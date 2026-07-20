@@ -74,9 +74,6 @@ fun MediaDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val detail = uiState.detail
     val canManageSeries by viewModel.canManageSeries.collectAsStateWithLifecycle()
-    LaunchedEffect(detail?.item?.id) {
-        detail?.let { viewModel.loadSeerrDataIfNeeded(it) }
-    }
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
 
@@ -268,7 +265,6 @@ fun MediaDetailScreen(
                         onEpisodesDescendingChange = { descending: Boolean ->
                             viewModel.setEpisodesDescending(descending)
                         },
-                        onLoadSeerrData = { detail?.let { viewModel.loadSeerrDataIfNeeded(it) } },
                         onBack = onBack,
                         onSeerrRequest = { item: SeerrSearchItem -> seerrRequestItem = item },
                         onNavigate = onNavigate,

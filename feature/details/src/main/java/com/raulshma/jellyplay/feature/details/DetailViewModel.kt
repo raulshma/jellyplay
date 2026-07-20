@@ -376,6 +376,20 @@ class DetailViewModel @Inject constructor(
                                 }
                             }
                     }
+
+                    // Trigger the Seerr recommendations/videos fetch from the VM
+                    // (not the UI) so the former UI-side LaunchedEffect with its
+                    // hard-coded 350ms delay and connection-polling over-keying is
+                    // gone. The same delay is preserved here for frame priority
+                    // (don't contend with first-frame GPU work), and the
+                    // seerrDataLoaded guard keeps it idempotent across re-entries.
+                    // Late-connect (Seerr enabled while on the detail screen) is
+                    // not handled; revisit if it becomes a real need.
+                    launch {
+                        kotlinx.coroutines.delay(350)
+                        if (currentItemId != itemId) return@launch
+                        loadSeerrDataIfNeeded(detail)
+                    }
                 }
                 .onFailure { err ->
                     val accessDenied = (err as? ApiException)?.isAccessDenied == true

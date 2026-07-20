@@ -618,17 +618,13 @@ internal fun DetailContentBody(
         }
 
         // ── Seerr Recommendations Section ──
-        // Defer the Seerr fetch until after the staggered section reveal (~300ms)
-        // so the network round-trip doesn't contend with the first-frame GPU work.
-        // The VM guard (seerrDataLoaded) makes this idempotent; this is purely a
-        // priority/yield, so a short frame-aligned delay suffices over an arbitrary
-        // 1s wall-clock back-off.
-        LaunchedEffect(state.isSeerrConnected, state.isSeerrRecommendationsEnabled, state.seerrRecommendations.isEmpty()) {
-            if (state.isSeerrConnected && state.isSeerrRecommendationsEnabled && state.seerrRecommendations.isEmpty()) {
-                kotlinx.coroutines.delay(350)
-                callbacks.onLoadSeerrData()
-            }
-        }
+        // The Seerr fetch is triggered from the VM (DetailViewModel.loadItem)
+        // with a short delay so it doesn't contend with first-frame GPU work.
+        // It is NOT triggered from a UI LaunchedEffect here — the former
+        // LaunchedEffect over-keyed on isSeerrConnected / isSeerrRecommendationsEnabled
+        // and ran on every flag tick (e.g. connection polling) even after the
+        // first successful load. Late-connect (Seerr enabled while on the detail
+        // screen) does not auto-fetch; revisit if that becomes a real need.
 
         if (state.isSeerrConnected && state.isSeerrRecommendationsEnabled && state.seerrRecommendations.isNotEmpty()) {
             StaggeredDetailSection(visible = showContent, delayIndex = 11) {
