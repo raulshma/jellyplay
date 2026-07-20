@@ -77,9 +77,3 @@ data class HomeScrollPosition(
     val firstVisibleItemIndex: Int = 0,
     val firstVisibleItemScrollOffset: Int = 0,
 )
-
-@Immutable
-data class HomeFocusPosition(
-    val sectionIndex: Int = 0,
-    val itemIndex: Int = 0,
-)

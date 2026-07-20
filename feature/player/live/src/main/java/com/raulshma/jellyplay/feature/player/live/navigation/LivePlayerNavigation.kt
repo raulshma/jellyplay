@@ -9,7 +9,7 @@ import com.raulshma.jellyplay.feature.player.live.LivePlayerScreen
 /**
  * Navigation entry for [Route.LiveTvChannelPlayer]. Renders
  * [LivePlayerScreen] — the dedicated Live TV player built around the
- * Wholphin approach (HLS via Media3 ExoPlayer). The previous routing
+ * HLS via Media3 ExoPlayer. The previous routing
  * through `VideoPlayerScreen` (and its `isLive` plumbing) has been retired.
  *
  * The route data class [Route.LiveTvChannelPlayer] lives in `:core:ui`

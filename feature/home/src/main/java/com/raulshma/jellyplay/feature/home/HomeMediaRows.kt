@@ -45,6 +45,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.hasPlaybackPosition
+import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
@@ -379,8 +381,7 @@ fun WideMediaCard(
             )
             val isSeries = item.mediaType == MediaType.SERIES
             val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
-            val hasWatchProgress =
-                item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
+            val hasWatchProgress = item.hasWatchProgress
             val remainingTime = if (hasWatchProgress && hasValidDuration) {
                 formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
             } else null
@@ -508,7 +509,7 @@ fun HomeMediaRow(
                     fallbackUrls = fallbackImageUrlBuilder(item),
                     onClick = memoizedClick,
                     modifier = focusModifier.width(cardWidth),
-                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                    showProgress = item.hasPlaybackPosition,
                     progressPercent = progressPercent,
                     blurHash = item.blurHashes.primary,
                     onPlayClick = memoizedPlayClick,
@@ -543,7 +544,7 @@ fun HomeMediaRow(
                     fallbackUrls = fallbackImageUrlBuilder(item),
                     onClick = memoizedClick,
                     modifier = Modifier.width(cardWidth),
-                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                    showProgress = item.hasPlaybackPosition,
                     progressPercent = progressPercent,
                     blurHash = item.blurHashes.primary,
                     onPlayClick = memoizedPlayClick,

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.raulshma.jellyplay.core.data.repository.HomeSectionQuery
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -13,16 +14,22 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
+import com.raulshma.jellyplay.core.data.usecase.GetHomeSectionsUseCase
+import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
+import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
+import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -39,7 +46,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -63,6 +72,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
+    private val getHomeSections: GetHomeSectionsUseCase,
+    private val orderHomeSections: OrderHomeSectionsUseCase,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadRepository: DownloadRepository,
@@ -76,9 +87,10 @@ class HomeViewModel @Inject constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val authRepository: AuthRepository,
-    private val arrRepository: com.raulshma.jellyplay.core.data.repository.ArrRepository,
+    private val arrRepository: ArrRepository,
     private val tvWatchNextScheduler: TvWatchNextScheduler,
-    @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
+    private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
+    private val timeSource: TimeSource,
 ) : JellyPlayViewModel(), DefaultLifecycleObserver {
 
     companion object {
@@ -106,6 +118,15 @@ class HomeViewModel @Inject constructor(
     private val _uiState = stateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.flow
 
+    /**
+     * Applies [transform] to the nested [HomeSearchState] in one update, so the
+     * ~12 search-mutation sites don't each repeat
+     * `it.copy(searchState = it.searchState.copy(...))`.
+     */
+    private fun updateSearch(transform: (HomeSearchState) -> HomeSearchState) {
+        _uiState.update { it.copy(searchState = transform(it.searchState)) }
+    }
+
     val activeDownloadCount: StateFlow<Int> = downloadRepository.getActiveDownloadCount()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
@@ -125,7 +146,6 @@ class HomeViewModel @Inject constructor(
     private val refreshMutex = Mutex()
     private var refreshJob: Job? = null
     private var homeScrollPosition = HomeScrollPosition()
-    private var homeFocusPosition = HomeFocusPosition()
     private var lastRefreshTime = 0L
     private var isAppInForeground = true
     // Discover-sections TTL bookkeeping (see DISCOVER_TTL_MS / fetchDiscoverSections).
@@ -161,7 +181,6 @@ class HomeViewModel @Inject constructor(
                     if (previousUserId != null) {
                         refreshJob?.cancel()
                         resetHomeScrollPosition()
-                        resetHomeFocusPosition()
                         _uiState.update {
                             it.copy(
                                 sections = emptyList(),
@@ -175,7 +194,6 @@ class HomeViewModel @Inject constructor(
                 } else if (previousUserId != userId) {
                     refreshJob?.cancel()
                     resetHomeScrollPosition()
-                    resetHomeFocusPosition()
                     _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null, isLoading = true) }
                     fetchAndUpdateSections()
                     startPeriodicRefresh()
@@ -220,8 +238,8 @@ class HomeViewModel @Inject constructor(
                     showClock = prefs.showClockOnHome,
                     showSettingsInHomeSearch = prefs.showSettingsInHomeSearch,
                     continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
-                    experimentalCardClippingEnabled = com.raulshma.jellyplay.core.model.ExperimentalFeature.HOME_CARD_CLIPPING in prefs.enabledExperimentalFeatures,
-                    directArrEnabled = com.raulshma.jellyplay.core.model.ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.enabledExperimentalFeatures,
+                    experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.enabledExperimentalFeatures,
+                    directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.enabledExperimentalFeatures,
                 ) }
 
                 if (homeSectionPrefsChanged) {
@@ -289,7 +307,7 @@ class HomeViewModel @Inject constructor(
             offlineModeManager.offlineMode
                 .flatMapLatest { mode ->
                     if (mode != OfflineMode.ONLINE) offlineRepository.getOfflineLibrary()
-                    else kotlinx.coroutines.flow.flowOf(emptyList())
+                    else flowOf(emptyList())
                 }
                 .collect { items ->
                     _uiState.update { it.copy(offlineLibrary = items) }
@@ -306,7 +324,7 @@ class HomeViewModel @Inject constructor(
             preferencesStore.activeUserId
                 .flatMapLatest { userId ->
                     if (userId != null) searchHistoryRepository.getRecent(userId)
-                    else kotlinx.coroutines.flow.flowOf(emptyList())
+                    else flowOf(emptyList())
                 }
                 .collect { history -> _searchHistory.value = history }
         }
@@ -319,7 +337,7 @@ class HomeViewModel @Inject constructor(
                 .collect { query ->
                     searchJob?.cancel()
                     if (query.isBlank()) {
-                        _uiState.update { it.copy(searchState = it.searchState.copy(jellyfinResults = emptyList(), seerrResults = emptyList(), settingsResults = emptyList(), isSearching = false)) }
+                        updateSearch { it.copy(jellyfinResults = emptyList(), seerrResults = emptyList(), settingsResults = emptyList(), isSearching = false) }
                     } else {
                         searchJob = launch { performSearch(query) }
                     }
@@ -345,9 +363,7 @@ class HomeViewModel @Inject constructor(
                 }
                 .flowOn(Dispatchers.Default)
                 .collect { results ->
-                    _uiState.update {
-                        it.copy(searchState = it.searchState.copy(settingsResults = results))
-                    }
+                    updateSearch { it.copy(settingsResults = results) }
                 }
         }
 
@@ -445,21 +461,10 @@ class HomeViewModel @Inject constructor(
         homeScrollPosition = HomeScrollPosition()
     }
 
-    // Note: HomeFocusPosition is still reset on user/refresh transitions
-    // (below) and pinned by HomeScrollFocusPositionTest, but no UI ever reads
-    // or writes a per-row/per-card focus index — focus restoration is handled
-    // entirely in the composable layer via rememberInt (homeFocusRow). The
-    // getter/save accessor methods were unused and have been removed.
-
-    private fun resetHomeFocusPosition() {
-        homeFocusPosition = HomeFocusPosition()
-    }
-
     private fun refresh() {
         launch {
             _uiState.update { it.copy(isLoading = true) }
             resetHomeScrollPosition()
-            resetHomeFocusPosition()
             _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null) }
             mediaRepository.invalidateCaches()
             invalidateDiscoverCache()
@@ -491,7 +496,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun updateSearchQuery(query: String) {
-        _uiState.update { it.copy(searchState = it.searchState.copy(query = query, isSearching = if (query.isBlank()) false else it.searchState.isSearching)) }
+        updateSearch { it.copy(query = query, isSearching = if (query.isBlank()) false else it.isSearching) }
         searchQueryFlow.value = query
     }
 
@@ -577,22 +582,21 @@ class HomeViewModel @Inject constructor(
             offlineModeManager.checkNetworkAndAutoDetect()
 
             if (offlineModeManager.isOffline) {
-                lastRefreshTime = System.currentTimeMillis()
+                lastRefreshTime = timeSource.nowEpochMillis()
                 return
             }
 
-            lastRefreshTime = System.currentTimeMillis()
-            val enabledSections = enabledHomeSectionTypes
-            val overrides = libraryHomeSectionOverrides
-            mediaRepository.getHomeSections(
-                enabledSections,
-                overrides,
-                nextUpRewatching,
-                nextUpMaxDays,
-                nextUpExcludedSeriesIds,
-                hiddenCwItemIds,
-                pinnedHomeSections,
+            lastRefreshTime = timeSource.nowEpochMillis()
+            val query = HomeSectionQuery(
+                enabledSections = enabledHomeSectionTypes,
+                libraryHomeSectionOverrides = libraryHomeSectionOverrides,
+                nextUpRewatching = nextUpRewatching,
+                nextUpMaxDays = nextUpMaxDays,
+                nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
+                hiddenCwItemIds = hiddenCwItemIds,
+                pinnedSections = pinnedHomeSections,
             )
+            getHomeSections(query)
                 .onSuccess { homeResult ->
                     val fetchedSections = homeResult.sections
                     // Surface a non-blocking notice only when a section type
@@ -601,45 +605,12 @@ class HomeViewModel @Inject constructor(
                     // NOT failures — previously the size-mismatch heuristic
                     // false-positived on new users and after merges.
                     _uiState.update { it.copy(partialLoadError = homeResult.failedSectionTypes.isNotEmpty()) }
-                    val finalSections = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                        val orderIndex = homeSectionOrder.withIndex().associate { it.value to it.index }
-                        val ordered = fetchedSections
-                            .mapIndexed { index, section -> index to section }
-                            .sortedWith(
-                                compareBy<Pair<Int, com.raulshma.jellyplay.core.model.HomeSection>> {
-                                    orderIndex[it.second.type] ?: Int.MAX_VALUE
-                                }.thenBy { it.first },
-                            )
-                            .map { it.second }
-                        if (mergeContinueWatchingAndNextUp) {
-                            val cw = ordered.firstOrNull { it.type == HomeSectionType.CONTINUE_WATCHING }
-                            val nextUp = ordered.firstOrNull { it.type == HomeSectionType.NEXT_UP }?.items.orEmpty()
-                            if (cw != null) {
-                                val seen = cw.items.mapTo(mutableSetOf()) { it.id }
-                                val mergedItems = cw.items + nextUp.filter { seen.add(it.id) }
-                                ordered.mapNotNull { section ->
-                                    when (section.type) {
-                                        HomeSectionType.CONTINUE_WATCHING -> section.copy(items = mergedItems)
-                                        HomeSectionType.NEXT_UP -> null
-                                        else -> section
-                                    }
-                                }
-                            } else {
-                                val nextUpSection = ordered.firstOrNull { it.type == HomeSectionType.NEXT_UP }
-                                if (nextUpSection != null) {
-                                    ordered.mapNotNull { section ->
-                                        when (section.type) {
-                                            HomeSectionType.NEXT_UP -> section.copy(type = HomeSectionType.CONTINUE_WATCHING)
-                                            else -> section
-                                        }
-                                    }
-                                } else {
-                                    ordered
-                                }
-                            }
-                        } else {
-                            ordered
-                        }
+                    val finalSections = withContext(Dispatchers.Default) {
+                        orderHomeSections(
+                            sections = fetchedSections,
+                            order = homeSectionOrder,
+                            mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
+                        )
                     }
 
                     _uiState.update { it.copy(sections = finalSections) }
@@ -654,20 +625,10 @@ class HomeViewModel @Inject constructor(
                         // Defer the widget broadcast + TV Watch Next refresh until
                         // after the mutex is released (see pendingCwSideEffect above).
                         pendingCwSideEffect = {
-                            // Explicit-component broadcast: implicit broadcasts to
-                            // manifest-registered receivers are blocked on Android O+,
-                            // and the widget's intent-filter only carries
-                            // APPWIDGET_UPDATE, so we target the receiver class directly
-                            // to guarantee delivery in-process.
-                            val intent = android.content.Intent(
-                                "com.raulshma.jellyplay.widget.ACTION_REFRESH_CONTINUE_WATCHING",
-                            ).apply {
-                                setClassName(
-                                    context.packageName,
-                                    "com.raulshma.jellyplay.widget.ContinueWatchingWidget",
-                                )
-                            }
-                            context.sendBroadcast(intent)
+                            // Push the CW change to the home-screen widget. The
+                            // broadcaster owns the explicit-component broadcast so
+                            // this VM no longer needs an Android Context.
+                            continueWatchingBroadcaster.refreshContinueWatching()
                             // Refresh the Android TV "Watch Next" OS row so the
                             // system home stays in sync with the user's progress.
                             // Worker is a no-op on phones and respects its preference.
@@ -714,7 +675,7 @@ class HomeViewModel @Inject constructor(
      * empty; the *arr repository already swallows per-server errors.
      */
     private suspend fun fetchRecentlyGrabbed() {
-        val now = java.time.LocalDate.now(java.time.ZoneOffset.systemDefault())
+        val now = timeSource.today(ZoneOffset.systemDefault())
         val end = now.plusDays(30)
         arrRepository.refreshCalendar(now, end)
         val items = arrRepository.calendar(now, end).first()
@@ -729,12 +690,12 @@ class HomeViewModel @Inject constructor(
         // Seerr round-trips per minute (C2 periodic refresh + per pref change).
         // A user-initiated refresh (swipe-to-refresh) sets `force = true` which
         // bypasses this gate via [invalidateDiscoverCache].
-        val now = System.currentTimeMillis()
+        val now = timeSource.nowEpochMillis()
         if (!discoverCacheInvalidated && now - lastDiscoverFetchEpochMs < DISCOVER_TTL_MS) return
 
-        val today = LocalDate.now(ZoneOffset.systemDefault()).toString()
+        val today = timeSource.today(ZoneOffset.systemDefault()).toString()
 
-        val deferredResults = mutableListOf<Pair<DiscoverSectionType, kotlinx.coroutines.Deferred<Result<SeerrSearchResponse>>>>()
+        val deferredResults = mutableListOf<Pair<DiscoverSectionType, Deferred<Result<SeerrSearchResponse>>>>()
 
         if (prefs.discoverTrending) {
             deferredResults.add(DiscoverSectionType.TRENDING to scope.async { seerrRepository.getTrending() })
@@ -759,7 +720,7 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        lastDiscoverFetchEpochMs = System.currentTimeMillis()
+        lastDiscoverFetchEpochMs = timeSource.nowEpochMillis()
         discoverCacheInvalidated = false
         _uiState.update { it.copy(discoverSections = newSections) }
     }
@@ -787,11 +748,11 @@ class HomeViewModel @Inject constructor(
                 // avoids the mutex churn and the lastRefreshTime bookkeeping.
                 if (offlineModeManager.isOffline) continue
 
-                val now = System.currentTimeMillis()
+                val now = timeSource.nowEpochMillis()
                 if (now - lastRefreshTime < MIN_REFRESH_INTERVAL_MS) continue
 
                 fetchAndUpdateSections()
-                lastRefreshTime = System.currentTimeMillis()
+                lastRefreshTime = timeSource.nowEpochMillis()
             }
         }
     }
@@ -801,7 +762,7 @@ class HomeViewModel @Inject constructor(
         isAppInForeground = true
         launch {
             offlineModeManager.checkNetworkAndAutoDetect()
-            val now = System.currentTimeMillis()
+            val now = timeSource.nowEpochMillis()
             if (now - lastRefreshTime >= REFRESH_INTERVAL_FOREGROUND_MS) {
                 fetchAndUpdateSections()
             }
@@ -823,7 +784,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private suspend fun performSearch(query: String) {
-        _uiState.update { it.copy(searchState = it.searchState.copy(isSearching = true)) }
+        updateSearch { it.copy(isSearching = true) }
         try {
             coroutineScope {
                 val jellyfinDeferred = async { mediaRepository.search(query, limit = 8) }
@@ -845,7 +806,7 @@ class HomeViewModel @Inject constructor(
                     }
                 }
                 jellyfinDeferred.await().onSuccess { result ->
-                    _uiState.update { it.copy(searchState = it.searchState.copy(jellyfinResults = result.items)) }
+                    updateSearch { it.copy(jellyfinResults = result.items) }
                     if (result.items.isNotEmpty()) {
                         val userId = preferencesStore.activeUserId.first()
                         if (userId != null) {
@@ -854,17 +815,17 @@ class HomeViewModel @Inject constructor(
                     }
                 }
                 seerrDeferred.await()?.let { results ->
-                    _uiState.update { it.copy(searchState = it.searchState.copy(seerrResults = results)) }
+                    updateSearch { it.copy(seerrResults = results) }
                 } ?: run {
-                    _uiState.update { it.copy(searchState = it.searchState.copy(seerrResults = emptyList())) }
+                    updateSearch { it.copy(seerrResults = emptyList()) }
                 }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            _uiState.update { it.copy(searchState = it.searchState.copy(jellyfinResults = emptyList(), seerrResults = emptyList())) }
+            updateSearch { it.copy(jellyfinResults = emptyList(), seerrResults = emptyList()) }
         } finally {
-            _uiState.update { it.copy(searchState = it.searchState.copy(isSearching = false)) }
+            updateSearch { it.copy(isSearching = false) }
         }
     }
 

@@ -194,7 +194,7 @@ class LiveTvPlayerViewModel @Inject constructor(
     /**
      * Resolves a playable live URL for [channel] and starts playback.
      *
-     * Mirrors the wholphin end-to-end flow:
+     * end-to-end flow:
      *   1. Always resolve under [PlaybackMode.AUTO] regardless of the user's
      *      playback pref — live tuners do not support static direct play
      *      (FORCE_DIRECT_PLAY disables direct stream + transcode, leaving
@@ -204,8 +204,7 @@ class LiveTvPlayerViewModel @Inject constructor(
      *      **blank** `mediaSourceId` (live sources have a server-generated
      *      source id distinct from the channel id; passing the channel id as
      *      the source id causes the server to return an empty source list).
-     *   3. Pick the first source from the response (matches wholphin's
-     *      `response.mediaSources.firstOrNull()`).
+     *   3. Pick the first source from the response.
      *   4. Try `resolvePlayback` first — it walks the full Direct Play /
      *      Direct Stream / Transcode decision tree and returns null only if
      *      the server offers no playable method.
@@ -272,7 +271,7 @@ class LiveTvPlayerViewModel @Inject constructor(
         playerType: com.raulshma.jellyplay.core.model.PlayerType,
     ): ResolvedPlayback? {
         // Pass mediaSourceId = "" so the server does not filter on a
-        // channel-id-as-source-id (wholphin passes null for the same reason).
+        // channel-id-as-source-id.
         val resolved = playbackRepository.resolvePlayback(
             itemId = channel.id,
             mediaSourceId = "",
@@ -417,7 +416,7 @@ class LiveTvPlayerViewModel @Inject constructor(
     /**
      * Invoked by the engine on a direct/direct stream failure. Re-resolves
      * via `resolveLiveStream` with `FORCE_TRANSCODE` so the server hands
-     * back a transcoding URL — mirrors Wholphin's `onPlayerError` path.
+     * back a transcoding URL `onPlayerError` path.
      */
     private fun onTranscodeFallback() {
         val channel = _state.value.currentChannel ?: return
