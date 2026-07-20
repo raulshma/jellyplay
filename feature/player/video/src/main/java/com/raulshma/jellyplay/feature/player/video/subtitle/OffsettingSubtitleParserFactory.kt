@@ -22,7 +22,7 @@ internal class OffsettingSubtitleParser(
         outputOptions: SubtitleParser.OutputOptions,
         output: Consumer<CuesWithTiming>,
     ) {
-        // Read the offset on every parse() (M17). Previously the offset was
+        // Read the offset on every parse(). Previously the offset was
         // captured once at create() time, so adjusting the subtitle-delay
         // slider after ExoPlayer.prepare() had no effect on side-loaded subs
         // until the media was reloaded. Reading it here lets the live slider
@@ -64,7 +64,7 @@ internal class OffsettingSubtitleParserFactory(
         delegate.getCueReplacementBehavior(format)
 
     override fun create(format: Format): SubtitleParser {
-        // Always wrap (M17): a previous fast-path returned the bare delegate
+        // Always wrap: a previous fast-path returned the bare delegate
         // when the offset was 0 at create() time, but the offset is now read
         // dynamically on each parse() so the delay slider can change it after
         // prepare(). The wrapper's parse() short-circuits to the delegate when

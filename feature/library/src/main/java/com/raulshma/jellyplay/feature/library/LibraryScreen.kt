@@ -147,7 +147,7 @@ fun LibraryScreen(
     // instead of snapshot-list identity. Keying on the snapshot re-fired the
     // prefetch on every page boundary, and each merge produced a new Map in
     // _photoFolderChildUrls — which used to invalidate the whole screen (now
-    // mitigated by per-item collection in L3.1). Gating on loadState also lets
+    // mitigated by per-item collection). Gating on loadState also lets
     // us skip non-photo libraries entirely.
     val appendState = pagedItems.loadState
     LaunchedEffect(appendState) {

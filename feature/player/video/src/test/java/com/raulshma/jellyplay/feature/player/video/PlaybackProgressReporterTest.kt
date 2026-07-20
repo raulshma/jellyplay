@@ -99,7 +99,7 @@ class PlaybackProgressReporterTest {
 
         reporter.startPositionTracking()
 
-        // V-1: position/duration now flow through the dedicated sink callback
+        // Position/duration now flow through the dedicated sink callback
         // instead of the monolithic uiState.
         assertEquals(1_200_000L, reportedPositionMs)
         assertEquals(3_600_000L, reportedDurationMs)

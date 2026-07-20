@@ -1272,7 +1272,7 @@ class MpvPlayerEngine(
      * The string-typed subtitle-style key/value pairs shared by both
      * [applySubtitleStyleOptions] (init-time, setOptionString) and
      * [applySubtitleStyleProperties] (runtime, setPropertyString). Delegates to
-     * [MpvStyleMapping.customStyleEntries] (extracted L7) so the mapping is
+     * [MpvStyleMapping.customStyleEntries] so the mapping is
      * unit-testable without a live mpv handle. Callers apply each pair through
      * their own setter.
      */

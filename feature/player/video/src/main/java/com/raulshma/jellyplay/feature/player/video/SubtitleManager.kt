@@ -20,7 +20,7 @@ import kotlinx.coroutines.withContext
  * subtitles, searching OpenSubtitles (via the server), uploading local files,
  * side-loading local files, and loading the upload/search language cultures.
  *
- * Extracted verbatim from [VideoPlayerViewModel] (recommendation A7 — continue
+ * Extracted verbatim from [VideoPlayerViewModel], continuing
  * the collaborator-extraction pattern established by [TrackSelectionHelper] and
  * [TrickplayManager]). The ViewModel keeps thin public delegating functions of
  * the same names so the screen call sites are unchanged; this class performs

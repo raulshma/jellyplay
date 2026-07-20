@@ -452,7 +452,7 @@ fun VideoPlayerScreen(
     // duration is low-frequency (changes only on media load / live updates),
     // so it is safe to collect at the screen root. currentPosition is NOT
     // collected here — it now lives on viewModel.currentPositionMs and is read
-    // only inside the leaf composables that render it (V-1).
+    // only inside the leaf composables that render it.
     val engineDuration by viewModel.durationMs.collectAsStateWithLifecycle()
     val duration = if (isCastConnected) castDuration else engineDuration
     val playbackSpeed = uiState.playbackSpeed
@@ -1143,7 +1143,7 @@ fun VideoPlayerScreen(
             val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
             val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
 
-            // Hoist PlayerControls callbacks into remembered lambdas (M9).
+            // Hoist PlayerControls callbacks into remembered lambdas.
             // Each fresh `{ ... }` passed inline below allocated a new lambda
             // per recomposition, defeating PlayerControls' skippability and
             // forcing the 1500-line controls tree to recompose on every
@@ -1655,7 +1655,7 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.Chapter -> {
-            // Collect position only while the chapter sheet is open (V-1), so
+            // Collect position only while the chapter sheet is open, so
             // the router itself stays a low-frequency scope when no sheet (or
             // a non-chapter sheet) is shown.
             ChapterPickerBinder(
@@ -1841,7 +1841,7 @@ private fun PlayerSheetRouter(
 
 /**
  * Narrow binder that subscribes to [currentPositionFlow] only while the
- * chapter picker sheet is open (V-1), so the screen root and the sheet router
+  * chapter picker sheet is open, so the screen root and the sheet router
  * are not invalidated at 4 Hz on every position tick.
  */
 @Composable
