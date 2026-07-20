@@ -16,10 +16,10 @@ import com.raulshma.jellyplay.feature.home.HomeScreen
 fun EntryProviderScope<NavKey>.homeSection(
     navigator: Navigator,
     homeMode: HomeMode = HomeMode.VIDEO,
-    onModeChange: (HomeMode) -> Unit = {},
-    onPlayOnClick: () -> Unit = {},
+    onModeChange: (HomeMode) -> Unit,
+    onPlayOnClick: () -> Unit,
     playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
-    musicContent: @Composable () -> Unit = {},
+    musicContent: @Composable () -> Unit,
 ) {
     entry<Route.Home> {
         // Build the callbacks once per navigator lifetime so the HomeScreen subtree

@@ -33,8 +33,7 @@ import okhttp3.OkHttpClient
  *    rebuffer) rather than the VOD defaults.
  *  - On a [PlaybackException] while the current method is direct, the
  *    engine invokes [onTranscodeFallbackNeeded] so the ViewModel can
- *    re-resolve via `PlaybackRepository` with direct disabled — mirrors the
- *    Wholphin `onPlayerError` path.
+ *    re-resolve via `PlaybackRepository` with direct disabled.
  */
 class ExoLiveEngine(
     context: Context,
@@ -154,7 +153,7 @@ class ExoLiveEngine(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            // Wholphin's pattern: on a direct-stream/direct-play failure,
+            // on a direct-stream/direct-play failure,
             // ask the ViewModel to re-resolve with transcoding forced.
             _state.value = LiveEngineState.ERROR
             _errorMessage.value = error.localizedMessage ?: "Playback error"

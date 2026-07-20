@@ -171,9 +171,6 @@ private fun MainHomeContent(
     val homeScrollState = rememberHomeScrollState(
         savePosition = remember(viewModel) { { index, offset -> viewModel.saveHomeScrollPosition(index, offset) } },
         initialPosition = viewModel.getHomeScrollPosition(),
-        sectionCount = { state.sections.size },
-        newsletterBannerVisible = state.newsletterBannerVisible,
-        rowFocusRequesters = { emptyList() },
     )
     val listState = homeScrollState.listState
 

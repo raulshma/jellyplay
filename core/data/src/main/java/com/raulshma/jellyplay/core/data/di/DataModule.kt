@@ -25,6 +25,8 @@ import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadIntakeImpl
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProviderImpl
+import com.raulshma.jellyplay.core.data.util.SystemTimeSource
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
@@ -126,4 +128,8 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindOkHttpConfigProvider(impl: OkHttpConfigProviderImpl): OkHttpConfigProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindTimeSource(impl: SystemTimeSource): TimeSource
 }
