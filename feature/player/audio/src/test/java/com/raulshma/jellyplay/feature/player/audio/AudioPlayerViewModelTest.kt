@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -40,7 +40,7 @@ class AudioPlayerViewModelTest {
     private lateinit var preferencesStore: UserPreferencesStore
     private lateinit var mediaRepository: MediaRepository
     private lateinit var downloadRepository: DownloadRepository
-    private lateinit var playbackRepository: PlaybackRepository
+    private lateinit var downloadIntake: DownloadIntake
     private lateinit var sleepTimerManager: SleepTimerManager
     private lateinit var castManager: CastManager
 
@@ -53,7 +53,7 @@ class AudioPlayerViewModelTest {
         preferencesStore = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
-        playbackRepository = mockk(relaxed = true)
+        downloadIntake = mockk(relaxed = true)
         sleepTimerManager = mockk(relaxed = true)
         castManager = mockk(relaxed = true)
 
@@ -64,7 +64,7 @@ class AudioPlayerViewModelTest {
             preferencesStore = preferencesStore,
             mediaRepository = mediaRepository,
             downloadRepository = downloadRepository,
-            playbackRepository = playbackRepository,
+            downloadIntake = downloadIntake,
             sleepTimerManager = sleepTimerManager,
             castManager = castManager,
         )

@@ -42,10 +42,22 @@ class DownloadDelegate @Inject constructor(
     private val playbackRepository: PlaybackRepository,
 ) {
 
-    suspend fun prepareDownloadRequest(detail: MediaDetail): DownloadRequest? {
+    /**
+     * Builds a [DownloadRequest] from [detail]. [maxBitrate] (bits per second)
+     * is applied to the stream URL so the server transcodes to the user's
+     * chosen download quality; pass null for original quality.
+     */
+    suspend fun prepareDownloadRequest(
+        detail: MediaDetail,
+        maxBitrate: Int? = null,
+    ): DownloadRequest? {
         val item = detail.item
         val source = detail.mediaSources.firstOrNull() ?: return null
-        val streamUrl = playbackRepository.getStreamUrl(item.id, source.id)
+        val streamUrl = playbackRepository.getStreamUrl(
+            itemId = item.id,
+            mediaSourceId = source.id,
+            maxBitrate = maxBitrate,
+        )
         if (streamUrl.isBlank()) return null
         val imageUrl = playbackRepository.getImageUrl(item.id, maxWidth = 300)
         val mediaType = when (item.mediaType) {

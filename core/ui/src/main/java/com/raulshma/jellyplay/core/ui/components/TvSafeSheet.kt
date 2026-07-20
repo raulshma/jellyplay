@@ -156,6 +156,7 @@ private fun MobileBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
         sheetState = sheetState,
+        shape = ShapeCache.smoothTop28,
         containerColor = colorScheme.surfaceContainer,
         contentColor = colorScheme.onSurface,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },

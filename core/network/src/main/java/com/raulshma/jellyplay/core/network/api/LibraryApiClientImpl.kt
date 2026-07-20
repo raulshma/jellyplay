@@ -168,7 +168,7 @@ class LibraryApiClientImpl @Inject constructor(
                                     HomeSectionType.LATEST_MEDIA !in disabledForFolder
                                 if (latest.isNotEmpty() && latestEnabledForFolder) {
                                     val sectionId = "latest_${folder.id}"
-                                    sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest))
+                                    sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest, libraryId = folder.id))
                                 }
                             }.onFailure {
                                 // A per-folder Latest Media 403 (e.g. a stale

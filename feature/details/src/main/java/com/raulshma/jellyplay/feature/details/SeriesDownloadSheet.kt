@@ -195,7 +195,21 @@ fun SeriesDownloadSheet(
 
                 // Apply any whole-season selection that was requested while this
                 // season's episodes were still loading, once they arrive.
-                LaunchedEffect(season.id, seasonEpisodes, pendingSeasonSelections) {
+                //
+                // Keys: season.id + a snapshot-count of pending selections for
+                // THIS season. Reading pendingSeasonSelections inside the
+                // derivedStateOf registers a snapshot read, so any add/remove
+                // re-keys this effect precisely. The previous keys (the whole
+                // pendingSeasonSelections list reference, plus the seasonEpisodes
+                // list reference) either never changed (SnapshotStateList keeps
+                // a stable identity) or changed every recompose (fresh List),
+                // so the effect could miss real mutations or fire spuriously.
+                val pendingCount = remember(season.id) {
+                    androidx.compose.runtime.derivedStateOf {
+                        pendingSeasonSelections.count { it.first == season.id }
+                    }
+                }.value
+                LaunchedEffect(season.id, pendingCount, seasonEpisodes.isNotEmpty(), isLoadingThis) {
                     val pendingIdx = pendingSeasonSelections.indexOfFirst { it.first == season.id }
                     if (pendingIdx >= 0 && seasonEpisodes.isNotEmpty() && !isLoadingThis) {
                         val (_, markSelectAll) = pendingSeasonSelections.removeAt(pendingIdx)

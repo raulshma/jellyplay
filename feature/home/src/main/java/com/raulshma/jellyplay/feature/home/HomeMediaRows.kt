@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
@@ -45,6 +47,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.hasPlaybackPosition
+import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
@@ -138,6 +142,7 @@ fun ContinueWatchingRow(
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
+    onSectionLongClick: (() -> Unit)? = null,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -155,12 +160,10 @@ fun ContinueWatchingRow(
     }
 
     Column(modifier = modifier) {
-        Text(
-            text = title,
-            style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
-            else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
+        HomeSectionTitle(
+            title = title,
+            contentPad = contentPad,
+            onLongClick = onSectionLongClick,
         )
         if (isTv) {
             TvFocusableItemRow(
@@ -240,15 +243,6 @@ fun WideMediaCard(
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
         label = "wideCardCombinedScale",
     )
-    val elevation by animateFloatAsState(
-        targetValue = when {
-            isPressed -> 12f
-            tvFocusState.isFocused -> 16f
-            else -> 4f
-        },
-        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-        label = "wideCardElevation",
-    )
     val brightnessOverlay by animateFloatAsState(
         targetValue = if (isPressed) 0.08f else 0f,
         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
@@ -286,7 +280,7 @@ fun WideMediaCard(
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
-                    shadowElevation = elevation.dp.toPx()
+                    shadowElevation = 0f
                     clip = clipToShape
                     shape = ShapeCache.smooth12
                 }
@@ -298,6 +292,10 @@ fun WideMediaCard(
                     onLongClick = peek.onLongClick,
                 ),
             shape = ShapeCache.smooth12,
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+            ),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Box {
@@ -384,8 +382,7 @@ fun WideMediaCard(
             )
             val isSeries = item.mediaType == MediaType.SERIES
             val hasValidDuration = item.runTimeTicks != null && item.runTimeTicks!! > 0 && !isSeries
-            val hasWatchProgress =
-                item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0 && !item.isPlayed
+            val hasWatchProgress = item.hasWatchProgress
             val remainingTime = if (hasWatchProgress && hasValidDuration) {
                 formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
             } else null
@@ -460,6 +457,7 @@ fun HomeMediaRow(
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
     showEpisodeSeriesBadge: Boolean = false,
+    onSectionLongClick: (() -> Unit)? = null,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -483,12 +481,10 @@ fun HomeMediaRow(
     }
 
     Column(modifier = modifier) {
-        Text(
-            text = title,
-            style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
-            else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
+        HomeSectionTitle(
+            title = title,
+            contentPad = contentPad,
+            onLongClick = onSectionLongClick,
         )
         if (isTv) {
             TvFocusableItemRow(
@@ -513,7 +509,7 @@ fun HomeMediaRow(
                     fallbackUrls = fallbackImageUrlBuilder(item),
                     onClick = memoizedClick,
                     modifier = focusModifier.width(cardWidth),
-                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                    showProgress = item.hasPlaybackPosition,
                     progressPercent = progressPercent,
                     blurHash = item.blurHashes.primary,
                     onPlayClick = memoizedPlayClick,
@@ -548,7 +544,7 @@ fun HomeMediaRow(
                     fallbackUrls = fallbackImageUrlBuilder(item),
                     onClick = memoizedClick,
                     modifier = Modifier.width(cardWidth),
-                    showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
+                    showProgress = item.hasPlaybackPosition,
                     progressPercent = progressPercent,
                     blurHash = item.blurHashes.primary,
                     onPlayClick = memoizedPlayClick,
@@ -562,3 +558,52 @@ fun HomeMediaRow(
         }
     }
 }
+
+/**
+ * The row title for a home section. Renders the same heading typography the
+ * rows always used, but adds an optional long-press affordance so the user can
+ * configure the section (toggle visibility / reorder / open Home Layout
+ * settings) directly from home — the same operations available under
+ * Settings → Home Screen Layout.
+ *
+ * On touch, a trailing vertical-dots icon signals the affordance only when
+ * [onLongClick] is non-null (i.e. for configurable section types). On TV the
+ * hint is hidden (D-pad focus is the cue) and the long-press maps to the
+ * select-and-hold key. The click handler is a no-op: the title is not a
+ * navigation target, we only intercept long-press so the row's own horizontal
+ * scroll and item clicks are unaffected.
+ */
+@Composable
+private fun HomeSectionTitle(
+    title: String,
+    contentPad: androidx.compose.ui.unit.Dp,
+    onLongClick: (() -> Unit)?,
+) {
+    val isTv = LocalTvMode.current
+    val interactionSource = remember { MutableInteractionSource() }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = {},
+                        onLongClick = onLongClick,
+                    )
+                } else Modifier,
+            )
+            .padding(horizontal = contentPad, vertical = 8.dp),
+    ) {
+        Text(
+            text = title,
+            style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
+            else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+

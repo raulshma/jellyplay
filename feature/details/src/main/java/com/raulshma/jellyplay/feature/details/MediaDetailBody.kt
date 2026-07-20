@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -133,46 +134,10 @@ internal fun DetailContentBody(
     showMediaInfo: Boolean = true,
     contentFocusRequester: FocusRequester? = null,
 ) {
-    // Derive flat locals from the bundles so the verbatim body content below
-    // keeps its original field references unchanged.
     val detail = state.detail ?: return
     val item = detail.item
-    val seasons = state.seasons
-    val episodes = state.episodes
-    val fetchedSeasonIds = state.fetchedSeasonIds
-    val smartPlayTarget = state.smartPlayTarget
-    val selectedSubtitleIndex = state.selectedSubtitleIndex
-    val selectedAudioIndex = state.selectedAudioIndex
-    val getImageUrl = callbacks.getImageUrl
-    val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || item.mediaType == MediaType.ALBUM
+    val isAudio = item.mediaType.isAudioType
     val isAlbum = item.mediaType == MediaType.ALBUM
-    val albumTracks = state.albumTracks
-    val collectionItems = state.collectionItems
-    val onPlayClick = callbacks.onPlayClick
-    val onAudioClick = callbacks.onAudioClick
-    val onPlayAlbumTrack = callbacks.onPlayAlbumTrack
-    val onNavigate = callbacks.onNavigate
-    val onToggleFavorite = callbacks.onToggleFavorite
-    val onMarkPlayed = callbacks.onMarkPlayed
-    val onMarkUnplayed = callbacks.onMarkUnplayed
-    val onSubtitleSelect = callbacks.onSubtitleSelect
-    val onAudioSelect = callbacks.onAudioSelect
-    val onItemClick = callbacks.onItemClick
-    val onPersonClick = callbacks.onPersonClick
-    val onNavigateToSeries = callbacks.onNavigateToSeries
-    val onSeasonSelected = callbacks.onSeasonSelected
-    val onEpisodesDescendingChange = callbacks.onEpisodesDescendingChange
-    val onLoadSeerrData = callbacks.onLoadSeerrData
-    val seerrRecommendations = state.seerrRecommendations
-    val seerrSimilar = state.seerrSimilar
-    val isSeerrConnected = state.isSeerrConnected
-    val isSeerrRecommendationsEnabled = state.isSeerrRecommendationsEnabled
-    val getSeerrPosterUrl = callbacks.getSeerrPosterUrl
-    val onSeerrRequest = callbacks.onSeerrRequest
-    val relatedVideos = state.relatedVideos
-    val onVideoClick = callbacks.onVideoClick
-    val preferences = state.preferences
-    val relatedItems = state.relatedItems
     val showContent = true
 
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -214,7 +179,7 @@ internal fun DetailContentBody(
                                 .clip(ShapeCache.smooth8)
                                 .then(seriesNavFocusState.focusModifier)
                                 .then(Modifier.tvFocusIndicator(seriesNavFocusState, ShapeCache.smooth8))
-                                .clickable { item.seriesId?.let(onNavigateToSeries) }
+                                .clickable { item.seriesId?.let(callbacks.onNavigateToSeries) }
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -352,7 +317,7 @@ internal fun DetailContentBody(
                                 )
                             }
                         }
-                        if (preferences.showExternalRatings) {
+                        if (state.preferences.showExternalRatings) {
                             detail.criticRating?.let { criticRating ->
                                 val criticText = remember(criticRating) { String.format("%.0f", criticRating) }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -416,7 +381,7 @@ internal fun DetailContentBody(
                                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
                                         .then(studioFocusState.focusModifier)
                                         .then(Modifier.tvFocusIndicator(studioFocusState, ShapeCache.smooth16))
-                                        .clickable { onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.StudioDetail(studio.id, studio.name)) }
+                                        .clickable { callbacks.onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.StudioDetail(studio.id, studio.name)) }
                                         .padding(horizontal = 14.dp, vertical = 7.dp)
                                 ) {
                                     Text(
@@ -446,11 +411,11 @@ internal fun DetailContentBody(
             if (source != null) {
                 MediaInfoSection(
                     mediaStreams = source.mediaStreams,
-                    selectedAudioIndex = selectedAudioIndex,
-                    selectedSubtitleIndex = selectedSubtitleIndex,
-                    onAudioSelect = onAudioSelect,
-                    onSubtitleSelect = onSubtitleSelect,
-                    preferences = preferences,
+                    selectedAudioIndex = state.selectedAudioIndex,
+                    selectedSubtitleIndex = state.selectedSubtitleIndex,
+                    onAudioSelect = callbacks.onAudioSelect,
+                    onSubtitleSelect = callbacks.onSubtitleSelect,
+                    preferences = state.preferences,
                 )
             }
         }
@@ -470,7 +435,7 @@ internal fun DetailContentBody(
             }
         }
 
-        StaggeredDetailSection(visible = showContent && isAudio && albumTracks.isNotEmpty(), delayIndex = 5) {
+        StaggeredDetailSection(visible = showContent && isAudio && state.albumTracks.isNotEmpty(), delayIndex = 5) {
             Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
                 FadingItem {
                     Text(
@@ -483,10 +448,10 @@ internal fun DetailContentBody(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    albumTracks.forEachIndexed { index, track ->
-                        val trackClick = remember(track.id) { { onItemClick(track.id) } }
-                        val trackPlayClick = remember(track.id, index) { { onPlayAlbumTrack(index); onItemClick(track.id) } }
-                        val trackImageUrl = remember(track.id) { getImageUrl(track.id) }
+                    state.albumTracks.forEachIndexed { index, track ->
+                        val trackClick = remember(track.id) { { callbacks.onItemClick(track.id) } }
+                        val trackPlayClick = remember(track.id, index) { { callbacks.onPlayAlbumTrack(index); callbacks.onItemClick(track.id) } }
+                        val trackImageUrl = remember(track.id) { callbacks.getImageUrl(track.id) }
                         FadingItem {
                             AlbumTrackItem(
                                 track = track,
@@ -502,7 +467,7 @@ internal fun DetailContentBody(
         }
 
         StaggeredDetailSection(visible = showContent, delayIndex = 6) {
-            val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && seasons.isNotEmpty()
+            val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && state.seasons.isNotEmpty()
             if (showSeasons) {
                 CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                     // Memoize the skip-specials filter so it is not recomputed (allocating
@@ -510,41 +475,41 @@ internal fun DetailContentBody(
                     // detail item (scroll-driven FadingItem animations, sibling
                     // sections animating). Only re-runs when episodes or the
                     // skipSpecials flag actually change.
-                    val filteredEpisodes = remember(episodes, preferences.skipSpecials) {
-                        if (preferences.skipSpecials) {
-                            episodes.mapValues { (_, eps) -> eps.filter { it.seasonNumber != 0 } }
+                    val filteredEpisodes = remember(state.episodes, state.preferences.skipSpecials) {
+                        if (state.preferences.skipSpecials) {
+                            state.episodes.mapValues { (_, eps) -> eps.filter { it.seasonNumber != 0 } }
                         } else {
-                            episodes
+                            state.episodes
                         }
                     }
                     SeasonsSection(
                         seriesItem = item,
-                        seasons = seasons,
+                        seasons = state.seasons,
                         episodes = filteredEpisodes,
-                        fetchedSeasonIds = fetchedSeasonIds,
-                        smartPlayTarget = smartPlayTarget,
-                        getImageUrl = getImageUrl,
+                        fetchedSeasonIds = state.fetchedSeasonIds,
+                        smartPlayTarget = state.smartPlayTarget,
+                        getImageUrl = callbacks.getImageUrl,
                         currentItemId = if (item.mediaType == MediaType.EPISODE) item.id else null,
                         currentSeasonId = if (item.mediaType == MediaType.EPISODE) item.seasonId else null,
                         onEpisodePlayClick = { episode ->
                             val sourceId = null
                             val startPos = episode.playbackPositionTicks ?: 0L
-                            onPlayClick(episode.id, sourceId, startPos)
+                            callbacks.onPlayClick(episode.id, sourceId, startPos)
                         },
                         onEpisodeDetailClick = { episode ->
-                            onItemClick(episode.id)
+                            callbacks.onItemClick(episode.id)
                         },
-                        onSeasonSelected = onSeasonSelected,
-                        hideEpisodeThumbnails = preferences.hideEpisodeThumbnails,
-                        episodesDescending = preferences.episodesDescending,
-                        onEpisodesDescendingChange = onEpisodesDescendingChange,
+                        onSeasonSelected = callbacks.onSeasonSelected,
+                        hideEpisodeThumbnails = state.preferences.hideEpisodeThumbnails,
+                        episodesDescending = state.preferences.episodesDescending,
+                        onEpisodesDescendingChange = callbacks.onEpisodesDescendingChange,
                     )
                 }
             }
         }
 
         StaggeredDetailSection(visible = showContent, delayIndex = 7) {
-            if (item.mediaType == MediaType.COLLECTION && collectionItems.isNotEmpty()) {
+            if (item.mediaType == MediaType.COLLECTION && state.collectionItems.isNotEmpty()) {
                 Column {
                     FadingItem {
                         Text(
@@ -556,14 +521,14 @@ internal fun DetailContentBody(
                     }
                     Spacer(Modifier.height(16.dp))
                     TvFocusableItemRow(
-                        items = collectionItems,
+                        items = state.collectionItems,
                         key = { "collection_${it.id}" },
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) { _, collectionItem, focusModifier ->
-                            val collectionClick = remember(collectionItem.id) { { onItemClick(collectionItem.id) } }
+                            val collectionClick = remember(collectionItem.id) { { callbacks.onItemClick(collectionItem.id) } }
                             val collectionProgress = collectionItem.progressFraction()
-                            val collectionImageUrl = remember(collectionItem.id) { getImageUrl(collectionItem.id) }
+                            val collectionImageUrl = remember(collectionItem.id) { callbacks.getImageUrl(collectionItem.id) }
                             PosterCard(
                                 item = collectionItem,
                                 imageUrl = collectionImageUrl,
@@ -596,8 +561,8 @@ internal fun DetailContentBody(
                             contentPadding = PaddingValues(horizontal = bodyContentPad),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) { _, person, focusModifier ->
-                                val personClick = remember(person.id) { { onPersonClick(person.id) } }
-                                val personImageUrl = remember(person.id) { getImageUrl(person.id) }
+                                val personClick = remember(person.id) { { callbacks.onPersonClick(person.id) } }
+                                val personImageUrl = remember(person.id) { callbacks.getImageUrl(person.id) }
                                 PersonItem(
                                     person = person,
                                     imageUrl = personImageUrl,
@@ -612,13 +577,13 @@ internal fun DetailContentBody(
         }
 
         StaggeredDetailSection(visible = showContent, delayIndex = 9) {
-            if (relatedVideos.isNotEmpty()) {
-                VideosSection(videos = relatedVideos, onVideoClick = onVideoClick)
+            if (state.relatedVideos.isNotEmpty()) {
+                VideosSection(videos = state.relatedVideos, onVideoClick = callbacks.onVideoClick)
             }
         }
 
         StaggeredDetailSection(visible = showContent, delayIndex = 10) {
-            if (relatedItems.isNotEmpty()) {
+            if (state.relatedItems.isNotEmpty()) {
                 Column {
                     FadingItem {
                         Text(
@@ -634,13 +599,13 @@ internal fun DetailContentBody(
                     // visible item lambda (one CompositionLocal read per item).
                     val relatedCardWidth = if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
                     TvFocusableItemRow(
-                        items = relatedItems,
+                        items = state.relatedItems,
                         key = { "related_${it.id}" },
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) { _, related, focusModifier ->
-                            val relatedClick = remember(related.id) { { onItemClick(related.id) } }
-                            val relatedImageUrl = remember(related.id) { getImageUrl(related.id) }
+                            val relatedClick = remember(related.id) { { callbacks.onItemClick(related.id) } }
+                            val relatedImageUrl = remember(related.id) { callbacks.getImageUrl(related.id) }
                             PosterCard(
                                 item = related,
                                 imageUrl = relatedImageUrl,
@@ -653,41 +618,37 @@ internal fun DetailContentBody(
         }
 
         // ── Seerr Recommendations Section ──
-        // Defer the Seerr fetch until after the staggered section reveal (~300ms)
-        // so the network round-trip doesn't contend with the first-frame GPU work.
-        // The VM guard (seerrDataLoaded) makes this idempotent; this is purely a
-        // priority/yield, so a short frame-aligned delay suffices over an arbitrary
-        // 1s wall-clock back-off.
-        LaunchedEffect(isSeerrConnected, isSeerrRecommendationsEnabled, seerrRecommendations.isEmpty()) {
-            if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrRecommendations.isEmpty()) {
-                kotlinx.coroutines.delay(350)
-                onLoadSeerrData()
-            }
-        }
-        
-        if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrRecommendations.isNotEmpty()) {
+        // The Seerr fetch is triggered from the VM (DetailViewModel.loadItem)
+        // with a short delay so it doesn't contend with first-frame GPU work.
+        // It is NOT triggered from a UI LaunchedEffect here — the former
+        // LaunchedEffect over-keyed on isSeerrConnected / isSeerrRecommendationsEnabled
+        // and ran on every flag tick (e.g. connection polling) even after the
+        // first successful load. Late-connect (Seerr enabled while on the detail
+        // screen) does not auto-fetch; revisit if that becomes a real need.
+
+        if (state.isSeerrConnected && state.isSeerrRecommendationsEnabled && state.seerrRecommendations.isNotEmpty()) {
             StaggeredDetailSection(visible = showContent, delayIndex = 11) {
                 SeerrItemsRow(
                     title = stringResource(R.string.detail_section_seerr_recommendations),
                     keyPrefix = "seerr_rec",
                     contentType = "seerrRecItem",
-                    items = seerrRecommendations,
-                    onSeerrRequest = onSeerrRequest,
-                    onNavigate = onNavigate,
+                    items = state.seerrRecommendations,
+                    onSeerrRequest = callbacks.onSeerrRequest,
+                    onNavigate = callbacks.onNavigate,
                 )
             }
         }
 
         // ── Seerr Similar Section ──
-        if (isSeerrConnected && isSeerrRecommendationsEnabled && seerrSimilar.isNotEmpty()) {
+        if (state.isSeerrConnected && state.isSeerrRecommendationsEnabled && state.seerrSimilar.isNotEmpty()) {
             StaggeredDetailSection(visible = showContent, delayIndex = 12) {
                 SeerrItemsRow(
                     title = stringResource(R.string.detail_section_seerr_similar),
                     keyPrefix = "seerr_sim",
                     contentType = "seerrSimItem",
-                    items = seerrSimilar,
-                    onSeerrRequest = onSeerrRequest,
-                    onNavigate = onNavigate,
+                    items = state.seerrSimilar,
+                    onSeerrRequest = callbacks.onSeerrRequest,
+                    onNavigate = callbacks.onNavigate,
                 )
             }
         }
