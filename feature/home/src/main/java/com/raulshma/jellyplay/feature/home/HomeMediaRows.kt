@@ -72,8 +72,6 @@ import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.DotsVertical
 
 /**
  * Horizontal scroller for a home media row on touch devices. When [clippingEnabled]
@@ -606,14 +604,6 @@ private fun HomeSectionTitle(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        if (onLongClick != null && !isTv) {
-            Icon(
-                Tabler.Outline.DotsVertical,
-                contentDescription = "Configure section",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
     }
 }
 
