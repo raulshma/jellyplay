@@ -272,7 +272,9 @@ fun MediaDetailScreen(
                         onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
                         onVideoClick = onVideoClick,
                         onHideFromNextUp = { viewModel.hideFromNextUp() },
+                        onShowFromNextUp = { viewModel.showFromNextUp() },
                         onHideFromContinueWatching = { viewModel.hideFromContinueWatching() },
+                        onShowFromContinueWatching = { viewModel.showFromContinueWatching() },
                         onManageSeries = { onManageSeries(itemId) },
                     )
                 }

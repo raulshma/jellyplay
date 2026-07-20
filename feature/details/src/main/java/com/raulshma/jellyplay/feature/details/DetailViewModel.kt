@@ -839,6 +839,16 @@ class DetailViewModel @Inject constructor(
         val seriesId = item.seriesId ?: item.id
         launch {
             preferencesStore.excludeSeriesFromNextUp(seriesId)
+            _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_hidden_from_next_up)))
+        }
+    }
+
+    fun showFromNextUp() {
+        val item = _uiState.value.detail?.item ?: return
+        val seriesId = item.seriesId ?: item.id
+        launch {
+            preferencesStore.includeSeriesInNextUp(seriesId)
+            _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_shown_in_next_up)))
         }
     }
 
@@ -846,6 +856,15 @@ class DetailViewModel @Inject constructor(
         val item = _uiState.value.detail?.item ?: return
         launch {
             preferencesStore.hideCwItem(item.id)
+            _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_hidden_from_continue_watching)))
+        }
+    }
+
+    fun showFromContinueWatching() {
+        val item = _uiState.value.detail?.item ?: return
+        launch {
+            preferencesStore.unhideCwItem(item.id)
+            _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_shown_in_continue_watching)))
         }
     }
 

@@ -1699,6 +1699,15 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
+    suspend fun includeSeriesInNextUp(seriesId: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS]?.let {
+                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
+            } ?: emptySet()
+            prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS] = json.encodeToString(current - seriesId)
+        }
+    }
+
     suspend fun setHiddenCwItemIds(ids: Set<String>) {
         dataStore.edit { it[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(ids) }
     }

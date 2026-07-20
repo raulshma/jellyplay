@@ -86,6 +86,8 @@ internal data class DetailContentCallbacks(
     val onPlayAlbumTrack: (Int) -> Unit,
     val onVideoClick: (SeerrRelatedVideo) -> Unit,
     val onHideFromNextUp: () -> Unit,
+    val onShowFromNextUp: () -> Unit,
     val onHideFromContinueWatching: () -> Unit,
+    val onShowFromContinueWatching: () -> Unit,
     val onManageSeries: () -> Unit,
 )
