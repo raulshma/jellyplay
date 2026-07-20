@@ -57,6 +57,20 @@ object ShapeCache {
     /** 28dp smooth corners — bottom sheets, floating panels */
     val smooth28 = SynthwaveDynamicShape(AbsoluteSmoothCornerShape(cornerRadius = 28.dp, smoothnessAsPercent = 60))
 
+    /** 28dp top-only smooth corners — bottom sheets that sit flush on the screen base */
+    val smoothTop28 = SynthwaveDynamicShape(
+        AbsoluteSmoothCornerShape(
+            cornerRadiusTL = 28.dp,
+            cornerRadiusTR = 28.dp,
+            cornerRadiusBL = 0.dp,
+            cornerRadiusBR = 0.dp,
+            smoothnessAsPercentTL = 60,
+            smoothnessAsPercentTR = 60,
+            smoothnessAsPercentBL = 60,
+            smoothnessAsPercentBR = 60,
+        ),
+    )
+
     /** 32dp smooth corners — full-width cards, hero surfaces */
     val smooth32 = SynthwaveDynamicShape(AbsoluteSmoothCornerShape(cornerRadius = 32.dp, smoothnessAsPercent = 60))
 

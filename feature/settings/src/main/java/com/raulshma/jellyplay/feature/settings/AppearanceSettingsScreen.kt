@@ -86,7 +86,7 @@ fun AppearanceSettingsScreen(
         tag = "appearance_init",
     )
 
-    val homeLayoutGroup = remember { listOf("pinned_home_sections", "home_layout_presets", "configure_libraries") }
+    val homeLayoutGroup = remember { listOf("pinned_home_sections", "home_layout_presets", "configure_libraries", "home_section_layout") }
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId, showAdvanced) {
         val themeGroup = listOf(

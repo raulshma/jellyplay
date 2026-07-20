@@ -36,6 +36,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -327,6 +328,122 @@ class HomeViewModelTest {
         coVerify(exactly = 0) {
             mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
         }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun setSectionVisible_removesTypeFromEnabledSet() = runTest {
+        // Start with all configurable types enabled.
+        prefsFlow.value = UserPreferences(
+            enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet(),
+        )
+        viewModel = buildViewModel()
+        runCurrent()
+
+        viewModel.setSectionVisible(HomeSectionType.NEXT_UP, visible = false)
+
+        val expected = HomeSectionType.CONFIGURABLE.toSet() - HomeSectionType.NEXT_UP
+        verify { preferencesEditor.setEnabledHomeSectionTypes(expected) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun setSectionVisible_addsTypeToEnabledSet() = runTest {
+        prefsFlow.value = UserPreferences(
+            enabledHomeSectionTypes = emptySet(),
+        )
+        viewModel = buildViewModel()
+        runCurrent()
+
+        viewModel.setSectionVisible(HomeSectionType.RECOMMENDATIONS, visible = true)
+
+        verify { preferencesEditor.setEnabledHomeSectionTypes(setOf(HomeSectionType.RECOMMENDATIONS)) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun moveSection_up_swapsWithPredecessor() = runTest {
+        val order = listOf(
+            HomeSectionType.CONTINUE_WATCHING,
+            HomeSectionType.NEXT_UP,
+            HomeSectionType.LATEST_MEDIA,
+        )
+        prefsFlow.value = UserPreferences(homeSectionOrder = order)
+        // Capture the edit{} block and run it against a recording store so the
+        // resulting order can be asserted (edit is fire-and-forget over the app
+        // scope, so the lambda is the only place the new order lives).
+        val editorBlock = slot<suspend UserPreferencesStore.() -> Unit>()
+        every { preferencesEditor.edit(capture(editorBlock)) } returns mockk()
+        viewModel = buildViewModel()
+        runCurrent()
+
+        viewModel.moveSection(HomeSectionType.NEXT_UP, up = true)
+
+        assertTrue(editorBlock.isCaptured)
+        val recordingStore = mockk<UserPreferencesStore>(relaxed = true)
+        var capturedOrder: List<HomeSectionType>? = null
+        coEvery { recordingStore.setHomeSectionOrder(any()) } answers { capturedOrder = firstArg() }
+        // edit's block is suspend — run it in a real coroutine to replay it
+        // against the recording store and observe the persisted order.
+        kotlinx.coroutines.runBlocking { editorBlock.captured.invoke(recordingStore) }
+        assertEquals(
+            listOf(HomeSectionType.NEXT_UP, HomeSectionType.CONTINUE_WATCHING, HomeSectionType.LATEST_MEDIA),
+            capturedOrder,
+        )
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun moveSection_down_atLastIndex_isNoOp() = runTest {
+        val order = listOf(
+            HomeSectionType.CONTINUE_WATCHING,
+            HomeSectionType.NEXT_UP,
+        )
+        prefsFlow.value = UserPreferences(homeSectionOrder = order)
+        every { preferencesEditor.edit(any()) } returns mockk()
+        viewModel = buildViewModel()
+        runCurrent()
+
+        viewModel.moveSection(HomeSectionType.NEXT_UP, up = false)
+
+        // NEXT_UP is already last → editor must not be touched.
+        verify(exactly = 0) { preferencesEditor.edit(any()) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun setLibrarySectionVisible_disabled_addsTypeToOverrideSet() = runTest {
+        prefsFlow.value = UserPreferences(
+            libraryHomeSectionOverrides = mapOf("movies" to setOf(HomeSectionType.RECENTLY_ADDED)),
+        )
+        viewModel = buildViewModel()
+        runCurrent()
+
+        // Hiding LATEST_MEDIA for the "movies" library adds it to the disabled
+        // set alongside the existing RECENTLY_ADDED entry.
+        viewModel.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = false)
+
+        verify {
+            preferencesEditor.setLibraryHomeSectionOverrides(
+                mapOf("movies" to setOf(HomeSectionType.RECENTLY_ADDED, HomeSectionType.LATEST_MEDIA)),
+            )
+        }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun setLibrarySectionVisible_enabled_dropsEmptyKey() = runTest {
+        prefsFlow.value = UserPreferences(
+            libraryHomeSectionOverrides = mapOf("movies" to setOf(HomeSectionType.LATEST_MEDIA)),
+        )
+        viewModel = buildViewModel()
+        runCurrent()
+
+        // Re-enabling the only disabled type empties the set, so the key must
+        // be dropped entirely (restoring default-enabled state).
+        viewModel.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = true)
+
+        verify { preferencesEditor.setLibraryHomeSectionOverrides(emptyMap()) }
         stopPeriodicRefresh()
     }
 

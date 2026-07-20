@@ -104,6 +104,14 @@ internal data class HomeContentCallbacks(
     val onSeerrItemClick: (Int, String) -> Unit,
     val onSeerrRequest: (com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem) -> Unit,
     val seerrPrefetch: (Int, String, () -> Unit) -> Unit,
+    /** Open the inline section-config sheet for a given section. Carries the
+     *  optional [libraryId] for per-library sections (LATEST_MEDIA) so the sheet
+     *  can apply a per-library override instead of a global toggle. */
+    val onConfigureSection: (HomeSectionType, String?) -> Unit,
+    /** Deep-link into Settings → Home Screen Layout (global ordering / presets). */
+    val onConfigureHomeLayout: () -> Unit,
+    /** Deep-link into Settings → Configure Libraries (per-library overrides). */
+    val onConfigureLibraries: () -> Unit,
 )
 
 /**
@@ -324,6 +332,14 @@ internal fun HomeContentList(
                             }
                         }
                     }
+                    // Long-press affordance only for user-configurable section
+                    // types; non-configurable rows (FAVORITES, PINNED, …) are
+                    // managed from their own surfaces and pass null.
+                    val sectionLongClick = remember(section.type, section.libraryId, callbacks) {
+                        if (section.type.isConfigurable) {
+                            { callbacks.onConfigureSection(section.type, section.libraryId) }
+                        } else null
+                    }
                     ContinueWatchingRow(
                         title = sectionTitle,
                         items = section.items,
@@ -335,8 +351,14 @@ internal fun HomeContentList(
                         focusRequester = rowFocusRequesters[index],
                         onRowFocused = { homeFocusRow = index },
                         clippingEnabled = state.experimentalCardClippingEnabled,
+                        onSectionLongClick = sectionLongClick,
                     )
                 } else {
+                    val sectionLongClick = remember(section.type, section.libraryId, callbacks) {
+                        if (section.type.isConfigurable) {
+                            { callbacks.onConfigureSection(section.type, section.libraryId) }
+                        } else null
+                    }
                     HomeMediaRow(
                         title = sectionTitle,
                         items = section.items,
@@ -350,6 +372,7 @@ internal fun HomeContentList(
                         onRowFocused = { homeFocusRow = index },
                         clippingEnabled = state.experimentalCardClippingEnabled,
                         showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
+                        onSectionLongClick = sectionLongClick,
                     )
                 }
             }
