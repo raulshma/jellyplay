@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import android.content.Context
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
@@ -26,13 +27,16 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -48,6 +52,7 @@ class DetailViewModelTest {
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var downloadRepository: DownloadRepository
+    private lateinit var downloadIntake: DownloadIntake
     private lateinit var preferencesStore: UserPreferencesStore
     private lateinit var offlineModeManager: OfflineModeManager
     private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
@@ -67,6 +72,7 @@ class DetailViewModelTest {
         playbackRepository = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
+        downloadIntake = mockk(relaxed = true)
         preferencesStore = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
         adaptiveBitrateManager = mockk(relaxed = true)
@@ -132,6 +138,7 @@ class DetailViewModelTest {
             playbackRepository = playbackRepository,
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
+            downloadIntake = downloadIntake,
             preferencesStore = preferencesStore,
             offlineModeManager = offlineModeManager,
             adaptiveBitrateManager = adaptiveBitrateManager,
@@ -155,6 +162,23 @@ class DetailViewModelTest {
         assertEquals("boom", viewModel.uiState.value.error)
         assertNull(viewModel.uiState.value.detail)
     }
+
+    // The single SharedFlow<DetailMessage> must surface exactly one event per
+    // action, even when the precondition fails synchronously (no detail loaded
+    // yet). Regression for the former nullable-field approach where the screen
+    // had to clear the field after showing.
+    @Test
+    fun messages_downloadSeriesWithNoDetail_emitsSeriesDownloadError() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.messages.collect { /* warm */ } }
+            every { context.getString(R.string.detail_error_details_not_loaded) } returns "no detail"
+
+            viewModel.downloadSeries()
+
+            val message = withTimeout(1_000) { viewModel.messages.first() }
+            assertTrue(message is DetailMessage.SeriesDownload)
+            assertEquals("no detail", (message as DetailMessage.SeriesDownload).error)
+        }
 
     @Test
     fun loadItem_movie_clearsSmartPlayTarget() = runTest(mainDispatcherRule.testDispatcher) {

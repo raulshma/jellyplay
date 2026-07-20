@@ -33,10 +33,9 @@ data class DetailUiState(
     // 401/403). Lets the screen render a dedicated "no access" treatment
     // instead of a generic network-error string.
     val isAccessDenied: Boolean = false,
-    // Transient, user-facing feedback (snackbar) for one-shot actions such as
-    // favorite / watched toggles that fail after an optimistic UI update. The
-    // screen is responsible for showing and then clearing it.
-    val userMessage: String? = null,
+    // One-shot snackbar feedback for favorite / watched / download actions is
+    // surfaced via [DetailViewModel.messages] (SharedFlow<DetailMessage>), not
+    // here — see [DetailMessage].
     // Series content
     val seasons: List<MediaItem> = emptyList(),
     val episodes: Map<String, List<MediaItem>> = emptyMap(),
@@ -67,10 +66,8 @@ data class DetailUiState(
     val seerrTvSeasons: List<SeerrSeason> = emptyList(),
     // Downloads
     val isDownloading: Boolean = false,
-    val downloadError: String? = null,
     val cellularDownloadWarningMb: Int? = null,
     val isDownloadingSeries: Boolean = false,
-    val seriesDownloadResult: SeriesDownloadResult? = null,
     val downloadSheetEpisodes: Map<String, List<MediaItem>> = emptyMap(),
     val downloadSheetLoadingSeasons: Set<String> = emptySet(),
     val downloadedEpisodeIds: Set<String> = emptySet(),

@@ -60,9 +60,6 @@ class HomeScrollState internal constructor(
 internal fun rememberHomeScrollState(
     savePosition: (Int, Int) -> Unit,
     initialPosition: HomeScrollPosition,
-    sectionCount: () -> Int,
-    newsletterBannerVisible: Boolean,
-    rowFocusRequesters: () -> List<androidx.compose.ui.focus.FocusRequester>,
 ): HomeScrollState {
     val isTv = LocalTvMode.current
     val listState = rememberSaveable(saver = LazyListState.Saver) {

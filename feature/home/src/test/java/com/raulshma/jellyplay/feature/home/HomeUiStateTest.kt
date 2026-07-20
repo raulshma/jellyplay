@@ -178,28 +178,6 @@ class HomeUiStateTest {
     }
 
     @Test
-    fun defaultFocusPosition_isZero() {
-        val pos = HomeFocusPosition()
-        assertEquals(0, pos.sectionIndex)
-        assertEquals(0, pos.itemIndex)
-    }
-
-    @Test
-    fun focusPosition_coerceAtLeast_negativesClampToZero() {
-        val sectionIndex = (-2).coerceAtLeast(0)
-        val itemIndex = (-10).coerceAtLeast(0)
-        assertEquals(0, sectionIndex)
-        assertEquals(0, itemIndex)
-    }
-
-    @Test
-    fun focusPosition_dataClass_equality() {
-        val a = HomeFocusPosition(1, 2)
-        val b = HomeFocusPosition(1, 2)
-        assertEquals(a, b)
-    }
-
-    @Test
     fun scrollPosition_dataClass_equality() {
         val a = HomeScrollPosition(3, 50)
         val b = HomeScrollPosition(3, 50)

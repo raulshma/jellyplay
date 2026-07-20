@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -91,6 +92,13 @@ data class HomeCallbacks(
      *  carries its own `highlightSettingId` for deep-link scroll/highlight. */
     val onSettingsSearchItemClick: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     val onNewsletterClick: () -> Unit = {},
+    /** Deep-link into Settings → Home Screen Layout. Reached from the inline
+     *  section-config sheet's "Configure Home Layout" action. */
+    val onConfigureHomeLayout: () -> Unit = {},
+    /** Deep-link into Settings → Configure Libraries (per-library section
+     *  overrides). Reached from the inline section-config sheet when a
+     *  per-library (LATEST_MEDIA) row is being configured. */
+    val onConfigureLibraries: () -> Unit = {},
 )
 
 @Composable
@@ -171,9 +179,6 @@ private fun MainHomeContent(
     val homeScrollState = rememberHomeScrollState(
         savePosition = remember(viewModel) { { index, offset -> viewModel.saveHomeScrollPosition(index, offset) } },
         initialPosition = viewModel.getHomeScrollPosition(),
-        sectionCount = { state.sections.size },
-        newsletterBannerVisible = state.newsletterBannerVisible,
-        rowFocusRequesters = { emptyList() },
     )
     val listState = homeScrollState.listState
 
@@ -239,6 +244,20 @@ private fun MainHomeContent(
     var isFabExpanded by remember { mutableStateOf(false) }
     var isSearchExpanded by remember { mutableStateOf(false) }
     val isSearchFocused by remember { derivedStateOf { state.searchState.query.isNotBlank() || isSearchExpanded } }
+
+    // Inline section-config sheet target — set by long-pressing a configurable
+    // section title. Hoisted here (not in the LazyColumn item) so opening the
+    // sheet doesn't recompose the content list, and so it survives the row
+    // leaving composition while the sheet is open. Carries the optional
+    // libraryId for per-library (LATEST_MEDIA) rows so the sheet can apply a
+    // per-library override instead of a global toggle.
+    var sectionConfigTarget by remember { mutableStateOf<SectionConfigTarget?>(null) }
+    val onConfigureSection = remember { { type: HomeSectionType, libraryId: String? ->
+        sectionConfigTarget = SectionConfigTarget(type, libraryId)
+    } }
+    val onConfigureHomeLayout = remember(callbacks) { { callbacks.onConfigureHomeLayout() } }
+    val onConfigureLibraries = remember(callbacks) { { callbacks.onConfigureLibraries() } }
+    val dismissSectionConfig = remember { { sectionConfigTarget = null } }
 
     val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
@@ -373,6 +392,9 @@ private fun MainHomeContent(
                                 onSeerrItemClick = callbacks.onSeerrItemClick,
                                 onSeerrRequest = remember(viewModel) { { item: SeerrSearchItem -> viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(item)) } },
                                 seerrPrefetch = seerrPrefetch,
+                                onConfigureSection = onConfigureSection,
+                                onConfigureHomeLayout = onConfigureHomeLayout,
+                                onConfigureLibraries = onConfigureLibraries,
                             ),
                             listState = listState,
                             density = density,
@@ -534,7 +556,60 @@ private fun MainHomeContent(
             },
         )
     }
+
+    // Inline section-config sheet (long-press a configurable section title).
+    // Resolved against the current pref mirrors so toggle/move states are
+    // always accurate even if the row that opened it has since recomposed.
+    // Per-library (LATEST_MEDIA) rows branch to a per-library hide override
+    // and hide the reorder controls, since per-library rows move as a group.
+    val target = sectionConfigTarget
+    if (target != null && target.type.isConfigurable) {
+        val libraryId = target.libraryId
+        val perLibrary = libraryId != null
+        val order = state.homeSectionOrder
+        val index = order.indexOf(target.type)
+        val enabled = if (perLibrary) {
+            // Per-library: enabled unless the type is in this library's
+            // disabled override set (defaults to enabled when absent).
+            target.type !in state.libraryHomeSectionOverrides[libraryId].orEmpty()
+        } else {
+            target.type in state.enabledHomeSectionTypes
+        }
+        HomeSectionConfigSheet(
+            sectionType = target.type,
+            enabled = enabled,
+            perLibrary = perLibrary,
+            position = index,
+            total = order.size,
+            canMoveUp = index > 0,
+            canMoveDown = index in 0..(order.lastIndex - 1),
+            onToggleVisible = remember(viewModel, target) {
+                { visible ->
+                    if (libraryId != null) {
+                        viewModel.setLibrarySectionVisible(libraryId, target.type, visible)
+                    } else {
+                        viewModel.setSectionVisible(target.type, visible)
+                    }
+                }
+            },
+            onMoveUp = remember(viewModel, target) { { viewModel.moveSection(target.type, up = true) } },
+            onMoveDown = remember(viewModel, target) { { viewModel.moveSection(target.type, up = false) } },
+            onConfigureLayout = if (perLibrary) onConfigureLibraries else onConfigureHomeLayout,
+            onDismiss = dismissSectionConfig,
+        )
+    }
 }
+
+/**
+ * Target of the inline section-config sheet. Carries the optional [libraryId]
+ * so per-library (LATEST_MEDIA) rows can apply a per-library override instead
+ * of a global toggle. UI-only — never persisted, never crosses module bounds.
+ */
+@androidx.compose.runtime.Immutable
+private data class SectionConfigTarget(
+    val type: HomeSectionType,
+    val libraryId: String? = null,
+)
 
 /**
  * Leaf composable that owns the scroll-coupled app-bar icon colors.

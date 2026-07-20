@@ -34,13 +34,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -74,9 +74,6 @@ fun MediaDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val detail = uiState.detail
     val canManageSeries by viewModel.canManageSeries.collectAsStateWithLifecycle()
-    LaunchedEffect(detail?.item?.id) {
-        detail?.let { viewModel.loadSeerrDataIfNeeded(it) }
-    }
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
 
@@ -95,31 +92,25 @@ fun MediaDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarContext = LocalContext.current
 
-    LaunchedEffect(uiState.seriesDownloadResult) {
-        uiState.seriesDownloadResult?.let { result ->
-            val message = if (result.error != null) {
-                result.error
-            } else if (result.queuedCount > 0) {
-                snackbarContext.resources.getQuantityString(R.plurals.detail_episodes_queued, result.queuedCount, result.queuedCount)
-            } else {
-                snackbarContext.getString(R.string.detail_msg_no_episodes_queued)
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { message ->
+            val text = when (message) {
+                is DetailMessage.Text -> message.text
+                is DetailMessage.SeriesDownload -> {
+                    if (message.error != null) {
+                        message.error
+                    } else if (message.queuedCount > 0) {
+                        snackbarContext.resources.getQuantityString(
+                            R.plurals.detail_episodes_queued,
+                            message.queuedCount,
+                            message.queuedCount,
+                        )
+                    } else {
+                        snackbarContext.getString(R.string.detail_msg_no_episodes_queued)
+                    }
+                }
             }
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearSeriesDownloadResult()
-        }
-    }
-
-    LaunchedEffect(uiState.downloadError) {
-        uiState.downloadError?.let { error ->
-            snackbarHostState.showSnackbar(error)
-            viewModel.clearDownloadError()
-        }
-    }
-
-    LaunchedEffect(uiState.userMessage) {
-        uiState.userMessage?.let { message ->
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearUserMessage()
+            snackbarHostState.showSnackbar(text)
         }
     }
 
@@ -197,47 +188,48 @@ fun MediaDetailScreen(
                     detail?.item?.seriesId ?: itemId
                 }
 
-                val state = remember(
-                    itemId, detail, uiState.seasons, uiState.episodes, uiState.fetchedSeasonIds,
-                    uiState.smartPlayTarget, uiState.selectedSubtitleIndex, uiState.selectedAudioIndex,
-                    uiState.isDownloading, uiState.isDownloadingSeries, activeDownload, uiState.isLoading,
-                    uiState.error, uiState.albumTracks, uiState.collectionItems, uiState.relatedItems,
-                    uiState.relatedVideos, uiState.seerrRecommendations, uiState.seerrSimilar,
-                    uiState.isSeerrConnected, uiState.isSeerrRecommendationsEnabled,
-                    preferences, canManageSeries,
-                ) {
-                    DetailContentState(
-                        itemId = itemId,
-                        detail = detail,
-                        seasons = uiState.seasons,
-                        episodes = uiState.episodes,
-                        fetchedSeasonIds = uiState.fetchedSeasonIds,
-                        smartPlayTarget = uiState.smartPlayTarget,
-                        selectedSubtitleIndex = uiState.selectedSubtitleIndex,
-                        selectedAudioIndex = uiState.selectedAudioIndex,
-                        isDownloading = uiState.isDownloading,
-                        isDownloadingSeries = uiState.isDownloadingSeries,
-                        activeDownload = activeDownload,
-                        isLoading = uiState.isLoading,
-                        error = uiState.error,
-                        isAccessDenied = uiState.isAccessDenied,
-                        albumTracks = uiState.albumTracks,
-                        collectionItems = uiState.collectionItems,
-                        relatedItems = uiState.relatedItems,
-                        relatedVideos = uiState.relatedVideos,
-                        seerrRecommendations = uiState.seerrRecommendations,
-                        seerrSimilar = uiState.seerrSimilar,
-                        isSeerrConnected = uiState.isSeerrConnected,
-                        isSeerrRecommendationsEnabled = uiState.isSeerrRecommendationsEnabled,
-                        preferences = preferences,
-                        canManageSeries = canManageSeries,
-                    )
-                }
+                // Constructed directly (not via `remember`) — DetailContentState
+                // is a @Immutable data class, so Compose structural-equals it for
+                // free and `DetailContent` is skipped whenever no field actually
+                // changed. The former 22-key `remember` added per-recomposition
+                // key-comparison cost and silently drifted whenever a new uiState
+                // field was added without updating the key list.
+                val state = DetailContentState(
+                    itemId = itemId,
+                    detail = detail,
+                    seasons = uiState.seasons,
+                    episodes = uiState.episodes,
+                    fetchedSeasonIds = uiState.fetchedSeasonIds,
+                    smartPlayTarget = uiState.smartPlayTarget,
+                    selectedSubtitleIndex = uiState.selectedSubtitleIndex,
+                    selectedAudioIndex = uiState.selectedAudioIndex,
+                    isDownloading = uiState.isDownloading,
+                    isDownloadingSeries = uiState.isDownloadingSeries,
+                    activeDownload = activeDownload,
+                    isLoading = uiState.isLoading,
+                    error = uiState.error,
+                    isAccessDenied = uiState.isAccessDenied,
+                    albumTracks = uiState.albumTracks,
+                    collectionItems = uiState.collectionItems,
+                    relatedItems = uiState.relatedItems,
+                    relatedVideos = uiState.relatedVideos,
+                    seerrRecommendations = uiState.seerrRecommendations,
+                    seerrSimilar = uiState.seerrSimilar,
+                    isSeerrConnected = uiState.isSeerrConnected,
+                    isSeerrRecommendationsEnabled = uiState.isSeerrRecommendationsEnabled,
+                    preferences = preferences,
+                    canManageSeries = canManageSeries,
+                )
+
+                val onVideoClick = rememberVideoClickHandler(
+                    uriHandler = uriHandler,
+                    onPlayYouTube = { key -> activeTrailerKey = key },
+                )
 
                 val callbacks = remember(
                     rememberedGetImageUrl, rememberedGetBackdropUrl, rememberedGetSeerrPosterUrl,
                     viewModel, onPlayClick, onAudioClick, itemId, onItemClick, onPersonClick,
-                    onNavigateToSeries, onNavigate, onEditClick, onManageSeries, onBack, uriHandler,
+                    onNavigateToSeries, onNavigate, onEditClick, onManageSeries, onBack, onVideoClick,
                 ) {
                     DetailContentCallbacks(
                         getImageUrl = rememberedGetImageUrl,
@@ -273,25 +265,16 @@ fun MediaDetailScreen(
                         onEpisodesDescendingChange = { descending: Boolean ->
                             viewModel.setEpisodesDescending(descending)
                         },
-                        onLoadSeerrData = { detail?.let { viewModel.loadSeerrDataIfNeeded(it) } },
                         onBack = onBack,
                         onSeerrRequest = { item: SeerrSearchItem -> seerrRequestItem = item },
                         onNavigate = onNavigate,
                         onEditClick = { onEditClick(itemId) },
                         onPlayAlbumTrack = { index: Int -> viewModel.playAlbum(index) },
-                        onVideoClick = { video: SeerrRelatedVideo ->
-                            if (video.site?.lowercase() == "youtube" && video.key != null) {
-                                activeTrailerKey = video.key
-                            } else if (video.key != null) {
-                                val url = when (video.site?.lowercase()) {
-                                    "youtube" -> "https://www.youtube.com/watch?v=${video.key}"
-                                    else -> null
-                                }
-                                url?.let { uriHandler.openUri(it) }
-                            }
-                        },
+                        onVideoClick = onVideoClick,
                         onHideFromNextUp = { viewModel.hideFromNextUp() },
+                        onShowFromNextUp = { viewModel.showFromNextUp() },
                         onHideFromContinueWatching = { viewModel.hideFromContinueWatching() },
+                        onShowFromContinueWatching = { viewModel.showFromContinueWatching() },
                         onManageSeries = { onManageSeries(itemId) },
                     )
                 }

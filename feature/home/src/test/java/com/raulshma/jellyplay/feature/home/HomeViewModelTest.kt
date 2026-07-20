@@ -1,0 +1,479 @@
+package com.raulshma.jellyplay.feature.home
+
+import androidx.lifecycle.LifecycleOwner
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
+import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
+import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.usecase.GetHomeSectionsUseCase
+import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
+import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
+import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
+import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
+import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.testing.MainDispatcherRule
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
+
+/**
+ * Real HomeViewModel tests. Instantiates the VM with MockK deps + a fake
+ * [TimeSource], then drives it through the branches the previous tautological
+ * test suite skipped: section fetch + ordering, CW side-effects, offline
+ * transitions, search, and sign-in reset.
+ *
+ * Harness mirrors `DetailViewModelTest`: MockK + [MainDispatcherRule] + runTest.
+ * Uses [runCurrent] (not `advanceUntilIdle`) so the periodic-refresh `while(true)`
+ * loop's `delay` doesn't drive virtual time unbounded.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class HomeViewModelTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
+    private lateinit var mediaRepository: MediaRepository
+    private lateinit var imageUrlProvider: ImageUrlProvider
+    private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
+    private lateinit var downloadRepository: DownloadRepository
+    private lateinit var offlineRepository: OfflineRepository
+    private lateinit var offlineModeManager: OfflineModeManager
+    private lateinit var newsletterTriggerManager: NewsletterTriggerManager
+    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var preferencesEditor: PreferencesEditor
+    private lateinit var searchHistoryRepository: SearchHistoryRepository
+    private lateinit var seerrRepository: SeerrRepository
+    private lateinit var seerrRequestDelegate: SeerrRequestDelegate
+    private lateinit var seerrPreferencesStore: SeerrPreferencesStore
+    private lateinit var authRepository: AuthRepository
+    private lateinit var arrRepository: ArrRepository
+    private lateinit var tvWatchNextScheduler: TvWatchNextScheduler
+    private lateinit var continueWatchingBroadcaster: ContinueWatchingBroadcaster
+    private lateinit var fakeTimeSource: FakeTimeSource
+
+    private val userFlow = MutableStateFlow<UserInfo?>(null)
+    private val prefsFlow = MutableStateFlow(UserPreferences())
+    private val seerrPrefsFlow = MutableStateFlow(SeerrPreferences())
+    private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
+    private val networkStatusFlow = MutableStateFlow(NetworkStatus.Online)
+
+    private lateinit var viewModel: HomeViewModel
+
+    @Before
+    fun setUp() {
+        mediaRepository = mockk(relaxed = true)
+        imageUrlProvider = mockk(relaxed = true)
+        photoFolderPrefetcher = mockk(relaxed = true)
+        downloadRepository = mockk(relaxed = true)
+        offlineRepository = mockk(relaxed = true)
+        offlineModeManager = mockk(relaxed = true)
+        newsletterTriggerManager = mockk(relaxed = true)
+        preferencesStore = mockk(relaxed = true)
+        preferencesEditor = mockk(relaxed = true)
+        searchHistoryRepository = mockk(relaxed = true)
+        seerrRepository = mockk(relaxed = true)
+        seerrRequestDelegate = mockk(relaxed = true)
+        seerrPreferencesStore = mockk(relaxed = true)
+        authRepository = mockk(relaxed = true)
+        arrRepository = mockk(relaxed = true)
+        tvWatchNextScheduler = mockk(relaxed = true)
+        continueWatchingBroadcaster = mockk(relaxed = true)
+        fakeTimeSource = FakeTimeSource()
+
+        every { authRepository.currentUser } returns userFlow
+        every { preferencesStore.preferences } returns prefsFlow
+        every { seerrPreferencesStore.preferences } returns seerrPrefsFlow
+        every { offlineModeManager.offlineMode } returns offlineModeFlow
+        every { offlineModeManager.networkStatus } returns networkStatusFlow
+        every { offlineModeManager.isOffline } returns false
+        every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
+        every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
+        every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
+        every { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(emptyList())
+        every { seerrRepository.isConnected() } returns flowOf(false)
+        every { seerrRepository.isSearchEnabled() } returns flowOf(false)
+    }
+
+    private fun buildViewModel(): HomeViewModel = HomeViewModel(
+        mediaRepository = mediaRepository,
+        getHomeSections = GetHomeSectionsUseCase(mediaRepository),
+        orderHomeSections = OrderHomeSectionsUseCase(),
+        imageUrlProvider = imageUrlProvider,
+        photoFolderPrefetcher = photoFolderPrefetcher,
+        downloadRepository = downloadRepository,
+        offlineRepository = offlineRepository,
+        offlineModeManager = offlineModeManager,
+        newsletterTriggerManager = newsletterTriggerManager,
+        preferencesStore = preferencesStore,
+        preferencesEditor = preferencesEditor,
+        searchHistoryRepository = searchHistoryRepository,
+        seerrRepository = seerrRepository,
+        seerrRequestDelegate = seerrRequestDelegate,
+        seerrPreferencesStore = seerrPreferencesStore,
+        authRepository = authRepository,
+        arrRepository = arrRepository,
+        tvWatchNextScheduler = tvWatchNextScheduler,
+        continueWatchingBroadcaster = continueWatchingBroadcaster,
+        timeSource = fakeTimeSource,
+    )
+
+    @Test
+    fun signIn_fetchesSections_andOrdersThem() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(
+                    section(HomeSectionType.LATEST_MEDIA),
+                    section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1"))),
+                ),
+            ),
+        )
+        viewModel = buildViewModel()
+
+        // Triggers the sign-in path: previousUserId null → userId set → fetch.
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        val sections = viewModel.uiState.value.sections
+        // Default UserPreferences.homeSectionOrder is CONFIGURABLE, which lists
+        // CONTINUE_WATCHING before LATEST_MEDIA — so ordering should apply.
+        assertEquals(HomeSectionType.CONTINUE_WATCHING, sections.first().type)
+        assertEquals(2, sections.size)
+        stopPeriodicRefresh()
+    }
+
+    /**
+     * Stops the VM's periodic-refresh `while(true)` loop so `runTest` cleanup
+     * (which advances virtual time to settle pending `delay`s) doesn't hang on
+     * the infinite loop. Equivalent to the app backgrounding the screen.
+     */
+    private fun stopPeriodicRefresh() {
+        viewModel.onStop(mockk(relaxed = true))
+    }
+
+    @Test
+    fun continueWatchingChange_firesBroadcaster_andTvScheduler() = runTest {
+        // CW publishing is gated on the androidTvWatchNextEnabled pref (default true).
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(
+                    section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1"))),
+                ),
+            ),
+        )
+        viewModel = buildViewModel()
+
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        verify { continueWatchingBroadcaster.refreshContinueWatching() }
+        coVerify { tvWatchNextScheduler.scheduleRefresh() }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun continueWatchingChange_skipsTvScheduler_whenPrefDisabled() = runTest {
+        prefsFlow.value = UserPreferences(androidTvWatchNextEnabled = false)
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(
+                    section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1"))),
+                ),
+            ),
+        )
+        viewModel = buildViewModel()
+
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        verify { continueWatchingBroadcaster.refreshContinueWatching() }
+        coVerify(exactly = 0) { tvWatchNextScheduler.scheduleRefresh() }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun signOut_clearsSections() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(
+            HomeSectionsResult(sections = listOf(section(HomeSectionType.CONTINUE_WATCHING))),
+        )
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+        assertFalse(viewModel.uiState.value.sections.isEmpty())
+
+        userFlow.value = null
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.sections.isEmpty())
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun offlineToOnline_clearsIsGoingOnline_afterFetch() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        // Drive the offline→online transition path: the offlineMode collector's
+        // ONLINE branch sets isGoingOnline via toggleOfflineMode, then clears
+        // it in finally after the fetch resolves.
+        every { offlineModeManager.isOffline } returns true
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        every { offlineModeManager.isOffline } returns false
+        offlineModeFlow.value = OfflineMode.ONLINE
+        runCurrent()
+
+        assertFalse(
+            "isGoingOnline must clear after the online fetch resolves",
+            viewModel.uiState.value.isGoingOnline,
+        )
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun search_keepsLatestQuery_afterSupersededEntry() = runTest {
+        viewModel = buildViewModel()
+
+        viewModel.onEvent(HomeUiEvent.UpdateSearchQuery("bat"))
+        viewModel.onEvent(HomeUiEvent.UpdateSearchQuery("batman"))
+        runCurrent()
+
+        // Query is the latest value; the intermediate "bat" was superseded by
+        // the debounce + distinctUntilChanged chain.
+        assertEquals("batman", viewModel.uiState.value.searchState.query)
+    }
+
+    @Test
+    fun clearSearch_resetsSearchState() = runTest {
+        viewModel = buildViewModel()
+
+        viewModel.onEvent(HomeUiEvent.UpdateSearchQuery("hello"))
+        runCurrent()
+
+        viewModel.onEvent(HomeUiEvent.ClearSearch)
+        runCurrent()
+
+        val search = viewModel.uiState.value.searchState
+        assertEquals("", search.query)
+        assertTrue(search.jellyfinResults.isEmpty())
+        assertTrue(search.seerrResults.isEmpty())
+    }
+
+    @Test
+    fun prefChange_withUnrelatedPrefs_doesNotRefetch() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        // Reset invocation count after the sign-in fetch.
+        io.mockk.clearMocks(mediaRepository, answers = false, recordedCalls = true, childMocks = false)
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+
+        // Toggle a pref that is NOT in the home-section diff set (oledMode).
+        prefsFlow.value = UserPreferences(oledMode = true)
+        runCurrent()
+
+        coVerify(exactly = 0) {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun setSectionVisible_removesTypeFromEnabledSet() = runTest {
+        // Start with all configurable types enabled.
+        prefsFlow.value = UserPreferences(
+            enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet(),
+        )
+        viewModel = buildViewModel()
+        runCurrent()
+
+        viewModel.setSectionVisible(HomeSectionType.NEXT_UP, visible = false)
+
+        val expected = HomeSectionType.CONFIGURABLE.toSet() - HomeSectionType.NEXT_UP
+        verify { preferencesEditor.setEnabledHomeSectionTypes(expected) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun setSectionVisible_addsTypeToEnabledSet() = runTest {
+        prefsFlow.value = UserPreferences(
+            enabledHomeSectionTypes = emptySet(),
+        )
+        viewModel = buildViewModel()
+        runCurrent()
+
+        viewModel.setSectionVisible(HomeSectionType.RECOMMENDATIONS, visible = true)
+
+        verify { preferencesEditor.setEnabledHomeSectionTypes(setOf(HomeSectionType.RECOMMENDATIONS)) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun moveSection_up_swapsWithPredecessor() = runTest {
+        val order = listOf(
+            HomeSectionType.CONTINUE_WATCHING,
+            HomeSectionType.NEXT_UP,
+            HomeSectionType.LATEST_MEDIA,
+        )
+        prefsFlow.value = UserPreferences(homeSectionOrder = order)
+        // Capture the edit{} block and run it against a recording store so the
+        // resulting order can be asserted (edit is fire-and-forget over the app
+        // scope, so the lambda is the only place the new order lives).
+        val editorBlock = slot<suspend UserPreferencesStore.() -> Unit>()
+        every { preferencesEditor.edit(capture(editorBlock)) } returns mockk()
+        viewModel = buildViewModel()
+        runCurrent()
+
+        viewModel.moveSection(HomeSectionType.NEXT_UP, up = true)
+
+        assertTrue(editorBlock.isCaptured)
+        val recordingStore = mockk<UserPreferencesStore>(relaxed = true)
+        var capturedOrder: List<HomeSectionType>? = null
+        coEvery { recordingStore.setHomeSectionOrder(any()) } answers { capturedOrder = firstArg() }
+        // edit's block is suspend — run it in a real coroutine to replay it
+        // against the recording store and observe the persisted order.
+        kotlinx.coroutines.runBlocking { editorBlock.captured.invoke(recordingStore) }
+        assertEquals(
+            listOf(HomeSectionType.NEXT_UP, HomeSectionType.CONTINUE_WATCHING, HomeSectionType.LATEST_MEDIA),
+            capturedOrder,
+        )
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun moveSection_down_atLastIndex_isNoOp() = runTest {
+        val order = listOf(
+            HomeSectionType.CONTINUE_WATCHING,
+            HomeSectionType.NEXT_UP,
+        )
+        prefsFlow.value = UserPreferences(homeSectionOrder = order)
+        every { preferencesEditor.edit(any()) } returns mockk()
+        viewModel = buildViewModel()
+        runCurrent()
+
+        viewModel.moveSection(HomeSectionType.NEXT_UP, up = false)
+
+        // NEXT_UP is already last → editor must not be touched.
+        verify(exactly = 0) { preferencesEditor.edit(any()) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun setLibrarySectionVisible_disabled_addsTypeToOverrideSet() = runTest {
+        prefsFlow.value = UserPreferences(
+            libraryHomeSectionOverrides = mapOf("movies" to setOf(HomeSectionType.RECENTLY_ADDED)),
+        )
+        viewModel = buildViewModel()
+        runCurrent()
+
+        // Hiding LATEST_MEDIA for the "movies" library adds it to the disabled
+        // set alongside the existing RECENTLY_ADDED entry.
+        viewModel.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = false)
+
+        verify {
+            preferencesEditor.setLibraryHomeSectionOverrides(
+                mapOf("movies" to setOf(HomeSectionType.RECENTLY_ADDED, HomeSectionType.LATEST_MEDIA)),
+            )
+        }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun setLibrarySectionVisible_enabled_dropsEmptyKey() = runTest {
+        prefsFlow.value = UserPreferences(
+            libraryHomeSectionOverrides = mapOf("movies" to setOf(HomeSectionType.LATEST_MEDIA)),
+        )
+        viewModel = buildViewModel()
+        runCurrent()
+
+        // Re-enabling the only disabled type empties the set, so the key must
+        // be dropped entirely (restoring default-enabled state).
+        viewModel.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = true)
+
+        verify { preferencesEditor.setLibraryHomeSectionOverrides(emptyMap()) }
+        stopPeriodicRefresh()
+    }
+
+    private fun userInfo(id: String) = UserInfo(
+        id = id,
+        name = "Tester",
+        serverAddress = "http://server",
+        accessToken = "token",
+        serverId = "s1",
+        primaryImageTag = null,
+    )
+
+    private fun section(
+        type: HomeSectionType,
+        items: List<MediaItem> = emptyList(),
+    ) = HomeSection(
+        id = type.name,
+        title = type.displayName,
+        type = type,
+        items = items,
+    )
+
+    private fun item(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.MOVIE)
+
+    /**
+     * Controllable [TimeSource] returning a fixed epoch so the periodic-refresh
+     * and TTL gates behave deterministically without crossing their thresholds.
+     */
+    private class FakeTimeSource : TimeSource {
+        override fun nowEpochMillis(): Long = 1_000L
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 1, 1)
+    }
+}

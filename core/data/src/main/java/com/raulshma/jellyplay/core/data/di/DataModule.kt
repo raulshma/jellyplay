@@ -21,8 +21,12 @@ import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepositoryImpl
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.DownloadIntakeImpl
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProviderImpl
+import com.raulshma.jellyplay.core.data.util.SystemTimeSource
+import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
@@ -57,13 +61,12 @@ abstract class DataModule {
         fun provideLyricsRepository(mediaRepository: MediaRepository): LyricsRepository =
             mediaRepository
 
-        // Note: GetHomeSectionsUseCase, GetMediaDetailUseCase, and
-        // StartMediaDownloadUseCase previously had explicit @Provides @Singleton
-        // methods here. They were removed because each use case already has
-        // @Inject constructor — Hilt provides them automatically (unscoped,
-        // which is the correct scope for stateless transformers). No consumer
-        // in the codebase injects these directly today; they remain available
-        // for future use via constructor injection.
+        // Note: GetHomeSectionsUseCase and GetMediaDetailUseCase previously had
+        // explicit @Provides @Singleton methods here. They were removed because
+        // each use case already has @Inject constructor — Hilt provides them
+        // automatically (unscoped, which is the correct scope for stateless
+        // transformers). No consumer in the codebase injects these directly
+        // today; they remain available for future use via constructor injection.
     }
 
     @Binds
@@ -81,6 +84,10 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindDownloadRepository(impl: DownloadRepositoryImpl): DownloadRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDownloadIntake(impl: DownloadIntakeImpl): DownloadIntake
 
     @Binds
     @Singleton
@@ -121,4 +128,8 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindOkHttpConfigProvider(impl: OkHttpConfigProviderImpl): OkHttpConfigProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindTimeSource(impl: SystemTimeSource): TimeSource
 }

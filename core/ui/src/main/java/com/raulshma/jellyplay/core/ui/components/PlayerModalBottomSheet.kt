@@ -42,7 +42,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val SheetTopShape = ShapeCache.smooth28
+private val SheetTopShape = ShapeCache.smoothTop28
 private const val MAX_SCRIM_ALPHA = 0.5f
 private const val DISMISS_FRACTION = 0.18f
 /**

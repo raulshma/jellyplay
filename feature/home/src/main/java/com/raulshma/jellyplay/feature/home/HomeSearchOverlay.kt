@@ -219,15 +219,7 @@ fun HomeSearchResultsOverlay(
                 }
                 if (jellyfinResults.isNotEmpty()) {
                     item(contentType = "libraryHeader") {
-                        Text(
-                            text = "Library",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.8.sp,
-                            ),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        )
+                        SearchSectionHeader("Library")
                     }
                     items(
                         count = jellyfinResults.size,
@@ -252,12 +244,35 @@ fun HomeSearchResultsOverlay(
                             }
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
-                            SearchItemRow(
+                            val imageUrl = getImageUrl(item.id)
+                            HomeSearchResultRow(
                                 title = item.name,
                                 subtitle = subtitle,
-                                imageUrl = getImageUrl(item.id),
                                 onClick = { onJellyfinClick(item) },
-                                index = index,
+                                tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+                                leading = {
+                                    if (imageUrl.isNotBlank()) {
+                                        MediaImage(
+                                            url = imageUrl,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clip(ShapeCache.smooth10),
+                                            contentScale = ContentScale.Crop,
+                                            // 44dp thumbnail at 3× density ≈ 132px; decode at 128² instead
+                                            // of the 384² default to cut memory and decode cost during
+                                            // search-as-you-type.
+                                            size = CoilSize(128, 128),
+                                        )
+                                    } else {
+                                        androidx.compose.material3.Icon(
+                                            Tabler.Outline.Search,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                },
                             )
                         }
                     }
@@ -274,15 +289,7 @@ fun HomeSearchResultsOverlay(
                         }
                     }
                     item(contentType = "seerrHeader") {
-                        Text(
-                            text = "Request via Seerr",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.8.sp,
-                            ),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        )
+                        SearchSectionHeader("Request via Seerr")
                     }
                     items(
                         count = seerrResults.size,
@@ -310,12 +317,32 @@ fun HomeSearchResultsOverlay(
                             }
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
-                            SearchItemRow(
+                            val posterUrl = item.posterUrl ?: ""
+                            HomeSearchResultRow(
                                 title = item.displayName,
                                 subtitle = subtitle,
-                                imageUrl = item.posterUrl ?: "",
                                 onClick = { onSeerrClick(item) },
-                                index = index + jellyfinResults.size,
+                                tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+                                leading = {
+                                    if (posterUrl.isNotBlank()) {
+                                        MediaImage(
+                                            url = posterUrl,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clip(ShapeCache.smooth10),
+                                            contentScale = ContentScale.Crop,
+                                            size = CoilSize(128, 128),
+                                        )
+                                    } else {
+                                        androidx.compose.material3.Icon(
+                                            Tabler.Outline.Search,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                },
                             )
                         }
                     }
@@ -332,15 +359,7 @@ fun HomeSearchResultsOverlay(
                         }
                     }
                     item(contentType = "settingsHeader") {
-                        Text(
-                            text = "Settings",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.8.sp,
-                            ),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        )
+                        SearchSectionHeader("Settings")
                     }
                     items(
                         count = settingsResults.size,
@@ -350,9 +369,32 @@ fun HomeSearchResultsOverlay(
                         val item = settingsResults[index]
                         val placementSpec = lazyItemPlacementSpec()
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
-                            SettingsSearchRow(
-                                item = item,
+                            HomeSearchResultRow(
+                                title = item.title,
+                                subtitle = item.subtitle,
                                 onClick = { onSettingsClick(item) },
+                                tileBackground = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                                leading = {
+                                    Icon(
+                                        imageVector = item.icon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(22.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                },
+                                trailing = if (item.isAdvanced) {
+                                    {
+                                        Text(
+                                            text = item.category,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .clip(ShapeCache.smooth8)
+                                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                        )
+                                    }
+                                } else null,
                             )
                         }
                     }
@@ -379,12 +421,31 @@ fun HomeSearchResultsOverlay(
 }
 
 @Composable
-private fun SearchItemRow(
+private fun SearchSectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = SearchSectionHeaderLetterSpacing,
+        ),
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+/** Letter spacing shared by the search-overlay section headers ("Library",
+ *  "Request via Seerr", "Settings"). Extracted so the four call sites stay in
+ *  sync instead of each hardcoding `0.8.sp`. */
+private val SearchSectionHeaderLetterSpacing = 0.8.sp
+
+@Composable
+private fun HomeSearchResultRow(
     title: String,
     subtitle: String,
-    imageUrl: String,
     onClick: () -> Unit,
-    index: Int,
+    tileBackground: Color,
+    leading: @Composable () -> Unit,
+    trailing: @Composable (() -> Unit)? = null,
 ) {
     val isTv = LocalTvMode.current
     val tvFocusState = rememberTvFocusState()
@@ -396,10 +457,9 @@ private fun SearchItemRow(
         label = "searchItemScale",
     )
     val scale = if (isTv) 1f else baseScale
-    val isFocused = tvFocusState.isFocused
     val backgroundColor = when {
         isPressed -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-        isFocused -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        tvFocusState.isFocused -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         else -> Color.Transparent
     }
 
@@ -430,30 +490,10 @@ private fun SearchItemRow(
             modifier = Modifier
                 .size(44.dp)
                 .clip(ShapeCache.smooth10)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+                .background(tileBackground),
             contentAlignment = Alignment.Center,
         ) {
-            if (imageUrl.isNotBlank()) {
-                MediaImage(
-                    url = imageUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(ShapeCache.smooth10),
-                    contentScale = ContentScale.Crop,
-                    // 44dp thumbnail at 3× density ≈ 132px; decode at 128² instead
-                    // of the 384² default to cut memory and decode cost during
-                    // search-as-you-type.
-                    size = CoilSize(128, 128),
-                )
-            } else {
-                androidx.compose.material3.Icon(
-                    Tabler.Outline.Search,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            leading()
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -474,100 +514,10 @@ private fun SearchItemRow(
                 )
             }
         }
-    }
-}
-
-/**
- * A settings search-result row for the home search overlay. Mirrors [SearchItemRow]'s
- * visual language (44dp leading tile, TV focus, press-scale) but renders the setting's
- * [SettingsSearchItem.icon] in the tile and its category as the subtitle, so settings
- * rows are visually distinct from media rows without a separate design language.
- */
-@Composable
-private fun SettingsSearchRow(
-    item: SettingsSearchItem,
-    onClick: () -> Unit,
-) {
-    val isTv = LocalTvMode.current
-    val tvFocusState = rememberTvFocusState()
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val baseScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "settingsRowScale",
-    )
-    val scale = if (isTv) 1f else baseScale
-    val isFocused = tvFocusState.isFocused
-    val backgroundColor = when {
-        isPressed -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-        isFocused -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        else -> Color.Transparent
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(tvFocusState.focusModifier)
-            .tvFocusIndicator(tvFocusState, ShapeCache.smooth12)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(ShapeCache.smooth12)
-            .background(backgroundColor)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-            )
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(ShapeCache.smooth10)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = item.icon,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (item.subtitle.isNotBlank()) {
-                Text(
-                    text = item.subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        if (item.isAdvanced) {
+        if (trailing != null) {
             Spacer(Modifier.width(8.dp))
-            Text(
-                text = item.category,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .clip(ShapeCache.smooth8)
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            )
+            trailing()
         }
     }
 }
+

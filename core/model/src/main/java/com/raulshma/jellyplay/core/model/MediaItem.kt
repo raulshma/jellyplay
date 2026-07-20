@@ -93,6 +93,23 @@ data class MediaItem(
     val unplayedItemCount: Int? = null,
 )
 
+/**
+ * True when the user has a non-zero playback position saved. Use for surfacing
+ * a "resume" indicator or progress bar without the `playbackPositionTicks != null
+ * && playbackPositionTicks!! > 0` repeat at every call site.
+ */
+val MediaItem.hasPlaybackPosition: Boolean
+    get() = playbackPositionTicks != null && playbackPositionTicks > 0
+
+/**
+ * True when the user is mid-playback and hasn't finished — i.e. there is a
+ * non-zero position AND the item isn't marked played. Use for the "time
+ * remaining" badge; [hasPlaybackPosition] is the broader predicate for just
+ * showing a progress bar.
+ */
+val MediaItem.hasWatchProgress: Boolean
+    get() = hasPlaybackPosition && !isPlayed
+
 @Immutable
 @Serializable
 data class NameGuidPair(

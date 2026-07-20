@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -36,7 +37,6 @@ import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.progressFraction
-import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -54,46 +54,46 @@ fun CollectionDetailScreen(
         viewModel.loadCollection(collectionId)
     }
 
-    val collectionDetail = viewModel.collectionDetail
-    val items = viewModel.items
-    val isLoading = viewModel.isLoading
-    val error = viewModel.error
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val success = state as? CollectionDetailUiState.Success
+    val items = success?.items ?: emptyList()
+    val title = success?.detail?.item?.name ?: "Collection"
+
     val backdropVisible = remember { mutableStateOf(false) }
     val contentVisible = remember { mutableStateOf(false) }
 
-    LaunchedEffect(collectionDetail) {
-        if (collectionDetail != null) {
+    LaunchedEffect(success) {
+        if (success != null) {
             backdropVisible.value = true
             contentVisible.value = true
         }
     }
 
     JellyPlayScreenScaffold(
-        title = collectionDetail?.item?.name ?: "Collection",
+        title = title,
         onBack = onBack,
         topBarStyle = TopBarStyle.Collapsing,
     ) { padding ->
-        when {
-            isLoading -> {
+        when (state) {
+            CollectionDetailUiState.Loading -> {
                 DelayedLoadingScreen(modifier = Modifier.padding(padding))
             }
 
-            error != null -> {
+            is CollectionDetailUiState.Error -> {
                 ErrorScreen(
-                    message = error!!,
+                    message = (state as CollectionDetailUiState.Error).message,
                     onRetry = { viewModel.loadCollection(collectionId) },
                     modifier = Modifier.padding(padding),
                 )
             }
 
-            else -> {
+            is CollectionDetailUiState.Success -> {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding),
                 ) {
-                    collectionDetail?.let { detail ->
-                        AnimatedVisibility(
+                    AnimatedVisibility(
                             visible = backdropVisible.value,
                             enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()) + slideInVertically(
                                 initialOffsetY = { -it / 6 },
@@ -118,7 +118,6 @@ fun CollectionDetailScreen(
                                 )
                             }
                         }
-                    }
 
                     AnimatedVisibility(
                         visible = contentVisible.value,

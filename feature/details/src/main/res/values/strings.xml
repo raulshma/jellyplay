@@ -62,6 +62,8 @@
     <string name="detail_option_download_series">Download Series</string>
     <string name="detail_option_hide_from_next_up">Hide from Next Up</string>
     <string name="detail_option_hide_from_continue_watching">Hide from Continue Watching</string>
+    <string name="detail_option_show_in_next_up">Show in Next Up</string>
+    <string name="detail_option_show_in_continue_watching">Show in Continue Watching</string>
     <string name="detail_option_technical_info">Technical Info</string>
 
     <!-- ── Series download sheet ────────────────────────────────────────── -->
@@ -115,6 +117,10 @@
     <string name="detail_msg_couldnt_mark_played">Couldn\'t mark as played</string>
     <string name="detail_msg_couldnt_mark_unplayed">Couldn\'t mark as unplayed</string>
     <string name="detail_msg_no_episodes_queued">No episodes could be queued</string>
+    <string name="detail_msg_hidden_from_next_up">Hidden from Next Up</string>
+    <string name="detail_msg_shown_in_next_up">Shown in Next Up</string>
+    <string name="detail_msg_hidden_from_continue_watching">Hidden from Continue Watching</string>
+    <string name="detail_msg_shown_in_continue_watching">Shown in Continue Watching</string>
 
     <!-- ── Snackbar: episodes queued (plurals) ──────────────────────────── -->
     <plurals name="detail_episodes_queued">

@@ -1,7 +1,13 @@
 package com.raulshma.jellyplay.feature.details
 
 import android.util.Log
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
@@ -10,7 +16,22 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -33,7 +54,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,7 +88,19 @@ import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.seerr.*
+import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCast
+import com.raulshma.jellyplay.core.model.seerr.SeerrCast
+import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
+import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
+import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
+import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
+import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
+import com.raulshma.jellyplay.core.model.seerr.SeerrReleases
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
+import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
+import com.raulshma.jellyplay.core.model.seerr.SeerrWatchProvider
+import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -73,6 +111,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
+import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
@@ -86,9 +125,30 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import java.text.NumberFormat
-import java.util.*
+import java.util.Locale
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.*
+import com.composables.icons.tabler.outline.ArrowRight
+import com.composables.icons.tabler.outline.Building
+import com.composables.icons.tabler.outline.Calendar
+import com.composables.icons.tabler.outline.CalendarEvent
+import com.composables.icons.tabler.outline.Cash
+import com.composables.icons.tabler.outline.Check
+import com.composables.icons.tabler.outline.ChevronDown
+import com.composables.icons.tabler.outline.Circle
+import com.composables.icons.tabler.outline.Clock
+import com.composables.icons.tabler.outline.CloudDownload
+import com.composables.icons.tabler.outline.Hourglass
+import com.composables.icons.tabler.outline.InfoCircle
+import com.composables.icons.tabler.outline.Language
+import com.composables.icons.tabler.outline.Movie
+import com.composables.icons.tabler.outline.Pencil
+import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.Plus
+import com.composables.icons.tabler.outline.Star
+import com.composables.icons.tabler.outline.Ticket
+import com.composables.icons.tabler.outline.Users
+import com.composables.icons.tabler.outline.Wallet
+import com.composables.icons.tabler.outline.World
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -189,17 +249,10 @@ fun SeerrDetailScreen(
                                 viewModel.toggleSeason(tvId, seasonNumber)
                             }
                         },
-                        onVideoClick = { video ->
-                            if (video.site?.lowercase() == "youtube" && video.key != null) {
-                                activeTrailerKey = video.key
-                            } else if (video.key != null) {
-                                val url = when (video.site?.lowercase()) {
-                                    "youtube" -> "https://www.youtube.com/watch?v=${video.key}"
-                                    else -> null
-                                }
-                                url?.let { uriHandler.openUri(it) }
-                            }
-                        },
+                        onVideoClick = rememberVideoClickHandler(
+                            uriHandler = uriHandler,
+                            onPlayYouTube = { key -> activeTrailerKey = key },
+                        ),
                         preferences = preferences,
                     )
                 }

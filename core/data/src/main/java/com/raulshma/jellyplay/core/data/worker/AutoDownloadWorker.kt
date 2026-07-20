@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -31,6 +32,7 @@ class AutoDownloadWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val mediaRepository: MediaRepository,
     private val downloadRepository: DownloadRepository,
+    private val downloadIntake: DownloadIntake,
     private val preferencesStore: UserPreferencesStore,
 ) : CoroutineWorker(context, params) {
 
@@ -65,7 +67,7 @@ class AutoDownloadWorker @AssistedInject constructor(
                     .filter { it.id !in alreadyDownloaded }
                     .map { it.id }
                 if (newEpisodeIds.isNotEmpty()) {
-                    downloadRepository.downloadSeries(
+                    downloadIntake.startSeries(
                         seriesId = seriesId,
                         episodeIds = mapOf(season.id to newEpisodeIds),
                     )

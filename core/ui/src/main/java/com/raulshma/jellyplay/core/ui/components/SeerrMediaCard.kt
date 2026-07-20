@@ -260,10 +260,16 @@ fun SeerrMediaCard(
                 color = outlineColor.copy(alpha = 0.35f)
             )
         }
+        val standardBorder = remember(outlineColor) {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = outlineColor.copy(alpha = 0.3f)
+            )
+        }
         val border = when {
             isSynthwave -> synthwaveBorder
             isSoothing -> soothingBorder
-            else -> null
+            else -> standardBorder
         }
 
         Card(
@@ -303,7 +309,7 @@ fun SeerrMediaCard(
             shape = cardShape,
             border = border,
             elevation = CardDefaults.cardElevation(
-                defaultElevation = if (isLoading) 12.dp else 0.dp
+                defaultElevation = 0.dp
             ),
         ) {
             Box {

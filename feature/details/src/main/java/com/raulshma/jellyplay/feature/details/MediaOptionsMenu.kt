@@ -7,6 +7,7 @@ import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.Download
+import com.composables.icons.tabler.outline.Eye
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.ListDetails
@@ -17,6 +18,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.feature.details.R
 
@@ -59,7 +61,9 @@ internal fun rememberMediaOptions(
     onDownload: () -> Unit,
     onDownloadSeries: () -> Unit,
     onHideFromNextUp: () -> Unit,
+    onShowFromNextUp: () -> Unit,
     onHideFromContinueWatching: () -> Unit,
+    onShowFromContinueWatching: () -> Unit,
     onManageSeries: () -> Unit,
     onTechnicalInfo: () -> Unit,
 ): List<MediaOption> {
@@ -75,7 +79,7 @@ internal fun rememberMediaOptions(
     } else 0f
 
     val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&
-        (item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC || (!isAudio && !isSeries))
+        (item.mediaType.isAudioType || (!isAudio && !isSeries))
 
     // Resolve localized labels in the @Composable body — the remember {} calculation lambda
     // below is not a composable scope, so stringResource cannot be called inside it.
@@ -89,10 +93,13 @@ internal fun rememberMediaOptions(
     val labelDownloadSeries = stringResource(R.string.detail_option_download_series)
     val labelHideFromNextUp = stringResource(R.string.detail_option_hide_from_next_up)
     val labelHideFromContinueWatching = stringResource(R.string.detail_option_hide_from_continue_watching)
+    val labelShowInNextUp = stringResource(R.string.detail_option_show_in_next_up)
+    val labelShowInContinueWatching = stringResource(R.string.detail_option_show_in_continue_watching)
     val labelTechnicalInfo = stringResource(R.string.detail_option_technical_info)
     val labelManageSeries = stringResource(R.string.detail_option_manage_series)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
+        preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
         downloadStatus, downloadProgress, canManageSeries, labelManageSeries) {
         buildList {
@@ -137,13 +144,31 @@ internal fun rememberMediaOptions(
                 )
             }
             if (isSeries || item?.seriesId != null) {
-                add(MediaOption(labelHideFromNextUp, Tabler.Outline.EyeOff) {
-                    onClose(); onHideFromNextUp()
-                })
+                // Next Up exclusion is keyed by series id; an episode resolves
+                // to its parent series, a series to itself.
+                val seriesId = item?.seriesId ?: item?.id
+                val isHiddenFromNextUp =
+                    seriesId != null && seriesId in preferences.nextUpExcludedSeriesIds
+                add(
+                    MediaOption(
+                        label = if (isHiddenFromNextUp) labelShowInNextUp else labelHideFromNextUp,
+                        icon = if (isHiddenFromNextUp) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
+                    ) {
+                        onClose()
+                        if (isHiddenFromNextUp) onShowFromNextUp() else onHideFromNextUp()
+                    }
+                )
             }
-            add(MediaOption(labelHideFromContinueWatching, Tabler.Outline.EyeOff) {
-                onClose(); onHideFromContinueWatching()
-            })
+            val isHiddenFromCw = item?.id in preferences.hiddenCwItemIds
+            add(
+                MediaOption(
+                    label = if (isHiddenFromCw) labelShowInContinueWatching else labelHideFromContinueWatching,
+                    icon = if (isHiddenFromCw) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
+                ) {
+                    onClose()
+                    if (isHiddenFromCw) onShowFromContinueWatching() else onHideFromContinueWatching()
+                }
+            )
             if (canManageSeries) {
                 add(MediaOption(labelManageSeries, Tabler.Outline.ListDetails) {
                     onClose(); onManageSeries()
