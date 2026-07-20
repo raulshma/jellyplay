@@ -834,6 +834,69 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Marks every episode in [seasonId] as played. Jellyfin's
+     * `markPlayedItem` endpoint recurses into a season's children, so this is a
+     * single network call — but the UI needs the optimistic in-place flip so
+     * every `EpisodeCard` shows the WATCHED badge and the Play button target
+     * recomputes without waiting on a re-fetch.
+     *
+     * See the [episodesMap] / [invalidateSortedEpisodesCache] contract: any
+     * mutation of episode contents (played state) MUST bump the epoch or the
+     * sorted-episode cache silently serves a stale list.
+     */
+    fun markSeasonPlayed(seasonId: String) {
+        markSeason(seasonId, played = true)
+    }
+
+    fun markSeasonUnplayed(seasonId: String) {
+        markSeason(seasonId, played = false)
+    }
+
+    private fun markSeason(seasonId: String, played: Boolean) {
+        val current = episodesMap[seasonId] ?: return
+        // No-op if there is nothing to flip — avoids an unnecessary network
+        // call, a spurious cache invalidation, and a redundant uiState emission.
+        val alreadyInTargetState = current.all { it.isPlayed == played }
+        if (alreadyInTargetState) return
+
+        launch {
+            val result = if (played) mediaRepository.markPlayed(seasonId)
+            else mediaRepository.markUnplayed(seasonId)
+            result
+                .onSuccess {
+                    episodesMap[seasonId] = current.map { episode ->
+                        // Jellyfin clears the resume position when it marks an item
+                        // played; mirror that locally so the in-progress bar and
+                        // the "remaining time" label don't linger on a played ep.
+                        if (played) {
+                            episode.copy(isPlayed = true, playbackPositionTicks = 0L)
+                        } else {
+                            episode.copy(isPlayed = false)
+                        }
+                    }
+                    invalidateSortedEpisodesCache()
+                    _uiState.update { state ->
+                        state.copy(episodes = episodesMap.toMap())
+                    }
+                    // The Play-button target may now point to a different
+                    // episode (e.g. next-up moved to the following season), so
+                    // recompute it against the updated episode contents.
+                    maybeComputeSmartPlayTarget()
+                }
+                .onFailure {
+                    _messages.emit(
+                        DetailMessage.Text(
+                            context.getString(
+                                if (played) R.string.detail_msg_couldnt_mark_played
+                                else R.string.detail_msg_couldnt_mark_unplayed
+                            )
+                        )
+                    )
+                }
+        }
+    }
+
     fun hideFromNextUp() {
         val item = _uiState.value.detail?.item ?: return
         val seriesId = item.seriesId ?: item.id
