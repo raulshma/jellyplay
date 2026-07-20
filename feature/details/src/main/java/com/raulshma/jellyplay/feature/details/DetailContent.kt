@@ -135,7 +135,9 @@ internal fun DetailContent(
         onDownload = { showDownloadDialog = true },
         onDownloadSeries = callbacks.onDownloadSeriesClick,
         onHideFromNextUp = callbacks.onHideFromNextUp,
+        onShowFromNextUp = callbacks.onShowFromNextUp,
         onHideFromContinueWatching = callbacks.onHideFromContinueWatching,
+        onShowFromContinueWatching = callbacks.onShowFromContinueWatching,
         onManageSeries = callbacks.onManageSeries,
         onTechnicalInfo = { callbacks.onNavigate(Route.MediaInfo(state.itemId)) },
     )
