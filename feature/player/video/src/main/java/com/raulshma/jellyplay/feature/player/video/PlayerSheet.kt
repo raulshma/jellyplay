@@ -3,42 +3,57 @@ package com.raulshma.jellyplay.feature.player.video
 import androidx.compose.runtime.saveable.Saver
 
 sealed class PlayerSheet {
-    data object None : PlayerSheet()
-    data object Speed : PlayerSheet()
-    data object Audio : PlayerSheet()
-    data object Subtitle : PlayerSheet()
-    data object Chapter : PlayerSheet()
-    data object PlaybackInfo : PlayerSheet()
-    data object AspectRatio : PlayerSheet()
-    data object SubtitleStyle : PlayerSheet()
+    abstract val key: String
 
-    data object AVSync : PlayerSheet()
-    data object Decoder : PlayerSheet()
-    data object SubtitleDownload : PlayerSheet()
-    data object Episodes : PlayerSheet()
-    data object SyncPlay : PlayerSheet()
-    data object Quality : PlayerSheet()
-    data object PlaybackMode : PlayerSheet()
-    data object SleepTimer : PlayerSheet()
-    data object VideoFilter : PlayerSheet()
+    data object None : PlayerSheet() { override val key = "None" }
+    data object Speed : PlayerSheet() { override val key = "Speed" }
+    data object Audio : PlayerSheet() { override val key = "Audio" }
+    data object Subtitle : PlayerSheet() { override val key = "Subtitle" }
+    data object Chapter : PlayerSheet() { override val key = "Chapter" }
+    data object PlaybackInfo : PlayerSheet() { override val key = "PlaybackInfo" }
+    data object AspectRatio : PlayerSheet() { override val key = "AspectRatio" }
+    data object SubtitleStyle : PlayerSheet() { override val key = "SubtitleStyle" }
+
+    data object AVSync : PlayerSheet() { override val key = "AVSync" }
+    data object Decoder : PlayerSheet() { override val key = "Decoder" }
+    data object SubtitleDownload : PlayerSheet() { override val key = "SubtitleDownload" }
+    data object Episodes : PlayerSheet() { override val key = "Episodes" }
+    data object SyncPlay : PlayerSheet() { override val key = "SyncPlay" }
+    data object Quality : PlayerSheet() { override val key = "Quality" }
+    data object PlaybackMode : PlayerSheet() { override val key = "PlaybackMode" }
+    data object SleepTimer : PlayerSheet() { override val key = "SleepTimer" }
+    data object VideoFilter : PlayerSheet() { override val key = "VideoFilter" }
 }
 
 /**
  * Allows the currently-open sheet to survive configuration changes (locale
  * switch, rotation outside the player's locked orientation) via
  * `rememberSaveable(stateSaver = PlayerSheetSaver)`. Restores by matching
- * the data-object's class simple name; unknown values fall back to `None`.
+ * each sheet's [PlayerSheet.key]; unknown values fall back to `None`.
  */
 val PlayerSheetSaver: Saver<PlayerSheet, String> = Saver(
-    save = { it::class.simpleName ?: PlayerSheet.None::class.simpleName!! },
-    restore = { name ->
-        // Enumerate via reflection so the list cannot drift from the
-        // sealed-class declaration. The prior hand-maintained ALL_SHEETS
-        // silently fell back to None when a new sheet was added but
-        // forgotten here — the open sheet vanished on rotation.
-        ALL_SHEETS.firstOrNull { it::class.simpleName == name } ?: PlayerSheet.None
-    },
+    save = { it.key },
+    restore = { name -> ALL_SHEETS.firstOrNull { it.key == name } ?: PlayerSheet.None },
 )
 
-private val ALL_SHEETS: List<PlayerSheet> =
-    PlayerSheet::class.sealedSubclasses.mapNotNull { it.objectInstance }
+// Explicit list avoids kotlin-reflect (sealedSubclasses), which is not on
+// the runtime classpath and crashes PlayerSheetKt's <clinit> on launch.
+private val ALL_SHEETS: List<PlayerSheet> = listOf(
+    PlayerSheet.None,
+    PlayerSheet.Speed,
+    PlayerSheet.Audio,
+    PlayerSheet.Subtitle,
+    PlayerSheet.Chapter,
+    PlayerSheet.PlaybackInfo,
+    PlayerSheet.AspectRatio,
+    PlayerSheet.SubtitleStyle,
+    PlayerSheet.AVSync,
+    PlayerSheet.Decoder,
+    PlayerSheet.SubtitleDownload,
+    PlayerSheet.Episodes,
+    PlayerSheet.SyncPlay,
+    PlayerSheet.Quality,
+    PlayerSheet.PlaybackMode,
+    PlayerSheet.SleepTimer,
+    PlayerSheet.VideoFilter,
+)

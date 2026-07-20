@@ -27,7 +27,11 @@ class NightModeHelper {
     fun setStrength(strength: EffectStrength) {
         this.strength = strength
         if (isEnabled) {
-            enhancer?.setTargetGain(targetGainForStrength)
+            try {
+                enhancer?.setTargetGain(targetGainForStrength)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to set target gain on LoudnessEnhancer", e)
+            }
         }
     }
 
@@ -51,7 +55,16 @@ class NightModeHelper {
 
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
-        enhancer?.enabled = enabled
+        try {
+            enhancer?.apply {
+                if (enabled) {
+                    setTargetGain(targetGainForStrength)
+                }
+                this.enabled = enabled
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set enabled on LoudnessEnhancer", e)
+        }
     }
 
     fun detach() {
