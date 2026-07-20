@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -51,6 +52,26 @@ data class HomeUiState(
     /** Whether the DIRECT_ARR_INTEGRATION experimental flag is enabled. */
     val directArrEnabled: Boolean = false,
     val currentUser: UserInfo? = null,
+    /**
+     * Mirror of the user's enabled home section types (from prefs). Consumed
+     * only by the inline section-config sheet so it can show the current
+     * toggle state without reading the store directly.
+     */
+    val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
+    /**
+     * Mirror of the user's home section ordering (from prefs). Consumed only
+     * by the inline section-config sheet to enable/disable the Move Up/Down
+     * buttons relative to the section's current position.
+     */
+    val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
+    /**
+     * Mirror of the user's per-library section overrides (from prefs). Keyed by
+     * library (folder) id, value is the set of DISABLED [HomeSectionType]s for
+     * that library. Consumed by the inline section-config sheet so a per-library
+     * LATEST_MEDIA row shows its real toggle state. Mirrors the Settings →
+     * Configure Libraries semantics.
+     */
+    val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
 )
 
 @Immutable

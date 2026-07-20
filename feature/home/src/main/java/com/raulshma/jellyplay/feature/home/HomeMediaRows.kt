@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
@@ -70,6 +72,8 @@ import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.DotsVertical
 
 /**
  * Horizontal scroller for a home media row on touch devices. When [clippingEnabled]
@@ -140,6 +144,7 @@ fun ContinueWatchingRow(
     focusRequester: FocusRequester? = null,
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
+    onSectionLongClick: (() -> Unit)? = null,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -157,12 +162,10 @@ fun ContinueWatchingRow(
     }
 
     Column(modifier = modifier) {
-        Text(
-            text = title,
-            style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
-            else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
+        HomeSectionTitle(
+            title = title,
+            contentPad = contentPad,
+            onLongClick = onSectionLongClick,
         )
         if (isTv) {
             TvFocusableItemRow(
@@ -456,6 +459,7 @@ fun HomeMediaRow(
     onRowFocused: (() -> Unit)? = null,
     clippingEnabled: Boolean = false,
     showEpisodeSeriesBadge: Boolean = false,
+    onSectionLongClick: (() -> Unit)? = null,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -479,12 +483,10 @@ fun HomeMediaRow(
     }
 
     Column(modifier = modifier) {
-        Text(
-            text = title,
-            style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
-            else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
+        HomeSectionTitle(
+            title = title,
+            contentPad = contentPad,
+            onLongClick = onSectionLongClick,
         )
         if (isTv) {
             TvFocusableItemRow(
@@ -558,3 +560,60 @@ fun HomeMediaRow(
         }
     }
 }
+
+/**
+ * The row title for a home section. Renders the same heading typography the
+ * rows always used, but adds an optional long-press affordance so the user can
+ * configure the section (toggle visibility / reorder / open Home Layout
+ * settings) directly from home — the same operations available under
+ * Settings → Home Screen Layout.
+ *
+ * On touch, a trailing vertical-dots icon signals the affordance only when
+ * [onLongClick] is non-null (i.e. for configurable section types). On TV the
+ * hint is hidden (D-pad focus is the cue) and the long-press maps to the
+ * select-and-hold key. The click handler is a no-op: the title is not a
+ * navigation target, we only intercept long-press so the row's own horizontal
+ * scroll and item clicks are unaffected.
+ */
+@Composable
+private fun HomeSectionTitle(
+    title: String,
+    contentPad: androidx.compose.ui.unit.Dp,
+    onLongClick: (() -> Unit)?,
+) {
+    val isTv = LocalTvMode.current
+    val interactionSource = remember { MutableInteractionSource() }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = {},
+                        onLongClick = onLongClick,
+                    )
+                } else Modifier,
+            )
+            .padding(horizontal = contentPad, vertical = 8.dp),
+    ) {
+        Text(
+            text = title,
+            style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
+            else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        if (onLongClick != null && !isTv) {
+            Icon(
+                Tabler.Outline.DotsVertical,
+                contentDescription = "Configure section",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+

@@ -240,6 +240,9 @@ class HomeViewModel @Inject constructor(
                     continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
                     experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.enabledExperimentalFeatures,
                     directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.enabledExperimentalFeatures,
+                    enabledHomeSectionTypes = prefs.enabledHomeSectionTypes,
+                    homeSectionOrder = prefs.homeSectionOrder,
+                    libraryHomeSectionOverrides = prefs.libraryHomeSectionOverrides,
                 ) }
 
                 if (homeSectionPrefsChanged) {
@@ -564,6 +567,51 @@ class HomeViewModel @Inject constructor(
         launch {
             preferencesStore.excludeSeriesFromNextUp(seriesId)
         }
+    }
+
+    /**
+     * Toggles a home section's visibility from the inline section-config sheet.
+     * Writes through [preferencesEditor] exactly as the Settings screen does —
+     * the prefs collector above then triggers [fetchAndUpdateSections] so the
+     * row appears/disappears with no extra wiring.
+     */
+    fun setSectionVisible(type: HomeSectionType, visible: Boolean) {
+        val updated = enabledHomeSectionTypes.toMutableSet().apply {
+            if (visible) add(type) else remove(type)
+        }
+        preferencesEditor.setEnabledHomeSectionTypes(updated)
+    }
+
+    /**
+     * Moves a home section up/down within the user's ordering, from the inline
+     * section-config sheet. Swaps with the neighbour in the cached order and
+     * persists via [preferencesEditor]; the prefs collector + ordering use case
+     * re-apply it on the next emission.
+     */
+    fun moveSection(type: HomeSectionType, up: Boolean) {
+        val index = homeSectionOrder.indexOf(type)
+        if (index == -1) return
+        val target = if (up) index - 1 else index + 1
+        if (target !in homeSectionOrder.indices) return
+        val updated = homeSectionOrder.toMutableList().apply {
+            val removed = removeAt(index)
+            add(target, removed)
+        }
+        preferencesEditor.edit { setHomeSectionOrder(updated) }
+    }
+
+    /**
+     * Toggles a per-library section (currently LATEST_MEDIA) from the inline
+     * section-config sheet, mirroring Settings → Configure Libraries. The
+     * override map is keyed by library id with the DISABLED types as its value
+     * set; an empty set removes the key (restoring default-enabled state).
+     */
+    fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
+        val current = libraryHomeSectionOverrides.toMutableMap()
+        val disabled = current[libraryId].orEmpty().toMutableSet()
+        if (visible) disabled.remove(type) else disabled.add(type)
+        if (disabled.isEmpty()) current.remove(libraryId) else current[libraryId] = disabled
+        preferencesEditor.setLibraryHomeSectionOverrides(current)
     }
 
     private suspend fun fetchAndUpdateSections() {

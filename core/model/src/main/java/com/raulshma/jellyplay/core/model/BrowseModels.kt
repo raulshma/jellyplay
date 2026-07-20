@@ -19,6 +19,15 @@ data class HomeSection(
     val type: HomeSectionType,
     val items: List<MediaItem>,
     val seedItem: MediaItem? = null,
+    /**
+     * For per-library sections (currently LATEST_MEDIA), the Jellyfin library
+     * (folder) id backing this row. `null` for every other section type. The
+     * home UI uses this to apply per-library visibility overrides via the
+     * inline section-config sheet — matching the Settings → Configure Libraries
+     * screen semantics. See [HomeSectionType.isConfigurable] and
+     * `libraryHomeSectionOverrides` in `UserPreferences`.
+     */
+    val libraryId: String? = null,
 )
 
 /**
@@ -81,6 +90,14 @@ enum class HomeSectionType {
             RECOMMENDATIONS -> "Personalized picks based on your watch history"
             PINNED -> "Collections and shelves you have pinned to home"
         }
+
+    /**
+     * Whether this section type can be toggled/reordered by the user via the
+     * home layout configuration (Settings → Home Screen Layout, or long-press
+     * on a home section title). Non-configurable types (FAVORITES, PINNED, …)
+     * are driven by other surfaces and never show the configure affordance.
+     */
+    val isConfigurable: Boolean get() = this in CONFIGURABLE
 
     companion object {
         val CONFIGURABLE = listOf(

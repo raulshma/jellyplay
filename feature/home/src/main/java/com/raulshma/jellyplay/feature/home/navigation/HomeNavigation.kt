@@ -68,6 +68,8 @@ fun EntryProviderScope<NavKey>.homeSection(
                 },
                 onSettingsSearchItemClick = { route -> navigator.navigate(route) },
                 onNewsletterClick = { navigator.navigate(Route.Newsletter) },
+                onConfigureHomeLayout = { navigator.navigate(Route.AppearanceSettings("home_section_layout")) },
+                onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },
             )
         }
         HomeScreen(
