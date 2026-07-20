@@ -101,7 +101,7 @@ private const val SAVED_KEY_ITEM_ID = "video_player.saved_item_id"
 private const val SAVED_KEY_POSITION_MS = "video_player.saved_position_ms"
 private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_id"
 private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
-/** Debounce window for engine config syncs driven by slider drags (C11). */
+/** Debounce window for engine config syncs driven by slider drags. */
 private const val CONFIG_SYNC_DEBOUNCE_MS = 150L
 
 /**
@@ -205,7 +205,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val _uiState = stateFlow(VideoPlayerUiState())
     val uiState: StateFlow<VideoPlayerUiState> = _uiState.flow
 
-    // --- High-frequency playback streams (V-1) ---------------------------------
+    // --- High-frequency playback streams ---------------------------------------
     // currentPosition / bufferedPosition / videoStats (and duration) update at
     // up to 4 Hz while controls are visible. Previously they were folded into
     // the ~60-field [VideoPlayerUiState], so every tick invalidated the entire
@@ -283,7 +283,7 @@ class VideoPlayerViewModel @Inject constructor(
     private var lastPersistedPositionMs: Long = Long.MIN_VALUE
 
     /**
-     * Single resolved playback-session id (M19). The server issues its own id
+     * Single resolved playback-session id. The server issues its own id
      * via the `PlaybackInfo` endpoint (stored in [PlayerSessionState.playSessionId]);
      * [playSessionId] above is the locally-allocated UUID fallback. Previously
      * start/stop reports read the local UUID directly while progress reports
@@ -384,7 +384,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     /**
      * Snapshot of [uiState] with the live playback position/duration injected
-     * from the dedicated high-frequency flows (V-1). Use this anywhere that
+     * from the dedicated high-frequency flows. Use this anywhere that
      * needs the position-aware derived properties ([activeSegment],
      * [shouldShowUpNext], …) so the logic does not depend on the (now stale)
      * `currentPosition`/`duration` fields stored on uiState itself.
@@ -397,7 +397,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun seekTo(positionMs: Long) {
         lastSeekPositionMs = positionMs
         lastSeekTimestamp = System.currentTimeMillis()
-        // Update the dedicated position flow (V-1) so the seek bar reflects the
+        // Update the dedicated position flow so the seek bar reflects the
         // new position immediately; uiState is no longer the source of truth.
         _currentPositionMs.value = positionMs
         playerSessionManager.engine?.seekTo(positionMs)
@@ -432,7 +432,7 @@ class VideoPlayerViewModel @Inject constructor(
                 }
                 android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
                 android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                    // Store the raw engine volume without clamping (M1): VLC's
+                    // Store the raw engine volume without clamping: VLC's
                     // range is 0..2 (to support >100% boost) while ExoPlayer/MPV
                     // use 0..1. A previous coerceIn(0f, 1f) here permanently
                     // halved VLC volumes above 100% on the first duck cycle.
@@ -556,7 +556,7 @@ class VideoPlayerViewModel @Inject constructor(
     // Tracks the in-flight media-load coroutine so a new [initializeInternal]
     // call can cancel it before launching its own — prevents overlapping
     // network/teardown side effects when a SyncPlay load event races a user
-    // navigation. See [initializeInternal] for the full rationale (M12).
+    // navigation. See [initializeInternal] for the full rationale.
     private var loadJob: Job? = null
 
     /**
@@ -1032,7 +1032,7 @@ class VideoPlayerViewModel @Inject constructor(
     val playerEngineRef: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine? get() = playerSessionManager.engine
 
     /**
-     * Reactive engine handle for composition (M11). The screen previously read
+     * Reactive engine handle for composition. The screen previously read
      * [playerEngineRef] as a plain property; Compose had no subscription, so a
      * engine swap only re-created the surface `AndroidView` if some unrelated
      * state happened to recompose. Exposing the session manager's StateFlow
@@ -1173,7 +1173,7 @@ class VideoPlayerViewModel @Inject constructor(
 
         reportCurrentPlaybackStopped()
 
-        // Cancel any in-flight load before starting a new one (M12).
+        // Cancel any in-flight load before starting a new one.
         // initializeInternal itself runs on Main.immediate so its synchronous
         // prefix cannot interleave with another call; but each call launches a
         // long-lived async load coroutine (media-detail fetch, engine load,
@@ -1747,7 +1747,7 @@ class VideoPlayerViewModel @Inject constructor(
         // overwrites sessionState.playSessionId with the new server id, so without
         // this the previous session is never reported stopped (the server would
         // see start(idA) → progress(idB) → stop(idB), orphaning idA — the same
-        // desync class the M19 currentPlaySessionId resolver prevents elsewhere).
+        // desync class the currentPlaySessionId resolver prevents elsewhere).
         reportCurrentPlaybackStopped()
         progressReporter.cancelJobs()
 

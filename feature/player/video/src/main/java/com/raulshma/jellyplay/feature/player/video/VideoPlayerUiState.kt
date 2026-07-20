@@ -64,7 +64,7 @@ data class CinemaIntroUiState(
  * values actually changes, so collecting it at the root of [VideoPlayerScreen]
  * does NOT trigger the 4 Hz recomposition driven by playback position ticks —
  * the position itself is now delivered through dedicated StateFlows and read
- * only inside the composables that render it (see V-1).
+     * only inside the composables that render it.
  */
 @Immutable
 data class SegmentOverlayState(

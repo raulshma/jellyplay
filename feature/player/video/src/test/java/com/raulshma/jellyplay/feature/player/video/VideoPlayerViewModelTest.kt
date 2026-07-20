@@ -120,7 +120,7 @@ class VideoPlayerViewModelTest {
     @Test
     fun seekTo_updatesCurrentPosition() {
         viewModel.seekTo(5_000L)
-        // V-1: position now lives on the dedicated currentPositionMs flow.
+        // Position now lives on the dedicated currentPositionMs flow.
         assertEquals(5_000L, viewModel.currentPositionMs.value)
     }
 

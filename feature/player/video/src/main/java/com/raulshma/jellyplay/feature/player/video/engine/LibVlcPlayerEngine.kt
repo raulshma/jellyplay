@@ -203,7 +203,7 @@ class LibVlcPlayerEngine(
         options.add("--network-caching=$networkCaching")
 
         if (isLowRamDevice) {
-            // Low-RAM tradeoff (M14): VLC's clock synchronisation periodically
+            // Low-RAM tradeoff: VLC's clock synchronisation periodically
             // adjusts the playback clock to keep audio/video aligned, which
             // costs CPU on memory-constrained devices. Disabling it here
             // reduces decode contention (avoiding stutter / dropped frames)
@@ -670,7 +670,7 @@ class LibVlcPlayerEngine(
         }
 
         if (isLowRamDevice) {
-            // Mirrors the load() options above; see the M14 comment there.
+            // Mirrors the load() options above; see the low-RAM comment there.
             media.addOption(":clock-jitter=0")
             media.addOption(":clock-synchro=0")
         }

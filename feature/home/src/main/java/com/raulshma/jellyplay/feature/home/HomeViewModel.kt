@@ -735,7 +735,7 @@ class HomeViewModel @Inject constructor(
         if (offlineModeManager.networkStatus.value == NetworkStatus.Local) return
         // Trending/popular change slowly; cache discover results for
         // DISCOVER_TTL_MS so "just sitting on Home" doesn't fan out up to 5
-        // Seerr round-trips per minute (C2 periodic refresh + per pref change).
+        // Seerr round-trips per minute (periodic refresh + per pref change).
         // A user-initiated refresh (swipe-to-refresh) sets `force = true` which
         // bypasses this gate via [invalidateDiscoverCache].
         val now = timeSource.nowEpochMillis()

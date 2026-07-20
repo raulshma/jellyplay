@@ -36,7 +36,7 @@ import java.util.Locale
 
 @Composable
 fun VideoStatsOverlay(
-    // High-frequency streams collected here (V-1) so only this overlay (shown
+    // High-frequency streams collected here so only this overlay (shown
     // only while "Stats for Nerds" is enabled) recomposes on position ticks.
     statsFlow: StateFlow<EngineVideoStats>,
     currentPositionFlow: StateFlow<Long>,

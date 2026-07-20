@@ -32,7 +32,7 @@ internal class PlaybackProgressReporter(
     /**
      * Receives every engine position tick (position, duration, buffered,
      * stats). The ViewModel routes these to dedicated high-frequency
-     * StateFlows (V-1) instead of the monolithic [uiState], so the screen
+      * StateFlows instead of the monolithic [uiState], so the screen
      * root stops recomposing at 4 Hz.
      */
     private val onEnginePositionUpdate: (positionMs: Long, durationMs: Long, bufferedPositionMs: Long, videoStats: EngineVideoStats) -> Unit,
@@ -65,7 +65,7 @@ internal class PlaybackProgressReporter(
                     lastPos = pos
                     lastDur = dur
                     // Route the high-frequency display values to dedicated
-                    // flows (V-1) — NOT into uiState — so the screen root is
+                    // flows — NOT into uiState — so the screen root is
                     // not invalidated at 4 Hz. The segment auto-skip logic
                     // below operates on the raw `pos` directly, decoupled from
                     // uiState.currentPosition, so behavior is unchanged.

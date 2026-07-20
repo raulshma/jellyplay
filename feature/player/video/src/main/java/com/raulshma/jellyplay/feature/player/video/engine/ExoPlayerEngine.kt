@@ -82,7 +82,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import okhttp3.OkHttpClient
 
-// The position-polling bounded paused-wait (M2) now lives in [EnginePositionTicker].
+// The position-polling bounded paused-wait now lives in [EnginePositionTicker].
 
 /**
  * Default subtitle text size for the embedded-style path. A fixed SP value keeps
@@ -740,7 +740,7 @@ class ExoPlayerEngine(
         // decoderMode change: decoding changes require a reload, which is
         // handled by the upper layer recreating the player — nothing to do here.
         //
-        // subtitleDelayMs change (M17): the OffsettingSubtitleParserFactory's
+        // subtitleDelayMs change: the OffsettingSubtitleParserFactory's
         // wrapper reads currentConfig.subtitleDelayMs on each parse() call, so
         // a delay adjustment takes effect for subsequent cues without a media
         // reload. (Previously the offset was snapshotted at prepare() time and
