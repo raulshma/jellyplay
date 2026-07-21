@@ -19,6 +19,9 @@ interface PlaybackOutboxDao {
     @Query("SELECT * FROM playback_outbox ORDER BY createdAt ASC")
     suspend fun getAll(): List<PlaybackOutboxEntity>
 
+    @Query("SELECT * FROM playback_outbox ORDER BY createdAt ASC")
+    fun getAllFlow(): Flow<List<PlaybackOutboxEntity>>
+
     @Query("SELECT COUNT(*) FROM playback_outbox")
     suspend fun count(): Int
 

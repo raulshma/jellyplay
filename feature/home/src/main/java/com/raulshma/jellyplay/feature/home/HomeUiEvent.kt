@@ -6,6 +6,7 @@ sealed interface HomeUiEvent {
     data object Refresh : HomeUiEvent
     data object PullToRefresh : HomeUiEvent
     data object ToggleOfflineMode : HomeUiEvent
+    data object SyncNow : HomeUiEvent
     data class UpdateSearchQuery(val query: String) : HomeUiEvent
     data object ClearSearch : HomeUiEvent
     data class SelectSeerrRequestItem(val item: SeerrSearchItem?) : HomeUiEvent

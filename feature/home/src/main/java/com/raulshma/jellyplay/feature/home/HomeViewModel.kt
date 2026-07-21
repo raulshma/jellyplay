@@ -25,6 +25,8 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -81,6 +83,7 @@ class HomeViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val playbackOutboxRepository: PlaybackOutboxRepository,
+    private val playbackSyncScheduler: PlaybackSyncScheduler,
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
     private val preferencesStore: UserPreferencesStore,
@@ -150,6 +153,15 @@ class HomeViewModel @Inject constructor(
      */
     val pendingSyncCount: StateFlow<Int> = playbackOutboxRepository.countFlow()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /**
+     * Reactive snapshot of pending outbox entries (oldest-first), for the
+     * sync details sheet. Only collected while the sheet is open, so it does
+     * not add steady-state flow cost.
+     */
+    val pendingSyncEntries: StateFlow<List<PlaybackOutboxEntry>> =
+        playbackOutboxRepository.getAllFlow()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet()
     private var homeSectionOrder = HomeSectionType.CONFIGURABLE
@@ -446,6 +458,7 @@ class HomeViewModel @Inject constructor(
             is HomeUiEvent.Refresh -> refresh()
             is HomeUiEvent.PullToRefresh -> pullToRefresh()
             is HomeUiEvent.ToggleOfflineMode -> toggleOfflineMode()
+            is HomeUiEvent.SyncNow -> syncNow()
             is HomeUiEvent.UpdateSearchQuery -> updateSearchQuery(event.query)
             is HomeUiEvent.ClearSearch -> clearSearch()
             is HomeUiEvent.SelectSeerrRequestItem -> selectSeerrRequestItem(event.item)
@@ -526,6 +539,17 @@ class HomeViewModel @Inject constructor(
             _uiState.update { it.copy(isGoingOnline = true) }
         }
         offlineModeManager.toggleManualOffline()
+    }
+
+    /**
+     * Manually drain the playback outbox. The drain worker requires a network
+     * connection (NetworkType.CONNECTED constraint), so the button is a no-op
+     * while offline — the user is told this in the sheet rather than firing a
+     * work request that can't run. On reconnect the worker drains anyway.
+     */
+    private fun syncNow() {
+        if (offlineModeManager.offlineMode.value != OfflineMode.ONLINE) return
+        playbackSyncScheduler.enqueueNow()
     }
 
     private fun updateSearchQuery(query: String) {

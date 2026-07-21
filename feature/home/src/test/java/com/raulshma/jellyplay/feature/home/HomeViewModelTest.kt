@@ -7,6 +7,9 @@ import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
@@ -17,6 +20,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -27,6 +31,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
@@ -42,6 +47,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -87,6 +93,8 @@ class HomeViewModelTest {
     private lateinit var arrRepository: ArrRepository
     private lateinit var tvWatchNextScheduler: TvWatchNextScheduler
     private lateinit var continueWatchingBroadcaster: ContinueWatchingBroadcaster
+    private lateinit var playbackOutboxRepository: PlaybackOutboxRepository
+    private lateinit var playbackSyncScheduler: PlaybackSyncScheduler
     private lateinit var fakeTimeSource: FakeTimeSource
 
     private val userFlow = MutableStateFlow<UserInfo?>(null)
@@ -94,6 +102,8 @@ class HomeViewModelTest {
     private val seerrPrefsFlow = MutableStateFlow(SeerrPreferences())
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
     private val networkStatusFlow = MutableStateFlow(NetworkStatus.Online)
+    private val outboxCountFlow = MutableStateFlow(0)
+    private val outboxEntriesFlow = MutableStateFlow<List<PlaybackOutboxEntry>>(emptyList())
 
     private lateinit var viewModel: HomeViewModel
 
@@ -116,6 +126,8 @@ class HomeViewModelTest {
         arrRepository = mockk(relaxed = true)
         tvWatchNextScheduler = mockk(relaxed = true)
         continueWatchingBroadcaster = mockk(relaxed = true)
+        playbackOutboxRepository = mockk(relaxed = true)
+        playbackSyncScheduler = mockk(relaxed = true)
         fakeTimeSource = FakeTimeSource()
 
         every { authRepository.currentUser } returns userFlow
@@ -125,6 +137,8 @@ class HomeViewModelTest {
         every { offlineModeManager.networkStatus } returns networkStatusFlow
         every { offlineModeManager.isOffline } returns false
         every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
+        every { playbackOutboxRepository.countFlow() } returns outboxCountFlow
+        every { playbackOutboxRepository.getAllFlow() } returns outboxEntriesFlow
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
         every { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(emptyList())
@@ -140,6 +154,8 @@ class HomeViewModelTest {
         photoFolderPrefetcher = photoFolderPrefetcher,
         downloadRepository = downloadRepository,
         offlineRepository = offlineRepository,
+        playbackOutboxRepository = playbackOutboxRepository,
+        playbackSyncScheduler = playbackSyncScheduler,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,
         preferencesStore = preferencesStore,
@@ -276,6 +292,53 @@ class HomeViewModelTest {
             "isGoingOnline must clear after the online fetch resolves",
             viewModel.uiState.value.isGoingOnline,
         )
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun syncNow_whenOnline_enqueuesDrain() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onEvent(HomeUiEvent.SyncNow)
+        // The drain worker must be enqueued exactly once; the worker itself
+        // carries the NetworkType.CONNECTED constraint, but the VM gate also
+        // short-circuits while offline.
+        verify(exactly = 1) { playbackSyncScheduler.enqueueNow() }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun syncNow_whenOffline_skipsEnqueue() = runTest {
+        viewModel = buildViewModel()
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        viewModel.onEvent(HomeUiEvent.SyncNow)
+        verify(exactly = 0) { playbackSyncScheduler.enqueueNow() }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun pendingSyncEntries_emitsWhatRepositoryProduces() = runTest {
+        val entry = PlaybackOutboxEntry(
+            id = "e1",
+            itemId = "item-1",
+            eventType = PlaybackOutboxEventType.PROGRESS,
+            sessionId = "s1",
+            positionTicks = 10_000_000L,
+            isPaused = false,
+            playMethod = PlayMethod.DIRECT_PLAY,
+            mediaSourceId = null,
+            recordedAt = 1L,
+            createdAt = 1L,
+        )
+        outboxEntriesFlow.value = listOf(entry)
+        viewModel = buildViewModel()
+        // pendingSyncEntries is stateIn(WhileSubscribed) — needs a live
+        // subscriber to pull, then its .value reflects the upstream emission.
+        val job = launch { viewModel.pendingSyncEntries.collect { } }
+        runCurrent()
+
+        assertEquals(listOf(entry), viewModel.pendingSyncEntries.value)
+        job.cancel()
         stopPeriodicRefresh()
     }
 

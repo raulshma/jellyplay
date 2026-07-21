@@ -1,7 +1,13 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -35,6 +41,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.ToggleFloatingActionButtonDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,7 +82,9 @@ import com.composables.icons.tabler.outline.WifiOff
 import com.composables.icons.tabler.outline.X
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.border
+import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.outline.Clock
+import com.composables.icons.tabler.outline.Refresh
 
 @Composable
 fun HomeTopDock(
@@ -95,6 +104,7 @@ fun HomeTopDock(
     onClearSearch: () -> Unit,
     onToggleOffline: () -> Unit,
     isGoingOnline: Boolean = false,
+    onShowSyncDetails: () -> Unit = {},
     searchResultsContent: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -179,6 +189,7 @@ fun HomeTopDock(
                         showClock = showClock,
                         onToggleOffline = onToggleOffline,
                         isGoingOnline = isGoingOnline,
+                        onShowSyncDetails = onShowSyncDetails,
                         onModeChange = onModeChange,
                         onSearchExpand = { onSearchExpanded(true) },
                     )
@@ -312,6 +323,64 @@ private fun OfflineToggleIcon(
     }
 }
 
+/**
+ * Dedicated affordance for pending playback-progress sync. Shown as a sibling
+ * of the offline toggle only when there are queued events. Uses the project's
+ * established sync icon (Tabler.Outline.Refresh) plus a count badge; rotates
+ * while draining to signal active progress. Opens the sync details sheet.
+ */
+@Composable
+private fun SyncStatusIcon(
+    pendingCount: Int,
+    isDraining: Boolean,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    val syncFocusState = rememberTvFocusState()
+    val infiniteTransition = rememberInfiniteTransition(label = "sync_draining")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "sync_draining_rotation",
+    )
+    val contentDescription = stringResource(
+        R.string.sync_icon_content_description,
+        pendingCount,
+    )
+    Box(
+        modifier = Modifier
+            .then(syncFocusState.focusModifier)
+            .tvFocusIndicator(syncFocusState, CircleShape)
+    ) {
+        BadgedBox(
+            badge = {
+                Badge { Text(pendingCount.coerceAtMost(99).toString()) }
+            },
+        ) {
+            IconButton(
+                onClick = onClick,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    imageVector = Tabler.Outline.Refresh,
+                    contentDescription = contentDescription,
+                    tint = if (isDraining) MaterialTheme.colorScheme.primary else tint,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .then(
+                            if (isDraining) Modifier.graphicsLayer { rotationZ = rotation }
+                            else Modifier,
+                        ),
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CollapsedDockContent(
@@ -323,6 +392,7 @@ private fun CollapsedDockContent(
     showClock: Boolean,
     onToggleOffline: () -> Unit,
     isGoingOnline: Boolean = false,
+    onShowSyncDetails: () -> Unit = {},
     onModeChange: (HomeMode) -> Unit,
     onSearchExpand: () -> Unit,
 ) {
@@ -365,35 +435,26 @@ private fun CollapsedDockContent(
                 .then(onlineFocusState.focusModifier)
                 .tvFocusIndicator(onlineFocusState, CircleShape)
         ) {
-            // Badge the offline toggle with the count of playback events queued
-            // for sync so the user sees their offline watch progress is recorded
-            // and will flush on reconnect.
-            val showSyncBadge = pendingSyncCount > 0 && !isGoingOnline
-            if (showSyncBadge) {
-                BadgedBox(
-                    badge = {
-                        Badge {
-                            Text(pendingSyncCount.coerceAtMost(99).toString())
-                        }
-                    },
-                ) {
-                    OfflineToggleIcon(
-                        isGoingOnline = isGoingOnline,
-                        onToggleOffline = onToggleOffline,
-                    )
-                }
-            } else {
-                OfflineToggleIcon(
-                    isGoingOnline = isGoingOnline,
-                    onToggleOffline = onToggleOffline,
-                )
-            }
+            // The offline toggle does one job: switch offline mode. Pending
+            // playback sync is surfaced by a dedicated SyncStatusIcon sibling
+            // (added below) so neither affordance obscures the other.
+            OfflineToggleIcon(
+                isGoingOnline = isGoingOnline,
+                onToggleOffline = onToggleOffline,
+            )
         }
-    } else if (pendingSyncCount > 0) {
-        // Online but outbox is draining — show a spinner so the user sees sync
-        // is in progress rather than wondering whether their progress landed.
-        JellyPlayCircularProgressIndicator(
-            modifier = Modifier.size(20.dp),
+    }
+    // Pending playback-progress events: show a dedicated sync affordance as a
+    // sibling of the offline toggle. It conveys purpose (sync icon + count)
+    // rather than hiding behind the offline button, and opens the pending
+    // sync details sheet on click. Renders both offline (queued, waiting for
+    // reconnect) and online (draining) — animated when draining.
+    if (pendingSyncCount > 0) {
+        SyncStatusIcon(
+            pendingCount = pendingSyncCount,
+            isDraining = offlineMode == OfflineMode.ONLINE,
+            tint = appBarIconColorFaded,
+            onClick = onShowSyncDetails,
         )
     }
     ModeSwitch(

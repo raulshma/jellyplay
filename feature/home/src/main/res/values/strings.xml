@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pending playback-progress sync indicator shown on the home dock. -->
+    <string name="sync_icon_content_description">Playback sync: %1$d item(s) pending. Open sync details.</string>
+
+    <!-- Sync details sheet. -->
+    <string name="sync_details_title">Pending watch progress sync</string>
+    <string name="sync_items_queued">%1$d item(s) queued</string>
+    <string name="sync_up_to_date">Up to date</string>
+    <string name="sync_will_sync_when_online">Will sync automatically when back online</string>
+    <string name="syncing">Syncing…</string>
+    <string name="sync_now">Sync now</string>
+    <string name="sync_now_disabled_offline">Reconnect to sync</string>
+    <string name="sync_close">Close</string>
+
+    <!-- Event types shown per pending row. -->
+    <string name="sync_event_start">Started</string>
+    <string name="sync_event_progress">Progress</string>
+    <string name="sync_event_stop">Stopped</string>
+</resources>
