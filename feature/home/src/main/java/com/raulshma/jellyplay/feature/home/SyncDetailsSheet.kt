@@ -311,8 +311,13 @@ private fun formatTicks(ticks: Long): String {
 private fun formatAge(deltaMillis: Long): String {
     val minutes = abs(deltaMillis) / 60_000
     return when {
-        minutes < 1 -> "just now"
-        minutes < 60 -> "${minutes}m ago"
-        else -> "${minutes / 60}h ${minutes % 60}m ago"
+        minutes < 1L -> "just now"
+        minutes < 60L -> "${minutes}m ago"
+        minutes < 24L * 60L -> "${minutes / 60L}h ${minutes % 60L}m ago"
+        else -> {
+            val days = minutes / (24L * 60L)
+            val remainingHours = (minutes % (24L * 60L)) / 60L
+            if (remainingHours == 0L) "${days}d ago" else "${days}d ${remainingHours}h ago"
+        }
     }
 }

@@ -108,6 +108,10 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
                 sessionId = sessionId,
                 positionTicks = positionTicks,
                 isPaused = false,
+                // The Jellyfin PlaybackStopInfo payload does not carry a play
+                // method, so the worker's STOP replay path ignores this field.
+                // The entity column is non-null, so we stamp a placeholder —
+                // it is never read back for STOP events.
                 playMethod = PlayMethod.DIRECT_PLAY.name,
                 mediaSourceId = null,
                 recordedAt = now,
@@ -154,6 +158,10 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
 
     override suspend fun deleteForItem(itemId: String) = withContext(Dispatchers.IO) {
         dao.deleteForItem(itemId)
+    }
+
+    override suspend fun deletePlaybackTelemetryForItem(itemId: String) = withContext(Dispatchers.IO) {
+        dao.deletePlaybackTelemetryForItem(itemId)
     }
 
     override suspend fun count(): Int = withContext(Dispatchers.IO) { dao.count() }

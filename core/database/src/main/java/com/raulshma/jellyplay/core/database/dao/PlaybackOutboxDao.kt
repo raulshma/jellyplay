@@ -36,4 +36,19 @@ interface PlaybackOutboxDao {
 
     @Query("DELETE FROM playback_outbox WHERE itemId = :itemId AND eventType = :eventType")
     suspend fun deleteForItemByType(itemId: String, eventType: String)
+
+    /**
+     * Deletes START/PROGRESS/STOP telemetry rows for [itemId] while leaving
+     * PLAYED / UNPLAYED flips in place. A delivered STOP supersedes pending
+     * telemetry for this item, but the user's explicit played-state intent is
+     * orthogonal and must survive until the drain delivers it.
+     */
+    @Query(
+        """
+        DELETE FROM playback_outbox
+        WHERE itemId = :itemId
+          AND eventType IN ('START', 'PROGRESS', 'STOP')
+        """
+    )
+    suspend fun deletePlaybackTelemetryForItem(itemId: String)
 }

@@ -90,8 +90,18 @@ interface PlaybackOutboxRepository {
 
     suspend fun delete(id: String)
 
-    /** Clears all entries for an item (called after a STOP is delivered). */
+    /** Clears all entries for an item. */
     suspend fun deleteForItem(itemId: String)
+
+    /**
+     * Clears START/PROGRESS/STOP telemetry rows for an item, leaving any
+     * pending PLAYED/UNPLAYED flip in place. Called after a STOP is delivered
+     * online: the server now holds the authoritative final position, so the
+     * pending telemetry is redundant — but a user's explicit played-state
+     * intent is orthogonal to the playback telemetry channel and must still
+     * drain.
+     */
+    suspend fun deletePlaybackTelemetryForItem(itemId: String)
 
     suspend fun count(): Int
 

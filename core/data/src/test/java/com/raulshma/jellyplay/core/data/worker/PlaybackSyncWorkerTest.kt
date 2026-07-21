@@ -66,7 +66,7 @@ class PlaybackSyncWorkerTest {
         coEvery { outbox.count() } returns 0
     }
 
-    private fun buildWorker(): PlaybackSyncWorker =
+    private fun buildWorker(runAttemptCount: Int = 0): PlaybackSyncWorker =
         TestListenableWorkerBuilder<PlaybackSyncWorker>(context)
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(
@@ -84,6 +84,7 @@ class PlaybackSyncWorkerTest {
                     userDataSyncScheduler,
                 )
             })
+            .setRunAttemptCount(runAttemptCount)
             .build()
 
     private fun entry(
@@ -204,7 +205,7 @@ class PlaybackSyncWorkerTest {
     // ── Failure / retry policy ────────────────────────────────────────
 
     @Test
-    fun `one failed entry returns retry and retains failed entry`() = runTest {
+    fun `early attempt on a failed entry returns retry and retains the entry`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
         coEvery { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("server 500"))
@@ -213,6 +214,44 @@ class PlaybackSyncWorkerTest {
 
         assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
         coVerify(exactly = 0) { outbox.delete(any()) }
+    }
+
+    @Test
+    fun `exhausted retries dead-letter a failing entry and returns success`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
+        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("server 500"))
+
+        // runAttemptCount >= MAX_RETRIES (3) triggers the dead-letter path.
+        val result = buildWorker(runAttemptCount = 3).doWork()
+
+        // Dead-lettered: the entry is dropped so countFlow() reaches 0 and the
+        // sync indicator clears. The drain converges with success.
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        coVerify(exactly = 1) { outbox.delete("e1") }
+        // Nothing was reconciled — the report never landed on the server.
+        coVerify(exactly = 0) { offlineRepository.getOfflineItem(any()) }
+    }
+
+    @Test
+    fun `exhausted retries still drain successes and dead-letter only failures`() = runTest {
+        coEvery { outbox.drain() } returns listOf(
+            entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS),
+            entry("e2", "item-2", PlaybackOutboxEventType.PROGRESS),
+        )
+        coEvery { apiClient.reportPlaybackProgress("item-1", any(), any(), any(), any()) } returns Result.success(Unit)
+        coEvery { apiClient.reportPlaybackProgress("item-2", any(), any(), any(), any()) } returns
+            Result.failure(RuntimeException("down"))
+        // Success-side reconciliation early-returns (no offline row).
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns null
+
+        val result = buildWorker(runAttemptCount = 3).doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        coVerify(exactly = 1) { outbox.delete("e1") }
+        coVerify(exactly = 1) { outbox.delete("e2") }
+        // Only the pushed item is reconciled; the dead-lettered one is not.
+        coVerify(exactly = 1) { offlineRepository.getOfflineItem("item-1") }
+        coVerify(exactly = 0) { offlineRepository.getOfflineItem("item-2") }
     }
 
     @Test

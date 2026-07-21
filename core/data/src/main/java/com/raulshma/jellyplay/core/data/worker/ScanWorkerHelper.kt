@@ -39,9 +39,15 @@ internal object ScanWorkerHelper {
 
             if (hasMore) delay(INTER_BATCH_DELAY_MS)
 
+            // `progress` is the "items checked" count surfaced in the UI as
+            // "N items checked". Clamp to the server's reported total so the
+            // final partial batch — where `startIndex` overshoots `totalCount`
+            // (e.g. 200 vs 50) — does not display a count larger than the
+            // population that was scanned.
+            val scannedSoFar = if (totalCount > 0) minOf(startIndex, totalCount) else startIndex
             scanStateDao.update(
                 entity.copy(
-                    progress = startIndex,
+                    progress = scannedSoFar,
                     total = totalCount,
                     itemsFound = stubs.size,
                     status = ScanPhase.SCANNING.name,
@@ -49,11 +55,16 @@ internal object ScanWorkerHelper {
             )
         }
 
+        // On completion, surface a self-consistent final count. `progress`
+        // (items checked) and `total` (server-reported population) must not
+        // diverge: clamp progress to total so the UI never shows "checked more
+        // than exist". `itemsFound` stays as the post-filter count.
+        val finalTotal = if (totalCount > 0) totalCount else stubs.size
         scanStateDao.update(
             entity.copy(
                 status = ScanPhase.COMPLETED.name,
-                progress = startIndex,
-                total = stubs.size,
+                progress = finalTotal,
+                total = finalTotal,
                 itemsFound = stubs.size,
                 resultJson = json.encodeToString(serializer<List<MediaItemStub>>(), stubs),
             )
