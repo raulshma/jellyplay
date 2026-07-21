@@ -879,6 +879,15 @@ class DetailViewModel @Inject constructor(
                     _uiState.update { state ->
                         state.copy(episodes = episodesMap.toMap())
                     }
+                    // Drop the repo-level seasons/episodes caches for this
+                    // series. The in-place flip above keeps the current screen
+                    // correct, but `MediaRepositoryImpl.invalidateUserDataCaches`
+                    // keys the series-cache drop off `detailCache.get(seasonId)`,
+                    // which is null — seasons are loaded via getSeasons(seriesId),
+                    // not as standalone details. Without this explicit drop,
+                    // re-entering the series detail (back navigation, app
+                    // background) would serve the stale pre-mutation snapshot.
+                    currentSeriesId?.let { mediaRepository.invalidateSeriesCache(it) }
                     // The Play-button target may now point to a different
                     // episode (e.g. next-up moved to the following season), so
                     // recompute it against the updated episode contents.

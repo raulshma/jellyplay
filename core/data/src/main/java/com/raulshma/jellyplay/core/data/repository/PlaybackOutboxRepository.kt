@@ -6,11 +6,18 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Type of playback event held in the offline outbox. Stored as its [name]
  * in the `playback_outbox` table.
+ *
+ * PLAYED / UNPLAYED store a user-driven watched-state flip (mark as watched /
+ * unwatched) that could not reach the server. Unlike START/PROGRESS/STOP these
+ * carry no session payload — only the target state — and are coalesced to one
+ * row per item (latest intent wins).
  */
 enum class PlaybackOutboxEventType {
     START,
     PROGRESS,
     STOP,
+    PLAYED,
+    UNPLAYED,
 }
 
 /**
@@ -67,6 +74,16 @@ interface PlaybackOutboxRepository {
         sessionId: String,
         positionTicks: Long,
     )
+
+    /**
+     * Stages a user-driven played-state flip (mark as watched / unwatched) for
+     * delivery on reconnect. Uses a deterministic id (`"played_state:$itemId"`)
+     * so a second enqueue for the same item REPLACE-lands in place — the latest
+     * user intent wins, which is the only sensible semantics for a state flip.
+     * Does not touch START/PROGRESS/STOP rows for the item: a final STOP and a
+     * watched flip are orthogonal and can coexist.
+     */
+    suspend fun enqueuePlayedState(itemId: String, isPlayed: Boolean)
 
     /** Snapshot of all pending entries ordered oldest-first. */
     suspend fun drain(): List<PlaybackOutboxEntry>

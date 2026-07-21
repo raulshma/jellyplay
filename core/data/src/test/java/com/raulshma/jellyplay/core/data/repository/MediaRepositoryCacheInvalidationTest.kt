@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -41,7 +42,17 @@ class MediaRepositoryCacheInvalidationTest {
         val lrcLibApi: LrcLibApi = mockk(relaxed = true)
         val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
         val offlineRepository: OfflineRepository = mockk(relaxed = true)
-        return MediaRepositoryImpl(apiClient, lrcLibApi, lyricsCacheDao, networkMonitor, offlineRepository)
+        val offlineModeManager: OfflineModeManager = mockk(relaxed = true)
+        val playbackOutboxRepository: PlaybackOutboxRepository = mockk(relaxed = true)
+        return MediaRepositoryImpl(
+            apiClient,
+            lrcLibApi,
+            lyricsCacheDao,
+            networkMonitor,
+            offlineRepository,
+            offlineModeManager,
+            playbackOutboxRepository,
+        )
     }
 
     /** Waits long enough for the `Dispatchers.Default` collector to observe the latest emission. */

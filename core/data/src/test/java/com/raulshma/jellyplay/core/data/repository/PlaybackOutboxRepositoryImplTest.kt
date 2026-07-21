@@ -201,4 +201,48 @@ class PlaybackOutboxRepositoryImplTest {
         repository.deleteForItem("item-1")
         assertEquals(1, repository.count())
     }
+
+    // ── Played-state (mark watched / unwatched) channel ──────────────
+
+    @Test
+    fun `enqueuePlayedState latest intent wins for same item`() = runTest {
+        repository.enqueuePlayedState("item-1", isPlayed = true)
+        repository.enqueuePlayedState("item-1", isPlayed = false)
+        repository.enqueuePlayedState("item-1", isPlayed = true)
+
+        val pending = repository.drain()
+
+        // One row — the deterministic id caused REPLACE-in-place. The final
+        // target state (PLAYED) is what survives.
+        assertEquals(1, pending.size)
+        assertEquals(PlaybackOutboxEventType.PLAYED, pending[0].eventType)
+    }
+
+    @Test
+    fun `enqueuePlayedState does not affect progress events for same item`() = runTest {
+        // A played-state flip and a playback progress event are orthogonal —
+        // both must survive until drain.
+        repository.enqueueProgress("item-1", "s1", 500L, false, PlayMethod.DIRECT_PLAY, null)
+        repository.enqueuePlayedState("item-1", isPlayed = true)
+
+        val pending = repository.drain()
+
+        assertEquals(2, pending.size)
+        val types = pending.map { it.eventType }.toSet()
+        assertTrue(types.contains(PlaybackOutboxEventType.PROGRESS))
+        assertTrue(types.contains(PlaybackOutboxEventType.PLAYED))
+    }
+
+    @Test
+    fun `enqueuePlayedState for distinct items keeps separate rows`() = runTest {
+        repository.enqueuePlayedState("item-1", isPlayed = true)
+        repository.enqueuePlayedState("item-2", isPlayed = false)
+
+        val pending = repository.drain()
+
+        assertEquals(2, pending.size)
+        val byItem = pending.associateBy { it.itemId }
+        assertEquals(PlaybackOutboxEventType.PLAYED, byItem["item-1"]?.eventType)
+        assertEquals(PlaybackOutboxEventType.UNPLAYED, byItem["item-2"]?.eventType)
+    }
 }

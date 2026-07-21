@@ -138,6 +138,10 @@ class PlaybackSyncWorker @AssistedInject constructor(
                     entry.sessionId,
                     entry.positionTicks,
                 ).isSuccess
+            PlaybackOutboxEventType.PLAYED ->
+                apiClient.markPlayed(entry.itemId).isSuccess
+            PlaybackOutboxEventType.UNPLAYED ->
+                apiClient.markUnplayed(entry.itemId).isSuccess
         }
 
     /**

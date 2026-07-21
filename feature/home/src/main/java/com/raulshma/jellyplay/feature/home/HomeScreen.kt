@@ -15,6 +15,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.material3.Icon
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -160,7 +161,16 @@ private fun MainHomeContent(
     val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val pendingSyncEntries by viewModel.pendingSyncEntries.collectAsStateWithLifecycle()
+    val pendingItemDetails by viewModel.pendingItemDetails.collectAsStateWithLifecycle()
     var showSyncDetails by remember { mutableStateOf(false) }
+    // Resolve media metadata (offline-first) for the sync details sheet only
+    // while it's open — keeps the map pruned to the currently-queued ids and
+    // avoids any lookup cost when the sheet is closed.
+    LaunchedEffect(showSyncDetails, pendingSyncEntries) {
+        if (showSyncDetails) {
+            viewModel.ensurePendingItemDetails(pendingSyncEntries.map { it.itemId })
+        }
+    }
     val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
 
     val seerrCardLoadingState = rememberSeerrCardLoadingState()
@@ -572,6 +582,7 @@ private fun MainHomeContent(
     if (showSyncDetails) {
         SyncDetailsSheet(
             entries = pendingSyncEntries,
+            itemDetails = pendingItemDetails,
             offlineMode = state.offlineMode,
             onSyncNow = { viewModel.onEvent(HomeUiEvent.SyncNow) },
             onDismiss = { showSyncDetails = false },

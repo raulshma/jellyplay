@@ -164,6 +164,43 @@ class PlaybackSyncWorkerTest {
         coVerify(exactly = 1) { userDataSyncScheduler.enqueueNow() }
     }
 
+    @Test
+    fun `PLAYED entry replays via markPlayed and is deleted on success`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
+        coEvery { apiClient.markPlayed("item-1") } returns Result.success(Unit)
+        coEvery { offlineRepository.getOfflineItem(any()) } returns null
+
+        val result = buildWorker().doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        coVerify(exactly = 1) { apiClient.markPlayed("item-1") }
+        coVerify(exactly = 1) { outbox.delete("e1") }
+    }
+
+    @Test
+    fun `UNPLAYED entry replays via markUnplayed and is deleted on success`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.UNPLAYED))
+        coEvery { apiClient.markUnplayed("item-1") } returns Result.success(Unit)
+        coEvery { offlineRepository.getOfflineItem(any()) } returns null
+
+        val result = buildWorker().doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        coVerify(exactly = 1) { apiClient.markUnplayed("item-1") }
+        coVerify(exactly = 1) { outbox.delete("e1") }
+    }
+
+    @Test
+    fun `PLAYED entry failure retains the entry for retry`() = runTest {
+        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
+        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("server 500"))
+
+        val result = buildWorker().doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        coVerify(exactly = 0) { outbox.delete(any()) }
+    }
+
     // ── Failure / retry policy ────────────────────────────────────────
 
     @Test

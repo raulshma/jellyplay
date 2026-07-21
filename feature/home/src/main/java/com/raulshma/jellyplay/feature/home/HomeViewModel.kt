@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
+import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
@@ -66,6 +67,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
@@ -162,6 +164,73 @@ class HomeViewModel @Inject constructor(
     val pendingSyncEntries: StateFlow<List<PlaybackOutboxEntry>> =
         playbackOutboxRepository.getAllFlow()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Resolved media metadata (title + poster URL) keyed by outbox `itemId`,
+     * for rendering per-row context in the sync details sheet. Resolution is
+     * **offline-first** — the sheet is most relevant when offline — and falls
+     * back to a network `getMediaDetail` lookup only when the item was watched
+     * but never downloaded. Entries are populated on demand via
+     * [ensurePendingItemDetails] and pruned to the currently-queued ids so the
+     * map never grows unbounded. `item == null` (with a network-derived URL)
+     * marks a resolved-but-not-found id so we don't refetch it every
+     * recomposition.
+     */
+    private val _pendingItemDetails =
+        MutableStateFlow<Map<String, ResolvedSyncMedia>>(emptyMap())
+    val pendingItemDetails: StateFlow<Map<String, ResolvedSyncMedia>> = _pendingItemDetails
+
+    /** Item ids currently being resolved, to dedupe concurrent callers. */
+    private val pendingResolveInFlight = mutableSetOf<String>()
+
+    /**
+     * Ensures the [pendingItemDetails] map holds a resolution for every id in
+     * [itemIds], pruning any stale entries that are no longer queued. Cheap to
+     * call on every recomposition — already-resolved and in-flight ids are
+     * skipped. Safe to call with an empty collection (clears the map).
+     */
+    fun ensurePendingItemDetails(itemIds: Collection<String>) {
+        val keep = itemIds.toSet()
+        // Drop resolutions for ids that are no longer queued.
+        if (_pendingItemDetails.value.keys.any { it !in keep }) {
+            _pendingItemDetails.value = _pendingItemDetails.value.filterKeys { it in keep }
+        }
+        for (id in keep) {
+            if (_pendingItemDetails.value.containsKey(id) || id in pendingResolveInFlight) continue
+            pendingResolveInFlight += id
+            launch {
+                val resolved = resolveSyncMedia(id)
+                _pendingItemDetails.update { current -> current + (id to resolved) }
+                pendingResolveInFlight -= id
+            }
+        }
+    }
+
+    /**
+     * Resolves a single item offline-first. Returns the offline row adapted to
+     * [MediaItem] (with its local poster path) when available, else falls back
+     * to a network `getMediaDetail` lookup guarded by the current offline mode.
+     * The poster URL always falls back to the id-derived server URL so the row
+     * can attempt to load it once back online even if neither store had a row.
+     */
+    private suspend fun resolveSyncMedia(id: String): ResolvedSyncMedia {
+        val offline = offlineRepository.getOfflineItem(id)
+        if (offline != null) {
+            val url = offline.posterPath ?: imageUrlProvider.getImageUrl(id)
+            return ResolvedSyncMedia(item = offline.toMediaItem(), posterUrl = url)
+        }
+        // Online-only fallback for items watched but never downloaded. Skipped
+        // while offline to avoid a guaranteed-failing network call.
+        if (offlineModeManager.offlineMode.value == OfflineMode.ONLINE) {
+            mediaRepository.getMediaDetail(id)
+                .getOrNull()
+                ?.item
+                ?.let { item ->
+                    return ResolvedSyncMedia(item = item, posterUrl = imageUrlProvider.getImageUrl(id))
+                }
+        }
+        return ResolvedSyncMedia(item = null, posterUrl = imageUrlProvider.getImageUrl(id))
+    }
 
     private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet()
     private var homeSectionOrder = HomeSectionType.CONFIGURABLE
@@ -932,3 +1001,17 @@ class HomeViewModel @Inject constructor(
     }
 
 }
+
+/**
+ * Resolved media context for a single pending-sync outbox row.
+ *
+ * @property item the resolved [MediaItem] (title, type, episode context), or
+ *   `null` if neither the offline store nor the server had a row for the id.
+ * @property posterUrl the URL to load the poster from. For offline items this
+ *   is the locally-saved [OfflineMediaItem.posterPath]; otherwise it is the
+ *   id-derived server URL, which will only resolve once back online.
+ */
+data class ResolvedSyncMedia(
+    val item: com.raulshma.jellyplay.core.model.MediaItem?,
+    val posterUrl: String,
+)

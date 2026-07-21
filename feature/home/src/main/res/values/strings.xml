@@ -17,4 +17,9 @@
     <string name="sync_event_start">Started</string>
     <string name="sync_event_progress">Progress</string>
     <string name="sync_event_stop">Stopped</string>
+    <string name="sync_event_played">Marked played</string>
+    <string name="sync_event_unplayed">Marked unplayed</string>
+
+    <!-- Title shown for a pending row whose media could not be resolved. -->
+    <string name="sync_unknown_title">Unknown item</string>
 </resources>
