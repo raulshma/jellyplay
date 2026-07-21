@@ -220,6 +220,7 @@ internal fun PlayerControls(
     hdrType: String? = null,
     mediaStreams: List<MediaStream> = emptyList(),
     audioTracks: List<TrackOption> = emptyList(),
+    isConnectionMetered: Boolean = false,
     showPlaybackMetadata: Boolean = true,
     showClock: Boolean = false,
     showTimeRemaining: Boolean = false,
@@ -516,6 +517,7 @@ internal fun PlayerControls(
                         mediaStreams = mediaStreams,
                         videoStats = playbackMetadata,
                         audioTracks = audioTracks,
+                        isConnectionMetered = isConnectionMetered,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
                 }

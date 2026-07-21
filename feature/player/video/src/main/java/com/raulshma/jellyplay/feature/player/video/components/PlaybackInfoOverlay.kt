@@ -42,6 +42,7 @@ fun PlaybackInfoOverlay(
     mediaSource: MediaSource?,
     mediaStreams: List<MediaStream>,
     playMethod: String,
+    isConnectionMetered: Boolean = false,
     hdrType: String? = null,
     playerType: String = "Unknown",
     decoderMode: String = "Unknown",
@@ -94,6 +95,10 @@ fun PlaybackInfoOverlay(
                     InfoRow("Size", source.size?.let { formatFileSize(it) } ?: "Unknown")
                     InfoRow("Bitrate", source.bitrate?.let { "${it / 1000} kbps" } ?: "Unknown")
                     InfoRow("Play Method", playMethod)
+                    InfoRow(
+                        "Connection",
+                        if (isConnectionMetered) "Metered" else "Unmetered",
+                    )
                 }
             }
 
