@@ -80,4 +80,7 @@ interface PlaybackOutboxRepository {
 
     /** Reactive count of pending outbox entries, for UI indicators. */
     fun countFlow(): Flow<Int>
+
+    /** Reactive snapshot of pending entries ordered oldest-first, for the sync details sheet. */
+    fun getAllFlow(): Flow<List<PlaybackOutboxEntry>>
 }

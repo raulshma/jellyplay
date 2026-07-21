@@ -452,4 +452,144 @@ class PlaybackRepositoryImplTest {
         coVerify(exactly = 1) { outbox.enqueueStop("item-1", "session-1", 8_000_000L) }
         coVerify(exactly = 0) { outbox.deleteForItem(any()) }
     }
+
+    // ── Online success must NOT touch outbox ──────────────────────────
+
+    @Test
+    fun `reportPlaybackProgress online success does not enqueue outbox`() = runTest {
+        coEvery {
+            apiClient.reportPlaybackProgress("item-1", "s1", 1L, false, PlayMethod.DIRECT_PLAY)
+        } returns Result.success(Unit)
+
+        repository.reportPlaybackProgress(
+            PlaybackProgress(itemId = "item-1", sessionId = "s1", positionTicks = 1L)
+        )
+
+        coVerify(exactly = 0) { outbox.enqueueProgress(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `reportPlaybackStart online success does not enqueue outbox`() = runTest {
+        coEvery { apiClient.reportPlaybackStart("item-1", "s1", PlayMethod.DIRECT_PLAY) } returns
+            Result.success(Unit)
+
+        repository.reportPlaybackStart(PlaybackStartInfo(itemId = "item-1", sessionId = "s1"))
+
+        coVerify(exactly = 0) { outbox.enqueueStart(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `reportPlaybackStart enqueues to outbox when online api call fails`() = runTest {
+        coEvery { apiClient.reportPlaybackStart("item-1", "s1", PlayMethod.TRANSCODE) } returns
+            Result.failure(RuntimeException("timeout"))
+
+        repository.reportPlaybackStart(
+            PlaybackStartInfo(itemId = "item-1", sessionId = "s1", playMethod = PlayMethod.TRANSCODE)
+        )
+
+        coVerify(exactly = 1) {
+            outbox.enqueueStart(
+                itemId = "item-1",
+                sessionId = "s1",
+                playMethod = PlayMethod.TRANSCODE,
+                startPositionTicks = null,
+            )
+        }
+    }
+
+    // ── Field propagation: mediaSourceId + playMethod + isPaused ──────
+
+    @Test
+    fun `reportPlaybackProgress offline propagates mediaSourceId and playMethod and paused`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+
+        repository.reportPlaybackProgress(
+            PlaybackProgress(
+                itemId = "item-1",
+                sessionId = "s1",
+                positionTicks = 99L,
+                isPaused = true,
+                playMethod = PlayMethod.DIRECT_STREAM,
+                mediaSourceId = "source-9",
+            )
+        )
+
+        coVerify(exactly = 1) {
+            outbox.enqueueProgress(
+                itemId = "item-1",
+                sessionId = "s1",
+                positionTicks = 99L,
+                isPaused = true,
+                playMethod = PlayMethod.DIRECT_STREAM,
+                mediaSourceId = "source-9",
+            )
+        }
+    }
+
+    @Test
+    fun `reportPlaybackProgress online propagates all fields to apiClient`() = runTest {
+        coEvery {
+            apiClient.reportPlaybackProgress("item-1", "s1", 99L, true, PlayMethod.DIRECT_STREAM)
+        } returns Result.success(Unit)
+
+        repository.reportPlaybackProgress(
+            PlaybackProgress(
+                itemId = "item-1",
+                sessionId = "s1",
+                positionTicks = 99L,
+                isPaused = true,
+                playMethod = PlayMethod.DIRECT_STREAM,
+                mediaSourceId = "source-9", // not consumed by apiClient today, but must not throw
+            )
+        )
+
+        coVerify(exactly = 1) {
+            apiClient.reportPlaybackProgress("item-1", "s1", 99L, true, PlayMethod.DIRECT_STREAM)
+        }
+    }
+
+    // ── STOP edge: offline returns success regardless ─────────────────
+
+    @Test
+    fun `reportPlaybackStopped offline returns success and does not clear outbox`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+
+        val result = repository.reportPlaybackStopped("item-1", "s1", 100L)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { outbox.enqueueStop("item-1", "s1", 100L) }
+        // Offline path must NOT delete — entries still pending, drain hasn't run.
+        coVerify(exactly = 0) { outbox.deleteForItem(any()) }
+    }
+
+    @Test
+    fun `reportPlaybackStopped with zero position offline still enqueues`() = runTest {
+        // Callers gate on position > 0 themselves, but the repository must not
+        // silently drop a zero-position stop if one reaches it.
+        every { offlineModeManager.isOffline } returns true
+
+        repository.reportPlaybackStopped("item-1", "s1", 0L)
+
+        coVerify(exactly = 1) { outbox.enqueueStop("item-1", "s1", 0L) }
+    }
+
+    // ── Repeated reports coalesce correctly via outbox ────────────────
+
+    @Test
+    fun `repeated online progress failures enqueue repeatedly relying on outbox coalescence`() = runTest {
+        coEvery {
+            apiClient.reportPlaybackProgress("item-1", "s1", any(), any(), PlayMethod.DIRECT_PLAY)
+        } returns Result.failure(RuntimeException("down"))
+
+        // Simulate the 10s reporter loop firing 3 times while offline-but-reported-online.
+        repeat(3) { i ->
+            repository.reportPlaybackProgress(
+                PlaybackProgress(itemId = "item-1", sessionId = "s1", positionTicks = 10L * i)
+            )
+        }
+
+        // Repository enqueues each call; outbox coalesces to one PROGRESS row
+        // (verified in PlaybackOutboxRepositoryImplTest).
+        coVerify(exactly = 3) { outbox.enqueueProgress(any(), any(), any(), any(), any(), any()) }
+    }
 }

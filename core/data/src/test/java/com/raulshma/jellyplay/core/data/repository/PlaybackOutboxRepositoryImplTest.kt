@@ -115,4 +115,90 @@ class PlaybackOutboxRepositoryImplTest {
 
         assertEquals(0, repository.count())
     }
+
+    // ── Coalescence semantics ────────────────────────────────────────
+
+    @Test
+    fun `enqueueProgress coalesced entry holds latest session id`() = runTest {
+        repository.enqueueProgress("item-1", "session-A", 100L, false, PlayMethod.DIRECT_PLAY, null)
+        repository.enqueueProgress("item-1", "session-B", 200L, false, PlayMethod.DIRECT_PLAY, null)
+
+        val pending = repository.drain()
+        assertEquals(1, pending.size)
+        assertEquals("session-B", pending[0].sessionId)
+        assertEquals(200L, pending[0].positionTicks)
+    }
+
+    @Test
+    fun `enqueueProgress coalesced entry holds latest paused state`() = runTest {
+        repository.enqueueProgress("item-1", "s1", 100L, isPaused = false, PlayMethod.DIRECT_PLAY, null)
+        repository.enqueueProgress("item-1", "s1", 100L, isPaused = true, PlayMethod.DIRECT_STREAM, "src")
+
+        val entry = repository.drain().single()
+        assertEquals(true, entry.isPaused)
+        assertEquals(PlayMethod.DIRECT_STREAM, entry.playMethod)
+        assertEquals("src", entry.mediaSourceId)
+    }
+
+    @Test
+    fun `enqueueProgress after STOP for same item creates a fresh entry`() = runTest {
+        // A STOP is terminal but does not block a subsequent PROGRESS (e.g. the
+        // user resumes after the stop). Both must survive until drain.
+        repository.enqueueStop("item-1", "s1", 500L)
+        repository.enqueueProgress("item-1", "s2", 100L, false, PlayMethod.DIRECT_PLAY, null)
+
+        val pending = repository.drain()
+        assertEquals(2, pending.size)
+    }
+
+    @Test
+    fun `multiple STOPs for same item are not coalesced`() = runTest {
+        repository.enqueueStop("item-1", "s1", 100L)
+        repository.enqueueStop("item-1", "s1", 200L)
+        repository.enqueueStop("item-1", "s1", 300L)
+
+        assertEquals(3, repository.drain().size)
+    }
+
+    @Test
+    fun `mixed events drain preserves enqueue order`() = runTest {
+        repository.enqueueStart("item-1", "s1", PlayMethod.DIRECT_PLAY, 0L)
+        repository.enqueueProgress("item-1", "s1", 100L, false, PlayMethod.DIRECT_PLAY, null)
+        repository.enqueueProgress("item-1", "s1", 200L, false, PlayMethod.DIRECT_PLAY, null) // coalesces
+        repository.enqueueStop("item-1", "s1", 300L)
+
+        val pending = repository.drain()
+        // START, PROGRESS (coalesced), STOP — order preserved by createdAt.
+        assertEquals(3, pending.size)
+        assertEquals(PlaybackOutboxEventType.START, pending[0].eventType)
+        assertEquals(PlaybackOutboxEventType.PROGRESS, pending[1].eventType)
+        assertEquals(200L, pending[1].positionTicks) // latest progress won
+        assertEquals(PlaybackOutboxEventType.STOP, pending[2].eventType)
+    }
+
+    @Test
+    fun `deleteForItem is idempotent when no entries match`() = runTest {
+        repository.enqueueProgress("item-1", "s1", 1L, false, PlayMethod.DIRECT_PLAY, null)
+
+        repository.deleteForItem("nonexistent")
+        repository.deleteForItem("nonexistent")
+
+        assertEquals(1, repository.count())
+    }
+
+    // ── count reflects enqueue and delete ────────────────────────────
+    // (countFlow's reactivity is Room/Flow plumbing; verified manually via
+    // the home header wiring. The count contract itself is covered here.)
+
+    @Test
+    fun `count tracks enqueue and delete`() = runTest {
+        assertEquals(0, repository.count())
+
+        repository.enqueueProgress("item-1", "s1", 1L, false, PlayMethod.DIRECT_PLAY, null)
+        repository.enqueueStop("item-2", "s2", 2L)
+        assertEquals(2, repository.count())
+
+        repository.deleteForItem("item-1")
+        assertEquals(1, repository.count())
+    }
 }
