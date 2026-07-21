@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.PlayMethod
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Type of playback event held in the offline outbox. Stored as its [name]
@@ -76,4 +77,7 @@ interface PlaybackOutboxRepository {
     suspend fun deleteForItem(itemId: String)
 
     suspend fun count(): Int
+
+    /** Reactive count of pending outbox entries, for UI indicators. */
+    fun countFlow(): Flow<Int>
 }

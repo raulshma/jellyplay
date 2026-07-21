@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButtonMenu
@@ -86,6 +87,7 @@ fun HomeTopDock(
     homeMode: HomeMode,
     headerStatus: HeaderStatus,
     activeDownloadCount: Int,
+    pendingSyncCount: Int,
     showClock: Boolean,
     onModeChange: (HomeMode) -> Unit,
     onSearchExpanded: (Boolean) -> Unit,
@@ -173,6 +175,7 @@ fun HomeTopDock(
                         homeMode = homeMode,
                         headerStatus = headerStatus,
                         appBarIconColorFaded = appBarIconColorFaded,
+                        pendingSyncCount = pendingSyncCount,
                         showClock = showClock,
                         onToggleOffline = onToggleOffline,
                         isGoingOnline = isGoingOnline,
@@ -284,6 +287,31 @@ private fun RowScope.SearchExpandedContent(
     }
 }
 
+@Composable
+private fun OfflineToggleIcon(
+    isGoingOnline: Boolean,
+    onToggleOffline: () -> Unit,
+) {
+    IconButton(
+        onClick = onToggleOffline,
+        enabled = !isGoingOnline,
+        modifier = Modifier.size(40.dp),
+    ) {
+        if (isGoingOnline) {
+            JellyPlayCircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+            )
+        } else {
+            Icon(
+                Tabler.Outline.Download,
+                contentDescription = "Go online",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CollapsedDockContent(
@@ -291,6 +319,7 @@ private fun CollapsedDockContent(
     homeMode: HomeMode,
     headerStatus: HeaderStatus,
     appBarIconColorFaded: Color,
+    pendingSyncCount: Int,
     showClock: Boolean,
     onToggleOffline: () -> Unit,
     isGoingOnline: Boolean = false,
@@ -336,25 +365,36 @@ private fun CollapsedDockContent(
                 .then(onlineFocusState.focusModifier)
                 .tvFocusIndicator(onlineFocusState, CircleShape)
         ) {
-            IconButton(
-                onClick = onToggleOffline,
-                enabled = !isGoingOnline,
-                modifier = Modifier.size(40.dp),
-            ) {
-                if (isGoingOnline) {
-                    JellyPlayCircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                    )
-                } else {
-                    Icon(
-                        Tabler.Outline.Download,
-                        contentDescription = "Go online",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp),
+            // Badge the offline toggle with the count of playback events queued
+            // for sync so the user sees their offline watch progress is recorded
+            // and will flush on reconnect.
+            val showSyncBadge = pendingSyncCount > 0 && !isGoingOnline
+            if (showSyncBadge) {
+                BadgedBox(
+                    badge = {
+                        Badge {
+                            Text(pendingSyncCount.coerceAtMost(99).toString())
+                        }
+                    },
+                ) {
+                    OfflineToggleIcon(
+                        isGoingOnline = isGoingOnline,
+                        onToggleOffline = onToggleOffline,
                     )
                 }
+            } else {
+                OfflineToggleIcon(
+                    isGoingOnline = isGoingOnline,
+                    onToggleOffline = onToggleOffline,
+                )
             }
         }
+    } else if (pendingSyncCount > 0) {
+        // Online but outbox is draining — show a spinner so the user sees sync
+        // is in progress rather than wondering whether their progress landed.
+        JellyPlayCircularProgressIndicator(
+            modifier = Modifier.size(20.dp),
+        )
     }
     ModeSwitch(
         currentMode = homeMode,

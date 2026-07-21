@@ -66,6 +66,7 @@ class MediaRepositoryImpl @Inject constructor(
     private val lrcLibApi: LrcLibApi,
     private val lyricsCacheDao: LyricsCacheDao,
     private val networkMonitor: NetworkMonitor,
+    private val offlineRepository: OfflineRepository,
 ) : MediaRepository {
 
     private val detailCache = TtlCache<MediaDetail>(
@@ -846,13 +847,27 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun markPlayed(itemId: String): Result<Unit> {
         cachedHomeSectionsTimestamp = 0L
         invalidateUserDataCaches(itemId)
-        return apiClient.markPlayed(itemId)
+        val result = apiClient.markPlayed(itemId)
+        // Mirror Jellyfin's server-side cascade into the offline store so
+        // downloaded items in this hierarchy stay consistent with server state.
+        // Best-effort: a failure here must not surface to the caller — the
+        // server mutation already succeeded and PlaybackSyncWorker's
+        // reconciliation will correct drift on the next reconnect drain.
+        if (result.isSuccess) {
+            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = true) }
+        }
+        return result
     }
 
     override suspend fun markUnplayed(itemId: String): Result<Unit> {
         cachedHomeSectionsTimestamp = 0L
         invalidateUserDataCaches(itemId)
-        return apiClient.markUnplayed(itemId)
+        val result = apiClient.markUnplayed(itemId)
+        // Same cascade as markPlayed — see that method for rationale.
+        if (result.isSuccess) {
+            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = false) }
+        }
+        return result
     }
 
     /**

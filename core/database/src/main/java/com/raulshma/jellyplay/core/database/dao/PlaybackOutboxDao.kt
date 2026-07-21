@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PlaybackOutboxDao {
@@ -20,6 +21,9 @@ interface PlaybackOutboxDao {
 
     @Query("SELECT COUNT(*) FROM playback_outbox")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM playback_outbox")
+    fun countFlow(): Flow<Int>
 
     @Query("DELETE FROM playback_outbox WHERE id = :id")
     suspend fun deleteById(id: String)
