@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import android.content.Context
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
@@ -144,6 +145,9 @@ class VideoPlayerCleanupTest {
         val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
         val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         val adaptiveBitrateManager = mockk<AdaptiveBitrateManager>(relaxed = true)
+        val networkMonitor = mockk<NetworkMonitor>(relaxed = true).apply {
+            every { isMetered } returns MutableStateFlow(false)
+        }
         val activePlayerController = mockk<ActivePlayerController>(relaxed = true)
         val playerLifecycleManager = PlayerLifecycleManager(preferencesStore)
         val videoMiniPlayerState = mockk<VideoMiniPlayerState>(relaxed = true)
@@ -170,6 +174,7 @@ class VideoPlayerCleanupTest {
             syncPlayManager = syncPlayManager,
             okHttpClient = okHttpClient,
             adaptiveBitrateManager = adaptiveBitrateManager,
+            networkMonitor = networkMonitor,
             activePlayerController = activePlayerController,
             playerLifecycleManager = playerLifecycleManager,
             videoMiniPlayerState = videoMiniPlayerState,

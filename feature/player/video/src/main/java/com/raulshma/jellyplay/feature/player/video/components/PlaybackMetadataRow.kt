@@ -41,6 +41,7 @@ internal fun PlaybackMetadataRow(
     mediaStreams: List<MediaStream>,
     videoStats: PlaybackMetadataSnapshot,
     audioTracks: List<TrackOption>,
+    isConnectionMetered: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
@@ -115,13 +116,17 @@ internal fun PlaybackMetadataRow(
     val hdrColor = if (isDolbyVision) dolbyVisionGold else hdrGold
     val audioColor = if (isAtmos || isDtsX) dolbyVisionGold else onScrim
 
-    val items = remember(playMethodLabel, videoCodec, hdrLabel, audioLabel, channelsLabel, playMethodColor, hdrColor, audioColor) {
+    val items = remember(playMethodLabel, videoCodec, hdrLabel, audioLabel, channelsLabel, playMethodColor, hdrColor, audioColor, isConnectionMetered) {
         listOfNotNull(
             MetadataItem(playMethodLabel, playMethodColor),
             videoCodec?.let { MetadataItem(it, onScrim) },
             hdrLabel?.let { MetadataItem(it, hdrColor) },
             if (audioLabel.isNotBlank()) MetadataItem(audioLabel, audioColor) else null,
-            channelsLabel?.let { MetadataItem(it, onScrim.copy(alpha = 0.9f)) }
+            channelsLabel?.let { MetadataItem(it, onScrim.copy(alpha = 0.9f)) },
+            // Metered link explains a silent quality cap (AUTO caps at
+            // MAX_BITRATE_METERED on cellular/metered Wi-Fi). Rendered as a
+            // warning so the user understands why high-bitrate media transcodes.
+            if (isConnectionMetered) MetadataItem("Metered", transcodeOrange) else null,
         )
     }
 

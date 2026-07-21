@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -194,6 +195,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val syncPlayManager: SyncPlayManager,
     private val okHttpClient: OkHttpClient,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
+    private val networkMonitor: NetworkMonitor,
     private val activePlayerController: ActivePlayerController,
     val playerLifecycleManager: PlayerLifecycleManager,
     val videoMiniPlayerState: VideoMiniPlayerState,
@@ -742,6 +744,17 @@ class VideoPlayerViewModel @Inject constructor(
                     registerTransientFocusLossListener()
                 } else if (!prefs.duckOnTransientFocusLoss && transientAudioFocusRequest != null) {
                     unregisterTransientFocusLossListener()
+                }
+            }
+        }
+        launch {
+            // Surface the metered-network state so the playback metadata can
+            // explain why a quality cap is being applied (AUTO on a metered link
+            // caps at AdaptiveBitrateManager.MAX_BITRATE_METERED). Guarded so a
+            // redundant emission (no change) doesn't allocate a fresh uiState.
+            networkMonitor.isMetered.collect { metered ->
+                if (_uiState.value.isConnectionMetered != metered) {
+                    _uiState.update { it.copy(isConnectionMetered = metered) }
                 }
             }
         }

@@ -217,6 +217,13 @@ data class VideoPlayerUiState(
     val videoAutoplayNext: Boolean = false,
     val autoPlayCountdownSec: Int = 10,
     val autoplayCancelled: Boolean = false,
+    /**
+     * Whether the active network is metered (cellular or metered Wi-Fi).
+     * Surfaced so the playback metadata can show why a quality cap is being
+     * applied (see AdaptiveBitrateManager.MAX_BITRATE_METERED) — a metered link
+     * silently transcodes high-bitrate sources even on AUTO quality.
+     */
+    val isConnectionMetered: Boolean = false,
 ) {
 
     // ── Cohesive sub-state projections ────────────────────────────────────
