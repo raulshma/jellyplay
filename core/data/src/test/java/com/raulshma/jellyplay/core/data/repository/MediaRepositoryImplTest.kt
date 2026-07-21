@@ -35,13 +35,14 @@ class MediaRepositoryImplTest {
     private val lrcLibApi: LrcLibApi = mockk(relaxed = true)
     private val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
+    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
 
     private lateinit var repository: MediaRepositoryImpl
 
     @Before
     fun setup() {
         every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
-        repository = MediaRepositoryImpl(apiClient, lrcLibApi, lyricsCacheDao, networkMonitor)
+        repository = MediaRepositoryImpl(apiClient, lrcLibApi, lyricsCacheDao, networkMonitor, offlineRepository)
     }
 
     @Test
@@ -849,6 +850,59 @@ class MediaRepositoryImplTest {
     fun `parseLrc returns empty list for invalid input`() {
         val lines = parseLrc("no timestamps here")
         assertEquals(0, lines.size)
+    }
+
+    // ── Played-state propagation to offline store ─────────────────────
+
+    @Test
+    fun `markPlayed cascades played state to offline store on server success`() = runTest {
+        coEvery { apiClient.markPlayed("season-1") } returns Result.success(Unit)
+
+        val result = repository.markPlayed("season-1")
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { offlineRepository.applyPlayedState("season-1", isPlayed = true) }
+    }
+
+    @Test
+    fun `markUnplayed cascades unplayed state to offline store on server success`() = runTest {
+        coEvery { apiClient.markUnplayed("season-1") } returns Result.success(Unit)
+
+        val result = repository.markUnplayed("season-1")
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { offlineRepository.applyPlayedState("season-1", isPlayed = false) }
+    }
+
+    @Test
+    fun `markPlayed does not touch offline store when server call fails`() = runTest {
+        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("server 500"))
+
+        repository.markPlayed("item-1")
+
+        coVerify(exactly = 0) { offlineRepository.applyPlayedState(any(), any()) }
+    }
+
+    @Test
+    fun `markUnplayed does not touch offline store when server call fails`() = runTest {
+        coEvery { apiClient.markUnplayed("item-1") } returns Result.failure(RuntimeException("server 500"))
+
+        repository.markUnplayed("item-1")
+
+        coVerify(exactly = 0) { offlineRepository.applyPlayedState(any(), any()) }
+    }
+
+    @Test
+    fun `markUnplayed offline failure is swallowed and server result returned`() = runTest {
+        coEvery { apiClient.markUnplayed("item-1") } returns Result.success(Unit)
+        coEvery { offlineRepository.applyPlayedState("item-1", isPlayed = false) } throws RuntimeException("db locked")
+
+        val result = repository.markUnplayed("item-1")
+
+        // Server mutation succeeded — that success must surface even though the
+        // offline mirror threw. PlaybackSyncWorker reconciliation will correct
+        // the drift on the next drain.
+        assertTrue(result.isSuccess)
     }
 }
 

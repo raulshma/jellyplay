@@ -158,6 +158,7 @@ private fun MainHomeContent(
     }
 
     val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
+    val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
     val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
 
     val seerrCardLoadingState = rememberSeerrCardLoadingState()
@@ -470,6 +471,7 @@ private fun MainHomeContent(
                     homeMode = state.homeMode,
                     headerStatus = headerStatus,
                     activeDownloadCount = activeDownloadCount,
+                    pendingSyncCount = pendingSyncCount,
                     showClock = state.showClock,
                     homeHeroEnabled = state.homeHeroEnabled,
                     hasFeaturedItem = heroController.featuredItem != null,
@@ -635,6 +637,7 @@ private fun HomeTopDockScrim(
     homeMode: HomeMode,
     headerStatus: HeaderStatus,
     activeDownloadCount: Int,
+    pendingSyncCount: Int,
     showClock: Boolean,
     homeHeroEnabled: Boolean,
     hasFeaturedItem: Boolean,
@@ -664,6 +667,7 @@ private fun HomeTopDockScrim(
         homeMode = homeMode,
         headerStatus = headerStatus,
         activeDownloadCount = activeDownloadCount,
+        pendingSyncCount = pendingSyncCount,
         showClock = showClock,
         onModeChange = onModeChange,
         onSearchExpanded = onSearchExpanded,

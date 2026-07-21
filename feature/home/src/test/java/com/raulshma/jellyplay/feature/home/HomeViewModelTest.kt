@@ -39,8 +39,10 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -273,6 +275,43 @@ class HomeViewModelTest {
         assertFalse(
             "isGoingOnline must clear after the online fetch resolves",
             viewModel.uiState.value.isGoingOnline,
+        )
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun offlineToOnline_clearsIsGoingOnline_whenFetchTimesOut() = runTest {
+        // Regression: a hung getHomeSections call (half-open socket, unvalidated
+        // captive portal that still reports INTERNET, etc.) previously parked
+        // fetchAndUpdateSections on refreshMutex forever, so isGoingOnline never
+        // cleared and the Go Online button + app bar spinners spun indefinitely.
+        // The withTimeoutOrNull cap must force-clear both flags on timeout.
+        // Hang on a never-completing Deferred (not real delay): real delay would
+        // run on the repository's withContext(Dispatchers.Default) and block a
+        // worker thread for the full timeout, leaking past test teardown.
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers { CompletableDeferred<Result<HomeSectionsResult>>().await() }
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        every { offlineModeManager.isOffline } returns true
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        every { offlineModeManager.isOffline } returns false
+        offlineModeFlow.value = OfflineMode.ONLINE
+        // Advance virtual time past the GOING_ONLINE_TIMEOUT_MS deadline.
+        advanceTimeBy(31_000)
+        runCurrent()
+
+        assertFalse(
+            "isGoingOnline must clear even if the fetch hangs past the deadline",
+            viewModel.uiState.value.isGoingOnline,
+        )
+        assertFalse(
+            "isLoading must clear even if the fetch hangs past the deadline",
+            viewModel.uiState.value.isLoading,
         )
         stopPeriodicRefresh()
     }

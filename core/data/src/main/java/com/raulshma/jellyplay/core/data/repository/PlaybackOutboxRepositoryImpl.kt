@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.database.dao.PlaybackOutboxDao
 import com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity
 import com.raulshma.jellyplay.core.model.PlayMethod
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -127,6 +128,8 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
     }
 
     override suspend fun count(): Int = withContext(Dispatchers.IO) { dao.count() }
+
+    override fun countFlow(): Flow<Int> = dao.countFlow()
 
     private fun PlaybackOutboxEntity.toDomain(): PlaybackOutboxEntry =
         PlaybackOutboxEntry(

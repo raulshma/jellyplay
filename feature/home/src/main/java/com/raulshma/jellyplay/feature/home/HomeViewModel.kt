@@ -6,6 +6,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.raulshma.jellyplay.core.data.repository.HomeSectionQuery
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
@@ -64,6 +65,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import java.time.ZoneOffset
 import javax.inject.Inject
@@ -78,6 +80,7 @@ class HomeViewModel @Inject constructor(
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
+    private val playbackOutboxRepository: PlaybackOutboxRepository,
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
     private val preferencesStore: UserPreferencesStore,
@@ -113,6 +116,16 @@ class HomeViewModel @Inject constructor(
          * Evict oldest entries beyond this cap.
          */
         private const val PHOTO_FOLDER_CACHE_CAP = 50
+        /**
+         * Hard deadline on the offline→online fetch. There is no withTimeout
+         * anywhere down the getHomeSections / fetchDiscoverSections /
+         * fetchRecentlyGrabbed chain — only OkHttp's per-call read timeout
+         * (which a half-open socket or a hung Seerr await can defeat). Without
+         * this cap a stuck fetch parks on refreshMutex forever and
+         * isGoingOnline never clears, leaving the Go Online button + app bar
+         * spinners spinning until the app is restarted.
+         */
+        private const val GOING_ONLINE_TIMEOUT_MS = 30_000L
     }
 
     private val _uiState = stateFlow(HomeUiState())
@@ -128,6 +141,14 @@ class HomeViewModel @Inject constructor(
     }
 
     val activeDownloadCount: StateFlow<Int> = downloadRepository.getActiveDownloadCount()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /**
+     * Count of playback events queued in the offline outbox. Surfaced to the
+     * home header so the user can see that their offline watch progress is
+     * pending sync (and that it will flush automatically on reconnect).
+     */
+    val pendingSyncCount: StateFlow<Int> = playbackOutboxRepository.countFlow()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     private var enabledHomeSectionTypes = HomeSectionType.CONFIGURABLE.toSet()
@@ -290,9 +311,18 @@ class HomeViewModel @Inject constructor(
                         // the user had to restart the app to recover.
                         _uiState.update { it.copy(isLoading = true) }
                         try {
-                            fetchAndUpdateSections()
+                            // Cap the post-toggle fetch so a hung network call
+                            // cannot leave isGoingOnline (and isLoading) stuck
+                            // on — the symptom was the Go Online button + app
+                            // bar spinners never clearing. On timeout we drop
+                            // the result; a normal refresh/pull-to-refresh can
+                            // still repopulate sections once the network
+                            // recovers. isLoading is force-cleared below.
+                            withTimeoutOrNull(GOING_ONLINE_TIMEOUT_MS) {
+                                fetchAndUpdateSections()
+                            }
                         } finally {
-                            _uiState.update { it.copy(isGoingOnline = false) }
+                            _uiState.update { it.copy(isGoingOnline = false, isLoading = false) }
                         }
                     }
                 }

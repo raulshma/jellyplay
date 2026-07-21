@@ -73,6 +73,7 @@ class UserDataSyncWorker @AssistedInject constructor(
 
     companion object {
         const val UNIQUE_PERIODIC_NAME = "com.raulshma.jellyplay.work.user_data_sync"
+        const val UNIQUE_NOW_NAME = "com.raulshma.jellyplay.work.user_data_sync_now"
         const val WORK_TAG = "sync"
         private const val TAG = "UserDataSyncWorker"
         private const val MAX_RETRIES = 3

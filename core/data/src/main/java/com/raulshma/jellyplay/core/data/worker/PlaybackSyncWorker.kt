@@ -46,6 +46,7 @@ class PlaybackSyncWorker @AssistedInject constructor(
     private val offlineRepository: OfflineRepository,
     private val mediaRepository: MediaRepository,
     private val offlineModeManager: OfflineModeManager,
+    private val userDataSyncScheduler: UserDataSyncScheduler,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -57,8 +58,18 @@ class PlaybackSyncWorker @AssistedInject constructor(
         val pending = outbox.drain()
         if (pending.isEmpty()) return Result.success()
 
+        // Promote to a foreground service while the drain runs so the user sees
+        // a "Syncing watch progress" notification and the OS does not throttle
+        // a burst of reconnect-driven drains. Best-effort: some device OEMs
+        // restrict foreground promotion; fall back to plain background if it
+        // throws.
+        runCatching {
+            setForeground(PlaybackSyncNotificationHelper.createForegroundInfo(applicationContext, pending.size))
+        }
+
         val reconciledItems = mutableSetOf<String>()
         var anyFailure = false
+        var remaining = pending.size
         for (entry in pending) {
             val ok = runCatching { replay(entry) }.getOrElse { false }
             if (ok) {
@@ -67,11 +78,32 @@ class PlaybackSyncWorker @AssistedInject constructor(
             } else {
                 anyFailure = true
             }
+            remaining--
+            // Update the notification mid-drain so the count ticks down. Only
+            // worth a notify() call on meaningful batches to avoid spam.
+            if (pending.size > 1 && remaining > 0) {
+                runCatching {
+                    PlaybackSyncNotificationHelper.updateNotification(applicationContext, remaining)
+                }
+            }
         }
         // Only reconcile after the push so the server's view reflects the
         // locally-recorded progress for these items.
         for (itemId in reconciledItems) {
             runCatching { reconcileOfflineRow(itemId) }
+        }
+
+        // Drain done — dismiss the progress notification regardless of outcome.
+        // On retry/failure WorkManager re-runs the worker, which will repost.
+        runCatching { PlaybackSyncNotificationHelper.dismissNotification(applicationContext) }
+
+        // If anything was pushed up, the online UI caches (Continue Watching,
+        // Next Up, detail) are now stale. Trigger an immediate user-data
+        // refresh so the user sees fresh played/progress state on the online
+        // home + detail screens instead of waiting for the 60s/2min TTLs or
+        // the 12h periodic tick. KEEP policy collapses rapid reconnects.
+        if (reconciledItems.isNotEmpty()) {
+            runCatching { userDataSyncScheduler.enqueueNow() }
         }
 
         return when {
@@ -110,8 +142,16 @@ class PlaybackSyncWorker @AssistedInject constructor(
 
     /**
      * Latest-wins reconciliation for downloaded items. Fetches the server's
-     * [MediaItem] and, if the server is newer or marks the item played,
+     * [MediaItem] and, if the server is newer or its played-state diverges,
      * overwrites the local offline row so resume reads authoritative state.
+     *
+     * Three branches:
+     *   - Server played (e.g. finished online): reset local to played.
+     *   - Server unplayed AND local played (e.g. user marked season unwatched
+     *     online and that mutation raced the reconnect flush): reset local to
+     *     unplayed via [OfflineRepository.applyPlayedState] so the cascade also
+     *     clears child episodes.
+     *   - Otherwise: most-recent activity wins by timestamp comparison.
      */
     private suspend fun reconcileOfflineRow(itemId: String) {
         val offline = offlineRepository.getOfflineItem(itemId) ?: return
@@ -130,6 +170,15 @@ class PlaybackSyncWorker @AssistedInject constructor(
                 percentage = 100.0,
                 isPlayed = true,
             )
+            return
+        }
+
+        // Server unplayed but local played: the user marked the item (or its
+        // season/series) unwatched online and that change has not yet reached
+        // the local store. Mirror the flip — including the hierarchy cascade —
+        // so the offline screen does not show stale watched state.
+        if (offline.isPlayed) {
+            offlineRepository.applyPlayedState(itemId, isPlayed = false)
             return
         }
 

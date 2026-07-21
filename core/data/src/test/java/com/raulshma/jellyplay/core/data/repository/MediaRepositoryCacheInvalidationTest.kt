@@ -40,7 +40,8 @@ class MediaRepositoryCacheInvalidationTest {
         every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         val lrcLibApi: LrcLibApi = mockk(relaxed = true)
         val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
-        return MediaRepositoryImpl(apiClient, lrcLibApi, lyricsCacheDao, networkMonitor)
+        val offlineRepository: OfflineRepository = mockk(relaxed = true)
+        return MediaRepositoryImpl(apiClient, lrcLibApi, lyricsCacheDao, networkMonitor, offlineRepository)
     }
 
     /** Waits long enough for the `Dispatchers.Default` collector to observe the latest emission. */
