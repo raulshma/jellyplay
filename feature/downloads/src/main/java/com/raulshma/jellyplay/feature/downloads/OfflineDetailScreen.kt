@@ -72,6 +72,8 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.TransparentTopBar
+import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
+import com.raulshma.jellyplay.core.ui.components.formatRelativeTime
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -784,8 +786,80 @@ private fun DownloadInfoCard(item: OfflineMediaItem) {
         if (item.downloadedBytes > 0 && item.totalSizeBytes > 0 && item.downloadedBytes < item.totalSizeBytes) {
             InfoLine(label = "Progress", value = "${(item.downloadedBytes.toFloat() / item.totalSizeBytes * 100).toInt()}%")
         }
+
+        // ── Watch progress ──
+        // Shown alongside the download info so the user can see, at a glance,
+        // how far they got and when they last watched — the same fields the
+        // offline-sync worker reconciles against the server. Skipped entirely
+        // for items with no recorded progress (position == null/0 and not
+        // played) so fresh downloads don't show a redundant "0%" row.
+        val positionTicks = item.playbackPositionTicks ?: 0L
+        val hasWatchProgress = item.isPlayed ||
+            positionTicks > 0L ||
+            item.playedPercentage > 0.0
+        if (hasWatchProgress) {
+            Spacer(Modifier.height(4.dp))
+            WatchProgressSection(item)
+        }
     }
 }
+
+@Composable
+private fun WatchProgressSection(item: OfflineMediaItem) {
+    val watchStatus = when {
+        item.isPlayed -> "Watched"
+        item.playedPercentage in 1.0..94.99 -> "In progress"
+        else -> "Started"
+    }
+    InfoLine(label = "Watch status", value = watchStatus)
+
+    // Played percentage: prefer the derived stored value, fall back to computing
+    // from position/runtime so an item seeded only with ticks still shows a %.
+    val percentage = item.playedPercentage
+        .takeIf { it > 0.0 }
+        ?: computeWatchPercentage(item.playbackPositionTicks, item.runTimeTicks)
+    if (percentage > 0.0) {
+        InfoLine(label = "Watched", value = "${percentage.toInt()}%")
+    }
+
+    // Position / runtime — "23m of 1h 2m".
+    val position = item.playbackPositionTicks ?: 0L
+    val runtime = item.runTimeTicks ?: 0L
+    if (position > 0L) {
+        val posStr = formatDurationFromTicks(position)
+        val value = if (runtime > position) "$posStr of ${formatDurationFromTicks(runtime)}" else posStr
+        InfoLine(label = "Position", value = value)
+    }
+
+    // Last tracked time (relative, e.g. "2d ago"). Falls back to absolute date
+    // when the relative formatter can't parse the stored timestamp.
+    val lastPlayedRelative = formatRelativeTime(item.lastPlayedDate)
+    val lastPlayedValue = lastPlayedRelative
+        ?: item.lastPlayedDate?.let { formatAbsoluteDate(it) }
+    if (lastPlayedValue != null) {
+        InfoLine(label = "Last watched", value = lastPlayedValue)
+    }
+}
+
+/** Derives a 0–100 watched percentage from position/runtime, guarding /0. */
+private fun computeWatchPercentage(positionTicks: Long?, runTimeTicks: Long?): Double {
+    if (positionTicks == null || positionTicks <= 0L) return 0.0
+    if (runTimeTicks == null || runTimeTicks <= 0L) return 0.0
+    return ((positionTicks.toDouble() / runTimeTicks.toDouble()) * 100.0).coerceIn(0.0, 100.0)
+}
+
+/** Best-effort absolute-date fallback for an ISO timestamp string. */
+private fun formatAbsoluteDate(isoTimestamp: String): String? =
+    runCatching {
+        val millis = runCatching {
+            java.time.OffsetDateTime.parse(isoTimestamp).toInstant().toEpochMilli()
+        }.getOrElse {
+            java.time.LocalDateTime.parse(isoTimestamp)
+                .atZone(java.time.ZoneId.systemDefault())
+                .toInstant().toEpochMilli()
+        }
+        DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(millis))
+    }.getOrNull()
 
 @Composable
 private fun InfoLine(label: String, value: String) {

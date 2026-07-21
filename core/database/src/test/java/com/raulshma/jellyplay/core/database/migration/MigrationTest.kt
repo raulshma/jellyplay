@@ -210,6 +210,48 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * Verifies the v35→v36 migration creates the `playback_outbox` table with
+     * the (itemId, createdAt) indices, queryable through the DAO. This table is
+     * the offline playback-progress outbox drained by PlaybackSyncWorker.
+     */
+    @Test
+    fun migrateAllFromV12_addsPlaybackOutbox() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+        }
+
+        val db = openWithMigrations()
+        // DAO round-trip proves the table + columns + indices exist and Room's
+        // generated mapping reads/writes the entity correctly.
+        db.playbackOutboxDao().upsert(
+            com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity(
+                id = "entry-1",
+                itemId = "item-1",
+                eventType = "PROGRESS",
+                sessionId = "session-1",
+                positionTicks = 5_000_000L,
+                isPaused = false,
+                playMethod = "DIRECT_PLAY",
+                mediaSourceId = null,
+                recordedAt = 1L,
+                createdAt = 1L,
+            )
+        )
+        assertEquals(1, db.playbackOutboxDao().count())
+        val pending = db.playbackOutboxDao().getAll()
+        assertEquals(1, pending.size)
+        assertEquals("item-1", pending[0].itemId)
+        assertEquals("PROGRESS", pending[0].eventType)
+        db.playbackOutboxDao().deleteForItem("item-1")
+        assertEquals(0, db.playbackOutboxDao().count())
+        db.close()
+    }
+
     @Test
     fun migrateAllFromV12() = runTest {
         createDatabase(12) { db ->
@@ -441,11 +483,14 @@ class MigrationTest {
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (35),
+        // One migration per step from v1 up to the current schema version (36),
         // each handing off to the next with no gaps or duplicate starts.
+        // androidx.room.Database has CLASS retention, so getAnnotation() returns
+        // null at runtime — the hardcoded fallback is the authoritative value
+        // and must be bumped alongside JellyPlayDatabase's version.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 35
+            ?: 36
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",

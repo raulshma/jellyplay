@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.IntroTimestamps
@@ -23,6 +24,8 @@ import javax.inject.Singleton
 @Singleton
 class PlaybackRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
+    private val outbox: PlaybackOutboxRepository,
+    private val offlineModeManager: OfflineModeManager,
 ) : PlaybackRepository {
 
     private val segmentsCache = TtlCache<List<MediaSegment>>(
@@ -30,23 +33,79 @@ class PlaybackRepositoryImpl @Inject constructor(
         ttlMs = SEGMENTS_CACHE_TTL_MS,
     )
 
-    override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> =
-        apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod)
+    override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> {
+        // Offline (or a transient HTTP failure): stage the event so the
+        // PlaybackSyncWorker can replay it on reconnect. Report success back
+        // to the caller so it does not double-enqueue or surface an error UI.
+        if (offlineModeManager.isOffline) {
+            outbox.enqueueStart(
+                itemId = info.itemId,
+                sessionId = info.sessionId,
+                playMethod = info.playMethod,
+                startPositionTicks = info.startPositionTicks,
+            )
+            return Result.success(Unit)
+        }
+        return apiClient.reportPlaybackStart(info.itemId, info.sessionId, info.playMethod)
+            .onFailure {
+                outbox.enqueueStart(
+                    itemId = info.itemId,
+                    sessionId = info.sessionId,
+                    playMethod = info.playMethod,
+                    startPositionTicks = info.startPositionTicks,
+                )
+            }
+    }
 
-    override suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit> =
-        apiClient.reportPlaybackProgress(
+    override suspend fun reportPlaybackProgress(progress: PlaybackProgress): Result<Unit> {
+        if (offlineModeManager.isOffline) {
+            outbox.enqueueProgress(
+                itemId = progress.itemId,
+                sessionId = progress.sessionId,
+                positionTicks = progress.positionTicks,
+                isPaused = progress.isPaused,
+                playMethod = progress.playMethod,
+                mediaSourceId = progress.mediaSourceId,
+            )
+            return Result.success(Unit)
+        }
+        return apiClient.reportPlaybackProgress(
             progress.itemId,
             progress.sessionId,
             progress.positionTicks,
             progress.isPaused,
             progress.playMethod,
-        )
+        ).onFailure {
+            outbox.enqueueProgress(
+                itemId = progress.itemId,
+                sessionId = progress.sessionId,
+                positionTicks = progress.positionTicks,
+                isPaused = progress.isPaused,
+                playMethod = progress.playMethod,
+                mediaSourceId = progress.mediaSourceId,
+            )
+        }
+    }
 
     override suspend fun reportPlaybackStopped(
         itemId: String,
         sessionId: String,
         positionTicks: Long,
-    ): Result<Unit> = apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks)
+    ): Result<Unit> {
+        if (offlineModeManager.isOffline) {
+            outbox.enqueueStop(itemId, sessionId, positionTicks)
+            return Result.success(Unit)
+        }
+        val result = apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks)
+        if (result.isSuccess) {
+            // A delivered STOP supersedes any pending PROGRESS for this item —
+            // the server now has the authoritative final position.
+            outbox.deleteForItem(itemId)
+        } else {
+            outbox.enqueueStop(itemId, sessionId, positionTicks)
+        }
+        return result
+    }
 
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?): String =
         apiClient.getImageUrl(itemId, imageType, maxWidth)

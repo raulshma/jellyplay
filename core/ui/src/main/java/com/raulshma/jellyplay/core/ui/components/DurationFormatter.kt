@@ -8,6 +8,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
 
@@ -85,4 +88,45 @@ fun rememberWallClockTimeString(): String {
         }
     }
     return time
+}
+
+/**
+ * Formats an ISO-8601 timestamp (with or without offset, e.g.
+ * `2026-07-20T12:34:56Z`, `2026-07-20T12:34:56+01:00`, or the bare
+ * `2026-07-20T12:34:56` produced by the Jellyfin SDK's mappers) into a
+ * relative-time string like "2d ago", "3h ago", "5m ago", or "just now".
+ *
+ * Returns `null` when [isoTimestamp] is blank or cannot be parsed, so the
+ * caller can fall back to a placeholder rather than showing a malformed date.
+ *
+ * The bare-local form is interpreted in the system zone — the same zone the
+ * SDK used to produce it (see JellyfinDtoMappers).
+ */
+fun formatRelativeTime(isoTimestamp: String?): String? {
+    if (isoTimestamp.isNullOrBlank()) return null
+    val epochMillis = parseIsoToEpochMillis(isoTimestamp) ?: return null
+    val deltaMillis = System.currentTimeMillis() - epochMillis
+    if (deltaMillis < 60_000L) return "just now"
+    val seconds = deltaMillis / 1000
+    val minutes = seconds / 60
+    val hours = minutes / 60
+    val days = hours / 24
+    return when {
+        days >= 1 -> "${days}d ago"
+        hours >= 1 -> "${hours}h ago"
+        minutes >= 1 -> "${minutes}m ago"
+        else -> "just now"
+    }
+}
+
+/** Parses the three ISO forms the offline/playback code produces into epoch-millis. */
+private fun parseIsoToEpochMillis(value: String): Long? {
+    // Offset-aware first (OfflineRepositoryImpl stamps OffsetDateTime.now().toString()).
+    runCatching {
+        return OffsetDateTime.parse(value).toInstant().toEpochMilli()
+    }
+    // Fall back to bare LocalDateTime (Jellyfin SDK mapper form) in system zone.
+    return runCatching {
+        LocalDateTime.parse(value).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    }.getOrNull()
 }

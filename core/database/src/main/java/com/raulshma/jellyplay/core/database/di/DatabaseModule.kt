@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
+import com.raulshma.jellyplay.core.database.dao.PlaybackOutboxDao
 import com.raulshma.jellyplay.core.database.migration.allMigrations
 import dagger.Module
 import dagger.Provides
@@ -70,4 +71,7 @@ object DatabaseModule {
 
     @Provides
     fun provideItemPlaybackPreferenceDao(database: JellyPlayDatabase) = database.itemPlaybackPreferenceDao()
+
+    @Provides
+    fun providePlaybackOutboxDao(database: JellyPlayDatabase) = database.playbackOutboxDao()
 }
