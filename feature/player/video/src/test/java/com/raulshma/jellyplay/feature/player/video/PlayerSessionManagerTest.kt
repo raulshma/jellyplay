@@ -204,6 +204,55 @@ class PlayerSessionManagerTest {
         assertFalse(state.isReady)
     }
 
+    // ── Offline metadata propagation ──────────────────────────────────
+
+    // Regression: loadOffline used to build MediaDetail.item without copying
+    // seriesId/seasonId/episodeNumber from OfflineMediaItem, which silently
+    // broke next-episode discovery, the "up next" overlay, and autoplay in
+    // offline mode (every downstream path bailed on the null fields).
+    @Test
+    fun loadOffline_propagatesSeriesMetadataAndFlagsOffline() = runTest(testDispatcher) {
+        val tempFile = Files.createTempFile("test-ep", ".mp4").toFile()
+        tempFile.deleteOnExit()
+        val itemId = "ep-1"
+        val download = downloadItem(itemId, tempFile.absolutePath)
+        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns download
+        coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineEpisodeItem(itemId)
+
+        sessionManager.loadMedia(
+            PlaybackSource.Offline(itemId, tempFile.absolutePath),
+            startPositionTicks = 0L,
+        )
+
+        val item = sessionManager.sessionState.value.mediaDetail?.item
+        assertEquals("series-1", item?.seriesId)
+        assertEquals("season-1", item?.seasonId)
+        assertEquals(1, item?.seasonNumber)
+        assertEquals(1, item?.episodeNumber)
+        assertEquals("Test Series", item?.seriesName)
+        assertTrue(sessionManager.sessionState.value.isOffline)
+    }
+
+    @Test
+    fun loadOffline_withoutOfflineMetadata_stillFlagsOfflineAndKeepsItemId() = runTest(testDispatcher) {
+        val tempFile = Files.createTempFile("test-movie", ".mp4").toFile()
+        tempFile.deleteOnExit()
+        val itemId = "item-movie"
+        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns downloadItem(itemId, tempFile.absolutePath)
+        // Legacy download with no offline_media row — only the download exists.
+        coEvery { offlineRepository.getOfflineItem(itemId) } returns null
+
+        sessionManager.loadMedia(
+            PlaybackSource.Offline(itemId, tempFile.absolutePath),
+            startPositionTicks = 0L,
+        )
+
+        val state = sessionManager.sessionState.value
+        assertEquals(itemId, state.mediaDetail?.item?.id)
+        assertNull(state.mediaDetail?.item?.seriesId)
+        assertTrue(state.isOffline)
+    }
+
     // ── Forced Online ─────────────────────────────────────────────────
 
     @Test
@@ -297,6 +346,21 @@ class PlayerSessionManagerTest {
         mediaType = MediaType.MOVIE,
         overview = "A test movie for unit testing.",
         runTimeTicks = 3_600_000 * 10_000L,
+    )
+
+    /** An episode offline item carrying series/season/episode metadata. */
+    private fun offlineEpisodeItem(itemId: String) = OfflineMediaItem(
+        id = itemId,
+        name = "Episode 1",
+        mediaType = MediaType.EPISODE,
+        overview = "First episode.",
+        runTimeTicks = 2_400_000 * 10_000L,
+        seriesId = "series-1",
+        seasonId = "season-1",
+        seriesName = "Test Series",
+        seasonName = "Season 1",
+        seasonNumber = 1,
+        episodeNumber = 1,
     )
 
     private fun mediaDetail(itemId: String) = MediaDetail(

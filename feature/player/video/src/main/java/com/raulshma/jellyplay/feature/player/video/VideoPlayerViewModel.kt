@@ -50,6 +50,7 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isMusicTrack
@@ -83,6 +84,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -1417,8 +1419,7 @@ class VideoPlayerViewModel @Inject constructor(
         val currentSeasonId = detail.item.seasonId ?: return
         launch {
             _uiState.update { it.copy(isLoadingEpisodes = true) }
-            val seasonsResult = mediaRepository.getSeasons(seriesId)
-            val seasonList = seasonsResult.getOrElse { emptyList() }
+            val seasonList = resolveSeasons(seriesId)
             _uiState.update { it.copy(seriesSeasons = seasonList, currentSeasonId = currentSeasonId) }
             loadSeasonEpisodes(currentSeasonId)
         }
@@ -1428,8 +1429,7 @@ class VideoPlayerViewModel @Inject constructor(
         val seriesId = mediaDetail?.item?.seriesId ?: uiState.value.seriesId ?: return
         launch {
             _uiState.update { it.copy(isLoadingEpisodes = true) }
-            val episodesResult = mediaRepository.getEpisodes(seriesId, seasonId)
-            val episodeList = episodesResult.getOrElse { emptyList() }
+            val episodeList = resolveEpisodes(seriesId, seasonId)
             _uiState.update { it.copy(
                 seasonEpisodes = episodeList,
                 currentSeasonId = seasonId,
@@ -1437,6 +1437,32 @@ class VideoPlayerViewModel @Inject constructor(
             ) }
         }
     }
+
+    /**
+     * Resolves the season list for [seriesId], branching on whether the current
+     * session is offline. Offline playback reads from the local download store
+     * so episode discovery works in airplane mode; online playback hits the
+     * server via the media repository as before.
+     */
+    private suspend fun resolveSeasons(seriesId: String): List<JellyfinMediaItem> =
+        if (playerSessionManager.sessionState.value.isOffline) {
+            offlineRepository.getSeasonsForSeries(seriesId).first().map { it.toMediaItem() }
+        } else {
+            mediaRepository.getSeasons(seriesId).getOrDefault(emptyList())
+        }
+
+    /**
+     * Resolves the episode list for [seasonId] under [seriesId], branching on
+     * offline state — mirrors [resolveSeasons]. Offline episodes come from the
+     * download store (ordered by episodeNumber ASC at the DAO level), enabling
+     * next-episode discovery, the "up next" overlay, and autoplay while offline.
+     */
+    private suspend fun resolveEpisodes(seriesId: String, seasonId: String): List<JellyfinMediaItem> =
+        if (playerSessionManager.sessionState.value.isOffline) {
+            offlineRepository.getEpisodesForSeason(seasonId).first().map { it.toMediaItem() }
+        } else {
+            mediaRepository.getEpisodes(seriesId, seasonId).getOrDefault(emptyList())
+        }
 
     fun playEpisode(episodeId: String, startPositionTicks: Long = 0L) {
         initialize(episodeId, null, startPositionTicks)
@@ -1953,10 +1979,10 @@ class VideoPlayerViewModel @Inject constructor(
     fun playNextEpisode() {
         val detail = mediaDetail ?: return
         val seriesId = detail.item.seriesId ?: return
+        val seasonId = detail.item.seasonId ?: return
         val currentItemId = playerSessionManager.sessionState.value.currentItemId ?: return
         launch {
-            val episodes = mediaRepository.getEpisodes(seriesId, detail.item.seasonId ?: return@launch)
-                .getOrElse { return@launch }
+            val episodes = resolveEpisodes(seriesId, seasonId)
             val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
             if (currentIndex < 0 || currentIndex + 1 >= episodes.size) return@launch
             val next = episodes[currentIndex + 1]
@@ -2140,7 +2166,7 @@ class VideoPlayerViewModel @Inject constructor(
         val seriesId = currentDetail.item.seriesId ?: return
         val seasonId = currentDetail.item.seasonId ?: return
         launch {
-            val episodes = mediaRepository.getEpisodes(seriesId, seasonId).getOrElse { return@launch }
+            val episodes = resolveEpisodes(seriesId, seasonId)
             val currentItemId = playerSessionManager.sessionState.value.currentItemId
             val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
             if (currentIndex >= 0 && currentIndex + 1 < episodes.size) {

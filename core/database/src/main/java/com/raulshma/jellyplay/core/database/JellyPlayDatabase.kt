@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.database.dao.ItemPlaybackPreferenceDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.dao.MoodPlaylistDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.PlaybackOutboxDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.dao.SearchHistoryDao
 import com.raulshma.jellyplay.core.database.dao.SeenMediaDao
@@ -25,6 +26,7 @@ import com.raulshma.jellyplay.core.database.entity.MediaAuditLogEntity
 import com.raulshma.jellyplay.core.database.entity.MoodPlaylistEntity
 import com.raulshma.jellyplay.core.database.entity.MoodPlaylistPreferenceEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
+import com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity
 import com.raulshma.jellyplay.core.database.entity.ScanStateEntity
 import com.raulshma.jellyplay.core.database.entity.SearchHistoryEntity
 import com.raulshma.jellyplay.core.database.entity.SeenMediaEntity
@@ -49,8 +51,9 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         SearchHistoryEntity::class,
         SeenMediaEntity::class,
         ItemPlaybackPreferenceEntity::class,
+        PlaybackOutboxEntity::class,
     ],
-    version = 35,
+    version = 36,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -68,4 +71,5 @@ abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun searchHistoryDao(): SearchHistoryDao
     abstract fun seenMediaDao(): SeenMediaDao
     abstract fun itemPlaybackPreferenceDao(): ItemPlaybackPreferenceDao
+    abstract fun playbackOutboxDao(): PlaybackOutboxDao
 }

@@ -584,8 +584,36 @@ val MIGRATION_34_35 = object : Migration(34, 35) {
     }
 }
 
+// Outbox for playback-progress events (START / PROGRESS / STOP) that could not
+// reach the Jellyfin server because the device was offline. The
+// PlaybackSyncWorker drains this table on reconnect / periodically. `recordedAt`
+// holds the local capture time used for latest-wins reconciliation against the
+// server's lastPlayedDate, and `createdAt` orders the drain queue.
+val MIGRATION_35_36 = object : Migration(35, 36) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS playback_outbox (
+                id TEXT NOT NULL PRIMARY KEY,
+                itemId TEXT NOT NULL,
+                eventType TEXT NOT NULL,
+                sessionId TEXT NOT NULL,
+                positionTicks INTEGER NOT NULL DEFAULT 0,
+                isPaused INTEGER NOT NULL DEFAULT 0,
+                playMethod TEXT NOT NULL DEFAULT 'DIRECT_PLAY',
+                mediaSourceId TEXT,
+                recordedAt INTEGER NOT NULL DEFAULT 0,
+                createdAt INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_playback_outbox_itemId ON playback_outbox(itemId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_playback_outbox_createdAt ON playback_outbox(createdAt)")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v35 migration chain, with the
+ * The complete, correctly-ordered v1→v36 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -628,4 +656,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_32_33,
         MIGRATION_33_34,
         MIGRATION_34_35,
+        MIGRATION_35_36,
     )

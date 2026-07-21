@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
 import com.raulshma.jellyplay.core.model.MediaSegment
@@ -15,6 +16,7 @@ import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -27,12 +29,16 @@ import org.junit.Test
 class PlaybackRepositoryImplTest {
 
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
+    private val offlineModeManager: OfflineModeManager = mockk()
 
     private lateinit var repository: PlaybackRepositoryImpl
 
     @Before
     fun setup() {
-        repository = PlaybackRepositoryImpl(apiClient)
+        // Default to online; offline-specific tests override via every { offlineModeManager.isOffline }.
+        every { offlineModeManager.isOffline } returns false
+        repository = PlaybackRepositoryImpl(apiClient, outbox, offlineModeManager)
     }
 
     @Test
@@ -329,5 +335,121 @@ class PlaybackRepositoryImplTest {
         )
 
         assertEquals(null, resolved)
+    }
+
+    // ── Offline outbox ────────────────────────────────────────────────
+
+    @Test
+    fun `reportPlaybackProgress enqueues to outbox and returns success when offline`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+        val progress = PlaybackProgress(
+            itemId = "item-1",
+            sessionId = "session-1",
+            positionTicks = 10_000_000L,
+            isPaused = false,
+            playMethod = PlayMethod.DIRECT_PLAY,
+        )
+
+        val result = repository.reportPlaybackProgress(progress)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) {
+            outbox.enqueueProgress(
+                itemId = "item-1",
+                sessionId = "session-1",
+                positionTicks = 10_000_000L,
+                isPaused = false,
+                playMethod = PlayMethod.DIRECT_PLAY,
+                mediaSourceId = null,
+            )
+        }
+        coVerify(exactly = 0) { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `reportPlaybackProgress enqueues to outbox when online api call fails`() = runTest {
+        coEvery {
+            apiClient.reportPlaybackProgress("item-1", "session-1", 10_000_000L, false, PlayMethod.DIRECT_PLAY)
+        } returns Result.failure(RuntimeException("timeout"))
+
+        repository.reportPlaybackProgress(
+            PlaybackProgress(
+                itemId = "item-1",
+                sessionId = "session-1",
+                positionTicks = 10_000_000L,
+                isPaused = false,
+                playMethod = PlayMethod.DIRECT_PLAY,
+            )
+        )
+
+        coVerify(exactly = 1) {
+            outbox.enqueueProgress(
+                itemId = "item-1",
+                sessionId = "session-1",
+                positionTicks = 10_000_000L,
+                isPaused = false,
+                playMethod = PlayMethod.DIRECT_PLAY,
+                mediaSourceId = null,
+            )
+        }
+    }
+
+    @Test
+    fun `reportPlaybackStart enqueues to outbox when offline`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+        val info = PlaybackStartInfo(
+            itemId = "item-1",
+            sessionId = "session-1",
+            startPositionTicks = 5_000_000L,
+            playMethod = PlayMethod.DIRECT_STREAM,
+        )
+
+        val result = repository.reportPlaybackStart(info)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) {
+            outbox.enqueueStart(
+                itemId = "item-1",
+                sessionId = "session-1",
+                playMethod = PlayMethod.DIRECT_STREAM,
+                startPositionTicks = 5_000_000L,
+            )
+        }
+    }
+
+    @Test
+    fun `reportPlaybackStopped enqueues stop when offline and skips api`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+
+        val result = repository.reportPlaybackStopped("item-1", "session-1", 8_000_000L)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { outbox.enqueueStop("item-1", "session-1", 8_000_000L) }
+        coVerify(exactly = 0) { apiClient.reportPlaybackStopped(any(), any(), any()) }
+    }
+
+    @Test
+    fun `reportPlaybackStopped clears outbox for item on online success`() = runTest {
+        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 8_000_000L) } returns
+            Result.success(Unit)
+
+        repository.reportPlaybackStopped("item-1", "session-1", 8_000_000L)
+
+        coVerifyOrder {
+            apiClient.reportPlaybackStopped("item-1", "session-1", 8_000_000L)
+            outbox.deleteForItem("item-1")
+        }
+        coVerify(exactly = 0) { outbox.enqueueStop(any(), any(), any()) }
+    }
+
+    @Test
+    fun `reportPlaybackStopped enqueues stop when online api call fails`() = runTest {
+        coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 8_000_000L) } returns
+            Result.failure(RuntimeException("server 500"))
+
+        repository.reportPlaybackStopped("item-1", "session-1", 8_000_000L)
+
+        coVerify(exactly = 1) { outbox.enqueueStop("item-1", "session-1", 8_000_000L) }
+        coVerify(exactly = 0) { outbox.deleteForItem(any()) }
     }
 }
