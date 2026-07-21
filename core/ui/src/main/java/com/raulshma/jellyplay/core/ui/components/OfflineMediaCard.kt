@@ -27,6 +27,7 @@ import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.toMediaItem
 
 /**
@@ -57,7 +58,9 @@ fun OfflineMediaCard(
 ) {
     val mediaItem = item.toMediaItem()
     val posterUrl = item.posterPath.orEmpty()
-    val hasProgress = item.playedPercentage in 1.0..94.99
+    // Gate the progress bar on the normalized watch state so it never shows
+    // alongside the "Watched" chip/badge (toMediaItem treats >=95% as played).
+    val hasProgress = mediaItem.hasWatchProgress
     // PosterCard's progressPercent is a 0–1 fraction (it feeds
     // fillMaxWidth(fraction)), but OfflineMediaItem.playedPercentage is 0–100,
     // so divide by 100 here — otherwise 1% watched would fill the whole bar.
@@ -76,7 +79,9 @@ fun OfflineMediaCard(
             progressPercent = progressFraction,
         )
 
-        if (item.isPlayed) {
+        // Read the normalized isPlayed (from toMediaItem) so this chip agrees
+        // with PosterCard's watched badge — both treat >=95% resume as played.
+        if (mediaItem.isPlayed) {
             OfflineStatusChip(
                 label = "Watched",
                 icon = Tabler.Outline.Check,
