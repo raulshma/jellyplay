@@ -97,6 +97,38 @@ class PlaybackOutboxRepositoryImplTest {
     }
 
     @Test
+    fun `deletePlaybackTelemetryForItem clears START PROGRESS STOP but preserves played-state flips`() = runTest {
+        // Reproduces the regression fixed in reportPlaybackStopped: a delivered
+        // online STOP used to wipe the whole item, silently dropping a pending
+        // PLAYED/UNPLAYED flip. The scoped delete must leave played-state rows.
+        repository.enqueueStart("item-1", "s1", PlayMethod.DIRECT_PLAY, 0L)
+        repository.enqueueProgress("item-1", "s1", 500L, false, PlayMethod.DIRECT_PLAY, null)
+        repository.enqueueStop("item-1", "s1", 900L)
+        repository.enqueuePlayedState("item-1", isPlayed = true)
+        repository.enqueueProgress("item-2", "s2", 100L, false, PlayMethod.DIRECT_PLAY, null)
+
+        repository.deletePlaybackTelemetryForItem("item-1")
+
+        val pending = repository.drain()
+        // item-1's PLAYED flip survives; item-2's PROGRESS is untouched.
+        assertEquals(2, pending.size)
+        val byItem = pending.associateBy { it.itemId }
+        assertEquals(PlaybackOutboxEventType.PLAYED, byItem["item-1"]?.eventType)
+        assertEquals(PlaybackOutboxEventType.PROGRESS, byItem["item-2"]?.eventType)
+    }
+
+    @Test
+    fun `deletePlaybackTelemetryForItem is a no-op when only played-state rows exist`() = runTest {
+        repository.enqueuePlayedState("item-1", isPlayed = false)
+
+        repository.deletePlaybackTelemetryForItem("item-1")
+
+        val pending = repository.drain()
+        assertEquals(1, pending.size)
+        assertEquals(PlaybackOutboxEventType.UNPLAYED, pending[0].eventType)
+    }
+
+    @Test
     fun `drain returns entries ordered oldest-first`() = runTest {
         repository.enqueueStart("item-1", "s1", PlayMethod.DIRECT_PLAY, 0L)
         repository.enqueueStop("item-2", "s2", 900L)

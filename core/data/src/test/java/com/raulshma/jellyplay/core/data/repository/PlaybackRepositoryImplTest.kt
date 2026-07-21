@@ -429,7 +429,7 @@ class PlaybackRepositoryImplTest {
     }
 
     @Test
-    fun `reportPlaybackStopped clears outbox for item on online success`() = runTest {
+    fun `reportPlaybackStopped clears telemetry for item on online success`() = runTest {
         coEvery { apiClient.reportPlaybackStopped("item-1", "session-1", 8_000_000L) } returns
             Result.success(Unit)
 
@@ -437,8 +437,10 @@ class PlaybackRepositoryImplTest {
 
         coVerifyOrder {
             apiClient.reportPlaybackStopped("item-1", "session-1", 8_000_000L)
-            outbox.deleteForItem("item-1")
+            outbox.deletePlaybackTelemetryForItem("item-1")
         }
+        // Must NOT wipe the whole item — a pending PLAYED/UNPLAYED flip survives.
+        coVerify(exactly = 0) { outbox.deleteForItem(any()) }
         coVerify(exactly = 0) { outbox.enqueueStop(any(), any(), any()) }
     }
 

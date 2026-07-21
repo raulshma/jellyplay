@@ -98,9 +98,11 @@ class PlaybackRepositoryImpl @Inject constructor(
         }
         val result = apiClient.reportPlaybackStopped(itemId, sessionId, positionTicks)
         if (result.isSuccess) {
-            // A delivered STOP supersedes any pending PROGRESS for this item —
-            // the server now has the authoritative final position.
-            outbox.deleteForItem(itemId)
+            // A delivered STOP supersedes any pending START/PROGRESS/STOP for
+            // this item — the server now has the authoritative final position.
+            // Scoped to telemetry only: a pending PLAYED/UNPLAYED flip is an
+            // orthogonal user intent and must still drain.
+            outbox.deletePlaybackTelemetryForItem(itemId)
         } else {
             outbox.enqueueStop(itemId, sessionId, positionTicks)
         }

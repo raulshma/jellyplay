@@ -67,6 +67,13 @@ class PlaybackSyncWorker @AssistedInject constructor(
             setForeground(PlaybackSyncNotificationHelper.createForegroundInfo(applicationContext, pending.size))
         }
 
+        // On the final attempt the drain must converge: a persistently
+        // undeliverable entry is dead-lettered (deleted + logged) rather than
+        // left in the outbox, so countFlow() reaches 0 and the sync indicator
+        // stops spinning. Playback telemetry is best-effort resume-position
+        // data, not transactional state — losing one undeliverable report after
+        // the retry budget is exhausted beats a sync UI that never clears.
+        val exhausted = runAttemptCount >= MAX_RETRIES
         val reconciledItems = mutableSetOf<String>()
         var anyFailure = false
         var remaining = pending.size
@@ -75,6 +82,14 @@ class PlaybackSyncWorker @AssistedInject constructor(
             if (ok) {
                 outbox.delete(entry.id)
                 reconciledItems.add(entry.itemId)
+            } else if (exhausted) {
+                Log.w(
+                    TAG,
+                    "Dead-lettering outbox entry ${entry.id} " +
+                        "(item=${entry.itemId}, type=${entry.eventType}) " +
+                        "after $MAX_RETRIES attempts",
+                )
+                outbox.delete(entry.id)
             } else {
                 anyFailure = true
             }
@@ -106,14 +121,11 @@ class PlaybackSyncWorker @AssistedInject constructor(
             runCatching { userDataSyncScheduler.enqueueNow() }
         }
 
-        return when {
-            !anyFailure -> Result.success()
-            runAttemptCount < MAX_RETRIES -> Result.retry()
-            else -> {
-                Log.w(TAG, "PlaybackSync exhausted $MAX_RETRIES retries; ${outbox.count()} entries remain")
-                Result.failure()
-            }
-        }
+        // On a non-exhausted attempt a failure → retry (it may succeed next
+        // time). On the exhausted attempt failures are already dead-lettered
+        // above, so anyFailure stays false and the drain returns success —
+        // guaranteeing the outbox count reaches 0.
+        return if (anyFailure) Result.retry() else Result.success()
     }
 
     private suspend fun replay(entry: PlaybackOutboxEntry): Boolean =
@@ -186,11 +198,13 @@ class PlaybackSyncWorker @AssistedInject constructor(
             return
         }
 
-        // Otherwise the most recent activity wins. The local `recordedAt` is
-        // epoch-millis; the server `lastPlayedDate` is a bare ISO local
-        // datetime string. Compare by parsing the server side in the system
-        // zone (the same zone used to populate it — see JellyfinDtoMappers).
-        val serverMillis = parseLocalToEpochMillis(serverItem.lastPlayedDate) ?: return
+        // Otherwise the most recent activity wins. Both sides are epoch-millis
+        // at heart: the server's `lastPlayedDate` arrives as an ISO string
+        // (kotlinx-datetime Instant -> "...Z", or a LocalDateTime when the
+        // server omits the offset), and the offline row stores
+        // OffsetDateTime.now().toString(). `parseIsoToEpochMillis` accepts
+        // both shapes so the comparison is zone-correct regardless of source.
+        val serverMillis = parseIsoToEpochMillis(serverItem.lastPlayedDate) ?: return
         if (serverMillis > System.currentTimeMillis()) {
             // Sanity guard against future-dated server clocks.
             return
@@ -216,25 +230,21 @@ class PlaybackSyncWorker @AssistedInject constructor(
             else -> ((positionTicks.toDouble() / runTimeTicks.toDouble()) * 100.0).coerceIn(0.0, 100.0)
         }
 
-    private fun parseLocalToEpochMillis(value: String?): Long? {
-        if (value.isNullOrBlank()) return null
-        return runCatching {
-            // The mapper produces a bare LocalDateTime (no offset). Interpret
-            // it in the system zone — the same zone the SDK used to produce it.
-            LocalDateTime.parse(value, ISO_PARSER)
-                .atZone(java.time.ZoneId.systemDefault())
-                .toInstant().toEpochMilli()
-        }.getOrNull()
-    }
-
+    /**
+     * Parses an ISO-8601 datetime string to epoch-millis, accepting either an
+     * offset-aware form (e.g. Jellyfin SDK's `Instant.toString()` →
+     * `2024-01-15T10:30:00Z`, or the offline row's `OffsetDateTime.toString()`)
+     * or a bare `LocalDateTime` (server sometimes omits the offset). Offset-
+     * aware inputs parse in their own zone; bare inputs parse in the system
+     * zone (the zone that produced them on-device).
+     */
     private fun parseIsoToEpochMillis(value: String?): Long? {
         if (value.isNullOrBlank()) return null
-        // Offline rows are stamped via OffsetDateTime.now().toString() in
-        // OfflineRepositoryImpl, so prefer an offset-aware parse and fall back
-        // to the bare local form.
+        // Offset-aware first — covers `...Z`, `...+00:00`, `...+05:30`.
         return runCatching {
             java.time.OffsetDateTime.parse(value, ISO_OFFSET_PARSER).toInstant().toEpochMilli()
         }.getOrElse {
+            // Bare LocalDateTime fallback — interpret in the system zone.
             runCatching {
                 LocalDateTime.parse(value, ISO_PARSER)
                     .atZone(java.time.ZoneId.systemDefault())

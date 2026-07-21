@@ -316,6 +316,14 @@ class DetailViewModelTest {
             // Sanity: before the action, smart-play points at the first unplayed ep.
             assertEquals("e1", viewModel.uiState.value.smartPlayTarget!!.episode.id)
 
+            // The post-mutation refetch re-issues getEpisodes; the server has now
+            // cascaded the played state into the season's children and cleared
+            // resume positions, so re-stub it with the post-mutation episodes
+            // (the initial stubSeries stub returned the pre-mutation snapshot).
+            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(
+                listOf(ep1.copy(isPlayed = true, playbackPositionTicks = 0L), ep2.copy(isPlayed = true, playbackPositionTicks = 0L))
+            )
+
             viewModel.markSeasonPlayed("season1")
             advanceUntilIdle()
 
@@ -358,6 +366,14 @@ class DetailViewModelTest {
 
             viewModel.loadItem("s1")
             advanceUntilIdle()
+
+            // The post-mutation refetch re-issues getEpisodes for season1; the
+            // server has cascaded the played state, so re-stub it with the
+            // post-mutation episodes. season2's stub is unchanged (the refetch
+            // only touches the marked season).
+            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(
+                listOf(s1e1.copy(isPlayed = true, playbackPositionTicks = 0L))
+            )
 
             viewModel.markSeasonPlayed("season1")
             advanceUntilIdle()
@@ -417,15 +433,21 @@ class DetailViewModelTest {
             assertFalse(viewModel.uiState.value.episodes["season1"]!!.any { it.isPlayed })
         }
 
-    // markSeasonUnplayed is the mirror image — flips isPlayed=false and lets
-    // smart-play target the now-unplayed first episode again.
+    // markSeasonUnplayed is the mirror image — flips isPlayed=false, clears the
+    // resume position (so the progress bar / "time left" label don't linger and
+    // the episodes leave continue watching locally), and lets smart-play target
+    // the now-unplayed first episode again.
     @Test
     fun markSeasonUnplayed_flipsEpisodesAndRetargets() =
         runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
-            val ep1 = episode("e1", 1, 1, isPlayed = true)
-            val ep2 = episode("e2", 1, 2, isPlayed = true)
+            // Played episodes with a residual resume position: after mark-unplayed
+            // the position MUST be cleared, or the progress bar and "time left"
+            // label linger on-screen (and the episode stays in continue watching
+            // locally until the next re-fetch).
+            val ep1 = episode("e1", 1, 1, isPlayed = true, positionTicks = 5_000_000_000L)
+            val ep2 = episode("e2", 1, 2, isPlayed = true, positionTicks = 5_000_000_000L)
             stubSeries("s1", season, listOf(ep1, ep2))
             coEvery { mediaRepository.markUnplayed("season1") } returns Result.success(Unit)
 
@@ -434,10 +456,20 @@ class DetailViewModelTest {
             // Before: all played → replay label.
             assertEquals("Replay S1:E1", viewModel.uiState.value.smartPlayTarget!!.label)
 
+            // The post-mutation refetch re-issues getEpisodes; the server has now
+            // cascaded the unplayed state and cleared resume positions, so
+            // re-stub it with the post-mutation episodes.
+            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(
+                listOf(ep1.copy(isPlayed = false, playbackPositionTicks = 0L), ep2.copy(isPlayed = false, playbackPositionTicks = 0L))
+            )
+
             viewModel.markSeasonUnplayed("season1")
             advanceUntilIdle()
 
-            assertTrue(viewModel.uiState.value.episodes["season1"]!!.none { it.isPlayed })
+            val episodes = viewModel.uiState.value.episodes["season1"]!!
+            assertTrue(episodes.none { it.isPlayed })
+            // Position cleared on unplayed, mirroring mark-played.
+            assertEquals(0L, episodes.first().playbackPositionTicks)
             // After: first episode unplayed → play label, no longer a replay.
             // (The recompute launches on Dispatchers.Default — poll for the
             // label to settle rather than asserting the instant `advanceUntilIdle`

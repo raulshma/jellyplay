@@ -866,14 +866,17 @@ class DetailViewModel @Inject constructor(
             result
                 .onSuccess {
                     episodesMap[seasonId] = current.map { episode ->
-                        // Jellyfin clears the resume position when it marks an item
-                        // played; mirror that locally so the in-progress bar and
-                        // the "remaining time" label don't linger on a played ep.
-                        if (played) {
-                            episode.copy(isPlayed = true, playbackPositionTicks = 0L)
-                        } else {
-                            episode.copy(isPlayed = false)
-                        }
+                        // The mark-played/unplayed endpoints clear the resume
+                        // position server-side; mirror that locally for BOTH
+                        // directions. For mark-unplayed this is what stops the
+                        // in-progress bar and the "remaining time" label from
+                        // lingering on an episode the user just marked unplayed,
+                        // and keeps the episode out of continue watching locally
+                        // until the next re-fetch confirms the server state.
+                        episode.copy(
+                            isPlayed = played,
+                            playbackPositionTicks = 0L,
+                        )
                     }
                     invalidateSortedEpisodesCache()
                     _uiState.update { state ->
@@ -888,6 +891,27 @@ class DetailViewModel @Inject constructor(
                     // re-entering the series detail (back navigation, app
                     // background) would serve the stale pre-mutation snapshot.
                     currentSeriesId?.let { mediaRepository.invalidateSeriesCache(it) }
+                    // Reconcile with the server: refetch the season so the
+                    // episode cards reflect authoritative post-mutation state
+                    // (played flag, resume position) rather than just the
+                    // optimistic guess above. The mark-played/unplayed
+                    // endpoints cascade into the season's children synchronously,
+                    // so the server response already reflects the change. This
+                    // mirrors findroid's SeasonViewModel, which refetches after
+                    // every mark action. Best-effort: on failure the optimistic
+                    // snapshot stays in place until the next manual load.
+                    val seriesId = currentSeriesId
+                    if (seriesId != null) {
+                        mediaRepository.getEpisodes(seriesId, seasonId)
+                            .onSuccess { freshEpisodes ->
+                                if (currentSeriesId != seriesId) return@onSuccess
+                                episodesMap[seasonId] = freshEpisodes
+                                invalidateSortedEpisodesCache()
+                                _uiState.update { state ->
+                                    state.copy(episodes = episodesMap.toMap())
+                                }
+                            }
+                    }
                     // The Play-button target may now point to a different
                     // episode (e.g. next-up moved to the following season), so
                     // recompute it against the updated episode contents.
