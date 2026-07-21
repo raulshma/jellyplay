@@ -326,8 +326,11 @@ class DetailViewModelTest {
             // Every episode now played → smart-play falls back to a replay of S1:E1.
             // The recompute launches on Dispatchers.Default, so poll the uiState
             // flow until the label settles (avoids a race where advanceUntilIdle
-            // returns before the Default launch posts its update).
-            val target = awaitSmartPlayTarget { it.episode.id == "e1" }
+            // returns before the Default launch posts its update). Match on the
+            // label, not the episode id — the episode (e1) is the same before
+            // and after, so an id-only predicate would return the stale "Play"
+            // target before the recompute lands the "Replay" target.
+            val target = awaitSmartPlayTarget { it.label == "Replay S1:E1" }
             assertEquals("Replay S1:E1", target.label)
             io.mockk.coVerify(exactly = 1) { mediaRepository.markPlayed("season1") }
         }
@@ -361,6 +364,31 @@ class DetailViewModelTest {
 
             assertTrue(viewModel.uiState.value.episodes["season1"]!!.all { it.isPlayed })
             assertTrue(viewModel.uiState.value.episodes["season2"]!!.none { it.isPlayed })
+        }
+
+    // markSeasonPlayed must drop the repo-level seasons/episodes caches for the
+    // series on success — the in-place optimistic flip keeps the current screen
+    // correct, but re-entering the detail (back/foreground) reads through
+    // `getSeasons`/`getEpisodes` whose cache `invalidateUserDataCaches(seasonId)`
+    // cannot reach (seasons aren't standalone detail-cache entries). Regression
+    // guard against serving a stale pre-mutation snapshot on re-entry.
+    @Test
+    fun markSeasonPlayed_invalidatesSeriesCacheForReEntry() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val ep1 = episode("e1", 1, 1, isPlayed = false)
+            stubSeries("s1", season, listOf(ep1))
+            coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
+
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+
+            viewModel.markSeasonPlayed("season1")
+            advanceUntilIdle()
+
+            io.mockk.coVerify(exactly = 1) { mediaRepository.markPlayed("season1") }
+            io.mockk.verify(exactly = 1) { mediaRepository.invalidateSeriesCache("s1") }
         }
 
     // Repository failure must surface the localized snackbar and leave the
@@ -413,8 +441,9 @@ class DetailViewModelTest {
             // After: first episode unplayed → play label, no longer a replay.
             // (The recompute launches on Dispatchers.Default — poll for the
             // label to settle rather than asserting the instant `advanceUntilIdle`
-            // returns.)
-            val target = awaitSmartPlayTarget { it.episode.id == "e1" }
+            // returns. Match on the label: the episode id is unchanged, so an
+            // id-only predicate would return the stale "Replay" target.)
+            val target = awaitSmartPlayTarget { it.label == "Play S1:E1" }
             assertEquals("Play S1:E1", target.label)
         }
 

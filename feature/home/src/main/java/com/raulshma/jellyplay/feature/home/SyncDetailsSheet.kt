@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -30,12 +31,15 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.CloudOff
+import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import kotlin.math.abs
@@ -46,15 +50,18 @@ import kotlin.math.abs
  * event type and captured position, summarises overall drain status, and offers
  * a "Sync now" action that enqueues the drain worker.
  *
- * Note on item identity: [PlaybackOutboxEntry] carries only an opaque Jellyfin
- * `itemId`, not a title. Resolving titles would require a per-row media lookup
- * (DB/server), which is out of scope here; the truncated id plus event type and
- * age is sufficient to convey "something is queued".
+ * Each row is enriched with the item's media details (poster thumbnail + title)
+ * via [itemDetails], resolved offline-first by [HomeViewModel] (see
+ * [HomeViewModel.ensurePendingItemDetails]). When a row's id hasn't resolved
+ * yet — or neither the offline store nor the server had a row for it — the row
+ * falls back to a truncated-id pill so the user still sees "something queued".
  *
  * Built on [TvSafeSheet] (TV full-screen Dialog / mobile ModalBottomSheet) to
  * match the project's sheet design language (SeerrRequestDialog,
  * HomeSectionConfigSheet).
  *
+ * @param itemDetails per-item resolved media (title + poster URL), keyed by
+ *   the outbox entry's `itemId`. May be partial during initial resolution.
  * @param onSyncNow invoked when the user taps "Sync now"; the caller is
  *   expected to dismiss the sheet afterwards.
  */
@@ -62,6 +69,7 @@ import kotlin.math.abs
 @Composable
 internal fun SyncDetailsSheet(
     entries: List<PlaybackOutboxEntry>,
+    itemDetails: Map<String, ResolvedSyncMedia>,
     offlineMode: OfflineMode,
     onSyncNow: () -> Unit,
     onDismiss: () -> Unit,
@@ -141,7 +149,7 @@ internal fun SyncDetailsSheet(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(entries, key = { it.id }) { entry ->
-                        PendingEntryRow(entry = entry)
+                        PendingEntryRow(entry = entry, resolved = itemDetails[entry.itemId])
                     }
                 }
             }
@@ -170,9 +178,13 @@ internal fun SyncDetailsSheet(
 }
 
 @Composable
-private fun PendingEntryRow(entry: PlaybackOutboxEntry) {
+private fun PendingEntryRow(
+    entry: PlaybackOutboxEntry,
+    resolved: ResolvedSyncMedia?,
+) {
     val colorScheme = MaterialTheme.colorScheme
     val focusState = rememberTvFocusState()
+    val item = resolved?.item
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -184,40 +196,84 @@ private fun PendingEntryRow(entry: PlaybackOutboxEntry) {
             .background(colorScheme.surfaceContainerHigh.copy(alpha = 0.5f))
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        Icon(
-            imageVector = Tabler.Outline.Clock,
-            contentDescription = null,
-            tint = colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp),
+        // Poster thumbnail (2:3). Falls back to a Movie icon placeholder while
+        // the URL is unresolved or still loading.
+        MediaImage(
+            url = resolved?.posterUrl.orEmpty(),
+            contentDescription = item?.name,
+            modifier = Modifier
+                .size(width = 40.dp, height = 60.dp)
+                .aspectRatio(2f / 3f)
+                .clip(ShapeCache.smooth8),
+            placeholderIcon = Tabler.Outline.Movie,
         )
         Column(
             verticalArrangement = Arrangement.spacedBy(2.dp),
             modifier = Modifier.weight(1f),
         ) {
             Text(
-                text = entry.eventTypeLabel(),
+                text = item?.let(::formatMediaTitle) ?: stringResource(R.string.sync_unknown_title),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
+                maxLines = 1,
             )
             Text(
-                text = formatEntryDetail(entry),
+                text = buildString {
+                    append(entry.eventTypeLabel())
+                    append("  ·  ")
+                    append(formatEntryDetail(entry))
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = colorScheme.onSurfaceVariant,
+                maxLines = 1,
             )
         }
-        Box(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(colorScheme.secondaryContainer)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-        ) {
-            Text(
-                text = entry.itemId.takeLast(6),
-                style = MaterialTheme.typography.labelSmall,
-                color = colorScheme.onSecondaryContainer,
+        // Truncated-id pill is only meaningful when the row hasn't resolved to
+        // a title — otherwise the title already identifies the item.
+        if (item == null) {
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(colorScheme.secondaryContainer)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = entry.itemId.takeLast(6),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colorScheme.onSecondaryContainer,
+                )
+            }
+        } else {
+            Icon(
+                imageVector = Tabler.Outline.Clock,
+                contentDescription = null,
+                tint = colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
             )
         }
     }
+}
+
+/**
+ * Title line for a resolved row. For episodes, prefixes the series name and
+ * `S##E##` context (the episode title alone rarely identifies the show); for
+ * everything else just the item name.
+ */
+private fun formatMediaTitle(item: com.raulshma.jellyplay.core.model.MediaItem): String {
+    if (item.mediaType != MediaType.EPISODE) return item.name
+    val prefix = buildString {
+        item.seriesName?.let { append(it).append(" ") }
+        val s = item.seasonNumber
+        val e = item.episodeNumber
+        if (s != null && e != null) {
+            append("S").append(s).append("E").append(e.toString().padStart(2, '0'))
+        } else if (e != null) {
+            append("E").append(e.toString().padStart(2, '0'))
+        } else if (s != null) {
+            append("S").append(s)
+        }
+    }
+    return if (prefix.isBlank()) item.name else "$prefix · ${item.name}"
 }
 
 @Composable
@@ -225,6 +281,8 @@ private fun PlaybackOutboxEntry.eventTypeLabel(): String = when (eventType) {
     PlaybackOutboxEventType.START -> stringResource(R.string.sync_event_start)
     PlaybackOutboxEventType.PROGRESS -> stringResource(R.string.sync_event_progress)
     PlaybackOutboxEventType.STOP -> stringResource(R.string.sync_event_stop)
+    PlaybackOutboxEventType.PLAYED -> stringResource(R.string.sync_event_played)
+    PlaybackOutboxEventType.UNPLAYED -> stringResource(R.string.sync_event_unplayed)
 }
 
 /**

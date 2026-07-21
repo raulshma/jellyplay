@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.network.LrcLibApi
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -36,13 +37,24 @@ class MediaRepositoryImplTest {
     private val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
+    private val offlineModeManager: OfflineModeManager = mockk(relaxed = true)
+    private val playbackOutboxRepository: PlaybackOutboxRepository = mockk(relaxed = true)
 
     private lateinit var repository: MediaRepositoryImpl
 
     @Before
     fun setup() {
         every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
-        repository = MediaRepositoryImpl(apiClient, lrcLibApi, lyricsCacheDao, networkMonitor, offlineRepository)
+        every { offlineModeManager.isOffline } returns false
+        repository = MediaRepositoryImpl(
+            apiClient,
+            lrcLibApi,
+            lyricsCacheDao,
+            networkMonitor,
+            offlineRepository,
+            offlineModeManager,
+            playbackOutboxRepository,
+        )
     }
 
     @Test
@@ -862,6 +874,8 @@ class MediaRepositoryImplTest {
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { offlineRepository.applyPlayedState("season-1", isPlayed = true) }
+        // Success path must NOT enqueue — the server already has the mutation.
+        coVerify(exactly = 0) { playbackOutboxRepository.enqueuePlayedState(any(), any()) }
     }
 
     @Test
@@ -872,24 +886,55 @@ class MediaRepositoryImplTest {
 
         assertTrue(result.isSuccess)
         coVerify(exactly = 1) { offlineRepository.applyPlayedState("season-1", isPlayed = false) }
+        coVerify(exactly = 0) { playbackOutboxRepository.enqueuePlayedState(any(), any()) }
     }
 
     @Test
-    fun `markPlayed does not touch offline store when server call fails`() = runTest {
+    fun `markPlayed applies locally and enqueues when offline`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+
+        val result = repository.markPlayed("item-1")
+
+        // Optimistic local mirror + outbox enqueue; no server call attempted.
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 0) { apiClient.markPlayed(any()) }
+        coVerify(exactly = 1) { offlineRepository.applyPlayedState("item-1", isPlayed = true) }
+        coVerify(exactly = 1) { playbackOutboxRepository.enqueuePlayedState("item-1", isPlayed = true) }
+    }
+
+    @Test
+    fun `markUnplayed applies locally and enqueues when offline`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+
+        val result = repository.markUnplayed("item-1")
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 0) { apiClient.markUnplayed(any()) }
+        coVerify(exactly = 1) { offlineRepository.applyPlayedState("item-1", isPlayed = false) }
+        coVerify(exactly = 1) { playbackOutboxRepository.enqueuePlayedState("item-1", isPlayed = false) }
+    }
+
+    @Test
+    fun `markPlayed applies locally and enqueues on transient server failure`() = runTest {
         coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("server 500"))
 
-        repository.markPlayed("item-1")
+        val result = repository.markPlayed("item-1")
 
-        coVerify(exactly = 0) { offlineRepository.applyPlayedState(any(), any()) }
+        // Swallowed: the user's intent is preserved locally and retried later.
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { offlineRepository.applyPlayedState("item-1", isPlayed = true) }
+        coVerify(exactly = 1) { playbackOutboxRepository.enqueuePlayedState("item-1", isPlayed = true) }
     }
 
     @Test
-    fun `markUnplayed does not touch offline store when server call fails`() = runTest {
+    fun `markUnplayed applies locally and enqueues on transient server failure`() = runTest {
         coEvery { apiClient.markUnplayed("item-1") } returns Result.failure(RuntimeException("server 500"))
 
-        repository.markUnplayed("item-1")
+        val result = repository.markUnplayed("item-1")
 
-        coVerify(exactly = 0) { offlineRepository.applyPlayedState(any(), any()) }
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { offlineRepository.applyPlayedState("item-1", isPlayed = false) }
+        coVerify(exactly = 1) { playbackOutboxRepository.enqueuePlayedState("item-1", isPlayed = false) }
     }
 
     @Test
