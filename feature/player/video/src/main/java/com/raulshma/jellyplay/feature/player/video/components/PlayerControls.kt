@@ -129,7 +129,7 @@ internal fun PlayerControls(
     title: String,
     subtitle: String,
     isPlaying: Boolean,
-    // High-frequency playback streams collected here (V-1) so the seek bar /
+    // High-frequency playback streams collected here so the seek bar /
     // time labels recompose at 4 Hz without invalidating the whole screen.
     currentPositionFlow: StateFlow<Long>,
     duration: Long,
@@ -220,6 +220,7 @@ internal fun PlayerControls(
     hdrType: String? = null,
     mediaStreams: List<MediaStream> = emptyList(),
     audioTracks: List<TrackOption> = emptyList(),
+    isConnectionMetered: Boolean = false,
     showPlaybackMetadata: Boolean = true,
     showClock: Boolean = false,
     showTimeRemaining: Boolean = false,
@@ -230,7 +231,7 @@ internal fun PlayerControls(
     isNextEpisodeVisible: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    // Collect the high-frequency streams here (V-1): the recomposition they
+    // Collect the high-frequency streams here: the recomposition they
     // drive is scoped to PlayerControls (the seek bar / time labels), not the
     // whole screen. PlayerControls is itself gated by an AnimatedVisibility in
     // the screen, so collection only runs while the controls are shown.
@@ -516,6 +517,7 @@ internal fun PlayerControls(
                         mediaStreams = mediaStreams,
                         videoStats = playbackMetadata,
                         audioTracks = audioTracks,
+                        isConnectionMetered = isConnectionMetered,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
                 }
@@ -1011,7 +1013,7 @@ private fun TvControllableSeekBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(24.dp)
-                // a11y (M10): the Canvas-drawn seekbar previously carried no
+                // a11y: the Canvas-drawn seekbar previously carried no
                 // semantics, so TalkBack ignored the primary scrub control
                 // entirely. Expose it as a Role.Slider with a ProgressBarRangeInfo
                 // (announces "% of duration") and a SetProgress action so

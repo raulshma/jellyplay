@@ -126,7 +126,7 @@ class VttTagParserTest {
         assertTrue(result.spanStyles[1].start == 5 && result.spanStyles[1].end == 11)
     }
 
-    // ─── M16: expanded tag / entity coverage ──────────────────────────────────
+    // ─── Expanded tag / entity coverage ───────────────────────────────────────
 
     @Test
     fun stripTags_classTagStripped() {

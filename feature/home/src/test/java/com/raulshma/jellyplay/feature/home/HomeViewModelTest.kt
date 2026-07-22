@@ -7,6 +7,9 @@ import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
@@ -17,6 +20,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
+import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -27,6 +31,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
@@ -39,8 +44,11 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -85,6 +93,8 @@ class HomeViewModelTest {
     private lateinit var arrRepository: ArrRepository
     private lateinit var tvWatchNextScheduler: TvWatchNextScheduler
     private lateinit var continueWatchingBroadcaster: ContinueWatchingBroadcaster
+    private lateinit var playbackOutboxRepository: PlaybackOutboxRepository
+    private lateinit var playbackSyncScheduler: PlaybackSyncScheduler
     private lateinit var fakeTimeSource: FakeTimeSource
 
     private val userFlow = MutableStateFlow<UserInfo?>(null)
@@ -92,6 +102,8 @@ class HomeViewModelTest {
     private val seerrPrefsFlow = MutableStateFlow(SeerrPreferences())
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
     private val networkStatusFlow = MutableStateFlow(NetworkStatus.Online)
+    private val outboxCountFlow = MutableStateFlow(0)
+    private val outboxEntriesFlow = MutableStateFlow<List<PlaybackOutboxEntry>>(emptyList())
 
     private lateinit var viewModel: HomeViewModel
 
@@ -114,6 +126,8 @@ class HomeViewModelTest {
         arrRepository = mockk(relaxed = true)
         tvWatchNextScheduler = mockk(relaxed = true)
         continueWatchingBroadcaster = mockk(relaxed = true)
+        playbackOutboxRepository = mockk(relaxed = true)
+        playbackSyncScheduler = mockk(relaxed = true)
         fakeTimeSource = FakeTimeSource()
 
         every { authRepository.currentUser } returns userFlow
@@ -123,6 +137,8 @@ class HomeViewModelTest {
         every { offlineModeManager.networkStatus } returns networkStatusFlow
         every { offlineModeManager.isOffline } returns false
         every { downloadRepository.getActiveDownloadCount() } returns flowOf(0)
+        every { playbackOutboxRepository.countFlow() } returns outboxCountFlow
+        every { playbackOutboxRepository.getAllFlow() } returns outboxEntriesFlow
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
         every { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(emptyList())
@@ -138,6 +154,8 @@ class HomeViewModelTest {
         photoFolderPrefetcher = photoFolderPrefetcher,
         downloadRepository = downloadRepository,
         offlineRepository = offlineRepository,
+        playbackOutboxRepository = playbackOutboxRepository,
+        playbackSyncScheduler = playbackSyncScheduler,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,
         preferencesStore = preferencesStore,
@@ -273,6 +291,90 @@ class HomeViewModelTest {
         assertFalse(
             "isGoingOnline must clear after the online fetch resolves",
             viewModel.uiState.value.isGoingOnline,
+        )
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun syncNow_whenOnline_enqueuesDrain() = runTest {
+        viewModel = buildViewModel()
+        viewModel.onEvent(HomeUiEvent.SyncNow)
+        // The drain worker must be enqueued exactly once; the worker itself
+        // carries the NetworkType.CONNECTED constraint, but the VM gate also
+        // short-circuits while offline.
+        verify(exactly = 1) { playbackSyncScheduler.enqueueNow() }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun syncNow_whenOffline_skipsEnqueue() = runTest {
+        viewModel = buildViewModel()
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        viewModel.onEvent(HomeUiEvent.SyncNow)
+        verify(exactly = 0) { playbackSyncScheduler.enqueueNow() }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun pendingSyncEntries_emitsWhatRepositoryProduces() = runTest {
+        val entry = PlaybackOutboxEntry(
+            id = "e1",
+            itemId = "item-1",
+            eventType = PlaybackOutboxEventType.PROGRESS,
+            sessionId = "s1",
+            positionTicks = 10_000_000L,
+            isPaused = false,
+            playMethod = PlayMethod.DIRECT_PLAY,
+            mediaSourceId = null,
+            recordedAt = 1L,
+            createdAt = 1L,
+        )
+        outboxEntriesFlow.value = listOf(entry)
+        viewModel = buildViewModel()
+        // pendingSyncEntries is stateIn(WhileSubscribed) — needs a live
+        // subscriber to pull, then its .value reflects the upstream emission.
+        val job = launch { viewModel.pendingSyncEntries.collect { } }
+        runCurrent()
+
+        assertEquals(listOf(entry), viewModel.pendingSyncEntries.value)
+        job.cancel()
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun offlineToOnline_clearsIsGoingOnline_whenFetchTimesOut() = runTest {
+        // Regression: a hung getHomeSections call (half-open socket, unvalidated
+        // captive portal that still reports INTERNET, etc.) previously parked
+        // fetchAndUpdateSections on refreshMutex forever, so isGoingOnline never
+        // cleared and the Go Online button + app bar spinners spun indefinitely.
+        // The withTimeoutOrNull cap must force-clear both flags on timeout.
+        // Hang on a never-completing Deferred (not real delay): real delay would
+        // run on the repository's withContext(Dispatchers.Default) and block a
+        // worker thread for the full timeout, leaking past test teardown.
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers { CompletableDeferred<Result<HomeSectionsResult>>().await() }
+        viewModel = buildViewModel()
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        every { offlineModeManager.isOffline } returns true
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        every { offlineModeManager.isOffline } returns false
+        offlineModeFlow.value = OfflineMode.ONLINE
+        // Advance virtual time past the GOING_ONLINE_TIMEOUT_MS deadline.
+        advanceTimeBy(31_000)
+        runCurrent()
+
+        assertFalse(
+            "isGoingOnline must clear even if the fetch hangs past the deadline",
+            viewModel.uiState.value.isGoingOnline,
+        )
+        assertFalse(
+            "isLoading must clear even if the fetch hangs past the deadline",
+            viewModel.uiState.value.isLoading,
         )
         stopPeriodicRefresh()
     }
@@ -444,6 +546,90 @@ class HomeViewModelTest {
         viewModel.setLibrarySectionVisible("movies", HomeSectionType.LATEST_MEDIA, visible = true)
 
         verify { preferencesEditor.setLibraryHomeSectionOverrides(emptyMap()) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun ensurePendingItemDetails_resolvesOfflineItem_andUsesLocalPosterPath() = runTest {
+        val offlineItem = com.raulshma.jellyplay.core.model.OfflineMediaItem(
+            id = "item-1",
+            name = "Offline Movie",
+            mediaType = MediaType.MOVIE,
+            posterPath = "file:///offline/poster.jpg",
+        )
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem
+        every { imageUrlProvider.getImageUrl("item-1") } returns "http://server/item-1/image"
+        viewModel = buildViewModel()
+
+        viewModel.ensurePendingItemDetails(listOf("item-1"))
+        runCurrent()
+
+        val resolved = viewModel.pendingItemDetails.value["item-1"]
+        assertEquals("Offline Movie", resolved?.item?.name)
+        // Offline hit must prefer the local poster path over the server URL.
+        assertEquals("file:///offline/poster.jpg", resolved?.posterUrl)
+        // Network fallback must not fire when the offline store had the row.
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail("item-1") }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun ensurePendingItemDetails_fallsBackToNetwork_whenOfflineMiss_andOnline() = runTest {
+        coEvery { offlineRepository.getOfflineItem("item-2") } returns null
+        val detail = com.raulshma.jellyplay.core.model.MediaDetail(
+            item = MediaItem(id = "item-2", name = "Online Only", mediaType = MediaType.MOVIE),
+        )
+        coEvery { mediaRepository.getMediaDetail("item-2") } returns Result.success(detail)
+        every { imageUrlProvider.getImageUrl("item-2") } returns "http://server/item-2/image"
+        viewModel = buildViewModel()
+
+        viewModel.ensurePendingItemDetails(listOf("item-2"))
+        runCurrent()
+
+        val resolved = viewModel.pendingItemDetails.value["item-2"]
+        assertEquals("Online Only", resolved?.item?.name)
+        assertEquals("http://server/item-2/image", resolved?.posterUrl)
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun ensurePendingItemDetails_skipsNetwork_whenOfflineMiss_andOfflineMode() = runTest {
+        coEvery { offlineRepository.getOfflineItem("item-3") } returns null
+        every { imageUrlProvider.getImageUrl("item-3") } returns "http://server/item-3/image"
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        viewModel = buildViewModel()
+        runCurrent()
+
+        viewModel.ensurePendingItemDetails(listOf("item-3"))
+        runCurrent()
+
+        val resolved = viewModel.pendingItemDetails.value["item-3"]
+        // Resolves to the not-found marker (null item) with a server URL so the
+        // row can still attempt to load it once back online.
+        assertEquals(null, resolved?.item)
+        assertEquals("http://server/item-3/image", resolved?.posterUrl)
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail("item-3") }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun ensurePendingItemDetails_prunesStaleKeys_andDedupesInFlight() = runTest {
+        coEvery { offlineRepository.getOfflineItem(any()) } returns null
+        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.failure(RuntimeException("net"))
+        every { imageUrlProvider.getImageUrl(any()) } returns "http://server/img"
+        viewModel = buildViewModel()
+
+        viewModel.ensurePendingItemDetails(listOf("a", "b"))
+        runCurrent()
+        assertEquals(setOf("a", "b"), viewModel.pendingItemDetails.value.keys)
+
+        // Second call with overlapping ids must not re-launch resolves for
+        // already-resolved keys (dedup), and ids dropped from the input are
+        // pruned from the map.
+        viewModel.ensurePendingItemDetails(listOf("b", "c"))
+        runCurrent()
+
+        assertEquals(setOf("b", "c"), viewModel.pendingItemDetails.value.keys)
         stopPeriodicRefresh()
     }
 

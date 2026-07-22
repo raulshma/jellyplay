@@ -27,7 +27,7 @@ internal const val POSITION_PAUSED_RECHECK_MS = 2_500L
  *
  * The three backends (ExoPlayer / libmpv / LibVLC) previously each carried a
  * near-identical copy of this loop: a `while(isActive)` ticker, the bounded
- * paused-wait (the "M2" fix), a `delay(pollingIntervalMs)`, and a
+  * paused-wait, a `delay(pollingIntervalMs)`, and a
  * play-state edge-detection that suppresses redundant work while paused. The
  * subtle concurrency reasoning was triplicated; this helper centralises it.
  *

@@ -804,7 +804,14 @@ class DetailViewModel @Inject constructor(
                     _uiState.update { state ->
                         state.copy(
                             detail = state.detail?.copy(
-                                item = state.detail.item.copy(isPlayed = true)
+                                // Jellyfin clears a manual watched item's
+                                // resume point. Mirror that immediately so the
+                                // detail UI cannot retain an in-progress bar
+                                // while the queued/offline mutation syncs.
+                                item = state.detail.item.copy(
+                                    isPlayed = true,
+                                    playbackPositionTicks = 0L,
+                                )
                             )
                         )
                     }
@@ -823,13 +830,108 @@ class DetailViewModel @Inject constructor(
                     _uiState.update { state ->
                         state.copy(
                             detail = state.detail?.copy(
-                                item = state.detail.item.copy(isPlayed = false)
+                                // Marking unwatched also resets resume state;
+                                // otherwise the detail screen would instantly
+                                // show the title as partially watched again.
+                                item = state.detail.item.copy(
+                                    isPlayed = false,
+                                    playbackPositionTicks = 0L,
+                                )
                             )
                         )
                     }
                 }
                 .onFailure {
                     _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_mark_unplayed)))
+                }
+        }
+    }
+
+    /**
+     * Marks every episode in [seasonId] as played. Jellyfin's
+     * `markPlayedItem` endpoint recurses into a season's children, so this is a
+     * single network call — but the UI needs the optimistic in-place flip so
+     * every `EpisodeCard` shows the WATCHED badge and the Play button target
+     * recomputes without waiting on a re-fetch.
+     *
+     * See the [episodesMap] / [invalidateSortedEpisodesCache] contract: any
+     * mutation of episode contents (played state) MUST bump the epoch or the
+     * sorted-episode cache silently serves a stale list.
+     */
+    fun markSeasonPlayed(seasonId: String) {
+        markSeason(seasonId, played = true)
+    }
+
+    fun markSeasonUnplayed(seasonId: String) {
+        markSeason(seasonId, played = false)
+    }
+
+    private fun markSeason(seasonId: String, played: Boolean) {
+        val current = episodesMap[seasonId] ?: return
+        // No-op if there is nothing to flip — avoids an unnecessary network
+        // call, a spurious cache invalidation, and a redundant uiState emission.
+        val alreadyInTargetState = current.all { it.isPlayed == played }
+        if (alreadyInTargetState) return
+
+        launch {
+            val result = if (played) mediaRepository.markPlayed(seasonId)
+            else mediaRepository.markUnplayed(seasonId)
+            result
+                .onSuccess {
+                    episodesMap[seasonId] = current.map { episode ->
+                        // The mark-played/unplayed endpoints clear the resume
+                        // position server-side; mirror that locally for BOTH
+                        // directions. For mark-unplayed this is what stops the
+                        // in-progress bar and the "remaining time" label from
+                        // lingering on an episode the user just marked unplayed,
+                        // and keeps the episode out of continue watching locally
+                        // until the next re-fetch confirms the server state.
+                        episode.copy(
+                            isPlayed = played,
+                            playbackPositionTicks = 0L,
+                        )
+                    }
+                    invalidateSortedEpisodesCache()
+                    _uiState.update { state ->
+                        state.copy(episodes = episodesMap.toMap())
+                    }
+                    // Drop the repo-level seasons/episodes caches for this
+                    // series. The in-place flip above keeps the current screen
+                    // correct, but `MediaRepositoryImpl.invalidateUserDataCaches`
+                    // keys the series-cache drop off `detailCache.get(seasonId)`,
+                    // which is null — seasons are loaded via getSeasons(seriesId),
+                    // not as standalone details. Without this explicit drop,
+                    // re-entering the series detail (back navigation, app
+                    // background) would serve the stale pre-mutation snapshot.
+                    currentSeriesId?.let { mediaRepository.invalidateSeriesCache(it) }
+                    // No post-mutation server refetch. The optimistic flip above
+                    // already holds the correct post-mutation state for this
+                    // screen, and a refetch would actively cause a stale-badge
+                    // regression on re-entry: getEpisodes writes its response back
+                    // into episodesCache (a single-season slice), so
+                    // getAllEpisodesGrouped would HIT that entry when the user
+                    // returns and serve pre-cascade data — the watched/unwatched
+                    // badges would flip back to stale and only self-correct "after
+                    // some time" once the TTL expired. Dropping the cache above and
+                    // NOT re-populating it forces re-entry's getAllEpisodesGrouped
+                    // to miss the cache and hit the server, which by then has the
+                    // fully-cascaded UserData.Played state (the same authoritative
+                    // state the per-episode detail screen reads). Re-entry is
+                    // therefore correct without a refetch here.
+                    // The Play-button target may now point to a different
+                    // episode (e.g. next-up moved to the following season), so
+                    // recompute it against the updated episode contents.
+                    maybeComputeSmartPlayTarget()
+                }
+                .onFailure {
+                    _messages.emit(
+                        DetailMessage.Text(
+                            context.getString(
+                                if (played) R.string.detail_msg_couldnt_mark_played
+                                else R.string.detail_msg_couldnt_mark_unplayed
+                            )
+                        )
+                    )
                 }
         }
     }

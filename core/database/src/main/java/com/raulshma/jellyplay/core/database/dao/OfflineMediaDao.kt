@@ -55,6 +55,42 @@ interface OfflineMediaDao {
         lastPlayedDate: String?,
     )
 
+    /**
+     * Batch-applies a played/unplayed state to a single item and every offline
+     * row in its hierarchy: the item itself, its direct children (`parentId`),
+     * and any season/episode under it (`seasonId` / `seriesId`). Used when the
+     * user marks a season or series played/unplayed online — the Jellyfin
+     * `markPlayedItem` endpoint cascades the same change to children server-side,
+     * so this mirrors that cascade into the local offline store.
+     *
+     * `lastPlayedDate` is set on mark-played and cleared on mark-unplayed so the
+     * row reflects the server's UserData semantics.
+     */
+    @Query(
+        """
+        UPDATE offline_media
+        SET isPlayed = :isPlayed,
+            playedPercentage = CASE WHEN :isPlayed THEN 100.0 ELSE 0.0 END,
+            -- Marking either watched or unwatched is an explicit reset of the
+            -- resume state. Keeping an old position when marking watched lets
+            -- a later offline resume reopen a title the user intentionally
+            -- completed; keeping it when marking unwatched shows stale
+            -- Continue Watching progress. Jellyfin clears this field for both
+            -- endpoints, so mirror that contract locally.
+            playbackPositionTicks = NULL,
+            lastPlayedDate = :lastPlayedDate
+        WHERE id = :itemId
+           OR parentId = :itemId
+           OR seasonId = :itemId
+           OR seriesId = :itemId
+        """
+    )
+    suspend fun applyPlayedStateToHierarchy(
+        itemId: String,
+        isPlayed: Boolean,
+        lastPlayedDate: String?,
+    )
+
     @Transaction
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(entities: List<OfflineMediaEntity>)

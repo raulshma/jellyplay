@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import android.content.Context
 import com.raulshma.jellyplay.core.data.cast.CastManager
+import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
@@ -72,6 +73,9 @@ class VideoPlayerViewModelTest {
         val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
         val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         val adaptiveBitrateManager = mockk<AdaptiveBitrateManager>(relaxed = true)
+        val networkMonitor = mockk<NetworkMonitor>(relaxed = true).apply {
+            every { isMetered } returns MutableStateFlow(false)
+        }
         val activePlayerController = mockk<ActivePlayerController>(relaxed = true)
         val playerLifecycleManager = PlayerLifecycleManager(preferencesStore)
         val videoMiniPlayerState = mockk<VideoMiniPlayerState>(relaxed = true)
@@ -97,6 +101,7 @@ class VideoPlayerViewModelTest {
             syncPlayManager = syncPlayManager,
             okHttpClient = okHttpClient,
             adaptiveBitrateManager = adaptiveBitrateManager,
+            networkMonitor = networkMonitor,
             activePlayerController = activePlayerController,
             playerLifecycleManager = playerLifecycleManager,
             videoMiniPlayerState = videoMiniPlayerState,
@@ -120,7 +125,7 @@ class VideoPlayerViewModelTest {
     @Test
     fun seekTo_updatesCurrentPosition() {
         viewModel.seekTo(5_000L)
-        // V-1: position now lives on the dedicated currentPositionMs flow.
+        // Position now lives on the dedicated currentPositionMs flow.
         assertEquals(5_000L, viewModel.currentPositionMs.value)
     }
 

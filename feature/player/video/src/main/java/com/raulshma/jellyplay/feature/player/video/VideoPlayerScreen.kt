@@ -281,8 +281,13 @@ fun VideoPlayerScreen(
             onBack()
         }
     }
+    // Capture the latest onBack via rememberUpdatedState — the collector
+    // below keys on Unit, so without this the screen keeps invoking the
+    // onBack lambda captured at first composition (a nav lambda that may have
+    // been rebuilt by the parent).
+    val currentOnBack by rememberUpdatedState(onBack)
     LaunchedEffect(Unit) {
-        viewModel.closePlayer.collect { onBack() }
+        viewModel.closePlayer.collect { currentOnBack() }
     }
     // Restore immersive mode when leaving PiP
     LaunchedEffect(isInPipMode) {
@@ -447,7 +452,7 @@ fun VideoPlayerScreen(
     // duration is low-frequency (changes only on media load / live updates),
     // so it is safe to collect at the screen root. currentPosition is NOT
     // collected here — it now lives on viewModel.currentPositionMs and is read
-    // only inside the leaf composables that render it (V-1).
+    // only inside the leaf composables that render it.
     val engineDuration by viewModel.durationMs.collectAsStateWithLifecycle()
     val duration = if (isCastConnected) castDuration else engineDuration
     val playbackSpeed = uiState.playbackSpeed
@@ -843,7 +848,16 @@ fun VideoPlayerScreen(
                             }
                             gestureDeltaMs = totalDeltaMs
                             val durationMs = eng.durationMs.coerceAtLeast(0)
-                            gestureSeekPositionMs = (gestureStartPositionMs + totalDeltaMs).coerceIn(0, durationMs)
+                            // For live streams durationMs is 0, so the
+                            // upper clamp pinned every seek to 0. Skip the
+                            // clamp when there is no known duration; live seek
+                            // gestures are rare and the engine clamps on its
+                            // own at seek time.
+                            gestureSeekPositionMs = if (durationMs <= 0L) {
+                                (gestureStartPositionMs + totalDeltaMs).coerceAtLeast(0L)
+                            } else {
+                                (gestureStartPositionMs + totalDeltaMs).coerceIn(0L, durationMs)
+                            }
                         }
                     }
                 },
@@ -863,10 +877,14 @@ fun VideoPlayerScreen(
                 onVolumeGesture = remember(context, isCastConnected, castVolume) {
                     { delta ->
                         if (isCastConnected) {
+                            // Cast volume used to scale by 0.02, requiring
+                            // ~50 full-height swipes for the full range. Use the
+                            // accumulator pattern from the local path so one
+                            // full-height swipe moves ~0.5 of the range.
                             val currentNorm = castVolume
-                            val newVolume = (currentNorm + delta * 0.02f).coerceIn(0f, 1f)
+                            volumeGestureAccumulator += delta
+                            val newVolume = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
                             volumeOverlay = newVolume
-                            volumeGestureAccumulator = 0f
                             viewModel.setCastVolume(newVolume)
                         } else {
                             val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
@@ -1041,7 +1059,7 @@ fun VideoPlayerScreen(
             }
 
             if (isScreenLocked && !isInPipMode) {
-                val usePin = uiState.usePinForPlayerLock && uiState.pinHash != null
+                val usePin = uiState.usePinForPlayerLock && uiState.hasPin
                 if (usePin) {
                     PinLockOverlay(
                         visible = true,
@@ -1083,9 +1101,11 @@ fun VideoPlayerScreen(
                     playerType = uiState.preferredPlayerType.name,
                     decoderMode = uiState.decoderMode.displayName,
                     audioSessionId = 0,
+                    // Drop below the CastIndicator when both are visible so
+                    // they don't stack on the same (60dp, 16dp) anchor.
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(start = 16.dp, top = 60.dp)
+                        .padding(start = 16.dp, top = if (isCastConnected || isCastConnecting) 92.dp else 60.dp)
                         .width(280.dp),
                 )
             }
@@ -1123,7 +1143,7 @@ fun VideoPlayerScreen(
             val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
             val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
 
-            // Hoist PlayerControls callbacks into remembered lambdas (M9).
+            // Hoist PlayerControls callbacks into remembered lambdas.
             // Each fresh `{ ... }` passed inline below allocated a new lambda
             // per recomposition, defeating PlayerControls' skippability and
             // forcing the 1500-line controls tree to recompose on every
@@ -1215,6 +1235,7 @@ fun VideoPlayerScreen(
                 hdrType = uiState.hdrType,
                 mediaStreams = uiState.mediaStreams,
                 audioTracks = uiState.audioTracks,
+                isConnectionMetered = uiState.isConnectionMetered,
                 showPlaybackMetadata = uiState.showPlaybackMetadata,
                 showClock = uiState.showClock,
                 showTimeRemaining = uiState.showTimeRemaining,
@@ -1461,6 +1482,8 @@ fun VideoPlayerScreen(
         PlaybackErrorDialog(
             errorMessage = playerError,
             currentPlayerType = uiState.preferredPlayerType,
+            retryable = uiState.playerErrorRetryable,
+            onRetry = { viewModel.retryPlayback() },
             onRetryWithEngine = { viewModel.retryWithEngine(it) },
             onDismiss = { viewModel.dismissPlaybackError() },
         )
@@ -1633,7 +1656,7 @@ private fun PlayerSheetRouter(
             )
         }
         is PlayerSheet.Chapter -> {
-            // Collect position only while the chapter sheet is open (V-1), so
+            // Collect position only while the chapter sheet is open, so
             // the router itself stays a low-frequency scope when no sheet (or
             // a non-chapter sheet) is shown.
             ChapterPickerBinder(
@@ -1655,6 +1678,7 @@ private fun PlayerSheetRouter(
                     mediaSource = uiState.currentMediaSource,
                     mediaStreams = uiState.mediaStreams,
                     playMethod = uiState.playMethod,
+                    isConnectionMetered = uiState.isConnectionMetered,
                     hdrType = uiState.hdrType,
                     playerType = uiState.preferredPlayerType.name,
                     decoderMode = uiState.decoderMode.name,
@@ -1819,7 +1843,7 @@ private fun PlayerSheetRouter(
 
 /**
  * Narrow binder that subscribes to [currentPositionFlow] only while the
- * chapter picker sheet is open (V-1), so the screen root and the sheet router
+  * chapter picker sheet is open, so the screen root and the sheet router
  * are not invalidated at 4 Hz on every position tick.
  */
 @Composable

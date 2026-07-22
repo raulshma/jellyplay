@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
@@ -50,6 +51,13 @@ data class PlayerSessionState(
     val isReady: Boolean = false,
     val offlineTrickplayDir: java.io.File? = null,
     val streamUrl: String? = null,
+    /**
+     * True when the current item is playing from a local download (resolved
+     * via [PlaybackSource.Offline]). The ViewModel uses this to branch
+     * episode/season resolution toward the offline store so next-episode
+     * discovery and autoplay work without a server round-trip.
+     */
+    val isOffline: Boolean = false,
 )
 
 class PlayerSessionManager(
@@ -201,23 +209,29 @@ class PlayerSessionManager(
         val prefs = preferencesStore.preferences.first()
         val playerType = prefs.preferredPlayer
 
-        if (playerType == PlayerType.EXTERNAL) {
-            _sessionState.update { it.copy(isReady = true) }
-            return
-        }
-
+        // Preserve the offline item's rich metadata (seriesId, seasonId,
+        // season/episode numbers, seriesName, …) via the canonical adapter so
+        // downstream next-episode discovery, autoplay, and the "up next" overlay
+        // work offline. Falls back to a minimal MediaItem when only the download
+        // row (no offline_media metadata) is present. runTimeTicks is overridden
+        // with the locally-extracted value so seek/duration math matches the
+        // actual file, not whatever was persisted at download time.
         val detail = com.raulshma.jellyplay.core.model.MediaDetail(
-            item = com.raulshma.jellyplay.core.model.MediaItem(
+            item = (offlineItem?.toMediaItem() ?: com.raulshma.jellyplay.core.model.MediaItem(
                 id = itemId,
                 name = title,
                 mediaType = download?.mediaType ?: com.raulshma.jellyplay.core.model.MediaType.UNKNOWN,
-                overview = offlineItem?.overview,
-                seriesName = offlineItem?.seriesName,
+            )).copy(
                 runTimeTicks = runTimeTicks,
             ),
             mediaSources = emptyList(),
             chapters = emptyList(),
         )
+
+        if (playerType == PlayerType.EXTERNAL) {
+            _sessionState.update { it.copy(isReady = true, mediaDetail = detail, isOffline = true) }
+            return
+        }
 
         initializeEngine(playerType, detail, null, url, startPositionTicks, prefs, mimeType = mimeHint)
 
@@ -231,6 +245,7 @@ class PlayerSessionManager(
             isReady = true,
             mediaDetail = detail,
             offlineTrickplayDir = trickplayDir,
+            isOffline = true,
         ) }
     }
 

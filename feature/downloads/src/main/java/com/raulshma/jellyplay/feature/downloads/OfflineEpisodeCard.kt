@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
+import com.raulshma.jellyplay.core.ui.components.formatRelativeTime
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -264,6 +265,7 @@ internal fun OfflineEpisodeCard(
                 formatRemainingTimeFromTicks(runtimeTicks, positionTicks)
             } else null
             val totalTime = runtimeTicks?.takeIf { it > 0 }?.let { formatDurationFromTicks(it) }
+            val lastWatched = formatRelativeTime(episode.lastPlayedDate)
 
             if (remainingTime != null && totalTime != null) {
                 Row(
@@ -293,6 +295,17 @@ internal fun OfflineEpisodeCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
+            // Last-watched timestamp (e.g. "2d ago"). Shown when the episode has
+            // any watch activity and we could format the stored timestamp.
+            if (lastWatched != null && (episode.isPlayed || (positionTicks != null && positionTicks > 0))) {
+                Text(
+                    text = lastWatched,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
             episode.overview?.takeIf { it.isNotBlank() }?.let { overview ->

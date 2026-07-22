@@ -9,6 +9,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Shared font infrastructure for libass-based subtitle rendering on both the
@@ -83,12 +85,12 @@ class FontProvider @Inject constructor(
      * bundled fallback). The copied file is named deterministically from the
      * family name so repeated installs overwrite rather than accumulate.
      */
-    suspend fun installUserFont(uri: Uri): InstalledFont? {
-        return try {
+    suspend fun installUserFont(uri: Uri): InstalledFont? = withContext(Dispatchers.IO) {
+        try {
             val tempFile = File(fontsDir, "user-${System.currentTimeMillis()}.ttf")
             context.contentResolver.openInputStream(uri)?.use { inp ->
                 tempFile.outputStream().use { out -> inp.copyTo(out) }
-            } ?: return null
+            } ?: return@withContext null
             val family = parseFontFamily(tempFile)
             val finalName = family?.let { sanitizeFileName(it) + ".ttf" } ?: tempFile.name
             val finalFile = File(fontsDir, finalName)

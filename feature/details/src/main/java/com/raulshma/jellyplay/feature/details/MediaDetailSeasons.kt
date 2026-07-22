@@ -27,9 +27,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SplitButtonDefaults
+import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +55,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Eye
+import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.SortAscending2
 import com.composables.icons.tabler.outline.SortDescending2
@@ -89,6 +96,8 @@ internal fun SeasonsSection(
     hideEpisodeThumbnails: Boolean = false,
     episodesDescending: Boolean = true,
     onEpisodesDescendingChange: (Boolean) -> Unit = {},
+    onMarkSeasonPlayed: (seasonId: String) -> Unit = {},
+    onMarkSeasonUnplayed: (seasonId: String) -> Unit = {},
 ) {
     val smartTargetSeasonId = smartPlayTarget?.episode?.seasonId
     val initialSeasonIndex = when {
@@ -173,21 +182,83 @@ internal fun SeasonsSection(
                     label = "seasonContentColor",
                 )
                 val seasonTabFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                Surface(
+                val seasonColors = ButtonDefaults.buttonColors(
+                    containerColor = surfaceColor,
+                    contentColor = contentColor,
+                )
+                val trailingFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                var menuExpanded by remember { mutableStateOf(false) }
+                val seasonName = season.name ?: stringResource(
+                    R.string.detail_season_format, season.indexNumber ?: (index + 1),
+                )
+                // Compact (extra-small) split-button variant — these tabs sit in a
+                // dense horizontal row, so use the xsmall container height (shorter
+                // than the default SmallContainerHeight) and a tighter label style.
+                val containerHeight = SplitButtonDefaults.ExtraSmallContainerHeight
+                Box(
                     modifier = focusModifier
                         .clip(ShapeCache.smooth16)
                         .then(seasonTabFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(seasonTabFocusState, ShapeCache.smooth16))
-                        .clickable { selectedSeasonIndex = index },
-                    color = surfaceColor,
-                    contentColor = contentColor,
+                        .then(Modifier.tvFocusIndicator(seasonTabFocusState, ShapeCache.smooth16)),
                 ) {
-                    Text(
-                        text = season.name ?: stringResource(R.string.detail_season_format, season.indexNumber ?: (index + 1)),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
+                    SplitButtonLayout(
+                        leadingButton = {
+                            SplitButtonDefaults.LeadingButton(
+                                onClick = { selectedSeasonIndex = index },
+                                colors = seasonColors,
+                                shapes = SplitButtonDefaults.leadingButtonShapesFor(containerHeight),
+                                contentPadding = SplitButtonDefaults.leadingButtonContentPaddingFor(containerHeight),
+                            ) {
+                                Text(
+                                    text = seasonName,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        },
+                        trailingButton = {
+                            SplitButtonDefaults.TrailingButton(
+                                onClick = { menuExpanded = true },
+                                colors = seasonColors,
+                                shapes = SplitButtonDefaults.trailingButtonShapesFor(containerHeight),
+                                // Tighter than the xsmall default content padding so the
+                                // watch-state affordance sits flush against the title.
+                                contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp),
+                                modifier = Modifier
+                                    .then(trailingFocusState.focusModifier)
+                                    .then(Modifier.tvFocusIndicator(trailingFocusState, ShapeCache.smooth4)),
+                            ) {
+                                Icon(
+                                    imageVector = Tabler.Outline.Eye,
+                                    contentDescription = stringResource(R.string.detail_cd_season_options),
+                                    modifier = Modifier.size(SplitButtonDefaults.ExtraSmallTrailingButtonIconSize),
+                                )
+                            }
+                        },
                     )
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.detail_mark_season_watched)) },
+                            onClick = {
+                                menuExpanded = false
+                                onMarkSeasonPlayed(season.id)
+                            },
+                            leadingIcon = { Icon(Tabler.Outline.Eye, contentDescription = null) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.detail_mark_season_unwatched)) },
+                            onClick = {
+                                menuExpanded = false
+                                onMarkSeasonUnplayed(season.id)
+                            },
+                            leadingIcon = { Icon(Tabler.Outline.EyeOff, contentDescription = null) },
+                        )
+                    }
                 }
         }
 

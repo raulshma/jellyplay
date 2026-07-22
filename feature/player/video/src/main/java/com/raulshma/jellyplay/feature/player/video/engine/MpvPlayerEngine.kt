@@ -86,8 +86,8 @@ class MpvPlayerEngine(
     private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
     override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
 
-    private val _errorFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    override val errorFlow: Flow<String> = _errorFlow.asSharedFlow()
+    private val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 1)
+    override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
 
     private val _bufferedPositionMs = MutableStateFlow(0L)
     override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
@@ -282,11 +282,7 @@ class MpvPlayerEngine(
 
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
-            val hwdecValue = mpvCfg.hwdecOverride?.key ?: when (currentConfig.decoderMode) {
-                DecoderMode.HW_PREFERRED -> "mediacodec-copy,mediacodec,no"
-                DecoderMode.HW_ONLY -> "mediacodec-copy,mediacodec"
-                DecoderMode.SW_ONLY -> "no"
-            }
+            val hwdecValue = mpvCfg.hwdecOverride?.key ?: decoderModeToHwdec(currentConfig.decoderMode)
             mpv.setOptionString("hwdec", hwdecValue)
             mpv.setOptionString("hwdec-codecs", "all")
 
@@ -359,24 +355,13 @@ class MpvPlayerEngine(
                 mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
             }
 
-            when (currentConfig.audioEffects.channelMixMode) {
-                ChannelMixMode.STEREO_DOWNMIX -> mpv.setOptionString("audio-channels", "stereo")
-                ChannelMixMode.MONO -> mpv.setOptionString("audio-channels", "mono")
-                ChannelMixMode.SURROUND_UPMIX -> mpv.setOptionString("audio-channels", "5.1")
-                ChannelMixMode.AUTO -> mpv.setOptionString("audio-channels", "auto")
-            }
+            mpv.setOptionString("audio-channels", channelMixModeToAudioChannels(currentConfig.audioEffects.channelMixMode))
 
             val afFilters = mutableListOf<String>()
             // Normalization filters (DYNAMIC compression / TRACK-ALBUM loudnorm).
             if (currentConfig.audioEffects.audioNormalizationEnabled) {
-                when (currentConfig.audioEffects.audioNormalizationMode) {
-                    AudioNormalizationMode.DYNAMIC -> {
-                        afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
-                    }
-                    AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
-                        afFilters.add("loudnorm=I=-23:LRA=7:tp=-1")
-                    }
-                    AudioNormalizationMode.NONE -> {}
+                audioNormalizationModeToAfFilter(currentConfig.audioEffects.audioNormalizationMode)?.let {
+                    afFilters.add(it)
                 }
             }
             // Dialogue-boost voice-band de-noise: cut sub-bass rumble below
@@ -467,7 +452,7 @@ class MpvPlayerEngine(
                 pendingRequest = null
             } catch (e: Exception) {
                 Log.e(TAG, "playFile failed", e)
-                _errorFlow.tryEmit(e.message ?: "Failed to start MPV playback")
+                _errorFlow.tryEmit(EngineError.Source(httpStatus = null, cause = e))
             }
         }
     }
@@ -475,6 +460,10 @@ class MpvPlayerEngine(
     override fun release() {
         pendingRequest = null
         pendingSubtitles = emptyList()
+        // Note: there is no AudioManager.releaseAudioSessionId() —
+        // Android's AudioSystem reclaims unreferenced session ids, so the
+        // prior allocation via generateAudioSessionId() has no manual release.
+        // Just drop our handle so the next load() allocates a fresh one.
         generatedAudioSessionId = 0
         mainHandler.removeCallbacksAndMessages(null)
         dialogueBoost.detach()
@@ -509,6 +498,14 @@ class MpvPlayerEngine(
         // for the next load(). A cancelled scope silently swallows new
         // launches (no-ops), which would otherwise lose the position ticker.
         engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        // Stop the dedicated release thread once the engine is fully
+        // torn down. The last scheduled runnable has already captured `view`
+        // and will run to completion, but no new work can be enqueued because
+        // mpvView is null. Lazy re-init resurrects the thread if the engine
+        // is ever re-used.
+        if (releaseThread.isAlive) {
+            runCatching { releaseThread.quitSafely() }
+        }
     }
 
     override fun play() {
@@ -562,11 +559,7 @@ class MpvPlayerEngine(
             }
 
             if (oldConfig.decoderMode != config.decoderMode || (oldConfig.engineSpecific as? MpvEngineConfig)?.hwdecOverride != mpvCfg.hwdecOverride) {
-                val hwdecValue = mpvCfg.hwdecOverride?.key ?: when (config.decoderMode) {
-                    DecoderMode.HW_PREFERRED -> "mediacodec-copy,mediacodec,no"
-                    DecoderMode.HW_ONLY -> "mediacodec-copy,mediacodec"
-                    DecoderMode.SW_ONLY -> "no"
-                }
+                val hwdecValue = mpvCfg.hwdecOverride?.key ?: decoderModeToHwdec(config.decoderMode)
                 mpv.setPropertyString("hwdec", hwdecValue)
             }
 
@@ -611,12 +604,7 @@ class MpvPlayerEngine(
             }
 
             if (oldConfig.audioEffects.channelMixMode != config.audioEffects.channelMixMode) {
-                when (config.audioEffects.channelMixMode) {
-                    ChannelMixMode.STEREO_DOWNMIX -> mpv.setPropertyString("audio-channels", "stereo")
-                    ChannelMixMode.MONO -> mpv.setPropertyString("audio-channels", "mono")
-                    ChannelMixMode.SURROUND_UPMIX -> mpv.setPropertyString("audio-channels", "5.1")
-                    ChannelMixMode.AUTO -> mpv.setPropertyString("audio-channels", "auto")
-                }
+                mpv.setPropertyString("audio-channels", channelMixModeToAudioChannels(config.audioEffects.channelMixMode))
             }
 
             val oldAudioFx = oldConfig.audioEffects
@@ -629,14 +617,8 @@ class MpvPlayerEngine(
             ) {
                 val afFilters = mutableListOf<String>()
                 if (newAudioFx.audioNormalizationEnabled) {
-                    when (newAudioFx.audioNormalizationMode) {
-                        AudioNormalizationMode.DYNAMIC -> {
-                            afFilters.add("acompressor=ratio=3:threshold=0.05:attack=10:release=200")
-                        }
-                        AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
-                            afFilters.add("loudnorm=I=-23:LRA=7:tp=-1")
-                        }
-                        AudioNormalizationMode.NONE -> {}
+                    audioNormalizationModeToAfFilter(newAudioFx.audioNormalizationMode)?.let {
+                        afFilters.add(it)
                     }
                 }
                 // Dialogue-boost rumble cut (mirrors ExoPlayer HighPassFilterAudioProcessor).
@@ -758,8 +740,10 @@ class MpvPlayerEngine(
     }
 
     override fun setMaxVideoBitrate(bps: Int?) {
-        // MPV does not support mid-stream bitrate changes for non-adaptive streams.
-        // The value is stored and applied when the next load() is called.
+        // Intentional no-op. MPV plays single-URL streams (not adaptive
+        // manifests), so there is no variant ladder to cap — the only lever
+        // would be requesting a transcode from the server, which the
+        // ViewModel already negotiates via PlaybackRepository before load().
     }
 
     override val volume: Float
@@ -842,7 +826,6 @@ class MpvPlayerEngine(
                 setBackgroundColor(android.graphics.Color.BLACK)
             }
         }
-        mpvView = view
 
         try {
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
@@ -853,6 +836,9 @@ class MpvPlayerEngine(
             Log.e(TAG, "MPV initialize failed", e)
             return view
         }
+        // Publish only after initialize() succeeded — otherwise every later
+        // op on the engine throws repeatedly against a half-initialized view.
+        mpvView = view
 
         pendingRequest?.let { request ->
             pendingRequest = null
@@ -1104,7 +1090,7 @@ class MpvPlayerEngine(
             }
             MPV_END_FILE_REASON_ERROR -> {
                 _playbackState.value = EnginePlaybackState.ERROR
-                _errorFlow.tryEmit("Playback error (mpv): ${errorCode ?: "unknown"}")
+                _errorFlow.tryEmit(EngineError.Unknown("Playback error (mpv): ${errorCode ?: "unknown"}"))
             }
             // STOP / QUIT / null — ignore: not end-of-content.
             else -> {}
@@ -1192,7 +1178,7 @@ class MpvPlayerEngine(
             }
             refreshTracks("addExternalSubtitle", delayMs = 500)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to add external subtitle: ${source.url}", e)
+            Log.e(TAG, "Failed to add external subtitle: ${redactSensitive(source.url)}", e)
         }
     }
 
@@ -1286,7 +1272,7 @@ class MpvPlayerEngine(
      * The string-typed subtitle-style key/value pairs shared by both
      * [applySubtitleStyleOptions] (init-time, setOptionString) and
      * [applySubtitleStyleProperties] (runtime, setPropertyString). Delegates to
-     * [MpvStyleMapping.customStyleEntries] (extracted L7) so the mapping is
+     * [MpvStyleMapping.customStyleEntries] so the mapping is
      * unit-testable without a live mpv handle. Callers apply each pair through
      * their own setter.
      */
@@ -1426,4 +1412,31 @@ class MpvPlayerEngine(
             Log.w(TAG, "Failed to set property $name to $value", e)
         }
     }
+}
+
+/**
+ * Pure mapping helpers for mpv option/property values that were
+ * previously duplicated verbatim between `initOptions` (load-time,
+ * `setOptionString`) and `updateConfig` (live, `setPropertyString`).
+ * Keeping the mapping in one place stops the two sites from drifting.
+ */
+
+internal fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
+    DecoderMode.HW_PREFERRED -> "mediacodec-copy,mediacodec,no"
+    DecoderMode.HW_ONLY -> "mediacodec-copy,mediacodec"
+    DecoderMode.SW_ONLY -> "no"
+}
+
+internal fun channelMixModeToAudioChannels(mode: ChannelMixMode): String = when (mode) {
+    ChannelMixMode.STEREO_DOWNMIX -> "stereo"
+    ChannelMixMode.MONO -> "mono"
+    ChannelMixMode.SURROUND_UPMIX -> "5.1"
+    ChannelMixMode.AUTO -> "auto"
+}
+
+/** Returns null for NONE so callers can omit it from the af chain. */
+internal fun audioNormalizationModeToAfFilter(mode: AudioNormalizationMode): String? = when (mode) {
+    AudioNormalizationMode.DYNAMIC -> "acompressor=ratio=3:threshold=0.05:attack=10:release=200"
+    AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> "loudnorm=I=-23:LRA=7:tp=-1"
+    AudioNormalizationMode.NONE -> null
 }

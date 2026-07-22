@@ -162,7 +162,15 @@ fun NextEpisodeOverlay(
                                 .ifElse(isTv, Modifier.focusRequester(tvPlayNextFocusRequester))
                                 .then(playFocusState.focusModifier)
                                 .tvFocusIndicator(playFocusState, CircleShape)
-                                .clickable(onClick = onPlayNext),
+                                .clickable(onClick = {
+                                    // Dismiss before invoking so the countdown
+                                    // LaunchedEffect stops (it would otherwise
+                                    // re-fire onPlayNext) and the card gives
+                                    // instant visual feedback. Mirrors the cancel
+                                    // button below.
+                                    dismissed = true
+                                    onPlayNext()
+                                }),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(

@@ -45,6 +45,14 @@ import com.composables.icons.tabler.outline.*
 fun PlaybackErrorOverlay(
     errorMessage: String,
     currentPlayerType: PlayerType,
+    /**
+     * Whether the underlying [EngineError] is recoverable on the same engine
+     * (Network, Render, watchdog timeout). When `true`, a "Retry" button is
+     * shown ahead of the switch-engine buttons. Fatal errors (Decoder, Drm)
+     * pass `false` → only switch-engine buttons + Dismiss.
+     */
+    retryable: Boolean,
+    onRetry: () -> Unit,
     onRetryWithEngine: (PlayerType) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -86,7 +94,11 @@ fun PlaybackErrorOverlay(
                 // Friendly headline rather than the raw exception string, which may be a
                 // stack-trace-like decoder/codec message that reads poorly to users.
                 Text(
-                    "This video couldn't be played. Try a different player engine, or dismiss to return.",
+                    if (retryable) {
+                        "Playback was interrupted. Retry on this engine, or try a different one."
+                    } else {
+                        "This video couldn't be played on this engine. Try a different player engine, or dismiss to return."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -97,6 +109,16 @@ fun PlaybackErrorOverlay(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     )
+                }
+                if (retryable) {
+                    Spacer(Modifier.height(20.dp))
+                    OutlinedButton(
+                        onClick = onRetry,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = ShapeCache.smooth12,
+                    ) {
+                        Text("Retry on ${currentPlayerType.displayName}")
+                    }
                 }
                 Spacer(Modifier.height(20.dp))
                 Text(
@@ -135,12 +157,16 @@ fun PlaybackErrorOverlay(
 fun PlaybackErrorDialog(
     errorMessage: String,
     currentPlayerType: PlayerType,
+    retryable: Boolean,
+    onRetry: () -> Unit,
     onRetryWithEngine: (PlayerType) -> Unit,
     onDismiss: () -> Unit,
 ) {
     PlaybackErrorOverlay(
         errorMessage = errorMessage,
         currentPlayerType = currentPlayerType,
+        retryable = retryable,
+        onRetry = onRetry,
         onRetryWithEngine = onRetryWithEngine,
         onDismiss = onDismiss,
     )

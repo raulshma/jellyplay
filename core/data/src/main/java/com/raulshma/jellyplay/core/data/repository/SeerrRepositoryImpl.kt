@@ -43,7 +43,7 @@ class SeerrRepositoryImpl @Inject constructor(
     // NOTE: kept on SharingStarted.Eagerly (not WhileSubscribed) deliberately.
     // cachedPrefs.value is read synchronously by serverUrl() below with NO
     // .first() fallback, so it must be warm from the moment the singleton is
-    // materialised. The other two singletons in the F-H1 fix
+    // materialised. The other two singletons
     // (OkHttpConfigProviderImpl, FloatingPlayerState) are safe to switch to
     // WhileSubscribed because their .value readers all have fallbacks.
     private val cachedPrefs = seerrPreferencesStore.preferences

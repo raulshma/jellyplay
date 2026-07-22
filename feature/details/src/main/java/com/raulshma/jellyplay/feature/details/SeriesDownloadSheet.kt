@@ -85,6 +85,33 @@ fun SeriesDownloadSheet(
     val totalSelectedCount = selection.totalSelectedCount
     val allSelected = selection.allSelected
     val allSelectableIds = selection.allSelectableIds
+    // `allSelected` is derived only from seasons whose episodes have been
+    // loaded, so it can read "true" while some seasons remain unfetched.
+    // Treat the button as Deselect-all only when every season is loaded AND
+    // every selectable episode is selected; otherwise Select-all still has
+    // work to do (loading + selecting the remaining seasons).
+    val everySeasonLoaded = seasons.all { it.id in episodes.keys }
+    val effectivelyAllSelected = allSelected && everySeasonLoaded
+
+    // Select-all that survives lazy loading: for seasons whose episodes
+    // aren't fetched yet, kick off the fetch and queue a deferred whole-season
+    // selection via the same pending mechanism the per-season checkbox uses.
+    // Without this, toggleSelectAll() reads empty selectable sets for unfetched
+    // seasons and silently selects nothing.
+    fun onSelectAllToggled() {
+        if (effectivelyAllSelected) {
+            selection.toggleSelectAll()
+            return
+        }
+        seasons.forEach { season ->
+            if (season.id in episodes.keys) {
+                selection.selectAllInSeason(season.id)
+            } else if (pendingSeasonSelections.none { it.first == season.id }) {
+                onLoadEpisodes(season.id)
+                pendingSeasonSelections.add(season.id to true)
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -139,17 +166,17 @@ fun SeriesDownloadSheet(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             FilledTonalButton(
-                onClick = { selection.toggleSelectAll() },
+                onClick = { onSelectAllToggled() },
                 shape = ShapeCache.smoothPill,
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = if (allSelected) MaterialTheme.colorScheme.errorContainer
+                    containerColor = if (effectivelyAllSelected) MaterialTheme.colorScheme.errorContainer
                     else MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = if (allSelected) MaterialTheme.colorScheme.onErrorContainer
+                    contentColor = if (effectivelyAllSelected) MaterialTheme.colorScheme.onErrorContainer
                     else MaterialTheme.colorScheme.onPrimaryContainer,
                 ),
                 modifier = Modifier.weight(1f).focusIndicator(),
             ) {
-                Text(if (allSelected) stringResource(R.string.detail_deselect_all) else stringResource(R.string.detail_select_all))
+                Text(if (effectivelyAllSelected) stringResource(R.string.detail_deselect_all) else stringResource(R.string.detail_select_all))
             }
         }
 
