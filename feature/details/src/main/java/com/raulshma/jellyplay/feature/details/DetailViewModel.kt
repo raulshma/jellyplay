@@ -905,20 +905,32 @@ class DetailViewModel @Inject constructor(
                     // background) would serve the stale pre-mutation snapshot.
                     currentSeriesId?.let { mediaRepository.invalidateSeriesCache(it) }
                     // Reconcile with the server: refetch the season so the
-                    // episode cards reflect authoritative post-mutation state
-                    // (played flag, resume position) rather than just the
-                    // optimistic guess above. The mark-played/unplayed
-                    // endpoints cascade into the season's children synchronously,
-                    // so the server response already reflects the change. This
-                    // mirrors findroid's SeasonViewModel, which refetches after
-                    // every mark action. Best-effort: on failure the optimistic
-                    // snapshot stays in place until the next manual load.
+                    // episode cards pick up authoritative post-mutation metadata
+                    // (the episode set, names, runtimes). The played flag and
+                    // resume position, however, are forced to the just-applied
+                    // mutation rather than taken verbatim from the response.
+                    // The mark-played/unplayed endpoints set every episode in the
+                    // season uniformly, but the server's UserData.Played cascade —
+                    // and a stale episodesCache entry the invalidation above may
+                    // not have reached in a race — can still hand back a
+                    // pre-mutation snapshot from this refetch. Overwriting
+                    // wholesale would flip the optimistic WATCHED badges back to
+                    // stale, only for them to reappear "after some time" once the
+                    // server/cache catches up. Forcing the flag here keeps the
+                    // badge correct immediately; the next full load (loadItem)
+                    // re-reads the authoritative server state fresh. Best-effort:
+                    // on failure the optimistic snapshot stays in place.
                     val seriesId = currentSeriesId
                     if (seriesId != null) {
                         mediaRepository.getEpisodes(seriesId, seasonId)
                             .onSuccess { freshEpisodes ->
                                 if (currentSeriesId != seriesId) return@onSuccess
-                                episodesMap[seasonId] = freshEpisodes
+                                episodesMap[seasonId] = freshEpisodes.map { fresh ->
+                                    fresh.copy(
+                                        isPlayed = played,
+                                        playbackPositionTicks = 0L,
+                                    )
+                                }
                                 invalidateSortedEpisodesCache()
                                 _uiState.update { state ->
                                     state.copy(episodes = episodesMap.toMap())

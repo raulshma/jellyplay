@@ -526,6 +526,43 @@ class DetailViewModelTest {
             assertEquals("Play S1:E1", target.label)
         }
 
+    // Regression: the post-mutation reconcile refetch must NOT clobber the
+    // optimistic WATCHED badges by overwriting episodes with a stale pre-mutation
+    // server/cache snapshot. Jellyfin's UserData.Played cascade into the season's
+    // children can lag the mark ACK, and the repo's episodesCache may still serve
+    // a pre-mutation entry if invalidateSeriesCache lost a race. The refetch
+    // adopts the server's episode list but must force isPlayed to the just-applied
+    // mutation — otherwise the badges flip back to stale and only "reappear after
+    // some time" once the server/cache catches up. Mirrors the user-reported
+    // "season watched works but episodes don't show the badge until later" bug.
+    @Test
+    fun markSeasonPlayed_reconcileRefetchReturnsStaleState_doesNotRevertBadges() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val ep1 = episode("e1", 1, 1, isPlayed = false)
+            val ep2 = episode("e2", 1, 2, isPlayed = false)
+            stubSeries("s1", season, listOf(ep1, ep2))
+            coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
+
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+
+            // Simulate the server/cache lagging behind the mark ACK: the refetch
+            // still hands back the PRE-mutation (unplayed) episodes. Without the
+            // forced-flag fix this would clobber the optimistic flip.
+            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(
+                listOf(ep1.copy(isPlayed = false), ep2.copy(isPlayed = false))
+            )
+
+            viewModel.markSeasonPlayed("season1")
+            advanceUntilIdle()
+
+            val episodes = viewModel.uiState.value.episodes["season1"]!!
+            assertTrue(episodes.all { it.isPlayed })
+            assertEquals(0L, episodes.first().playbackPositionTicks)
+        }
+
     // When every episode is already in the target state, the call short-circuits
     // — no network round-trip, no spurious cache invalidation.
     @Test
