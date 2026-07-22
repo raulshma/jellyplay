@@ -11,6 +11,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -181,6 +182,28 @@ class OfflineMediaDaoTest {
         assertEquals(0.0, row.playedPercentage, 0.001)
         assertEquals(null, row.playbackPositionTicks)
         assertEquals(null, row.lastPlayedDate)
+    }
+
+    @Test
+    fun `applyPlayedStateToHierarchy played resets stale resume position`() = runTest {
+        offlineMediaDao.upsert(
+            createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1").copy(
+                playbackPositionTicks = 5_000_000_000L,
+                playedPercentage = 50.0,
+            ),
+        )
+
+        offlineMediaDao.applyPlayedStateToHierarchy(
+            itemId = "season-1",
+            isPlayed = true,
+            lastPlayedDate = "2026-07-21T10:00:00Z",
+        )
+
+        val row = offlineMediaDao.getById("ep-1")!!
+        assertTrue(row.isPlayed)
+        assertEquals(100.0, row.playedPercentage, 0.001)
+        assertNull(row.playbackPositionTicks)
+        assertEquals("2026-07-21T10:00:00Z", row.lastPlayedDate)
     }
 
     @Test

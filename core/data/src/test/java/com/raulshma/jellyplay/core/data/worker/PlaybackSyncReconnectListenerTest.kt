@@ -1,10 +1,13 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.OfflineMode
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -12,22 +15,28 @@ import org.junit.Test
 /**
  * The reconnect listener should fire [PlaybackSyncScheduler.enqueueNow] exactly
  * once at [PlaybackSyncReconnectListener.start] (process-death recovery) plus
- * once per Offline→Online transition. It must not fire on steady Online
- * emissions or transitions that remain without validated internet (Local).
- *
- * Each test calls [PlaybackSyncReconnectListener.stop] so the infinite
- * `collect` does not leave a child job that would fail `runTest`.
+ * once whenever the app becomes ready to sync: validated Online connectivity
+ * and Offline Mode disabled.
  */
 class PlaybackSyncReconnectListenerTest {
 
     private val networkMonitor: NetworkMonitor = mockk()
+    private val offlineModeManager: OfflineModeManager = mockk()
     private val scheduler: PlaybackSyncScheduler = mockk(relaxed = true)
+
+    private fun listener(
+        scope: CoroutineScope,
+        networkStatus: MutableStateFlow<NetworkStatus>,
+        offlineMode: MutableStateFlow<OfflineMode> = MutableStateFlow(OfflineMode.ONLINE),
+    ): PlaybackSyncReconnectListener {
+        every { networkMonitor.networkStatus } returns networkStatus
+        every { offlineModeManager.offlineMode } returns offlineMode
+        return PlaybackSyncReconnectListener(networkMonitor, offlineModeManager, scheduler, scope)
+    }
 
     @Test
     fun `start enqueues immediately once for process-death recovery`() = runTest {
-        val status = MutableStateFlow(NetworkStatus.Online)
-        every { networkMonitor.networkStatus } returns status
-        val listener = PlaybackSyncReconnectListener(networkMonitor, scheduler, this)
+        val listener = listener(this, MutableStateFlow(NetworkStatus.Online))
 
         try {
             listener.start()
@@ -42,8 +51,7 @@ class PlaybackSyncReconnectListenerTest {
     @Test
     fun `transition from Offline to Online enqueues one additional drain`() = runTest {
         val status = MutableStateFlow(NetworkStatus.Offline)
-        every { networkMonitor.networkStatus } returns status
-        val listener = PlaybackSyncReconnectListener(networkMonitor, scheduler, this)
+        val listener = listener(this, status)
 
         try {
             listener.start()
@@ -52,7 +60,6 @@ class PlaybackSyncReconnectListenerTest {
             status.value = NetworkStatus.Online
             testScheduler.advanceUntilIdle()
 
-            // 1 recovery + 1 transition.
             verify(exactly = 2) { scheduler.enqueueNow() }
         } finally {
             listener.stop()
@@ -62,13 +69,11 @@ class PlaybackSyncReconnectListenerTest {
     @Test
     fun `staying Online does not enqueue additional drains`() = runTest {
         val status = MutableStateFlow(NetworkStatus.Online)
-        every { networkMonitor.networkStatus } returns status
-        val listener = PlaybackSyncReconnectListener(networkMonitor, scheduler, this)
+        val listener = listener(this, status)
 
         try {
             listener.start()
             testScheduler.advanceUntilIdle()
-            // Equal value — StateFlow emits nothing.
             status.value = NetworkStatus.Online
             testScheduler.advanceUntilIdle()
 
@@ -81,16 +86,14 @@ class PlaybackSyncReconnectListenerTest {
     @Test
     fun `transition Offline to Local does not enqueue`() = runTest {
         val status = MutableStateFlow(NetworkStatus.Offline)
-        every { networkMonitor.networkStatus } returns status
-        val listener = PlaybackSyncReconnectListener(networkMonitor, scheduler, this)
+        val listener = listener(this, status)
 
         try {
             listener.start()
             testScheduler.advanceUntilIdle()
-            status.value = NetworkStatus.Local // still no validated internet
+            status.value = NetworkStatus.Local
             testScheduler.advanceUntilIdle()
 
-            // Only the recovery call — Local is not "online" for sync purposes.
             verify(exactly = 1) { scheduler.enqueueNow() }
         } finally {
             listener.stop()
@@ -100,8 +103,7 @@ class PlaybackSyncReconnectListenerTest {
     @Test
     fun `transition Local to Online enqueues one additional drain`() = runTest {
         val status = MutableStateFlow(NetworkStatus.Local)
-        every { networkMonitor.networkStatus } returns status
-        val listener = PlaybackSyncReconnectListener(networkMonitor, scheduler, this)
+        val listener = listener(this, status)
 
         try {
             listener.start()
@@ -110,7 +112,6 @@ class PlaybackSyncReconnectListenerTest {
             status.value = NetworkStatus.Online
             testScheduler.advanceUntilIdle()
 
-            // 1 recovery + 1 transition.
             verify(exactly = 2) { scheduler.enqueueNow() }
         } finally {
             listener.stop()
@@ -119,9 +120,7 @@ class PlaybackSyncReconnectListenerTest {
 
     @Test
     fun `start is idempotent`() = runTest {
-        val status = MutableStateFlow(NetworkStatus.Online)
-        every { networkMonitor.networkStatus } returns status
-        val listener = PlaybackSyncReconnectListener(networkMonitor, scheduler, this)
+        val listener = listener(this, MutableStateFlow(NetworkStatus.Online))
 
         try {
             listener.start()
@@ -137,8 +136,7 @@ class PlaybackSyncReconnectListenerTest {
     @Test
     fun `repeated Offline Online cycles enqueue each time`() = runTest {
         val status = MutableStateFlow(NetworkStatus.Offline)
-        every { networkMonitor.networkStatus } returns status
-        val listener = PlaybackSyncReconnectListener(networkMonitor, scheduler, this)
+        val listener = listener(this, status)
 
         try {
             listener.start()
@@ -151,8 +149,43 @@ class PlaybackSyncReconnectListenerTest {
             status.value = NetworkStatus.Online
             testScheduler.advanceUntilIdle()
 
-            // 1 recovery + 2 transitions.
             verify(exactly = 3) { scheduler.enqueueNow() }
+        } finally {
+            listener.stop()
+        }
+    }
+
+    @Test
+    fun `leaving manual Offline Mode enqueues an immediate drain while network remains online`() = runTest {
+        val offlineMode = MutableStateFlow(OfflineMode.OFFLINE_MANUAL)
+        val listener = listener(this, MutableStateFlow(NetworkStatus.Online), offlineMode)
+
+        try {
+            listener.start()
+            testScheduler.advanceUntilIdle()
+
+            offlineMode.value = OfflineMode.ONLINE
+            testScheduler.advanceUntilIdle()
+
+            verify(exactly = 2) { scheduler.enqueueNow() }
+        } finally {
+            listener.stop()
+        }
+    }
+
+    @Test
+    fun `leaving manual Offline Mode on a local network does not enqueue`() = runTest {
+        val offlineMode = MutableStateFlow(OfflineMode.OFFLINE_MANUAL)
+        val listener = listener(this, MutableStateFlow(NetworkStatus.Local), offlineMode)
+
+        try {
+            listener.start()
+            testScheduler.advanceUntilIdle()
+
+            offlineMode.value = OfflineMode.ONLINE
+            testScheduler.advanceUntilIdle()
+
+            verify(exactly = 1) { scheduler.enqueueNow() }
         } finally {
             listener.stop()
         }

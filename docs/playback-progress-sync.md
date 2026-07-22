@@ -106,15 +106,19 @@ resume cache.
 
 ## Drain on reconnect
 
-`PlaybackSyncReconnectListener` watches `NetworkMonitor.networkStatus` and fires
-`PlaybackSyncScheduler.enqueueNow()` on the Offline/Local → Online transition
-(`Local` is treated as offline — captive portals can't reach the server). It
-also fires once at app start so progress captured while the process was killed
-flushes shortly after launch.
+`PlaybackSyncReconnectListener` watches both `NetworkMonitor.networkStatus` and
+the app's `OfflineMode`, firing `PlaybackSyncScheduler.enqueueNow()` whenever
+the combined state becomes ready (validated Online + Offline Mode disabled).
+That includes an Offline/Local → Online transition and turning **manual Offline
+Mode** off while connectivity is already online. (`Local` is treated as offline
+— captive portals can't reach the server.) It also fires once at app start so
+progress captured while the process was killed flushes shortly after launch.
 
 `PlaybackSyncWorker.doWork()`:
 
-1. **Bail** if still offline → `Result.retry()`.
+1. **Bail** if Offline Mode is still enabled → `Result.success()` without
+   draining. This releases the unique one-shot work slot; the ready-state
+   listener immediately schedules a fresh drain when Offline Mode is disabled.
 2. **Drain** the outbox (oldest-first). For each entry, replay directly through
    `JellyfinApiClient` (bypassing the repository — a retry must not recurse into
    the outbox). On success, `outbox.delete(id)`. On failure, leave it and mark
@@ -168,7 +172,10 @@ locally so the offline screens stay consistent.
    swallow the failure.
 4. `OfflineMediaDao.applyPlayedStateToHierarchy` runs one batch `UPDATE`
    matching `id == itemId OR parentId == itemId OR seasonId == itemId OR
-   seriesId == itemId` — one query covers episode/season/series uniformly.
+   seriesId == itemId` — one query covers episode/season/series uniformly. It
+   clears every matching resume position in both directions, matching
+   Jellyfin's explicit watched/unwatched endpoints and preventing stale local
+   progress from resurfacing in offline UI.
 
 The offline write is best-effort (`runCatching`); the server mutation has
 already succeeded (or is queued), and `PlaybackSyncWorker` reconciliation will

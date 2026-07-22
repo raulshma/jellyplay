@@ -118,13 +118,13 @@ class PlaybackSyncWorkerTest {
     }
 
     @Test
-    fun `offline returns retry without draining`() = runTest {
+    fun `offline completes without draining so manual reconnect can enqueue immediately`() = runTest {
         every { offlineModeManager.isOffline } returns true
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
 
         val result = buildWorker().doWork()
 
-        assertTrue(result is androidx.work.ListenableWorker.Result.Retry)
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
         coVerify(exactly = 0) { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) }
     }
 

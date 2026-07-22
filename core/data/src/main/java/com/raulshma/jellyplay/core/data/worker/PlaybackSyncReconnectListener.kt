@@ -1,10 +1,13 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import com.raulshma.jellyplay.core.model.OfflineMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,6 +28,7 @@ import javax.inject.Singleton
 @Singleton
 class PlaybackSyncReconnectListener @Inject constructor(
     private val networkMonitor: NetworkMonitor,
+    private val offlineModeManager: OfflineModeManager,
     private val scheduler: PlaybackSyncScheduler,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
@@ -32,24 +36,25 @@ class PlaybackSyncReconnectListener @Inject constructor(
 
     fun start() {
         if (job?.isActive == true) return
-        // Capture the initial connected-state synchronously so the launched
-        // collector cannot miss the seed value (the coroutine may not run until
-        // the scope's dispatcher pumps, by which time the value could have
-        // changed).
-        //
-        // Use `== Online` (not the NetworkStatus.hasNetwork enum helper, which
-        // treats an unvalidated Local network as connected — playback progress
-        // sync needs a validated internet path to reach the server).
-        var wasConnected = networkMonitor.networkStatus.value == NetworkStatus.Online
+        // A drain is viable only when the network is validated *and* app-level
+        // Offline Mode is disabled. Watching both conditions matters for a
+        // manual-offline user: flipping that setting back online does not emit a
+        // network transition, so a network-only listener would leave progress
+        // queued until the periodic backstop.
+        var wasReady = isReady(
+            networkMonitor.networkStatus.value,
+            offlineModeManager.offlineMode.value,
+        )
         job = scope.launch {
-            // StateFlow already deduplicates equal emissions (operator fusion),
-            // so `collect` only fires on actual transitions.
-            networkMonitor.networkStatus.collect { status ->
-                val connected = status == NetworkStatus.Online
-                if (connected && !wasConnected) {
+            combine(
+                networkMonitor.networkStatus,
+                offlineModeManager.offlineMode,
+            ) { networkStatus, offlineMode -> isReady(networkStatus, offlineMode) }
+                .collect { ready ->
+                if (ready && !wasReady) {
                     scheduler.enqueueNow()
                 }
-                wasConnected = connected
+                wasReady = ready
             }
         }
         // Flush anything captured while the process was dead. Even if we are
@@ -66,4 +71,7 @@ class PlaybackSyncReconnectListener @Inject constructor(
         job?.cancel()
         job = null
     }
+
+    private fun isReady(networkStatus: NetworkStatus, offlineMode: OfflineMode): Boolean =
+        networkStatus == NetworkStatus.Online && offlineMode == OfflineMode.ONLINE
 }

@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -39,7 +40,7 @@ class ChannelDetailViewModelTest {
         every { imageUrlProvider.getImageUrl("prog-1", any()) } returns "https://img/prog"
         coEvery { mediaRepository.getLiveTvChannels(any(), any(), any(), any(), any()) } returns Result.success(emptyList())
         coEvery { mediaRepository.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList())
-        viewModel = ChannelDetailViewModel(mediaRepository, imageUrlProvider)
+        viewModel = ChannelDetailViewModel(mediaRepository, imageUrlProvider, UserMessageBus())
     }
 
     @Test
