@@ -148,6 +148,39 @@ interface DownloadDao {
      */
     @Query("SELECT seriesId, mediaItemId FROM downloads WHERE seriesId IS NOT NULL")
     suspend fun getDownloadedEpisodeIdsBySeries(): List<EpisodeSeriesRow>
+
+    /**
+     * Aggregated `(totalSizeBytes, downloadedBytes)` per series, summing every
+     * downloaded episode that belongs to each series id in [seriesIds].
+     *
+     * A SERIES row has no `downloads` entry of its own — episodes are
+     * downloaded individually (each row carries `seriesId`). Joining via
+     * `offline_media.seriesId` (instead of `downloads.seriesId`) recovers
+     * legacy orphan rows whose `downloads.seriesId` is NULL but whose
+     * `offline_media` episode row still carries the correct link — the same
+     * recovery join used by [getDownloadsForSeriesViaOfflineMedia].
+     *
+     * Reactive so storage summaries update as episode downloads progress;
+     * Room re-emits on any write to `downloads` or `offline_media`.
+     */
+    @Query(
+        """
+        SELECT om.id AS seriesId,
+            COALESCE((
+                SELECT SUM(d.totalSizeBytes) FROM downloads d
+                INNER JOIN offline_media m ON m.id = d.mediaItemId
+                WHERE m.seriesId = om.id
+            ), 0) AS totalSizeBytes,
+            COALESCE((
+                SELECT SUM(d.downloadedBytes) FROM downloads d
+                INNER JOIN offline_media m ON m.id = d.mediaItemId
+                WHERE m.seriesId = om.id
+            ), 0) AS downloadedBytes
+        FROM offline_media om
+        WHERE om.mediaType = 'SERIES' AND om.id IN (:seriesIds)
+        """
+    )
+    fun getSeriesSizeAggregatesFlow(seriesIds: List<String>): Flow<List<SeriesSizeAggregate>>
 }
 
 /**
@@ -169,4 +202,14 @@ data class RecoveryRow(
 data class EpisodeSeriesRow(
     val seriesId: String,
     val mediaItemId: String,
+)
+
+/**
+ * Per-series aggregated size used by the offline library/home summary.
+ * See [DownloadDao.getSeriesSizeAggregatesFlow].
+ */
+data class SeriesSizeAggregate(
+    val seriesId: String,
+    val totalSizeBytes: Long,
+    val downloadedBytes: Long,
 )

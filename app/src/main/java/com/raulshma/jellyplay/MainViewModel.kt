@@ -55,6 +55,7 @@ class MainViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val offlineRepository: OfflineRepository,
+    private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
     val userMessageBus: UserMessageBus,
     private val serverHealthMonitor: com.raulshma.jellyplay.core.data.network.ServerHealthMonitor,
     val cacheManager: com.raulshma.jellyplay.core.data.cache.CacheManager,
@@ -63,6 +64,14 @@ class MainViewModel @Inject constructor(
 ) : JellyPlayViewModel() {
 
     val serverHealth = serverHealthMonitor.serverHealth
+
+    /**
+     * App-wide offline mode. Collected by [com.raulshma.jellyplay.navigation.JellyPlayApp]
+     * so the floating nav can hide server-bound destinations (Library, Live TV)
+     * that have no offline fallback and would otherwise land on a dead-end
+     * [com.raulshma.jellyplay.core.ui.components.ErrorScreen].
+     */
+    val offlineMode = offlineModeManager.offlineMode
 
     private val _isRestoring = stateFlow(true)
     val isRestoring = _isRestoring.flow
