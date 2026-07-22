@@ -323,11 +323,15 @@ class MpvPlayerEngine(
             mpv.setOptionString("sub-ass-force-margins", "no")
 
             mpv.setOptionString("scale", mpvCfg.scaler.key)
-            // dscale (downscaler) was previously left unset, so mpv fell back
-            // to its soft bilinear default — the dominant case on phones where
-            // 1080p+ video is downscaled to the display. Mirror the upscaler so
-            // both up- and down-scaled content stay sharp.
-            mpv.setOptionString("dscale", mpvCfg.scaler.key)
+            // dscale (downscaler) is the hot path on phones (1080p/4K video
+            // downscaled to the display). High-order scalers (lanczos, spline*)
+            // there are costly per-frame GPU for a downscale where bilinear is
+            // visually indistinguishable at phone DPI. Leave it unset so mpv
+            // uses its default (bilinear / oversample) — matches mpvkt and
+            // upstream mpv-android. The user-chosen `scale` still drives the
+            // upscaler.
+            // (Previously mirrored `scale`, which forced e.g. lanczos on the
+            // downscale path — a steady GPU tax even on capable hardware.)
             if (mpvCfg.deband) {
                 mpv.setOptionString("deband", "yes")
             }
@@ -337,6 +341,12 @@ class MpvPlayerEngine(
             }
             mpv.setOptionString("framedrop", mpvCfg.frameDrop.key)
             mpv.setOptionString("vd-lavc-skiploopfilter", mpvCfg.skipLoopFilter.key)
+            // Force CPU-side AV1 film-grain synthesis. The GPU film-grain path
+            // (default on hwdec) stalls on several drivers — frames back up and
+            // playback stutters even though the decoder is keeping up. This is
+            // the documented workaround for https://github.com/mpv-player/mpv/issues/14651
+            // and is what mpvkt sets unconditionally.
+            mpv.setOptionString("vd-lavc-film-grain", "cpu")
 
             val demuxerMax = when (mpvCfg.demuxerMaxBytes) {
                 MpvDemuxerMaxBytes.AUTO -> {
@@ -355,11 +365,14 @@ class MpvPlayerEngine(
 
             mpv.setOptionString("msg-level", "all=warn")
 
-            if (currentConfig.decoderMode == DecoderMode.SW_ONLY) {
-                mpv.setOptionString("profile", "fast")
-                if (isLowRamDevice) {
-                    mpv.setOptionString("vf", "format=yuv420p")
-                }
+            // `fast` bundles vd-lavc-fast (skips some loop-filter / ref-frame
+            // work) and cheap scaler defaults — a steady per-frame decode/render
+            // saving mpvkt applies unconditionally. Previously gated to SW_ONLY
+            // only, so the dominant HW path paid the full-quality decode cost
+            // that ExoPlayer's MediaCodec pipeline never does.
+            mpv.setOptionString("profile", "fast")
+            if (currentConfig.decoderMode == DecoderMode.SW_ONLY && isLowRamDevice) {
+                mpv.setOptionString("vf", "format=yuv420p")
             }
 
             if (currentConfig.audioPassthrough) {
@@ -593,6 +606,9 @@ class MpvPlayerEngine(
 
             if (oldMpvCfg?.scaler != mpvCfg.scaler) {
                 mpv.setPropertyString("scale", mpvCfg.scaler.key)
+                // dscale mirrors the upscaler at init (see initOptions), but at
+                // runtime we leave mpv's default downscaler — only the upscaler
+                // changes here.
             }
             if (oldMpvCfg?.deband != mpvCfg.deband) {
                 mpv.setPropertyString("deband", if (mpvCfg.deband) "yes" else "no")
@@ -1488,8 +1504,13 @@ class MpvPlayerEngine(
  */
 
 internal fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
-    DecoderMode.HW_PREFERRED -> "mediacodec-copy,mediacodec,no"
-    DecoderMode.HW_ONLY -> "mediacodec-copy,mediacodec"
+    // Zero-copy `mediacodec` first: mpv picks the first entry that inits, and
+    // `mediacodec-copy` (GPU→CPU→GPU per frame) almost always inits when listed
+    // first, so copy-first ordering silently forced every HW decode through the
+    // slow path — the primary cause of mpv lag vs. zero-copy ExoPlayer. Keep
+    // copy as fallback, then SW last.
+    DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
+    DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
     DecoderMode.SW_ONLY -> "no"
 }
 
