@@ -2,15 +2,18 @@ package com.raulshma.jellyplay.startup
 
 import android.content.Context
 import android.util.Log
+import androidx.work.BackoffPolicy
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /**
@@ -41,6 +44,11 @@ class DownloadRecoveryInitializer @Inject constructor(
             val pending = downloadDao.getRecoveryRows(DownloadStatus.PENDING.name)
             for (download in pending) {
                 val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
+                    .setBackoffCriteria(
+                        BackoffPolicy.EXPONENTIAL,
+                        DownloadRepositoryImpl.DOWNLOAD_BACKOFF_DELAY_MS,
+                        TimeUnit.MILLISECONDS,
+                    )
                     .setInputData(
                         Data.Builder()
                             .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
@@ -63,6 +71,11 @@ class DownloadRecoveryInitializer @Inject constructor(
             for (download in stale) {
                 downloadDao.updateProgress(download.id, download.downloadedBytes, DownloadStatus.PENDING.name)
                 val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
+                    .setBackoffCriteria(
+                        BackoffPolicy.EXPONENTIAL,
+                        DownloadRepositoryImpl.DOWNLOAD_BACKOFF_DELAY_MS,
+                        TimeUnit.MILLISECONDS,
+                    )
                     .setInputData(
                         Data.Builder()
                             .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)

@@ -99,25 +99,39 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
         sessionId: String,
         positionTicks: Long,
     ) = withContext(Dispatchers.IO) {
-        val now = nowMillis()
-        dao.upsert(
-            PlaybackOutboxEntity(
-                id = UUID.randomUUID().toString(),
-                itemId = itemId,
-                eventType = PlaybackOutboxEventType.STOP.name,
-                sessionId = sessionId,
-                positionTicks = positionTicks,
-                isPaused = false,
-                // The Jellyfin PlaybackStopInfo payload does not carry a play
-                // method, so the worker's STOP replay path ignores this field.
-                // The entity column is non-null, so we stamp a placeholder —
-                // it is never read back for STOP events.
-                playMethod = PlayMethod.DIRECT_PLAY.name,
-                mediaSourceId = null,
-                recordedAt = now,
-                createdAt = now,
+        mutex.withLock {
+            // A STOP carries the item's final position, so any pending
+            // PROGRESS for the same item is superseded. Previously the STOP
+            // always inserted a fresh row, so a mid-position PROGRESS could
+            // drain after the STOP and (if the STOP dead-letters while the
+            // PROGRESS succeeds) leave the server at a stale mid position.
+            // Deleting the superseded PROGRESS under the same mutex that
+            // serialises the PROGRESS read-modify-write guarantees no
+            // concurrent PROGRESS report can re-insert between this delete and
+            // the STOP insert. START is intentionally retained: a START then
+            // STOP pair is meaningful (the session lifecycle) and ordering is
+            // preserved by createdAt.
+            dao.deleteForItemByType(itemId, PlaybackOutboxEventType.PROGRESS.name)
+            val now = nowMillis()
+            dao.upsert(
+                PlaybackOutboxEntity(
+                    id = UUID.randomUUID().toString(),
+                    itemId = itemId,
+                    eventType = PlaybackOutboxEventType.STOP.name,
+                    sessionId = sessionId,
+                    positionTicks = positionTicks,
+                    isPaused = false,
+                    // The Jellyfin PlaybackStopInfo payload does not carry a play
+                    // method, so the worker's STOP replay path ignores this field.
+                    // The entity column is non-null, so we stamp a placeholder—
+                    // it is never read back for STOP events.
+                    playMethod = PlayMethod.DIRECT_PLAY.name,
+                    mediaSourceId = null,
+                    recordedAt = now,
+                    createdAt = now,
+                )
             )
-        )
+        }
     }
 
     override suspend fun enqueuePlayedState(itemId: String, isPlayed: Boolean) = withContext(Dispatchers.IO) {
@@ -154,6 +168,10 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
 
     override suspend fun delete(id: String) = withContext(Dispatchers.IO) {
         dao.deleteById(id)
+    }
+
+    override suspend fun markDeadLetter(id: String) = withContext(Dispatchers.IO) {
+        dao.markDeadLetter(id)
     }
 
     override suspend fun deleteForItem(itemId: String) = withContext(Dispatchers.IO) {

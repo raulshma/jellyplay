@@ -159,10 +159,10 @@ fun ArrQueueScreen(
                     onSelectAll = { viewModel.selectAll() },
                     onClear = { viewModel.clearSelection() },
                     onBulkDelete = {
-                        // Reuse the single-item delete dialog via the first
-                        // selected item as a stand-in; the actual bulk path
-                        // fires through deleteSelected.
-                        viewModel.deleteSelected(blocklist = false, searchAgain = false)
+                        // Surface the same 3-option delete dialog the single-row
+                        // path uses, so a bulk delete isn't forced into "remove only"
+                        // without the blocklist / search-again choices.
+                        viewModel.showBulkDeleteDialog()
                     },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -209,6 +209,14 @@ fun ArrQueueScreen(
                 onDismiss = { viewModel.dismissAction() },
                 onConfirm = { blocklist, searchAgain ->
                     viewModel.deleteItem(action.item, blocklist, searchAgain)
+                },
+            )
+            ArrQueueAction.BulkDelete -> DeleteActionDialog(
+                item = null,
+                bulk = true,
+                onDismiss = { viewModel.dismissAction() },
+                onConfirm = { blocklist, searchAgain ->
+                    viewModel.deleteSelected(blocklist = blocklist, searchAgain = searchAgain)
                 },
             )
             is ArrQueueAction.Grab -> ConfirmActionDialog(
@@ -555,12 +563,12 @@ private fun SelectionActionBar(
 
 @Composable
 private fun DeleteActionDialog(
-    item: ArrQueueItem,
+    item: ArrQueueItem?,
     bulk: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (blocklist: Boolean, searchAgain: Boolean) -> Unit,
 ) {
-    val title = if (bulk) "Remove selected?" else "Remove \"${item.title}\"?"
+    val title = if (bulk) "Remove selected?" else "Remove \"${item?.title}\"?"
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },

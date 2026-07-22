@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.formatEta
 import com.raulshma.jellyplay.core.model.formatSpeed
@@ -22,6 +23,9 @@ data class DownloadsUiState(
     val totalStorageBytes: Long = 0L,
     val isLoading: Boolean = true,
     val error: String? = null,
+    /** Stable ids currently in selection mode. */
+    val selectedIds: Set<String> = emptySet(),
+    val selectionMode: Boolean = false,
 )
 
 @HiltViewModel
@@ -31,6 +35,9 @@ class DownloadsViewModel @Inject constructor(
 ) : JellyPlayViewModel() {
 
     private val workManager = androidx.work.WorkManager.getInstance(context)
+
+    private fun workName(id: String) =
+        "${com.raulshma.jellyplay.core.data.worker.DownloadWorker.UNIQUE_WORK_PREFIX}$id"
 
     private val _uiState = stateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState.flow
@@ -62,7 +69,7 @@ class DownloadsViewModel @Inject constructor(
 
     fun cancelDownload(item: DownloadItem) {
         launch {
-            workManager.cancelUniqueWork("${com.raulshma.jellyplay.core.data.worker.DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
+            workManager.cancelUniqueWork(workName(item.id))
             downloadRepository.cancelDownload(item.id)
         }
     }
@@ -70,7 +77,7 @@ class DownloadsViewModel @Inject constructor(
     fun pauseDownload(item: DownloadItem) {
         launch {
             downloadRepository.pauseDownload(item.id)
-            workManager.cancelUniqueWork("${com.raulshma.jellyplay.core.data.worker.DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
+            workManager.cancelUniqueWork(workName(item.id))
         }
     }
 
@@ -83,7 +90,7 @@ class DownloadsViewModel @Inject constructor(
 
     fun deleteDownload(item: DownloadItem) {
         launch {
-            workManager.cancelUniqueWork("${com.raulshma.jellyplay.core.data.worker.DownloadWorker.UNIQUE_WORK_PREFIX}${item.id}")
+            workManager.cancelUniqueWork(workName(item.id))
             downloadRepository.deleteDownload(item.id)
         }
     }
@@ -106,6 +113,85 @@ class DownloadsViewModel @Inject constructor(
         launch {
             val minPriority = _uiState.value.downloads.minOfOrNull { it.priority } ?: 0
             downloadRepository.setDownloadPriority(item.id, minPriority - 1)
+        }
+    }
+
+    // ── Selection ────────────────────────────────────────────────────────
+
+    fun toggleSelection(item: DownloadItem) {
+        _uiState.update {
+            val next = if (item.id in it.selectedIds) it.selectedIds - item.id else it.selectedIds + item.id
+            it.copy(selectedIds = next, selectionMode = next.isNotEmpty())
+        }
+    }
+
+    fun clearSelection() {
+        _uiState.update { it.copy(selectedIds = emptySet(), selectionMode = false) }
+    }
+
+    fun selectAll() {
+        _uiState.update {
+            it.copy(selectedIds = it.downloads.map { item -> item.id }.toSet(), selectionMode = true)
+        }
+    }
+
+    // ── Bulk actions ─────────────────────────────────────────────────────
+
+    /** Bulk-delete every selected download. Frees disk for completed items. */
+    fun deleteSelected() {
+        val targets = _uiState.value.downloads.filter { it.id in _uiState.value.selectedIds }
+        if (targets.isEmpty()) return
+        launch {
+            targets.forEach { item ->
+                workManager.cancelUniqueWork(workName(item.id))
+                downloadRepository.deleteDownload(item.id)
+            }
+            clearSelection()
+        }
+    }
+
+    /** Pause every selected download that is currently downloading. */
+    fun pauseSelected() {
+        val targets = _uiState.value.downloads
+            .filter { it.id in _uiState.value.selectedIds && it.status == DownloadStatus.DOWNLOADING }
+        if (targets.isEmpty()) return
+        launch {
+            targets.forEach { item ->
+                downloadRepository.pauseDownload(item.id)
+                workManager.cancelUniqueWork(workName(item.id))
+            }
+        }
+    }
+
+    /** Resume every selected download that is currently paused. */
+    fun resumeSelected() {
+        val targets = _uiState.value.downloads
+            .filter { it.id in _uiState.value.selectedIds && it.status == DownloadStatus.PAUSED }
+        if (targets.isEmpty()) return
+        launch {
+            targets.forEach { item ->
+                downloadRepository.resumeDownload(item.id)
+                downloadRepository.enqueueDownload(item.id)
+            }
+        }
+    }
+
+    /** Cancel every selected active/queued/paused download. */
+    fun cancelSelected() {
+        val targets = _uiState.value.downloads.filter { item ->
+            item.id in _uiState.value.selectedIds && item.status in setOf(
+                DownloadStatus.PENDING,
+                DownloadStatus.QUEUED,
+                DownloadStatus.DOWNLOADING,
+                DownloadStatus.PAUSED,
+            )
+        }
+        if (targets.isEmpty()) return
+        launch {
+            targets.forEach { item ->
+                workManager.cancelUniqueWork(workName(item.id))
+                downloadRepository.cancelDownload(item.id)
+            }
         }
     }
 

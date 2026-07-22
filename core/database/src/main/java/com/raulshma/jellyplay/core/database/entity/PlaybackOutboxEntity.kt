@@ -36,4 +36,14 @@ data class PlaybackOutboxEntity(
     val mediaSourceId: String? = null,
     @ColumnInfo(defaultValue = "0") val recordedAt: Long = System.currentTimeMillis(),
     @ColumnInfo(defaultValue = "0") val createdAt: Long = System.currentTimeMillis(),
+    /**
+     * `true` once the row has exhausted its retry budget. Dead-lettered rows
+     * are retained for auditability (and a future "retry sync" affordance) but
+     * skipped by [PlaybackSyncWorker]'s drain and excluded from `count()`/
+     * `countFlow()` so the sync indicator still clears. Previously these rows
+     * were hard-deleted, which silently discarded telemetry the server may
+     * already have received (the failure could have been a network blip after
+     * a 200) and left no audit trail.
+     */
+    @ColumnInfo(defaultValue = "0") val deadLetter: Boolean = false,
 )

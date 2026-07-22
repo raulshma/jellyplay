@@ -57,6 +57,7 @@ class DpadSeekState(
             offsetMs = amountMs
             startPositionMs = getCurrentPositionMs()
         }
+        offsetMs = clampOffsetToRange(targetDirection)
         timestamp++
     }
 
@@ -78,7 +79,28 @@ class DpadSeekState(
             offsetMs = step
             startPositionMs = getCurrentPositionMs()
         }
+        // Clamp the *previewed* offset to what's actually reachable so the on-screen
+        // "+Ns/-Ns" indicator never advertises a seek beyond the media bounds — the
+        // commit handlers already clamp the final target, but the live preview should
+        // not mislead the user into expecting a larger jump than will occur.
+        offsetMs = clampOffsetToRange(targetDirection)
         timestamp++
+    }
+
+    /**
+     * Caps [offsetMs] to the remaining seekable range from [startPositionMs]:
+     * forward seeks cannot exceed the gap to the end; backward seeks cannot
+     * undershoot position 0. Returns 0 when the duration is still unknown (so a
+     * mid-load press doesn't freeze seeking entirely).
+     */
+    private fun clampOffsetToRange(targetDirection: Int): Long {
+        val dur = getDurationMs()
+        if (dur <= 0L) return offsetMs.coerceAtLeast(0L)
+        return if (targetDirection == 1) {
+            offsetMs.coerceAtMost((dur - startPositionMs).coerceAtLeast(0L))
+        } else {
+            offsetMs.coerceAtMost(startPositionMs.coerceAtLeast(0L))
+        }
     }
 }
 

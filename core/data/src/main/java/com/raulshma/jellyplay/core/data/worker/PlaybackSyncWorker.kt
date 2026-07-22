@@ -14,6 +14,11 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -70,11 +75,21 @@ class PlaybackSyncWorker @AssistedInject constructor(
         }
 
         // On the final attempt the drain must converge: a persistently
-        // undeliverable entry is dead-lettered (deleted + logged) rather than
-        // left in the outbox, so countFlow() reaches 0 and the sync indicator
-        // stops spinning. Playback telemetry is best-effort resume-position
-        // data, not transactional state — losing one undeliverable report after
-        // the retry budget is exhausted beats a sync UI that never clears.
+        // undeliverable entry is dead-lettered (flagged, not deleted) so it is
+        // skipped by future drains and the sync indicator's countFlow() reaches
+        // 0, but the row is retained for audit and a future manual "retry sync"
+        // affordance. Hard-deleting was unsafe: the failure could have been a
+        // network blip after a 200, so the server may already have the event —
+        // discarding the row lost both the audit trail and any chance of repair.
+        //
+        // Note on atomicity: each entry's "replay + delete" cannot be wrapped
+        // in a single Room transaction because replay() is a network call and
+        // holding the SQLite lock across network I/O is an anti-pattern (and
+        // blocks every other DB client). The residual risk is re-delivery if
+        // the process is killed between a successful replay() and the delete():
+        // the Jellyfin playback-report endpoints are keyed by sessionId/itemId
+        // and treat a later report as latest-wins, so a duplicate is idempotent
+        // in effect. The dead-letter flag closes the data-loss half of the bug.
         val exhausted = runAttemptCount >= MAX_RETRIES
         val reconciledItems = mutableSetOf<String>()
         var anyFailure = false
@@ -91,7 +106,7 @@ class PlaybackSyncWorker @AssistedInject constructor(
                         "(item=${entry.itemId}, type=${entry.eventType}) " +
                         "after $MAX_RETRIES attempts",
                 )
-                outbox.delete(entry.id)
+                outbox.markDeadLetter(entry.id)
             } else {
                 anyFailure = true
             }
@@ -105,9 +120,27 @@ class PlaybackSyncWorker @AssistedInject constructor(
             }
         }
         // Only reconcile after the push so the server's view reflects the
-        // locally-recorded progress for these items.
-        for (itemId in reconciledItems) {
-            runCatching { reconcileOfflineRow(itemId) }
+        // locally-recorded progress for these items. The reconciliation does a
+        // network fetch per item (invalidateDetailCache + getMediaDetail), so a
+        // large outbox (e.g. a long offline music session with many distinct
+        // item ids) would otherwise fire N serial detail fetches in this
+        // foreground worker. Bound the batch size and run the fetches with
+        // bounded concurrency: anything beyond the cap is deferred to the
+        // periodic backstop (the next drain reconciles them once they surface
+        // again). Each reconciliation is independent and wrapped in runCatching
+        // so a single failure cannot abort the batch.
+        val itemsToReconcile = reconciledItems.toList().take(MAX_RECONCILE_BATCH)
+        if (itemsToReconcile.isNotEmpty()) {
+            coroutineScope {
+                val gate = Semaphore(MAX_CONCURRENT_RECONCILES)
+                itemsToReconcile.map { itemId ->
+                    async {
+                        gate.withPermit {
+                            runCatching { reconcileOfflineRow(itemId) }
+                        }
+                    }
+                }.awaitAll()
+            }
         }
 
         // Drain done — dismiss the progress notification regardless of outcome.
@@ -117,8 +150,11 @@ class PlaybackSyncWorker @AssistedInject constructor(
         // If anything was pushed up, the online UI caches (Continue Watching,
         // Next Up, detail) are now stale. Trigger an immediate user-data
         // refresh so the user sees fresh played/progress state on the online
-        // home + detail screens instead of waiting for the 60s/2min TTLs or
-        // the 12h periodic tick. KEEP policy collapses rapid reconnects.
+        // home + detail screens instead of waiting for the 60s/2min cache TTLs
+        // or the UserDataSyncScheduler periodic tick (12h). KEEP policy
+        // collapses rapid reconnects. (This worker's own outbox-drain backstop
+        // in PlaybackSyncScheduler is 4h with a 30m flex — distinct from the
+        // user-data cadence referenced here.)
         if (reconciledItems.isNotEmpty()) {
             runCatching { userDataSyncScheduler.enqueueNow() }
         }
@@ -262,6 +298,20 @@ class PlaybackSyncWorker @AssistedInject constructor(
 
         private const val TAG = "PlaybackSyncWorker"
         private const val MAX_RETRIES = 3
+        /**
+         * Bounds the number of distinct items reconciled per drain so a very
+         * large outbox cannot monopolise the foreground worker with a burst of
+         * network fetches. Anything beyond the cap is deferred to the periodic
+         * backstop (4h), which reconciles surviving offline rows on the next
+         * run.
+         */
+        private const val MAX_RECONCILE_BATCH = 50
+        /**
+         * Bounds concurrency of the per-item detail fetches inside a batch so
+         * the server is not hit with N simultaneous requests. Mirrors the
+         * MAX_CONCURRENT_FOLDER_FETCHES gate in NewMediaCheckWorker.
+         */
+        private const val MAX_CONCURRENT_RECONCILES = 4
         private val ISO_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
         private val ISO_OFFSET_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
     }

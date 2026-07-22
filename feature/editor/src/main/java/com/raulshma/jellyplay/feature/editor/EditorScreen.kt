@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.editor
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +13,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
@@ -19,12 +24,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -55,6 +64,39 @@ fun EditorScreen(
         viewModel.loadEditorData(itemId)
     }
 
+    // Unsaved-changes guard: when the editor is dirty, intercept system back
+    // (including the TV remote Back button) and confirm before discarding.
+    // `rememberSaveable` survives config changes; reset whenever a different
+    // item is loaded.
+    var showDiscardDialog by rememberSaveable(itemId) { mutableStateOf(false) }
+    BackHandler(enabled = uiState.isDirty && !showDiscardDialog) {
+        showDiscardDialog = true
+    }
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text("Discard changes?") },
+            text = { Text("You have unsaved edits. Discard them and leave?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardDialog = false
+                    onBack()
+                }) { Text("Discard") }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (uiState.isDirty && !uiState.isSaving) {
+                        TextButton(onClick = {
+                            showDiscardDialog = false
+                            viewModel.saveMetadata()
+                        }) { Text("Save") }
+                    }
+                    TextButton(onClick = { showDiscardDialog = false }) { Text("Keep editing") }
+                }
+            },
+        )
+    }
+
     // TV focus-on-launch: focus the tab row once data arrives so D-pad input lands on content,
     // not the navigation drawer.
     val contentFocusRequester = remember { FocusRequester() }
@@ -66,7 +108,11 @@ fun EditorScreen(
 
     JellyPlayScreenScaffold(
         title = uiState.mediaDetail?.item?.name ?: "Edit Metadata",
-        onBack = onBack,
+        onBack = {
+            // Route the toolbar back arrow through the same dirty-check as
+            // system back so neither path silently discards unsaved edits.
+            if (uiState.isDirty) showDiscardDialog = true else onBack()
+        },
         actions = {
             val saveFocusState = rememberTvFocusState()
             FilledTonalButton(
@@ -105,6 +151,17 @@ fun EditorScreen(
                 .focusGroup()
                 .focusRequester(contentFocusRequester),
         ) {
+            // Upload / save / delete / refresh failures all funnel into
+            // uiState.error; render it inline + dismissible so the user sees
+            // the failure instead of a silently re-enabled button. Matches the
+            // ErrorBanner convention used by sibling admin screens.
+            uiState.error?.let { errorMessage ->
+                EditorErrorBanner(
+                    message = errorMessage,
+                    onDismiss = { viewModel.clearError() },
+                )
+            }
+
             PrimaryTabRow(
                 selectedTabIndex = pagerState.currentPage,
             ) {
@@ -138,6 +195,42 @@ fun EditorScreen(
                     2 -> SubtitlesTab(viewModel = viewModel)
                 }
             }
+        }
+    }
+}
+
+/** Inline error banner for failed upload / save / delete / refresh operations. */
+@Composable
+private fun EditorErrorBanner(message: String, onDismiss: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+        shape = ShapeCache.smooth16,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                Tabler.Outline.AlertTriangle,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onDismiss) { Text("Dismiss") }
         }
     }
 }

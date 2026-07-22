@@ -56,6 +56,7 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -503,10 +504,25 @@ fun SearchScreen(
                 // server connection. Placed above Seerr/Library because on-device
                 // results are immediately playable.
                 val offlineResults by viewModel.offlineResults.collectAsStateWithLifecycle()
-                val showOffline = offlineResults.isNotEmpty() && query.isNotBlank()
+                // De-duplicate against the library grid below so a downloaded item
+                // that also exists in the library isn't rendered twice (Home already
+                // does this for its downloaded row).
+                val dedupedOfflineResults = remember(offlineResults, pagedResults.itemSnapshotList) {
+                    if (offlineResults.isEmpty()) offlineResults
+                    else {
+                        val onlineIds = buildSet {
+                            for (item in pagedResults.itemSnapshotList) {
+                                item?.id?.takeUnless { it.isBlank() }?.let { add(it) }
+                            }
+                        }
+                        if (onlineIds.isEmpty()) offlineResults
+                        else offlineResults.filter { it.id !in onlineIds }
+                    }
+                }
+                val showOffline = dedupedOfflineResults.isNotEmpty() && query.isNotBlank()
                 if (showOffline) {
                     OfflineSearchSection(
-                        items = offlineResults,
+                        items = dedupedOfflineResults,
                         contentPadding = contentPad,
                         spacing = spacing,
                         cardWidth = seerrCardWidth,
@@ -613,11 +629,86 @@ fun SearchScreen(
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     when {
                         pagedResults.itemCount == 0 && query.isNotBlank() && !isRefreshing && !showSeerr && !showSeerrError && !showOffline -> {
-                            ScreenEmptyState(
-                                icon = Tabler.Outline.Search,
-                                title = stringResource(R.string.search_no_results_found),
-                                description = if (hasActiveFilters) stringResource(R.string.search_try_adjusting_filters) else null,
-                            )
+                            // Typo tolerance fallback: Jellyfin's media search is substring/prefix
+                            // only, so a misspelled query ("Interstelar") returns nothing. With no
+                            // easy way to push a fuzzy variant through the server query, surface
+                            // "Did you mean?" suggestions derived from the user's own recent
+                            // searches — a pure client-side prefix heuristic, no extra fetches.
+                            val didYouMean by remember(query, searchHistory) {
+                                derivedStateOf {
+                                    if (query.length < 3 || searchHistory.isEmpty()) {
+                                        emptyList()
+                                    } else {
+                                        searchHistory
+                                            .asSequence()
+                                            .map { it.query }
+                                            .filter { it != query }
+                                            .filter {
+                                                // Suggest a past query that shares a meaningful
+                                                // leading run of characters (catches single-word
+                                                // typos) or any whitespace token with the typed query.
+                                                it.commonPrefixWith(query, ignoreCase = true).length >= 3 ||
+                                                    it.lowercase().split(' ', '\t').any { token ->
+                                                        token.length >= 3 && query.lowercase().contains(token)
+                                                    }
+                                            }
+                                            .distinct()
+                                            .take(4)
+                                            .toList()
+                                    }
+                                }
+                            }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(vertical = 48.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                ScreenEmptyState(
+                                    icon = Tabler.Outline.Search,
+                                    title = stringResource(R.string.search_no_results_found),
+                                    description = if (hasActiveFilters) stringResource(R.string.search_try_adjusting_filters) else null,
+                                )
+                                if (didYouMean.isNotEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.search_did_you_mean),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+                                    )
+                                    FlowRow(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 24.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        didYouMean.forEach { suggestion ->
+                                            val suggestionFocusState = rememberTvFocusState()
+                                            Row(
+                                                modifier = Modifier
+                                                    .then(suggestionFocusState.focusModifier)
+                                                    .tvFocusIndicator(suggestionFocusState, CircleShape)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                                    .clickable { viewModel.search(suggestion) }
+                                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Text(
+                                                    text = suggestion,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                         query.isBlank() && !showSeerr -> {
                             Column(

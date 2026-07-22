@@ -38,7 +38,11 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun skipOnboarding() {
-        completeOnboarding()
+        // Skip jumps to the final step rather than silently completing from page 1,
+        // which previously permanently dismissed the wizard (Skip == Complete). The
+        // user lands on the review/finish step and can complete (or step back) from
+        // there, so an accidental tap never throws away the chance to configure.
+        setStep(OnboardingStep.count - 1)
     }
 
     fun completeOnboarding() {

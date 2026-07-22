@@ -220,6 +220,7 @@ class AudioPlaybackManager @Inject constructor(
         },
         detachPrimaryListener = { primary -> primary.removeListener(playerListener) },
         onCrossfadeError = { error -> playerListener.onPlayerError(error) },
+        onCrossfadeFailed = { nextIndex -> onCrossfadeFailed(nextIndex) },
         dataSourceFactoryProvider = {
             audioStreamCache.getCacheDataSourceFactory(audioStreamCache.buildUpstreamFactory())
         },
@@ -615,6 +616,16 @@ class AudioPlaybackManager @Inject constructor(
 
             if (detail != null) {
                 _playbackError.value = null
+                // Capture whether this is the cold-start restored current item
+                // BEFORE overwriting _currentPlayingItemId below. On a fresh
+                // launch restorePersistedQueue() loads the queue + position but
+                // leaves _currentPlayingItemId null and currentItemId null, so
+                // the only signal is that the tapped item is the restored
+                // queue's current index AND nothing is loaded yet.
+                val coldStart = currentItemId == null && _currentPlayingItemId.value == null
+                val restoredCurrentId = _queue.value.getOrNull(_currentIndex.value)?.id
+                val isRestoredCurrentItem = coldStart && restoredCurrentId == itemId
+                val restoredPosMs = _currentPosition.value
                 _currentPlayingItemId.value = itemId
                 _title.value = detail.item.name
                 _artist.value = detail.item.albumArtist
@@ -626,7 +637,16 @@ class AudioPlaybackManager @Inject constructor(
 
                 val source = detail.mediaSources.firstOrNull()
                 val resumeTicks = detail.item.playbackPositionTicks ?: 0L
-                val startPositionMs = if (resumeTicks > 0) resumeTicks / 10_000 else 0L
+                // Prefer the locally-persisted resume position over the
+                // server-reported ticks when resuming the restored current
+                // item: it is always at least as recent as the (10 s-throttled)
+                // server progress, and survives process death the server ticks
+                // may not.
+                val startPositionMs = when {
+                    isRestoredCurrentItem && restoredPosMs > 0 -> restoredPosMs
+                    resumeTicks > 0 -> resumeTicks / 10_000
+                    else -> 0L
+                }
 
                 val q = _queue.value
                 val currentIdx = _currentIndex.value
@@ -1365,6 +1385,12 @@ class AudioPlaybackManager @Inject constructor(
                         trackName = d.item.name,
                         durationSec = d.item.runTimeTicks?.let { it / 10_000_000.0 },
                     )
+                    // Auto-EQ-by-genre: previously the pref toggle only
+                    // persisted the flag and applyAutoEqForGenre was never
+                    // invoked on transitions, leaving the feature dead beyond
+                    // the first manual preset pick. applyAutoEqForGenre no-ops
+                    // when autoEqByGenre is disabled or no genre matches.
+                    effectsProcessor.applyAutoEqForGenre(d.item.genres)
                 }
 
                 playbackRepository.reportPlaybackStart(
@@ -1459,6 +1485,31 @@ class AudioPlaybackManager @Inject constructor(
                 mediaSourceId = nextItem.mediaSourceId,
             )
         )
+    }
+
+    /**
+     * Invoked by [AudioCrossfader] when a crossfade setup fails (e.g. a
+     * network error fetching the next item's detail). In that case the primary
+     * ExoPlayer keeps playing the current track to its end and reaches
+     * `STATE_ENDED`; under `REPEAT_MODE_OFF` ExoPlayer neither auto-advances
+     * nor fires `onMediaItemTransition`, so `_currentIndex` would otherwise
+     * stay stuck on the ended item and desync from the queue/UI highlight.
+     *
+     * We proactively advance the primary player to [nextIndex], which fires
+     * `onMediaItemTransition` → [onTrackTransitioned] for full reconciliation
+     * (title/artist/lyrics/replayGain/index). Mirrors the manual
+     * [skipToNext] advance path.
+     */
+    private fun onCrossfadeFailed(nextIndex: Int) {
+        scope.launch(Dispatchers.Main) {
+            val player = exoPlayer ?: return@launch
+            val q = _queue.value
+            if (nextIndex !in q.indices) return@launch
+            _currentIndex.value = nextIndex
+            player.seekTo(nextIndex, 0L)
+            player.prepare()
+            player.playWhenReady = true
+        }
     }
 
     private fun fetchLyrics(

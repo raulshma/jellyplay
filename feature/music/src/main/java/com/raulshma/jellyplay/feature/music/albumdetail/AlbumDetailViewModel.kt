@@ -72,7 +72,7 @@ class AlbumDetailViewModel @Inject constructor(
         if (tracks.isEmpty()) return
         val queueItems = tracks.map { track ->
             track.toAudioQueueItem(
-                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
+                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = ImageUrlProvider.DEFAULT_MAX_WIDTH),
                 albumFallback = detail?.item?.name,
             )
         }
@@ -81,7 +81,7 @@ class AlbumDetailViewModel @Inject constructor(
 
     fun addToQueue(track: MediaItem) {
         val queueItem = track.toAudioQueueItem(
-            imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
+            imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = ImageUrlProvider.DEFAULT_MAX_WIDTH),
             albumFallback = detail?.item?.name,
         )
         audioPlaybackManager.addToQueue(queueItem)
@@ -98,7 +98,7 @@ class AlbumDetailViewModel @Inject constructor(
                     } else {
                         val queueItems = mix.map { track ->
                             track.toAudioQueueItem(
-                                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
+                                imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = ImageUrlProvider.DEFAULT_MAX_WIDTH),
                                 albumFallback = detail?.item?.name,
                             )
                         }

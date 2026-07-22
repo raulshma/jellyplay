@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
@@ -183,7 +184,7 @@ class SettingsViewModel @Inject constructor(
                     getDirSize(downloadsDir)
                 }
                 val imgAsync = async {
-                    val imageDir = File(context.cacheDir, "image_cache")
+                    val imageDir = File(context.cacheDir, ImageCache.DIR)
                     if (imageDir.exists()) getDirSize(imageDir) else 0L
                 }
                 QuadLongs(cacheAsync.await(), extAsync.await(), dlAsync.await(), imgAsync.await())
@@ -1314,13 +1315,34 @@ class SettingsViewModel @Inject constructor(
     var backupRestoreStatus by composeState<String?>(null)
         private set
 
+    /**
+     * Details surfaced to the UI when an import needs user confirmation before
+     * overwriting preferences. [isLegacy] is true for the pre-versioning format
+     * and [versionMismatch] is true when the backup's schema version differs
+     * from the app's current one. [hasSecuritySensitive] is true when the
+     * backup would overwrite the PIN/biometric lock — the user can opt in via
+     * [confirmImport].
+     */
+    @Immutable
+    data class PendingImport(
+        val uri: Uri,
+        val schemaVersion: Int,
+        val isLegacy: Boolean,
+        val versionMismatch: Boolean,
+        val hasSecuritySensitive: Boolean,
+    )
+
+    var pendingImport by composeState<PendingImport?>(null)
+        private set
+
     fun exportSettings(uri: Uri) {
         launch {
             backupRestoreStatus = null
             runCatching {
                 val prefs = preferences
+                val backup = com.raulshma.jellyplay.core.datastore.SettingsBackup(preferences = prefs)
                 val jsonString = com.raulshma.jellyplay.core.datastore.PreferencesJson.fullPreferences
-                    .encodeToString(UserPreferences.serializer(), prefs)
+                    .encodeToString(com.raulshma.jellyplay.core.datastore.SettingsBackup.serializer(), backup)
                 withContext(Dispatchers.IO) {
                     context.contentResolver.openOutputStream(uri)?.use { stream ->
                         stream.writer().use { it.write(jsonString) }
@@ -1333,6 +1355,11 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Reads the selected backup, detects its schema version (or flags it as the
+     * legacy un-enveloped format), and stages a [PendingImport] for the UI to
+     * confirm. Nothing is written until [confirmImport] is called.
+     */
     fun importSettings(uri: Uri) {
         launch {
             backupRestoreStatus = null
@@ -1342,14 +1369,79 @@ class SettingsViewModel @Inject constructor(
                         stream.reader().use { it.readText() }
                     } ?: throw IOException("Cannot open input stream")
                 }
-                val imported = com.raulshma.jellyplay.core.datastore.PreferencesJson.import
-                    .decodeFromString(UserPreferences.serializer(), jsonString)
-                editor.edit { restorePreferences(imported) }
-                backupRestoreStatus = "Settings imported successfully"
+                val current = com.raulshma.jellyplay.core.datastore.SettingsBackup.CURRENT_SCHEMA_VERSION
+                val json = com.raulshma.jellyplay.core.datastore.PreferencesJson.import
+                // Try the enveloped format first; fall back to the legacy bare
+                // UserPreferences object so old backups still import (with a warning).
+                val parsed = runCatching {
+                    json.decodeFromString(
+                        com.raulshma.jellyplay.core.datastore.SettingsBackup.serializer(),
+                        jsonString,
+                    )
+                }
+                val (schemaVersion, preferencesSnapshot, isLegacy) = if (parsed.isSuccess) {
+                    val backup = parsed.getOrThrow()
+                    Triple(backup.schemaVersion, backup.preferences, false)
+                } else {
+                    val bare = json.decodeFromString(UserPreferences.serializer(), jsonString)
+                    Triple(
+                        com.raulshma.jellyplay.core.datastore.SettingsBackup.LEGACY_SCHEMA_VERSION,
+                        bare,
+                        true,
+                    )
+                }
+                pendingImport = PendingImport(
+                    uri = uri,
+                    schemaVersion = schemaVersion,
+                    isLegacy = isLegacy,
+                    versionMismatch = schemaVersion != current,
+                    hasSecuritySensitive = preferencesSnapshot.pinLockEnabled ||
+                        preferencesSnapshot.biometricLockEnabled ||
+                        preferencesSnapshot.pinHash != null ||
+                        preferencesSnapshot.usePinForPlayerLock,
+                )
             }.onFailure {
                 backupRestoreStatus = "Import failed: ${it.message}"
             }
         }
+    }
+
+    /**
+     * Applies a staged import after the user confirms. Security-sensitive lock
+     * fields are only restored when [restoreSecuritySensitive] is true (the UI
+     * defaults this to false unless the user explicitly opts in).
+     */
+    fun confirmImport(restoreSecuritySensitive: Boolean) {
+        val pending = pendingImport ?: return
+        launch {
+            backupRestoreStatus = null
+            runCatching {
+                val jsonString = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(pending.uri)?.use { stream ->
+                        stream.reader().use { it.readText() }
+                    } ?: throw IOException("Cannot open input stream")
+                }
+                val json = com.raulshma.jellyplay.core.datastore.PreferencesJson.import
+                val imported = if (pending.isLegacy) {
+                    json.decodeFromString(UserPreferences.serializer(), jsonString)
+                } else {
+                    json.decodeFromString(
+                        com.raulshma.jellyplay.core.datastore.SettingsBackup.serializer(),
+                        jsonString,
+                    ).preferences
+                }
+                editor.edit { restorePreferences(imported, restoreSecuritySensitive) }
+                pendingImport = null
+                backupRestoreStatus = "Settings imported successfully"
+            }.onFailure {
+                pendingImport = null
+                backupRestoreStatus = "Import failed: ${it.message}"
+            }
+        }
+    }
+
+    fun cancelImport() {
+        pendingImport = null
     }
 
     fun clearBackupRestoreStatus() {

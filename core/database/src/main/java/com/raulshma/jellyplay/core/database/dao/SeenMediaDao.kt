@@ -19,4 +19,15 @@ interface SeenMediaDao {
 
     @Query("SELECT COUNT(*) FROM seen_media")
     suspend fun count(): Int
+
+    @Query("SELECT itemId FROM seen_media")
+    suspend fun getAllSeenItemIds(): List<String>
+
+    /**
+     * Deletes every seen-media row whose [itemIds] matches. Used by the
+     * reconciliation pass to drop orphan rows whose underlying library item has
+     * been removed server-side, so a re-add of the same id can re-notify.
+     */
+    @Query("DELETE FROM seen_media WHERE itemId IN (:itemIds)")
+    suspend fun deleteByItemIds(itemIds: List<String>): Int
 }

@@ -53,7 +53,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         ItemPlaybackPreferenceEntity::class,
         PlaybackOutboxEntity::class,
     ],
-    version = 36,
+    version = 37,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

@@ -40,6 +40,7 @@ class AudioCrossfader(
     private val onCrossfadeTransition: suspend (secondary: ExoPlayer, nextIndex: Int, nextItem: AudioQueueItem) -> Unit,
     private val detachPrimaryListener: (ExoPlayer) -> Unit,
     private val onCrossfadeError: (PlaybackException) -> Unit,
+    private val onCrossfadeFailed: (nextIndex: Int) -> Unit,
     private val dataSourceFactoryProvider: () -> androidx.media3.datasource.DataSource.Factory,
 ) {
     private var crossfadePlayer: ExoPlayer? = null
@@ -206,6 +207,12 @@ class AudioCrossfader(
                 // item's detail) must release the crossfade flag so that the
                 // next attempt is not permanently blocked.
                 isCrossfadingSetter(false)
+                // Notify the manager so it can reconcile `_currentIndex` /
+                // `currentItemId`. Without this, the primary player will reach
+                // STATE_ENDED and, under REPEAT_MODE_OFF, neither ExoPlayer's
+                // auto-advance nor `onMediaItemTransition` fires — leaving the
+                // UI's current-track highlight stuck on the ended item.
+                onCrossfadeFailed(actualIndex)
             }
         }
     }

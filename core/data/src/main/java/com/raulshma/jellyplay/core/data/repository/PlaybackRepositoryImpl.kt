@@ -273,6 +273,13 @@ class PlaybackRepositoryImpl @Inject constructor(
             return Result.success(segments)
         }
 
+        // Distinguish "API succeeded and returned no segments" (cache the
+        // fallback so repeated player opens don't re-hit the legacy endpoints)
+        // from "API failed" (do not cache — a transient network error must not
+        // be masked as "no segments" for the cache TTL, or the next call would
+        // skip the retry and serve an empty list for 5 minutes).
+        val cacheFallback = segmentsResult.isSuccess
+
         return coroutineScope {
             val introDeferred = async { apiClient.getIntroTimestamps(itemId).getOrNull() }
             val creditDeferred = async { apiClient.getCreditTimestamps(itemId).getOrNull() }
@@ -306,9 +313,13 @@ class PlaybackRepositoryImpl @Inject constructor(
                     )
                 }
             }
-            val result = Result.success(fallbackSegments)
-            segmentsCache.put(itemId, fallbackSegments)
-            result
+            // Only cache on a successful (empty) segments call. When the
+            // segments API itself failed, leave the cache untouched so the
+            // next call retries the API instead of serving a stale "empty".
+            if (cacheFallback) {
+                segmentsCache.put(itemId, fallbackSegments)
+            }
+            Result.success(fallbackSegments)
         }
     }
 

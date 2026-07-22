@@ -155,10 +155,16 @@ class WatchHistoryRepositoryImpl @Inject constructor(
                     itemId = item.id,
                     name = item.name,
                     type = item.mediaType.name,
-                    client = "JellyPlay",
-                    method = "DirectPlay",
-                    device = "Mobile",
-                    duration = (item.runTimeTicks ?: 0L) * 100L, // convert ticks to nanoseconds
+                    // This is a fallback when the Playback Reporting plugin is
+                    // unavailable, so the real client/device/method/watch-duration
+                    // are genuinely unknown. Reporting fabricated values (a fixed
+                    // client/device, DirectPlay, and the content runtime as the
+                    // watch duration) is misleading — surface "Unknown" and 0 so
+                    // the heatmap/stats don't pretend to a fidelity they lack.
+                    client = "Unknown",
+                    method = "Unknown",
+                    device = "Unknown",
+                    duration = 0L,
                 )
             }
         }

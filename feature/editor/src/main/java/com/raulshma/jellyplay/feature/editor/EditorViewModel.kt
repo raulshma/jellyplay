@@ -189,9 +189,16 @@ class EditorViewModel @Inject constructor(
         }
     }
 
+    /** Clears the transient [EditorUiState.error] shown by the screen's error banner. */
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
     fun saveMetadata() {
         launch {
-            _uiState.update { it.copy(isSaving = true) }
+            // Clear any stale error from a prior failed save so the red banner
+            // doesn't linger while this retry is in flight.
+            _uiState.update { it.copy(isSaving = true, error = null) }
             try {
                 val state = _uiState.value
                 val itemId = state.mediaDetail?.item?.id ?: return@launch

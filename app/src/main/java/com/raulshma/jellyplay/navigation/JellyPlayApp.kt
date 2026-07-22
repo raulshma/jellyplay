@@ -362,15 +362,25 @@ private fun MainContent(
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value]
     val isFullScreenRoute = currentBackStack?.any { it is Route && it.isFullScreen } ?: false
 
+    // App-wide offline state. Library + Live TV have no offline fallback (they
+    // always fetch live and degrade to a dead-end ErrorScreen), so while offline
+    // they are hidden from the floating nav. Home is the offline hub, Search has
+    // an offline-results path, Shortcuts are device-local, and MusicBrowse's
+    // home surfaces the downloaded music library — all stay visible.
+    val offlineMode by viewModel.offlineMode.collectAsStateWithLifecycle()
+    val isOffline = offlineMode != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
+
     // Memoize the route filter+reorder so it only re-runs when homeMode /
-    // hiddenNavItems / navItemOrder actually change. MainContent recomposes
-    // frequently (it reads audioTitle/artist/... for the mini player), so the
-    // previous eager `when{}` allocated a fresh LinkedHashMap + intermediate
-    // entry lists + KClass.simpleName lookups on every recomposition.
+    // hiddenNavItems / navItemOrder / offline actually change. MainContent
+    // recomposes frequently (it reads audioTitle/artist/... for the mini
+    // player), so the previous eager `when{}` allocated a fresh LinkedHashMap +
+    // intermediate entry lists + KClass.simpleName lookups on every
+    // recomposition.
     val activeTopLevelRoutes: LinkedHashMap<Route, String> by remember(
         homeMode,
         preferences.hiddenNavItems,
         preferences.navItemOrder,
+        isOffline,
     ) {
         derivedStateOf {
             when (homeMode) {
@@ -379,8 +389,16 @@ private fun MainContent(
             }.let { routes ->
                 val hidden = preferences.hiddenNavItems
                 val order = preferences.navItemOrder
+                // Server-bound destinations with no offline fallback. Hidden
+                // by simpleName to stay consistent with the user hidden-item
+                // filter below (also keyed on simpleName).
+                val offlineHidden = if (isOffline) {
+                    setOf(Route.Library::class.simpleName, Route.LiveTv::class.simpleName)
+                } else {
+                    emptySet()
+                }
                 val filtered = routes.filterKeys { route ->
-                    route::class.simpleName !in hidden
+                    route::class.simpleName !in hidden && route::class.simpleName !in offlineHidden
                 }
                 if (order.isEmpty()) {
                     LinkedHashMap(filtered)
