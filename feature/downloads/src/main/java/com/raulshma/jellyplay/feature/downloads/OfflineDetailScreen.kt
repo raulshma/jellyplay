@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
@@ -38,12 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +61,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.BackdropLayer
+import com.raulshma.jellyplay.core.ui.components.ChipRow
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.OfflinePersonItem
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -73,6 +70,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.TransparentTopBar
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
+import com.raulshma.jellyplay.core.ui.components.rememberBackdropScrollState
 import com.raulshma.jellyplay.core.ui.components.formatRelativeTime
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -123,6 +121,8 @@ fun OfflineDetailScreen(
             onNavigateToSeries = onNavigateToSeries,
             onNavigateToDetail = onNavigateToDetail,
             onEpisodeDelete = { viewModel.deleteEpisode(it) },
+            onMarkSeasonPlayed = { viewModel.markSeasonPlayed(it) },
+            onMarkSeasonUnplayed = { viewModel.markSeasonUnplayed(it) },
             onDelete = { viewModel.delete(onBack) },
             onBack = onBack,
         )
@@ -147,6 +147,8 @@ private fun OfflineDetailContent(
     onNavigateToSeries: (seriesId: String) -> Unit,
     onNavigateToDetail: (itemId: String) -> Unit,
     onEpisodeDelete: (episodeId: String) -> Unit,
+    onMarkSeasonPlayed: (seasonId: String) -> Unit,
+    onMarkSeasonUnplayed: (seasonId: String) -> Unit,
     onDelete: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -154,7 +156,6 @@ private fun OfflineDetailContent(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var overviewExpanded by remember { mutableStateOf(false) }
     val playFocusState = rememberTvFocusState()
-    val density = LocalDensity.current
 
     val backdropHeight = when {
         isTv -> AdaptiveBackdropHeight.Tv
@@ -177,35 +178,12 @@ private fun OfflineDetailContent(
     // item is the backdrop spacer (height baseBackdropHeight - 150dp), so the
     // raw scroll offset maps directly to how far the backdrop has scrolled.
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val spacerHeightPx = with(density) { (baseBackdropHeight - 150.dp).toPx() }
-    val collapsedHeightPx = with(density) { backdropHeight.toPx() }
-    val scrollOffset by remember {
-        androidx.compose.runtime.derivedStateOf {
-            (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) +
-                listState.firstVisibleItemScrollOffset.toFloat()
-        }
-    }
-    val scrollFraction by remember {
-        androidx.compose.runtime.derivedStateOf {
-            (scrollOffset / collapsedHeightPx).coerceIn(0f, 1f)
-        }
-    }
-
-    // Collapse the top bar once the user has scrolled past ~70% of the
-    // backdrop, mirroring the online detail screen. The bar's container and
-    // title fade in as it collapses; over the backdrop both are transparent so
-    // the image shows through (and the back button keeps its translucent circle).
-    val scrollCollapsed by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        label = "scrollCollapsed",
-    )
-    val animatedContainerColor = androidx.compose.ui.graphics.lerp(
-        Color.Transparent,
-        MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
-        scrollCollapsed,
-    )
-    val animatedTitleAlpha = scrollCollapsed
+    val scrollState = rememberBackdropScrollState(listState, backdropHeight)
+    val scrollOffset = scrollState.scrollOffset
+    val scrollFraction = scrollState.scrollFraction
+    val scrollCollapsed = scrollState.scrollCollapsed
+    val animatedContainerColor = scrollState.containerColor
+    val animatedTitleAlpha = scrollState.titleAlpha
 
     Box(modifier = Modifier.fillMaxSize()) {
         // ── Backdrop layer (parallax: translates up at half scroll speed
@@ -439,6 +417,8 @@ private fun OfflineDetailContent(
                                     },
                                     onEpisodeDetail = { episode -> onNavigateToDetail(episode.id) },
                                     onEpisodeDelete = { episode -> onEpisodeDelete(episode.id) },
+                                    onMarkSeasonPlayed = onMarkSeasonPlayed,
+                                    onMarkSeasonUnplayed = onMarkSeasonUnplayed,
                                 )
                             }
                         }
@@ -574,74 +554,6 @@ private fun OfflineDetailContent(
     }
 }
 
-/**
- * The fixed backdrop layer behind the scrolling content. Matches the online
- * detail screen: image with parallax-ready scale + a 4-stop vertical gradient
- * scrim that fades to the surface color where content begins.
- */
-@Composable
-private fun BackdropLayer(
-    backdropUrl: String?,
-    blurHash: String?,
-    height: androidx.compose.ui.unit.Dp,
-    scrollTranslationY: Float = 0f,
-    scrollAlpha: Float = 1f,
-    modifier: Modifier = Modifier,
-) {
-    val density = LocalDensity.current
-    val baseBackdropHeight = height / 1.2f
-    val surface = MaterialTheme.colorScheme.surface
-    // Build the gradient in composable scope (MaterialTheme.colorScheme is a
-    // @Composable read and can't be accessed inside drawBehind's DrawScope).
-    val startYPx = with(density) { (baseBackdropHeight - 200.dp).toPx() }
-    Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(height)
-                .graphicsLayer {
-                    translationY = scrollTranslationY
-                    alpha = scrollAlpha
-                },
-        ) {
-            if (!backdropUrl.isNullOrBlank()) {
-                MediaImage(
-                    url = backdropUrl,
-                    contentDescription = null,
-                    blurHash = blurHash,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                )
-            }
-            // 4-stop gradient scrim, identical to the online detail screen.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawBehind {
-                        drawRect(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    surface.copy(alpha = 0.4f),
-                                    surface.copy(alpha = 0.9f),
-                                    surface,
-                                ),
-                                startY = startYPx,
-                                endY = size.height,
-                            ),
-                        )
-                    },
-            )
-        }
-    }
-}
-
 @Composable
 private fun InfoRow(item: OfflineMediaItem) {
     Row(
@@ -695,25 +607,6 @@ private fun InfoRow(item: OfflineMediaItem) {
                 Icon(Tabler.Outline.Star, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("${rating.toInt()}%", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChipRow(
-    values: List<String>,
-    container: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
-) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(values, key = { it }) { value ->
-            Box(
-                modifier = Modifier
-                    .clip(ShapeCache.smooth16)
-                    .background(container)
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
-            ) {
-                Text(value, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f))
             }
         }
     }
