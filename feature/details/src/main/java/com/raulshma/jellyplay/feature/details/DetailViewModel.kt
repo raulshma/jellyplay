@@ -904,39 +904,20 @@ class DetailViewModel @Inject constructor(
                     // re-entering the series detail (back navigation, app
                     // background) would serve the stale pre-mutation snapshot.
                     currentSeriesId?.let { mediaRepository.invalidateSeriesCache(it) }
-                    // Reconcile with the server: refetch the season so the
-                    // episode cards pick up authoritative post-mutation metadata
-                    // (the episode set, names, runtimes). The played flag and
-                    // resume position, however, are forced to the just-applied
-                    // mutation rather than taken verbatim from the response.
-                    // The mark-played/unplayed endpoints set every episode in the
-                    // season uniformly, but the server's UserData.Played cascade —
-                    // and a stale episodesCache entry the invalidation above may
-                    // not have reached in a race — can still hand back a
-                    // pre-mutation snapshot from this refetch. Overwriting
-                    // wholesale would flip the optimistic WATCHED badges back to
-                    // stale, only for them to reappear "after some time" once the
-                    // server/cache catches up. Forcing the flag here keeps the
-                    // badge correct immediately; the next full load (loadItem)
-                    // re-reads the authoritative server state fresh. Best-effort:
-                    // on failure the optimistic snapshot stays in place.
-                    val seriesId = currentSeriesId
-                    if (seriesId != null) {
-                        mediaRepository.getEpisodes(seriesId, seasonId)
-                            .onSuccess { freshEpisodes ->
-                                if (currentSeriesId != seriesId) return@onSuccess
-                                episodesMap[seasonId] = freshEpisodes.map { fresh ->
-                                    fresh.copy(
-                                        isPlayed = played,
-                                        playbackPositionTicks = 0L,
-                                    )
-                                }
-                                invalidateSortedEpisodesCache()
-                                _uiState.update { state ->
-                                    state.copy(episodes = episodesMap.toMap())
-                                }
-                            }
-                    }
+                    // No post-mutation server refetch. The optimistic flip above
+                    // already holds the correct post-mutation state for this
+                    // screen, and a refetch would actively cause a stale-badge
+                    // regression on re-entry: getEpisodes writes its response back
+                    // into episodesCache (a single-season slice), so
+                    // getAllEpisodesGrouped would HIT that entry when the user
+                    // returns and serve pre-cascade data — the watched/unwatched
+                    // badges would flip back to stale and only self-correct "after
+                    // some time" once the TTL expired. Dropping the cache above and
+                    // NOT re-populating it forces re-entry's getAllEpisodesGrouped
+                    // to miss the cache and hit the server, which by then has the
+                    // fully-cascaded UserData.Played state (the same authoritative
+                    // state the per-episode detail screen reads). Re-entry is
+                    // therefore correct without a refetch here.
                     // The Play-button target may now point to a different
                     // episode (e.g. next-up moved to the following season), so
                     // recompute it against the updated episode contents.

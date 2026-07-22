@@ -363,14 +363,6 @@ class DetailViewModelTest {
             // Sanity: before the action, smart-play points at the first unplayed ep.
             assertEquals("e1", viewModel.uiState.value.smartPlayTarget!!.episode.id)
 
-            // The post-mutation refetch re-issues getEpisodes; the server has now
-            // cascaded the played state into the season's children and cleared
-            // resume positions, so re-stub it with the post-mutation episodes
-            // (the initial stubSeries stub returned the pre-mutation snapshot).
-            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(
-                listOf(ep1.copy(isPlayed = true, playbackPositionTicks = 0L), ep2.copy(isPlayed = true, playbackPositionTicks = 0L))
-            )
-
             viewModel.markSeasonPlayed("season1")
             advanceUntilIdle()
 
@@ -378,6 +370,11 @@ class DetailViewModelTest {
             assertTrue(episodes.all { it.isPlayed })
             // Position is cleared server-side on mark-played; mirror locally.
             assertEquals(0L, episodes.first().playbackPositionTicks)
+            // markSeason no longer issues a post-mutation getEpisodes refetch: the
+            // optimistic flip is the source of truth for this screen, and the
+            // refetch would write a stale pre-cascade snapshot back into the repo's
+            // episodesCache (bitten on re-entry). Verify the refetch never fires.
+            io.mockk.coVerify(exactly = 0) { mediaRepository.getEpisodes("s1", "season1") }
             // Every episode now played → smart-play falls back to a replay of S1:E1.
             // The recompute launches on Dispatchers.Default, so poll the uiState
             // flow until the label settles (avoids a race where advanceUntilIdle
@@ -413,14 +410,6 @@ class DetailViewModelTest {
 
             viewModel.loadItem("s1")
             advanceUntilIdle()
-
-            // The post-mutation refetch re-issues getEpisodes for season1; the
-            // server has cascaded the played state, so re-stub it with the
-            // post-mutation episodes. season2's stub is unchanged (the refetch
-            // only touches the marked season).
-            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(
-                listOf(s1e1.copy(isPlayed = true, playbackPositionTicks = 0L))
-            )
 
             viewModel.markSeasonPlayed("season1")
             advanceUntilIdle()
@@ -503,13 +492,6 @@ class DetailViewModelTest {
             // Before: all played → replay label.
             assertEquals("Replay S1:E1", viewModel.uiState.value.smartPlayTarget!!.label)
 
-            // The post-mutation refetch re-issues getEpisodes; the server has now
-            // cascaded the unplayed state and cleared resume positions, so
-            // re-stub it with the post-mutation episodes.
-            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(
-                listOf(ep1.copy(isPlayed = false, playbackPositionTicks = 0L), ep2.copy(isPlayed = false, playbackPositionTicks = 0L))
-            )
-
             viewModel.markSeasonUnplayed("season1")
             advanceUntilIdle()
 
@@ -526,41 +508,37 @@ class DetailViewModelTest {
             assertEquals("Play S1:E1", target.label)
         }
 
-    // Regression: the post-mutation reconcile refetch must NOT clobber the
-    // optimistic WATCHED badges by overwriting episodes with a stale pre-mutation
-    // server/cache snapshot. Jellyfin's UserData.Played cascade into the season's
-    // children can lag the mark ACK, and the repo's episodesCache may still serve
-    // a pre-mutation entry if invalidateSeriesCache lost a race. The refetch
-    // adopts the server's episode list but must force isPlayed to the just-applied
-    // mutation — otherwise the badges flip back to stale and only "reappear after
-    // some time" once the server/cache catches up. Mirrors the user-reported
-    // "season watched works but episodes don't show the badge until later" bug.
+    // Regression for the user-reported re-entry bug: "marked a season unwatched,
+    // it removed the badge; went back and came to the detail again — it showed the
+    // badge again; but the per-episode detail screen shows unwatched". The mark-
+    // unplayed path must NOT issue a getEpisodes refetch that writes a stale
+    // pre-cascade snapshot back into the repo's episodesCache, which re-entry's
+    // getAllEpisodesGrouped would then HIT and serve as stale watched state. The
+    // optimistic flip keeps the current screen correct; the invalidateSeriesCache
+    // call forces re-entry to miss the cache and re-hit the server (now fully
+    // cascaded). Verified here by asserting markUnplayed neither issues a refetch
+    // nor touches the unplayed badge.
     @Test
-    fun markSeasonPlayed_reconcileRefetchReturnsStaleState_doesNotRevertBadges() =
+    fun markSeasonUnplayed_doesNotRefetchSoReEntryNeverServesStaleWatchedState() =
         runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
-            val ep1 = episode("e1", 1, 1, isPlayed = false)
-            val ep2 = episode("e2", 1, 2, isPlayed = false)
+            val ep1 = episode("e1", 1, 1, isPlayed = true)
+            val ep2 = episode("e2", 1, 2, isPlayed = true)
             stubSeries("s1", season, listOf(ep1, ep2))
-            coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
+            coEvery { mediaRepository.markUnplayed("season1") } returns Result.success(Unit)
 
             viewModel.loadItem("s1")
             advanceUntilIdle()
 
-            // Simulate the server/cache lagging behind the mark ACK: the refetch
-            // still hands back the PRE-mutation (unplayed) episodes. Without the
-            // forced-flag fix this would clobber the optimistic flip.
-            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(
-                listOf(ep1.copy(isPlayed = false), ep2.copy(isPlayed = false))
-            )
-
-            viewModel.markSeasonPlayed("season1")
+            viewModel.markSeasonUnplayed("season1")
             advanceUntilIdle()
 
+            // No post-mutation refetch → the repo cache is not re-populated with a
+            // stale single-season slice, so re-entry's getAllEpisodesGrouped misses.
+            io.mockk.coVerify(exactly = 0) { mediaRepository.getEpisodes("s1", "season1") }
             val episodes = viewModel.uiState.value.episodes["season1"]!!
-            assertTrue(episodes.all { it.isPlayed })
-            assertEquals(0L, episodes.first().playbackPositionTicks)
+            assertTrue(episodes.none { it.isPlayed })
         }
 
     // When every episode is already in the target state, the call short-circuits
