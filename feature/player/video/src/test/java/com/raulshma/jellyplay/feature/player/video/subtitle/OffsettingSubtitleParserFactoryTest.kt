@@ -10,7 +10,7 @@ class OffsettingSubtitleParserFactoryTest {
 
     @Test
     fun offsettingSubtitleParser_zeroOffset_wrapsAndDelegatesAtParseTime() {
-        // After M17 the factory always wraps (so the offset can be read
+        // The factory always wraps (so the offset can be read
         // dynamically on each parse). At offset 0 the wrapper delegates
         // unchanged, preserving the zero-cost path at runtime.
         val offsetUs = AtomicLong(0L)
@@ -79,7 +79,7 @@ class OffsettingSubtitleParserFactoryTest {
 
     @Test
     fun offsettingSubtitleParser_offsetChangeTakesEffectOnSubsequentParse() {
-        // M17: the delay is read on each parse(), so adjusting it after the
+        // The delay is read on each parse(), so adjusting it after the
         // parser was created shifts subsequent cues without a media reload.
         val offsetUs = AtomicLong(0L)
         val delegate = FakeParser()

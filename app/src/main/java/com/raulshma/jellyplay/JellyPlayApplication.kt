@@ -58,6 +58,8 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     @Inject lateinit var notificationScheduler: NotificationScheduler
     @Inject lateinit var autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
     @Inject lateinit var userDataSyncScheduler: com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
+    @Inject lateinit var playbackSyncScheduler: com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+    @Inject lateinit var playbackSyncReconnectListener: com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
     @Inject lateinit var widgetWorkScheduler: com.raulshma.jellyplay.widget.WidgetWorkScheduler
     @Inject lateinit var downloadRecoveryInitializer: com.raulshma.jellyplay.startup.DownloadRecoveryInitializer
 
@@ -79,6 +81,8 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         applicationScope.launch(Dispatchers.IO) {
             widgetWorkScheduler.enqueuePeriodic()
             userDataSyncScheduler.enqueuePeriodic()
+            playbackSyncScheduler.enqueuePeriodic()
+            playbackSyncReconnectListener.start()
             autoDownloadScheduler.sync()
             notificationScheduler.scheduleOrUpdate()
         }

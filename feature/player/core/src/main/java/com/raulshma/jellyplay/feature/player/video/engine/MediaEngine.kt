@@ -220,7 +220,16 @@ interface PlaybackState {
     val playbackState: StateFlow<EnginePlaybackState>
     val durationMs: Long
     val positionFlow: Flow<Long>
-    val errorFlow: Flow<String>
+
+    /**
+     * Structured playback errors. Engines map their native error surface
+     * (ExoPlayer `PlaybackException`, mpv/libvlc events) onto the
+     * [EngineError] taxonomy so the UI can distinguish retryable from fatal
+     * failures and offer the right affordance. The bare `Flow<String>`
+     * channel was replaced because every error collapsed to
+     * [EngineError.Unknown] and the retry / switch-engine paths never fired.
+     */
+    val errorFlow: Flow<EngineError>
     val bufferedPositionMs: StateFlow<Long>
     val videoStats: StateFlow<EngineVideoStats>
 

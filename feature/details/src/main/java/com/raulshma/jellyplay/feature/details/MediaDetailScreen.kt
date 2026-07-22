@@ -254,6 +254,8 @@ fun MediaDetailScreen(
                         onToggleFavorite = { viewModel.toggleFavorite() },
                         onMarkPlayed = { viewModel.markPlayed() },
                         onMarkUnplayed = { viewModel.markUnplayed() },
+                        onMarkSeasonPlayed = { seasonId -> viewModel.markSeasonPlayed(seasonId) },
+                        onMarkSeasonUnplayed = { seasonId -> viewModel.markSeasonUnplayed(seasonId) },
                         onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
                         onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },
                         onItemClick = onItemClick,

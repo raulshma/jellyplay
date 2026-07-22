@@ -222,6 +222,20 @@ class OfflineRepositoryImpl @Inject constructor(
         )
     }
 
+    override suspend fun applyPlayedState(itemId: String, isPlayed: Boolean) {
+        // The batch UPDATE matches the item and every row in its hierarchy
+        // (parentId / seasonId / seriesId), mirroring Jellyfin's server-side
+        // cascade for markPlayedItem / markUnplayedItem. Zero rows match for a
+        // non-downloaded item, so there is no existence guard here. Stamp
+        // lastPlayedDate on mark-played (matches server UserData semantics) and
+        // clear it on mark-unplayed so the offline row reflects the reset.
+        offlineMediaDao.applyPlayedStateToHierarchy(
+            itemId = itemId,
+            isPlayed = isPlayed,
+            lastPlayedDate = if (isPlayed) java.time.OffsetDateTime.now().toString() else null,
+        )
+    }
+
     override suspend fun searchOffline(query: String, limit: Int): List<OfflineMediaItem> {
         val trimmed = query.trim()
         if (trimmed.length < MIN_OFFLINE_SEARCH_LENGTH || limit <= 0) return emptyList()

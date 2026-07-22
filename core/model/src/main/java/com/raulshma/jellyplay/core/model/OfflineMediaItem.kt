@@ -65,34 +65,73 @@ data class OfflinePersonInfo(
 )
 
 /**
+ * Fraction of [OfflineMediaItem.runTimeTicks] at which an item is treated as
+ * watched when adapting to [MediaItem]. Matches the player's own watched
+ * threshold (see `PlaybackProgressReporter`'s 95% trigger). Jellyfin's server
+ * UserData keeps `playbackPositionTicks` and `played` as independent flags —
+ * a near-finished item can have a resume position of 95–99% with `played =
+ * false`. Without this normalization the offline episode cards would show
+ * "0m left" instead of "Watched".
+ */
+private const val OFFLINE_WATCHED_THRESHOLD = 0.95
+
+/**
  * Adapts an [OfflineMediaItem] into a [MediaItem] so the shared online card
  * components ([PosterCard], [WideMediaCard], [PersonItem], …) can render
  * offline content unchanged. Only fields present on the offline model are
  * populated; the rest use the [MediaItem] defaults.
+ *
+ * Watched-state normalization: an item whose resume position is at or above
+ * [OFFLINE_WATCHED_THRESHOLD] of its runtime is reported as played with a
+ * null position, so display components render the "Watched" badge rather than
+ * a spurious "0m left". This is a display-only projection — the underlying
+ * [OfflineMediaItem] (and its DB row) keeps the raw flags, so resume logic
+ * that reads the entity directly (e.g. `resolveOfflineResumeTicks`) is
+ * unaffected.
  */
-fun OfflineMediaItem.toMediaItem(): MediaItem = MediaItem(
-    id = id,
-    name = name,
-    originalTitle = originalTitle,
-    overview = overview,
-    mediaType = mediaType,
-    year = year,
-    communityRating = communityRating,
-    officialRating = officialRating,
-    runTimeTicks = runTimeTicks,
-    playbackPositionTicks = playbackPositionTicks,
-    isPlayed = isPlayed,
-    premiereDate = null,
-    genres = genres,
-    studios = studios,
-    parentId = null,
-    seriesId = seriesId,
-    seasonId = seasonId,
-    seriesName = seriesName,
-    seasonName = seasonName,
-    episodeNumber = episodeNumber,
-    seasonNumber = seasonNumber,
-    childCount = if (childCount > 0) childCount else null,
-    lastPlayedDate = lastPlayedDate,
-    blurHashes = ImageBlurHashes(primary = blurHashPrimary, backdrop = blurHashBackdrop),
-)
+fun OfflineMediaItem.toMediaItem(): MediaItem {
+    val effectiveIsPlayed: Boolean
+    val effectivePositionTicks: Long?
+    val rt = runTimeTicks
+    when {
+        isPlayed -> {
+            effectiveIsPlayed = true
+            effectivePositionTicks = null
+        }
+        rt != null && rt > 0 && playbackPositionTicks != null &&
+            playbackPositionTicks.toDouble() / rt.toDouble() >= OFFLINE_WATCHED_THRESHOLD -> {
+            effectiveIsPlayed = true
+            effectivePositionTicks = null
+        }
+        else -> {
+            effectiveIsPlayed = isPlayed
+            effectivePositionTicks = playbackPositionTicks
+        }
+    }
+    return MediaItem(
+        id = id,
+        name = name,
+        originalTitle = originalTitle,
+        overview = overview,
+        mediaType = mediaType,
+        year = year,
+        communityRating = communityRating,
+        officialRating = officialRating,
+        runTimeTicks = runTimeTicks,
+        playbackPositionTicks = effectivePositionTicks,
+        isPlayed = effectiveIsPlayed,
+        premiereDate = null,
+        genres = genres,
+        studios = studios,
+        parentId = null,
+        seriesId = seriesId,
+        seasonId = seasonId,
+        seriesName = seriesName,
+        seasonName = seasonName,
+        episodeNumber = episodeNumber,
+        seasonNumber = seasonNumber,
+        childCount = if (childCount > 0) childCount else null,
+        lastPlayedDate = lastPlayedDate,
+        blurHashes = ImageBlurHashes(primary = blurHashPrimary, backdrop = blurHashBackdrop),
+    )
+}

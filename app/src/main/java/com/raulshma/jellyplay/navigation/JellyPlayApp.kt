@@ -967,7 +967,7 @@ private fun TvContent(
                     // full player, so without this overlay backgrounded audio has no D-pad-
                     // reachable pause/skip/close bar on TV. The components are already TV-aware
                     // (MiniPlayer/VideoMiniPlayer apply tvFocusIndicator); this is the host
-                    // wiring gap called out in the TV navigation audit (H5).
+                    // wiring gap for TV navigation.
                     if (showMiniPlayer) {
                         Box(
                             modifier = Modifier

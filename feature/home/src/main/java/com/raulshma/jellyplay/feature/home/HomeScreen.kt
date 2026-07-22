@@ -15,6 +15,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.material3.Icon
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -158,6 +159,18 @@ private fun MainHomeContent(
     }
 
     val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
+    val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
+    val pendingSyncEntries by viewModel.pendingSyncEntries.collectAsStateWithLifecycle()
+    val pendingItemDetails by viewModel.pendingItemDetails.collectAsStateWithLifecycle()
+    var showSyncDetails by remember { mutableStateOf(false) }
+    // Resolve media metadata (offline-first) for the sync details sheet only
+    // while it's open — keeps the map pruned to the currently-queued ids and
+    // avoids any lookup cost when the sheet is closed.
+    LaunchedEffect(showSyncDetails, pendingSyncEntries) {
+        if (showSyncDetails) {
+            viewModel.ensurePendingItemDetails(pendingSyncEntries.map { it.itemId })
+        }
+    }
     val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
 
     val seerrCardLoadingState = rememberSeerrCardLoadingState()
@@ -460,6 +473,9 @@ private fun MainHomeContent(
                 val dockOnToggleOffline = remember(viewModel) {
                     { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) }
                 }
+                val dockOnShowSyncDetails = remember(viewModel) {
+                    { showSyncDetails = true }
+                }
 
                 HomeTopDockScrim(
                     homeScrollState = homeScrollState,
@@ -470,6 +486,7 @@ private fun MainHomeContent(
                     homeMode = state.homeMode,
                     headerStatus = headerStatus,
                     activeDownloadCount = activeDownloadCount,
+                    pendingSyncCount = pendingSyncCount,
                     showClock = state.showClock,
                     homeHeroEnabled = state.homeHeroEnabled,
                     hasFeaturedItem = heroController.featuredItem != null,
@@ -480,6 +497,7 @@ private fun MainHomeContent(
                     onClearSearch = dockOnClearSearch,
                     onToggleOffline = dockOnToggleOffline,
                     isGoingOnline = state.isGoingOnline,
+                    onShowSyncDetails = dockOnShowSyncDetails,
                     onHeroFocusDown = remember(heroFocusRequester) {
                         { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
                     },
@@ -554,6 +572,20 @@ private fun MainHomeContent(
                 viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(null))
                 viewModel.onEvent(HomeUiEvent.ClearRequestResult)
             },
+        )
+    }
+
+    // Pending playback-sync details sheet. Opened from the dedicated SyncStatusIcon
+    // in the dock; closed via Back or the Close button. The "Sync now" action
+    // enqueues the drain worker and dismisses (only enabled while online, since
+    // the worker carries a NetworkType.CONNECTED constraint).
+    if (showSyncDetails) {
+        SyncDetailsSheet(
+            entries = pendingSyncEntries,
+            itemDetails = pendingItemDetails,
+            offlineMode = state.offlineMode,
+            onSyncNow = { viewModel.onEvent(HomeUiEvent.SyncNow) },
+            onDismiss = { showSyncDetails = false },
         )
     }
 
@@ -635,6 +667,7 @@ private fun HomeTopDockScrim(
     homeMode: HomeMode,
     headerStatus: HeaderStatus,
     activeDownloadCount: Int,
+    pendingSyncCount: Int,
     showClock: Boolean,
     homeHeroEnabled: Boolean,
     hasFeaturedItem: Boolean,
@@ -645,6 +678,7 @@ private fun HomeTopDockScrim(
     onClearSearch: () -> Unit,
     onToggleOffline: () -> Unit,
     isGoingOnline: Boolean = false,
+    onShowSyncDetails: () -> Unit = {},
     onHeroFocusDown: () -> Boolean,
     searchResultsContent: @Composable () -> Unit,
 ) {
@@ -664,6 +698,7 @@ private fun HomeTopDockScrim(
         homeMode = homeMode,
         headerStatus = headerStatus,
         activeDownloadCount = activeDownloadCount,
+        pendingSyncCount = pendingSyncCount,
         showClock = showClock,
         onModeChange = onModeChange,
         onSearchExpanded = onSearchExpanded,
@@ -671,6 +706,7 @@ private fun HomeTopDockScrim(
         onClearSearch = onClearSearch,
         onToggleOffline = onToggleOffline,
         isGoingOnline = isGoingOnline,
+        onShowSyncDetails = onShowSyncDetails,
         searchResultsContent = searchResultsContent,
         modifier = Modifier.then(
             if (isTv) {

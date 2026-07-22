@@ -64,7 +64,7 @@ data class CinemaIntroUiState(
  * values actually changes, so collecting it at the root of [VideoPlayerScreen]
  * does NOT trigger the 4 Hz recomposition driven by playback position ticks —
  * the position itself is now delivered through dedicated StateFlows and read
- * only inside the composables that render it (see V-1).
+     * only inside the composables that render it.
  */
 @Immutable
 data class SegmentOverlayState(
@@ -101,7 +101,7 @@ data class VideoPlayerUiState(
     val chapters: List<ChapterInfo> = emptyList(),
     val aspectRatio: AspectRatio = AspectRatio.AUTO,
     val detectedAspectRatio: AspectRatio? = null,
-    val playMethod: String = "Direct Play",
+    val playMethod: String = "",
     val isDirectPlayForced: Boolean = false,
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val dialogueBoostEnabled: Boolean = false,
@@ -123,6 +123,11 @@ data class VideoPlayerUiState(
     /** Non-null when the last subtitle search failed (network/server). Lets the
      *  Search tab distinguish a failure from a genuine empty result. */
     val subtitleSearchError: String? = null,
+    /** Download-from-server in-flight flag + failure surface. Mirrors the
+     *  upload path so the UI can show a spinner and retry on network failure
+     *  (previously the failure was silent — see SubtitleManager.downloadSubtitle). */
+    val isDownloadingSubtitle: Boolean = false,
+    val subtitleDownloadError: String? = null,
     val isUploadingSubtitle: Boolean = false,
     val defaultSearchLanguage: String = "eng",
     val syncPlayGroupName: String? = null,
@@ -156,6 +161,15 @@ data class VideoPlayerUiState(
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
     val playerError: String? = null,
+    /**
+     * Structured retryability verdict paired with [playerError], propagated
+     * from [com.raulshma.jellyplay.feature.player.video.engine.EngineError.retryable].
+     * When `false` the error is fatal on this engine (decoder/DRM) and the
+     * error dialog should offer switch-engine, not same-engine retry. The
+     * bare `playerError: String` is retained as the rendered message; this
+     * flag is the structured signal the legacy String channel dropped.
+     */
+    val playerErrorRetryable: Boolean = false,
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
     val trickplayInfo: TrickplayInfo? = null,
@@ -186,7 +200,13 @@ data class VideoPlayerUiState(
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,
     val usePinForPlayerLock: Boolean = false,
-    val pinHash: String? = null,
+    /**
+     * Presence flag for the player-lock PIN. The hash itself never
+     * leaves the VM/prefs — surfacing it through per-frame UiState churned
+     * state identity on PIN change and exposed the hash to equals/hashCode/
+     * toString (log risk). Callers only ever gate on presence.
+     */
+    val hasPin: Boolean = false,
     val showPlaybackMetadata: Boolean = true,
     val showClock: Boolean = false,
     val showTimeRemaining: Boolean = false,
@@ -197,6 +217,13 @@ data class VideoPlayerUiState(
     val videoAutoplayNext: Boolean = false,
     val autoPlayCountdownSec: Int = 10,
     val autoplayCancelled: Boolean = false,
+    /**
+     * Whether the active network is metered (cellular or metered Wi-Fi).
+     * Surfaced so the playback metadata can show why a quality cap is being
+     * applied (see AdaptiveBitrateManager.MAX_BITRATE_METERED) — a metered link
+     * silently transcodes high-bitrate sources even on AUTO quality.
+     */
+    val isConnectionMetered: Boolean = false,
 ) {
 
     // ── Cohesive sub-state projections ────────────────────────────────────
@@ -317,7 +344,7 @@ data class VideoPlayerUiState(
             showPlaybackMetadata = showPlaybackMetadata,
             showClock = showClock, showTimeRemaining = showTimeRemaining,
             keepScreenOnDuringVideo = keepScreenOnDuringVideo,
-            usePinForPlayerLock = usePinForPlayerLock, pinHash = pinHash,
+            usePinForPlayerLock = usePinForPlayerLock, hasPin = hasPin,
             trickplayEnabled = trickplayEnabled,
             trickplayOnSeekGesture = trickplayOnSeekGesture,
             trickplayInfo = trickplayInfo,

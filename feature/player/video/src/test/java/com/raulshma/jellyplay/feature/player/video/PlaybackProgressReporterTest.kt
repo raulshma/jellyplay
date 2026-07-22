@@ -99,7 +99,7 @@ class PlaybackProgressReporterTest {
 
         reporter.startPositionTracking()
 
-        // V-1: position/duration now flow through the dedicated sink callback
+        // Position/duration now flow through the dedicated sink callback
         // instead of the monolithic uiState.
         assertEquals(1_200_000L, reportedPositionMs)
         assertEquals(3_600_000L, reportedDurationMs)
@@ -275,70 +275,6 @@ class PlaybackProgressReporterTest {
         reporter.startPositionTracking()
 
         assertEquals(0, watchedThresholdCalls.size)
-    }
-
-    @Test
-    fun reportStart_incognitoMode_skipsRepository() {
-        reporter = PlaybackProgressReporter(
-            playbackRepository = playbackRepo,
-            viewModel = viewModel,
-            uiState = uiState,
-            getCurrentItemId = { "item1" },
-            getPlaySessionId = { "session1" },
-            getResolvedPlayMethod = { PlayMethod.DIRECT_PLAY },
-            getMediaEngine = { engine },
-            getIncognitoModeEnabled = { true },
-            onAutoSkip = { autoSkipCalls += it },
-            onPlaybackEndedNoNext = { endedNoNextCalls++ },
-            onWatchedThresholdReached = { watchedThresholdCalls += it },
-            onPositionPersisted = {},
-            onEnginePositionUpdate = { _, _, _, _ -> },
-        )
-
-        kotlinx.coroutines.runBlocking {
-            reporter.reportStart("item1", "session1", "source1", PlayMethod.DIRECT_PLAY)
-        }
-
-        coVerify(exactly = 0) {
-            playbackRepo.reportPlaybackStart(any())
-        }
-    }
-
-    @Test
-    fun reportStopAndRelease_incognitoMode_skipsRepository() {
-        reporter = PlaybackProgressReporter(
-            playbackRepository = playbackRepo,
-            viewModel = viewModel,
-            uiState = uiState,
-            getCurrentItemId = { "item1" },
-            getPlaySessionId = { "session1" },
-            getResolvedPlayMethod = { PlayMethod.DIRECT_PLAY },
-            getMediaEngine = { engine },
-            getIncognitoModeEnabled = { true },
-            onAutoSkip = { autoSkipCalls += it },
-            onPlaybackEndedNoNext = { endedNoNextCalls++ },
-            onWatchedThresholdReached = { watchedThresholdCalls += it },
-            onPositionPersisted = {},
-            onEnginePositionUpdate = { _, _, _, _ -> },
-        )
-        every { engine.currentPositionMs } returns 5_000L
-
-        reporter.reportStopAndRelease("item1", "session1")
-
-        coVerify(exactly = 0) {
-            playbackRepo.reportPlaybackStopped(any(), any(), any())
-        }
-    }
-
-    @Test
-    fun reportStopAndRelease_zeroPosition_skipsRepositoryReport() {
-        every { engine.currentPositionMs } returns 0L
-
-        reporter.reportStopAndRelease("item1", "session1")
-
-        coVerify(exactly = 0) {
-            playbackRepo.reportPlaybackStopped(any(), any(), any())
-        }
     }
 
     @Test

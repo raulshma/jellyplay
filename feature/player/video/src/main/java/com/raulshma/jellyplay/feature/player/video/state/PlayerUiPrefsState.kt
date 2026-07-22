@@ -23,7 +23,7 @@ data class PlayerUiPrefsState(
     val showTimeRemaining: Boolean = false,
     val keepScreenOnDuringVideo: Boolean = true,
     val usePinForPlayerLock: Boolean = false,
-    val pinHash: String? = null,
+    val hasPin: Boolean = false,
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
     val trickplayInfo: TrickplayInfo? = null,

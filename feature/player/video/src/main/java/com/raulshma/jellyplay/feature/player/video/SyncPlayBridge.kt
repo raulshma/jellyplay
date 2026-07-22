@@ -40,7 +40,7 @@ internal class SyncPlayBridge(
     val ignoreWait: StateFlow<Boolean> get() = syncPlayManager.playbackCore.ignoreWait
 
     fun start() {
-        // Defensive clear before re-registering (M13): the @Singleton
+        // Defensive clear before re-registering: the @Singleton
         // SyncPlayPlaybackCore retains its callbacks until clearCallbacks()
         // runs. If a previous bridge for this VM was never torn down (e.g. an
         // early init failure path, or a future registration site that forgets
