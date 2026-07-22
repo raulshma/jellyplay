@@ -57,7 +57,7 @@ private fun streamingQualityLabel(quality: StreamingQuality): String = when (qua
     StreamingQuality.UHD_4K -> "4K (Ultra HD)"
 }
 
-private val STORAGE_CACHE_GROUP_IDS = setOf("clear_cache", "wifi_only_downloads", "download_connections", "max_concurrent_downloads", "auto_delete_cache", "max_cache_size")
+private val STORAGE_CACHE_GROUP_IDS = setOf("clear_cache", "clear_image_cache", "wifi_only_downloads", "download_connections", "max_concurrent_downloads", "auto_delete_cache", "max_cache_size")
 private val STORAGE_NETWORK_GROUP_IDS = setOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync")
 private val STORAGE_DOWNLOADS_GROUP_IDS = setOf("download_quality", "smart_downloads", "auto_download_new_episodes", "download_schedule", "download_schedule_start", "download_schedule_end", "download_schedule_wifi_only", "max_download_storage_limit", "download_storage_location")
 
@@ -207,7 +207,7 @@ fun StorageSettingsScreen(
                         }
                     }
 
-                    val storageTotal = if (showAdvanced) 7 else 2
+                    val storageTotal = if (showAdvanced) 8 else 3
                     var storageIdx = 0
                     SettingInfoItem(
                         icon = Tabler.Outline.Database,
@@ -222,6 +222,14 @@ fun StorageSettingsScreen(
                         highlighted = highlightSettingId == "clear_cache",
                         index = storageIdx++, count = storageTotal,
                         onClick = { viewModel.clearCache() },
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.Photo,
+                        title = stringResource(R.string.settings_clear_image_cache),
+                        subtitle = stringResource(R.string.settings_clear_image_cache_subtitle),
+                        highlighted = highlightSettingId == "clear_image_cache",
+                        index = storageIdx++, count = storageTotal,
+                        onClick = { viewModel.clearImageCache() },
                     )
                     if (showAdvanced) {
                         SettingToggleItem(

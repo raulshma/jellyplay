@@ -8,6 +8,7 @@ import kotlinx.coroutines.coroutineScope
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.SeriesSizeAggregate
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -16,6 +17,7 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -83,10 +85,47 @@ class OfflineRepositoryImpl @Inject constructor(
             if (entities.isEmpty()) {
                 kotlinx.coroutines.flow.flowOf(emptyList())
             } else {
-                downloadDao.getDownloadsByMediaItemIdsFlow(entities.map { it.id })
-                    .map { downloads ->
-                        val downloadMap = downloads.associateBy { it.mediaItemId }
-                        entities.map { entity ->
+                // Partition top-level ids by type: SERIES has no `downloads`
+                // row of its own (episodes are downloaded individually, each
+                // carrying `seriesId`), so its size must be aggregated from its
+                // episodes. Movies/standalone audio keep the direct per-row
+                // join. Querying each partition only by the ids it can match
+                // avoids a wasted left-join against every series id.
+                val seriesIds = entities.asSequence()
+                    .filter { it.mediaType == MediaType.SERIES.name }
+                    .map { it.id }
+                    .toList()
+                val directIds = entities.asSequence()
+                    .filter { it.mediaType != MediaType.SERIES.name }
+                    .map { it.id }
+                    .toList()
+                val directDownloadsFlow: Flow<Map<String, DownloadEntity>> =
+                    if (directIds.isEmpty()) {
+                        flowOf(emptyMap())
+                    } else {
+                        downloadDao.getDownloadsByMediaItemIdsFlow(directIds)
+                            .map { it.associateBy { d -> d.mediaItemId } }
+                    }
+                val seriesAggregatesFlow: Flow<Map<String, SeriesSizeAggregate>> =
+                    if (seriesIds.isEmpty()) {
+                        flowOf(emptyMap())
+                    } else {
+                        downloadDao.getSeriesSizeAggregatesFlow(seriesIds)
+                            .map { it.associateBy { a -> a.seriesId } }
+                    }
+                // Combine both maps so the summary re-emits as episode
+                // downloads progress (Room re-emits each Flow on writes to its
+                // tables). SERIES rows take their bytes from the aggregate;
+                // everything else from its direct download row.
+                combine(directDownloadsFlow, seriesAggregatesFlow) { downloadMap, aggregateMap ->
+                    entities.map { entity ->
+                        if (entity.mediaType == MediaType.SERIES.name) {
+                            val agg = aggregateMap[entity.id]
+                            entity.toOfflineMediaItem().copy(
+                                downloadedBytes = agg?.downloadedBytes ?: 0L,
+                                totalSizeBytes = agg?.totalSizeBytes ?: 0L,
+                            )
+                        } else {
                             val download = downloadMap[entity.id]
                             entity.toOfflineMediaItem().copy(
                                 downloadPath = download?.downloadPath,
@@ -96,6 +135,7 @@ class OfflineRepositoryImpl @Inject constructor(
                             )
                         }
                     }
+                }
             }
         }.distinctUntilChanged()
 

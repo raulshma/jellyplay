@@ -242,10 +242,36 @@ class DownloadWorker @AssistedInject constructor(
             }
         }
         if (responseCode != 200 && responseCode != 206) {
-            if (entity.status != DownloadStatus.PAUSED.name) {
-                dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)
-            }
             response.close()
+            // 401/403 = the access token was revoked or expired mid-download
+            // (admin forced logout, password change, server session cycle).
+            // Retrying is pointless — every attempt gets the same 401 and burns
+            // the WorkManager retry budget. Fail the row with a user-facing
+            // "session expired" message (surfaced under the FAILED state in the
+            // Downloads UI via DownloadEntity.errorMessage) so the user knows to
+            // sign in again, rather than seeing a generic retry loop.
+            if (responseCode == 401 || responseCode == 403) {
+                if (entity.status != DownloadStatus.PAUSED.name) {
+                    dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)
+                    dao.updateErrorMessage(downloadId, SESSION_EXPIRED_ERROR)
+                }
+                return Result.failure()
+            }
+            // Other transient non-2xx (503, 429, …): retry, but reset
+            // existingBytes to 0 and delete the partial file first. Previously
+            // the retry re-sent the same stale `Range: bytes=N-` header, hit the
+            // same transient error, and burned retries until Result.failure() —
+            // leaving a FAILED row with a non-zero byte count and no usable
+            // partial for that path. Starting clean guarantees the next attempt
+            // re-downloads from byte 0 instead of looping on the stale Range.
+            if (entity.status != DownloadStatus.PAUSED.name) {
+                dao.updateProgress(downloadId, 0L, DownloadStatus.FAILED.name)
+                dao.updateErrorMessage(downloadId, null)
+            }
+            runCatching {
+                val partial = File(entity.downloadPath)
+                if (partial.exists()) partial.delete()
+            }
             return Result.retry()
         }
 
@@ -373,8 +399,22 @@ class DownloadWorker @AssistedInject constructor(
 
         dao.updateProgressWithSpeed(downloadId, downloadedBytes, DownloadStatus.DOWNLOADING.name, 0L)
 
-        if (totalSize > 0L && downloadedBytes < totalSize) {
+        // Integrity check. When Content-Length was known (totalSize > 0) verify
+        // the final byte count matches exactly, so a server that closed the
+        // connection early without an error still fails + retries instead of
+        // shipping a truncated file as COMPLETED.
+        if (totalSize > 0L && downloadedBytes != totalSize) {
             dao.updateProgressWithSpeed(downloadId, downloadedBytes, DownloadStatus.FAILED.name, 0L)
+            dao.updateErrorMessage(downloadId, SIZE_MISMATCH_ERROR)
+            return Result.retry()
+        }
+        // Content-Length unknown (totalSize == 0): a clean stream end is the
+        // only completion signal, so a 0-byte or truncated response (e.g. an
+        // empty 200 body) would otherwise be marked COMPLETED and play as a
+        // corrupt file. Reject 0-byte results as FAILED + retry.
+        if (downloadedBytes <= 0L) {
+            dao.updateProgressWithSpeed(downloadId, downloadedBytes, DownloadStatus.FAILED.name, 0L)
+            dao.updateErrorMessage(downloadId, SIZE_MISMATCH_ERROR)
             return Result.retry()
         }
 
@@ -389,5 +429,14 @@ class DownloadWorker @AssistedInject constructor(
         const val WORK_TAG = "download"
         private const val BUFFER_SIZE = 65536
         private const val MIN_MULTI_SIZE = 2L * 1024 * 1024
+        // User-facing message written to DownloadEntity.errorMessage when the
+        // server returns 401/403 mid-download, signalling the access token was
+        // revoked/expired. The Downloads UI renders errorMessage under the
+        // FAILED state so the user knows to sign in again.
+        const val SESSION_EXPIRED_ERROR = "Session expired — please sign in again"
+        // User-facing message written when the final byte count does not match
+        // the Content-Length (or the body was empty with no Content-Length),
+        // indicating a truncated/empty download — possible network truncation.
+        const val SIZE_MISMATCH_ERROR = "File size mismatch — possible network truncation"
     }
 }

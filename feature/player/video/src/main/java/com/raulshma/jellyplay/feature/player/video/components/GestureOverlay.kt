@@ -130,6 +130,13 @@ internal fun GestureOverlay(
                         var prevVolumeBoundHapticTime = 0L
                         do {
                             val event = awaitPointerEvent()
+                            // A second finger means the user is pinching to
+                            // zoom/reframe the video surface. Abort this
+                            // single-finger gesture (seek/brightness/volume)
+                            // so it doesn't fight the pinch detector, and leave
+                            // the changes unconsumed so the surface's pinch
+                            // handler can take over.
+                            if (event.changes.count { it.pressed } >= 2) break
                             val change = event.changes.firstOrNull() ?: break
                             if (!change.pressed) break
                             val totalDx = change.position.x - startX

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.lifecycle.SavedStateHandle
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -25,6 +26,7 @@ import javax.inject.Inject
 @HiltViewModel
 class OfflineSeriesViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
+    private val mediaRepository: MediaRepository,
     @Suppress("unused") savedStateHandle: SavedStateHandle,
 ) : JellyPlayViewModel() {
 
@@ -95,6 +97,27 @@ class OfflineSeriesViewModel @Inject constructor(
 
     fun deleteSeason(seasonId: String) {
         launch { offlineRepository.deleteOfflineSeason(seasonId) }
+    }
+
+    /**
+     * Marks every downloaded episode in [seasonId] (and the season row itself)
+     * as watched. Routes through [MediaRepository.markPlayed] so the change is
+     * applied to the local offline DB AND enqueued into the playback outbox for
+     * server sync on reconnect (or pushed immediately when online) — mirroring
+     * the online season-mark path. The batch UPDATE flows back through the
+     * reactive [seasons]/[episodes] queries so the UI refreshes on its own.
+     */
+    fun markSeasonPlayed(seasonId: String) {
+        launch { mediaRepository.markPlayed(seasonId) }
+    }
+
+    /**
+     * Marks every downloaded episode in [seasonId] (and the season row itself)
+     * as unwatched, clearing position/percentage. See [markSeasonPlayed]; uses
+     * [MediaRepository.markUnplayed] for the same offline-aware sync behavior.
+     */
+    fun markSeasonUnplayed(seasonId: String) {
+        launch { mediaRepository.markUnplayed(seasonId) }
     }
 
     fun deleteSeries() {

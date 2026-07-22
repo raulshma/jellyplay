@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,14 +50,20 @@ fun CalendarCard(
     enrichedPosterUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // When false (e.g. the item lacks a tmdbId to deep-link with), the card
+    // renders as non-actionable: no click ripple, dimmed, and not focusable.
+    // The click target is still surfaced to a screen-reader via onClick so the
+    // existing info fallback can announce "no details".
+    enabled: Boolean = true,
 ) {
     val focusState = rememberTvFocusState()
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, ShapeCache.smooth12)
-            .combinedClickable(onClick = onClick),
+            .then(if (enabled) focusState.focusModifier else Modifier)
+            .then(if (enabled) Modifier.tvFocusIndicator(focusState, ShapeCache.smooth12) else Modifier)
+            .then(if (enabled) Modifier.combinedClickable(onClick = onClick) else Modifier)
+            .then(if (!enabled) Modifier.alpha(0.5f) else Modifier),
         shape = ShapeCache.smooth12,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,

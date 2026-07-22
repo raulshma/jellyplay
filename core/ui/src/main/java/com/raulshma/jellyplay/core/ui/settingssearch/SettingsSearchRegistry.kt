@@ -1861,6 +1861,15 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.Trash
         ),
         SettingsSearchItem(
+            id = "clear_image_cache",
+            title = "Clear Image Cache",
+            subtitle = "Clear cached posters and images (reloads on next view)",
+            category = "Storage",
+            keywords = listOf("image cache", "clear images", "posters", "thumbnails", "coil"),
+            route = Route.StorageSettings(),
+            icon = Tabler.Outline.Photo
+        ),
+        SettingsSearchItem(
             id = "wifi_only_downloads",
             title = "WiFi Only Downloads",
             subtitle = "Restricts downloads to unmetered WiFi connections",

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -21,7 +22,9 @@ import javax.inject.Singleton
  * offline playback outbox; the periodic schedule is only a backstop.
  *
  * Also triggers once on [start] so progress captured while the app process
- * was killed still flushes shortly after launch.
+ * was killed still flushes shortly after launch — but only when the outbox
+ * has pending entries, so a warm start with nothing to drain does not
+ * schedule a no-op worker run.
  *
  * Constructed as a singleton so [start] is idempotent across callers.
  */
@@ -30,6 +33,7 @@ class PlaybackSyncReconnectListener @Inject constructor(
     private val networkMonitor: NetworkMonitor,
     private val offlineModeManager: OfflineModeManager,
     private val scheduler: PlaybackSyncScheduler,
+    private val outbox: PlaybackOutboxRepository,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
     private var job: Job? = null
@@ -57,9 +61,17 @@ class PlaybackSyncReconnectListener @Inject constructor(
                 wasReady = ready
             }
         }
-        // Flush anything captured while the process was dead. Even if we are
-        // currently online, the worker constraints gate the actual run.
-        scheduler.enqueueNow()
+        // Flush anything captured while the process was dead — but only if the
+        // outbox actually has pending entries. enqueueNow uses KEEP, so without
+        // this gate every warm start (including ones where the outbox is known
+        // empty) schedules a worker run that just wakes the DB and returns
+        // success on an empty drain. A cheap single-row count avoids that
+        // no-op WorkManager run for users who never go offline.
+        scope.launch {
+            if (outbox.count() > 0) {
+                scheduler.enqueueNow()
+            }
+        }
     }
 
     /**

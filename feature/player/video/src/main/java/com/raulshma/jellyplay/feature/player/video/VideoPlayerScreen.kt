@@ -168,6 +168,22 @@ private const val HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP = 180
 /** Trickplay thumbnail offset above the bottom controls. */
 private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
 
+/**
+ * Nudge the system media (STREAM_MUSIC) volume one step up or down for the
+ * hardware-keyboard shortcuts (arrows / volume keys on non-TV). Mirrors the
+ * gesture volume path, which adjusts the stream volume rather than the engine
+ * volume so the system volume UI and ringer behaviour stay consistent.
+ */
+private fun adjustStreamMusicVolume(context: Context, up: Boolean) {
+    val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return
+    val direction = if (up) android.media.AudioManager.ADJUST_RAISE else android.media.AudioManager.ADJUST_LOWER
+    am.adjustStreamVolume(
+        android.media.AudioManager.STREAM_MUSIC,
+        direction,
+        android.media.AudioManager.FLAG_SHOW_UI,
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoPlayerScreen(
@@ -197,6 +213,12 @@ fun VideoPlayerScreen(
     // remain on `remember` below — they're either re-derived or non-restorable.
     var showControls by rememberSaveable { mutableStateOf(true) }
     var controlsHasFocus by rememberSaveable { mutableStateOf(false) }
+    // Tracks whether playback is intended (the user / app last pressed play, not
+    // pause). Used to suppress the full-screen buffering spinner when the engine
+    // briefly reports BUFFERING during a user-initiated pause — ExoPlayer passes
+    // through BUFFERING on some streams right after pause, which otherwise shows
+    // a misleading "loading" spinner over a paused frame.
+    var playbackIntended by rememberSaveable { mutableStateOf(true) }
     var currentSheet by rememberSaveable(stateSaver = PlayerSheetSaver) {
         mutableStateOf(PlayerSheet.None)
     }
@@ -208,11 +230,20 @@ fun VideoPlayerScreen(
     var videoZoom by rememberSaveable { mutableFloatStateOf(1f) }
 
     val isTv = LocalTvMode.current
+    // Hardware-keyboard detection (Chromebooks, Bluetooth keyboards, Samsung
+    // DeX). Drives the non-TV keyboard-shortcut handler so phones/tablets with
+    // a keyboard get space/arrows/F/M/Esc controls while touch-only devices
+    // attach no extra key handler. TV keeps its dedicated D-pad scheme below.
+    val hasHardwareKeyboard = remember(context) {
+        context.resources.configuration.keyboard != android.content.res.Configuration.KEYBOARD_NOKEYS &&
+            context.resources.configuration.hardKeyboardHidden != android.content.res.Configuration.HARDKEYBOARDHIDDEN_YES
+    }
 
     val tvPlayerFocusRequester = remember { FocusRequester() }
     val tvSkipSegmentFocusRequester = remember { FocusRequester() }
     val tvCinemaIntroFocusRequester = remember { FocusRequester() }
     val tvNextEpisodeFocusRequester = remember { FocusRequester() }
+    val keyboardFocusRequester = remember { FocusRequester() }
     var userInteractionCount by rememberSaveable { mutableIntStateOf(0) }
 
     var brightnessOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
@@ -412,7 +443,10 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(uiState.rememberBrightness) {
-        if (uiState.rememberBrightness && uiState.brightnessLevel != 0.5f) {
+        // -1f (BRIGHTNESS_OVERRIDE_NONE) is the "user hasn't set a level" sentinel;
+        // 0.5f is a legitimate brightness a user can pick, so it must not be used
+        // as the guard. Re-applies the saved level on recreate/resume.
+        if (uiState.rememberBrightness && uiState.brightnessLevel >= 0f) {
             activity?.let { act ->
                 if (!act.isDestroyed && !act.isFinishing) {
                     val layout = act.window.attributes
@@ -421,6 +455,32 @@ fun VideoPlayerScreen(
                 }
             }
         }
+    }
+
+    // The system resets window.attributes.screenBrightness to the OS default on
+    // ON_PAUSE/ON_STOP (e.g. screen-off, app switch), and the LaunchedEffect above
+    // only re-fires when the rememberBrightness *flag* changes — not on plain
+    // foregrounding. Re-apply the saved level on every ON_RESUME so the user's
+    // chosen brightness survives navigation away and back.
+    val brightnessLevel = uiState.brightnessLevel
+    val rememberBrightness = uiState.rememberBrightness
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(activity, rememberBrightness, brightnessLevel, lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME &&
+                rememberBrightness && brightnessLevel >= 0f
+            ) {
+                activity?.let { act ->
+                    if (!act.isDestroyed && !act.isFinishing) {
+                        val layout = act.window.attributes
+                        layout.screenBrightness = brightnessLevel
+                        act.window.attributes = layout
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     BackHandler {
@@ -449,6 +509,13 @@ fun VideoPlayerScreen(
     val castVolume by viewModel.castVolumeFlow.collectAsStateWithLifecycle(initialValue = 1f)
 
     val isPlaying = if (isCastConnected) castIsPlaying else uiState.isPlaying
+    // If playback is actually running, the user intended it — reconcile the
+    // playbackIntended flag from the authoritative play state so paths that
+    // resume playback outside the screen's doPlay/doPause (PiP remote, SyncPlay,
+    // autoplay, sleep-timer cancel) keep the buffering-spinner gate correct.
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) playbackIntended = true
+    }
     // duration is low-frequency (changes only on media load / live updates),
     // so it is safe to collect at the screen root. currentPosition is NOT
     // collected here — it now lives on viewModel.currentPositionMs and is read
@@ -559,11 +626,14 @@ fun VideoPlayerScreen(
                 isSkipSegmentVisible -> tvSkipSegmentFocusRequester.tryRequestFocus("tv_skip_segment")
                 else -> tvPlayerFocusRequester.tryRequestFocus("tv_player")
             }
+        } else if (!isTv && hasHardwareKeyboard && !showControls) {
+            keyboardFocusRequester.tryRequestFocus("keyboard_player")
         }
     }
 
     val doPlay: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         {
+            playbackIntended = true
             if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
             else if (isCastConnected) viewModel.castPlay()
             else viewModel.resumePlayback()
@@ -571,6 +641,7 @@ fun VideoPlayerScreen(
     }
     val doPause: () -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
         {
+            playbackIntended = false
             if (isInSyncPlaySession) viewModel.syncPlayTogglePlayPause()
             else if (isCastConnected) viewModel.castPause()
             else engine?.pause()
@@ -594,7 +665,14 @@ fun VideoPlayerScreen(
         {
             val pos = viewModel.playerEngineRef?.currentPositionMs ?: 0L
             val dur = viewModel.playerEngineRef?.durationMs ?: 0L
-            val target = (pos + uiState.seekDurationMs).coerceAtMost(dur.coerceAtLeast(0))
+            // For live streams dur is 0 until resolved, which previously pinned every
+            // forward seek to 0. Skip the upper clamp when there is no known duration;
+            // the engine clamps on its own at seek time. Mirrors the gesture path.
+            val target = if (dur <= 0L) {
+                (pos + uiState.seekDurationMs).coerceAtLeast(0L)
+            } else {
+                (pos + uiState.seekDurationMs).coerceAtMost(dur)
+            }
             doSeekTo(target)
         }
     }
@@ -612,6 +690,26 @@ fun VideoPlayerScreen(
         onCommit = { doSeekTo(it) },
     )
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
+
+    // Shared confirmation haptic for discrete player actions (seek commit,
+    // play/pause toggle, segment skip). Reuses the same View performHapticFeedback
+    // path and hapticsEnabled gate as the gesture-bound haptic below, so a single
+    // preference governs all player haptics.
+    val performConfirmHaptic: () -> Unit = remember(activity, viewModel) {
+        {
+            if (viewModel.hapticsEnabled) {
+                activity?.let { act ->
+                    val view = act.window.decorView
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    }
+                }
+            }
+        }
+    }
 
     if (isCastConnected) {
         CompanionDashboard(
@@ -659,6 +757,7 @@ fun VideoPlayerScreen(
                                     keyEvent.nativeKeyEvent.keyCode == NativeKeyEvent.KEYCODE_SPACE
                                 ) {
                                     doTogglePlayPause()
+                                    performConfirmHaptic()
                                     showControls = true
                                     true
                                 } else {
@@ -672,6 +771,7 @@ fun VideoPlayerScreen(
                                             seekState.seekForward(dpadKey.repeatCount)
                                         } else if (dpadKey.isKeyUp) {
                                             seekState.commitForward()
+                                            performConfirmHaptic()
                                         }
                                         true
                                     } else false
@@ -682,6 +782,7 @@ fun VideoPlayerScreen(
                                             seekState.seekBackward(dpadKey.repeatCount)
                                         } else if (dpadKey.isKeyUp) {
                                             seekState.commitBackward()
+                                            performConfirmHaptic()
                                         }
                                         true
                                     } else false
@@ -712,19 +813,100 @@ fun VideoPlayerScreen(
                                 },
                                 onPlayPause = {
                                     doTogglePlayPause()
+                                    performConfirmHaptic()
                                     true
                                 },
                                 onFastForward = {
                                     doSeekForward()
                                     showControls = true
+                                    performConfirmHaptic()
                                     true
                                 },
                                 onRewind = {
                                     doSeekBack()
                                     showControls = true
+                                    performConfirmHaptic()
                                     true
                                 },
                             )
+                    } else if (!isTv && hasHardwareKeyboard && currentSheet == PlayerSheet.None) {
+                        // Hardware-keyboard shortcuts for phones/tablets with a
+                        // keyboard (Chromebook, Bluetooth, Samsung DeX). TV keeps
+                        // the D-pad scheme above; this branch is non-TV only so the
+                        // two never interfere. Keys match common media conventions:
+                        // space=play/pause, arrows=seek/volume, F=fullscreen, M=mute,
+                        // Esc=back, J/L=seek like YouTube.
+                        Modifier
+                            .focusRequester(keyboardFocusRequester)
+                            .focusable()
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
+                                val keyCode = keyEvent.nativeKeyEvent.keyCode
+                                userInteractionCount++
+                                viewModel.onUserInteraction()
+                                when (keyCode) {
+                                    NativeKeyEvent.KEYCODE_SPACE,
+                                    NativeKeyEvent.KEYCODE_MEDIA_PLAY,
+                                    NativeKeyEvent.KEYCODE_MEDIA_PAUSE,
+                                    NativeKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                        doTogglePlayPause()
+                                        performConfirmHaptic()
+                                        showControls = true
+                                        true
+                                    }
+                                    NativeKeyEvent.KEYCODE_DPAD_RIGHT,
+                                    NativeKeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+                                    NativeKeyEvent.KEYCODE_L -> {
+                                        doSeekForward()
+                                        performConfirmHaptic()
+                                        showControls = true
+                                        true
+                                    }
+                                    NativeKeyEvent.KEYCODE_DPAD_LEFT,
+                                    NativeKeyEvent.KEYCODE_MEDIA_REWIND,
+                                    NativeKeyEvent.KEYCODE_J -> {
+                                        doSeekBack()
+                                        performConfirmHaptic()
+                                        showControls = true
+                                        true
+                                    }
+                                    NativeKeyEvent.KEYCODE_DPAD_UP,
+                                    NativeKeyEvent.KEYCODE_VOLUME_UP -> {
+                                        adjustStreamMusicVolume(context, up = true)
+                                        showControls = true
+                                        true
+                                    }
+                                    NativeKeyEvent.KEYCODE_DPAD_DOWN,
+                                    NativeKeyEvent.KEYCODE_VOLUME_DOWN -> {
+                                        adjustStreamMusicVolume(context, up = false)
+                                        showControls = true
+                                        true
+                                    }
+                                    NativeKeyEvent.KEYCODE_F,
+                                    NativeKeyEvent.KEYCODE_F1, NativeKeyEvent.KEYCODE_F2,
+                                    NativeKeyEvent.KEYCODE_F3, NativeKeyEvent.KEYCODE_F4 -> {
+                                        toggleOrientation()
+                                        showControls = true
+                                        true
+                                    }
+                                    NativeKeyEvent.KEYCODE_M -> {
+                                        viewModel.toggleMute()
+                                        showControls = true
+                                        true
+                                    }
+                                    NativeKeyEvent.KEYCODE_ESCAPE,
+                                    NativeKeyEvent.KEYCODE_BACK -> {
+                                        if (showControls) {
+                                            showControls = false
+                                            true
+                                        } else {
+                                            onBack()
+                                            true
+                                        }
+                                    }
+                                    else -> false
+                                }
+                            }
                     } else Modifier
                 )
                 .pointerInput(uiState.gesturesEnabled, isScreenLocked) {
@@ -750,16 +932,19 @@ fun VideoPlayerScreen(
                                 offset.x < width * 0.35 -> {
                                     seekState.addOffset(-1, currentSeekDurationMs)
                                     currentDoSeekBack()
+                                    performConfirmHaptic()
                                 }
                                 offset.x > width * 0.65 -> {
                                     seekState.addOffset(1, currentSeekDurationMs)
                                     currentDoSeekForward()
+                                    performConfirmHaptic()
                                 }
                                 else -> {
                                     if (videoZoom > 1f) {
                                         videoZoom = 1f
                                     } else {
                                         currentDoTogglePlayPause()
+                                        performConfirmHaptic()
                                     }
                                 }
                             }
@@ -999,7 +1184,10 @@ fun VideoPlayerScreen(
             if (cinemaIntroState != null && !isInPipMode) {
                 IntroSkipOverlay(
                     isVisible = true,
-                    onSkip = { viewModel.skipIntro() },
+                    onSkip = {
+                        viewModel.skipIntro()
+                        performConfirmHaptic()
+                    },
                     focusRequester = tvCinemaIntroFocusRequester,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -1013,7 +1201,10 @@ fun VideoPlayerScreen(
                     SegmentSkipOverlay(
                         isVisible = true,
                         segmentType = activeSegment.type,
-                        onSkip = { viewModel.skipSegment(activeSegment) },
+                        onSkip = {
+                            viewModel.skipSegment(activeSegment)
+                            performConfirmHaptic()
+                        },
                         focusRequester = tvSkipSegmentFocusRequester,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -1035,6 +1226,7 @@ fun VideoPlayerScreen(
                     onPlayNext = { viewModel.playNextEpisode() },
                     onCancel = { viewModel.cancelAutoplay() },
                     isPlaying = isPlaying,
+                    pauseCountdown = currentSheet != PlayerSheet.None || isScreenLocked,
                     focusRequester = tvNextEpisodeFocusRequester,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -1049,7 +1241,7 @@ fun VideoPlayerScreen(
                     .padding(top = 60.dp, end = 16.dp),
             )
 
-            if (uiState.isBuffering && uiState.playerError == null && !isPlaying) {
+            if (uiState.isBuffering && uiState.playerError == null && !isPlaying && playbackIntended) {
                 Box(
                     modifier = Modifier.align(Alignment.Center),
                     contentAlignment = Alignment.Center,
@@ -1100,7 +1292,10 @@ fun VideoPlayerScreen(
                     streamingQuality = uiState.preferredPlayerType.name,
                     playerType = uiState.preferredPlayerType.name,
                     decoderMode = uiState.decoderMode.displayName,
-                    audioSessionId = 0,
+                    // Engines expose a real audio session id (ExoPlayer: live
+                    // session; mpv: generated id; VLC: 0 — capabilities gate the
+                    // row). Read the collected engine so a swap refreshes it.
+                    audioSessionId = engine?.audioSessionId ?: 0,
                     // Drop below the CastIndicator when both are visible so
                     // they don't stack on the same (60dp, 16dp) anchor.
                     modifier = Modifier

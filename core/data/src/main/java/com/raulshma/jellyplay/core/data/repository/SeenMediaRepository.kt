@@ -43,6 +43,22 @@ interface SeenMediaRepository {
      * notification worker prunes anything older than 30 days).
      */
     suspend fun pruneOlderThan(cutoffEpochMs: Long)
+
+    /**
+     * Reconciles the seen-media table against the [liveItemIds] the library
+     * currently reports, removing orphan rows whose underlying item no longer
+     * exists server-side.
+     *
+     * Orphan rows otherwise persist until the 30-day age prune and keep matching
+     * a deleted id, which blocks a future re-add of that id from ever
+     * re-triggering a notification. The caller passes the set of item ids it
+     * observed in the most recent library scan; any tracked id absent from that
+     * set is considered deleted and dropped.
+     *
+     * Returns the number of orphan rows removed (0 when the table is empty or
+     * [liveItemIds] exactly covers it).
+     */
+    suspend fun reconcileAgainstLiveItemIds(liveItemIds: Set<String>): Int
 }
 
 /** Plain-data view of a seen-media record, decoupled from the Room entity. */

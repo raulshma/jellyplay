@@ -63,6 +63,17 @@ class MpvPlayerEngine(
         private const val MPV_END_FILE_REASON_QUIT = 2
         private const val MPV_END_FILE_REASON_ERROR = 3
         private const val MPV_END_FILE_REASON_REDIRECT = 4
+        // mpv_error codes carried by the END_FILE node's `error` field — see
+        // mpv client.h. A network/source load failure surfaces as
+        // MPV_ERROR_LOADING_FAILED; decoder/output/format init failures are
+        // fatal on the same engine. Used by [mapMpvError].
+        private const val MPV_ERROR_LOADING_FAILED = -13
+        private const val MPV_ERROR_AO_INIT_FAILED = -14
+        private const val MPV_ERROR_VO_INIT_FAILED = -15
+        private const val MPV_ERROR_NOTHING_TO_PLAY = -16
+        private const val MPV_ERROR_UNKNOWN_FORMAT = -17
+        private const val MPV_ERROR_UNSUPPORTED = -18
+        private const val MPV_ERROR_NOT_IMPLEMENTED = -19
         private val MPV_SUBTITLE_LOG_PATTERN =
             Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream)")
         private val REDACT_API_KEY = Regex("(?i)(api_key=)[^&\\s]+")
@@ -312,11 +323,15 @@ class MpvPlayerEngine(
             mpv.setOptionString("sub-ass-force-margins", "no")
 
             mpv.setOptionString("scale", mpvCfg.scaler.key)
-            // dscale (downscaler) was previously left unset, so mpv fell back
-            // to its soft bilinear default — the dominant case on phones where
-            // 1080p+ video is downscaled to the display. Mirror the upscaler so
-            // both up- and down-scaled content stay sharp.
-            mpv.setOptionString("dscale", mpvCfg.scaler.key)
+            // dscale (downscaler) is the hot path on phones (1080p/4K video
+            // downscaled to the display). High-order scalers (lanczos, spline*)
+            // there are costly per-frame GPU for a downscale where bilinear is
+            // visually indistinguishable at phone DPI. Leave it unset so mpv
+            // uses its default (bilinear / oversample) — matches mpvkt and
+            // upstream mpv-android. The user-chosen `scale` still drives the
+            // upscaler.
+            // (Previously mirrored `scale`, which forced e.g. lanczos on the
+            // downscale path — a steady GPU tax even on capable hardware.)
             if (mpvCfg.deband) {
                 mpv.setOptionString("deband", "yes")
             }
@@ -326,6 +341,12 @@ class MpvPlayerEngine(
             }
             mpv.setOptionString("framedrop", mpvCfg.frameDrop.key)
             mpv.setOptionString("vd-lavc-skiploopfilter", mpvCfg.skipLoopFilter.key)
+            // Force CPU-side AV1 film-grain synthesis. The GPU film-grain path
+            // (default on hwdec) stalls on several drivers — frames back up and
+            // playback stutters even though the decoder is keeping up. This is
+            // the documented workaround for https://github.com/mpv-player/mpv/issues/14651
+            // and is what mpvkt sets unconditionally.
+            mpv.setOptionString("vd-lavc-film-grain", "cpu")
 
             val demuxerMax = when (mpvCfg.demuxerMaxBytes) {
                 MpvDemuxerMaxBytes.AUTO -> {
@@ -344,11 +365,14 @@ class MpvPlayerEngine(
 
             mpv.setOptionString("msg-level", "all=warn")
 
-            if (currentConfig.decoderMode == DecoderMode.SW_ONLY) {
-                mpv.setOptionString("profile", "fast")
-                if (isLowRamDevice) {
-                    mpv.setOptionString("vf", "format=yuv420p")
-                }
+            // `fast` bundles vd-lavc-fast (skips some loop-filter / ref-frame
+            // work) and cheap scaler defaults — a steady per-frame decode/render
+            // saving mpvkt applies unconditionally. Previously gated to SW_ONLY
+            // only, so the dominant HW path paid the full-quality decode cost
+            // that ExoPlayer's MediaCodec pipeline never does.
+            mpv.setOptionString("profile", "fast")
+            if (currentConfig.decoderMode == DecoderMode.SW_ONLY && isLowRamDevice) {
+                mpv.setOptionString("vf", "format=yuv420p")
             }
 
             if (currentConfig.audioPassthrough) {
@@ -582,6 +606,9 @@ class MpvPlayerEngine(
 
             if (oldMpvCfg?.scaler != mpvCfg.scaler) {
                 mpv.setPropertyString("scale", mpvCfg.scaler.key)
+                // dscale mirrors the upscaler at init (see initOptions), but at
+                // runtime we leave mpv's default downscaler — only the upscaler
+                // changes here.
             }
             if (oldMpvCfg?.deband != mpvCfg.deband) {
                 mpv.setPropertyString("deband", if (mpvCfg.deband) "yes" else "no")
@@ -1090,10 +1117,65 @@ class MpvPlayerEngine(
             }
             MPV_END_FILE_REASON_ERROR -> {
                 _playbackState.value = EnginePlaybackState.ERROR
-                _errorFlow.tryEmit(EngineError.Unknown("Playback error (mpv): ${errorCode ?: "unknown"}"))
+                _errorFlow.tryEmit(mapMpvError(errorCode))
             }
             // STOP / QUIT / null — ignore: not end-of-content.
             else -> {}
+        }
+    }
+
+    /**
+     * Map an mpv END_FILE `error` string onto the [EngineError] taxonomy so the
+     * UI can offer the right affordance. The node carries an `mpv_error` int,
+     * but the binding exposes it as a string; [mapMpvError] tolerates both the
+     * numeric form ("-13") and a descriptive string (e.g. "loading_failed",
+     * "ao_init_failed", or a raw network message).
+     *
+     * Mirrors ExoPlayer's [PlaybackException.toEngineError]: a load/source
+     * failure maps to a retryable [EngineError.Network] (transient mpv network
+     * drops, HTTP timeouts, server-closed transcodes), while decoder/init/format
+     * failures map to [EngineError.Decoder] (not retryable on the same engine).
+     * Unknown errors stay non-retryable [EngineError.Unknown].
+     */
+    private fun mapMpvError(errorCode: String?): EngineError {
+        if (errorCode.isNullOrBlank()) return EngineError.Unknown("Playback error (mpv): unknown")
+        val raw = "Playback error (mpv): $errorCode"
+        val numeric = errorCode.toIntOrNull()
+        val textual = errorCode.lowercase()
+        // Numeric mpv_error path — the documented END_FILE contract.
+        if (numeric != null) {
+            return when (numeric) {
+                // Load / source failures — transient, retryable.
+                MPV_ERROR_LOADING_FAILED -> EngineError.Network(null)
+                // Decoder / output / format init — fatal on same engine.
+                MPV_ERROR_AO_INIT_FAILED,
+                MPV_ERROR_VO_INIT_FAILED,
+                MPV_ERROR_NOTHING_TO_PLAY,
+                MPV_ERROR_UNKNOWN_FORMAT,
+                MPV_ERROR_UNSUPPORTED,
+                MPV_ERROR_NOT_IMPLEMENTED,
+                -> EngineError.Decoder(codec = null, cause = null)
+                else -> EngineError.Unknown(raw)
+            }
+        }
+        // Descriptive-string fallback: some bindings surface the error name or
+        // a network message rather than the numeric code. Match keywords so we
+        // still recover the retry affordance for transient drops.
+        return when {
+            "loading_failed" in textual ||
+                "network" in textual ||
+                "connection" in textual ||
+                "timeout" in textual ||
+                "protocol" in textual ||
+                "http" in textual ||
+                "stream" in textual -> EngineError.Network(null)
+            "ao_init" in textual ||
+                "vo_init" in textual ||
+                "format" in textual ||
+                "unsupported" in textual ||
+                "decoder" in textual ||
+                "codec" in textual -> EngineError.Decoder(codec = null, cause = null)
+            else -> EngineError.Unknown(raw)
         }
     }
 
@@ -1422,8 +1504,13 @@ class MpvPlayerEngine(
  */
 
 internal fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
-    DecoderMode.HW_PREFERRED -> "mediacodec-copy,mediacodec,no"
-    DecoderMode.HW_ONLY -> "mediacodec-copy,mediacodec"
+    // Zero-copy `mediacodec` first: mpv picks the first entry that inits, and
+    // `mediacodec-copy` (GPU→CPU→GPU per frame) almost always inits when listed
+    // first, so copy-first ordering silently forced every HW decode through the
+    // slow path — the primary cause of mpv lag vs. zero-copy ExoPlayer. Keep
+    // copy as fallback, then SW last.
+    DecoderMode.HW_PREFERRED -> "mediacodec,mediacodec-copy,no"
+    DecoderMode.HW_ONLY -> "mediacodec,mediacodec-copy"
     DecoderMode.SW_ONLY -> "no"
 }
 

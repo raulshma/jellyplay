@@ -12,8 +12,13 @@ sealed interface EngineSpecificConfig
 enum class MpvHwdec(val key: String, val displayName: String) {
     MEDIACODEC("mediacodec", "MediaCodec Direct (Zero-Copy)"),
     MEDIACODEC_COPY("mediacodec-copy", "MediaCodec Copy"),
-    MEDIACODEC_HW_ONLY("mediacodec-copy,mediacodec", "MediaCodec HW Only (No SW Fallback)"),
-    MEDIACODEC_FALLBACK("mediacodec-copy,mediacodec,no", "MediaCodec + SW Fallback"),
+    // mpv picks the first hwdec entry whose init succeeds. Zero-copy
+    // `mediacodec` must come first: `mediacodec-copy` copies every decoded
+    // frame GPU→CPU→GPU (~3 GB/s at 1080p60), the dominant cause of mpv
+    // lag vs. ExoPlayer (which is zero-copy by default). Copy stays as a
+    // fallback for devices/codecs where direct surface output fails.
+    MEDIACODEC_HW_ONLY("mediacodec,mediacodec-copy", "MediaCodec HW Only (No SW Fallback)"),
+    MEDIACODEC_FALLBACK("mediacodec,mediacodec-copy,no", "MediaCodec + SW Fallback"),
     AUTO("auto", "Auto Detect"),
     NO("no", "Software Only"),
 }
@@ -86,16 +91,27 @@ data class MpvEngineConfig(
     // gpu-next is the modern vo with better HDR / 10-bit handling; the legacy
     // `gpu` vo is the historical default but is no longer recommended.
     val videoOutput: MpvVideoOutput = MpvVideoOutput.GPU_NEXT,
-    // Lanczos is a sharp, well-rounded scaler; the previous bilinear default
-    // produced visibly soft output, especially for downscaled (phone) content.
-    val scaler: MpvScaler = MpvScaler.LANCZOS,
+    // Bilinear matches mpv's own default and mpvkt's config — the cheapest
+    // upscaler. High-order scalers (lanczos, spline*) are a steady per-frame
+    // GPU tax that ExoPlayer never pays; on mid/low GPUs they cause frame
+    // drops. Users who want sharpness can still pick a heavier scaler in
+    // settings. The downscaler is left at mpv's default separately (see
+    // initOptions dscale comment).
+    val scaler: MpvScaler = MpvScaler.BILINEAR,
     val deband: Boolean = false,
     val interpolation: Boolean = false,
     val audioOutput: MpvAudioOutput = MpvAudioOutput.AUDIOTRACK,
     val audioFallback: MpvAudioOutput? = MpvAudioOutput.AAUDIO,
     val demuxerMaxBytes: MpvDemuxerMaxBytes = MpvDemuxerMaxBytes.AUTO,
-    val skipLoopFilter: MpvSkipLoopFilter = MpvSkipLoopFilter.NONE,
-    val frameDrop: MpvFrameDrop = MpvFrameDrop.VO,
+    // `default` matches mpv's built-in default and mpvkt — non-reference frames
+    // skip the in-loop deblock, a real per-frame saving on H.264/HEVC. `none`
+    // (best quality) is available in settings for users who want it.
+    val skipLoopFilter: MpvSkipLoopFilter = MpvSkipLoopFilter.DEFAULT,
+    // decoder+vo: under decode pressure the decoder drops to stay realtime, and
+    // the vo drops on display-resample mismatch. `vo` alone can't shed load at
+    // the decoder, so a slow decode path (or a momentary hwdec fallback) backs
+    // up and stutters. Cheap insurance; visually identical when decode keeps up.
+    val frameDrop: MpvFrameDrop = MpvFrameDrop.DECODER_VO,
     val hwdecOverride: MpvHwdec? = null,
 ) : EngineSpecificConfig
 

@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsSource
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +49,14 @@ class AudioLyricsManager @Inject constructor(
     private val perItemOffsets = mutableMapOf<String, Long>()
     private var currentItemId: String? = null
 
+    /**
+     * Tracks the in-flight lyrics fetch so a rapid skip can cancel the
+     * previous request. Without this, N concurrent fetches race and the
+     * last one to resolve wins [_lyrics] — which may be for a track several
+     * skips ago. See [fetchLyrics].
+     */
+    private var lyricsJob: Job? = null
+
     fun initialize(scope: CoroutineScope) {
         this.scope = scope
     }
@@ -60,14 +69,23 @@ class AudioLyricsManager @Inject constructor(
     ) {
         currentItemId = itemId
         restoreOffsetForItem(itemId)
-        scope.launch {
+        // Cancel any in-flight fetch so a rapid skip (next/next/next) cannot
+        // let a slow response from an older track overwrite the current one's
+        // lyrics. Cleared on the fresh launch below.
+        lyricsJob?.cancel()
+        lyricsJob = scope.launch {
             _isFetchingLyrics.value = true
             lyricsRepository.getLyricsWithFallback(itemId, artistName, trackName, durationSec)
                 .onSuccess {
+                    // Bail if the user has since moved on to another track:
+                    // this response is stale and must not overwrite the
+                    // current item's lyrics.
+                    if (currentItemId != itemId) return@onSuccess
                     _lyrics.value = it.lines
                     _lyricsSource.value = it.source
                 }
                 .onFailure {
+                    if (currentItemId != itemId) return@onFailure
                     _lyrics.value = emptyList()
                     _lyricsSource.value = LyricsSource.UNKNOWN
                 }
@@ -86,9 +104,13 @@ class AudioLyricsManager @Inject constructor(
         val itemId = currentItemId ?: return
         this.currentItemId = itemId
         restoreOffsetForItem(itemId)
-        scope.launch {
+        // Cancel the auto-fetch (if any) so the user's manual selection isn't
+        // later clobbered by a slower in-flight fallback.
+        lyricsJob?.cancel()
+        lyricsJob = scope.launch {
             lyricsRepository.getLyricsById(lrcLibId, itemId)
                 .onSuccess {
+                    if (currentItemId != itemId) return@onSuccess
                     _lyrics.value = it.lines
                     _lyricsSource.value = it.source
                 }
@@ -119,6 +141,8 @@ class AudioLyricsManager @Inject constructor(
     }
 
     fun reset() {
+        lyricsJob?.cancel()
+        lyricsJob = null
         _lyrics.value = emptyList()
         _currentLyricIndex.value = -1
         _lyricsSource.value = LyricsSource.UNKNOWN

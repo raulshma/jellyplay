@@ -643,7 +643,10 @@ class AudioPlayerViewModel @Inject constructor(
             preferencesStore.setSleepTimerEndOfEpisode(false)
         }
         sleepTimerManager.setOnTimerExpired {
-            audioPlaybackManager.togglePlayPause()
+            // Explicit pause rather than togglePlayPause(): if the user paused
+            // manually after arming the timer, the toggle would otherwise RESUME
+            // playback — the opposite of the timer's intent.
+            audioPlaybackManager.pause()
         }
         sleepTimerManager.start(durationMs)
         _uiState.update {
@@ -662,7 +665,8 @@ class AudioPlayerViewModel @Inject constructor(
             preferencesStore.setSleepTimerEndOfEpisode(true)
         }
         sleepTimerManager.setOnTimerExpired {
-            audioPlaybackManager.togglePlayPause()
+            // Explicit pause rather than togglePlayPause(): see startSleepTimer.
+            audioPlaybackManager.pause()
         }
         sleepTimerManager.startEndOfEpisode()
         _uiState.update {

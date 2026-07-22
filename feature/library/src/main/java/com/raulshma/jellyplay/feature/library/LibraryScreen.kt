@@ -651,6 +651,47 @@ fun LibraryScreen(
                         }
                     }
 
+                    // Alphabet "jump to letter" rail. Jellyfin returns library items
+                    // sorted by SortName by default, so the first snapshot index where
+                    // each leading letter appears is stable within the loaded pages.
+                    // Tapping a letter scrolls the active grid/list to that index — a
+                    // local-only affordance that works with the existing paging source
+                    // (no NameStartsWith server filter is plumbed through the data layer).
+                    val alphabetScope = rememberCoroutineScope()
+                    val jumpIndexByLetter by remember {
+                        derivedStateOf {
+                            // Single pass over the loaded snapshot: record the first
+                            // index at which each normalized leading letter appears.
+                            val items = pagedItems.itemSnapshotList.items
+                            val map = LinkedHashMap<Char, Int>()
+                            for (i in items.indices) {
+                                val key = items[i].name.firstOrNull()
+                                    ?.lowercaseChar()
+                                    ?.takeIf { it in 'a'..'z' }
+                                    ?: '#'
+                                if (key !in map) map[key] = i
+                            }
+                            map
+                        }
+                    }
+                    if (jumpIndexByLetter.isNotEmpty()) {
+                        AlphabetJumpRail(
+                            letters = jumpIndexByLetter.keys.toList(),
+                            onJump = { letter ->
+                                val index = jumpIndexByLetter[letter] ?: return@AlphabetJumpRail
+                                alphabetScope.launch {
+                                    when (viewMode) {
+                                        LibraryViewMode.LIST -> listState.scrollToItem(index)
+                                        else -> gridState.scrollToItem(index)
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 4.dp),
+                        )
+                    }
+
                     if (!isTv && pagedItems.itemCount > 0) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = toolbarExpanded,
@@ -932,4 +973,71 @@ private fun GlassPill(
     }
 }
 
+/**
+ * Right-edge alphabet "jump to letter" rail for large libraries. Renders the set
+ * of leading letters present in the loaded items (plus `#` for non A–Z names) as
+ * a compact vertical column; a tap/dpad-select scrolls the host grid/list to the
+ * first item whose name starts with that letter. Local-only — see
+ * [LibraryScreen] for why a NameStartsWith server filter isn't used.
+ */
+@Composable
+private fun AlphabetJumpRail(
+    letters: List<Char>,
+    onJump: (Char) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isLight = LocalIsLightTheme.current
+    val railShape = ShapeCache.smooth12
+    val railBg = if (isLight) Color.Black.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.08f)
+    val contentColor = MaterialTheme.colorScheme.onBackground
+
+    Surface(
+        modifier = modifier
+            .width(24.dp)
+            .clip(railShape)
+            .background(railBg),
+        color = Color.Transparent,
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            contentPadding = PaddingValues(vertical = 4.dp),
+        ) {
+            items(letters.size, key = { letters[it].code }) { index ->
+                val letter = letters[index]
+                val focusState = rememberTvFocusState(focusedScale = 1.15f)
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+                val scale by animateFloatAsState(
+                    targetValue = if (isPressed) 0.9f else 1f,
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    label = "letterPressedScale",
+                )
+                Box(
+                    modifier = Modifier
+                        .graphicsLayer {
+                            scaleX = scale * focusState.scale
+                            scaleY = scale * focusState.scale
+                        }
+                        .then(focusState.focusModifier)
+                        .tvFocusIndicator(focusState, railShape)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = { onJump(letter) },
+                        )
+                        .padding(vertical = 1.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = letter.uppercaseChar().toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = contentColor,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
 

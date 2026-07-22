@@ -34,6 +34,16 @@ internal class TrackSelectionHelper(
     private var selectedSubtitleTrackIndex: Int? = null
     private var selectedAudioTrackIndex: Int? = null
 
+    // A selection (auto or manual) is "held" once applied via selectAudioTrack /
+    // selectSubtitleTrack. While held, updateTracksFromEngine does NOT re-run the
+    // stored/pending/preference resolution that can otherwise flip it — that
+    // re-resolution was the cause of the "subtitle flashes then resets" bug on
+    // offline playback (empty mediaStreams → resolveMediaStreamIndex returned
+    // null → the next availableTracks emission re-resolved and dropped to Off).
+    // Cleared on a fresh item load (setPendingStreams) and explicit reset.
+    private var audioSelectionHeld = false
+    private var subtitleSelectionHeld = false
+
     @Suppress("DEPRECATION")
     private var pendingSubtitleStreamIndex: Int? = null
     private var pendingAudioStreamIndex: Int? = null
@@ -41,6 +51,9 @@ internal class TrackSelectionHelper(
     fun setPendingStreams(subtitleIndex: Int?, audioIndex: Int?) {
         pendingSubtitleStreamIndex = subtitleIndex
         pendingAudioStreamIndex = audioIndex
+        // New item: a selection has not yet been applied for it.
+        audioSelectionHeld = false
+        subtitleSelectionHeld = false
     }
 
     /**
@@ -61,6 +74,7 @@ internal class TrackSelectionHelper(
         if (option.index >= SERVER_TRACK_INDEX_BASE) {
             val streamIndex = option.index - SERVER_TRACK_INDEX_BASE
             selectedAudioTrackIndex = option.index
+            audioSelectionHeld = true
             updateUiState { state ->
                 state.copy(audioTracks = state.audioTracks.map { track ->
                     track.copy(isSelected = track.index == option.index)
@@ -74,6 +88,12 @@ internal class TrackSelectionHelper(
         val engine = getEngine() ?: return
         engine.selectTrack(TrackType.AUDIO, option.index)
         selectedAudioTrackIndex = if (option.index < 0) null else option.index
+        // Latch the held state only for a real track (>= 0) or an explicit user
+        // override (e.g. the user deliberately turned it off). An auto fallback
+        // to "Default"/"Off" while no tracks exist yet must stay unlatched so a
+        // later track emission (e.g. offline sidecar subs attached post-load)
+        // can still resolve the language/preference selection.
+        audioSelectionHeld = isUserOverride || option.index >= 0
         updateUiState { state ->
             val isDefault = option.index < 0
             state.copy(audioTracks = state.audioTracks.map { track ->
@@ -98,6 +118,7 @@ internal class TrackSelectionHelper(
         if (option.index >= SERVER_TRACK_INDEX_BASE) {
             val streamIndex = option.index - SERVER_TRACK_INDEX_BASE
             selectedSubtitleTrackIndex = option.index
+            subtitleSelectionHeld = true
             updateUiState { state ->
                 state.copy(subtitleTracks = state.subtitleTracks.map { track ->
                     track.copy(isSelected = track.index == option.index)
@@ -113,6 +134,11 @@ internal class TrackSelectionHelper(
         engine.selectTrack(TrackType.SUBTITLE, option.index)
 
         selectedSubtitleTrackIndex = if (option.index < 0) null else option.index
+        // Latch only for a real track or an explicit user override. An auto
+        // fallback to "Off" while tracks haven't loaded yet must remain
+        // unlatched so a subsequent emission (offline sidecar subs arrive after
+        // the first track list) can still apply the auto/preference selection.
+        subtitleSelectionHeld = isUserOverride || option.index >= 0
 
         updateUiState { state ->
             val isOff = option.index < 0
@@ -246,7 +272,14 @@ internal class TrackSelectionHelper(
                 } else null
                 (matchByIndex ?: matchByLabel)?.let { selectAudioTrack(it, isUserOverride = false) }
             }
-        } else {
+        } else if (!audioSelectionHeld) {
+            // Re-resolve stored/per-item/series/global preference — but only when
+            // no selection has been applied for this item yet. Once a track is
+            // selected (auto or manual) we leave it alone; the re-assert block
+            // above keeps it sticky across track-list republishes. Without this
+            // guard, every availableTracks emission re-ran this block, and on
+            // offline playback (empty mediaStreams) resolveMediaStreamIndex
+            // returned null → the next emission dropped audio back to default.
             val itemId = getCurrentItemId()
             if (itemId != null) {
                 val currentPrefs = preferencesStore.preferences.value
@@ -263,6 +296,10 @@ internal class TrackSelectionHelper(
                         val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
                         if (targetLabel != null) {
                             audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectAudioTrack(it, isUserOverride = false) }
+                        } else if (streams.isEmpty()) {
+                            // Offline restore: stored index is the engine
+                            // positional index (no server streams to map a label).
+                            audioTracks.firstOrNull { it.index == audioIdx }?.let { selectAudioTrack(it, isUserOverride = false) }
                         }
                     }
                 } else {
@@ -301,7 +338,15 @@ internal class TrackSelectionHelper(
                     }
                 }
             }
-        } else {
+        } else if (!subtitleSelectionHeld) {
+            // Re-resolve stored/preference only while no selection is held for
+            // this item. The classic "subtitle flashes then resets" bug on
+            // offline playback: user picks a sub → persistStreamSelectionFromPlayer
+            // stores null (resolveMediaStreamIndex fails on empty mediaStreams)
+            // → the next availableTracks emission re-entered this block → no
+            // stored index, language-preference match against empty streams
+            // failed → fell through to selectSubtitleTrack(Off), wiping the
+            // override the user just set. Guarding it keeps the held selection.
             val itemId = getCurrentItemId()
             if (itemId != null) {
                 val currentPrefs = preferencesStore.preferences.value
@@ -318,6 +363,13 @@ internal class TrackSelectionHelper(
                         val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
                         if (targetLabel != null) {
                             subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectSubtitleTrack(it, isUserOverride = false) }
+                        } else if (streams.isEmpty()) {
+                            // Offline restore: no server streams to map a label
+                            // from, so the stored index is an engine positional
+                            // index (see resolveMediaStreamIndex). Match it
+                            // directly so a prior offline subtitle selection
+                            // survives a session reload.
+                            subtitleTracks.firstOrNull { it.index == subIdx }?.let { selectSubtitleTrack(it, isUserOverride = false) }
                         }
                     }
                 } else {
@@ -352,6 +404,7 @@ internal class TrackSelectionHelper(
     fun resetAudioSelection() {
         val itemId = getCurrentItemId() ?: return
         selectedAudioTrackIndex = null
+        audioSelectionHeld = false
         scope.launch {
             val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
             preferencesStore.setMediaStreamSelection(
@@ -366,6 +419,7 @@ internal class TrackSelectionHelper(
     fun resetSubtitleSelection() {
         val itemId = getCurrentItemId() ?: return
         selectedSubtitleTrackIndex = null
+        subtitleSelectionHeld = false
         scope.launch {
             val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
             preferencesStore.setMediaStreamSelection(
@@ -380,6 +434,8 @@ internal class TrackSelectionHelper(
     fun reset() {
         selectedSubtitleTrackIndex = null
         selectedAudioTrackIndex = null
+        subtitleSelectionHeld = false
+        audioSelectionHeld = false
         pendingSubtitleStreamIndex = null
         pendingAudioStreamIndex = null
         playbackPreferenceResolver.clear()
@@ -465,9 +521,18 @@ internal class TrackSelectionHelper(
         streams: List<MediaStream>,
         type: StreamType,
         trackOption: TrackOption,
-    ): Int? {        val typedStreams = streams.filter { it.type == type }
+    ): Int? {
+        val typedStreams = streams.filter { it.type == type }
         val trackLabel = trackOption.label
         val trackLanguage = trackOption.language
+
+        // Offline playback carries no server mediaStreams (detail.mediaSources is
+        // empty), so there is nothing to match against here. Persist the engine
+        // track's positional index directly — it's the only stable handle for
+        // offline sidecar subs, and restore-on-reload re-matches by label in
+        // updateTracksFromEngine. Previously this returned null offline, so the
+        // stored per-item selection silently became null and never restored.
+        if (typedStreams.isEmpty()) return trackOption.index
 
         val exactMatch = typedStreams.firstOrNull {
             it.displayTitle == trackLabel || it.title == trackLabel || it.language == trackLabel

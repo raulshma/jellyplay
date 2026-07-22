@@ -224,10 +224,12 @@ class PlaybackSyncWorkerTest {
         // runAttemptCount >= MAX_RETRIES (3) triggers the dead-letter path.
         val result = buildWorker(runAttemptCount = 3).doWork()
 
-        // Dead-lettered: the entry is dropped so countFlow() reaches 0 and the
-        // sync indicator clears. The drain converges with success.
+        // Dead-lettered: the entry is flagged (not hard-deleted) so the row is
+        // retained for audit but skipped by future drains — countFlow() still
+        // reaches 0 and the sync indicator clears. The drain converges.
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
-        coVerify(exactly = 1) { outbox.delete("e1") }
+        coVerify(exactly = 0) { outbox.delete("e1") }
+        coVerify(exactly = 1) { outbox.markDeadLetter("e1") }
         // Nothing was reconciled — the report never landed on the server.
         coVerify(exactly = 0) { offlineRepository.getOfflineItem(any()) }
     }
@@ -248,7 +250,8 @@ class PlaybackSyncWorkerTest {
 
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
         coVerify(exactly = 1) { outbox.delete("e1") }
-        coVerify(exactly = 1) { outbox.delete("e2") }
+        coVerify(exactly = 0) { outbox.delete("e2") }
+        coVerify(exactly = 1) { outbox.markDeadLetter("e2") }
         // Only the pushed item is reconciled; the dead-lettered one is not.
         coVerify(exactly = 1) { offlineRepository.getOfflineItem("item-1") }
         coVerify(exactly = 0) { offlineRepository.getOfflineItem("item-2") }

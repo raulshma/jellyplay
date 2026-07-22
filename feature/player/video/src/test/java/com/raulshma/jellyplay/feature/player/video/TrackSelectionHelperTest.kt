@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
 import io.mockk.every
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
@@ -326,6 +327,78 @@ class TrackSelectionHelperTest {
 
         // selectTrack(AUDIO, 1) must have been invoked at least once (initial select + reselect)
         verify(atLeast = 1) { engine.selectTrack(TrackType.AUDIO, 1) }
+    }
+
+    // ─── Regression: "subtitle flashes then resets" on offline playback ────────
+    // Offline playback carries no server mediaStreams (empty). Before the fix,
+    // every availableTracks emission re-ran the stored/preference resolution and
+    // dropped a held selection back to "Off" because the label lookup against
+    // empty streams failed. The held-guard skips that re-resolution.
+
+    @Test
+    fun updateTracksFromEngine_subtitleSelectionHeld_survivesReemissionWithEmptyStreams() {
+        // Simulate offline: mediaStreams is empty.
+        state.value = VideoPlayerUiState()
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine() // auto-applies a preference selection
+        helper.selectSubtitleTrack(TrackOption(0, "English", "eng", false))
+
+        // Reset the mock call recorder; subsequent emissions must NOT flip to Off.
+        io.mockk.clearMocks(engine, answers = false)
+
+        helper.updateTracksFromEngine()
+
+        // The held English selection survives — no call to select Off.
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, -1) }
+        // The selection itself stays put.
+        assertEquals(0, state.value.subtitleTracks.first { it.isSelected }.index)
+    }
+
+    @Test
+    fun selectSubtitleTrack_offlineUserOverride_persistsEngineIndex() {
+        // Offline: empty mediaStreams. resolveMediaStreamIndex previously
+        // returned null so the stored selection was lost. Now it persists the
+        // engine positional index directly.
+        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        state.value = VideoPlayerUiState() // empty mediaStreams
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+        helper.selectSubtitleTrack(TrackOption(0, "English", "eng", false))
+
+        // The persisted per-item selection should carry index 0 (engine index),
+        // not null.
+        coVerify {
+            preferencesStore.setMediaStreamSelection(
+                itemId = "item1",
+                audioStreamIndex = null,
+                subtitleStreamIndex = 0,
+            )
+        }
+    }
+
+    @Test
+    fun updateTracksFromEngine_autoOffDoesNotLatch_allowsLaterSidecarSelection() {
+        // First emission has no subtitle tracks yet (offline sidecar subs load
+        // after the first track list). Auto-selection falls through to Off but
+        // must NOT latch, so a later emission with a real track can still
+        // resolve the language preference.
+        state.value = VideoPlayerUiState()
+        availableTracks.value = emptyList()
+        helper.updateTracksFromEngine()
+        verify { engine.selectTrack(TrackType.SUBTITLE, -1) } // auto Off
+
+        io.mockk.clearMocks(engine, answers = false)
+
+        // Sidecar sub arrives: language matches the default "eng" preference.
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
     }
 
     @Test

@@ -11,6 +11,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import coil3.size.Size
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
+import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -183,7 +184,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             }
             .diskCache {
                 DiskCache.Builder()
-                    .directory(cacheDir.resolve("image_cache").absolutePath.toPath())
+                    .directory(cacheDir.resolve(ImageCache.DIR).absolutePath.toPath())
                     .maxSizeBytes(cacheSize)
                     .build()
             }

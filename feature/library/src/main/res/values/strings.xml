@@ -22,6 +22,7 @@
     <string name="library_mood_playlists">Mood Playlists</string>
     <string name="library_playlists">Playlists</string>
     <string name="library_shuffle">Shuffle</string>
+    <string name="library_jump_to_letter">Jump to letter</string>
 
     <!-- LibraryFilterSheet -->
     <string name="library_reset">Reset</string>

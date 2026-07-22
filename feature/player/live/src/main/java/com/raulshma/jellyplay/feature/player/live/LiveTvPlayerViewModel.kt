@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.live
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -21,6 +22,9 @@ import com.raulshma.jellyplay.feature.player.live.engine.LivePlaybackRequest
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayerEngine
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayMethod
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,6 +40,13 @@ private const val TAG = "LiveTvPlayerViewModel"
 
 private const val PROGRAM_LOOKAHEAD_HOURS = 12L
 private const val CHANNEL_LIST_LIMIT = 200
+/**
+ * Watchdog mirroring the VOD player's BUFFERING_TIMEOUT_MS: if a live stream
+ * stays in BUFFERING this long without reaching READY (common with flaky
+ * tuners that stall without raising a PlaybackException), surface an
+ * actionable error instead of spinning the rebuffer spinner forever.
+ */
+private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
 
 /**
  * Owns Live TV playback end to end: loads the channel list from
@@ -54,6 +65,7 @@ private const val CHANNEL_LIST_LIMIT = 200
  */
 @HiltViewModel
 class LiveTvPlayerViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val userPreferencesStore: UserPreferencesStore,
@@ -70,6 +82,17 @@ class LiveTvPlayerViewModel @Inject constructor(
     private var engine: LivePlayerEngine? = null
     private var initialized = false
     private var preMuteVolume: Float? = null
+    // Becoming-noisy (headphone unplug) + audio-focus (call/duck) lifecycle.
+    // Ported from the VOD VideoPlayerViewModel — live TV arguably needs these
+    // more (always-on stream, often background). Fields mirror the VOD names.
+    private var becomingNoisyReceiver: android.content.BroadcastReceiver? = null
+    private var transientAudioFocusRequest: android.media.AudioFocusRequest? = null
+    private var preDuckVolume: Float? = null
+    private var wasPlayingBeforeTransientLoss = false
+    // Buffering watchdog (see LIVE_BUFFERING_TIMEOUT_MS). A live tuner can stall
+    // in BUFFERING without ever raising a PlaybackException; this surfaces an
+    // error after the timeout so the rebuffer spinner doesn't spin forever.
+    private var bufferingWatchdogJob: Job? = null
 
     init {
         userPreferencesStore.preferences
@@ -392,7 +415,113 @@ class LiveTvPlayerViewModel @Inject constructor(
         newEngine.onTranscodeFallbackNeeded = ::onTranscodeFallback
         observeEngine(newEngine)
         engine = newEngine
+        // Install becoming-noisy + audio-focus only once for the (reused)
+        // engine instance, mirroring the VOD player. They persist across
+        // channel switches and are torn down in [stop].
+        registerBecomingNoisyReceiver()
+        registerTransientFocusLossListener()
         return newEngine
+    }
+
+    /**
+     * Pause live TV when audio becomes noisy (e.g. headphones unplugged),
+     * mirroring the VOD `VideoPlayerViewModel`. Without this, unplugging
+     * headphones keeps the live stream blasting through the speaker.
+     */
+    private fun registerBecomingNoisyReceiver() {
+        if (becomingNoisyReceiver != null) return
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: android.content.Intent?) {
+                if (intent?.action == android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                    engine?.pause()
+                }
+            }
+        }
+        becomingNoisyReceiver = receiver
+        val filter = android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        try {
+            context.registerReceiver(
+                receiver,
+                filter,
+                // Private receiver for a system broadcast — explicit flag required on API 34+.
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    Context.RECEIVER_NOT_EXPORTED
+                } else 0,
+            )
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Request audio focus and duck/pause on transient loss, then restore on
+     * regain — mirrors the VOD `registerTransientFocusLossListener`. Live TV
+     * has no resume-skip concept, so the GAIN path simply restores volume and
+     * resumes if it was playing. Volume bookkeeping uses the Media3 player's
+     * `volume` directly (same surface [toggleMute] uses).
+     */
+    private fun registerTransientFocusLossListener() {
+        if (transientAudioFocusRequest != null) return
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            ?: return
+        val listener = android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
+            val player = engine?.media3Player ?: return@OnAudioFocusChangeListener
+            when (focusChange) {
+                android.media.AudioManager.AUDIOFOCUS_LOSS -> {
+                    engine?.pause()
+                    preDuckVolume = null
+                    wasPlayingBeforeTransientLoss = false
+                    unregisterTransientFocusLossListener()
+                }
+                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                    wasPlayingBeforeTransientLoss = engine?.isPlaying?.value == true
+                    if (!_state.value.isMuted) {
+                        // Store the raw player volume so GAIN restores it exactly.
+                        // Skip capture while muted (player.volume is 0f and would
+                        // clobber the real level on restore — mute is re-asserted
+                        // on GAIN instead).
+                        if (preDuckVolume == null) preDuckVolume = player.volume
+                        player.volume = 0.2f
+                    }
+                    // When muted, volume stays at 0f — ducking must not make muted
+                    // audio audible (e.g. during a phone call with the UI muted).
+                }
+                android.media.AudioManager.AUDIOFOCUS_GAIN -> {
+                    // Restore pre-duck volume, or re-assert mute (0f) so a
+                    // duck-while-muted cycle never leaks audio at the duck level
+                    // past the focus regain.
+                    player.volume = if (_state.value.isMuted) 0f else (preDuckVolume ?: player.volume)
+                    if (wasPlayingBeforeTransientLoss) engine?.play()
+                    preDuckVolume = null
+                    wasPlayingBeforeTransientLoss = false
+                }
+            }
+        }
+        val audioAttributes = android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE)
+            .build()
+        val request = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(audioAttributes)
+            .setAcceptsDelayedFocusGain(true)
+            .setOnAudioFocusChangeListener(listener)
+            .build()
+        transientAudioFocusRequest = request
+        try {
+            audioManager.requestAudioFocus(request)
+        } catch (_: Exception) {
+            transientAudioFocusRequest = null
+        }
+    }
+
+    private fun unregisterTransientFocusLossListener() {
+        val request = transientAudioFocusRequest ?: return
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+        try {
+            audioManager?.abandonAudioFocusRequest(request)
+        } catch (_: Exception) {}
+        transientAudioFocusRequest = null
+        preDuckVolume = null
+        wasPlayingBeforeTransientLoss = false
     }
 
     private fun observeEngine(eng: LivePlayerEngine) {
@@ -402,6 +531,29 @@ class LiveTvPlayerViewModel @Inject constructor(
                 isBuffering = s == LiveEngineState.BUFFERING || s == LiveEngineState.IDLE,
                 errorMessage = if (s == LiveEngineState.ERROR) eng.errorMessage.value else null,
             )
+            // Buffering watchdog: arm a timeout on entering BUFFERING, cancel it
+            // on any other state. If the tuner stalls without a PlaybackException,
+            // the timeout surfaces a retryable error so the user isn't stuck on
+            // a spinning rebuffer. Mirrors the VOD player's initial-buffer guard.
+            when (s) {
+                LiveEngineState.BUFFERING -> {
+                    if (bufferingWatchdogJob == null) {
+                        bufferingWatchdogJob = viewModelScope.launch {
+                            delay(LIVE_BUFFERING_TIMEOUT_MS)
+                            if (eng.state.value == LiveEngineState.BUFFERING) {
+                                _state.value = _state.value.copy(
+                                    isBuffering = false,
+                                    errorMessage = "Live stream failed to load. Check your connection and retry.",
+                                )
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    bufferingWatchdogJob?.cancel()
+                    bufferingWatchdogJob = null
+                }
+            }
         }.launchIn(viewModelScope)
         eng.isPlaying.onEach { _state.value = _state.value.copy(isPlaying = it) }
             .launchIn(viewModelScope)
@@ -531,6 +683,15 @@ class LiveTvPlayerViewModel @Inject constructor(
      * returns to the same channel.
      */
     fun stop() {
+        // Unregister becoming-noisy + audio-focus before releasing the engine
+        // so the listeners never dereference a torn-down player.
+        becomingNoisyReceiver?.let {
+            try { context.unregisterReceiver(it) } catch (_: Exception) {}
+        }
+        becomingNoisyReceiver = null
+        unregisterTransientFocusLossListener()
+        bufferingWatchdogJob?.cancel()
+        bufferingWatchdogJob = null
         engine?.release()
         engine = null
         initialized = false

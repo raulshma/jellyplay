@@ -48,8 +48,10 @@ data class PlaybackOutboxEntry(
  * drains the outbox on reconnect and periodically.
  *
  * PROGRESS entries are coalesced per item (latest position wins); START and
- * STOP entries are never coalesced. After a STOP is delivered the per-item
- * PROGRESS entries are cleared.
+ * STOP entries are never coalesced with each other. Enqueuing a STOP deletes
+ * any superseded pending PROGRESS for the item (the STOP carries the final
+ * position). After a STOP is delivered online the per-item START/PROGRESS/STOP
+ * telemetry entries are cleared via [deletePlaybackTelemetryForItem].
  */
 interface PlaybackOutboxRepository {
 
@@ -89,6 +91,15 @@ interface PlaybackOutboxRepository {
     suspend fun drain(): List<PlaybackOutboxEntry>
 
     suspend fun delete(id: String)
+
+    /**
+     * Flags the entry as dead-lettered (retry budget exhausted) instead of
+     * deleting it. The row is retained for audit / a future manual "retry sync"
+     * affordance but skipped by [drain] and excluded from [count]/[countFlow],
+     * so a persistently undeliverable entry no longer hard-deletes telemetry the
+     * server may already have received.
+     */
+    suspend fun markDeadLetter(id: String)
 
     /** Clears all entries for an item. */
     suspend fun deleteForItem(itemId: String)
