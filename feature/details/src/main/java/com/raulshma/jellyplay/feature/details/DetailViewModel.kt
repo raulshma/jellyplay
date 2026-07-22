@@ -804,7 +804,14 @@ class DetailViewModel @Inject constructor(
                     _uiState.update { state ->
                         state.copy(
                             detail = state.detail?.copy(
-                                item = state.detail.item.copy(isPlayed = true)
+                                // Jellyfin clears a manual watched item's
+                                // resume point. Mirror that immediately so the
+                                // detail UI cannot retain an in-progress bar
+                                // while the queued/offline mutation syncs.
+                                item = state.detail.item.copy(
+                                    isPlayed = true,
+                                    playbackPositionTicks = 0L,
+                                )
                             )
                         )
                     }
@@ -823,7 +830,13 @@ class DetailViewModel @Inject constructor(
                     _uiState.update { state ->
                         state.copy(
                             detail = state.detail?.copy(
-                                item = state.detail.item.copy(isPlayed = false)
+                                // Marking unwatched also resets resume state;
+                                // otherwise the detail screen would instantly
+                                // show the title as partially watched again.
+                                item = state.detail.item.copy(
+                                    isPlayed = false,
+                                    playbackPositionTicks = 0L,
+                                )
                             )
                         )
                     }

@@ -295,6 +295,53 @@ class DetailViewModelTest {
         assertEquals("e1", target.episode.id)
     }
 
+    // ---- Item-level mark played / unplayed ----------------------------------
+
+    @Test
+    fun markPlayed_clearsResumePositionInDetailUi() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val item = MediaItem(
+            id = "movie-1",
+            name = "Movie",
+            mediaType = MediaType.MOVIE,
+            playbackPositionTicks = 5_000_000_000L,
+        )
+        coEvery { mediaRepository.getMediaDetail("movie-1") } returns Result.success(MediaDetail(item = item))
+        coEvery { mediaRepository.markPlayed("movie-1") } returns Result.success(Unit)
+
+        viewModel.loadItem("movie-1")
+        advanceUntilIdle()
+        viewModel.markPlayed()
+        advanceUntilIdle()
+
+        val updated = viewModel.uiState.value.detail!!.item
+        assertTrue(updated.isPlayed)
+        assertEquals(0L, updated.playbackPositionTicks)
+    }
+
+    @Test
+    fun markUnplayed_clearsResumePositionInDetailUi() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val item = MediaItem(
+            id = "movie-1",
+            name = "Movie",
+            mediaType = MediaType.MOVIE,
+            isPlayed = true,
+            playbackPositionTicks = 5_000_000_000L,
+        )
+        coEvery { mediaRepository.getMediaDetail("movie-1") } returns Result.success(MediaDetail(item = item))
+        coEvery { mediaRepository.markUnplayed("movie-1") } returns Result.success(Unit)
+
+        viewModel.loadItem("movie-1")
+        advanceUntilIdle()
+        viewModel.markUnplayed()
+        advanceUntilIdle()
+
+        val updated = viewModel.uiState.value.detail!!.item
+        assertFalse(updated.isPlayed)
+        assertEquals(0L, updated.playbackPositionTicks)
+    }
+
     // ---- Season-level mark played / unplayed --------------------------------
 
     // markSeasonPlayed flips every episode in that season to isPlayed=true in

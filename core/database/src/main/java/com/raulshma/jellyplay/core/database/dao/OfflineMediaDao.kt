@@ -71,7 +71,13 @@ interface OfflineMediaDao {
         UPDATE offline_media
         SET isPlayed = :isPlayed,
             playedPercentage = CASE WHEN :isPlayed THEN 100.0 ELSE 0.0 END,
-            playbackPositionTicks = CASE WHEN :isPlayed THEN playbackPositionTicks ELSE NULL END,
+            -- Marking either watched or unwatched is an explicit reset of the
+            -- resume state. Keeping an old position when marking watched lets
+            -- a later offline resume reopen a title the user intentionally
+            -- completed; keeping it when marking unwatched shows stale
+            -- Continue Watching progress. Jellyfin clears this field for both
+            -- endpoints, so mirror that contract locally.
+            playbackPositionTicks = NULL,
             lastPlayedDate = :lastPlayedDate
         WHERE id = :itemId
            OR parentId = :itemId

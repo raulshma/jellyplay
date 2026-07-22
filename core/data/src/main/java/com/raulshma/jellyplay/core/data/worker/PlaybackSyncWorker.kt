@@ -51,9 +51,11 @@ class PlaybackSyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         if (offlineModeManager.isOffline) {
-            // The constraints guarantee CONNECTED, but the user may have
-            // toggled manual offline; defer until genuinely online.
-            return Result.retry()
+            // A manual offline setting is not a transient delivery failure.
+            // Finish this run so it cannot occupy the unique one-shot slot with
+            // WorkManager backoff; PlaybackSyncReconnectListener will enqueue a
+            // fresh, immediate drain when Offline Mode is disabled again.
+            return Result.success()
         }
         val pending = outbox.drain()
         if (pending.isEmpty()) return Result.success()
