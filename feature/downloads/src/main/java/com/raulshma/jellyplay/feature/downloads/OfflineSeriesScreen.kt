@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.feature.downloads
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,8 +19,6 @@ import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
@@ -35,7 +31,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -44,15 +39,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,12 +63,15 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.BackdropLayer
+import com.raulshma.jellyplay.core.ui.components.ChipRow
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.TransparentTopBar
+import com.raulshma.jellyplay.core.ui.components.rememberBackdropScrollState
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -122,35 +115,18 @@ fun OfflineSeriesScreen(
     }
 
     val series = seriesItem
-    val density = LocalDensity.current
     val backdropHeight = when {
         isTv -> AdaptiveBackdropHeight.Tv
         adaptiveInfo.windowSizeClass == WindowSizeClass.Expanded -> AdaptiveBackdropHeight.Expanded
         else -> AdaptiveBackdropHeight.Portrait
     }
     val baseBackdropHeight = backdropHeight / 1.2f
-    val spacerHeightPx = with(density) { (baseBackdropHeight - 150.dp).toPx() }
-    val collapsedHeightPx = with(density) { backdropHeight.toPx() }
-    val scrollOffset by remember {
-        derivedStateOf {
-            (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) +
-                listState.firstVisibleItemScrollOffset.toFloat()
-        }
-    }
-    val scrollFraction by remember {
-        derivedStateOf { (scrollOffset / collapsedHeightPx).coerceIn(0f, 1f) }
-    }
-    val scrollCollapsed by animateFloatAsState(
-        targetValue = if (scrollFraction > 0.7f) 1f else 0f,
-        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        label = "seriesScrollCollapsed",
-    )
-    val animatedContainerColor = lerp(
-        Color.Transparent,
-        MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
-        scrollCollapsed,
-    )
-    val animatedTitleAlpha = scrollCollapsed
+    val scrollState = rememberBackdropScrollState(listState, backdropHeight)
+    val scrollOffset = scrollState.scrollOffset
+    val scrollFraction = scrollState.scrollFraction
+    val scrollCollapsed = scrollState.scrollCollapsed
+    val animatedContainerColor = scrollState.containerColor
+    val animatedTitleAlpha = scrollState.titleAlpha
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Backdrop layer (parallax + gradient scrim, matching online detail).
@@ -245,6 +221,8 @@ fun OfflineSeriesScreen(
                                 onEpisodePlay = { episode -> onPlayOffline(episode.id) },
                                 onEpisodeDetail = { episode -> onEpisodeDetail(episode.id) },
                                 onEpisodeDelete = { episode -> viewModel.deleteEpisode(episode.id) },
+                                onMarkSeasonPlayed = { seasonId -> viewModel.markSeasonPlayed(seasonId) },
+                                onMarkSeasonUnplayed = { seasonId -> viewModel.markSeasonUnplayed(seasonId) },
                             )
                         }
                     }
@@ -346,66 +324,6 @@ private fun SeriesHeader(
 }
 
 @Composable
-private fun BackdropLayer(
-    backdropUrl: String?,
-    blurHash: String?,
-    height: androidx.compose.ui.unit.Dp,
-    scrollTranslationY: Float = 0f,
-    scrollAlpha: Float = 1f,
-    modifier: Modifier = Modifier,
-) {
-    val density = LocalDensity.current
-    val baseBackdropHeight = height / 1.2f
-    val surface = MaterialTheme.colorScheme.surface
-    val startYPx = with(density) { (baseBackdropHeight - 200.dp).toPx() }
-    Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(height)
-                .graphicsLayer {
-                    translationY = scrollTranslationY
-                    alpha = scrollAlpha
-                },
-        ) {
-            if (!backdropUrl.isNullOrBlank()) {
-                MediaImage(
-                    url = backdropUrl,
-                    contentDescription = null,
-                    blurHash = blurHash,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawBehind {
-                        drawRect(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    surface.copy(alpha = 0.4f),
-                                    surface.copy(alpha = 0.9f),
-                                    surface,
-                                ),
-                                startY = startYPx,
-                                endY = size.height,
-                            ),
-                        )
-                    },
-            )
-        }
-    }
-}
-
-@Composable
 private fun InfoRow(series: OfflineMediaItem) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -445,22 +363,6 @@ private fun InfoRow(series: OfflineMediaItem) {
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                     .padding(horizontal = 6.dp, vertical = 2.dp),
             ) { Text(r, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface) }
-        }
-    }
-}
-
-@Composable
-private fun ChipRow(values: List<String>) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(values, key = { it }) { value ->
-            Box(
-                modifier = Modifier
-                    .clip(ShapeCache.smooth16)
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f))
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
-            ) {
-                Text(value, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f))
-            }
         }
     }
 }
