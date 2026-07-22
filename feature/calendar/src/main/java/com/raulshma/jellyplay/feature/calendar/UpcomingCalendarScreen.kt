@@ -159,6 +159,7 @@ fun UpcomingCalendarScreen(
                                         CalendarCard(
                                             item = item,
                                             enrichedPosterUrl = item.tmdbId?.let { state.enrichedPosters[it] },
+                                            enabled = item.tmdbId != null,
                                             onClick = {
                                                 val tmdbId = item.tmdbId
                                                 if (tmdbId != null) {

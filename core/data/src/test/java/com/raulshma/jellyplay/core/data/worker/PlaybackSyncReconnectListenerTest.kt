@@ -2,8 +2,10 @@ package com.raulshma.jellyplay.core.data.worker
 
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -23,15 +25,18 @@ class PlaybackSyncReconnectListenerTest {
     private val networkMonitor: NetworkMonitor = mockk()
     private val offlineModeManager: OfflineModeManager = mockk()
     private val scheduler: PlaybackSyncScheduler = mockk(relaxed = true)
+    private val outbox: PlaybackOutboxRepository = mockk()
 
     private fun listener(
         scope: CoroutineScope,
         networkStatus: MutableStateFlow<NetworkStatus>,
         offlineMode: MutableStateFlow<OfflineMode> = MutableStateFlow(OfflineMode.ONLINE),
+        outboxCount: Int = 1,
     ): PlaybackSyncReconnectListener {
         every { networkMonitor.networkStatus } returns networkStatus
         every { offlineModeManager.offlineMode } returns offlineMode
-        return PlaybackSyncReconnectListener(networkMonitor, offlineModeManager, scheduler, scope)
+        coEvery { outbox.count() } returns outboxCount
+        return PlaybackSyncReconnectListener(networkMonitor, offlineModeManager, scheduler, outbox, scope)
     }
 
     @Test
@@ -185,6 +190,32 @@ class PlaybackSyncReconnectListenerTest {
             offlineMode.value = OfflineMode.ONLINE
             testScheduler.advanceUntilIdle()
 
+            verify(exactly = 1) { scheduler.enqueueNow() }
+        } finally {
+            listener.stop()
+        }
+    }
+
+    @Test
+    fun `startup flush is skipped when the outbox is empty`() = runTest {
+        // A warm start with an empty outbox must not schedule a no-op drain.
+        // The Offline→Online transition is still honoured when it happens.
+        val status = MutableStateFlow(NetworkStatus.Online)
+        val listener = listener(this, status, outboxCount = 0)
+
+        try {
+            listener.start()
+            testScheduler.advanceUntilIdle()
+
+            // No startup flush, and no transition while staying Online.
+            verify(exactly = 0) { scheduler.enqueueNow() }
+
+            status.value = NetworkStatus.Offline
+            testScheduler.advanceUntilIdle()
+            status.value = NetworkStatus.Online
+            testScheduler.advanceUntilIdle()
+
+            // The network transition still enqueues exactly once.
             verify(exactly = 1) { scheduler.enqueueNow() }
         } finally {
             listener.stop()

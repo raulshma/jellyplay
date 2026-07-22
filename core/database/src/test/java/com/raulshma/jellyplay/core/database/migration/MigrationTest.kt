@@ -252,6 +252,49 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * Verifies the v36→v37 migration adds the `deadLetter` column to
+     * `playback_outbox` with a NOT NULL DEFAULT 0, that pre-existing rows
+     * default to live (deadLetter = 0), and that flagging a row via
+     * [PlaybackOutboxDao.markDeadLetter] excludes it from the drain ([getAll])
+     * and the pending [count] — so the sync indicator clears even when an
+     * undeliverable entry is retained for audit instead of hard-deleted.
+     */
+    @Test
+    fun migrateAllFromV12_addsPlaybackOutboxDeadLetterColumn() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+        }
+
+        val db = openWithMigrations()
+        db.playbackOutboxDao().upsert(
+            com.raulshma.jellyplay.core.database.entity.PlaybackOutboxEntity(
+                id = "entry-1",
+                itemId = "item-1",
+                eventType = "PROGRESS",
+                sessionId = "session-1",
+                positionTicks = 5_000_000L,
+                isPaused = false,
+                playMethod = "DIRECT_PLAY",
+                mediaSourceId = null,
+                recordedAt = 1L,
+                createdAt = 1L,
+            )
+        )
+        // The migrated column defaults a pre-existing row to live.
+        assertEquals(1, db.playbackOutboxDao().getAll().size)
+        assertEquals(1, db.playbackOutboxDao().count())
+        // Flagging dead-letter retains the row but excludes it from drain + count.
+        db.playbackOutboxDao().markDeadLetter("entry-1")
+        assertEquals(0, db.playbackOutboxDao().getAll().size)
+        assertEquals(0, db.playbackOutboxDao().count())
+        db.close()
+    }
+
     @Test
     fun migrateAllFromV12() = runTest {
         createDatabase(12) { db ->
@@ -483,14 +526,14 @@ class MigrationTest {
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (36),
+        // One migration per step from v1 up to the current schema version (37),
         // each handing off to the next with no gaps or duplicate starts.
         // androidx.room.Database has CLASS retention, so getAnnotation() returns
         // null at runtime — the hardcoded fallback is the authoritative value
         // and must be bumped alongside JellyPlayDatabase's version.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 36
+            ?: 37
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",

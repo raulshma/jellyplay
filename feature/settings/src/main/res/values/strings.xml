@@ -524,7 +524,9 @@
     <string name="settings_legend_images">Images: %1$d MB</string>
     <string name="settings_cache_used">Cache Used</string>
     <string name="settings_clear_cache">Clear Cache</string>
-    <string name="settings_clear_cache_subtitle">Free up storage space</string>
+    <string name="settings_clear_cache_subtitle">Free up storage space (keeps image cache)</string>
+    <string name="settings_clear_image_cache">Clear Image Cache</string>
+    <string name="settings_clear_image_cache_subtitle">Reloads all posters and images</string>
     <string name="settings_wifi_only">WiFi Only</string>
     <string name="settings_wifi_only_on">Downloads only on unmetered networks</string>
     <string name="settings_wifi_only_off">Downloads on any network</string>

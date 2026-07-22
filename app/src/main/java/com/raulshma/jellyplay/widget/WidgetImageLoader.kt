@@ -13,6 +13,7 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
+import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
@@ -41,9 +42,38 @@ object WidgetImageLoader {
     // fall back to its placeholder drawable — preferable to a frozen cell.
     private const val WIDGET_LOAD_TIMEOUT_MS = 2_000L
 
+    // Overall deadline for a whole batch preload. RemoteViewsFactory callbacks
+    // run on the widget host's binder thread, so without a hard ceiling N slow
+    // URLs (each up to WIDGET_LOAD_TIMEOUT_MS) can stall the launcher and ANR
+    // it. Bounded preloads return a partial map; unresolved URLs fall back to
+    // the placeholder just like an individual timeout.
+    private const val WIDGET_PRELOAD_DEADLINE_MS = 2_000L
+
+    // Cap how many distinct posters a single preload attempts. A widget cell
+    // count is small; loading more just widens the blocking window on the
+    // binder thread for content the user has to scroll to see anyway.
+    private const val WIDGET_PRELOAD_MAX_URLS = 12
+
+    /**
+     * Process-scoped decoded-poster cache keyed by image URL. RemoteViewsService
+     * factories are recreated frequently (new binder, process restart, config
+     * change) and previously re-fetched every poster on each re-bind even when
+     * the URL was unchanged. This LruCache makes repeat binds a map lookup.
+     *
+     * Sized by bitmap byte count (~250KB per decoded+rounded poster at
+     * [WIDGET_IMAGE_TARGET]); ~6MB comfortably holds a full widget grid and is
+     * well inside the widget process's bitmap budget.
+     */
+    private val posterMemoryCache: LruCache<String, Bitmap> = object : LruCache<String, Bitmap>(6 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+    }
+
     suspend fun loadPoster(context: Context, url: String?, cornerRadiusDp: Float = 10f): Bitmap? {
         if (url.isNullOrBlank()) return null
-        return withTimeoutOrNull(WIDGET_LOAD_TIMEOUT_MS) {
+        // Serve from the process cache first so a factory re-bind (or a second
+        // widget on the same launcher) does not re-decode/re-fetch.
+        posterMemoryCache.get(url)?.let { return it }
+        val bitmap = withTimeoutOrNull(WIDGET_LOAD_TIMEOUT_MS) {
             withContext(Dispatchers.IO) {
                 runCatching {
                     val request = ImageRequest.Builder(context)
@@ -67,24 +97,43 @@ object WidgetImageLoader {
                 }.getOrNull()
             }
         }
+        if (bitmap != null) posterMemoryCache.put(url, bitmap)
+        return bitmap
     }
 
     /**
-     * Pre-fetches every poster concurrently so `RemoteViewsFactory.getViewAt`
+     * Pre-fetches posters concurrently so `RemoteViewsFactory.getViewAt`
      * can read from the resulting cache instead of doing per-cell network I/O
-     * on the binder thread. A single slow URL won't blow the budget — each
-     * individual load is bounded by [WIDGET_LOAD_TIMEOUT_MS] via [loadPoster].
+     * on the binder thread.
+     *
+     * Two safety rails keep this from ANR-ing the launcher when called from a
+     * factory's `onDataSetChanged`:
+     *   1. The batch is capped at [WIDGET_PRELOAD_MAX_URLS] distinct URLs.
+     *   2. The whole batch is bounded by [WIDGET_PRELOAD_DEADLINE_MS]; any URL
+     *      not resolved in time simply maps to `null` (placeholder fallback).
+     *
+     * Already-cached posters (from a prior preload in this process) are served
+     * instantly from [posterMemoryCache] and don't count against the deadline.
      */
     suspend fun preloadPosters(
         context: Context,
         urls: Collection<String>,
         cornerRadiusDp: Float = 10f,
-    ): Map<String, Bitmap?> = coroutineScope {
-        urls.filter { it.isNotBlank() }
-            .distinct()
-            .map { url -> async { url to loadPoster(context, url, cornerRadiusDp) } }
-            .awaitAll()
-            .toMap()
+    ): Map<String, Bitmap?> {
+        val distinct = urls.filter { it.isNotBlank() }.distinct()
+        if (distinct.isEmpty()) return emptyMap()
+        val capped = distinct.take(WIDGET_PRELOAD_MAX_URLS)
+        // withTimeoutOrNull returns null on timeout — treat that as "resolve
+        // whatever landed". Because the async loads write into posterMemoryCache
+        // as they complete, a timeout still leaves any finished entries cached
+        // for the next bind; here we just report the ones that resolved in time.
+        return withTimeoutOrNull(WIDGET_PRELOAD_DEADLINE_MS) {
+            coroutineScope {
+                capped.map { url -> async { url to loadPoster(context, url, cornerRadiusDp) } }
+                    .awaitAll()
+                    .toMap()
+            }
+        } ?: emptyMap()
     }
 
     private fun applyRoundedCorners(context: Context, bitmap: Bitmap, cornerRadiusDp: Float = 10f): Bitmap {

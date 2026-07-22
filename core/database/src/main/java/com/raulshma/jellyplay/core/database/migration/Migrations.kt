@@ -612,8 +612,21 @@ val MIGRATION_35_36 = object : Migration(35, 36) {
     }
 }
 
+// Dead-letter flag for the playback outbox. A row whose retry budget is
+// exhausted is now flagged (deadLetter = 1) instead of hard-deleted, so the
+// telemetry is retained for audit / a future "retry sync" action while still
+// being skipped by the drain and excluded from the pending count. Hard-deleting
+// discarded rows the server may already have received (the failure could be a
+// network blip after a 200) with no record. NOT NULL DEFAULT 0 matches the
+// entity's @ColumnInfo(defaultValue = "0").
+val MIGRATION_36_37 = object : Migration(36, 37) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE playback_outbox ADD COLUMN deadLetter INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v36 migration chain, with the
+ * The complete, correctly-ordered v1→v37 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -657,4 +670,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_33_34,
         MIGRATION_34_35,
         MIGRATION_35_36,
+        MIGRATION_36_37,
     )

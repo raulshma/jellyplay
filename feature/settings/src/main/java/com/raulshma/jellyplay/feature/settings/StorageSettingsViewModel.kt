@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadQuality
+import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
@@ -82,7 +83,7 @@ class StorageSettingsViewModel @Inject constructor(
                     getDirSize(downloadsDir)
                 }
                 val imgAsync = async {
-                    val imageDir = File(context.cacheDir, "image_cache")
+                    val imageDir = File(context.cacheDir, ImageCache.DIR)
                     if (imageDir.exists()) getDirSize(imageDir) else 0L
                 }
                 QuadLongs(cacheAsync.await(), extAsync.await(), dlAsync.await(), imgAsync.await())
@@ -106,10 +107,44 @@ class StorageSettingsViewModel @Inject constructor(
             cacheError = null
             try {
                 withContext(Dispatchers.IO) {
-                    context.cacheDir.deleteRecursively()
+                    // Delete the contents of cacheDir *except* the Coil image cache.
+                    // Wiping image_cache mid-session causes every visible image to
+                    // re-decode and flash to its blurHash for several seconds.
+                    context.cacheDir.listFiles()?.forEach { child ->
+                        if (child.name != ImageCache.DIR) {
+                            child.deleteRecursively()
+                        }
+                    }
                     val externalCache = context.externalCacheDir
                     if (externalCache != null && externalCache.exists()) {
-                        externalCache.deleteRecursively()
+                        externalCache.listFiles()?.forEach { child ->
+                            if (child.name != ImageCache.DIR) {
+                                child.deleteRecursively()
+                            }
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                cacheError = error.message ?: error::class.simpleName
+            } finally {
+                refreshCacheSize()
+            }
+        }
+    }
+
+    /**
+     * Clears only the Coil image cache ([ImageCache.DIR]). Use when the user
+     * explicitly wants to reclaim the image-cache bytes (the generic [clearCache]
+     * deliberately preserves it to avoid mid-session image flashing).
+     */
+    fun clearImageCache() {
+        launch {
+            cacheError = null
+            try {
+                withContext(Dispatchers.IO) {
+                    val imageDir = File(context.cacheDir, ImageCache.DIR)
+                    if (imageDir.exists()) {
+                        imageDir.deleteRecursively()
                     }
                 }
             } catch (error: Exception) {

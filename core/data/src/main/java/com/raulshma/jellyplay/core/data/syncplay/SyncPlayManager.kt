@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
@@ -50,6 +52,15 @@ class SyncPlayManager @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var eventJob: Job? = null
     private var pingReportJob: Job? = null
+    private var reconnectWatchJob: Job? = null
+
+    /**
+     * Wall-clock ms of the most-recent WebSocket reconnect that happened while a
+     * SyncPlay session was active. Consumers (e.g. [SyncPlayViewModel]) can read
+     * this to ignore transient empty [SyncPlayEvent.GroupUpdate] messages that the
+     * server emits right after a drop, instead of treating them as an ejection.
+     */
+    private val lastReconnectAtMs = AtomicLong(0L)
 
     private val queuedEvent = AtomicReference<SyncPlayEvent?>(null)
 
@@ -62,6 +73,8 @@ class SyncPlayManager @Inject constructor(
     val currentGroup: SyncPlayGroup? get() = cachedGroup.get()
     val activeGroupId: String? get() = activeGroupIdRef.get()
     val isInSyncPlaySession: Boolean get() = isGroupActive.get() && activeGroupIdRef.get() != null
+    /** See [lastReconnectAtMs]. 0 when no reconnect has occurred mid-session. */
+    val lastReconnectMs: Long get() = lastReconnectAtMs.get()
 
     fun startListening() {
         if (eventJob?.isActive == true) return
@@ -190,6 +203,7 @@ class SyncPlayManager @Inject constructor(
             }
 
             startListening()
+            startReconnectWatcher()
             timeSyncManager.start()
 
             scope.launch {
@@ -231,6 +245,41 @@ class SyncPlayManager @Inject constructor(
         }
     }
 
+    /**
+     * Watches the shared [JellyfinWebSocketClient] for transient disconnects and, on
+     * every false → true transition of [JellyfinWebSocketClient.isConnected], re-asserts
+     * the user's current group membership. Without this the WS auto-reconnects but the
+     * server-side group listener never gets re-established, so a momentary network blip
+     * silently orphans the watch party.
+     */
+    private fun startReconnectWatcher() {
+        reconnectWatchJob?.cancel()
+        reconnectWatchJob = scope.launch {
+            // StateFlow already de-duplicates consecutive equal emissions, so we only
+            // need drop(1) (skip the initial value, which on join is already `true`)
+            // and filter { it } (only react to reconnects, not disconnects). Each
+            // collected `true` therefore represents a reconnect.
+            webSocketClient.isConnected
+                .drop(1)
+                .filter { it }
+                .collect {
+                    val groupId = activeGroupIdRef.get()
+                    if (!isGroupActive.get() || groupId == null) return@collect
+                    lastReconnectAtMs.set(System.currentTimeMillis())
+                    Log.d(TAG, "WebSocket reconnected mid-session, re-asserting group membership: $groupId")
+                    try {
+                        apiClient.postCapabilities()
+                        apiClient.joinSyncPlayGroup(groupId)
+                        refreshGroupInfo()
+                    } catch (ce: CancellationException) {
+                        throw ce
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to re-assert SyncPlay group membership after reconnect", e)
+                    }
+                }
+        }
+    }
+
     suspend fun leaveGroup(): Result<Unit> {
         Log.d(TAG, "Leaving SyncPlay group")
         val apiResult = try {
@@ -248,8 +297,10 @@ class SyncPlayManager @Inject constructor(
         syncPlayReady.set(false)
         queuedEvent.set(null)
         syncPlayEnabledAtMs.set(0L)
+        lastReconnectAtMs.set(0L)
         eventJob?.cancel()
         pingReportJob?.cancel()
+        reconnectWatchJob?.cancel()
         queueCore.clear()
         playbackCore.onGroupLeft()
         timeSyncManager.stop()
@@ -330,9 +381,11 @@ class SyncPlayManager @Inject constructor(
         activeGroupIdRef.set(null)
         syncPlayReady.set(false)
         syncPlayEnabledAtMs.set(0L)
+        lastReconnectAtMs.set(0L)
         queuedEvent.set(null)
         eventJob?.cancel()
         pingReportJob?.cancel()
+        reconnectWatchJob?.cancel()
         queueCore.clear()
         playbackCore.onGroupLeft()
         timeSyncManager.stop()

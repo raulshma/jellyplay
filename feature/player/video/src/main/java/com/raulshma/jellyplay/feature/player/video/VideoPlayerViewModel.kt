@@ -349,6 +349,11 @@ class VideoPlayerViewModel @Inject constructor(
     private var transientAudioFocusRequest: android.media.AudioFocusRequest? = null
     private var preDuckVolume: Float? = null
     private var wasPlayingBeforeTransientLoss = false
+    // Volume captured when a sleep timer starts fading, so cancelSleepTimer can
+    // restore the user's level instead of slamming to 1f. Mirrors preDuckVolume
+    // in the audio-focus listener. Null when the user is muted (mute wins) or
+    // when no timer has captured the pre-fade level.
+    private var preSleepVolume: Float? = null
 
     private val _passOutEvents = Channel<String>(Channel.BUFFERED)
     val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
@@ -2700,6 +2705,16 @@ class VideoPlayerViewModel @Inject constructor(
             preferencesStore.setSleepTimerDurationMs(durationMs)
             preferencesStore.setSleepTimerEndOfEpisode(false)
         }
+        // Capture the pre-fade volume before the fade ramp lowers it, so a
+        // later cancel restores the user's level rather than full volume.
+        // Skip capture while muted (the fade also skips writes when muted, so
+        // there is nothing to restore). Mirrors preDuckVolume bookkeeping.
+        val engineForCapture = playerSessionManager.engine
+        preSleepVolume = if (engineForCapture != null && !_uiState.value.isMuted) {
+            engineForCapture.volume
+        } else {
+            null
+        }
         sleepTimerManager.setOnTimerExpired {
             playerSessionManager.engine?.pause()
         }
@@ -2721,6 +2736,11 @@ class VideoPlayerViewModel @Inject constructor(
         launch {
             preferencesStore.setSleepTimerEndOfEpisode(true)
         }
+        // End-of-episode timer has no fade, so there is no pre-fade level to
+        // restore on cancel. Clear any value captured by a prior timed timer
+        // so cancelSleepTimer leaves the current volume untouched instead of
+        // restoring a stale captured level.
+        preSleepVolume = null
         sleepTimerManager.setOnTimerExpired {
             playerSessionManager.engine?.pause()
         }
@@ -2734,11 +2754,16 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun cancelSleepTimer() {
         sleepTimerManager.cancel()
-        // Restore pre-fade volume — but never override an active user mute.
+        // Restore the pre-fade volume captured at startSleepTimer — never slam
+        // to 1f (jarring, and may be far louder than what the user had set).
+        // Never override an active user mute. If we never captured a level
+        // (timer started while muted, or end-of-episode timer with no fade),
+        // leave the current volume untouched.
         val engine = playerSessionManager.engine
         if (engine != null && !_uiState.value.isMuted) {
-            engine.setVolume(1f)
+            preSleepVolume?.let { engine.setVolume(it) }
         }
+        preSleepVolume = null
         _uiState.update { it.copy(
             sleepTimerActive = false,
             sleepTimerEndOfEpisode = false,

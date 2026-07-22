@@ -28,9 +28,16 @@ class JellyPlayTileService : TileService() {
     override fun onStartListening() {
         super.onStartListening()
         updateTile()
+        // Collect both play state and title so the tile can reflect three states:
+        // playing, paused (session loaded but not playing), and inactive (no
+        // session). QS tiles are binary (ACTIVE/INACTIVE), so the paused state is
+        // surfaced via the label/contentDescription rather than the tile icon.
         job = tileScope.launch {
-            audioPlaybackManager.isPlaying.collect { isPlaying ->
-                updateTile(isPlaying)
+            kotlinx.coroutines.flow.combine(
+                audioPlaybackManager.isPlaying,
+                audioPlaybackManager.title,
+            ) { isPlaying, title -> isPlaying to title }.collect { (isPlaying, title) ->
+                updateTile(isPlaying, title)
             }
         }
     }
@@ -46,10 +53,10 @@ class JellyPlayTileService : TileService() {
         val isPlaying = audioPlaybackManager.isPlaying.value
         if (isPlaying) {
             audioPlaybackManager.pause()
-            updateTile(false)
+            updateTile(false, audioPlaybackManager.title.value)
         } else if (audioPlaybackManager.hasActiveSession) {
             audioPlaybackManager.resume()
-            updateTile(true)
+            updateTile(true, audioPlaybackManager.title.value)
         } else {
             val intent = Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -67,15 +74,26 @@ class JellyPlayTileService : TileService() {
         }
     }
 
-    private fun updateTile(isPlaying: Boolean = false) {
+    private fun updateTile(isPlaying: Boolean = false, title: String = "") {
+        val hasSession = audioPlaybackManager.hasActiveSession
         qsTile?.apply {
             state = if (isPlaying) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-            label = if (audioPlaybackManager.hasActiveSession) {
-                audioPlaybackManager.title.value.ifEmpty { getString(R.string.app_name) }
-            } else {
-                getString(R.string.app_name)
+            label = when {
+                // Paused: a track is loaded but not playing.
+                hasSession && !isPlaying -> {
+                    val t = title.ifEmpty { getString(R.string.app_name) }
+                    getString(R.string.tile_paused_label, t)
+                }
+                // Playing: show the track title.
+                hasSession -> title.ifEmpty { getString(R.string.app_name) }
+                // No session: just the app name.
+                else -> getString(R.string.app_name)
             }
-            contentDescription = if (isPlaying) "Playing" else getString(R.string.app_name)
+            contentDescription = when {
+                isPlaying -> getString(R.string.tile_playing_cd)
+                hasSession -> getString(R.string.tile_paused_cd)
+                else -> getString(R.string.app_name)
+            }
             updateTile()
         }
     }

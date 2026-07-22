@@ -814,6 +814,15 @@ class DownloadRepositoryImpl @Inject constructor(
 
         val workRequestBuilder = OneTimeWorkRequestBuilder<DownloadWorker>()
             .setConstraints(constraintsBuilder.build())
+            // Explicit exponential backoff so a flaky server returning 503/429
+            // is not hammered by all concurrent downloads retrying as fast as
+            // WorkManager allows. 30s base multiplies load far less than the
+            // implicit default while still recovering promptly.
+            .setBackoffCriteria(
+                androidx.work.BackoffPolicy.EXPONENTIAL,
+                DOWNLOAD_BACKOFF_DELAY_MS,
+                java.util.concurrent.TimeUnit.MILLISECONDS,
+            )
             .setInputData(
                 Data.Builder()
                     .putString(DownloadWorker.KEY_DOWNLOAD_ID, downloadId)
@@ -976,6 +985,12 @@ class DownloadRepositoryImpl @Inject constructor(
     companion object {
         private const val TAG = "DownloadRepository"
         private val FILENAME_SANITIZE_REGEX = Regex("[^a-zA-Z0-9.\\-]")
+
+        // Exponential backoff base delay applied to every DownloadWorker
+        // request so a flaky server is not hammered by concurrent retries.
+        // Mirrored by DownloadRecoveryInitializer so cold-start re-enqueues
+        // back off identically. WorkManager caps each retry delay at 5h.
+        const val DOWNLOAD_BACKOFF_DELAY_MS = 30_000L
 
         // Container strings from Jellyfin (mkv, mp4, ts, webm, flv, mov, ...).
         // Constrained to 2-8 alphanumerics so a malformed/missing value can

@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -68,18 +69,24 @@ class PlaybackOutboxRepositoryImplTest {
     }
 
     @Test
-    fun `enqueueStart and enqueueStop never coalesce with progress`() = runTest {
+    fun `enqueueStop deletes superseded PROGRESS for the same item`() = runTest {
+        // A STOP carries the item's final position, so any pending PROGRESS for
+        // the same item is superseded and must be cleared — otherwise a
+        // mid-position PROGRESS could drain after the STOP and (if the STOP
+        // dead-letters while the PROGRESS succeeds) leave the server at a stale
+        // mid position. START is retained (START→STOP is a meaningful session
+        // lifecycle, ordered by createdAt).
         repository.enqueueStart("item-1", "s1", PlayMethod.DIRECT_PLAY, 0L)
         repository.enqueueProgress("item-1", "s1", 500L, false, PlayMethod.DIRECT_PLAY, null)
         repository.enqueueStop("item-1", "s1", 900L)
 
         val pending = repository.drain()
 
-        assertEquals(3, pending.size)
+        assertEquals(2, pending.size)
         val types = pending.map { it.eventType }.toSet()
         assertTrue(types.contains(PlaybackOutboxEventType.START))
-        assertTrue(types.contains(PlaybackOutboxEventType.PROGRESS))
         assertTrue(types.contains(PlaybackOutboxEventType.STOP))
+        assertFalse(types.contains(PlaybackOutboxEventType.PROGRESS))
     }
 
     @Test
@@ -200,12 +207,12 @@ class PlaybackOutboxRepositoryImplTest {
         repository.enqueueStop("item-1", "s1", 300L)
 
         val pending = repository.drain()
-        // START, PROGRESS (coalesced), STOP — order preserved by createdAt.
-        assertEquals(3, pending.size)
+        // START, STOP — the STOP supersedes (deletes) the coalesced PROGRESS,
+        // so it does not survive to the drain. Order preserved by createdAt.
+        assertEquals(2, pending.size)
         assertEquals(PlaybackOutboxEventType.START, pending[0].eventType)
-        assertEquals(PlaybackOutboxEventType.PROGRESS, pending[1].eventType)
-        assertEquals(200L, pending[1].positionTicks) // latest progress won
-        assertEquals(PlaybackOutboxEventType.STOP, pending[2].eventType)
+        assertEquals(PlaybackOutboxEventType.STOP, pending[1].eventType)
+        assertEquals(300L, pending[1].positionTicks) // the STOP's final position
     }
 
     @Test
@@ -276,5 +283,30 @@ class PlaybackOutboxRepositoryImplTest {
         val byItem = pending.associateBy { it.itemId }
         assertEquals(PlaybackOutboxEventType.PLAYED, byItem["item-1"]?.eventType)
         assertEquals(PlaybackOutboxEventType.UNPLAYED, byItem["item-2"]?.eventType)
+    }
+
+    // ── Dead-letter (exhausted retry budget) ──────────────────────────
+
+    @Test
+    fun `enqueueProgress after a dead-lettered PROGRESS creates a fresh live entry`() = runTest {
+        // Regression: getForItem previously omitted the deadLetter = 0 filter, so
+        // the coalesce path picked the dead row, .copy() preserved deadLetter=true,
+        // and the new live PROGRESS inherited the dead flag — silently dropped by
+        // drain and never synced. The fresh report must land as a live row.
+        repository.enqueueProgress("item-1", "s1", 100L, false, PlayMethod.DIRECT_PLAY, null)
+        val dead = repository.drain().single()
+        repository.markDeadLetter(dead.id)
+        // count()/drain() drop the dead-lettered row — no live telemetry left.
+        assertEquals(0, repository.count())
+        assertTrue(repository.drain().isEmpty())
+
+        // A subsequent PROGRESS for the same item must not adopt the dead row's
+        // flag — it must be drainable as a live entry.
+        repository.enqueueProgress("item-1", "s2", 500L, false, PlayMethod.DIRECT_PLAY, null)
+
+        val pending = repository.drain()
+        assertEquals(1, pending.size)
+        assertEquals(500L, pending[0].positionTicks)
+        assertEquals("s2", pending[0].sessionId)
     }
 }

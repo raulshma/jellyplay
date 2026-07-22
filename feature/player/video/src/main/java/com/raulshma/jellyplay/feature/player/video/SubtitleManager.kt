@@ -222,9 +222,15 @@ internal class SubtitleManager(
                     } else if (size > MAX_SUBTITLE_UPLOAD_BYTES) {
                         throw java.io.IOException("Subtitle file is too large (${size / 1024} KB). Limit is ${MAX_SUBTITLE_UPLOAD_BYTES / 1024} KB.")
                     } else {
-                        // SIZE unknown (some providers return 0 or null) — allow the
-                        // read but it will still be bounded by a real subtitle's size.
-                        readAndEncode(uri)
+                        // SIZE unknown (some providers return 0/null) — read the file
+                        // but reject it if it is genuinely empty. A 0-byte pick is
+                        // never a usable subtitle and would surface as a confusing
+                        // server error after Base64-encoding an empty string.
+                        val bytes = readBytes(uri)
+                        if (bytes.isEmpty()) {
+                            throw java.io.IOException("Selected subtitle file is empty")
+                        }
+                        android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                     }
                 }
             }.mapCatching { base64 ->
@@ -264,8 +270,12 @@ internal class SubtitleManager(
 
     /** Reads [uri] fully and Base64-encodes it (NO_WRAP). Throws on read failure. */
     private fun readAndEncode(uri: Uri): String {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw java.io.IOException("Cannot open input stream for selected subtitle")
+        val bytes = readBytes(uri)
         return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
     }
+
+    /** Reads [uri] fully into a byte array. Throws on read failure. */
+    private fun readBytes(uri: Uri): ByteArray =
+        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw java.io.IOException("Cannot open input stream for selected subtitle")
 }

@@ -187,6 +187,36 @@ class PlaybackRepositoryImplTest {
     }
 
     @Test
+    fun `getMediaSegments caches empty fallback when segments API succeeds with no segments`() = runTest {
+        coEvery { apiClient.getMediaSegments("item-1") } returns Result.success(emptyList())
+        coEvery { apiClient.getIntroTimestamps("item-1") } returns Result.success(IntroTimestamps(itemId = "item-1"))
+        coEvery { apiClient.getCreditTimestamps("item-1") } returns Result.success(CreditTimestamps(itemId = "item-1"))
+
+        repository.getMediaSegments("item-1")
+        repository.getMediaSegments("item-1")
+
+        // Success-empty is cached: the legacy endpoints are not re-hit.
+        coVerify(exactly = 1) { apiClient.getMediaSegments("item-1") }
+    }
+
+    @Test
+    fun `getMediaSegments does not cache when segments API fails so the next call retries`() = runTest {
+        // A transient network failure must not be masked as "no segments" for
+        // the cache TTL — the next call should retry the API.
+        coEvery { apiClient.getMediaSegments("item-1") } returns Result.failure(RuntimeException("network"))
+        coEvery { apiClient.getIntroTimestamps("item-1") } returns Result.success(IntroTimestamps(itemId = "item-1"))
+        coEvery { apiClient.getCreditTimestamps("item-1") } returns Result.success(CreditTimestamps(itemId = "item-1"))
+
+        val first = repository.getMediaSegments("item-1")
+        val second = repository.getMediaSegments("item-1")
+
+        assertTrue(first.isSuccess)
+        assertTrue(second.isSuccess)
+        // Not cached on failure: the API is hit again on the second call.
+        coVerify(exactly = 2) { apiClient.getMediaSegments("item-1") }
+    }
+
+    @Test
     fun `getServerUrl delegates to apiClient`() {
         every { apiClient.getServerUrl() } returns "https://test.example.com"
 
