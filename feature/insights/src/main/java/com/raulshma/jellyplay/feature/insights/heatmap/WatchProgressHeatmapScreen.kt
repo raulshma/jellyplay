@@ -249,6 +249,22 @@ fun WatchProgressHeatmapScreen(
                         Spacer(Modifier.height(8.dp))
                     }
 
+                    if (state.dailyActivities.isEmpty()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = ShapeCache.smooth8,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ) {
+                            Text(
+                                text = "No watch activity recorded for ${state.year}. Play something to start filling in your year.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+
                     YearSelector(
                         year = state.year,
                         onYearChange = { viewModel.onEvent(HeatmapEvent.SetYear(it)) },
@@ -301,6 +317,21 @@ fun WatchProgressHeatmapScreen(
                                     text = "Install the Playback Reporting plugin on your Jellyfin server for detailed heatmap data. Showing basic activity from watch history.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(12.dp),
+                                )
+                            }
+                        }
+
+                        if (state.dailyActivities.isEmpty()) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = ShapeCache.smooth8,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            ) {
+                                Text(
+                                    text = "No watch activity recorded for ${state.year}. Play something to start filling in your year.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(12.dp),
                                 )
                             }

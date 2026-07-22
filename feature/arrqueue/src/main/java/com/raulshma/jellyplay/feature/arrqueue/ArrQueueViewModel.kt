@@ -22,10 +22,14 @@ import javax.inject.Inject
  * sheet offering "Remove" vs "Blocklist & Search".
  */
 sealed interface ArrQueueAction {
-    val item: ArrQueueItem
+    val item: ArrQueueItem?
     data class Delete(override val item: ArrQueueItem) : ArrQueueAction
     data class Grab(override val item: ArrQueueItem) : ArrQueueAction
     data class Import(override val item: ArrQueueItem) : ArrQueueAction
+    /** Bulk delete: no single item; the dialog renders in bulk mode. */
+    data object BulkDelete : ArrQueueAction {
+        override val item: ArrQueueItem? = null
+    }
 }
 
 @Immutable
@@ -118,6 +122,10 @@ class ArrQueueViewModel @Inject constructor(
         _state.value = _state.value.copy(pendingAction = ArrQueueAction.Delete(item))
     }
 
+    fun showBulkDeleteDialog() {
+        _state.value = _state.value.copy(pendingAction = ArrQueueAction.BulkDelete)
+    }
+
     fun showGrabDialog(item: ArrQueueItem) {
         _state.value = _state.value.copy(pendingAction = ArrQueueAction.Grab(item))
     }
@@ -159,7 +167,7 @@ class ArrQueueViewModel @Inject constructor(
         val selected = _state.value.queue.filter { it.rowKey in _state.value.selectedIds }
         if (selected.isEmpty()) return
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
+            _state.value = _state.value.copy(actionInProgress = true, actionError = null, pendingAction = null)
             val options = ArrQueueDeleteOptions(
                 removeFromClient = true,
                 blocklist = blocklist,

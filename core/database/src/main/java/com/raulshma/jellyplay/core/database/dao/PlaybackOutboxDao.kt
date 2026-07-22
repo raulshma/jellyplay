@@ -13,19 +13,19 @@ interface PlaybackOutboxDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: PlaybackOutboxEntity)
 
-    @Query("SELECT * FROM playback_outbox WHERE itemId = :itemId ORDER BY createdAt ASC")
+    @Query("SELECT * FROM playback_outbox WHERE itemId = :itemId AND deadLetter = 0 ORDER BY createdAt ASC")
     suspend fun getForItem(itemId: String): List<PlaybackOutboxEntity>
 
-    @Query("SELECT * FROM playback_outbox ORDER BY createdAt ASC")
+    @Query("SELECT * FROM playback_outbox WHERE deadLetter = 0 ORDER BY createdAt ASC")
     suspend fun getAll(): List<PlaybackOutboxEntity>
 
-    @Query("SELECT * FROM playback_outbox ORDER BY createdAt ASC")
+    @Query("SELECT * FROM playback_outbox WHERE deadLetter = 0 ORDER BY createdAt ASC")
     fun getAllFlow(): Flow<List<PlaybackOutboxEntity>>
 
-    @Query("SELECT COUNT(*) FROM playback_outbox")
+    @Query("SELECT COUNT(*) FROM playback_outbox WHERE deadLetter = 0")
     suspend fun count(): Int
 
-    @Query("SELECT COUNT(*) FROM playback_outbox")
+    @Query("SELECT COUNT(*) FROM playback_outbox WHERE deadLetter = 0")
     fun countFlow(): Flow<Int>
 
     @Query("DELETE FROM playback_outbox WHERE id = :id")
@@ -36,6 +36,15 @@ interface PlaybackOutboxDao {
 
     @Query("DELETE FROM playback_outbox WHERE itemId = :itemId AND eventType = :eventType")
     suspend fun deleteForItemByType(itemId: String, eventType: String)
+
+    /**
+     * Flags a row as dead-lettered (retry budget exhausted) instead of
+     * deleting it. Dead-lettered rows are retained for audit / a future manual
+     * "retry sync" affordance, but excluded from [getAll]/[count]/[countFlow]
+     * so the drain skips them and the pending-count indicator still clears.
+     */
+    @Query("UPDATE playback_outbox SET deadLetter = 1 WHERE id = :id")
+    suspend fun markDeadLetter(id: String)
 
     /**
      * Deletes START/PROGRESS/STOP telemetry rows for [itemId] while leaving

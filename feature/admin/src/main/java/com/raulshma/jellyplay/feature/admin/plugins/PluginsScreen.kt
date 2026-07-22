@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -20,11 +21,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +66,13 @@ fun PluginsScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     val backgroundColor = rememberScreenBackgroundColor()
     val adaptiveInfo = LocalAdaptiveInfo.current
+
+    // Pending uninstall confirmation. Unlike the per-plugin detail screen, the
+    // list-level uninstall previously fired immediately — a destructive server
+    // operation with no chance to cancel. `rememberSaveable` so an open
+    // confirmation survives config change (rotation) rather than silently
+    // dismissing a destructive-action dialog.
+    var pendingUninstallId by rememberSaveable { mutableStateOf<String?>(null) }
 
     // TV focus-on-launch: focus the tab row once data arrives so D-pad input lands on content,
     // not the navigation drawer.
@@ -146,7 +157,7 @@ fun PluginsScreen(
                             plugins = state.installedPlugins,
                             onEnable = { viewModel.enablePlugin(it) },
                             onDisable = { viewModel.disablePlugin(it) },
-                            onUninstall = { viewModel.uninstallPlugin(it) },
+                            onUninstall = { pendingUninstallId = it },
                             onPluginClick = onPluginDetail,
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                                 start = contentPadding,
@@ -193,6 +204,32 @@ fun PluginsScreen(
                 }
             }
         }
+    }
+
+    pendingUninstallId?.let { pluginId ->
+        AlertDialog(
+            onDismissRequest = { pendingUninstallId = null },
+            title = { Text("Uninstall plugin?") },
+            text = {
+                Text(
+                    "This removes the plugin from the server. It can be reinstalled from the Catalog.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.uninstallPlugin(pluginId)
+                    pendingUninstallId = null
+                }) {
+                    Text("Uninstall")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingUninstallId = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 

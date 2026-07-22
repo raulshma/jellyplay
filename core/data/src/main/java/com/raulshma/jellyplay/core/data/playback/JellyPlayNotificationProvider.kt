@@ -97,11 +97,16 @@ class JellyPlayNotificationProvider(
 
         // Build actions using ActionFactory.createMediaAction with Player.Command constants.
         // The action factory routes them through the MediaSession's internal notification controller.
-        val rewindAction = actionFactory.createMediaAction(
+        // Rewind/Fast-Forward (COMMAND_SEEK_BACK/FORWARD) were previously used, but with no
+        // setSeekBack/ForwardIncrementMs on the player they resolved to the system's 10s/10s
+        // jumps and gave no way to skip a track from the notification, lock screen, Bluetooth
+        // headset, Wear or Android Auto. Skip-to-next/previous maps to the queue-backed
+        // seekToNext/seekToPrevious the MediaSession already exposes.
+        val previousAction = actionFactory.createMediaAction(
             mediaSession,
-            IconCompat.createWithResource(appContext, R.drawable.ic_notification_rewind),
-            "Rewind",
-            Player.COMMAND_SEEK_BACK,
+            IconCompat.createWithResource(appContext, R.drawable.ic_notification_skip_prev),
+            "Previous",
+            Player.COMMAND_SEEK_TO_PREVIOUS,
         )
         val playPauseAction = actionFactory.createMediaAction(
             mediaSession,
@@ -112,11 +117,11 @@ class JellyPlayNotificationProvider(
             if (isPlaying) "Pause" else "Play",
             Player.COMMAND_PLAY_PAUSE,
         )
-        val forwardAction = actionFactory.createMediaAction(
+        val nextAction = actionFactory.createMediaAction(
             mediaSession,
-            IconCompat.createWithResource(appContext, R.drawable.ic_notification_forward),
-            "Fast Forward",
-            Player.COMMAND_SEEK_FORWARD,
+            IconCompat.createWithResource(appContext, R.drawable.ic_notification_skip_next),
+            "Next",
+            Player.COMMAND_SEEK_TO_NEXT,
         )
         val stopAction = actionFactory.createMediaAction(
             mediaSession,
@@ -125,7 +130,7 @@ class JellyPlayNotificationProvider(
             Player.COMMAND_STOP,
         )
 
-        // Compact view: rewind, play/pause, forward
+        // Compact view: previous, play/pause, next
         val mediaStyle = MediaStyleNotificationHelper.MediaStyle(mediaSession)
             .setShowActionsInCompactView(0, 1, 2)
 
@@ -146,10 +151,10 @@ class JellyPlayNotificationProvider(
             cachedBitmap?.let { builder.setLargeIcon(it) }
         }
 
-        // Actions: rewind, play/pause, fast forward, stop
-        builder.addAction(rewindAction)
+        // Actions: previous, play/pause, next, stop
+        builder.addAction(previousAction)
         builder.addAction(playPauseAction)
-        builder.addAction(forwardAction)
+        builder.addAction(nextAction)
         builder.addAction(stopAction)
 
         return MediaNotification(NOTIFICATION_ID, builder.build())

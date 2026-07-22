@@ -16,6 +16,8 @@ sealed interface PersonDetailUiState {
     data class Success(
         val name: String,
         val filmography: List<MediaItem>,
+        val biography: String? = null,
+        val profileImageUrl: String? = null,
     ) : PersonDetailUiState
     data class Error(val message: String) : PersonDetailUiState
 }

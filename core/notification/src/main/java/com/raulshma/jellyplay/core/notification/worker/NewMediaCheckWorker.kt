@@ -27,6 +27,7 @@ import kotlinx.coroutines.sync.withPermit
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.Calendar
+import java.util.concurrent.ConcurrentHashMap
 
 @HiltWorker
 class NewMediaCheckWorker @AssistedInject constructor(
@@ -89,13 +90,20 @@ class NewMediaCheckWorker @AssistedInject constructor(
         // per-folder `delay` that serialized every fetch behind N network RTTs.
         val fetchGate = Semaphore(MAX_CONCURRENT_FOLDER_FETCHES)
 
+        // Concurrent-safe accumulator of every item id the live library reported
+        // across all enabled folders this run. Used after the fan-out to evict
+        // orphan seen_media rows (items deleted server-side) so a future re-add
+        // of the same id can re-trigger a notification instead of being muted
+        // forever by a stale row. See SeenMediaRepository.reconcileAgainstLiveItemIds.
+        val liveItemIds = ConcurrentHashMap.newKeySet<String>()
+
         val newItemsByLibrary = coroutineScope {
             enabledFolders.map { folder ->
                 async {
                     if (isStopped) return@async null
 
                     fetchGate.withPermit {
-                        fetchFolderNewItems(folder, prefs, isFirstScan)
+                        fetchFolderNewItems(folder, prefs, isFirstScan, liveItemIds)
                     }
                 }
             }.awaitAll()
@@ -103,6 +111,14 @@ class NewMediaCheckWorker @AssistedInject constructor(
 
         val thirtyDaysAgo = System.currentTimeMillis() - THIRTY_DAYS_MS
         seenMediaRepository.pruneOlderThan(thirtyDaysAgo)
+
+        // Reconcile seen_media against the live ids gathered this run. Skipped on
+        // the first scan (nothing tracked yet) and when no folder returned items
+        // (reconcileAgainstLiveItemIds treats an empty live set as "no information"
+        // to avoid a mass-delete on a transiently empty scan).
+        if (!isFirstScan && liveItemIds.isNotEmpty()) {
+            seenMediaRepository.reconcileAgainstLiveItemIds(liveItemIds)
+        }
 
         if (newItemsByLibrary.isNotEmpty()) {
             dispatcher.dispatch(newItemsByLibrary, prefs)
@@ -123,6 +139,7 @@ class NewMediaCheckWorker @AssistedInject constructor(
         folder: LibraryFolder,
         prefs: NotificationPreferences,
         isFirstScan: Boolean,
+        liveItemIds: MutableSet<String>,
     ): Pair<LibraryFolder, List<com.raulshma.jellyplay.core.model.MediaItem>>? {
         if (isStopped) return null
 
@@ -140,6 +157,11 @@ class NewMediaCheckWorker @AssistedInject constructor(
             latest
         }
         if (filtered.isEmpty()) return null
+
+        // Record the live ids this folder returned so the caller can reconcile
+        // seen_media against them. Done before the new-item filter so the
+        // reconciliation sees the full recent set, not just newly-discovered ids.
+        liveItemIds.addAll(filtered.map { it.id })
 
         val itemIds = filtered.map { it.id }
         val seenIds = seenMediaRepository.getSeenIds(itemIds)

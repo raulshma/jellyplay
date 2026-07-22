@@ -36,9 +36,12 @@ class PersonDetailViewModel @Inject constructor(
                 val itemsResult = itemsDeferred.await()
 
                 _uiState.value = if (detailResult.isSuccess && itemsResult.isSuccess) {
+                    val detail = detailResult.getOrThrow().item
                     PersonDetailUiState.Success(
-                        name = detailResult.getOrThrow().item.name,
+                        name = detail.name,
                         filmography = itemsResult.getOrThrow(),
+                        biography = detail.overview?.takeIf { it.isNotBlank() },
+                        profileImageUrl = imageUrlProvider.getImageUrl(personId).takeIf { it.isNotBlank() },
                     )
                 } else {
                     val detailError = detailResult.exceptionOrNull()?.message

@@ -2353,7 +2353,7 @@ class UserPreferencesStore @Inject constructor(
         dataStore.edit { it[Keys.LIBRARY_VIEW_MODE] = mode.name }
     }
 
-    suspend fun restorePreferences(prefs: UserPreferences) {
+    suspend fun restorePreferences(prefs: UserPreferences, restoreSecuritySensitive: Boolean = true) {
         val json = ENCODE_DEFAULTS_JSON
         dataStore.edit { settings ->
             settings[Keys.PREFERRED_PLAYER] = prefs.preferredPlayer.name
@@ -2380,10 +2380,17 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.PLAYBACK_MODE] = prefs.playbackMode.name
             settings[Keys.MAX_CACHE_SIZE_MB] = prefs.maxCacheSizeMb
             settings[Keys.AUTO_DELETE_CACHE] = prefs.autoDeleteCache
-            settings[Keys.PIN_LOCK_ENABLED] = prefs.pinLockEnabled
-            prefs.pinHash?.let { settings[Keys.PIN_HASH] = it }
-            settings[Keys.BIOMETRIC_LOCK_ENABLED] = prefs.biometricLockEnabled
-            settings[Keys.AUTO_LOCK_TIMER_MS] = prefs.autoLockTimerMs
+            // Security-sensitive fields (PIN hash, biometric lock, player lock,
+            // auto-lock timer) are only restored when explicitly opted in. An
+            // imported backup otherwise silently replaces the device's lock
+            // config — a footgun when the backup came from another device.
+            if (restoreSecuritySensitive) {
+                settings[Keys.PIN_LOCK_ENABLED] = prefs.pinLockEnabled
+                prefs.pinHash?.let { settings[Keys.PIN_HASH] = it }
+                settings[Keys.BIOMETRIC_LOCK_ENABLED] = prefs.biometricLockEnabled
+                settings[Keys.USE_PIN_FOR_PLAYER_LOCK] = prefs.usePinForPlayerLock
+                settings[Keys.AUTO_LOCK_TIMER_MS] = prefs.autoLockTimerMs
+            }
             settings[Keys.DIALOGUE_BOOST_ENABLED] = prefs.dialogueBoostEnabled
             settings[Keys.DIALOGUE_BOOST_STRENGTH] = prefs.dialogueBoostStrength.name
             settings[Keys.EQUALIZER_ENABLED] = prefs.equalizerEnabled

@@ -58,11 +58,15 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
             stopSelf()
             return
         }
-        if (player.playbackState != Player.STATE_IDLE && player.playbackState != Player.STATE_ENDED) {
+        // Keep background audio alive only while actually playing. If the user
+        // swipes the app away while paused (or buffering/idle/ended), release
+        // the player + wake lock so they don't leak via a lingering ongoing
+        // notification. Mirrors Spotify/Apple/Google Music behaviour.
+        if (!player.isPlaying) {
+            audioPlaybackManager.stopAndRelease()
+            stopSelf()
             return
         }
-        audioPlaybackManager.stopAndRelease()
-        stopSelf()
     }
 
     override fun onDestroy() {

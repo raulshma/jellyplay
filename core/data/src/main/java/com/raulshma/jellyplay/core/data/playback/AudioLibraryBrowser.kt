@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -261,7 +262,7 @@ class AudioLibraryBrowser(
 
     private fun mapArtistToMediaItem(artist: com.raulshma.jellyplay.core.model.MediaItem): MediaItem {
         val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(artist.id, maxWidth = 600))
+            Uri.parse(playbackRepository.getImageUrl(artist.id, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH))
         } catch (_: Exception) {
             null
         }
@@ -281,7 +282,7 @@ class AudioLibraryBrowser(
 
     private fun mapAlbumToMediaItem(album: com.raulshma.jellyplay.core.model.MediaItem): MediaItem {
         val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(album.id, maxWidth = 600))
+            Uri.parse(playbackRepository.getImageUrl(album.id, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH))
         } catch (_: Exception) {
             null
         }
@@ -302,7 +303,7 @@ class AudioLibraryBrowser(
 
     private fun mapPlaylistToMediaItem(playlist: com.raulshma.jellyplay.core.model.Playlist): MediaItem {
         val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(playlist.id, maxWidth = 600))
+            Uri.parse(playbackRepository.getImageUrl(playlist.id, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH))
         } catch (_: Exception) {
             null
         }
@@ -322,7 +323,7 @@ class AudioLibraryBrowser(
 
     private fun mapTrackToPlayableMediaItem(track: com.raulshma.jellyplay.core.model.MediaItem): MediaItem {
         val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(track.id, maxWidth = 600))
+            Uri.parse(playbackRepository.getImageUrl(track.id, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH))
         } catch (_: Exception) {
             null
         }
@@ -344,7 +345,7 @@ class AudioLibraryBrowser(
 
     private fun mapPlaylistItemToPlayableMediaItem(pi: com.raulshma.jellyplay.core.model.PlaylistItem): MediaItem {
         val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(pi.id, maxWidth = 600))
+            Uri.parse(playbackRepository.getImageUrl(pi.id, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH))
         } catch (_: Exception) {
             null
         }
@@ -366,7 +367,7 @@ class AudioLibraryBrowser(
 
     private fun mapDownloadToPlayableMediaItem(dl: com.raulshma.jellyplay.core.model.DownloadItem): MediaItem {
         val artUri = try {
-            Uri.parse(playbackRepository.getImageUrl(dl.mediaItemId, maxWidth = 600))
+            Uri.parse(playbackRepository.getImageUrl(dl.mediaItemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH))
         } catch (_: Exception) {
             null
         }
@@ -399,7 +400,7 @@ class AudioLibraryBrowser(
             val artist = detail?.item?.albumArtist ?: detail?.item?.artistItems?.firstOrNull()?.name ?: ""
             val album = detail?.item?.album ?: ""
             val artUri = try {
-                Uri.parse(playbackRepository.getImageUrl(itemId, maxWidth = 600))
+                Uri.parse(playbackRepository.getImageUrl(itemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH))
             } catch (_: Exception) {
                 null
             }
@@ -431,7 +432,7 @@ class AudioLibraryBrowser(
             maxBitrate = maxBitrate,
             useAudioEndpoint = false,
         )
-        val artUri = Uri.parse(playbackRepository.getImageUrl(itemId, maxWidth = 600))
+        val artUri = Uri.parse(playbackRepository.getImageUrl(itemId, maxWidth = ImageUrlProvider.MUSIC_MAX_WIDTH))
         return MediaItem.Builder()
             .setMediaId(itemId)
             .setUri(url)

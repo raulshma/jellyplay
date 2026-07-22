@@ -276,8 +276,15 @@ fun OnboardingScreen(
                 OnboardingBottomBar(
                     pagerState = pagerState,
                     onSkip = {
+                        // Skip now jumps to the review/finish step (CompletionStep)
+                        // instead of instantly completing — see OnboardingViewModel
+                        // .skipOnboarding. Animate the pager there and let the user
+                        // confirm via "Start Watching"; do NOT call onComplete() here
+                        // or an accidental Skip permanently dismisses the wizard.
                         viewModel.skipOnboarding()
-                        onComplete()
+                        scope.launch {
+                            pagerState.animateScrollToPage(OnboardingStep.count - 1)
+                        }
                     },
                     onNext = {
                         scope.launch {

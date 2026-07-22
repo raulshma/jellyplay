@@ -1,6 +1,9 @@
 <resources>
     <string name="app_name">JellyPlay</string>
     <string name="open_app_description">Open %1$s</string>
+    <string name="tile_paused_label">Paused: %1$s</string>
+    <string name="tile_playing_cd">Playing</string>
+    <string name="tile_paused_cd">Paused</string>
 
     <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
     <string name="press_back_again_to_exit">Press back again to exit</string>

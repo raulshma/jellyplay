@@ -219,8 +219,20 @@ class SyncPlayViewModel @Inject constructor(
                     }
                     is SyncPlayEvent.GroupUpdate -> {
                         if (event.groupName.isBlank() && event.participantCount == 0) {
-                            _uiState.update { it.copy(isInGroup = false, currentGroup = null) }
-                            commandJob?.cancel()
+                            // An empty GroupUpdate normally means the server ejected us.
+                            // But the server can emit a transient empty update right after
+                            // a WebSocket reconnect (before membership is re-asserted); in
+                            // that window treat it as a soft signal and re-confirm via the
+                            // live group info rather than flipping to "left".
+                            val lastReconnect = syncPlayManager.lastReconnectMs
+                            val recentlyReconnected = lastReconnect > 0L &&
+                                System.currentTimeMillis() - lastReconnect < RECONNECT_GRACE_MS
+                            if (recentlyReconnected) {
+                                loadCurrentGroup()
+                            } else {
+                                _uiState.update { it.copy(isInGroup = false, currentGroup = null) }
+                                commandJob?.cancel()
+                            }
                         } else {
                             loadCurrentGroup()
                         }
@@ -297,5 +309,13 @@ class SyncPlayViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         commandJob?.cancel()
+    }
+
+    companion object {
+        /**
+         * Window after a WebSocket reconnect during which an empty GroupUpdate is
+         * treated as a transient server hiccup rather than an ejection.
+         */
+        private const val RECONNECT_GRACE_MS = 5_000L
     }
 }

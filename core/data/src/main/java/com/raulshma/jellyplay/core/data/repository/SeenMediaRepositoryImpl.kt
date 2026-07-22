@@ -63,4 +63,22 @@ class SeenMediaRepositoryImpl @Inject constructor(
     override suspend fun pruneOlderThan(cutoffEpochMs: Long) {
         seenMediaDao.pruneOlderThan(cutoffEpochMs)
     }
+
+    override suspend fun reconcileAgainstLiveItemIds(liveItemIds: Set<String>): Int {
+        // A reconcile against an empty live set would wipe the table; treat that
+        // as "no information" rather than "everything deleted" so a transient
+        // empty scan (e.g. a folder that failed to load) cannot mass-delete.
+        if (liveItemIds.isEmpty()) return 0
+        val allSeen = seenMediaDao.getAllSeenItemIds()
+        if (allSeen.isEmpty()) return 0
+        // Orphan = a tracked id the library no longer returns. Chunked to respect
+        // SQLite's 999 bound-parameter ceiling (same ceiling getSeenIds honours).
+        val orphans = (allSeen.toSet() - liveItemIds)
+        if (orphans.isEmpty()) return 0
+        var removed = 0
+        for (chunk in orphans.chunked(SEEN_IDS_QUERY_CHUNK_SIZE)) {
+            removed += seenMediaDao.deleteByItemIds(chunk)
+        }
+        return removed
+    }
 }

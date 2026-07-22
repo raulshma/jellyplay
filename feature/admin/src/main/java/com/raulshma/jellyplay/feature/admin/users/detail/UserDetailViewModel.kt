@@ -204,8 +204,18 @@ class UserDetailViewModel @Inject constructor(
         val id = userId
         launch {
             apiClient.deleteUser(id)
-            _uiState.update { it.copy(showDeleteDialog = false) }
-            onDone()
+                .onSuccess {
+                    _uiState.update { it.copy(showDeleteDialog = false) }
+                    onDone()
+                }
+                .onFailure { e ->
+                    Log.e("UserDetail", "deleteUser failed", e)
+                    // Stay on the detail screen so the user sees the failure
+                    // (the list reload would otherwise still show the user).
+                    _uiState.update {
+                        it.copy(showDeleteDialog = false, saveError = e.message)
+                    }
+                }
         }
     }
 

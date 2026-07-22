@@ -43,6 +43,7 @@ class LiveTvPlayerViewModelTest {
     private lateinit var engineFactory: LiveEngineFactory
     private lateinit var fakeEngine: LivePlayerEngine
     private lateinit var imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+    private lateinit var appContext: android.content.Context
 
     private val capturedRequests = mutableListOf<LivePlaybackRequest>()
     private val preferencesFlow = MutableStateFlow(UserPreferences())
@@ -57,6 +58,10 @@ class LiveTvPlayerViewModelTest {
         engineFactory = mockk(relaxed = true)
         fakeEngine = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
+        // Relaxed Context mock: getSystemService returns null so the
+        // becoming-noisy/audio-focus registration no-ops cleanly under unit test.
+        appContext = mockk(relaxed = true)
+        every { appContext.getSystemService(any<String>()) } returns null
 
         every { lastChannelStore.observeLastChannelId() } returns flowOf(null)
         every { prefs.preferences } returns preferencesFlow
@@ -364,6 +369,7 @@ class LiveTvPlayerViewModelTest {
     }
 
     private fun createVm(): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
+        context = appContext,
         mediaRepository = liveTvRepo,
         playbackRepository = playbackRepo,
         userPreferencesStore = prefs,

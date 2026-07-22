@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManager
+import com.raulshma.jellyplay.core.notification.receiver.NotificationActionReceiver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -74,7 +75,7 @@ class NotificationDispatcher @Inject constructor(
 
         items.forEachIndexed { index, item ->
             val notificationId = notificationIdFor(library.id, index)
-            val notification = buildItemNotification(item, channelId, groupId, notificationId)
+            val notification = buildItemNotification(item, library.id, channelId, groupId, notificationId)
             notificationManager.notify(notificationId, notification)
         }
 
@@ -127,6 +128,7 @@ class NotificationDispatcher @Inject constructor(
 
     private fun buildItemNotification(
         item: MediaItem,
+        libraryId: String,
         channelId: String,
         groupId: String,
         notificationId: Int,
@@ -138,6 +140,37 @@ class NotificationDispatcher @Inject constructor(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 setPackage(context.packageName)
             },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        // "Mark as seen" silences this item without launching the app. Wired to
+        // NotificationActionReceiver which records the seen-media row and dismisses
+        // the notification. Uses a distinct PendingIntent request code per item so
+        // each notification carries its own itemId/libraryId/mediaType extras.
+        val markSeenIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_MARK_SEEN
+            putExtra(NotificationActionReceiver.EXTRA_ITEM_ID, item.id)
+            putExtra(NotificationActionReceiver.EXTRA_LIBRARY_ID, libraryId)
+            putExtra(NotificationActionReceiver.EXTRA_MEDIA_TYPE, item.mediaType.name)
+        }
+        val markSeenPendingIntent = PendingIntent.getBroadcast(
+            context,
+            notificationId,
+            markSeenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        // "Open" mirrors the content intent but goes through the action receiver's
+        // ACTION_OPEN_DETAIL path for consistency (and so the action is explicit on
+        // wearables / Android Auto where content taps are not always available).
+        val openIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_OPEN_DETAIL
+            putExtra(NotificationActionReceiver.EXTRA_ITEM_ID, item.id)
+        }
+        val openPendingIntent = PendingIntent.getBroadcast(
+            context,
+            notificationId + OPEN_ACTION_REQUEST_CODE_OFFSET,
+            openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -153,6 +186,16 @@ class NotificationDispatcher @Inject constructor(
             .setContentText(subText)
             .setGroup(groupId)
             .setContentIntent(contentIntent)
+            .addAction(
+                com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small,
+                ACTION_LABEL_MARK_SEEN,
+                markSeenPendingIntent,
+            )
+            .addAction(
+                com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small,
+                ACTION_LABEL_OPEN,
+                openPendingIntent,
+            )
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setDefaults(0)
@@ -163,6 +206,17 @@ class NotificationDispatcher @Inject constructor(
         private const val GROUP_GLOBAL = "new_media_global"
         private const val NOTIFICATION_ID_GLOBAL = 5000
         private const val NOTIFICATION_ID_BASE = 5001
+
+        // User-facing labels for the per-item notification action buttons. Kept as
+        // literals (matching the rest of this dispatcher, which builds all visible
+        // strings inline) rather than introducing a strings.xml in core:notification.
+        private const val ACTION_LABEL_MARK_SEEN = "Mark as seen"
+        private const val ACTION_LABEL_OPEN = "Open"
+
+        // Offset applied to a notification id to derive a distinct PendingIntent
+        // request code for the Open action, so it never collides with the
+        // Mark-seen action (or the content intent) for the same item.
+        private const val OPEN_ACTION_REQUEST_CODE_OFFSET = 100_000
 
         // Per-library ID slots. Giving each library a dedicated block of IDs avoids
         // cross-library collisions (the previous scheme added the library hash directly

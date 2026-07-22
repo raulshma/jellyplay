@@ -97,7 +97,16 @@ internal fun rememberHeroController(
 
     LaunchedEffect(showSurprise) {
         if (showSurprise && featuredCandidates.isNotEmpty()) {
-            featuredIndex = (0 until featuredCandidates.size).random()
+            // Exclude the currently-displayed hero from the candidate pool so a
+            // "Surprise Me" tap always produces a visible change. With a small
+            // pool (e.g. N=3 from LATEST_MEDIA) the naive pick had a 1/N chance
+            // of re-selecting the same item, making the feature appear to no-op.
+            val previousIndex = featuredIndex
+            featuredIndex = if (featuredCandidates.size > 1) {
+                (0 until featuredCandidates.size).filter { it != previousIndex }.random()
+            } else {
+                0
+            }
             autoRotateEnabled = false
         }
     }

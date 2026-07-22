@@ -75,6 +75,10 @@ fun NextEpisodeOverlay(
     onPlayNext: () -> Unit,
     onCancel: () -> Unit,
     isPlaying: Boolean,
+    // Pauses the auto-play countdown while a settings sheet is open or the player
+    // is locked, so the user isn't rushed out of a menu (or surprised by an
+    // auto-advance they couldn't cancel on a locked screen).
+    pauseCountdown: Boolean = false,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
 ) {
@@ -96,8 +100,8 @@ fun NextEpisodeOverlay(
         }
     }
 
-    LaunchedEffect(isVisible, countdown, dismissed, isPlaying, autoplayEnabled) {
-        if (isVisible && !dismissed && isPlaying && autoplayEnabled) {
+    LaunchedEffect(isVisible, countdown, dismissed, isPlaying, autoplayEnabled, pauseCountdown) {
+        if (isVisible && !dismissed && isPlaying && autoplayEnabled && !pauseCountdown) {
             if (countdown > 0) {
                 kotlinx.coroutines.delay(1000)
                 countdown--

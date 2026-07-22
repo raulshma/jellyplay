@@ -63,6 +63,17 @@ class MpvPlayerEngine(
         private const val MPV_END_FILE_REASON_QUIT = 2
         private const val MPV_END_FILE_REASON_ERROR = 3
         private const val MPV_END_FILE_REASON_REDIRECT = 4
+        // mpv_error codes carried by the END_FILE node's `error` field — see
+        // mpv client.h. A network/source load failure surfaces as
+        // MPV_ERROR_LOADING_FAILED; decoder/output/format init failures are
+        // fatal on the same engine. Used by [mapMpvError].
+        private const val MPV_ERROR_LOADING_FAILED = -13
+        private const val MPV_ERROR_AO_INIT_FAILED = -14
+        private const val MPV_ERROR_VO_INIT_FAILED = -15
+        private const val MPV_ERROR_NOTHING_TO_PLAY = -16
+        private const val MPV_ERROR_UNKNOWN_FORMAT = -17
+        private const val MPV_ERROR_UNSUPPORTED = -18
+        private const val MPV_ERROR_NOT_IMPLEMENTED = -19
         private val MPV_SUBTITLE_LOG_PATTERN =
             Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream)")
         private val REDACT_API_KEY = Regex("(?i)(api_key=)[^&\\s]+")
@@ -1090,10 +1101,65 @@ class MpvPlayerEngine(
             }
             MPV_END_FILE_REASON_ERROR -> {
                 _playbackState.value = EnginePlaybackState.ERROR
-                _errorFlow.tryEmit(EngineError.Unknown("Playback error (mpv): ${errorCode ?: "unknown"}"))
+                _errorFlow.tryEmit(mapMpvError(errorCode))
             }
             // STOP / QUIT / null — ignore: not end-of-content.
             else -> {}
+        }
+    }
+
+    /**
+     * Map an mpv END_FILE `error` string onto the [EngineError] taxonomy so the
+     * UI can offer the right affordance. The node carries an `mpv_error` int,
+     * but the binding exposes it as a string; [mapMpvError] tolerates both the
+     * numeric form ("-13") and a descriptive string (e.g. "loading_failed",
+     * "ao_init_failed", or a raw network message).
+     *
+     * Mirrors ExoPlayer's [PlaybackException.toEngineError]: a load/source
+     * failure maps to a retryable [EngineError.Network] (transient mpv network
+     * drops, HTTP timeouts, server-closed transcodes), while decoder/init/format
+     * failures map to [EngineError.Decoder] (not retryable on the same engine).
+     * Unknown errors stay non-retryable [EngineError.Unknown].
+     */
+    private fun mapMpvError(errorCode: String?): EngineError {
+        if (errorCode.isNullOrBlank()) return EngineError.Unknown("Playback error (mpv): unknown")
+        val raw = "Playback error (mpv): $errorCode"
+        val numeric = errorCode.toIntOrNull()
+        val textual = errorCode.lowercase()
+        // Numeric mpv_error path — the documented END_FILE contract.
+        if (numeric != null) {
+            return when (numeric) {
+                // Load / source failures — transient, retryable.
+                MPV_ERROR_LOADING_FAILED -> EngineError.Network(null)
+                // Decoder / output / format init — fatal on same engine.
+                MPV_ERROR_AO_INIT_FAILED,
+                MPV_ERROR_VO_INIT_FAILED,
+                MPV_ERROR_NOTHING_TO_PLAY,
+                MPV_ERROR_UNKNOWN_FORMAT,
+                MPV_ERROR_UNSUPPORTED,
+                MPV_ERROR_NOT_IMPLEMENTED,
+                -> EngineError.Decoder(codec = null, cause = null)
+                else -> EngineError.Unknown(raw)
+            }
+        }
+        // Descriptive-string fallback: some bindings surface the error name or
+        // a network message rather than the numeric code. Match keywords so we
+        // still recover the retry affordance for transient drops.
+        return when {
+            "loading_failed" in textual ||
+                "network" in textual ||
+                "connection" in textual ||
+                "timeout" in textual ||
+                "protocol" in textual ||
+                "http" in textual ||
+                "stream" in textual -> EngineError.Network(null)
+            "ao_init" in textual ||
+                "vo_init" in textual ||
+                "format" in textual ||
+                "unsupported" in textual ||
+                "decoder" in textual ||
+                "codec" in textual -> EngineError.Decoder(codec = null, cause = null)
+            else -> EngineError.Unknown(raw)
         }
     }
 
