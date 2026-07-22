@@ -131,6 +131,17 @@ class HomeViewModel @Inject constructor(
          * spinners spinning until the app is restarted.
          */
         private const val GOING_ONLINE_TIMEOUT_MS = 30_000L
+
+        /**
+         * How long the offline→online fetch will wait for the playback outbox
+         * to drain before fetching Continue Watching / Next Up. The drain
+         * (PlaybackSyncWorker) replays offline marks to the server; if we fetch
+         * before it completes, CW can still list items the user just marked
+         * unplayed. The drain is usually near-instant on reconnect, so this is a
+         * short cap — on timeout we fetch anyway (the next periodic refresh or
+         * pull-to-refresh re-syncs).
+         */
+        private const val OUTBOX_DRAIN_WAIT_MS = 8_000L
     }
 
     private val _uiState = stateFlow(HomeUiState())
@@ -392,11 +403,20 @@ class HomeViewModel @Inject constructor(
                         // the user had to restart the app to recover.
                         _uiState.update { it.copy(isLoading = true) }
                         try {
+                            // Let the playback outbox drain before fetching so
+                            // Continue Watching / Next Up reflect the server's
+                            // post-sync state. Without this the fetch can race
+                            // the drain: CW would still list an episode the user
+                            // marked unplayed offline, because the server hasn't
+                            // processed the mark yet. The drain is fast on
+                            // reconnect; on timeout we fetch anyway and the next
+                            // periodic refresh / pull-to-refresh re-syncs.
+                            awaitOutboxDrained()
                             // Cap the post-toggle fetch so a hung network call
                             // cannot leave isGoingOnline (and isLoading) stuck
                             // on — the symptom was the Go Online button + app
-                            // bar spinners never clearing. On timeout we drop
-                            // the result; a normal refresh/pull-to-refresh can
+                            // bar spinners never clearing. On timeout we drop the
+                            // result; a normal refresh/pull-to-refresh can
                             // still repopulate sections once the network
                             // recovers. isLoading is force-cleared below.
                             withTimeoutOrNull(GOING_ONLINE_TIMEOUT_MS) {
@@ -735,6 +755,22 @@ class HomeViewModel @Inject constructor(
         if (visible) disabled.remove(type) else disabled.add(type)
         if (disabled.isEmpty()) current.remove(libraryId) else current[libraryId] = disabled
         preferencesEditor.setLibraryHomeSectionOverrides(current)
+    }
+
+    /**
+     * Waits for the playback outbox to drain (count reaches 0) so the server
+     * has processed offline watched/unwatched marks before a home-section fetch
+     * reads Continue Watching / Next Up. Returns immediately when nothing is
+     * pending; on [OUTBOX_DRAIN_WAIT_MS] timeout it returns regardless so the
+     * fetch proceeds (a later periodic refresh re-syncs). Dead-lettered entries
+     * are excluded from the count, so a persistently-undeliverable mark won't
+     * stall the wait indefinitely.
+     */
+    private suspend fun awaitOutboxDrained() {
+        if (playbackOutboxRepository.count() == 0) return
+        withTimeoutOrNull(OUTBOX_DRAIN_WAIT_MS) {
+            playbackOutboxRepository.countFlow().first { it == 0 }
+        }
     }
 
     private suspend fun fetchAndUpdateSections() {
