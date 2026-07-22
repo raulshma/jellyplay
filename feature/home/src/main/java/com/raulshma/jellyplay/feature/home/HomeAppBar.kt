@@ -337,16 +337,24 @@ private fun SyncStatusIcon(
     onClick: () -> Unit,
 ) {
     val syncFocusState = rememberTvFocusState()
+    // The draining rotation only applies while isDraining. When the icon is
+    // shown offline with queued events (isDraining = false), the icon is
+    // visually static, so gate the sole infinite-transition child on it. An
+    // InfiniteTransition with no children stops its frame clock, eliminating a
+    // continuous ~60Hz recomposition of this composable while idle — the same
+    // gating pattern used for the hero pulse animations (HomeHero.kt).
     val infiniteTransition = rememberInfiniteTransition(label = "sync_draining")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1_200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "sync_draining_rotation",
-    )
+    val rotation by if (isDraining) {
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1_200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "sync_draining_rotation",
+        )
+    } else androidx.compose.runtime.mutableStateOf(0f)
     val contentDescription = stringResource(
         R.string.sync_icon_content_description,
         pendingCount,
