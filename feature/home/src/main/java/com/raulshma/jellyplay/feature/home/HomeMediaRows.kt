@@ -22,9 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.DotsVertical
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
@@ -604,20 +601,7 @@ private fun HomeSectionTitle(
             style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
             else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
         )
-        // Visible affordance for the long-press "customize section" action on
-        // touch devices. On TV the D-pad focus ring is the cue, so the icon is
-        // hidden there. Without this, the only path to section config is an
-        // undiscoverable long-press on the title.
-        if (!isTv && onLongClick != null) {
-            Icon(
-                imageVector = Tabler.Outline.DotsVertical,
-                contentDescription = null,
-                modifier = Modifier.padding(start = 4.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 
