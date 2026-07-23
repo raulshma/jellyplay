@@ -95,6 +95,42 @@ class OfflineSeriesViewModel @Inject constructor(
         launch { offlineRepository.deleteOfflineItem(episodeId) }
     }
 
+    /**
+     * Deletes a batch of downloaded episodes. Used by the multi-select delete
+     * sheet: if the selection covers an entire season, [deleteSeason] is used
+     * (one DB transaction + parallel artifact cleanup) so fully-selected seasons
+     * are pruned efficiently rather than one episode at a time; the remaining
+     * partial-season selections fall back to per-episode [deleteEpisode].
+     */
+    fun deleteEpisodes(episodeIds: Collection<String>) {
+        if (episodeIds.isEmpty()) return
+        val targets = episodeIds.toSet()
+        // Snapshot episodes once to classify whole-season vs partial selections.
+        val currentEpisodes = episodes.value
+        val currentSeasons = seasons.value
+        launch {
+            // For each season where every downloaded episode is selected, drop
+            // the season in one call; otherwise delete the selected episodes
+            // individually. This keeps whole-season deletes a single transaction.
+            val remainingEpisodeIds = mutableSetOf<String>()
+            currentSeasons.forEach { season ->
+                val seasonEpisodeIds = currentEpisodes[season.id].orEmpty().map { it.id }.toSet()
+                if (seasonEpisodeIds.isNotEmpty() && seasonEpisodeIds.all { it in targets }) {
+                    offlineRepository.deleteOfflineSeason(season.id)
+                } else {
+                    seasonEpisodeIds.filter { it in targets }.forEach { remainingEpisodeIds.add(it) }
+                }
+            }
+            // Any selected id not seen under a known season (defensive) — delete
+            // it directly so the selection is honored even if the seasons list
+            // changed between the sheet snapshot and this call.
+            targets
+                .filter { it !in currentEpisodes.values.flatten().map { e -> e.id } }
+                .forEach { remainingEpisodeIds.add(it) }
+            remainingEpisodeIds.forEach { offlineRepository.deleteOfflineItem(it) }
+        }
+    }
+
     fun deleteSeason(seasonId: String) {
         launch { offlineRepository.deleteOfflineSeason(seasonId) }
     }

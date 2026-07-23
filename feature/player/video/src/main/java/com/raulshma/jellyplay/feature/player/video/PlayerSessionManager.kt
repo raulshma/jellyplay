@@ -81,7 +81,30 @@ class PlayerSessionManager(
 
     private var lastPlaybackRequest: PlaybackRequest? = null
     private var lastPlayerType: PlayerType? = null
-    
+
+    /**
+     * Builds the secondary line shown beneath the episode title in the player
+     * chrome. For a series episode this renders the show name followed by the
+     * season/episode marker in `SXXEXX` form (e.g. "The Show · S01E05"). When
+     * neither a series name nor season/episode data is available, falls back
+     * to a trimmed overview — preserving the historical behaviour for movies
+     * and other non-episodic items.
+     */
+    private fun buildEpisodeSubtitle(
+        seriesName: String?,
+        overview: String?,
+        seasonNumber: Int?,
+        episodeNumber: Int?,
+    ): String = buildString {
+        val hasSeries = !seriesName.isNullOrBlank()
+        if (hasSeries) append(seriesName)
+        if (seasonNumber != null && episodeNumber != null) {
+            if (isNotEmpty()) append(" \u00B7 ")
+            append("S${seasonNumber}E${episodeNumber}")
+        }
+        if (isEmpty()) append(overview?.take(60) ?: "")
+    }
+
     fun bindReclaimedEngine(engine: MediaEngine, itemId: String, detail: MediaDetail) {
         _engine.value = engine
         playerLifecycleManager.activeCallbacks = engine
@@ -92,7 +115,12 @@ class PlayerSessionManager(
                 currentItemId = itemId,
                 mediaDetail = detail,
                 title = detail.item.name,
-                subtitle = detail.item.seriesName ?: (detail.item.overview?.take(60) ?: ""),
+                subtitle = buildEpisodeSubtitle(
+                    seriesName = detail.item.seriesName,
+                    overview = detail.item.overview,
+                    seasonNumber = detail.item.seasonNumber,
+                    episodeNumber = detail.item.episodeNumber,
+                ),
                 isReady = true
             )
         }
@@ -162,7 +190,12 @@ class PlayerSessionManager(
 
         val offlineItem = offlineRepository.getOfflineItem(itemId)
         val title = offlineItem?.name ?: download?.name ?: itemId
-        val subtitle = offlineItem?.seriesName ?: offlineItem?.overview?.take(60) ?: ""
+        val subtitle = buildEpisodeSubtitle(
+            seriesName = offlineItem?.seriesName,
+            overview = offlineItem?.overview,
+            seasonNumber = offlineItem?.seasonNumber,
+            episodeNumber = offlineItem?.episodeNumber,
+        )
         val url = Uri.fromFile(localFile).toString()
 
         var runTimeTicks = offlineItem?.runTimeTicks
@@ -294,7 +327,12 @@ class PlayerSessionManager(
         _sessionState.update {
             it.copy(
                 title = detail.item.name,
-                subtitle = detail.item.seriesName ?: (detail.item.overview?.take(60) ?: ""),
+                subtitle = buildEpisodeSubtitle(
+                    seriesName = detail.item.seriesName,
+                    overview = detail.item.overview,
+                    seasonNumber = detail.item.seasonNumber,
+                    episodeNumber = detail.item.episodeNumber,
+                ),
                 mediaDetail = detail,
                 currentMediaSource = source,
                 mediaStreams = streams,
