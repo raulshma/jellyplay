@@ -35,9 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -76,42 +74,11 @@ fun SeriesDownloadSheet(
 ) {
     val selection = rememberSeriesDownloadSelection(seasons, episodes, downloadedEpisodeIds)
     var expandedSeasonId by remember { mutableStateOf<String?>(null) }
-    // Whole-season selections requested while a season's episode list was still
-    // loading. Pair of <seasonId, markSelectAll>; once episodes arrive we apply
-    // the pending selection (and clear the entry). Lets the user pick a whole
-    // season from the collapsed checkbox without first expanding it.
-    val pendingSeasonSelections = remember { mutableStateListOf<Pair<String, Boolean>>() }
 
     val totalSelectedCount = selection.totalSelectedCount
     val allSelected = selection.allSelected
     val allSelectableIds = selection.allSelectableIds
-    // `allSelected` is derived only from seasons whose episodes have been
-    // loaded, so it can read "true" while some seasons remain unfetched.
-    // Treat the button as Deselect-all only when every season is loaded AND
-    // every selectable episode is selected; otherwise Select-all still has
-    // work to do (loading + selecting the remaining seasons).
-    val everySeasonLoaded = seasons.all { it.id in episodes.keys }
-    val effectivelyAllSelected = allSelected && everySeasonLoaded
-
-    // Select-all that survives lazy loading: for seasons whose episodes
-    // aren't fetched yet, kick off the fetch and queue a deferred whole-season
-    // selection via the same pending mechanism the per-season checkbox uses.
-    // Without this, toggleSelectAll() reads empty selectable sets for unfetched
-    // seasons and silently selects nothing.
-    fun onSelectAllToggled() {
-        if (effectivelyAllSelected) {
-            selection.toggleSelectAll()
-            return
-        }
-        seasons.forEach { season ->
-            if (season.id in episodes.keys) {
-                selection.selectAllInSeason(season.id)
-            } else if (pendingSeasonSelections.none { it.first == season.id }) {
-                onLoadEpisodes(season.id)
-                pendingSeasonSelections.add(season.id to true)
-            }
-        }
-    }
+    val isLoading = loadingSeasons.isNotEmpty()
 
     Column(
         modifier = Modifier
@@ -166,17 +133,18 @@ fun SeriesDownloadSheet(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             FilledTonalButton(
-                onClick = { onSelectAllToggled() },
+                onClick = { selection.toggleSelectAll() },
+                enabled = !isLoading,
                 shape = ShapeCache.smoothPill,
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = if (effectivelyAllSelected) MaterialTheme.colorScheme.errorContainer
+                    containerColor = if (allSelected) MaterialTheme.colorScheme.errorContainer
                     else MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = if (effectivelyAllSelected) MaterialTheme.colorScheme.onErrorContainer
+                    contentColor = if (allSelected) MaterialTheme.colorScheme.onErrorContainer
                     else MaterialTheme.colorScheme.onPrimaryContainer,
                 ),
                 modifier = Modifier.weight(1f).focusIndicator(),
             ) {
-                Text(if (effectivelyAllSelected) stringResource(R.string.detail_deselect_all) else stringResource(R.string.detail_select_all))
+                Text(if (allSelected) stringResource(R.string.detail_deselect_all) else stringResource(R.string.detail_select_all))
             }
         }
 
@@ -201,6 +169,19 @@ fun SeriesDownloadSheet(
             )
         }
 
+        // Loading indicator shown while seasons' episodes are still being
+        // eager-loaded on open. The select-all button stays disabled until this
+        // clears so toggleSelectAll() always sees the complete episode set.
+        if (loadingSeasons.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                JellyPlayLoadingIndicator(modifier = Modifier.size(28.dp))
+            }
+        }
+
         Spacer(Modifier.height(8.dp))
 
         LazyColumn(
@@ -220,45 +201,8 @@ fun SeriesDownloadSheet(
                 val selectedInSeason = selection.selectedForSeason(season.id)
                 val triState = selection.triStateForSeason(season.id, downloadedInSeason)
 
-                // Apply any whole-season selection that was requested while this
-                // season's episodes were still loading, once they arrive.
-                //
-                // Keys: season.id + a snapshot-count of pending selections for
-                // THIS season. Reading pendingSeasonSelections inside the
-                // derivedStateOf registers a snapshot read, so any add/remove
-                // re-keys this effect precisely. The previous keys (the whole
-                // pendingSeasonSelections list reference, plus the seasonEpisodes
-                // list reference) either never changed (SnapshotStateList keeps
-                // a stable identity) or changed every recompose (fresh List),
-                // so the effect could miss real mutations or fire spuriously.
-                val pendingCount = remember(season.id) {
-                    androidx.compose.runtime.derivedStateOf {
-                        pendingSeasonSelections.count { it.first == season.id }
-                    }
-                }.value
-                LaunchedEffect(season.id, pendingCount, seasonEpisodes.isNotEmpty(), isLoadingThis) {
-                    val pendingIdx = pendingSeasonSelections.indexOfFirst { it.first == season.id }
-                    if (pendingIdx >= 0 && seasonEpisodes.isNotEmpty() && !isLoadingThis) {
-                        val (_, markSelectAll) = pendingSeasonSelections.removeAt(pendingIdx)
-                        if (markSelectAll) {
-                            selection.selectAllInSeason(season.id)
-                        }
-                    }
-                }
-
                 fun onSeasonCheckboxToggle() {
-                    // If episodes aren't loaded yet, fetch them and defer the
-                    // selection until they arrive.
-                    if (season.id !in episodes.keys && seasonEpisodes.isEmpty()) {
-                        if (triState == androidx.compose.ui.state.ToggleableState.On) {
-                            // Already fully selected (e.g. all downloaded) — no-op.
-                            return
-                        }
-                        onLoadEpisodes(season.id)
-                        pendingSeasonSelections.add(season.id to true)
-                    } else {
-                        selection.toggleSeason(season.id)
-                    }
+                    selection.toggleSeason(season.id)
                 }
 
                 val seasonBgColor by animateColorAsState(
@@ -297,6 +241,7 @@ fun SeriesDownloadSheet(
                         TriStateCheckbox(
                             state = triState,
                             onClick = { onSeasonCheckboxToggle() },
+                            enabled = !isLoading,
                         )
                         Spacer(Modifier.width(4.dp))
                         Column(modifier = Modifier.weight(1f)) {

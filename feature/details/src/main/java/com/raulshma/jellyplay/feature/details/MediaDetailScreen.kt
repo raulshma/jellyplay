@@ -250,6 +250,7 @@ fun MediaDetailScreen(
                         onDownloadSeriesClick = {
                             showSeriesDownloadSheet = true
                             viewModel.loadDownloadedEpisodeIds()
+                            viewModel.prepareDownloadSheetEpisodes()
                         },
                         onToggleFavorite = { viewModel.toggleFavorite() },
                         onMarkPlayed = { viewModel.markPlayed() },

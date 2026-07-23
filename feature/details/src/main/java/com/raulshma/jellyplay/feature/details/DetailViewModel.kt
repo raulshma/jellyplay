@@ -1068,6 +1068,41 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    fun prepareDownloadSheetEpisodes() {
+        val seriesId = currentSeriesId ?: return
+        val seasons = _uiState.value.seasons
+        if (seasons.isEmpty()) return
+        val seasonIds = seasons.map { it.id }.toSet()
+
+        downloadSheetEpisodesMap.clear()
+        downloadSheetFetchedSeasonIds = emptySet()
+        _uiState.update { it.copy(downloadSheetLoadingSeasons = seasonIds) }
+
+        launch {
+            val grouped = mediaRepository.getAllEpisodesGrouped(seriesId).getOrDefault(emptyMap())
+            if (currentSeriesId != seriesId) return@launch
+            episodesMap.putAll(grouped)
+            seasons.forEach { season ->
+                downloadSheetEpisodesMap[season.id] = grouped[season.id] ?: emptyList()
+            }
+
+            val missing = seasons.filter { downloadSheetEpisodesMap[it.id].isNullOrEmpty() }
+            missing.forEach { season ->
+                mediaRepository.getEpisodes(seriesId, season.id)
+                    .onSuccess { downloadSheetEpisodesMap[season.id] = it }
+                    .onFailure { downloadSheetEpisodesMap[season.id] = emptyList() }
+            }
+
+            downloadSheetFetchedSeasonIds = seasonIds
+            _uiState.update {
+                it.copy(
+                    downloadSheetEpisodes = downloadSheetEpisodesMap.toMap(),
+                    downloadSheetLoadingSeasons = emptySet(),
+                )
+            }
+        }
+    }
+
     fun loadDownloadSheetEpisodes(seasonId: String) {
         if (seasonId in downloadSheetFetchedSeasonIds) return
         val seriesId = currentSeriesId ?: return
