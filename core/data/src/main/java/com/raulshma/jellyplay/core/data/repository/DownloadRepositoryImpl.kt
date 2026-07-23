@@ -270,6 +270,19 @@ class DownloadRepositoryImpl @Inject constructor(
         downloadDao.updateProgress(id, 0L, DownloadStatus.PENDING.name)
     }
 
+    override suspend fun resumeInterruptedDownloads() {
+        val interrupted = downloadDao.getRecoveryRowsByStatuses(
+            listOf(DownloadStatus.PAUSED.name, DownloadStatus.FAILED.name)
+        )
+        // Two-step per item (reset → enqueue), matching the established UI
+        // contract (resumeDownload → enqueueDownload). Preserve the persisted
+        // byte offset so each worker resumes rather than re-downloading from 0.
+        for (row in interrupted) {
+            downloadDao.updateProgress(row.id, row.downloadedBytes, DownloadStatus.PENDING.name)
+            enqueueDownload(row.id)
+        }
+    }
+
     override suspend fun getTotalDownloadedBytes(): Long =
         downloadDao.getTotalDownloadedBytes()
 

@@ -127,5 +127,15 @@ interface DownloadRepository {
 
     fun enqueueDownload(downloadId: String)
 
+    /**
+     * Resumes every interrupted (`PAUSED`/`FAILED`) download in a single pass:
+     * resets each to `PENDING` (preserving its resume byte offset) and re-enqueues
+     * its worker. Used by the network-reconnect path so downloads paused by a
+     * network drop resume automatically once connectivity returns, rather than
+     * staying dead-stuck (`PAUSED` is a terminal state until something flips it
+     * back to `PENDING` — `DownloadWorker.doWork` bails immediately on PAUSED).
+     */
+    suspend fun resumeInterruptedDownloads()
+
     suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit>
 }
