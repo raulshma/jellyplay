@@ -234,6 +234,9 @@ class DownloadRepositoryImpl @Inject constructor(
             entity.status == DownloadStatus.PENDING.name
         ) {
             downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.PAUSED.name)
+            // Mark as user-initiated so the reconnect auto-resume leaves it
+            // alone; only NETWORK interruptions auto-resume.
+            downloadDao.updatePausedReason(id, PAUSE_REASON_USER)
         }
     }
 
@@ -241,6 +244,10 @@ class DownloadRepositoryImpl @Inject constructor(
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
         if (entity.status == DownloadStatus.PAUSED.name || entity.status == DownloadStatus.FAILED.name) {
             downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.PENDING.name)
+            // Manual resume/retry clears both the pause reason and the
+            // auto-retry budget — the user has taken ownership of this row.
+            downloadDao.updatePausedReason(id, null)
+            downloadDao.resetRetryCount(id)
         }
     }
 
@@ -268,18 +275,40 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun retryDownload(id: String): Result<Unit> = runCatching {
         downloadDao.updateProgress(id, 0L, DownloadStatus.PENDING.name)
+        // A manual retry starts fresh — clear the auto-retry budget and reason.
+        downloadDao.updatePausedReason(id, null)
+        downloadDao.resetRetryCount(id)
     }
 
     override suspend fun resumeInterruptedDownloads() {
-        val interrupted = downloadDao.getRecoveryRowsByStatuses(
-            listOf(DownloadStatus.PAUSED.name, DownloadStatus.FAILED.name)
-        )
-        // Two-step per item (reset → enqueue), matching the established UI
-        // contract (resumeDownload → enqueueDownload). Preserve the persisted
-        // byte offset so each worker resumes rather than re-downloading from 0.
-        for (row in interrupted) {
-            downloadDao.updateProgress(row.id, row.downloadedBytes, DownloadStatus.PENDING.name)
-            enqueueDownload(row.id)
+        val candidates = try {
+            downloadDao.getInterruptedResumeRows(
+                listOf(DownloadStatus.PAUSED.name, DownloadStatus.FAILED.name)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to enumerate interrupted downloads for resume", e)
+            return
+        }
+        for (row in candidates) {
+            try {
+                // A user-paused download stays paused until the user resumes it.
+                if (row.status == DownloadStatus.PAUSED.name && row.pausedReason == PAUSE_REASON_USER) continue
+                // Exhausted the auto-retry budget — leave it FAILED for a manual
+                // retry rather than spinning on every reconnect.
+                if (row.retryCount >= MAX_AUTO_RETRY) continue
+                // A FAILED partial was deleted by cleanupStuckDownloads (multi-
+                // connection scattered writes can't be appended to), so resume
+                // FAILED rows from 0. A NETWORK-paused single-connection row has
+                // a contiguous prefix, so preserve its byte offset.
+                val startBytes = if (row.status == DownloadStatus.PAUSED.name) row.downloadedBytes else 0L
+                downloadDao.updateProgress(row.id, startBytes, DownloadStatus.PENDING.name)
+                downloadDao.updatePausedReason(row.id, null)
+                enqueueDownload(row.id)
+            } catch (e: Exception) {
+                // One bad row/enqueue must not abort the whole batch — the other
+                // interrupted downloads still resume this pass.
+                Log.w(TAG, "Failed to resume interrupted download ${row.id}", e)
+            }
         }
     }
 
@@ -1004,6 +1033,21 @@ class DownloadRepositoryImpl @Inject constructor(
         // Mirrored by DownloadRecoveryInitializer so cold-start re-enqueues
         // back off identically. WorkManager caps each retry delay at 5h.
         const val DOWNLOAD_BACKOFF_DELAY_MS = 30_000L
+
+        // Values written to `downloads.pausedReason`. USER = a long-press Pause;
+        // NETWORK = an in-flight transfer interrupted by a connectivity drop.
+        // The reconnect auto-resume resumes only NETWORK pauses.
+        const val PAUSE_REASON_USER = "USER"
+        const val PAUSE_REASON_NETWORK = "NETWORK"
+
+        // Maximum auto-resume attempts the reconnect listener will make for a
+        // single download before dead-lettering it (leaving it FAILED for a
+        // manual retry). Mirrors the playback-outbox dead-letter budget. The
+        // listener enqueues fresh WorkManager jobs (KEEP policy) that bypass
+        // WorkManager's own run-attempt cap, so without this DB-side budget a
+        // persistently failing download (storage full, 404, auth) would
+        // re-attempt on every reconnect indefinitely.
+        const val MAX_AUTO_RETRY = 3
 
         // Container strings from Jellyfin (mkv, mp4, ts, webm, flv, mov, ...).
         // Constrained to 2-8 alphanumerics so a malformed/missing value can

@@ -1,39 +1,38 @@
 package com.raulshma.jellyplay.core.data.worker
 
-import android.util.Log
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
-import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.OfflineMode
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Watches the network status and resumes interrupted (`PAUSED`/`FAILED`)
- * downloads when the device gains validated internet — the `Offline`/`Local` →
- * `Online` transition. (`Local` denotes a captive-portal / unvalidated LAN,
- * which cannot reliably reach the server, so it is treated the same as Offline
- * here.)
+ * Watches the network status and resumes interrupted downloads when the device
+ * gains validated internet — the `Offline`/`Local` → `Online` transition. The
+ * shared edge-detection scaffolding lives in [ReconnectTrigger].
  *
- * Why this is needed: when a network drop interrupts an in-flight download,
- * [DownloadWorker] catches the `IOException` and sets the row `PAUSED`.
- * `PAUSED` is a terminal state until something flips it back to `PENDING` —
- * [DownloadWorker.doWork] bails immediately on `PAUSED` — so without this
- * listener a download paused by connectivity loss stays paused forever (or
- * until the user manually resumes it), which manifests as "downloads never
- * finished after I lost signal."
+ * Why this is needed: when a network drop interrupts an in-flight download, the
+ * worker catches the `IOException` in its read loop and sets the row `PAUSED`
+ * (reason `NETWORK`). `PAUSED` is a terminal state until something flips it back
+ * to `PENDING` — [DownloadWorker.doWork] bails immediately on `PAUSED` — so
+ * without this listener a download paused by connectivity loss stays paused
+ * forever (or until the user manually resumes it), which manifests as
+ * "downloads never finished after I lost signal."
  *
- * Watches both [NetworkMonitor.networkStatus] and
- * [OfflineModeManager.offlineMode] (not network status alone) so that toggling
- * app-level Offline Mode back online — which emits no network transition — also
- * triggers the resume. This mirrors [PlaybackSyncReconnectListener], which has
- * the same requirement for the playback outbox drain.
+ * [DownloadRepository.resumeInterruptedDownloads] resumes only `PAUSED` rows
+ * with reason `NETWORK` (not user-paused) plus `FAILED` rows, and skips rows
+ * past the auto-retry budget so a persistently failing download dead-letters
+ * instead of spinning on every reconnect.
+ *
+ * Unlike [PlaybackSyncReconnectListener] there is no startup flush: cold-start
+ * recovery ([com.raulshma.jellyplay.startup.DownloadRecoveryInitializer]) only
+ * re-enqueues `PENDING`/`DOWNLOADING`/`QUEUED` rows, so an interrupted row that
+ * is already `PAUSED`/`FAILED` on a process that cold-starts already-online is
+ * not recovered until the next genuine `Offline → Online` transition (or a
+ * manual resume). That is by design — the listener reacts to connectivity, not
+ * process starts.
  *
  * Constructed as a singleton so [start] is idempotent across callers.
  */
@@ -44,49 +43,20 @@ class DownloadReconnectListener @Inject constructor(
     private val downloadRepository: DownloadRepository,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
-    private var job: Job? = null
+    private val trigger = ReconnectTrigger(
+        networkMonitor = networkMonitor,
+        offlineModeManager = offlineModeManager,
+        scope = scope,
+        tag = TAG,
+        onReady = { downloadRepository.resumeInterruptedDownloads() },
+    )
 
     fun start() {
-        if (job?.isActive == true) return
-        // Seed wasReady from the current flow values: NetworkMonitor's initial
-        // value is optimistically Online, so without seeding the first collect
-        // would fire a spurious resume on a fresh process even though no
-        // Offline → Online transition occurred.
-        var wasReady = isReady(
-            networkMonitor.networkStatus.value,
-            offlineModeManager.offlineMode.value,
-        )
-        job = scope.launch {
-            combine(
-                networkMonitor.networkStatus,
-                offlineModeManager.offlineMode,
-            ) { networkStatus, offlineMode -> isReady(networkStatus, offlineMode) }
-                .collect { ready ->
-                    if (ready && !wasReady) {
-                        try {
-                            downloadRepository.resumeInterruptedDownloads()
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to resume interrupted downloads on reconnect", e)
-                        }
-                    }
-                    wasReady = ready
-                }
-        }
+        trigger.start()
     }
 
-    /**
-     * Cancels the network collector. The collection runs indefinitely on the
-     * injected [scope], so tests that drive a [kotlinx.coroutines.test.TestScope]
-     * must call this (or cancel the scope) so `runTest` does not report
-     * uncompleted child jobs.
-     */
-    fun stop() {
-        job?.cancel()
-        job = null
-    }
-
-    private fun isReady(networkStatus: NetworkStatus, offlineMode: OfflineMode): Boolean =
-        networkStatus == NetworkStatus.Online && offlineMode == OfflineMode.ONLINE
+    /** Cancels the network collector. See [ReconnectTrigger.stop]. */
+    fun stop() = trigger.stop()
 
     private companion object {
         private const val TAG = "DownloadReconnect"

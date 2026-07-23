@@ -625,8 +625,24 @@ val MIGRATION_36_37 = object : Migration(36, 37) {
     }
 }
 
+// Download pause reason + reconnect retry budget. `pausedReason` distinguishes a
+// user long-press pause ("USER") from a network-drop interruption ("NETWORK") so
+// the reconnect auto-resume resumes only the latter — a user-paused download
+// stays paused until the user resumes it. `retryCount` bounds automatic retries:
+// the reconnect listener enqueues fresh WorkManager jobs (KEEP policy) that
+// bypass WorkManager's own run-attempt cap, so a persistently failing download
+// (storage full, 404, auth) would otherwise re-attempt on every reconnect. After
+// MAX_AUTO_RETRY failures the row is left FAILED for a manual retry (dead-letter).
+// NOT NULL DEFAULT 0 on retryCount matches the entity's @ColumnInfo(defaultValue).
+val MIGRATION_37_38 = object : Migration(37, 38) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE downloads ADD COLUMN pausedReason TEXT")
+        db.execSQL("ALTER TABLE downloads ADD COLUMN retryCount INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v37 migration chain, with the
+ * The complete, correctly-ordered v1→v38 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -671,4 +687,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_34_35,
         MIGRATION_35_36,
         MIGRATION_36_37,
+        MIGRATION_37_38,
     )
