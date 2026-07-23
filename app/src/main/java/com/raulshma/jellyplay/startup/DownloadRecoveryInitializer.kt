@@ -150,6 +150,14 @@ class DownloadRecoveryInitializer @Inject constructor(
                     if (file.exists()) {
                         file.delete()
                     }
+                    // Reset the byte offset to 0 so a later resume/retry can't
+                    // send `Range: bytes=N-` against the now-deleted (or, for
+                    // a multi-connection row, gapped) partial. The worker
+                    // resumes solely on `downloadedBytes > 0`, so leaving the
+                    // stale count would corrupt the output.
+                    if (download.downloadedBytes > 0L) {
+                        downloadDao.updateProgress(download.id, 0L, DownloadStatus.FAILED.name)
+                    }
                 }
             }
         } catch (e: Exception) {

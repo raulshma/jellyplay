@@ -86,21 +86,32 @@ interface DownloadDao {
     suspend fun getRecoveryRows(status: String): List<RecoveryRow>
 
     /**
-     * Lightweight rows for downloads whose [status] is in [statuses]. Used by the
+     * Lightweight rows for downloads whose [status] is in [statuses], used by the
      * network-reconnect path to enumerate interrupted (`PAUSED`/`FAILED`)
-     * downloads for bulk resume — same projection rationale as
-     * [getRecoveryRows].
+     * downloads for bulk resume. Carries `status` and `pausedReason` so the
+     * caller can skip user-paused rows (only network interruptions auto-resume)
+     * and `retryCount` so it can dead-letter rows past the auto-retry budget.
+     * Same projection rationale as [getRecoveryRows].
      */
-    @Query("SELECT id, downloadedBytes FROM downloads WHERE status IN (:statuses) LIMIT 500")
-    suspend fun getRecoveryRowsByStatuses(statuses: List<String>): List<RecoveryRow>
+    @Query(
+        """
+        SELECT id, downloadedBytes, status, pausedReason, retryCount
+        FROM downloads
+        WHERE status IN (:statuses)
+        LIMIT 500
+        """
+    )
+    suspend fun getInterruptedResumeRows(statuses: List<String>): List<InterruptedResumeRow>
 
     /**
      * Projected `COMPLETED` rows for the cold-start reconciliation pass, which
      * re-validates each completed download's file against the persisted
      * [totalSizeBytes] and resets truncated/missing files to `PENDING` so they
-     * re-download. Carries only the columns the pass needs.
+     * re-download. Carries only the columns the pass needs. Capped at 500 like
+     * [getRecoveryRows] so a large offline library doesn't pay an unbounded
+     * `File.exists()`/`length()` syscall burst every cold start.
      */
-    @Query("SELECT id, downloadPath, totalSizeBytes FROM downloads WHERE status = 'COMPLETED'")
+    @Query("SELECT id, downloadPath, totalSizeBytes FROM downloads WHERE status = 'COMPLETED' LIMIT 500")
     suspend fun getCompletedForReconciliation(): List<ReconciliationRow>
 
     @Query("SELECT * FROM downloads WHERE seriesId = :seriesId")
@@ -148,6 +159,15 @@ interface DownloadDao {
 
     @Query("UPDATE downloads SET priority = :priority WHERE id = :id")
     suspend fun updatePriority(id: String, priority: Int)
+
+    @Query("UPDATE downloads SET pausedReason = :reason WHERE id = :id")
+    suspend fun updatePausedReason(id: String, reason: String?)
+
+    @Query("UPDATE downloads SET retryCount = retryCount + 1 WHERE id = :id")
+    suspend fun incrementRetryCount(id: String)
+
+    @Query("UPDATE downloads SET retryCount = 0 WHERE id = :id")
+    suspend fun resetRetryCount(id: String)
 
     @Query("SELECT * FROM downloads WHERE status IN ('PENDING', 'PAUSED') ORDER BY priority DESC, createdAt ASC")
     fun getPendingDownloads(): Flow<List<DownloadEntity>>
@@ -209,6 +229,20 @@ interface DownloadDao {
 data class RecoveryRow(
     val id: String,
     val downloadedBytes: Long,
+)
+
+/**
+ * Lightweight row projected out of `downloads` for the reconnect auto-resume
+ * path — see [DownloadDao.getInterruptedResumeRows]. Carries the status/reason/
+ * retry-count fields the caller needs to decide whether a row is eligible to
+ * auto-resume (skip user-paused rows, dead-letter exhausted retries).
+ */
+data class InterruptedResumeRow(
+    val id: String,
+    val downloadedBytes: Long,
+    val status: String,
+    val pausedReason: String?,
+    val retryCount: Int,
 )
 
 /**
