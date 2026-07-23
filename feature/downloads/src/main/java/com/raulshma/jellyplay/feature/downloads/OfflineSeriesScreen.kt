@@ -21,14 +21,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,6 +70,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.TransparentTopBar
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.rememberBackdropScrollState
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -80,6 +80,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OfflineSeriesScreen(
     seriesId: String,
@@ -99,7 +100,7 @@ fun OfflineSeriesScreen(
 
     LaunchedEffect(seriesId) { viewModel.load(seriesId) }
 
-    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showDeleteSheet by remember { mutableStateOf(false) }
 
     val listFocusRequester = remember { FocusRequester() }
     val listState = rememberLazyListState()
@@ -242,7 +243,7 @@ fun OfflineSeriesScreen(
             actions = {
                 val binFocusState = rememberTvFocusState()
                 IconButton(
-                    onClick = { showDeleteDialog = true },
+                    onClick = { showDeleteSheet = true },
                     modifier = Modifier
                         .then(binFocusState.focusModifier)
                         .tvFocusIndicator(binFocusState, CircleShape)
@@ -263,28 +264,27 @@ fun OfflineSeriesScreen(
         )
     }
 
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text("Delete downloads") },
-            text = {
-                Text("Delete all downloaded episodes for this series?")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteDialog = false
-                        viewModel.deleteSeries()
+    if (showDeleteSheet) {
+        val deleteSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        TvSafeSheet(
+            onDismissRequest = { showDeleteSheet = false },
+            sheetState = deleteSheetState,
+        ) {
+            DeleteSeriesSheet(
+                seasons = seasons,
+                episodes = episodes,
+                onDelete = { episodeIds ->
+                    showDeleteSheet = false
+                    viewModel.deleteEpisodes(episodeIds)
+                    // If every downloaded episode was selected, there's nothing
+                    // left to show — pop back to the library.
+                    if (episodeIds.size >= downloadedEpisodeCount) {
                         onBack()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text("Delete series") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
-            },
-        )
+                    }
+                },
+                onDismiss = { showDeleteSheet = false },
+            )
+        }
     }
 }
 
