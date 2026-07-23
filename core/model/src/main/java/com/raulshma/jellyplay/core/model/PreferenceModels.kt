@@ -211,6 +211,18 @@ enum class OrientationMode(val displayName: String, val constant: String) {
     LOCKED_PORTRAIT("Locked Portrait", "locked_portrait"),
 }
 
+/**
+ * Where the brightness/volume indicator bar renders relative to the
+ * gesture that triggered it. Gesture sides are fixed (left = brightness,
+ * right = volume); this only controls the indicator placement.
+ */
+@Immutable
+@Serializable
+enum class GestureIndicatorSide(val displayName: String, val constant: String) {
+    OPPOSITE("Opposite side", "opposite"),
+    SAME("Same side", "same"),
+}
+
 @Immutable
 @Serializable
 enum class PreloadBufferSize(
