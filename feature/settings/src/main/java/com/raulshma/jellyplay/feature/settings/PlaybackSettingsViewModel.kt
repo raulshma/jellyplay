@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
@@ -138,6 +139,8 @@ class PlaybackSettingsViewModel @Inject constructor(
         editor.edit { setAudioDelay(ms) }
     fun setVideoBrightnessLevel(level: Float) =
         editor.edit { setVideoBrightnessLevel(level) }
+    fun setVideoGestureIndicatorSide(side: GestureIndicatorSide) =
+        editor.edit { setVideoGestureIndicatorSide(side) }
     fun setAutoPlayCountdownSec(sec: Int) =
         editor.edit { setAutoPlayCountdownSec(sec) }
     fun setTvZoomModePercent(percent: Float) =

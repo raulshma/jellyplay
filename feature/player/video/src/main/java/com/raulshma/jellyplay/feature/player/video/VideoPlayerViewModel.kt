@@ -1295,6 +1295,7 @@ class VideoPlayerViewModel @Inject constructor(
                 swipeSeekMaxMs = prefs.videoSwipeSeekMaxMs,
                 rememberBrightness = prefs.videoRememberBrightness,
                 brightnessLevel = prefs.videoBrightnessLevel,
+                gestureIndicatorSide = prefs.videoGestureIndicatorSide,
                 aspectRatio = defaultAspectRatio,
                 trickplayEnabled = prefs.trickplayEnabled,
                 trickplayOnSeekGesture = prefs.trickplayOnSeekGesture,

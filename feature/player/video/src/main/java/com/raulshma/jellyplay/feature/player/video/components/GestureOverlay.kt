@@ -63,6 +63,7 @@ import kotlin.math.abs
 import kotlin.math.pow
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 
 private fun brightnessIcon(value: Float) = when {
     value <= 0f -> Tabler.Outline.BrightnessDown
@@ -88,6 +89,7 @@ internal fun GestureOverlay(
     seekOffsetMs: Long,
     brightnessValue: Float,
     volumeValue: Float,
+    indicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     gesturesEnabled: Boolean,
     swipeSeekMaxMs: Long,
     showControls: Boolean,
@@ -201,6 +203,16 @@ internal fun GestureOverlay(
             )
         }
 
+        // Gesture sides are fixed (left = brightness, right = volume); the
+        // indicator bar can render on the opposite side (default) or the same
+        // side as the gesture. OPPOSITE is the default so the bar doesn't sit
+        // under the user's dragging thumb.
+        val opposite = indicatorSide == GestureIndicatorSide.OPPOSITE
+        val brightnessAlignment =
+            if (opposite) Alignment.CenterEnd else Alignment.CenterStart
+        val volumeAlignment =
+            if (opposite) Alignment.CenterStart else Alignment.CenterEnd
+
         if (brightnessValue >= 0f) {
             EdgeBarOverlay(
                 value = brightnessValue,
@@ -208,8 +220,11 @@ internal fun GestureOverlay(
                 label = "${(brightnessValue * 100).toInt()}%",
                 isAtBound = brightnessValue <= 0.01f || brightnessValue >= 0.99f,
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 24.dp),
+                    .align(brightnessAlignment)
+                    .then(
+                        if (opposite) Modifier.padding(end = 24.dp)
+                        else Modifier.padding(start = 24.dp)
+                    ),
             )
         }
 
@@ -220,8 +235,11 @@ internal fun GestureOverlay(
                 label = "${(volumeValue * 100).toInt()}%",
                 isAtBound = volumeValue <= 0.01f || volumeValue >= 0.99f,
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 24.dp),
+                    .align(volumeAlignment)
+                    .then(
+                        if (opposite) Modifier.padding(start = 24.dp)
+                        else Modifier.padding(end = 24.dp)
+                    ),
             )
         }
     }

@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.ColorBlindMode
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -216,6 +217,7 @@ class UserPreferencesStore @Inject constructor(
 
         val VIDEO_DEFAULT_SPEED = floatPreferencesKey("video_default_speed")
         val VIDEO_BRIGHTNESS_LEVEL = floatPreferencesKey("video_brightness_level")
+        val VIDEO_GESTURE_INDICATOR_SIDE = stringPreferencesKey("video_gesture_indicator_side")
         val AUDIO_DEFAULT_SPEED = floatPreferencesKey("audio_default_speed")
         val AUDIO_NIGHT_MODE_VOLUME = floatPreferencesKey("audio_night_mode_volume")
         val REPLAYGAIN_PRE_AMP_DB = floatPreferencesKey("replaygain_pre_amp_db")
@@ -963,6 +965,9 @@ class UserPreferencesStore @Inject constructor(
             videoSwipeSeekMaxMs = readLong(prefs, Keys.VIDEO_SWIPE_SEEK_MAX_MS, "video_swipe_seek_max_ms", 120_000L),
             videoRememberBrightness = readBool(prefs, Keys.VIDEO_REMEMBER_BRIGHTNESS, "video_remember_brightness", false),
             videoBrightnessLevel = readFloat(prefs, Keys.VIDEO_BRIGHTNESS_LEVEL, "video_brightness_level", 0.5f),
+            videoGestureIndicatorSide = try {
+                GestureIndicatorSide.valueOf(prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE] ?: GestureIndicatorSide.OPPOSITE.name)
+            } catch (_: Exception) { GestureIndicatorSide.OPPOSITE },
             audioDefaultSpeed = readFloat(prefs, Keys.AUDIO_DEFAULT_SPEED, "audio_default_speed", 1.0f),
             audioNightModeVolume = readFloat(prefs, Keys.AUDIO_NIGHT_MODE_VOLUME, "audio_night_mode_volume", 0.4f),
             audioNightModeGain = readInt(prefs, Keys.AUDIO_NIGHT_MODE_GAIN, "audio_night_mode_gain", 1200),
@@ -2035,6 +2040,10 @@ class UserPreferencesStore @Inject constructor(
         dataStore.edit { it[Keys.VIDEO_BRIGHTNESS_LEVEL] = level }
     }
 
+    suspend fun setVideoGestureIndicatorSide(side: GestureIndicatorSide) {
+        dataStore.edit { it[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = side.name }
+    }
+
     suspend fun setAudioDefaultSpeed(speed: Float) {
         dataStore.edit { it[Keys.AUDIO_DEFAULT_SPEED] = speed }
     }
@@ -2421,6 +2430,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = prefs.videoSwipeSeekMaxMs
             settings[Keys.VIDEO_REMEMBER_BRIGHTNESS] = prefs.videoRememberBrightness
             settings[Keys.VIDEO_BRIGHTNESS_LEVEL] = prefs.videoBrightnessLevel
+            settings[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = prefs.videoGestureIndicatorSide.name
             settings[Keys.AUDIO_DEFAULT_SPEED] = prefs.audioDefaultSpeed
             settings[Keys.AUDIO_NIGHT_MODE_VOLUME] = prefs.audioNightModeVolume
             settings[Keys.AUDIO_NIGHT_MODE_GAIN] = prefs.audioNightModeGain
@@ -2809,7 +2819,8 @@ class UserPreferencesStore @Inject constructor(
                 Keys.VIDEO_PASS_OUT_PROTECTION_HOURS,
                 Keys.CINEMA_MODE_ENABLED, Keys.VIDEO_EPISODE_BROWSER_ENABLED,
                 Keys.VIDEO_SHOW_PLAYBACK_METADATA, Keys.VIDEO_SWIPE_SEEK_MAX_MS,
-                Keys.VIDEO_REMEMBER_BRIGHTNESS, Keys.TRICKPLAY_ENABLED,
+                Keys.VIDEO_REMEMBER_BRIGHTNESS, Keys.VIDEO_GESTURE_INDICATOR_SIDE,
+                Keys.TRICKPLAY_ENABLED,
                 Keys.TRICKPLAY_ON_SEEK_GESTURE, Keys.VIDEO_PRELOAD_BUFFER_SIZE,
                 Keys.BACKGROUND_VIDEO_AUDIO_ENABLED, Keys.KEEP_SCREEN_ON_DURING_VIDEO,
                 Keys.INCOGNITO_MODE_ENABLED, Keys.FRAME_RATE_MATCHING,
