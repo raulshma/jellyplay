@@ -55,6 +55,7 @@ data class UserPreferences(
     val videoSwipeSeekMaxMs: Long = 120_000L,
     val videoRememberBrightness: Boolean = false,
     val videoBrightnessLevel: Float = 0.5f,
+    val videoGestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     val audioDefaultSpeed: Float = 1.0f,
     val audioNightModeVolume: Float = 0.4f,
     val audioNightModeGain: Int = 1200,

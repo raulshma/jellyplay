@@ -7,6 +7,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
+import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
@@ -102,6 +103,13 @@ class DownloadWorker @AssistedInject constructor(
             dao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)
             try {
             if (existingBytes > 0L) {
+                // Resume: re-probe the authoritative size so the integrity
+                // check in performDownload can catch a truncated stream. The
+                // resume path previously skipped the probe entirely (and
+                // updateTotalSize was skipped on resume), so a transcoded
+                // resume could complete short of the true size and ship a
+                // truncated file as COMPLETED.
+                val probedSize = probeContentSize(client, entity.downloadUrl, accessToken)
                 performSingleConnectionDownload(
                     downloadClient = client,
                     dao = dao,
@@ -110,6 +118,7 @@ class DownloadWorker @AssistedInject constructor(
                     existingBytes = existingBytes,
                     notificationId = notificationId,
                     accessToken = accessToken,
+                    probedTotalSize = probedSize,
                 )
             } else {
                 val totalSize = probeContentSize(client, entity.downloadUrl, accessToken)
@@ -135,6 +144,7 @@ class DownloadWorker @AssistedInject constructor(
                         existingBytes = 0L,
                         notificationId = notificationId,
                         accessToken = accessToken,
+                        probedTotalSize = totalSize,
                     )
                 }
             }
@@ -142,18 +152,23 @@ class DownloadWorker @AssistedInject constructor(
             val currentEntity = dao.getDownloadById(downloadId)
             if (currentEntity?.status != DownloadStatus.PAUSED.name) {
                 dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)
+                // These failures are re-enqueued by the reconnect auto-resume,
+                // so count them toward the dead-letter budget.
+                dao.incrementRetryCount(downloadId)
             }
             Result.retry()
         } catch (e: java.io.IOException) {
             val currentEntity = dao.getDownloadById(downloadId)
             if (currentEntity?.status != DownloadStatus.PAUSED.name) {
                 dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)
+                dao.incrementRetryCount(downloadId)
             }
             Result.retry()
         } catch (e: Exception) {
             val currentEntity = dao.getDownloadById(downloadId)
             if (currentEntity?.status != DownloadStatus.PAUSED.name) {
                 dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)
+                dao.incrementRetryCount(downloadId)
             }
             Result.failure()
         }
@@ -194,6 +209,7 @@ class DownloadWorker @AssistedInject constructor(
         existingBytes: Long,
         notificationId: Int,
         accessToken: String?,
+        probedTotalSize: Long = 0L,
     ): Result {
         val requestBuilder = Request.Builder()
             .url(entity.downloadUrl)
@@ -235,6 +251,7 @@ class DownloadWorker @AssistedInject constructor(
                     existingBytes = 0L,
                     notificationId = notificationId,
                     accessToken = accessToken,
+                    probedTotalSize = probedTotalSize,
                 )
             } catch (e: Exception) {
                 dao.updateProgress(downloadId, 0L, DownloadStatus.FAILED.name)
@@ -284,6 +301,7 @@ class DownloadWorker @AssistedInject constructor(
             existingBytes = existingBytes,
             notificationId = notificationId,
             accessToken = accessToken,
+            probedTotalSize = probedTotalSize,
         )
     }
 
@@ -296,6 +314,7 @@ class DownloadWorker @AssistedInject constructor(
         existingBytes: Long,
         notificationId: Int,
         accessToken: String?,
+        probedTotalSize: Long = 0L,
     ): Result {
         val isPartial = response.code == 206
 
@@ -312,8 +331,16 @@ class DownloadWorker @AssistedInject constructor(
             response.body?.contentLength()?.coerceAtLeast(0L) ?: 0L
         }
 
-        if (totalSize > 0 && existingBytes == 0L) {
-            dao.updateTotalSize(downloadId, totalSize)
+        // Authoritative size: prefer the GET response's Content-Length/Range
+        // (always accurate for ORIGINAL + honor Range on resume), and fall back
+        // to the HEAD probe when the body is chunked/transcoded (Content-Length
+        // == -1 → 0). Without this fallback, a transcoded stream that closed
+        // early without throwing could ship a truncated file as COMPLETED — the
+        // reported bug ("downloads show finished but media unavailable offline").
+        val effectiveTotalSize = if (totalSize > 0L) totalSize else probedTotalSize
+
+        if (effectiveTotalSize > 0 && existingBytes == 0L) {
+            dao.updateTotalSize(downloadId, effectiveTotalSize)
         }
 
         val file = File(entity.downloadPath)
@@ -376,12 +403,12 @@ class DownloadWorker @AssistedInject constructor(
                                 DownloadStatus.DOWNLOADING.name, speedBytesPerSec,
                             )
 
-                            val progress = if (totalSize > 0) {
-                                (downloadedBytes * 100 / totalSize).toInt()
+                            val progress = if (effectiveTotalSize > 0) {
+                                (downloadedBytes * 100 / effectiveTotalSize).toInt()
                             } else 0
                             DownloadNotificationHelper.updateNotification(
                                 applicationContext, notificationId, entity.name, progress,
-                                downloadedBytes, totalSize, speedBytesPerSec,
+                                downloadedBytes, effectiveTotalSize, speedBytesPerSec,
                             )
                         }
                     }
@@ -391,6 +418,11 @@ class DownloadWorker @AssistedInject constructor(
             response.close()
             if (downloadedBytes > existingBytes) {
                 dao.updateProgressWithSpeed(downloadId, downloadedBytes, DownloadStatus.PAUSED.name, 0L)
+                // Mark the interruption as network-driven so the reconnect
+                // auto-resume picks it up (user-paused rows are left alone), and
+                // count it toward the auto-retry dead-letter budget.
+                dao.updatePausedReason(downloadId, DownloadRepositoryImpl.PAUSE_REASON_NETWORK)
+                dao.incrementRetryCount(downloadId)
             }
             return Result.retry()
         }
@@ -399,16 +431,18 @@ class DownloadWorker @AssistedInject constructor(
 
         dao.updateProgressWithSpeed(downloadId, downloadedBytes, DownloadStatus.DOWNLOADING.name, 0L)
 
-        // Integrity check. When Content-Length was known (totalSize > 0) verify
-        // the final byte count matches exactly, so a server that closed the
-        // connection early without an error still fails + retries instead of
-        // shipping a truncated file as COMPLETED.
-        if (totalSize > 0L && downloadedBytes != totalSize) {
+        // Integrity check. When an authoritative size is known — either from
+        // the GET response's Content-Length/Range (ORIGINAL) or the HEAD probe
+        // (transcoded/chunked streams whose body carries no Content-Length) —
+        // verify the final byte count matches exactly, so a server that closed
+        // the connection early without an error still fails + retries instead
+        // of shipping a truncated file as COMPLETED.
+        if (effectiveTotalSize > 0L && downloadedBytes != effectiveTotalSize) {
             dao.updateProgressWithSpeed(downloadId, downloadedBytes, DownloadStatus.FAILED.name, 0L)
             dao.updateErrorMessage(downloadId, SIZE_MISMATCH_ERROR)
             return Result.retry()
         }
-        // Content-Length unknown (totalSize == 0): a clean stream end is the
+        // Size unknown (effectiveTotalSize == 0): a clean stream end is the
         // only completion signal, so a 0-byte or truncated response (e.g. an
         // empty 200 body) would otherwise be marked COMPLETED and play as a
         // corrupt file. Reject 0-byte results as FAILED + retry.
@@ -419,6 +453,9 @@ class DownloadWorker @AssistedInject constructor(
         }
 
         dao.updateProgressWithSpeed(downloadId, downloadedBytes, DownloadStatus.COMPLETED.name, 0L)
+        // A successful download clears the auto-retry budget so a later
+        // network interruption starts the dead-letter count from 0.
+        dao.resetRetryCount(downloadId)
         DownloadNotificationHelper.dismissNotification(applicationContext, notificationId)
         return Result.success()
     }

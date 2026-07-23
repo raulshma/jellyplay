@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.state
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 
 /**
  * Gesture / hold-speed / brightness / frame-rate preference slice.
@@ -16,5 +17,6 @@ data class GesturePrefsState(
     val seekDurationMs: Long = 10_000L,
     val rememberBrightness: Boolean = false,
     val brightnessLevel: Float = 0.5f,
+    val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     val frameRateMatching: Boolean = false,
 )

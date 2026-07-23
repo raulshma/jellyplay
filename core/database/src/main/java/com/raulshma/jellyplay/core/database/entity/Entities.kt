@@ -93,6 +93,24 @@ data class DownloadEntity(
      * pre-existing rows until the item is re-downloaded.
      */
     val container: String? = null,
+    /**
+     * Why a `PAUSED` row is paused: `"USER"` (user long-pressed Pause) or
+     * `"NETWORK"` (an in-flight transfer was interrupted by a network drop).
+     * Drives the reconnect auto-resume: only `NETWORK` pauses resume
+     * automatically on the next `Offline → Online` transition; `USER` pauses
+     * stay paused until the user resumes. NULL when the row is not paused.
+     */
+    val pausedReason: String? = null,
+    /**
+     * How many times the network-reconnect path has re-enqueued this row.
+     * After [DownloadRepositoryImpl.MAX_AUTO_RETRY] failed auto-resumes the row
+     * is dead-lettered (left FAILED for a manual retry) so a persistently
+     * failing download (storage full, 404, auth) can't spin forever on every
+     * reconnect. Reset to 0 on a successful `COMPLETED` write or a manual
+     * resume/retry.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val retryCount: Int = 0,
 )
 
 @Entity(

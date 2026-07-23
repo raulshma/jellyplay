@@ -57,6 +57,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -425,6 +429,38 @@ private fun DownloadItemRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // For series episodes, surface the parent series and an SXXEXX
+                // tag below the episode title so rows are identifiable in a flat
+                // download list (mirrors the context line on OfflineDetailScreen).
+                if (item.mediaType == com.raulshma.jellyplay.core.model.MediaType.EPISODE) {
+                    val tag = item.seasonNumber?.let { s ->
+                        item.episodeNumber?.let { e ->
+                            "S${s.toString().padStart(2, '0')}E${e.toString().padStart(2, '0')}"
+                        }
+                    }
+                    val series = item.seriesName?.takeIf { it.isNotBlank() }
+                    if (tag != null || series != null) {
+                        val annotatedContext = buildAnnotatedString {
+                            if (tag != null) {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                    append(tag)
+                                }
+                            }
+                            series?.let {
+                                if (length > 0) append(" · ")
+                                append(it)
+                            }
+                        }
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            annotatedContext,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(2.dp))
                 when (item.status) {
                     DownloadStatus.DOWNLOADING -> {

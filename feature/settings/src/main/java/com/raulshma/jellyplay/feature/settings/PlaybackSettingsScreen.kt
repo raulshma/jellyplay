@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
+import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MpvAudioOutput
@@ -105,6 +106,7 @@ sealed class PlaybackSettingsDialog {
     object PreloadBufferPicker : PlaybackSettingsDialog()
     object AudioDelayPicker : PlaybackSettingsDialog()
     object BrightnessPicker : PlaybackSettingsDialog()
+    object GestureIndicatorSidePicker : PlaybackSettingsDialog()
     object MpvVideoOutputPicker : PlaybackSettingsDialog()
     object MpvScalerPicker : PlaybackSettingsDialog()
     object MpvAudioOutputPicker : PlaybackSettingsDialog()
@@ -292,6 +294,16 @@ fun PlaybackSettingsScreen(
                         highlighted = highlightSettingId == "gestures",
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.ArrowsHorizontal,
+                        title = "Gesture Indicator Side",
+                        subtitle = if (preferences.videoGestureIndicatorSide == GestureIndicatorSide.OPPOSITE)
+                            "Show brightness/volume bar opposite the gesture" else "Show bar on the same side as the gesture",
+                        trailingText = preferences.videoGestureIndicatorSide.displayName,
+                        highlighted = highlightSettingId == "gesture_indicator_side",
+                        index = idx++, count = total,
+                        onClick = { activeDialog = PlaybackSettingsDialog.GestureIndicatorSidePicker },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Gauge,
@@ -1127,6 +1139,17 @@ fun PlaybackSettingsScreen(
             isSelected = { it == preferences.videoDefaultOrientation },
             onDismiss = { activeDialog = PlaybackSettingsDialog.None },
             onSelect = { viewModel.setVideoDefaultOrientation(it); activeDialog = PlaybackSettingsDialog.None },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.GestureIndicatorSidePicker) {
+        SettingsListPickerSheet(
+            title = "Gesture Indicator Side",
+            items = GestureIndicatorSide.entries,
+            label = { it.displayName },
+            isSelected = { it == preferences.videoGestureIndicatorSide },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = { viewModel.setVideoGestureIndicatorSide(it); activeDialog = PlaybackSettingsDialog.None },
         )
     }
 

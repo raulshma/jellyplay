@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -153,6 +154,7 @@ data class VideoPlayerUiState(
     val swipeSeekMaxMs: Long = 120_000L,
     val rememberBrightness: Boolean = false,
     val brightnessLevel: Float = 0.5f,
+    val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     val frameRateMatching: Boolean = false,
     val audioDelayMs: Long = 0L,
     val segments: List<MediaSegment> = emptyList(),
@@ -332,7 +334,8 @@ data class VideoPlayerUiState(
             isHoldSpeedActive = isHoldSpeedActive,
             defaultSpeed = defaultSpeed, swipeSeekMaxMs = swipeSeekMaxMs,
             seekDurationMs = seekDurationMs, rememberBrightness = rememberBrightness,
-            brightnessLevel = brightnessLevel, frameRateMatching = frameRateMatching,
+            brightnessLevel = brightnessLevel, gestureIndicatorSide = gestureIndicatorSide,
+            frameRateMatching = frameRateMatching,
         )
 
     val uiPrefs: PlayerUiPrefsState

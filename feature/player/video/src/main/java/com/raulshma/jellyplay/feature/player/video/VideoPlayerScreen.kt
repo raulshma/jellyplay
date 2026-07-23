@@ -1022,6 +1022,7 @@ fun VideoPlayerScreen(
                 seekOffsetMs = seekState.offsetMs,
                 brightnessValue = brightnessOverlay,
                 volumeValue = volumeOverlay,
+                indicatorSide = uiState.gestureIndicatorSide,
                 gesturesEnabled = uiState.gesturesEnabled && !isScreenLocked,
                 swipeSeekMaxMs = uiState.swipeSeekMaxMs,
                 onSeekGesture = remember(engine) {
