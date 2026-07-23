@@ -295,6 +295,52 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * Verifies the v37→v38 migration adds the `pausedReason` (TEXT, nullable)
+     * and `retryCount` (INTEGER NOT NULL DEFAULT 0) columns to `downloads`.
+     * Pre-existing rows pick up the defaults (null reason, 0 retries); a fresh
+     * DAO write round-trips both columns. The reconnect auto-resume path
+     * (DownloadRepositoryImpl.resumeInterruptedDownloads) reads `pausedReason`
+     * to skip user-paused rows and `retryCount` to dead-letter exhausted
+     * retries, so the columns must exist and map correctly post-migration.
+     */
+    @Test
+    fun migrateAllFromV12_addsDownloadPauseAndRetryColumns() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+            // A pre-v38 row: no pausedReason/retryCount columns exist yet.
+            db.execSQL(
+                "INSERT INTO downloads (id, mediaItemId, name, mediaType, downloadPath, downloadUrl, totalSizeBytes, downloadedBytes, status) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>("dl-1", "item-1", "Test", "MOVIE", "/p", "https://u", 1000L, 500L, "PAUSED"),
+            )
+        }
+
+        val db = openWithMigrations()
+        // Pre-existing row picks up the defaults after migration.
+        val migrated = db.downloadDao().getDownloadById("dl-1")
+        assertNotNull(migrated)
+        assertEquals(null, migrated!!.pausedReason)
+        assertEquals(0, migrated.retryCount)
+        // A fresh write round-trips both new columns.
+        db.downloadDao().insertDownload(
+            migrated.copy(
+                id = "dl-2",
+                pausedReason = "NETWORK",
+                retryCount = 2,
+            )
+        )
+        val written = db.downloadDao().getDownloadById("dl-2")
+        assertNotNull(written)
+        assertEquals("NETWORK", written!!.pausedReason)
+        assertEquals(2, written.retryCount)
+        db.close()
+    }
+
     @Test
     fun migrateAllFromV12() = runTest {
         createDatabase(12) { db ->
@@ -526,14 +572,14 @@ class MigrationTest {
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (37),
+        // One migration per step from v1 up to the current schema version (38),
         // each handing off to the next with no gaps or duplicate starts.
         // androidx.room.Database has CLASS retention, so getAnnotation() returns
         // null at runtime — the hardcoded fallback is the authoritative value
         // and must be bumped alongside JellyPlayDatabase's version.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 37
+            ?: 38
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",

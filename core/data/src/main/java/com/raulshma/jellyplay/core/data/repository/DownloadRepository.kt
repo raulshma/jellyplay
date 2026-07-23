@@ -127,5 +127,20 @@ interface DownloadRepository {
 
     fun enqueueDownload(downloadId: String)
 
+    /**
+     * Auto-resume pass run by the network-reconnect path. Resumes interrupted
+     * downloads — `PAUSED` rows whose `pausedReason` is `NETWORK` (an in-flight
+     * transfer interrupted by a connectivity drop) and `FAILED` rows — by
+     * resetting each to `PENDING` and re-enqueueing its worker.
+     *
+     * Skips: user-paused rows (`pausedReason == USER`) — those stay paused until
+     * the user resumes — and rows past the auto-retry budget (`retryCount >=
+     * MAX_AUTO_RETRY`), which are left FAILED for a manual retry so a
+     * persistently failing download can't spin on every reconnect. `FAILED`
+     * rows resume from byte 0 (their partial is gone / gapped); `PAUSED` rows
+     * preserve their contiguous byte offset.
+     */
+    suspend fun resumeInterruptedDownloads()
+
     suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit>
 }

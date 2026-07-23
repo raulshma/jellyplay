@@ -603,6 +603,15 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.HandMove
         ),
         SettingsSearchItem(
+            id = "gesture_indicator_side",
+            title = "Gesture Indicator Side",
+            subtitle = "Show brightness/volume bar opposite or same side as the gesture",
+            category = "Playback",
+            keywords = listOf("indicator", "brightness", "volume", "bar", "side", "gesture", "opposite"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.ArrowsHorizontal
+        ),
+        SettingsSearchItem(
             id = "default_speed",
             title = "Default Playback Speed",
             subtitle = "Default initial playback speed for videos",

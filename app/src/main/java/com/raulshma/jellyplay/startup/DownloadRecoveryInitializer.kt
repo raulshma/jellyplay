@@ -30,8 +30,45 @@ class DownloadRecoveryInitializer @Inject constructor(
     private val downloadDao: DownloadDao,
 ) {
     suspend fun recover() {
+        // Must run first: reconciliation resets truncated/missing completed
+        // downloads to PENDING so recoverPendingDownloads() re-enqueues them
+        // (KEEP policy) on the same pass, self-healing the offline library.
+        reconcileCompletedDownloads()
         recoverPendingDownloads()
         cleanupStuckDownloads()
+    }
+
+    /**
+     * Re-validates every `COMPLETED` download against the filesystem. A
+     * transcoded/chunked stream that closed early (without throwing) could
+     * previously be marked COMPLETED short of its true size; a file later
+     * removed by Android media eviction or cache clearing would also leave a
+     * stale COMPLETED row. Reset such rows to `PENDING` so they re-download.
+     * Rows with an unknown size (`totalSizeBytes == 0`) and an existing file
+     * are left untouched — we cannot verify them and they pre-date size
+     * tracking, so resetting them would force needless re-downloads.
+     */
+    private suspend fun reconcileCompletedDownloads() {
+        try {
+            val completed = downloadDao.getCompletedForReconciliation()
+            for (download in completed) {
+                if (download.downloadPath.isBlank()) {
+                    // No path recorded — nothing to verify against. Leave it;
+                    // playback will fall back to streaming.
+                    continue
+                }
+                val file = File(download.downloadPath)
+                val actualSize = if (file.exists()) file.length() else 0L
+                val expected = download.totalSizeBytes
+                val truncatedOrMissing = expected > 0L && actualSize < expected
+                if (truncatedOrMissing) {
+                    if (file.exists()) file.delete()
+                    downloadDao.updateProgress(download.id, 0L, DownloadStatus.PENDING.name)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to reconcile completed downloads", e)
+        }
     }
 
     private suspend fun recoverPendingDownloads() {
@@ -112,6 +149,14 @@ class DownloadRecoveryInitializer @Inject constructor(
                     // 80 % sitting on disk forever.
                     if (file.exists()) {
                         file.delete()
+                    }
+                    // Reset the byte offset to 0 so a later resume/retry can't
+                    // send `Range: bytes=N-` against the now-deleted (or, for
+                    // a multi-connection row, gapped) partial. The worker
+                    // resumes solely on `downloadedBytes > 0`, so leaving the
+                    // stale count would corrupt the output.
+                    if (download.downloadedBytes > 0L) {
+                        downloadDao.updateProgress(download.id, 0L, DownloadStatus.FAILED.name)
                     }
                 }
             }

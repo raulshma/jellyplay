@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.ForegroundInfo
 import androidx.work.ListenableWorker.Result
+import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -164,6 +165,8 @@ internal object MultiConnectionDownloadStrategy {
 
             dao.updateErrorMessage(downloadId, null)
             dao.updateProgressWithSpeed(downloadId, finalBytes, DownloadStatus.COMPLETED.name, 0L)
+            // A successful download clears the auto-retry budget.
+            dao.resetRetryCount(downloadId)
             DownloadNotificationHelper.dismissNotification(context, notificationId)
             Result.success()
         } catch (e: IOException) {
@@ -171,6 +174,10 @@ internal object MultiConnectionDownloadStrategy {
                 runCatching { if (file.exists()) file.delete() }
                     .onFailure { Log.w("DownloadWorker", "Failed to delete partial after IO error", it) }
                 dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.PAUSED.name, 0L)
+                // Network interruption: mark so the reconnect auto-resume picks
+                // it up, and count toward the dead-letter budget.
+                dao.updatePausedReason(downloadId, DownloadRepositoryImpl.PAUSE_REASON_NETWORK)
+                dao.incrementRetryCount(downloadId)
             }
             Result.retry()
         } catch (e: Exception) {

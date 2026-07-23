@@ -4,11 +4,7 @@ import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
-import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.OfflineMode
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,10 +12,9 @@ import javax.inject.Singleton
 /**
  * Watches the network status and enqueues an immediate
  * [PlaybackSyncWorker] drain when the device gains validated internet — the
- * `Offline`/`Local` → `Online` transition. (`Local` denotes a captive-portal /
- * unvalidated LAN, which cannot reliably reach the server, so it is treated
- * the same as Offline here.) This is the primary, low-latency trigger for the
- * offline playback outbox; the periodic schedule is only a backstop.
+ * `Offline`/`Local` → `Online` transition. This is the primary, low-latency
+ * trigger for the offline playback outbox; the periodic schedule is only a
+ * backstop. The shared edge-detection scaffolding lives in [ReconnectTrigger].
  *
  * Also triggers once on [start] so progress captured while the app process
  * was killed still flushes shortly after launch — but only when the outbox
@@ -36,54 +31,34 @@ class PlaybackSyncReconnectListener @Inject constructor(
     private val outbox: PlaybackOutboxRepository,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
-    private var job: Job? = null
+    private val trigger = ReconnectTrigger(
+        networkMonitor = networkMonitor,
+        offlineModeManager = offlineModeManager,
+        scope = scope,
+        tag = TAG,
+        onReady = { scheduler.enqueueNow() },
+    )
 
     fun start() {
-        if (job?.isActive == true) return
-        // A drain is viable only when the network is validated *and* app-level
-        // Offline Mode is disabled. Watching both conditions matters for a
-        // manual-offline user: flipping that setting back online does not emit a
-        // network transition, so a network-only listener would leave progress
-        // queued until the periodic backstop.
-        var wasReady = isReady(
-            networkMonitor.networkStatus.value,
-            offlineModeManager.offlineMode.value,
-        )
-        job = scope.launch {
-            combine(
-                networkMonitor.networkStatus,
-                offlineModeManager.offlineMode,
-            ) { networkStatus, offlineMode -> isReady(networkStatus, offlineMode) }
-                .collect { ready ->
-                if (ready && !wasReady) {
+        val started = trigger.start()
+        // Flush anything captured while the process was dead — but only on the
+        // first start, and only if the outbox actually has pending entries.
+        // enqueueNow uses KEEP, so without this gate every warm start
+        // (including ones where the outbox is known empty) schedules a worker
+        // run that just wakes the DB and returns success on an empty drain. A
+        // cheap single-row count avoids that no-op WorkManager run.
+        if (started) {
+            scope.launch {
+                if (outbox.count() > 0) {
                     scheduler.enqueueNow()
                 }
-                wasReady = ready
-            }
-        }
-        // Flush anything captured while the process was dead — but only if the
-        // outbox actually has pending entries. enqueueNow uses KEEP, so without
-        // this gate every warm start (including ones where the outbox is known
-        // empty) schedules a worker run that just wakes the DB and returns
-        // success on an empty drain. A cheap single-row count avoids that
-        // no-op WorkManager run for users who never go offline.
-        scope.launch {
-            if (outbox.count() > 0) {
-                scheduler.enqueueNow()
             }
         }
     }
 
-    /**
-     * Cancels the network collector. The collection runs indefinitely on the
-     * injected [scope], so tests that drive a [TestScope] must call this (or
-     * cancel the scope) so `runTest` does not report uncompleted child jobs.
-     */
-    fun stop() {
-        job?.cancel()
-        job = null
-    }
+    fun stop() = trigger.stop()
 
-    private fun isReady(networkStatus: NetworkStatus, offlineMode: OfflineMode): Boolean =
-        networkStatus == NetworkStatus.Online && offlineMode == OfflineMode.ONLINE
+    private companion object {
+        private const val TAG = "PlaybackSyncReconnect"
+    }
 }

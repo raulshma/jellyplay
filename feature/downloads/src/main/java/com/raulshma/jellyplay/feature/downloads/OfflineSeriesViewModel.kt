@@ -7,19 +7,17 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -45,8 +43,9 @@ class OfflineSeriesViewModel @Inject constructor(
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
-     * Episodes keyed by season id. Loaded once all seasons are known so the UI
-     * can switch season tabs without re-fetching.
+     * Episodes keyed by season id. Each season's Room flow is subscribed
+     * reactively (not snapshotted), so deleting a single episode re-emits that
+     * season's flow and the list refreshes on its own — no reload needed.
      */
     val episodes: StateFlow<Map<String, List<OfflineMediaItem>>> =
         _seriesId.flatMapLatest { id ->
@@ -57,13 +56,10 @@ class OfflineSeriesViewModel @Inject constructor(
                     if (seasonList.isEmpty()) {
                         flowOf(emptyMap())
                     } else {
-                        val map = ConcurrentHashMap<String, List<OfflineMediaItem>>()
-                        coroutineScope {
-                            seasonList.map { season ->
-                                async { map[season.id] = offlineRepository.getEpisodesForSeason(season.id).first() }
-                            }.awaitAll()
+                        val perSeason: List<Flow<Pair<String, List<OfflineMediaItem>>>> = seasonList.map { season ->
+                            offlineRepository.getEpisodesForSeason(season.id).map { eps -> season.id to eps }
                         }
-                        flowOf(map.toMap())
+                        combine(perSeason) { pairs -> pairs.toMap() }
                     }
                 }
             }
@@ -93,6 +89,42 @@ class OfflineSeriesViewModel @Inject constructor(
 
     fun deleteEpisode(episodeId: String) {
         launch { offlineRepository.deleteOfflineItem(episodeId) }
+    }
+
+    /**
+     * Deletes a batch of downloaded episodes. Used by the multi-select delete
+     * sheet: if the selection covers an entire season, [deleteSeason] is used
+     * (one DB transaction + parallel artifact cleanup) so fully-selected seasons
+     * are pruned efficiently rather than one episode at a time; the remaining
+     * partial-season selections fall back to per-episode [deleteEpisode].
+     */
+    fun deleteEpisodes(episodeIds: Collection<String>) {
+        if (episodeIds.isEmpty()) return
+        val targets = episodeIds.toSet()
+        // Snapshot episodes once to classify whole-season vs partial selections.
+        val currentEpisodes = episodes.value
+        val currentSeasons = seasons.value
+        launch {
+            // For each season where every downloaded episode is selected, drop
+            // the season in one call; otherwise delete the selected episodes
+            // individually. This keeps whole-season deletes a single transaction.
+            val remainingEpisodeIds = mutableSetOf<String>()
+            currentSeasons.forEach { season ->
+                val seasonEpisodeIds = currentEpisodes[season.id].orEmpty().map { it.id }.toSet()
+                if (seasonEpisodeIds.isNotEmpty() && seasonEpisodeIds.all { it in targets }) {
+                    offlineRepository.deleteOfflineSeason(season.id)
+                } else {
+                    seasonEpisodeIds.filter { it in targets }.forEach { remainingEpisodeIds.add(it) }
+                }
+            }
+            // Any selected id not seen under a known season (defensive) — delete
+            // it directly so the selection is honored even if the seasons list
+            // changed between the sheet snapshot and this call.
+            targets
+                .filter { it !in currentEpisodes.values.flatten().map { e -> e.id } }
+                .forEach { remainingEpisodeIds.add(it) }
+            remainingEpisodeIds.forEach { offlineRepository.deleteOfflineItem(it) }
+        }
     }
 
     fun deleteSeason(seasonId: String) {
