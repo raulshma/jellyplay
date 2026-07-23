@@ -8,17 +8,15 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -55,22 +53,20 @@ class OfflineDetailViewModel @Inject constructor(
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
-     * Episodes keyed by season id for the loaded item's series. Loaded once all
-     * seasons are known so the UI can switch season tabs without re-fetching
-     * (mirrors OfflineSeriesViewModel.episodes). Empty for non-episode items.
+     * Episodes keyed by season id for the loaded item's series. Each season's
+     * Room flow is subscribed reactively (not snapshotted), so deleting a single
+     * episode re-emits that season's flow and the list refreshes on its own —
+     * no reload needed. Mirrors OfflineSeriesViewModel.episodes.
      */
     val episodes: StateFlow<Map<String, List<OfflineMediaItem>>> =
         seasons.flatMapLatest { seasonList ->
             if (seasonList.isEmpty()) {
                 flowOf(emptyMap())
             } else {
-                val map = ConcurrentHashMap<String, List<OfflineMediaItem>>()
-                coroutineScope {
-                    seasonList.map { season ->
-                        async { map[season.id] = offlineRepository.getEpisodesForSeason(season.id).first() }
-                    }.awaitAll()
+                val perSeason: List<Flow<Pair<String, List<OfflineMediaItem>>>> = seasonList.map { season ->
+                    offlineRepository.getEpisodesForSeason(season.id).map { eps -> season.id to eps }
                 }
-                flowOf(map.toMap())
+                combine(perSeason) { pairs -> pairs.toMap() }
             }
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
