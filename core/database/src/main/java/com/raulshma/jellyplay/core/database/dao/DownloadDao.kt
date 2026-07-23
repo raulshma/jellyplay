@@ -85,6 +85,24 @@ interface DownloadDao {
     @Query("SELECT id, downloadedBytes FROM downloads WHERE status = :status LIMIT 500")
     suspend fun getRecoveryRows(status: String): List<RecoveryRow>
 
+    /**
+     * Lightweight rows for downloads whose [status] is in [statuses]. Used by the
+     * network-reconnect path to enumerate interrupted (`PAUSED`/`FAILED`)
+     * downloads for bulk resume — same projection rationale as
+     * [getRecoveryRows].
+     */
+    @Query("SELECT id, downloadedBytes FROM downloads WHERE status IN (:statuses) LIMIT 500")
+    suspend fun getRecoveryRowsByStatuses(statuses: List<String>): List<RecoveryRow>
+
+    /**
+     * Projected `COMPLETED` rows for the cold-start reconciliation pass, which
+     * re-validates each completed download's file against the persisted
+     * [totalSizeBytes] and resets truncated/missing files to `PENDING` so they
+     * re-download. Carries only the columns the pass needs.
+     */
+    @Query("SELECT id, downloadPath, totalSizeBytes FROM downloads WHERE status = 'COMPLETED'")
+    suspend fun getCompletedForReconciliation(): List<ReconciliationRow>
+
     @Query("SELECT * FROM downloads WHERE seriesId = :seriesId")
     suspend fun getDownloadsForSeries(seriesId: String): List<DownloadEntity>
 
@@ -191,6 +209,17 @@ interface DownloadDao {
 data class RecoveryRow(
     val id: String,
     val downloadedBytes: Long,
+)
+
+/**
+ * Lightweight row projected out of `downloads` for the cold-start
+ * reconciliation pass — see [DownloadDao.getCompletedForReconciliation].
+ * Carries only the columns needed to validate a completed download's file.
+ */
+data class ReconciliationRow(
+    val id: String,
+    val downloadPath: String,
+    val totalSizeBytes: Long,
 )
 
 /**
