@@ -22,9 +22,21 @@ import com.raulshma.jellyplay.core.model.MediaItem
 @Stable
 internal class SeriesDownloadSelection(
     private val seasons: List<MediaItem>,
-    private val episodes: Map<String, List<MediaItem>>,
-    private val downloadedEpisodeIds: Set<String>,
+    episodes: Map<String, List<MediaItem>> = emptyMap(),
+    downloadedEpisodeIds: Set<String> = emptySet(),
 ) {
+    // Live episode / downloaded data. These change as the sheet fetches
+    // seasons and resolves downloaded ids (both happen asynchronously right
+    // after the sheet opens), but they must NOT reset the selection. They are
+    // pushed in via [rememberSeriesDownloadSelection] each recomposition and
+    // kept out of the `remember` keys so a fetch never wipes selections the
+    // user already made — that re-creation was the root cause of Select-all
+    // racing and selecting only a subset of seasons.
+    var episodes: Map<String, List<MediaItem>> by mutableStateOf(episodes)
+        internal set
+    var downloadedEpisodeIds: Set<String> by mutableStateOf(downloadedEpisodeIds)
+        internal set
+
     var selectedEpisodeIds: Map<String, Set<String>> by mutableStateOf(
         seasons.associate { it.id to emptySet() },
     )
@@ -115,6 +127,16 @@ internal fun rememberSeriesDownloadSelection(
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
     downloadedEpisodeIds: Set<String>,
-): SeriesDownloadSelection = remember(seasons, episodes, downloadedEpisodeIds) {
-    SeriesDownloadSelection(seasons, episodes, downloadedEpisodeIds)
+): SeriesDownloadSelection {
+    // Key only on `seasons`: it's loaded once before the sheet opens and is
+    // the only input whose change legitimately warrants a fresh selection.
+    // `episodes` and `downloadedEpisodeIds` arrive asynchronously after open
+    // (and again on every season fetch); keying on them recreated the whole
+    // selection — discarding `selectedEpisodeIds` and the deferred
+    // `pendingSeasonSelections` work — which caused Select-all to sometimes
+    // select only the last-loaded season.
+    val selection = remember(seasons) { SeriesDownloadSelection(seasons) }
+    selection.episodes = episodes
+    selection.downloadedEpisodeIds = downloadedEpisodeIds
+    return selection
 }
