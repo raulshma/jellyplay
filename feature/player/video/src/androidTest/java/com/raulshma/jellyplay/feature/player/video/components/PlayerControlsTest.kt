@@ -74,8 +74,6 @@ class PlayerControlsTest {
                     supportsAudioDelay = supportsAudioDelay,
                     supportsAudioPassthrough = supportsAudioPassthrough,
                     onPlayPause = {},
-                    onSeekBack = {},
-                    onSeekForward = {},
                     onSeekStart = {},
                     onSeekEnd = {},
                     onSeekPositionChange = {},
@@ -116,9 +114,9 @@ class PlayerControlsTest {
     @Test
     fun playerControls_visible_showsPlaybackControls() {
         setContent()
-        composeTestRule.onNodeWithContentDescription("Rewind").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Previous episode").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Play").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Forward").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Next episode").assertIsDisplayed()
     }
 
     @Test
@@ -309,8 +307,6 @@ class PlayerControlsTest {
                     detectedAspectRatio = null,
                     isVisible = true,
                     onPlayPause = {},
-                    onSeekBack = {},
-                    onSeekForward = {},
                     onSeekStart = {},
                     onSeekEnd = {},
                     onSeekPositionChange = {},
@@ -364,8 +360,6 @@ class PlayerControlsTest {
                     detectedAspectRatio = null,
                     isVisible = true,
                     onPlayPause = { playPauseCount++ },
-                    onSeekBack = {},
-                    onSeekForward = {},
                     onSeekStart = {},
                     onSeekEnd = {},
                     onSeekPositionChange = {},

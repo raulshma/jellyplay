@@ -138,6 +138,7 @@ data class VideoPlayerUiState(
     val syncPlayRepeatMode: SyncPlayRepeatMode = SyncPlayRepeatMode.REPEAT_NONE,
     val syncPlayShuffleMode: SyncPlayShuffleMode = SyncPlayShuffleMode.SORTED,
     val nextEpisode: JellyfinMediaItem? = null,
+    val previousEpisode: JellyfinMediaItem? = null,
     val streamUrl: String? = null,
     val preferredPlayerType: PlayerType = PlayerType.EXO_PLAYER,
     val currentMediaSource: MediaSource? = null,
