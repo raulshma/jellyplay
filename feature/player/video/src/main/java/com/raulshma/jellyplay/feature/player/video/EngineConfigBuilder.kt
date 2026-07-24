@@ -16,8 +16,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
  * preferences snapshot.
  *
  * Extracted verbatim from `VideoPlayerViewModel.updateConfigWithUiState()`
- * (recommendation #1 — continue the collaborator-extraction pattern) so the
- * audio-effects / decoder / subtitle-delay → [EngineConfig] mapping is a pure,
+ * so the audio-effects / decoder / subtitle-delay → [EngineConfig] mapping is a pure,
  * unit-testable function instead of an inline block inside the ~2 kLOC
  * ViewModel. The ViewModel still owns the live state and applies the result to
  * the active engine; this object performs only the translation.

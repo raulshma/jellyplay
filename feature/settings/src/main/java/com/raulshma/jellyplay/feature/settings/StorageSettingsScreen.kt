@@ -75,7 +75,6 @@ fun StorageSettingsScreen(
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
     var showQualityPicker by remember { mutableStateOf(false) }
 
-    // #11 — cache size computed lazily on screen entry, not at VM construction.
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
     val scrollState = rememberLazyListState()

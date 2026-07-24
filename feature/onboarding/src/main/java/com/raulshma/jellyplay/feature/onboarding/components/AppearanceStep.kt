@@ -278,6 +278,7 @@ fun OnboardingToggleRow(
     subtitle: String? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -304,6 +305,7 @@ fun OnboardingToggleRow(
             .background(backgroundColor)
             .focusIndicator()
             .clickable(
+                enabled = enabled,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = { onCheckedChange(!checked) },
@@ -316,7 +318,7 @@ fun OnboardingToggleRow(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (subtitle != null) {
                 Text(
@@ -330,6 +332,7 @@ fun OnboardingToggleRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            enabled = enabled,
             modifier = Modifier.focusProperties { canFocus = false },
         )
     }

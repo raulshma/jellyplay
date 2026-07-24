@@ -17,6 +17,19 @@ enum class HomeMode {
     MUSIC,
 }
 
+/**
+ * Played-status filter for library browsing. Maps onto Jellyfin's
+ * `ItemFilter` (`IS_PLAYED` / `IS_UNPLAYED`) — see `LibraryApiClientImpl`.
+ * Lived in `core/model` so the data + UI layers share one definition.
+ */
+@Immutable
+@Serializable
+enum class PlayedStatus(val displayName: String) {
+    ALL("All"),
+    PLAYED("Played"),
+    UNPLAYED("Unplayed"),
+}
+
 @Immutable
 @Serializable
 enum class ThemeMode {

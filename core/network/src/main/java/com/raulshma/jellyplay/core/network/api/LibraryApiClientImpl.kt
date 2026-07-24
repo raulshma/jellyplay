@@ -409,12 +409,24 @@ class LibraryApiClientImpl @Inject constructor(
         limit: Int,
         searchTerm: String?,
         tags: List<String>?,
+        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
+        minRating: Float?,
     ): Result<SearchResult> = engine.apiResultWithRetry {
         val sortByEnum = ItemSortBy.entries
             .find { it.serialName.equals(sortBy, ignoreCase = true) }
         val sortOrderEnum = SortOrder.entries
             .find { it.serialName.equals(sortOrder, ignoreCase = true) }
             ?: SortOrder.ASCENDING
+        // Played-status maps onto Jellyfin's ItemFilter (IsPlayed/IsUnplayed).
+        // Previously these chips toggled + persisted but never reached the query,
+        // so the grid silently ignored them (analysis F1).
+        val itemFilters = buildList {
+            when (playedStatus) {
+                com.raulshma.jellyplay.core.model.PlayedStatus.PLAYED -> add(ItemFilter.IS_PLAYED)
+                com.raulshma.jellyplay.core.model.PlayedStatus.UNPLAYED -> add(ItemFilter.IS_UNPLAYED)
+                else -> {}
+            }
+        }
         val response = engine.requireApi().itemsApi.getItems(
             parentId = parentId?.let { it.toUUID() },
             includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
@@ -432,6 +444,8 @@ class LibraryApiClientImpl @Inject constructor(
             limit = limit,
             recursive = true,
             searchTerm = searchTerm?.takeIf { it.isNotBlank() },
+            filters = itemFilters.takeIf { it.isNotEmpty() },
+            minCommunityRating = minRating?.toDouble(),
             fields = listOf(
                 ItemFields.OVERVIEW,
                 ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,

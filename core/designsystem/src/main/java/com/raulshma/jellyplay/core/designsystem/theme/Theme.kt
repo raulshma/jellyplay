@@ -321,11 +321,12 @@ fun JellyPlayTheme(
         monochromeMode -> {
             remember(effectiveDarkTheme) { getMonochromeColorScheme(effectiveDarkTheme) }
         }
-        accentColorSwatch == "dynamic" && dynamicColor && !isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        accentColorSwatch == "dynamic" && dynamicColor && contrastLevel == ContrastLevel.DEFAULT && !isTv && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (effectiveDarkTheme) {
                 val dynamic = dynamicDarkColorScheme(context)
-                if (effectiveOledMode) dynamic.withOledSurfaces() else dynamic
+                val applyOled = effectiveOledMode && contrastLevel != ContrastLevel.HIGH
+                if (applyOled) dynamic.withOledSurfaces() else dynamic
             } else {
                 dynamicLightColorScheme(context)
             }
@@ -336,7 +337,8 @@ fun JellyPlayTheme(
                 ContrastLevel.HIGH -> HighContrastDarkColorScheme
                 ContrastLevel.DEFAULT -> DarkColorScheme
             }
-            if (effectiveOledMode) base.withOledSurfaces() else base
+            // High Contrast takes precedence over OLED surfaces.
+            if (effectiveOledMode && contrastLevel != ContrastLevel.HIGH) base.withOledSurfaces() else base
         }
         accentColorSwatch == "dynamic" -> when (contrastLevel) {
             ContrastLevel.MEDIUM -> MediumContrastLightColorScheme
@@ -485,6 +487,22 @@ fun PlayerDarkTheme(content: @Composable () -> Unit) {
             onSecondary = ambient.onSecondary,
             tertiary = ambient.tertiary,
             onTertiary = ambient.onTertiary,
+            // Carry the ambient theme's remaining roles through so error/outline/
+            // surfaceVariant (and the surface containers) don't fall back to M3
+            // defaults that clash with Synthwave/brand chrome.
+            error = ambient.error,
+            onError = ambient.onError,
+            errorContainer = ambient.errorContainer,
+            onErrorContainer = ambient.onErrorContainer,
+            outline = ambient.outline,
+            outlineVariant = ambient.outlineVariant,
+            surfaceVariant = ambient.surfaceVariant,
+            onSurfaceVariant = ambient.onSurfaceVariant,
+            surfaceTint = ambient.surfaceTint,
+            inverseSurface = ambient.inverseSurface,
+            inverseOnSurface = ambient.inverseOnSurface,
+            inversePrimary = ambient.inversePrimary,
+            scrim = ambient.scrim,
         )
     }
     MaterialTheme(colorScheme = darkScheme) {

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -133,13 +134,22 @@ private fun PersonHeader(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (!biography.isNullOrBlank()) {
+            var bioExpanded by remember { mutableStateOf(false) }
             Text(
                 text = biography,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 4,
+                maxLines = if (bioExpanded) Int.MAX_VALUE else 4,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = contentPad),
+            )
+            Text(
+                text = if (bioExpanded) "Show less" else "Read more",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clickable { bioExpanded = !bioExpanded }
+                    .padding(horizontal = contentPad),
             )
         }
         androidx.compose.foundation.layout.Row(

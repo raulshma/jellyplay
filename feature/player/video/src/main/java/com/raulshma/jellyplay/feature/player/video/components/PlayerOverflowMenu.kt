@@ -44,7 +44,7 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
  * mode, decoder, passthrough, subtitle download, stats, sleep timer, video
  * filters.
  *
- * Extracted verbatim from `PlayerControls.kt` (recommendation #2 — decompose
+ * Extracted verbatim from `PlayerControls.kt` — decompose
  * the 1.6 kLOC controls overlay into smaller, self-contained stateless
  * composables). All state is hoisted to the caller via explicit parameters;
  * only the per-submenu open/close state is local to this composable.

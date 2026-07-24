@@ -44,6 +44,8 @@ interface LibraryApiClient {
         limit: Int = 50,
         searchTerm: String? = null,
         tags: List<String>? = null,
+        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
+        minRating: Float? = null,
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>

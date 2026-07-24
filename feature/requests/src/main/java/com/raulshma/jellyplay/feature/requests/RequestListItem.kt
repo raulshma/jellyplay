@@ -58,6 +58,7 @@ fun RequestListItem(
     val colorScheme = MaterialTheme.colorScheme
     val requestStatus = remember(request.status) { SeerrRequestStatus.fromValue(request.status) }
     var isConfirmingDelete by remember(request.id) { mutableStateOf(false) }
+    var pendingApproval by remember(request.id) { mutableStateOf<SeerrRequestStatus?>(null) }
 
     LaunchedEffect(isConfirmingDelete) {
         if (isConfirmingDelete) {
@@ -230,7 +231,7 @@ fun RequestListItem(
                         }
                         requestStatus == SeerrRequestStatus.PENDING -> {
                             FilledTonalButton(
-                                onClick = onApprove,
+                                onClick = { pendingApproval = SeerrRequestStatus.APPROVED },
                                 enabled = !actionInProgress,
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                 modifier = Modifier
@@ -240,7 +241,7 @@ fun RequestListItem(
                                 Text("Approve", style = MaterialTheme.typography.labelSmall)
                             }
                             FilledTonalButton(
-                                onClick = onDecline,
+                                onClick = { pendingApproval = SeerrRequestStatus.DECLINED },
                                 enabled = !actionInProgress,
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                 modifier = Modifier
@@ -281,6 +282,25 @@ fun RequestListItem(
                 }
             }
         }
+    }
+
+    pendingApproval?.let { approval ->
+        val isApprove = approval == SeerrRequestStatus.APPROVED
+        com.raulshma.jellyplay.core.ui.components.ConfirmDialog(
+            title = if (isApprove) "Approve request?" else "Decline request?",
+            message = if (isApprove) {
+                "Approve this request? This can't be undone."
+            } else {
+                "Decline this request? The requester will be notified and this can't be undone."
+            },
+            confirmText = if (isApprove) "Approve" else "Decline",
+            dismissText = "Cancel",
+            isDestructive = !isApprove,
+            onConfirm = {
+                if (isApprove) onApprove() else onDecline()
+            },
+            onDismiss = { pendingApproval = null },
+        )
     }
 }
 

@@ -1299,7 +1299,18 @@ class VideoPlayerViewModel @Inject constructor(
                 aspectRatio = defaultAspectRatio,
                 trickplayEnabled = prefs.trickplayEnabled,
                 trickplayOnSeekGesture = prefs.trickplayOnSeekGesture,
-                segmentBehaviors = prefs.segmentBehaviors,
+                segmentBehaviors = run {
+                    val base = prefs.segmentBehaviors.toMutableMap()
+                    if (prefs.videoAutoSkipIntro) {
+                        base[com.raulshma.jellyplay.core.model.MediaSegmentType.INTRO] =
+                            com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
+                    }
+                    if (prefs.videoAutoSkipOutro) {
+                        base[com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO] =
+                            com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
+                    }
+                    base.toMap()
+                },
                 videoEpisodeBrowserEnabled = prefs.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = prefs.videoShowPlaybackMetadata,
                 showClock = prefs.showClockInPlayer,
@@ -1311,8 +1322,27 @@ class VideoPlayerViewModel @Inject constructor(
                 playbackMode = prefs.playbackMode,
                 videoAutoplayNext = prefs.videoAutoplayNext,
                 autoPlayCountdownSec = prefs.autoPlayCountdownSec,
+                rememberVolume = prefs.videoRememberVolume,
+                volumeLevel = prefs.videoVolumeLevel,
             ) }
             autoplayController.setEnabled(prefs.videoAutoplayNext)
+
+            // Reapply persisted volume/mute to the active engine when remembered.
+            if (prefs.videoRememberVolume) {
+                val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                if (am != null) {
+                    val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                    am.setStreamVolume(
+                        android.media.AudioManager.STREAM_MUSIC,
+                        (prefs.videoVolumeLevel * max).toInt().coerceIn(0, max),
+                        0,
+                    )
+                }
+            }
+            if (prefs.videoRememberMuted && prefs.videoMuted) {
+                _uiState.update { it.copy(isMuted = true) }
+                playerSessionManager.engine?.setMuted(true)
+            }
 
             if (allowCinemaMode && shouldAttemptCinemaMode(prefs, itemId, startPositionTicks)) {
                 val intros = mediaRepository.getIntros(itemId).getOrDefault(emptyList())
@@ -2068,6 +2098,18 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Persist the gesture-adjusted system volume (0..1) when "remember volume"
+     * is on. Mirrors [saveBrightness]; the engine itself doesn't store
+     * volume — the value is reapplied to STREAM_MUSIC on next-session restore.
+     */
+    fun saveVolume(normalizedLevel: Float) {
+        _uiState.update { it.copy(volumeLevel = normalizedLevel) }
+        if (_uiState.value.rememberVolume) {
+            launch { preferencesStore.setVideoVolumeLevel(normalizedLevel) }
+        }
+    }
+
     fun skipIntro() {
         val state = positionAwareState()
         if (state.cinemaIntroState != null) {
@@ -2561,12 +2603,23 @@ class VideoPlayerViewModel @Inject constructor(
     fun toggleMute() {
         val engine = playerSessionManager.engine ?: return
         val currentlyMuted = _uiState.value.isMuted
-        engine.setMuted(!currentlyMuted)
-        _uiState.update { it.copy(isMuted = !currentlyMuted) }
+        val nowMuted = !currentlyMuted
+        engine.setMuted(nowMuted)
+        _uiState.update { it.copy(isMuted = nowMuted) }
+        if (preferencesStore.preferences.value.videoRememberMuted) {
+            launch { preferencesStore.setVideoMuted(nowMuted) }
+        }
     }
 
     fun setControlsVisible(visible: Boolean) {
         playerSessionManager.engine?.setPollingIntervalMs(if (visible) 250L else 1000L)
+    }
+
+    /** Toggle the autoplay-next-episode preference from the in-player Up Next card. */
+    fun setVideoAutoplayNext(enabled: Boolean) {
+        _uiState.update { it.copy(videoAutoplayNext = enabled) }
+        autoplayController.setEnabled(enabled)
+        launch { preferencesStore.setVideoAutoplayNext(enabled) }
     }
 
     suspend fun getTrickplayThumbnail(positionMs: Long): Bitmap? {

@@ -7,8 +7,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
  * previously lived as two loose `var`s on `VideoPlayerViewModel`
  * (`autoplayNext` / `autoplayCancelled`).
  *
- * Extracted from the ViewModel (recommendation #1 — continue the
- * collaborator-extraction pattern) so the autoplay state machine and its
+ * Extracted from the ViewModel so the autoplay state machine and its
  * decision rules are unit-testable in isolation. The ViewModel remains the
  * source of truth for the UI-facing mirror fields (`videoAutoplayNext` /
  * `autoplayCancelled` in `VideoPlayerUiState`); it drives this controller and

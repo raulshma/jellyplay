@@ -126,14 +126,17 @@ fun SecurityStep(
 
             Spacer(Modifier.height(8.dp))
 
-            if (biometricAvailable) {
-                OnboardingToggleRow(
-                    title = "Biometric lock",
-                    subtitle = "Use fingerprint or face unlock",
-                    checked = biometricLockEnabled,
-                    onCheckedChange = onBiometricLockEnabledChange,
-                )
-            }
+            OnboardingToggleRow(
+                title = "Biometric lock",
+                subtitle = if (biometricAvailable) {
+                    "Use fingerprint or face unlock"
+                } else {
+                    "Set up a fingerprint or face in Android Settings to enable"
+                },
+                checked = biometricLockEnabled,
+                onCheckedChange = onBiometricLockEnabledChange,
+                enabled = biometricAvailable,
+            )
 
             Spacer(Modifier.height(8.dp))
 
@@ -148,10 +151,11 @@ fun SecurityStep(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                listOf(15_000L, 30_000L, 60_000L, 300_000L).forEach { duration ->
+                listOf(0L, 15_000L, 30_000L, 60_000L, 300_000L).forEach { duration ->
                     val selected = duration == autoLockTimerMs
                     OnboardingOptionCard(
                         label = when (duration) {
+                            0L -> "Never"
                             15_000L -> "15s"
                             30_000L -> "30s"
                             60_000L -> "1m"
