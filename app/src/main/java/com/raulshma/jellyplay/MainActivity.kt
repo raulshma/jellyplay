@@ -467,7 +467,13 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun onPipModeChanged(isInPictureInPictureMode: Boolean) {
-        if (!isInPictureInPictureMode) {
+        if (isInPictureInPictureMode) {
+            // Register the receiver + attach actions on EVERY PiP entry, including
+            // auto-entry (home-press while playing) which bypasses enterPipMode()
+            // and would otherwise leave the remote actions dead.
+            registerPipActionReceiver()
+            refreshPipActions()
+        } else {
             justExitedPip = true
             unregisterPipActionReceiver()
         }

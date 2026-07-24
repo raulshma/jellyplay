@@ -157,11 +157,13 @@ internal fun PlayerControls(
     hasEpisodes: Boolean = false,
     episodeBrowserEnabled: Boolean = true,
     onPlayPause: () -> Unit,
-    onSeekBack: () -> Unit,
-    onSeekForward: () -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit,
+    hasPreviousEpisode: Boolean = false,
+    hasNextEpisode: Boolean = false,
+    onPreviousEpisode: () -> Unit = {},
+    onNextEpisode: () -> Unit = {},
     tvTrickplayBitmap: Bitmap? = null,
     onBack: () -> Unit,
     onSpeedClick: () -> Unit,
@@ -446,7 +448,8 @@ internal fun PlayerControls(
             ) {
                 val tvRewindFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
-                    onClick = onSeekBack,
+                    onClick = onPreviousEpisode,
+                    enabled = hasPreviousEpisode,
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
                         .then(tvRewindFocusState.focusModifier)
@@ -458,7 +461,7 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        Tabler.Outline.PlayerTrackPrev, "Rewind",
+                        Tabler.Outline.PlayerTrackPrev, "Previous episode",
                         modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }
@@ -486,7 +489,8 @@ internal fun PlayerControls(
 
                 val tvForwardFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
-                    onClick = onSeekForward,
+                    onClick = onNextEpisode,
+                    enabled = hasNextEpisode,
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
                         .then(tvForwardFocusState.focusModifier)
@@ -498,7 +502,7 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        Tabler.Outline.PlayerTrackNext, "Forward",
+                        Tabler.Outline.PlayerTrackNext, "Next episode",
                         modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }

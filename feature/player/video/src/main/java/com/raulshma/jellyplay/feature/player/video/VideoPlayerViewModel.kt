@@ -1221,7 +1221,7 @@ class VideoPlayerViewModel @Inject constructor(
                     progressReporter.startPositionTracking()
                     progressReporter.startProgressReporting()
                     fetchMediaSegments(itemId)
-                    fetchNextEpisode(detail)
+                    fetchAdjacentEpisodes(detail)
                     loadSeriesEpisodes(detail)
                 }
             }
@@ -1456,7 +1456,7 @@ class VideoPlayerViewModel @Inject constructor(
             fetchMediaSegments(itemId)
             if (detail != null) {
                 kotlinx.coroutines.coroutineScope {
-                    launch { fetchNextEpisode(detail) }
+                    launch { fetchAdjacentEpisodes(detail) }
                     launch { loadSeriesEpisodes(detail) }
                 }
             }
@@ -2025,6 +2025,33 @@ class VideoPlayerViewModel @Inject constructor(
         configChangeIntent.tryEmit(Unit)
     }
 
+    fun playPreviousEpisode() {
+        val detail = mediaDetail ?: return
+        val seriesId = detail.item.seriesId ?: return
+        val seasonId = detail.item.seasonId ?: return
+        val currentItemId = playerSessionManager.sessionState.value.currentItemId ?: return
+        launch {
+            val episodes = resolveEpisodes(seriesId, seasonId)
+            val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
+            if (currentIndex <= 0) return@launch
+            val previous = episodes[currentIndex - 1]
+
+            if (syncPlayManager.isInSyncPlaySession) {
+                val group = syncPlayManager.currentGroup
+                val currentPlaylistItemId = group?.playingPlaylistItemId
+                val previousExistsInQueue = group?.playlistItemMap?.values?.contains(previous.id) == true
+                if (currentPlaylistItemId != null && previousExistsInQueue) {
+                    syncPlayBridge.sendPreviousItem(currentPlaylistItemId)
+                    return@launch
+                }
+            }
+
+            // Resume the previous episode from its saved position (mirrors the
+            // episode picker), falling back to the start when none is recorded.
+            initialize(previous.id, null, previous.playbackPositionTicks ?: 0L)
+        }
+    }
+
     fun playNextEpisode() {
         val detail = mediaDetail ?: return
         val seriesId = detail.item.seriesId ?: return
@@ -2223,18 +2250,18 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    private fun fetchNextEpisode(currentDetail: MediaDetail) {
+    private fun fetchAdjacentEpisodes(currentDetail: MediaDetail) {
         val seriesId = currentDetail.item.seriesId ?: return
         val seasonId = currentDetail.item.seasonId ?: return
         launch {
             val episodes = resolveEpisodes(seriesId, seasonId)
             val currentItemId = playerSessionManager.sessionState.value.currentItemId
             val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
-            if (currentIndex >= 0 && currentIndex + 1 < episodes.size) {
-                _uiState.update { it.copy(nextEpisode = episodes[currentIndex + 1]) }
-            } else {
-                _uiState.update { it.copy(nextEpisode = null) }
-            }
+            val next = if (currentIndex >= 0 && currentIndex + 1 < episodes.size) {
+                episodes[currentIndex + 1]
+            } else null
+            val previous = if (currentIndex > 0) episodes[currentIndex - 1] else null
+            _uiState.update { it.copy(nextEpisode = next, previousEpisode = previous) }
         }
     }
 

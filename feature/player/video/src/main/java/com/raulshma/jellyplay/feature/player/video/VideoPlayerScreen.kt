@@ -1366,6 +1366,11 @@ fun VideoPlayerScreen(
 
             val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
             val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
+            // Previous/Next center-button availability. Derived from the
+            // adjacency snapshot fetchAdjacentEpisodes writes alongside
+            // nextEpisode, so these stay consistent with the up-next overlay.
+            val hasPreviousEpisode = uiState.previousEpisode != null
+            val hasNextEpisode = uiState.nextEpisode != null
 
             // Hoist PlayerControls callbacks into remembered lambdas.
             // Each fresh `{ ... }` passed inline below allocated a new lambda
@@ -1380,8 +1385,8 @@ fun VideoPlayerScreen(
             // onPassthroughClick) are keyed on exactly that value so they
             // recreate only when it actually changes.
             val onPlayPause by remember(doTogglePlayPause) { mutableStateOf({ doTogglePlayPause() }) }
-            val onSeekBack by remember(doSeekBack) { mutableStateOf({ doSeekBack() }) }
-            val onSeekForward by remember(doSeekForward) { mutableStateOf({ doSeekForward() }) }
+            val onPreviousEpisode by remember { mutableStateOf({ viewModel.playPreviousEpisode() }) }
+            val onNextEpisode by remember { mutableStateOf({ viewModel.playNextEpisode() }) }
             val onSeekEnd by remember(duration, doSeekTo) {
                 mutableStateOf({
                     isSeeking = false
@@ -1482,8 +1487,10 @@ fun VideoPlayerScreen(
                 hasEpisodes = hasEpisodes,
                 episodeBrowserEnabled = episodeBrowserEnabled,
                 onPlayPause = onPlayPause,
-                onSeekBack = onSeekBack,
-                onSeekForward = onSeekForward,
+                hasPreviousEpisode = hasPreviousEpisode,
+                hasNextEpisode = hasNextEpisode,
+                onPreviousEpisode = onPreviousEpisode,
+                onNextEpisode = onNextEpisode,
                 onSeekStart = onSeekStart,
                 onSeekEnd = onSeekEnd,
                 onSeekPositionChange = onSeekPositionChange,
