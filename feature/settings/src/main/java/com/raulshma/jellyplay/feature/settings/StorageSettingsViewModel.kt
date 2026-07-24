@@ -30,7 +30,7 @@ import javax.inject.Inject
  *
  * The cache size is computed lazily on screen entry via [refreshCacheSize] — the screen invokes it
  * from a `LaunchedEffect(Unit)`. It is NOT computed in `init` to avoid recursive FS walks at
- * construction time (issue #11): a freshly built VM with no user ever viewing the storage screen
+ * construction time: a freshly built VM with no user ever viewing the storage screen
  * would otherwise trigger four directory walks on every process start.
  */
 @HiltViewModel

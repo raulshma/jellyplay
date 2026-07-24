@@ -592,8 +592,9 @@ fun SettingsScreen(
                                                     viewModel.setShowAdvancedSettings(true)
                                                     userMessageBus.info(uiTextOf(R.string.settings_advanced_enabled))
                                                 }
-                                                 if (item.id == "logout") {
-                                                     onLogout(false)
+                                                  if (item.id == "logout") {
+                                                      signOutFromServer = false
+                                                     showSignOutConfirm = true
                                                  } else {
                                                     when (item.route) {
                                                         is Route.ServerManagement -> onServerManagement(item.id)

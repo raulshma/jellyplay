@@ -387,7 +387,11 @@ fun PosterCard(
                 .jellyFocusIndicator(focusInteraction, cardShape)
                 .combinedClickable(
                     interactionSource = interactionSource,
-                    indication = null,
+                    indication = if (com.raulshma.jellyplay.core.ui.animation.isReducedMotion()) {
+                        androidx.compose.foundation.LocalIndication.current
+                    } else {
+                        null
+                    },
                     onClick = onClick,
                     onLongClick = peek?.onLongClick,
                 ),

@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.defaultViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -56,12 +57,6 @@ enum class SortOption(val displayName: String, val apiValue: String) {
     RANDOM("Random", "Random"),
     DATE_PLAYED("Recently Played", "DatePlayed,SortName"),
     PREMIERE_DATE("Release Date", "PremiereDate,SortName"),
-}
-
-enum class PlayedStatus(val displayName: String) {
-    ALL("All"),
-    PLAYED("Played"),
-    UNPLAYED("Unplayed"),
 }
 
 /** Projected slice of [UserPreferences] used to derive the active library view mode. */
@@ -131,14 +126,16 @@ class LibraryViewModel @Inject constructor(
     val pagedItems: Flow<PagingData<MediaItem>> = combine(_selectedFolder.flow, _filters.flow, _refreshTrigger) { folder, filters, _ ->
         folder to filters
     }.flatMapLatest { (folder, filters) ->
-        mediaRepository.getMediaItemsPaged(
-            parentId = folder?.id,
-            mediaTypes = filters.mediaTypes.ifEmpty { null },
-            genres = filters.genres.ifEmpty { null },
-            years = filters.years.ifEmpty { null },
-            sortBy = filters.sortBy.apiValue,
-            tags = filters.tags.ifEmpty { null },
-        )
+      mediaRepository.getMediaItemsPaged(
+          parentId = folder?.id,
+          mediaTypes = filters.mediaTypes.ifEmpty { null },
+          genres = filters.genres.ifEmpty { null },
+          years = filters.years.ifEmpty { null },
+          sortBy = filters.sortBy.apiValue,
+          tags = filters.tags.ifEmpty { null },
+          playedStatus = filters.playedStatus.takeIf { it != PlayedStatus.ALL },
+          minRating = filters.minRating.takeIf { it > 0f },
+      )
     }
     .cachedIn(scope)
 

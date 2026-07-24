@@ -27,7 +27,7 @@ import org.junit.Test
 
 /**
  * Pins [EngineConfigBuilder] — the audio-effects / decoder orchestration mapping
- * extracted from `VideoPlayerViewModel` (recommendation #1). Pure function, no
+ * extracted from `VideoPlayerViewModel`. Pure function, no
  * Android, so it is exercised directly.
  */
 class EngineConfigBuilderTest {

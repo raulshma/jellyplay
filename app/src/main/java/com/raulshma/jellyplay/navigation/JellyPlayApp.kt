@@ -868,6 +868,13 @@ private fun MainContent(
                         }
                     }
                 }
+                if (isOffline) {
+                    com.raulshma.jellyplay.core.ui.components.OfflineBanner(
+                        onRetry = { viewModel.refreshServerHealth() },
+                        modifier = Modifier
+                            .align(androidx.compose.ui.Alignment.TopCenter),
+                    )
+                }
             }
             // Press-and-hold peek overlay — topmost. Only composed when the user
             // has enabled the experimental feature and on phone; on TV the

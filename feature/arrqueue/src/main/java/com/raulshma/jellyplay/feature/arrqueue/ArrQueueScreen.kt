@@ -197,6 +197,32 @@ fun ArrQueueScreen(
                     }
                 }
             }
+
+            val actionSuccess = state.actionSuccess
+            if (actionSuccess != null) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = ShapeCache.smooth12,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = actionSuccess,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { viewModel.clearActionSuccess() }) {
+                            Text("OK")
+                        }
+                    }
+                }
+            }
         }
     }
 

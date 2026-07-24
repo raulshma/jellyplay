@@ -18,6 +18,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -279,7 +282,18 @@ fun VideoPlayerScreen(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: android.net.Uri? ->
         if (uri != null) {
-            viewModel.installUserFont(uri)
+            val name = uri.lastPathSegment.orEmpty().lowercase()
+            val isFont = name.endsWith(".ttf") || name.endsWith(".otf")
+            if (isFont) {
+                viewModel.installUserFont(uri)
+            } else {
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Selected file isn't a .ttf or .otf font.",
+                        duration = androidx.compose.material3.SnackbarDuration.Short,
+                    )
+                }
+            }
         }
     }
 
@@ -1034,13 +1048,16 @@ fun VideoPlayerScreen(
                             }
                             gestureDeltaMs = totalDeltaMs
                             val durationMs = eng.durationMs.coerceAtLeast(0)
-                            // For live streams durationMs is 0, so the
-                            // upper clamp pinned every seek to 0. Skip the
-                            // clamp when there is no known duration; live seek
-                            // gestures are rare and the engine clamps on its
-                            // own at seek time.
+                            // For live streams durationMs is 0, so the upper
+                            // clamp is skipped. To avoid showing a trickplay
+                            // thumbnail + time label for a position that doesn't
+                            // For live streams durationMs is 0, so the upper
+                            // clamp is skipped. To avoid showing a trickplay
+                            // thumbnail + time label for a position that doesn't
+                            // exist, cap the *per-gesture* delta by the
                             gestureSeekPositionMs = if (durationMs <= 0L) {
-                                (gestureStartPositionMs + totalDeltaMs).coerceAtLeast(0L)
+                                val capped = totalDeltaMs.coerceIn(-uiState.swipeSeekMaxMs, uiState.swipeSeekMaxMs)
+                                (gestureStartPositionMs + capped).coerceAtLeast(0L)
                             } else {
                                 (gestureStartPositionMs + totalDeltaMs).coerceIn(0L, durationMs)
                             }
@@ -1098,6 +1115,15 @@ fun VideoPlayerScreen(
                         }
                         if (brightnessOverlay in 0f..1f) {
                             viewModel.saveBrightness(brightnessOverlay)
+                        }
+                        if (volumeOverlay in 0f..1f) {
+                            val am = context.getSystemService(android.content.Context.AUDIO_SERVICE)
+                                as? android.media.AudioManager
+                            if (am != null) {
+                                val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                                val cur = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                                if (max > 0) viewModel.saveVolume(cur.toFloat() / max)
+                            }
                         }
                         seekState.reset()
                         volumeGestureAccumulator = 0f
@@ -1226,6 +1252,7 @@ fun VideoPlayerScreen(
                     autoplayEnabled = uiState.videoAutoplayNext,
                     onPlayNext = { viewModel.playNextEpisode() },
                     onCancel = { viewModel.cancelAutoplay() },
+                    onToggleAutoplay = { viewModel.setVideoAutoplayNext(!uiState.videoAutoplayNext) },
                     isPlaying = isPlaying,
                     pauseCountdown = currentSheet != PlayerSheet.None || isScreenLocked,
                     focusRequester = tvNextEpisodeFocusRequester,
@@ -1239,7 +1266,8 @@ fun VideoPlayerScreen(
                 hdrType = uiState.hdrType,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 60.dp, end = 16.dp),
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = 16.dp, end = 16.dp),
             )
 
             if (uiState.isBuffering && uiState.playerError == null && !isPlaying && playbackIntended) {
@@ -1442,6 +1470,10 @@ fun VideoPlayerScreen(
                 tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
                 isSkipSegmentVisible = isSkipSegmentVisible,
                 isNextEpisodeVisible = isNextEpisodeVisible,
+                onControlRowScrolled = {
+                    userInteractionCount++
+                    viewModel.onUserInteraction()
+                },
                 supportsSubtitleStyle = uiState.engineCapabilities.supportsSubtitleStyle,
                 supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
                 supportsNightMode = uiState.engineCapabilities.supportsNightMode,
@@ -1753,7 +1785,7 @@ private fun BoxScope.ZoomBadge(videoZoom: Float) {
         exit = fadeOut(tween(200, easing = AlphaEasing)),
         modifier = Modifier
             .align(Alignment.TopCenter)
-            .padding(top = 60.dp),
+            .padding(top = 100.dp),
     ) {
         Surface(
             shape = ShapeCache.smoothPill,

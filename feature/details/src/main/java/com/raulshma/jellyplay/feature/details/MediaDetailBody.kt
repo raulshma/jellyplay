@@ -27,6 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -423,12 +426,25 @@ internal fun DetailContentBody(
         StaggeredDetailSection(visible = showContent, delayIndex = 3) {
             item.overview?.let { overview ->
                 FadingItem {
+                    // F5: cap the overview so long synopses don't push everything
+                    // below the fold, with a "Read more" toggle (collapsed=4 lines).
+                    var expanded by remember { mutableStateOf(false) }
                     Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
                         Text(
                             text = overview,
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                            lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp)
+                            lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp),
+                            maxLines = if (expanded) Int.MAX_VALUE else 4,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = if (expanded) "Show less" else "Read more",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clickable { expanded = !expanded }
+                                .padding(top = 4.dp),
                         )
                     }
                 }

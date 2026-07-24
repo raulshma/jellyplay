@@ -183,6 +183,7 @@ private fun ServerItem(
     onDelete: () -> Unit,
     firstFocusModifier: Modifier = Modifier,
 ) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
     val border = when {
@@ -241,7 +242,7 @@ private fun ServerItem(
             }
             val deleteFocusState = rememberTvFocusState()
             IconButton(
-                onClick = onDelete,
+                onClick = { showDeleteConfirm = true },
                 modifier = Modifier.then(deleteFocusState.focusModifier).tvFocusIndicator(deleteFocusState, CircleShape),
             ) {
                 Icon(
@@ -251,5 +252,16 @@ private fun ServerItem(
                 )
             }
         }
+    }
+
+    if (showDeleteConfirm) {
+        com.raulshma.jellyplay.core.ui.components.ConfirmDialog(
+            title = "Remove server?",
+            message = "This removes \"${server.name}\" and every saved user on it. This can't be undone.",
+            confirmText = "Remove",
+            dismissText = "Cancel",
+            onConfirm = onDelete,
+            onDismiss = { showDeleteConfirm = false },
+        )
     }
 }

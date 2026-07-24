@@ -68,28 +68,13 @@ sealed class LanguageSettingsDialog {
     object AppLanguagePicker : LanguageSettingsDialog()
 }
 
+// TODO(i18n): ship values-*/strings.xml for these locales before re-enabling them.
+// The picker previously advertised 20 languages with zero translated resources, so every
+// selection silently rendered English — a trust-eroding silent failure (analysis F-19).
+// Restore entries here only once at least the top-5 translations exist.
 internal val appLanguages = listOf(
     null to "System Default",
     "en" to "English",
-    "es" to "Español",
-    "fr" to "Français",
-    "de" to "Deutsch",
-    "it" to "Italiano",
-    "pt" to "Português",
-    "ru" to "Русский",
-    "ja" to "日本語",
-    "zh" to "中文",
-    "ko" to "한국어",
-    "ar" to "العربية",
-    "hi" to "हिन्दी",
-    "tr" to "Türkçe",
-    "pl" to "Polski",
-    "nl" to "Nederlands",
-    "sv" to "Svenska",
-    "cs" to "Čeština",
-    "da" to "Dansk",
-    "fi" to "Suomi",
-    "nb" to "Norsk Bokmål",
 )
 
 private val appLanguageNameByCode: Map<String?, String> = appLanguages.associate { it.first to it.second }
@@ -227,6 +212,10 @@ fun LanguageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in SUBTITLE_GROUP_IDS,
                 ) {
+                    com.raulshma.jellyplay.core.ui.components.SubtitleStylePreview(
+                        style = preferences.subtitleStyle,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
                     var subIdx = 0
                     val subTotal = when {
                         !showAdvanced -> 4

@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
@@ -33,6 +34,7 @@ import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.onboarding.R
 
 @Composable
 fun SubtitlesStep(
@@ -47,8 +49,8 @@ fun SubtitlesStep(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OnboardingStepScaffold(
-            title = "Subtitles",
-            subtitle = "Customize subtitle appearance and defaults",
+            title = stringResource(R.string.onboarding_subtitles_title),
+            subtitle = stringResource(R.string.onboarding_subtitles_subtitle),
             icon = Tabler.Outline.Subtitles,
             onNext = {},
         ) {
@@ -61,7 +63,7 @@ fun SubtitlesStep(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Subtitle Preview",
+                    text = stringResource(R.string.onboarding_subtitles_preview),
                     fontSize = subtitleStyle.fontSize.sp,
                     color = when (subtitleStyle.fontColor) {
                         SubtitleColor.WHITE -> Color.White
@@ -79,7 +81,7 @@ fun SubtitlesStep(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Font Size",
+                text = stringResource(R.string.onboarding_subtitles_font_size),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -95,7 +97,7 @@ fun SubtitlesStep(
             Spacer(Modifier.height(4.dp))
 
             Text(
-                text = "Font Color",
+                text = stringResource(R.string.onboarding_subtitles_font_color),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -139,7 +141,7 @@ fun SubtitlesStep(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Edge Type",
+                text = stringResource(R.string.onboarding_subtitles_edge_type),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,

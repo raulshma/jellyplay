@@ -204,6 +204,7 @@ private fun UserCard(
     onRemove: () -> Unit,
     firstFocusModifier: Modifier = Modifier,
 ) {
+    var showRemoveConfirm by remember { mutableStateOf(false) }
     val isSynthwave = LocalIsSynthwave.current
     val isSoothing = LocalIsSoothingTheme.current
     val border = when {
@@ -275,7 +276,7 @@ private fun UserCard(
             }
             val removeFocusState = rememberTvFocusState()
             IconButton(
-                onClick = onRemove,
+                onClick = { showRemoveConfirm = true },
                 modifier = Modifier.then(removeFocusState.focusModifier).tvFocusIndicator(removeFocusState, CircleShape),
             ) {
                 Icon(
@@ -285,5 +286,16 @@ private fun UserCard(
                 )
             }
         }
+    }
+
+    if (showRemoveConfirm) {
+        com.raulshma.jellyplay.core.ui.components.ConfirmDialog(
+            title = "Remove user?",
+            message = "Remove \"${user.name}\" from this server? You'll need to sign in again to use it.",
+            confirmText = "Remove",
+            dismissText = "Cancel",
+            onConfirm = onRemove,
+            onDismiss = { showRemoveConfirm = false },
+        )
     }
 }

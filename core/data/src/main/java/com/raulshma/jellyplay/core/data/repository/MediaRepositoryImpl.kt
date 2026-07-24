@@ -238,6 +238,8 @@ class MediaRepositoryImpl @Inject constructor(
         startIndex: Int,
         limit: Int,
         tags: List<String>?,
+        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
+        minRating: Float?,
     ): Result<SearchResult> = apiClient.getMediaItems(
         parentId = parentId,
         mediaTypes = mediaTypes,
@@ -249,6 +251,8 @@ class MediaRepositoryImpl @Inject constructor(
         startIndex = startIndex,
         limit = limit,
         tags = tags,
+        playedStatus = playedStatus,
+        minRating = minRating,
     )
 
     // Single-flight dedup for getMediaDetail: the detail screen is reachable
@@ -350,10 +354,11 @@ class MediaRepositoryImpl @Inject constructor(
         tags: List<String>?,
         limit: Int,
         startIndex: Int,
+        minRating: Float?,
     ): Result<SearchResult> {
-        // The Jellyfin /Search/Hints endpoint doesn't accept genre/year/tags filters,
-        // so when they're present fall through to the filtered items query.
-        return if (genres.isNullOrEmpty() && years.isNullOrEmpty() && tags.isNullOrEmpty()) {
+        // The Jellyfin /Search/Hints endpoint doesn't accept genre/year/tags/rating
+        // filters, so when any are present fall through to the filtered items query.
+        return if (genres.isNullOrEmpty() && years.isNullOrEmpty() && tags.isNullOrEmpty() && minRating == null) {
             apiClient.getSearchHints(query, mediaTypes, limit, startIndex)
         } else {
             apiClient.getMediaItems(
@@ -368,6 +373,7 @@ class MediaRepositoryImpl @Inject constructor(
                 limit = limit,
                 searchTerm = query,
                 tags = tags,
+                minRating = minRating,
             )
         }
     }
@@ -387,6 +393,8 @@ class MediaRepositoryImpl @Inject constructor(
         sortBy: String,
         sortOrder: String,
         tags: List<String>?,
+        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
+        minRating: Float?,
     ): Flow<PagingData<MediaItem>> = Pager(
         config = PagingConfig(
             pageSize = PAGE_SIZE,
@@ -404,6 +412,8 @@ class MediaRepositoryImpl @Inject constructor(
                 sortBy = sortBy,
                 sortOrder = sortOrder,
                 tags = tags,
+                playedStatus = playedStatus,
+                minRating = minRating,
             )
         },
     ).flow
@@ -414,6 +424,7 @@ class MediaRepositoryImpl @Inject constructor(
         genres: List<String>?,
         years: List<Int>?,
         tags: List<String>?,
+        minRating: Float?,
     ): Flow<PagingData<MediaItem>> = Pager(
         config = PagingConfig(
             pageSize = PAGE_SIZE,
@@ -428,6 +439,7 @@ class MediaRepositoryImpl @Inject constructor(
                 genres = genres,
                 years = years,
                 tags = tags,
+                minRating = minRating,
             )
         },
     ).flow

@@ -46,6 +46,8 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayExpressiveTitles
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
+import com.raulshma.jellyplay.feature.onboarding.R
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun WelcomeStep(
@@ -176,7 +178,7 @@ fun WelcomeStep(
         Spacer(Modifier.height(32.dp))
 
         Text(
-            text = "Welcome to\nJellyPlay",
+            text = stringResource(R.string.onboarding_welcome_title),
             style = JellyPlayExpressiveTitles.displaySmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -191,7 +193,7 @@ fun WelcomeStep(
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = "Your personal Jellyfin client. Let's set up a few things to get you started.",
+            text = stringResource(R.string.onboarding_welcome_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -211,22 +213,22 @@ fun WelcomeStep(
         ) {
             StaggeredFeatureHighlight(
                 icon = Tabler.Outline.PlayerPlay,
-                text = "Stream movies & TV shows",
+                text = stringResource(R.string.onboarding_feature_stream),
                 index = 0,
             )
             StaggeredFeatureHighlight(
                 icon = Tabler.Outline.Headphones,
-                text = "Music player with advanced audio effects",
+                text = stringResource(R.string.onboarding_feature_music),
                 index = 1,
             )
             StaggeredFeatureHighlight(
                 icon = Tabler.Outline.CloudDownload,
-                text = "Download for offline playback",
+                text = stringResource(R.string.onboarding_feature_download),
                 index = 2,
             )
             StaggeredFeatureHighlight(
                 icon = Tabler.Outline.Users,
-                text = "SyncPlay \u2014 watch together",
+                text = stringResource(R.string.onboarding_feature_syncplay),
                 index = 3,
             )
         }

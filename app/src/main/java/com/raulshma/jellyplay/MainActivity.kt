@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -229,8 +230,19 @@ class MainActivity : FragmentActivity() {
                 derivedStateOf { hasLockEnabled && !isPinUnlocked.value }
             }
 
+            var themeClockTick by remember { mutableLongStateOf(0L) }
+            LaunchedEffect(preferences.themeMode) {
+                if (preferences.themeMode == ThemeMode.SCHEDULED) {
+                    while (true) {
+                        kotlinx.coroutines.delay(60_000L)
+                        themeClockTick = System.currentTimeMillis()
+                    }
+                }
+            }
+
             val darkTheme by remember {
                 derivedStateOf {
+                    @Suppress("UnusedExpression") themeClockTick // time-based input
                     preferences.synthwaveMode || when (preferences.themeMode) {
                         ThemeMode.DARK -> true
                         ThemeMode.LIGHT -> false
@@ -647,6 +659,12 @@ private fun formatLockoutMessage(remainingMs: Long): String {
     return when {
         seconds < 60 -> "Too many attempts. Try again in ${seconds}s."
         seconds < 3600 -> "Too many attempts. Try again in ${seconds / 60}m."
+        seconds < 86400 -> {
+            val h = seconds / 3600
+            val m = (seconds % 3600) / 60
+            if (m == 0L) "Too many attempts. Try again in ${h}h."
+            else "Too many attempts. Try again in ${h}h ${m}m."
+        }
         else -> "Too many attempts. Try again in ${seconds / 3600}h."
     }
 }
