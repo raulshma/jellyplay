@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
@@ -134,22 +135,12 @@ private fun PersonHeader(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (!biography.isNullOrBlank()) {
-            var bioExpanded by remember { mutableStateOf(false) }
-            Text(
+            ExpandableText(
                 text = biography,
+                collapsedMaxLines = 4,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = if (bioExpanded) Int.MAX_VALUE else 4,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = contentPad),
-            )
-            Text(
-                text = if (bioExpanded) "Show less" else "Read more",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .clickable { bioExpanded = !bioExpanded }
-                    .padding(horizontal = contentPad),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = contentPad),
             )
         }
         androidx.compose.foundation.layout.Row(
