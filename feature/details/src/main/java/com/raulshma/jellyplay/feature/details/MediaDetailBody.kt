@@ -62,6 +62,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.detailBodyMaxWidth
+import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.progressFraction
@@ -428,25 +429,15 @@ internal fun DetailContentBody(
                 FadingItem {
                     // F5: cap the overview so long synopses don't push everything
                     // below the fold, with a "Read more" toggle (collapsed=4 lines).
-                    var expanded by remember { mutableStateOf(false) }
-                    Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
-                        Text(
-                            text = overview,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    ExpandableText(
+                        text = overview,
+                        collapsedMaxLines = 4,
+                        style = MaterialTheme.typography.bodyLarge.copy(
                             lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp),
-                            maxLines = if (expanded) Int.MAX_VALUE else 4,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = if (expanded) "Show less" else "Read more",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .clickable { expanded = !expanded }
-                                .padding(top = 4.dp),
-                        )
-                    }
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        modifier = Modifier.padding(horizontal = bodyContentPad),
+                    )
                 }
             }
         }

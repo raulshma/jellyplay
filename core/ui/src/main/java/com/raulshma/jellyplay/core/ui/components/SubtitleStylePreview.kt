@@ -104,8 +104,8 @@ fun SubtitleStylePreview(
     }
 }
 
-/** Map a [SubtitleColor] enum to its Compose [Color]. */
-private fun subtitleColorToCompose(color: SubtitleColor): Color = when (color) {
+/** Map a [SubtitleColor] enum to its Compose [Color]. Shared by the preview and pickers. */
+fun subtitleColorToCompose(color: SubtitleColor): Color = when (color) {
     SubtitleColor.WHITE -> Color.White
     SubtitleColor.YELLOW -> Color.Yellow
     SubtitleColor.GREEN -> Color.Green

@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.subtitleColorToCompose
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.onboarding.R
@@ -65,15 +66,7 @@ fun SubtitlesStep(
                 Text(
                     text = stringResource(R.string.onboarding_subtitles_preview),
                     fontSize = subtitleStyle.fontSize.sp,
-                    color = when (subtitleStyle.fontColor) {
-                        SubtitleColor.WHITE -> Color.White
-                        SubtitleColor.YELLOW -> Color.Yellow
-                        SubtitleColor.GREEN -> Color.Green
-                        SubtitleColor.CYAN -> Color.Cyan
-                        SubtitleColor.RED -> Color.Red
-                        SubtitleColor.BLACK -> Color.Black
-                        SubtitleColor.BLUE -> Color.Blue
-                    },
+                    color = subtitleColorToCompose(subtitleStyle.fontColor),
                     textAlign = TextAlign.Center,
                 )
             }
@@ -109,13 +102,7 @@ fun SubtitlesStep(
             ) {
                 listOf(SubtitleColor.WHITE, SubtitleColor.YELLOW, SubtitleColor.GREEN, SubtitleColor.CYAN).forEach { color ->
                     val selected = color == subtitleStyle.fontColor
-                    val displayColor = when (color) {
-                        SubtitleColor.WHITE -> Color.White
-                        SubtitleColor.YELLOW -> Color.Yellow
-                        SubtitleColor.GREEN -> Color.Green
-                        SubtitleColor.CYAN -> Color.Cyan
-                        else -> Color.White
-                    }
+                    val displayColor = subtitleColorToCompose(color)
                     val borderColor by animateColorAsState(
                         targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
                         animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
