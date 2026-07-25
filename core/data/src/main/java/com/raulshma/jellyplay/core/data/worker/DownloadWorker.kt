@@ -7,7 +7,8 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
-import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.DownloadPauseReason
+import com.raulshma.jellyplay.core.data.repository.DownloadStates
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
@@ -43,7 +44,7 @@ class DownloadWorker @AssistedInject constructor(
 
         val entity = dao.getDownloadById(downloadId) ?: return Result.failure()
 
-        if (entity.status == DownloadStatus.PAUSED.name || entity.status == DownloadStatus.CANCELLED.name) {
+        if (DownloadStates.isInactive(entity.status)) {
             return Result.success()
         }
 
@@ -95,9 +96,7 @@ class DownloadWorker @AssistedInject constructor(
             // Re-check status now that a slot is ours: the user may have paused
             // or cancelled while the row was QUEUED.
             val statusAfterQueue = dao.getStatus(downloadId)
-            if (statusAfterQueue == DownloadStatus.PAUSED.name ||
-                statusAfterQueue == DownloadStatus.CANCELLED.name
-            ) {
+            if (DownloadStates.isInactive(statusAfterQueue)) {
                 return@withPermit Result.success()
             }
             dao.updateProgress(downloadId, existingBytes, DownloadStatus.DOWNLOADING.name)
@@ -383,10 +382,7 @@ class DownloadWorker @AssistedInject constructor(
                             // — the loop only needs to detect a pause/cancel
                             // transition written by another process.
                             val currentStatus = dao.getStatus(downloadId)
-                            if (currentStatus == null ||
-                                currentStatus == DownloadStatus.PAUSED.name ||
-                                currentStatus == DownloadStatus.CANCELLED.name
-                            ) {
+                            if (currentStatus == null || DownloadStates.isInactive(currentStatus)) {
                                 response.close()
                                 return Result.success()
                             }
@@ -421,7 +417,7 @@ class DownloadWorker @AssistedInject constructor(
                 // Mark the interruption as network-driven so the reconnect
                 // auto-resume picks it up (user-paused rows are left alone), and
                 // count it toward the auto-retry dead-letter budget.
-                dao.updatePausedReason(downloadId, DownloadRepositoryImpl.PAUSE_REASON_NETWORK)
+                dao.updatePausedReason(downloadId, DownloadPauseReason.NETWORK.persistedValue)
                 dao.incrementRetryCount(downloadId)
             }
             return Result.retry()

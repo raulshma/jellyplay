@@ -285,31 +285,6 @@ val Route.isDetail: Boolean
         else -> false
     }
 
-/** Detail-route class simple names — used by scene-key inspection where the
- *  typed [Route] is not available (NavKey.toString() substring match). */
-val DETAIL_ROUTE_CLASS_NAMES: Set<String> = setOf(
-    "MediaDetail",
-    "MetadataEditor",
-    "SeerrDetail",
-    "PersonDetail",
-    "ManageSeries",
-    "MediaInfo",
-    "CollectionDetail",
-    "OfflineSeries",
-    "OfflineDetail",
-    "ArtistDetail",
-    "AlbumDetail",
-    "SmartPlaylistDetail",
-    "MoodPlaylistDetail",
-    "PlaylistDetail",
-    "GenreDetail",
-    "StudioDetail",
-    "NewsletterSectionList",
-    "UserStatisticsDetail",
-    "ChannelDetail",
-    "UserDetail",
-)
-
 /**
  * Maps a [Route] to a coarse [NavRouteClass] for transition selection.
  * Ambient is checked first (before fullscreen) because [Route.Ambient] is a

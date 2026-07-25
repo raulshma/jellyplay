@@ -770,9 +770,7 @@ private fun VideosSection(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) { _, video, focusModifier ->
                 val thumbnailUrl = remember(video.site, video.key) {
-                    if (video.site?.equals("youtube", ignoreCase = true) == true) {
-                        "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
-                    } else null
+                    youTubeThumbnailUrl(video.site, video.key)
                 }
 
                 val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)

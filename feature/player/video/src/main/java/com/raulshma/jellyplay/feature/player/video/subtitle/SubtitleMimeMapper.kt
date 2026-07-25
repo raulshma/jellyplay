@@ -9,7 +9,7 @@ internal object SubtitleMimeMapper {
             "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
             "ass", "ssa" -> MimeTypes.TEXT_SSA
             "vtt", "webvtt" -> MimeTypes.TEXT_VTT
-            "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
+            "ttml", "dfxp", "tt" -> MimeTypes.APPLICATION_TTML
             "pgs" -> MimeTypes.APPLICATION_PGS
             "mov_text" -> MimeTypes.APPLICATION_TX3G
             else -> null

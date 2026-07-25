@@ -1273,53 +1273,7 @@ class ExoPlayerEngine(
  * collapsed to `EngineError.Unknown(raw)` and the retry / switch-engine
  * affordances (gated on `retryable` / specific subtypes) could never fire.
  *
- * The mapping is heuristic — Media3's error codes group by failure category
- * (`ERROR_CODE_IO_*`, `ERROR_CODE_DECODER_*`, `ERROR_CODE_DRM_*`,
- * `ERROR_CODE_AUDIO_RENDER_*` / `VIDEO_*`). When in doubt we fall back to
- * [EngineError.Unknown], which is non-retryable.
+ * The mapping lives in the shared engine-contract module
+ * ([toEngineError][com.raulshma.jellyplay.feature.player.video.engine.toEngineError])
+ * so any Media3-based engine maps codes through one table.
  */
-private fun PlaybackException.toEngineError(): EngineError {
-    val raw = message ?: "Unknown playback error"
-    val cause = cause
-    return when (errorCode) {
-        // Network / IO failures — always retryable.
-        PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-        PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
-        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
-        PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
-        PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
-        PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED,
-        PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE,
-        PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
-        -> EngineError.Network(cause)
-
-        // Decoder / codec failures — not retryable on the same engine.
-        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
-        PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
-        PlaybackException.ERROR_CODE_DECODING_FAILED,
-        PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
-        PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
-        PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
-        PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED,
-        -> EngineError.Decoder(codec = null, cause = cause)
-
-        // DRM — not retryable.
-        PlaybackException.ERROR_CODE_DRM_UNSPECIFIED,
-        PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED,
-        PlaybackException.ERROR_CODE_DRM_PROVISIONING_FAILED,
-        PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED,
-        PlaybackException.ERROR_CODE_DRM_DISALLOWED_OPERATION,
-        PlaybackException.ERROR_CODE_DRM_SYSTEM_ERROR,
-        PlaybackException.ERROR_CODE_DRM_DEVICE_REVOKED,
-        -> EngineError.Drm(scheme = null, cause = cause)
-
-        // Render surface failures — retryable (re-attach surface + retry).
-        PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSOR_INIT_FAILED,
-        PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED,
-        -> EngineError.Render(cause = cause)
-
-        else -> EngineError.Unknown(raw, cause)
-    }
-}

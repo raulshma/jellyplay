@@ -64,6 +64,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
@@ -1640,21 +1641,6 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    private fun detectAspectRatio(streams: List<MediaStream>): AspectRatio? {
-        val videoStream = streams.firstOrNull { it.type == StreamType.VIDEO } ?: return null
-        val width = videoStream.width ?: return null
-        val height = videoStream.height ?: return null
-        if (height == 0) return null
-
-        val nativeRatio = width.toFloat() / height.toFloat()
-        return when {
-            nativeRatio >= 2.3f -> AspectRatio.RATIO_21_9
-            nativeRatio >= 1.7f -> AspectRatio.RATIO_16_9
-            nativeRatio >= 1.3f -> AspectRatio.RATIO_4_3
-            else -> AspectRatio.FIT
-        }
-    }
-
     fun setSubtitleStyle(style: SubtitleStyle) {
         _uiState.update { it.copy(subtitleStyle = style) }
         updateConfigWithUiState()
@@ -2535,13 +2521,10 @@ class VideoPlayerViewModel @Inject constructor(
                 }
                 if (subUrl.isNullOrBlank()) return@mapNotNull null
 
-                val mimeType = when ((stream.codec ?: "").lowercase()) {
-                    "vtt", "webvtt" -> MimeTypes.TEXT_VTT
-                    "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
-                    "ttml", "dfxp", "tt" -> MimeTypes.APPLICATION_TTML
-                    "ssa", "ass" -> MimeTypes.TEXT_SSA
-                    else -> MimeTypes.TEXT_VTT
-                }
+                // Reuse the shared SubtitleMimeMapper (one codec→mime table instead
+                // of the inline copy that previously lived here and had drifted).
+                // Cast defaults unknown codecs to VTT — the most broadly supported.
+                val mimeType = SubtitleMimeMapper.mapCodecToMime(stream.codec) ?: MimeTypes.TEXT_VTT
 
                 MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                     .setMimeType(mimeType)
