@@ -11,6 +11,7 @@
     <string name="detail_section_tracks">Tracks</string>
     <string name="detail_section_items">Items</string>
     <string name="detail_section_cast_crew">Cast &amp; Crew</string>
+    <string name="detail_section_cast">Cast</string>
     <string name="detail_section_more_like_this">More Like This</string>
     <string name="detail_section_videos">Videos</string>
     <string name="detail_section_seasons">Seasons</string>

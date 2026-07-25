@@ -66,9 +66,7 @@ class MediaRepositoryImpl @Inject constructor(
     private val lrcLibApi: LrcLibApi,
     private val lyricsCacheDao: LyricsCacheDao,
     private val networkMonitor: NetworkMonitor,
-    private val offlineRepository: OfflineRepository,
-    private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
-    private val playbackOutboxRepository: PlaybackOutboxRepository,
+    private val playedStateSync: PlayedStateSync,
 ) : MediaRepository {
 
     private val detailCache = TtlCache<MediaDetail>(
@@ -861,51 +859,17 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun markPlayed(itemId: String): Result<Unit> {
         cachedHomeSectionsTimestamp = 0L
         invalidateUserDataCaches(itemId)
-        // Offline: optimistically mirror the cascade into the local store and
-        // stage the flip in the outbox so PlaybackSyncWorker delivers it on
-        // reconnect. Return success so the ViewModel's optimistic UI flip runs
-        // immediately — same contract as PlaybackRepositoryImpl's offline path.
-        if (offlineModeManager.isOffline) {
-            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = true) }
-            runCatching { playbackOutboxRepository.enqueuePlayedState(itemId, isPlayed = true) }
-            return Result.success(Unit)
-        }
-        val result = apiClient.markPlayed(itemId)
-        if (result.isSuccess) {
-            // Mirror Jellyfin's server-side cascade into the offline store so
-            // downloaded items in this hierarchy stay consistent with server
-            // state. Best-effort: a failure here must not surface — the server
-            // mutation already succeeded and reconciliation will correct drift.
-            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = true) }
-        } else {
-            // Online but the call failed (transient 5xx, auth drop). Don't lose
-            // the user's intent: apply locally for immediate UI feedback and
-            // enqueue for retry. Swallow the failure — same rationale as the
-            // offline branch.
-            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = true) }
-            runCatching { playbackOutboxRepository.enqueuePlayedState(itemId, isPlayed = true) }
-            return Result.success(Unit)
-        }
-        return result
+        // Fan-out (online API + best-effort offline mirror, or local apply +
+        // outbox staging when offline / online call failed) is owned by
+        // PlayedStateSync — the single home for the played/resume-state write
+        // contract, shared with PlaybackSyncWorker's reconciliation.
+        return playedStateSync.flip(itemId, played = true)
     }
 
     override suspend fun markUnplayed(itemId: String): Result<Unit> {
         cachedHomeSectionsTimestamp = 0L
         invalidateUserDataCaches(itemId)
-        if (offlineModeManager.isOffline) {
-            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = false) }
-            runCatching { playbackOutboxRepository.enqueuePlayedState(itemId, isPlayed = false) }
-            return Result.success(Unit)
-        }
-        val result = apiClient.markUnplayed(itemId)
-        if (result.isSuccess) {
-            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = false) }
-        } else {
-            runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = false) }
-            runCatching { playbackOutboxRepository.enqueuePlayedState(itemId, isPlayed = false) }
-            return Result.success(Unit)
-        }
-        return result
+        return playedStateSync.flip(itemId, played = false)
     }
 
     /**

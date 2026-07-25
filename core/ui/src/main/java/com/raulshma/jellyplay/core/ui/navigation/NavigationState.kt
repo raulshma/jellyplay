@@ -22,9 +22,19 @@ fun rememberNavigationState(
     startRoute: NavKey,
     topLevelRoutes: Set<NavKey>,
 ): NavigationState {
+    // Restore the selected top-level tab across process death. The saver
+    // serializes the current tab's NavKey.toString() (data class/object
+    // toString() is stable) and looks it back up among the known top-level
+    // routes, falling back to the start route if the saved tab is no longer
+    // registered (e.g. it was removed in an app update). Previously the
+    // restore ignored its input and always returned startRoute, so the user's
+    // last-selected tab was silently lost on recreation.
     val topLevelRoute = rememberSaveable(saver = androidx.compose.runtime.saveable.Saver(
         save = { it.value.toString() },
-        restore = { mutableStateOf(startRoute) },
+        restore = { saved ->
+            val byString = topLevelRoutes.associateBy { key -> key.toString() }
+            mutableStateOf(byString[saved] ?: startRoute)
+        },
     )) { mutableStateOf(startRoute) }
 
     val backStacks = topLevelRoutes.associateWith { key -> rememberNavBackStack(key) }

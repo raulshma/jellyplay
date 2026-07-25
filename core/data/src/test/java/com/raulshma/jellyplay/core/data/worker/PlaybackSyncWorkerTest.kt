@@ -8,14 +8,10 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.model.MediaDetail
-import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import io.mockk.coEvery
@@ -48,9 +44,8 @@ class PlaybackSyncWorkerTest {
     private lateinit var context: Context
     private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
-    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
+    private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
     private val userDataSyncScheduler: UserDataSyncScheduler = mockk(relaxed = true)
 
     @Before
@@ -78,9 +73,8 @@ class PlaybackSyncWorkerTest {
                     workerParameters,
                     outbox,
                     apiClient,
-                    offlineRepository,
-                    mediaRepository,
                     offlineModeManager,
+                    playedStateSync,
                     userDataSyncScheduler,
                 )
             })
@@ -142,7 +136,6 @@ class PlaybackSyncWorkerTest {
         coEvery { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) } returns Result.success(Unit)
         coEvery { apiClient.reportPlaybackStopped(any(), any(), any()) } returns Result.success(Unit)
         // Reconcile: no offline row → early return, no getMediaDetail call path matters.
-        coEvery { offlineRepository.getOfflineItem(any()) } returns null
 
         val result = buildWorker().doWork()
 
@@ -158,7 +151,6 @@ class PlaybackSyncWorkerTest {
     fun `successful drain triggers userDataSync enqueueNow exactly once`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
         coEvery { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) } returns Result.success(Unit)
-        coEvery { offlineRepository.getOfflineItem(any()) } returns null
 
         buildWorker().doWork()
 
@@ -169,7 +161,6 @@ class PlaybackSyncWorkerTest {
     fun `PLAYED entry replays via markPlayed and is deleted on success`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PLAYED))
         coEvery { apiClient.markPlayed("item-1") } returns Result.success(Unit)
-        coEvery { offlineRepository.getOfflineItem(any()) } returns null
 
         val result = buildWorker().doWork()
 
@@ -182,7 +173,6 @@ class PlaybackSyncWorkerTest {
     fun `UNPLAYED entry replays via markUnplayed and is deleted on success`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.UNPLAYED))
         coEvery { apiClient.markUnplayed("item-1") } returns Result.success(Unit)
-        coEvery { offlineRepository.getOfflineItem(any()) } returns null
 
         val result = buildWorker().doWork()
 
@@ -231,7 +221,7 @@ class PlaybackSyncWorkerTest {
         coVerify(exactly = 0) { outbox.delete("e1") }
         coVerify(exactly = 1) { outbox.markDeadLetter("e1") }
         // Nothing was reconciled — the report never landed on the server.
-        coVerify(exactly = 0) { offlineRepository.getOfflineItem(any()) }
+        coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow(any()) }
     }
 
     @Test
@@ -244,7 +234,6 @@ class PlaybackSyncWorkerTest {
         coEvery { apiClient.reportPlaybackProgress("item-2", any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("down"))
         // Success-side reconciliation early-returns (no offline row).
-        coEvery { offlineRepository.getOfflineItem("item-1") } returns null
 
         val result = buildWorker(runAttemptCount = 3).doWork()
 
@@ -253,8 +242,8 @@ class PlaybackSyncWorkerTest {
         coVerify(exactly = 0) { outbox.delete("e2") }
         coVerify(exactly = 1) { outbox.markDeadLetter("e2") }
         // Only the pushed item is reconciled; the dead-lettered one is not.
-        coVerify(exactly = 1) { offlineRepository.getOfflineItem("item-1") }
-        coVerify(exactly = 0) { offlineRepository.getOfflineItem("item-2") }
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("item-1") }
+        coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow("item-2") }
     }
 
     @Test
@@ -276,85 +265,21 @@ class PlaybackSyncWorkerTest {
     }
 
     // ── Reconcile branches ────────────────────────────────────────────
+    // Reconcile behaviour is verified in PlayedStateSyncImplTest — the worker
+    // now delegates the merge to PlayedStateSync, so the worker test only
+    // asserts that the worker *calls* reconcile for each drained item.
 
     @Test
-    fun `reconcile skips when no offline row exists`() = runTest {
+    fun `reconcile failure during drain does not fail the worker`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
         coEvery { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) } returns Result.success(Unit)
-        coEvery { offlineRepository.getOfflineItem("item-1") } returns null
-
-        buildWorker().doWork()
-
-        // No offline row → reconcile early-returns; no getMediaDetail, no update.
-        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
-        coVerify(exactly = 0) { offlineRepository.updatePlaybackProgress(any(), any(), any(), any()) }
-    }
-
-    @Test
-    fun `reconcile resets local to played when server reports played`() = runTest {
-        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
-        coEvery { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) } returns Result.success(Unit)
-        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = false)
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
-            mediaDetail(mediaItem(isPlayed = true))
-        )
-
-        buildWorker().doWork()
-
-        coVerify(exactly = 1) {
-            offlineRepository.updatePlaybackProgress(
-                itemId = "item-1",
-                positionTicks = 0L,
-                percentage = 100.0,
-                isPlayed = true,
-            )
-        }
-    }
-
-    @Test
-    fun `reconcile resets local to unplayed when local played but server unplayed`() = runTest {
-        // User watched offline (local played) but server says unplayed — e.g.
-        // marked unwatched online and the offline cascade hadn't landed yet.
-        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
-        coEvery { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) } returns Result.success(Unit)
-        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = true)
-        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.success(
-            mediaDetail(mediaItem(isPlayed = false))
-        )
-
-        buildWorker().doWork()
-
-        coVerify(exactly = 1) { offlineRepository.applyPlayedState("item-1", isPlayed = false) }
-    }
-
-    @Test
-    fun `reconcile updatePlaybackProgress failure during reconcile does not fail the drain`() = runTest {
-        coEvery { outbox.drain() } returns listOf(entry("e1", "item-1", PlaybackOutboxEventType.PROGRESS))
-        coEvery { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) } returns Result.success(Unit)
-        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isPlayed = false)
-        coEvery { mediaRepository.getMediaDetail("item-1") } throws RuntimeException("detail fetch failed")
+        coEvery { playedStateSync.reconcileOfflineRow("item-1") } throws RuntimeException("reconcile failed")
 
         val result = buildWorker().doWork()
 
-        // Reconcile is best-effort; the push still succeeded.
+        // Reconcile is best-effort (wrapped in runCatching); the push still succeeded.
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
-
-    private fun offlineItem(isPlayed: Boolean) = OfflineMediaItem(
-        id = "item-1",
-        name = "Test",
-        mediaType = com.raulshma.jellyplay.core.model.MediaType.MOVIE,
-        isPlayed = isPlayed,
-    )
-
-    private fun mediaItem(isPlayed: Boolean) = MediaItem(
-        id = "item-1",
-        name = "Test",
-        mediaType = com.raulshma.jellyplay.core.model.MediaType.MOVIE,
-        isPlayed = isPlayed,
-    )
-
-    private fun mediaDetail(item: MediaItem) = MediaDetail(item = item)
 }

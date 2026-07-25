@@ -34,6 +34,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.details.R
@@ -124,10 +125,9 @@ internal fun AlbumTrackItem(
         }
 
         track.runTimeTicks?.let { ticks ->
-            val minutes = (ticks / 600_000_000)
-            val seconds = ((ticks / 10_000_000) % 60)
+            // ticks → ms (10,000 ticks/ms), then the shared m:ss / h:mm:ss formatter.
             Text(
-                text = String.format("%d:%02d", minutes, seconds),
+                text = formatDurationMs(ticks / 10_000),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

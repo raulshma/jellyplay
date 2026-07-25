@@ -6,8 +6,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
@@ -19,8 +18,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 
 /**
  * Drains the [PlaybackOutboxRepository] — replaying START/PROGRESS/STOP events
@@ -48,9 +45,8 @@ class PlaybackSyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val outbox: PlaybackOutboxRepository,
     private val apiClient: JellyfinApiClient,
-    private val offlineRepository: OfflineRepository,
-    private val mediaRepository: MediaRepository,
     private val offlineModeManager: OfflineModeManager,
+    private val playedStateSync: PlayedStateSync,
     private val userDataSyncScheduler: UserDataSyncScheduler,
 ) : CoroutineWorker(context, params) {
 
@@ -136,7 +132,7 @@ class PlaybackSyncWorker @AssistedInject constructor(
                 itemsToReconcile.map { itemId ->
                     async {
                         gate.withPermit {
-                            runCatching { reconcileOfflineRow(itemId) }
+                            runCatching { playedStateSync.reconcileOfflineRow(itemId) }
                         }
                     }
                 }.awaitAll()
@@ -194,103 +190,6 @@ class PlaybackSyncWorker @AssistedInject constructor(
                 apiClient.markUnplayed(entry.itemId).isSuccess
         }
 
-    /**
-     * Latest-wins reconciliation for downloaded items. Fetches the server's
-     * [MediaItem] and, if the server is newer or its played-state diverges,
-     * overwrites the local offline row so resume reads authoritative state.
-     *
-     * Three branches:
-     *   - Server played (e.g. finished online): reset local to played.
-     *   - Server unplayed AND local played (e.g. user marked season unwatched
-     *     online and that mutation raced the reconnect flush): reset local to
-     *     unplayed via [OfflineRepository.applyPlayedState] so the cascade also
-     *     clears child episodes.
-     *   - Otherwise: most-recent activity wins by timestamp comparison.
-     */
-    private suspend fun reconcileOfflineRow(itemId: String) {
-        val offline = offlineRepository.getOfflineItem(itemId) ?: return
-        // Pull a fresh server view (bypass any cached detail so a stale cache
-        // cannot mask a newer played/position state).
-        mediaRepository.invalidateDetailCache(itemId)
-        val serverItem = mediaRepository.getMediaDetail(itemId).getOrNull()?.item ?: return
-
-        // Server watched (e.g. finished online) always wins — reset the local
-        // row so a later offline resume starts the next episode / 0, not a
-        // stale half-watched position.
-        if (serverItem.isPlayed) {
-            offlineRepository.updatePlaybackProgress(
-                itemId = itemId,
-                positionTicks = 0L,
-                percentage = 100.0,
-                isPlayed = true,
-            )
-            return
-        }
-
-        // Server unplayed but local played: the user marked the item (or its
-        // season/series) unwatched online and that change has not yet reached
-        // the local store. Mirror the flip — including the hierarchy cascade —
-        // so the offline screen does not show stale watched state.
-        if (offline.isPlayed) {
-            offlineRepository.applyPlayedState(itemId, isPlayed = false)
-            return
-        }
-
-        // Otherwise the most recent activity wins. Both sides are epoch-millis
-        // at heart: the server's `lastPlayedDate` arrives as an ISO string
-        // (kotlinx-datetime Instant -> "...Z", or a LocalDateTime when the
-        // server omits the offset), and the offline row stores
-        // OffsetDateTime.now().toString(). `parseIsoToEpochMillis` accepts
-        // both shapes so the comparison is zone-correct regardless of source.
-        val serverMillis = parseIsoToEpochMillis(serverItem.lastPlayedDate) ?: return
-        if (serverMillis > System.currentTimeMillis()) {
-            // Sanity guard against future-dated server clocks.
-            return
-        }
-        val offlineMillis = offline.lastPlayedDate?.let { parseIsoToEpochMillis(it) } ?: 0L
-        if (serverMillis <= offlineMillis) return
-
-        val runTime = serverItem.runTimeTicks ?: offline.runTimeTicks
-        val percentage = computePlayedPercentage(serverItem.playbackPositionTicks, runTime, isPlayed = false)
-        offlineRepository.updatePlaybackProgress(
-            itemId = itemId,
-            positionTicks = serverItem.playbackPositionTicks,
-            percentage = percentage,
-            isPlayed = false,
-        )
-    }
-
-    private fun computePlayedPercentage(positionTicks: Long?, runTimeTicks: Long?, isPlayed: Boolean): Double =
-        when {
-            isPlayed -> 100.0
-            positionTicks == null || positionTicks <= 0L -> 0.0
-            runTimeTicks == null || runTimeTicks <= 0L -> 0.0
-            else -> ((positionTicks.toDouble() / runTimeTicks.toDouble()) * 100.0).coerceIn(0.0, 100.0)
-        }
-
-    /**
-     * Parses an ISO-8601 datetime string to epoch-millis, accepting either an
-     * offset-aware form (e.g. Jellyfin SDK's `Instant.toString()` →
-     * `2024-01-15T10:30:00Z`, or the offline row's `OffsetDateTime.toString()`)
-     * or a bare `LocalDateTime` (server sometimes omits the offset). Offset-
-     * aware inputs parse in their own zone; bare inputs parse in the system
-     * zone (the zone that produced them on-device).
-     */
-    private fun parseIsoToEpochMillis(value: String?): Long? {
-        if (value.isNullOrBlank()) return null
-        // Offset-aware first — covers `...Z`, `...+00:00`, `...+05:30`.
-        return runCatching {
-            java.time.OffsetDateTime.parse(value, ISO_OFFSET_PARSER).toInstant().toEpochMilli()
-        }.getOrElse {
-            // Bare LocalDateTime fallback — interpret in the system zone.
-            runCatching {
-                LocalDateTime.parse(value, ISO_PARSER)
-                    .atZone(java.time.ZoneId.systemDefault())
-                    .toInstant().toEpochMilli()
-            }.getOrNull()
-        }
-    }
-
     companion object {
         const val UNIQUE_PERIODIC_NAME = "com.raulshma.jellyplay.work.playback_sync_periodic"
         const val UNIQUE_NOW_NAME = "com.raulshma.jellyplay.work.playback_sync_now"
@@ -312,7 +211,5 @@ class PlaybackSyncWorker @AssistedInject constructor(
          * MAX_CONCURRENT_FOLDER_FETCHES gate in NewMediaCheckWorker.
          */
         private const val MAX_CONCURRENT_RECONCILES = 4
-        private val ISO_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
-        private val ISO_OFFSET_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
     }
 }
