@@ -65,11 +65,6 @@ class MainViewModel @Inject constructor(
 
     val serverHealth = serverHealthMonitor.serverHealth
 
-    /** Re-checks server reachability — used by the offline banner's Retry (F-29). */
-    fun refreshServerHealth() {
-        launch { serverHealthMonitor.checkHealth() }
-    }
-
     /**
      * App-wide offline mode. Collected by [com.raulshma.jellyplay.navigation.JellyPlayApp]
      * so the floating nav can hide server-bound destinations (Library, Live TV)
