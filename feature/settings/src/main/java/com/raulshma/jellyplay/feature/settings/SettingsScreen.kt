@@ -104,10 +104,10 @@ import com.composables.icons.tabler.outline.*
 
 private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 
-private enum class DreamSettingsDialog {
-    None,
-    SlideshowIntervalPicker,
-    TransitionStylePicker,
+sealed class DreamSettingsDialog {
+    object None : DreamSettingsDialog()
+    object SlideshowIntervalPicker : DreamSettingsDialog()
+    object TransitionStylePicker : DreamSettingsDialog()
 }
 
 /**
@@ -241,7 +241,7 @@ fun SettingsScreen(
     var isSearchFocused by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var signOutFromServer by remember { mutableStateOf(false) }
-    var activeDialog by remember { mutableStateOf(DreamSettingsDialog.None) }
+    var activeDialog by remember { mutableStateOf<DreamSettingsDialog>(DreamSettingsDialog.None) }
 
     // Debounced + off-main-thread fuzzy search. Each keystroke only re-runs the
     // matcher after a short quiet period, and the Damerau-Levenshtein work happens

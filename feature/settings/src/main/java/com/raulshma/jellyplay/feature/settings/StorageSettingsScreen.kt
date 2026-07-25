@@ -61,21 +61,21 @@ private val STORAGE_CACHE_GROUP_IDS = setOf("clear_cache", "clear_image_cache", 
 private val STORAGE_NETWORK_GROUP_IDS = setOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync")
 private val STORAGE_DOWNLOADS_GROUP_IDS = setOf("download_quality", "smart_downloads", "auto_download_new_episodes", "download_schedule", "download_schedule_start", "download_schedule_end", "download_schedule_wifi_only", "max_download_storage_limit", "download_storage_location")
 
-private enum class StorageSettingsDialog {
-    None,
-    ConnectionsPicker,
-    ConcurrentDownloadsPicker,
-    MaxCacheSizePicker,
-    BandwidthCapPicker,
-    MeteredBehaviorPicker,
-    CellularStreamingQualityPicker,
-    CellularDownloadWarningPicker,
-    NetworkTimeoutPicker,
-    DownloadQualityPicker,
-    ScheduleStartPicker,
-    ScheduleEndPicker,
-    MaxDownloadStoragePicker,
-    StorageLocationPicker,
+sealed class StorageSettingsDialog {
+    object None : StorageSettingsDialog()
+    object ConnectionsPicker : StorageSettingsDialog()
+    object ConcurrentDownloadsPicker : StorageSettingsDialog()
+    object MaxCacheSizePicker : StorageSettingsDialog()
+    object BandwidthCapPicker : StorageSettingsDialog()
+    object MeteredBehaviorPicker : StorageSettingsDialog()
+    object CellularStreamingQualityPicker : StorageSettingsDialog()
+    object CellularDownloadWarningPicker : StorageSettingsDialog()
+    object NetworkTimeoutPicker : StorageSettingsDialog()
+    object DownloadQualityPicker : StorageSettingsDialog()
+    object ScheduleStartPicker : StorageSettingsDialog()
+    object ScheduleEndPicker : StorageSettingsDialog()
+    object MaxDownloadStoragePicker : StorageSettingsDialog()
+    object StorageLocationPicker : StorageSettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -90,7 +90,7 @@ fun StorageSettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
-    var activeDialog by remember { mutableStateOf(StorageSettingsDialog.None) }
+    var activeDialog by remember { mutableStateOf<StorageSettingsDialog>(StorageSettingsDialog.None) }
 
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
