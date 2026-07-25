@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -88,8 +89,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCast
-import com.raulshma.jellyplay.core.model.seerr.SeerrCast
+import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCredits
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
@@ -965,7 +965,9 @@ private fun SeerrDetailBody(
                         verticalArrangement = Arrangement.spacedBy(32.dp)
                     ) {
                         // Cast
-                        val cast = tvDetail?.aggregateCredits?.cast ?: movieDetail?.credits?.cast ?: emptyList()
+                        val cast = tvDetail?.aggregateCredits?.cast?.toAggregateCastMembers()
+                            ?: movieDetail?.credits?.cast?.toCastMembers()
+                            ?: emptyList()
                         if (cast.isNotEmpty()) {
                             CastSection(cast)
                         }
@@ -998,7 +1000,9 @@ private fun SeerrDetailBody(
                 }
             } else {
                 // Stacked layout for compact screens
-                val cast = tvDetail?.aggregateCredits?.cast ?: movieDetail?.credits?.cast ?: emptyList()
+                val cast = tvDetail?.aggregateCredits?.cast?.toAggregateCastMembers()
+                    ?: movieDetail?.credits?.cast?.toCastMembers()
+                    ?: emptyList()
                 if (cast.isNotEmpty()) {
                     CastSection(cast)
                 }
@@ -1163,20 +1167,12 @@ private fun ExternalLinksRow(
 
 @Composable
 private fun CastSection(
-    cast: List<Any>, // Can be SeerrCast or SeerrAggregateCast
+    cast: List<SeerrCastMember>,
 ) {
-    val uniqueCast = remember(cast) {
-        cast.distinctBy { member ->
-            when (member) {
-                is SeerrAggregateCast -> member.id
-                is SeerrCast -> member.id
-                else -> member.hashCode()
-            }
-        }
-    }
+    val uniqueCast = remember(cast) { cast.distinctBy { it.id } }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            text = "Cast",
+            text = stringResource(R.string.detail_section_cast),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -1188,24 +1184,14 @@ private fun CastSection(
                 .focusGroup()
                 .tvFocusRestorer(),
         ) {
-            items(uniqueCast, key = { member -> when (member) { is SeerrAggregateCast -> member.id; is SeerrCast -> member.id; else -> member.hashCode() } }, contentType = { "castMember" }) { member ->
-                val name: String
-                val character: String
-                val profileUrl: String?
-
-                if (member is SeerrAggregateCast) {
-                    name = member.name
-                    character = member.roles.firstOrNull()?.character ?: ""
-                    profileUrl = member.profileUrl
-                } else if (member is SeerrCast) {
-                    name = member.name
-                    character = member.character ?: ""
-                    profileUrl = member.profileUrl
-                } else return@items
+            items(uniqueCast, key = { it.id }, contentType = { "castMember" }) { member ->
+                val name = member.name
+                val character = member.character
+                val profileUrl = member.profileUrl
 
                 Column(
                     modifier = Modifier.width(100.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(
                         modifier = Modifier
@@ -1272,7 +1258,7 @@ private fun SeasonsSection(
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            text = "Seasons",
+            text = stringResource(R.string.detail_section_seasons),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -1655,7 +1641,7 @@ private fun VideosSection(
     }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            text = "Videos",
+            text = stringResource(R.string.detail_section_videos),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -1668,9 +1654,7 @@ private fun VideosSection(
                 .tvFocusRestorer(),
         ) {
             items(uniqueVideos, key = { it.key!! }, contentType = { "video" }) { video ->
-                val thumbnailUrl = if (video.site?.lowercase() == "youtube") {
-                    "https://img.youtube.com/vi/${video.key}/mqdefault.jpg"
-                } else null
+                val thumbnailUrl = youTubeThumbnailUrl(video.site, video.key)
 
                 val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
 

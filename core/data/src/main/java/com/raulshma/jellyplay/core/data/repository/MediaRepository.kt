@@ -44,6 +44,8 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         startIndex: Int = 0,
         limit: Int = 50,
         tags: List<String>? = null,
+        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
+        minRating: Float? = null,
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
@@ -63,6 +65,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         tags: List<String>? = null,
         limit: Int = 50,
         startIndex: Int = 0,
+        minRating: Float? = null,
     ): Result<SearchResult>
 
     /**
@@ -89,6 +92,8 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         sortBy: String = "SortName",
         sortOrder: String = "Ascending",
         tags: List<String>? = null,
+        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
+        minRating: Float? = null,
     ): Flow<PagingData<MediaItem>>
 
     fun searchPaged(
@@ -97,6 +102,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         genres: List<String>? = null,
         years: List<Int>? = null,
         tags: List<String>? = null,
+        minRating: Float? = null,
     ): Flow<PagingData<MediaItem>>
 
     suspend fun getGenres(parentId: String? = null): Result<List<Genre>>
@@ -181,6 +187,20 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
      * series itself.
      */
     fun invalidateSeriesCache(seriesId: String)
+
+    /**
+     * Single operation for "user data for [itemId] changed" (favorite flip,
+     * played/unplayed, playback position). Owns the series-resolution rule:
+     * drops the item's detail cache, its album tracks, and — if the item
+     * belongs to a series — that series' seasons/episodes caches.
+     *
+     * Prefer this over calling [invalidateDetailCache] +
+     * [invalidateSeriesCache] separately at a call site, which re-derives the
+     * "is this item part of a series?" rule locally. Callers that only have a
+     * series id (no item detail cached) should still call
+     * [invalidateSeriesCache] directly.
+     */
+    fun invalidateUserDataCaches(itemId: String)
 
     suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }

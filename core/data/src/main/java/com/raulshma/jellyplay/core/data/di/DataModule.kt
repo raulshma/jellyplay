@@ -13,6 +13,8 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
+import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -64,13 +66,6 @@ abstract class DataModule {
         @Singleton
         fun provideLyricsRepository(mediaRepository: MediaRepository): LyricsRepository =
             mediaRepository
-
-        // Note: GetHomeSectionsUseCase and GetMediaDetailUseCase previously had
-        // explicit @Provides @Singleton methods here. They were removed because
-        // each use case already has @Inject constructor — Hilt provides them
-        // automatically (unscoped, which is the correct scope for stateless
-        // transformers). No consumer in the codebase injects these directly
-        // today; they remain available for future use via constructor injection.
     }
 
     @Binds
@@ -80,6 +75,10 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindMediaRepository(impl: MediaRepositoryImpl): MediaRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindPlayedStateSync(impl: PlayedStateSyncImpl): PlayedStateSync
 
     @Binds
     @Singleton

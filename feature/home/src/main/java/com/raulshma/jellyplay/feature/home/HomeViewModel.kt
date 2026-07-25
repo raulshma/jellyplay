@@ -15,7 +15,6 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
-import com.raulshma.jellyplay.core.data.usecase.GetHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -78,7 +77,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val getHomeSections: GetHomeSectionsUseCase,
     private val orderHomeSections: OrderHomeSectionsUseCase,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
@@ -261,9 +259,8 @@ class HomeViewModel @Inject constructor(
     private var homeScrollPosition = HomeScrollPosition()
     private var lastRefreshTime = 0L
     private var isAppInForeground = true
-    // Discover-sections TTL bookkeeping (see DISCOVER_TTL_MS / fetchDiscoverSections).
-    private var lastDiscoverFetchEpochMs = 0L
-    private var discoverCacheInvalidated = true
+    // Discover-sections TTL gate (see DISCOVER_TTL_MS / fetchDiscoverSections).
+    private val discoverCache = TtlCacheGate(DISCOVER_TTL_MS)
 
     private val searchQueryFlow: MutableStateFlow<String> = MutableStateFlow("")
     private var searchJob: Job? = null
@@ -803,7 +800,15 @@ class HomeViewModel @Inject constructor(
                 hiddenCwItemIds = hiddenCwItemIds,
                 pinnedSections = pinnedHomeSections,
             )
-            getHomeSections(query)
+            mediaRepository.getHomeSections(
+                enabledSections = query.enabledSections,
+                libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
+                nextUpRewatching = query.nextUpRewatching,
+                nextUpMaxDays = query.nextUpMaxDays,
+                nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
+                hiddenCwItemIds = query.hiddenCwItemIds,
+                pinnedSections = query.pinnedSections,
+            )
                 .onSuccess { homeResult ->
                     val fetchedSections = homeResult.sections
                     // Surface a non-blocking notice only when a section type
@@ -898,7 +903,7 @@ class HomeViewModel @Inject constructor(
         // A user-initiated refresh (swipe-to-refresh) sets `force = true` which
         // bypasses this gate via [invalidateDiscoverCache].
         val now = timeSource.nowEpochMillis()
-        if (!discoverCacheInvalidated && now - lastDiscoverFetchEpochMs < DISCOVER_TTL_MS) return
+        if (!discoverCache.shouldFetch(now)) return
 
         val today = timeSource.today(ZoneOffset.systemDefault()).toString()
 
@@ -927,8 +932,7 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        lastDiscoverFetchEpochMs = timeSource.nowEpochMillis()
-        discoverCacheInvalidated = false
+        discoverCache.markFetched(timeSource.nowEpochMillis())
         _uiState.update { it.copy(discoverSections = newSections) }
     }
 
@@ -937,7 +941,7 @@ class HomeViewModel @Inject constructor(
      * actually hits the network. Called on user-initiated refresh.
      */
     fun invalidateDiscoverCache() {
-        discoverCacheInvalidated = true
+        discoverCache.invalidate()
     }
 
     private fun startPeriodicRefresh() {

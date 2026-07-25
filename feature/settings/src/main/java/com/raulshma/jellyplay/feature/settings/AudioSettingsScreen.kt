@@ -74,6 +74,11 @@ sealed class AudioSettingsDialog {
     object AudioPrefetchLookaheadPicker : AudioSettingsDialog()
     object AudioPrefetchBackfillPicker : AudioSettingsDialog()
     object AudioCacheNetworkPolicyPicker : AudioSettingsDialog()
+    object DialogueBoostStrengthPicker : AudioSettingsDialog()
+    object NightModeStrengthPicker : AudioSettingsDialog()
+    object BassBoostStrengthPicker : AudioSettingsDialog()
+    object VirtualizerStrengthPicker : AudioSettingsDialog()
+    object ReverbPicker : AudioSettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -326,12 +331,7 @@ fun AudioSettingsScreen(
                                 subtitle = preferences.dialogueBoostStrength.displayName,
                                 trailingText = preferences.dialogueBoostStrength.displayName,
                                 index = idx++, count = total,
-                                onClick = {
-                                    val strengths = EffectStrength.entries
-                                    val currentIndex = strengths.indexOf(preferences.dialogueBoostStrength)
-                                    val nextIndex = (currentIndex + 1) % strengths.size
-                                    viewModel.setDialogueBoostStrength(strengths[nextIndex])
-                                },
+                                onClick = { activeDialog = AudioSettingsDialog.DialogueBoostStrengthPicker },
                             )
                         }
                         SettingToggleItem(
@@ -351,12 +351,7 @@ fun AudioSettingsScreen(
                                 trailingText = preferences.nightModeStrength.displayName,
                                 highlighted = highlightSettingId == "night_mode_strength",
                                 index = idx++, count = total,
-                                onClick = {
-                                    val strengths = EffectStrength.entries
-                                    val currentIndex = strengths.indexOf(preferences.nightModeStrength)
-                                    val nextIndex = (currentIndex + 1) % strengths.size
-                                    viewModel.setNightModeStrength(strengths[nextIndex])
-                                },
+                                onClick = { activeDialog = AudioSettingsDialog.NightModeStrengthPicker },
                             )
                         }
                         SettingToggleItem(
@@ -376,12 +371,7 @@ fun AudioSettingsScreen(
                                 trailingText = preferences.bassBoostStrength.displayName,
                                 highlighted = highlightSettingId == "bass_boost_strength",
                                 index = idx++, count = total,
-                                onClick = {
-                                    val strengths = EffectStrength.entries
-                                    val currentIndex = strengths.indexOf(preferences.bassBoostStrength)
-                                    val nextIndex = (currentIndex + 1) % strengths.size
-                                    viewModel.setBassBoostStrength(strengths[nextIndex])
-                                },
+                                onClick = { activeDialog = AudioSettingsDialog.BassBoostStrengthPicker },
                             )
                         }
                         SettingToggleItem(
@@ -401,12 +391,7 @@ fun AudioSettingsScreen(
                                 trailingText = "${preferences.virtualizerStrength / 10}%",
                                 highlighted = highlightSettingId == "virtualizer_strength",
                                 index = idx++, count = total,
-                                onClick = {
-                                    val steps = listOf(0, 200, 400, 500, 600, 800, 1000)
-                                    val currentIdx = steps.indexOf(preferences.virtualizerStrength).coerceAtLeast(0)
-                                    val nextIdx = (currentIdx + 1) % steps.size
-                                    viewModel.setVirtualizerStrength(steps[nextIdx])
-                                },
+                                onClick = { activeDialog = AudioSettingsDialog.VirtualizerStrengthPicker },
                             )
                         }
                         SettingToggleItem(
@@ -436,12 +421,7 @@ fun AudioSettingsScreen(
                             trailingText = preferences.reverbPreset.displayName,
                             highlighted = highlightSettingId == "reverb",
                             index = idx++, count = total,
-                            onClick = {
-                                val presets = com.raulshma.jellyplay.core.model.ReverbPreset.entries
-                                val currentIndex = presets.indexOf(preferences.reverbPreset)
-                                val nextIndex = (currentIndex + 1) % presets.size
-                                viewModel.setReverbPreset(presets[nextIndex])
-                            },
+                            onClick = { activeDialog = AudioSettingsDialog.ReverbPicker },
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Wand,
@@ -902,6 +882,74 @@ fun AudioSettingsScreen(
             onDismiss = { activeDialog = AudioSettingsDialog.None },
             onSelect = {
                 viewModel.setAudioCacheNetworkPolicy(it)
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.DialogueBoostStrengthPicker) {
+        SettingsChipPickerSheet(
+            title = "Dialogue Boost Strength",
+            options = EffectStrength.entries.map { it.displayName },
+            selectedIndex = EffectStrength.entries.indexOf(preferences.dialogueBoostStrength),
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = { index ->
+                viewModel.setDialogueBoostStrength(EffectStrength.entries[index])
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.NightModeStrengthPicker) {
+        SettingsChipPickerSheet(
+            title = "Night Mode Strength",
+            options = EffectStrength.entries.map { it.displayName },
+            selectedIndex = EffectStrength.entries.indexOf(preferences.nightModeStrength),
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = { index ->
+                viewModel.setNightModeStrength(EffectStrength.entries[index])
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.BassBoostStrengthPicker) {
+        SettingsChipPickerSheet(
+            title = "Bass Boost Strength",
+            options = EffectStrength.entries.map { it.displayName },
+            selectedIndex = EffectStrength.entries.indexOf(preferences.bassBoostStrength),
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = { index ->
+                viewModel.setBassBoostStrength(EffectStrength.entries[index])
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.VirtualizerStrengthPicker) {
+        val steps = listOf(0, 200, 400, 500, 600, 800, 1000)
+        SettingsListPickerSheet(
+            title = "Virtualizer Strength",
+            items = steps,
+            label = { "${it / 10}%" },
+            isSelected = { it == preferences.virtualizerStrength },
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = {
+                viewModel.setVirtualizerStrength(it)
+                activeDialog = AudioSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is AudioSettingsDialog.ReverbPicker) {
+        SettingsListPickerSheet(
+            title = "Reverb",
+            items = ReverbPreset.entries,
+            label = { it.displayName },
+            isSelected = { it == preferences.reverbPreset },
+            onDismiss = { activeDialog = AudioSettingsDialog.None },
+            onSelect = {
+                viewModel.setReverbPreset(it)
                 activeDialog = AudioSettingsDialog.None
             },
         )

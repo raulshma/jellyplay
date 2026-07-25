@@ -8,7 +8,7 @@ import org.junit.Test
 
 /**
  * Pins [AutoPlayController] — the auto-advance state machine extracted from
- * `VideoPlayerViewModel` (recommendation #1). Pure logic, no Android.
+ * `VideoPlayerViewModel`. Pure logic, no Android.
  */
 class AutoPlayControllerTest {
 

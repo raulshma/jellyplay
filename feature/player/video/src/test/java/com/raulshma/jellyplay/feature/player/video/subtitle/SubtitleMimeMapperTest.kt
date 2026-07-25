@@ -28,6 +28,11 @@ class SubtitleMimeMapperTest {
     }
 
     @Test
+    fun tt_mapsToTtml() {
+        assertEquals(MimeTypes.APPLICATION_TTML, SubtitleMimeMapper.mapCodecToMime("tt"))
+    }
+
+    @Test
     fun vtt_mapsToVtt() {
         assertEquals(MimeTypes.TEXT_VTT, SubtitleMimeMapper.mapCodecToMime("vtt"))
     }

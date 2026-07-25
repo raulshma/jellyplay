@@ -18,6 +18,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -204,7 +207,7 @@ fun VideoPlayerScreen(
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val isInPipMode by viewModel.playerLifecycleManager.isInPipMode.collectAsStateWithLifecycle()
+    val isInPipMode by viewModel.pipController.isInPipMode.collectAsStateWithLifecycle()
 
     // Ephemeral UI state. Migrated to `rememberSaveable` so a configuration
     // change (locale switch, rotation outside the player's locked orientation)
@@ -279,7 +282,18 @@ fun VideoPlayerScreen(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: android.net.Uri? ->
         if (uri != null) {
-            viewModel.installUserFont(uri)
+            val name = uri.lastPathSegment.orEmpty().lowercase()
+            val isFont = name.endsWith(".ttf") || name.endsWith(".otf")
+            if (isFont) {
+                viewModel.installUserFont(uri)
+            } else {
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Selected file isn't a .ttf or .otf font.",
+                        duration = androidx.compose.material3.SnackbarDuration.Short,
+                    )
+                }
+            }
         }
     }
 
@@ -305,10 +319,10 @@ fun VideoPlayerScreen(
     // ensures the dismiss signal survives lifecycle STOPPED→STARTED transitions.
     // The old SharedFlow approach lost the event because LaunchedEffect's coroutine is
     // cancelled during STOPPED and SharedFlow(replay=0) doesn't replay to new subscribers.
-    val pipDismissed by viewModel.playerLifecycleManager.pipDismissed.collectAsStateWithLifecycle()
+    val pipDismissed by viewModel.pipController.pipDismissed.collectAsStateWithLifecycle()
     LaunchedEffect(pipDismissed) {
         if (pipDismissed) {
-            viewModel.playerLifecycleManager.clearPipDismissed()
+            viewModel.pipController.clearPipDismissed()
             onBack()
         }
     }
@@ -368,7 +382,7 @@ fun VideoPlayerScreen(
         }
 
         onDispose {
-            val currentlyInPip = viewModel.playerLifecycleManager.isInPipMode.value
+            val currentlyInPip = viewModel.pipController.isInPipMode.value
             val isBgCasting = viewModel.isCastConnected && viewModel.castIsPlaying.value &&
                 viewModel.backgroundCastingEnabled
             val restoreOrientation = if (isTv)
@@ -1034,13 +1048,16 @@ fun VideoPlayerScreen(
                             }
                             gestureDeltaMs = totalDeltaMs
                             val durationMs = eng.durationMs.coerceAtLeast(0)
-                            // For live streams durationMs is 0, so the
-                            // upper clamp pinned every seek to 0. Skip the
-                            // clamp when there is no known duration; live seek
-                            // gestures are rare and the engine clamps on its
-                            // own at seek time.
+                            // For live streams durationMs is 0, so the upper
+                            // clamp is skipped. To avoid showing a trickplay
+                            // thumbnail + time label for a position that doesn't
+                            // For live streams durationMs is 0, so the upper
+                            // clamp is skipped. To avoid showing a trickplay
+                            // thumbnail + time label for a position that doesn't
+                            // exist, cap the *per-gesture* delta by the
                             gestureSeekPositionMs = if (durationMs <= 0L) {
-                                (gestureStartPositionMs + totalDeltaMs).coerceAtLeast(0L)
+                                val capped = totalDeltaMs.coerceIn(-uiState.swipeSeekMaxMs, uiState.swipeSeekMaxMs)
+                                (gestureStartPositionMs + capped).coerceAtLeast(0L)
                             } else {
                                 (gestureStartPositionMs + totalDeltaMs).coerceIn(0L, durationMs)
                             }
@@ -1098,6 +1115,15 @@ fun VideoPlayerScreen(
                         }
                         if (brightnessOverlay in 0f..1f) {
                             viewModel.saveBrightness(brightnessOverlay)
+                        }
+                        if (volumeOverlay in 0f..1f) {
+                            val am = context.getSystemService(android.content.Context.AUDIO_SERVICE)
+                                as? android.media.AudioManager
+                            if (am != null) {
+                                val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                                val cur = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                                if (max > 0) viewModel.saveVolume(cur.toFloat() / max)
+                            }
                         }
                         seekState.reset()
                         volumeGestureAccumulator = 0f
@@ -1226,6 +1252,7 @@ fun VideoPlayerScreen(
                     autoplayEnabled = uiState.videoAutoplayNext,
                     onPlayNext = { viewModel.playNextEpisode() },
                     onCancel = { viewModel.cancelAutoplay() },
+                    onToggleAutoplay = { viewModel.setVideoAutoplayNext(!uiState.videoAutoplayNext) },
                     isPlaying = isPlaying,
                     pauseCountdown = currentSheet != PlayerSheet.None || isScreenLocked,
                     focusRequester = tvNextEpisodeFocusRequester,
@@ -1239,7 +1266,8 @@ fun VideoPlayerScreen(
                 hdrType = uiState.hdrType,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 60.dp, end = 16.dp),
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = 16.dp, end = 16.dp),
             )
 
             if (uiState.isBuffering && uiState.playerError == null && !isPlaying && playbackIntended) {
@@ -1338,6 +1366,11 @@ fun VideoPlayerScreen(
 
             val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
             val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
+            // Previous/Next center-button availability. Derived from the
+            // adjacency snapshot fetchAdjacentEpisodes writes alongside
+            // nextEpisode, so these stay consistent with the up-next overlay.
+            val hasPreviousEpisode = uiState.previousEpisode != null
+            val hasNextEpisode = uiState.nextEpisode != null
 
             // Hoist PlayerControls callbacks into remembered lambdas.
             // Each fresh `{ ... }` passed inline below allocated a new lambda
@@ -1352,8 +1385,8 @@ fun VideoPlayerScreen(
             // onPassthroughClick) are keyed on exactly that value so they
             // recreate only when it actually changes.
             val onPlayPause by remember(doTogglePlayPause) { mutableStateOf({ doTogglePlayPause() }) }
-            val onSeekBack by remember(doSeekBack) { mutableStateOf({ doSeekBack() }) }
-            val onSeekForward by remember(doSeekForward) { mutableStateOf({ doSeekForward() }) }
+            val onPreviousEpisode by remember { mutableStateOf({ viewModel.playPreviousEpisode() }) }
+            val onNextEpisode by remember { mutableStateOf({ viewModel.playNextEpisode() }) }
             val onSeekEnd by remember(duration, doSeekTo) {
                 mutableStateOf({
                     isSeeking = false
@@ -1442,6 +1475,10 @@ fun VideoPlayerScreen(
                 tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
                 isSkipSegmentVisible = isSkipSegmentVisible,
                 isNextEpisodeVisible = isNextEpisodeVisible,
+                onControlRowScrolled = {
+                    userInteractionCount++
+                    viewModel.onUserInteraction()
+                },
                 supportsSubtitleStyle = uiState.engineCapabilities.supportsSubtitleStyle,
                 supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
                 supportsNightMode = uiState.engineCapabilities.supportsNightMode,
@@ -1450,8 +1487,10 @@ fun VideoPlayerScreen(
                 hasEpisodes = hasEpisodes,
                 episodeBrowserEnabled = episodeBrowserEnabled,
                 onPlayPause = onPlayPause,
-                onSeekBack = onSeekBack,
-                onSeekForward = onSeekForward,
+                hasPreviousEpisode = hasPreviousEpisode,
+                hasNextEpisode = hasNextEpisode,
+                onPreviousEpisode = onPreviousEpisode,
+                onNextEpisode = onNextEpisode,
                 onSeekStart = onSeekStart,
                 onSeekEnd = onSeekEnd,
                 onSeekPositionChange = onSeekPositionChange,
@@ -1753,7 +1792,7 @@ private fun BoxScope.ZoomBadge(videoZoom: Float) {
         exit = fadeOut(tween(200, easing = AlphaEasing)),
         modifier = Modifier
             .align(Alignment.TopCenter)
-            .padding(top = 60.dp),
+            .padding(top = 100.dp),
     ) {
         Surface(
             shape = ShapeCache.smoothPill,

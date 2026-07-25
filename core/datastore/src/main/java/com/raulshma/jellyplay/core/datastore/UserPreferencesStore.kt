@@ -186,6 +186,13 @@ class UserPreferencesStore @Inject constructor(
         val TRAILER_AUTOPLAY = booleanPreferencesKey("trailer_autoplay")
         val CINEMA_MODE_ENABLED = booleanPreferencesKey("cinema_mode_enabled")
         val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey("video_remember_brightness")
+        val VIDEO_REMEMBER_VOLUME = booleanPreferencesKey("video_remember_volume")
+        val VIDEO_VOLUME_LEVEL = floatPreferencesKey("video_volume_level")
+        val VIDEO_AUTO_SKIP_INTRO = booleanPreferencesKey("video_auto_skip_intro")
+        val VIDEO_AUTO_SKIP_OUTRO = booleanPreferencesKey("video_auto_skip_outro")
+        val VIDEO_REMEMBER_MUTED = booleanPreferencesKey("video_remember_muted")
+        val VIDEO_MUTED = booleanPreferencesKey("video_muted")
+        val SUBTITLE_PREVIEW_IN_SETTINGS = booleanPreferencesKey("subtitle_preview_in_settings")
         val AUDIO_AUTOPLAY_NEXT = booleanPreferencesKey("audio_autoplay_next")
         val TRICKPLAY_ENABLED = booleanPreferencesKey("trickplay_enabled")
         val TRICKPLAY_ON_SEEK_GESTURE = booleanPreferencesKey("trickplay_on_seek_gesture")
@@ -959,12 +966,19 @@ class UserPreferencesStore @Inject constructor(
             videoHoldSpeedMultiplier = readFloat(prefs, Keys.VIDEO_HOLD_SPEED_MULTIPLIER, "video_hold_speed_multiplier", 2.0f),
             videoDefaultSpeed = readFloat(prefs, Keys.VIDEO_DEFAULT_SPEED, "video_default_speed", 1.0f),
             videoDefaultAspectRatio = prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] ?: "AUTO",
-            videoAutoplayNext = readBool(prefs, Keys.VIDEO_AUTOPLAY_NEXT, "video_autoplay_next", false),
+            videoAutoplayNext = readBool(prefs, Keys.VIDEO_AUTOPLAY_NEXT, "video_autoplay_next", true),
             trailerAutoplay = readBool(prefs, Keys.TRAILER_AUTOPLAY, "trailer_autoplay", true),
             cinemaModeEnabled = readBool(prefs, Keys.CINEMA_MODE_ENABLED, "cinema_mode_enabled", false),
             videoSwipeSeekMaxMs = readLong(prefs, Keys.VIDEO_SWIPE_SEEK_MAX_MS, "video_swipe_seek_max_ms", 120_000L),
-            videoRememberBrightness = readBool(prefs, Keys.VIDEO_REMEMBER_BRIGHTNESS, "video_remember_brightness", false),
+            videoRememberBrightness = readBool(prefs, Keys.VIDEO_REMEMBER_BRIGHTNESS, "video_remember_brightness", true),
             videoBrightnessLevel = readFloat(prefs, Keys.VIDEO_BRIGHTNESS_LEVEL, "video_brightness_level", 0.5f),
+            videoRememberVolume = readBool(prefs, Keys.VIDEO_REMEMBER_VOLUME, "video_remember_volume", true),
+            videoVolumeLevel = readFloat(prefs, Keys.VIDEO_VOLUME_LEVEL, "video_volume_level", 1.0f),
+            videoAutoSkipIntro = readBool(prefs, Keys.VIDEO_AUTO_SKIP_INTRO, "video_auto_skip_intro", false),
+            videoAutoSkipOutro = readBool(prefs, Keys.VIDEO_AUTO_SKIP_OUTRO, "video_auto_skip_outro", false),
+            videoRememberMuted = readBool(prefs, Keys.VIDEO_REMEMBER_MUTED, "video_remember_muted", true),
+            videoMuted = readBool(prefs, Keys.VIDEO_MUTED, "video_muted", false),
+            subtitlePreviewInSettings = readBool(prefs, Keys.SUBTITLE_PREVIEW_IN_SETTINGS, "subtitle_preview_in_settings", true),
             videoGestureIndicatorSide = try {
                 GestureIndicatorSide.valueOf(prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE] ?: GestureIndicatorSide.OPPOSITE.name)
             } catch (_: Exception) { GestureIndicatorSide.OPPOSITE },
@@ -2040,6 +2054,34 @@ class UserPreferencesStore @Inject constructor(
         dataStore.edit { it[Keys.VIDEO_BRIGHTNESS_LEVEL] = level }
     }
 
+    suspend fun setVideoRememberVolume(enabled: Boolean) {
+        dataStore.edit { it[Keys.VIDEO_REMEMBER_VOLUME] = enabled }
+    }
+
+    suspend fun setVideoVolumeLevel(level: Float) {
+        dataStore.edit { it[Keys.VIDEO_VOLUME_LEVEL] = level }
+    }
+
+    suspend fun setVideoAutoSkipIntro(enabled: Boolean) {
+        dataStore.edit { it[Keys.VIDEO_AUTO_SKIP_INTRO] = enabled }
+    }
+
+    suspend fun setVideoAutoSkipOutro(enabled: Boolean) {
+        dataStore.edit { it[Keys.VIDEO_AUTO_SKIP_OUTRO] = enabled }
+    }
+
+    suspend fun setVideoRememberMuted(enabled: Boolean) {
+        dataStore.edit { it[Keys.VIDEO_REMEMBER_MUTED] = enabled }
+    }
+
+    suspend fun setVideoMuted(muted: Boolean) {
+        dataStore.edit { it[Keys.VIDEO_MUTED] = muted }
+    }
+
+    suspend fun setSubtitlePreviewInSettings(enabled: Boolean) {
+        dataStore.edit { it[Keys.SUBTITLE_PREVIEW_IN_SETTINGS] = enabled }
+    }
+
     suspend fun setVideoGestureIndicatorSide(side: GestureIndicatorSide) {
         dataStore.edit { it[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = side.name }
     }
@@ -2430,6 +2472,13 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = prefs.videoSwipeSeekMaxMs
             settings[Keys.VIDEO_REMEMBER_BRIGHTNESS] = prefs.videoRememberBrightness
             settings[Keys.VIDEO_BRIGHTNESS_LEVEL] = prefs.videoBrightnessLevel
+            settings[Keys.VIDEO_REMEMBER_VOLUME] = prefs.videoRememberVolume
+            settings[Keys.VIDEO_VOLUME_LEVEL] = prefs.videoVolumeLevel
+            settings[Keys.VIDEO_AUTO_SKIP_INTRO] = prefs.videoAutoSkipIntro
+            settings[Keys.VIDEO_AUTO_SKIP_OUTRO] = prefs.videoAutoSkipOutro
+            settings[Keys.VIDEO_REMEMBER_MUTED] = prefs.videoRememberMuted
+            settings[Keys.VIDEO_MUTED] = prefs.videoMuted
+            settings[Keys.SUBTITLE_PREVIEW_IN_SETTINGS] = prefs.subtitlePreviewInSettings
             settings[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = prefs.videoGestureIndicatorSide.name
             settings[Keys.AUDIO_DEFAULT_SPEED] = prefs.audioDefaultSpeed
             settings[Keys.AUDIO_NIGHT_MODE_VOLUME] = prefs.audioNightModeVolume

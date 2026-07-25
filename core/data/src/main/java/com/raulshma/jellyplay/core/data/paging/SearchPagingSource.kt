@@ -13,6 +13,7 @@ class SearchPagingSource(
     private val genres: List<String>? = null,
     private val years: List<Int>? = null,
     private val tags: List<String>? = null,
+    private val minRating: Float? = null,
 ) : PagingSource<Int, MediaItem>() {
 
     override fun getRefreshKey(state: PagingState<Int, MediaItem>): Int? {
@@ -43,6 +44,7 @@ class SearchPagingSource(
                 tags = tags,
                 limit = pageSize,
                 startIndex = startIndex,
+                minRating = minRating,
             )
 
             result.fold(

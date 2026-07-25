@@ -159,6 +159,7 @@ class SearchViewModel @Inject constructor(
                     genres = filters.genres.ifEmpty { null },
                     years = filters.years.ifEmpty { null },
                     tags = filters.tags.ifEmpty { null },
+                    minRating = filters.minRating.takeIf { it > 0f },
                 )
             }
         }

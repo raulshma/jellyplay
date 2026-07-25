@@ -42,6 +42,8 @@ data class ArrQueueUiState(
     val selectionMode: Boolean = false,
     val actionInProgress: Boolean = false,
     val actionError: String? = null,
+    /** R3: brief success message (grab/import sent) for a snackbar. */
+    val actionSuccess: String? = null,
     /** Inline action dialog to show, if any. */
     val pendingAction: ArrQueueAction? = null,
 )
@@ -191,9 +193,12 @@ class ArrQueueViewModel @Inject constructor(
 
     fun grabItem(item: ArrQueueItem) {
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null, pendingAction = null)
+            _state.value = _state.value.copy(actionInProgress = true, actionError = null, actionSuccess = null, pendingAction = null)
             arrRepository.grabQueueItem(item)
-                .onSuccess { refresh() }
+                .onSuccess {
+                    _state.value = _state.value.copy(actionSuccess = "Grab sent for \"${item.title}\"")
+                    refresh()
+                }
                 .onFailure { _state.value = _state.value.copy(actionError = it.message) }
             _state.value = _state.value.copy(actionInProgress = false)
         }
@@ -201,9 +206,12 @@ class ArrQueueViewModel @Inject constructor(
 
     fun importItem(item: ArrQueueItem) {
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null, pendingAction = null)
+            _state.value = _state.value.copy(actionInProgress = true, actionError = null, actionSuccess = null, pendingAction = null)
             arrRepository.importQueueItem(item)
-                .onSuccess { refresh() }
+                .onSuccess {
+                    _state.value = _state.value.copy(actionSuccess = "Import sent for \"${item.title}\"")
+                    refresh()
+                }
                 .onFailure { _state.value = _state.value.copy(actionError = it.message) }
             _state.value = _state.value.copy(actionInProgress = false)
         }
@@ -211,6 +219,10 @@ class ArrQueueViewModel @Inject constructor(
 
     fun clearActionError() {
         _state.value = _state.value.copy(actionError = null)
+    }
+
+    fun clearActionSuccess() {
+        _state.value = _state.value.copy(actionSuccess = null)
     }
 
     private val ArrQueueItem.rowKey: String

@@ -70,6 +70,7 @@ class PlayerSessionManagerTest {
         offlineRepository = mockk(relaxed = true)
         preferencesStore = mockk(relaxed = true)
         playerLifecycleManager = mockk(relaxed = true)
+        val pipController = mockk<com.raulshma.jellyplay.core.data.playback.PipController>(relaxed = true)
         adaptiveBitrateManager = mockk(relaxed = true)
 
         // Default: EXTERNAL player to avoid real engine instantiation in unit tests.
@@ -100,6 +101,7 @@ class PlayerSessionManagerTest {
             offlineRepository = offlineRepository,
             preferencesStore = preferencesStore,
             playerLifecycleManager = playerLifecycleManager,
+            pipController = pipController,
             adaptiveBitrateManager = adaptiveBitrateManager,
             // Tests use EXTERNAL, which short-circuits before any real engine is
             // built, so a real factory wired to the (relaxed-mock) context is fine.

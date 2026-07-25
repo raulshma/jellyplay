@@ -16,6 +16,8 @@ class MediaPagingSource(
     private val sortBy: String = "SortName",
     private val sortOrder: String = "Ascending",
     private val tags: List<String>? = null,
+    private val playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
+    private val minRating: Float? = null,
 ) : PagingSource<Int, MediaItem>() {
 
     override fun getRefreshKey(state: PagingState<Int, MediaItem>): Int? {
@@ -41,6 +43,8 @@ class MediaPagingSource(
                 startIndex = startIndex,
                 limit = pageSize,
                 tags = tags,
+                playedStatus = playedStatus,
+                minRating = minRating,
             )
 
             result.fold(

@@ -29,7 +29,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapsh
  * The play-method / codec / HDR / audio / channels badge row shown beneath the
  * title in [PlayerControls] (e.g. "Direct Play • HEVC • HDR10 • TRUEHD Atmos • 7.1").
  *
- * Extracted verbatim from `PlayerControls.kt` (recommendation #2 — decompose
+ * Extracted verbatim from `PlayerControls.kt` — decompose
  * the controls overlay into smaller, self-contained stateless composables).
  * Pure function of its arguments: all state is hoisted to the caller.
  */

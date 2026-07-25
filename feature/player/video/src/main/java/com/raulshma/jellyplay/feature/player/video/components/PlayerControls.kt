@@ -53,6 +53,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filter
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -155,11 +157,13 @@ internal fun PlayerControls(
     hasEpisodes: Boolean = false,
     episodeBrowserEnabled: Boolean = true,
     onPlayPause: () -> Unit,
-    onSeekBack: () -> Unit,
-    onSeekForward: () -> Unit,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit,
+    hasPreviousEpisode: Boolean = false,
+    hasNextEpisode: Boolean = false,
+    onPreviousEpisode: () -> Unit = {},
+    onNextEpisode: () -> Unit = {},
     tvTrickplayBitmap: Bitmap? = null,
     onBack: () -> Unit,
     onSpeedClick: () -> Unit,
@@ -229,6 +233,7 @@ internal fun PlayerControls(
     tvNextEpisodeFocusRequester: FocusRequester? = null,
     isSkipSegmentVisible: Boolean = false,
     isNextEpisodeVisible: Boolean = false,
+    onControlRowScrolled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Collect the high-frequency streams here: the recomposition they
@@ -271,6 +276,12 @@ internal fun PlayerControls(
     val tvSeekbarFocusRequester = remember { FocusRequester() }
     val tvBottomButtonsFocusRequester = remember { FocusRequester() }
     val tvBackFocusState = rememberTvFocusState(focusedScale = 1.08f)
+
+    LaunchedEffect(bottomLeftScrollState) {
+        snapshotFlow { bottomLeftScrollState.isScrollInProgress }
+            .filter { it }
+            .collect { onControlRowScrolled() }
+    }
 
     // Overflow menu open/close state. Hoisted to the PlayerControls scope (rather
     // than the local button Box) so the in-window panel can be hosted in the root
@@ -437,7 +448,8 @@ internal fun PlayerControls(
             ) {
                 val tvRewindFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
-                    onClick = onSeekBack,
+                    onClick = onPreviousEpisode,
+                    enabled = hasPreviousEpisode,
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
                         .then(tvRewindFocusState.focusModifier)
@@ -449,7 +461,7 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        Tabler.Outline.PlayerTrackPrev, "Rewind",
+                        Tabler.Outline.PlayerTrackPrev, "Previous episode",
                         modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }
@@ -477,7 +489,8 @@ internal fun PlayerControls(
 
                 val tvForwardFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
-                    onClick = onSeekForward,
+                    onClick = onNextEpisode,
+                    enabled = hasNextEpisode,
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
                         .then(tvForwardFocusState.focusModifier)
@@ -489,7 +502,7 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        Tabler.Outline.PlayerTrackNext, "Forward",
+                        Tabler.Outline.PlayerTrackNext, "Next episode",
                         modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }

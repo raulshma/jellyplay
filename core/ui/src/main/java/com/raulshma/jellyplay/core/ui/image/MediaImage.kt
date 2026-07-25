@@ -49,7 +49,7 @@ fun MediaImage(
     // visible in a horizontal row of 8.
     size: CoilSize = CoilSize(384, 384),
     colorFilter: ColorFilter? = null,
-    placeholderIcon: ImageVector = Tabler.Outline.User,
+    placeholderIcon: ImageVector = Tabler.Outline.Photo,
     // Performance mode lowers decode size to save memory. Full-screen images
     // (hero, detail backdrop) opt out via performanceModeAware = false — capping
     // a single full-bleed image to 256² looks badly blurry, and there is only
@@ -127,7 +127,7 @@ private fun FallbackAsyncImage(
     contentScale: ContentScale,
     colorFilter: ColorFilter?,
     showPlaceholder: Boolean,
-    placeholderIcon: ImageVector = Tabler.Outline.User,
+    placeholderIcon: ImageVector = Tabler.Outline.Photo,
 ) {
     val context = LocalContext.current
     val fallbackKey = remember(fallbackUrls) { fallbackUrls.joinToString("|") }

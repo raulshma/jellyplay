@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pins the Hilt-singleton [PlayerEngineFactory] (recommendation #7): it is
+ * Pins the Hilt-singleton [PlayerEngineFactory]: it is
  * directly constructible (so `@Inject constructor` is valid and unit-testable
  * without a Hilt component), and its `create`/`resetBandwidthMeter` contracts
  * hold. Real-engine construction needs Android, so EXTERNAL (→ [NoOpEngine])

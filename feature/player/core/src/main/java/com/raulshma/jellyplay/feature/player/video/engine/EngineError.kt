@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 /**
- * Structured playback-error taxonomy surfaced by [MediaEngine]s and aggregated
- * by [PlayerPlaybackModel]. Replaces the bare `errorFlow: Flow<String>` string
- * channel so the UI can distinguish recoverable errors (network drop, surface
- * init) from fatal ones (unsupported codec, DRM failure) and offer the right
- * affordance (Retry vs. Switch-engine/Transcode vs. OK).
+ * Structured playback-error taxonomy surfaced by [MediaEngine]s. Replaces the
+ * bare `errorFlow: Flow<String>` string channel so the UI can distinguish
+ * recoverable errors (network drop, surface init, start-up timeout) from fatal
+ * ones (unsupported codec, DRM failure) and offer the right affordance (Retry
+ * vs. Switch-engine/Transcode vs. OK).
  *
  * Each subtype declares its own [retryable] verdict. The mapping from each
  * engine's native error surface to this taxonomy happens at the `MediaEngine`
@@ -51,6 +51,17 @@ sealed interface EngineError {
     /** Rendering surface initialization or output failure. Retryable. */
     data class Render(override val cause: Throwable?) : EngineError {
         override val message: String = "Render error"
+        override val retryable: Boolean = true
+    }
+
+    /**
+     * Playback failed to start within the initial buffering window (the engine
+     * never reached READY). Distinct from [Network] — the request may have
+     * succeeded but the decoder/surface pipeline stalled. Retryable: a retry
+     * may succeed, or the UI can offer switching engine / transcoding.
+     */
+    data class Timeout(override val cause: Throwable? = null) : EngineError {
+        override val message: String = "Playback failed to start. Try a different player engine."
         override val retryable: Boolean = true
     }
 

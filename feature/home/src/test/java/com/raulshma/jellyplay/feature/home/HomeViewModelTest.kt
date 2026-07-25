@@ -14,7 +14,6 @@ import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.newsletter.NewsletterTriggerManager
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
-import com.raulshma.jellyplay.core.data.usecase.GetHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -148,7 +147,6 @@ class HomeViewModelTest {
 
     private fun buildViewModel(): HomeViewModel = HomeViewModel(
         mediaRepository = mediaRepository,
-        getHomeSections = GetHomeSectionsUseCase(mediaRepository),
         orderHomeSections = OrderHomeSectionsUseCase(),
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,

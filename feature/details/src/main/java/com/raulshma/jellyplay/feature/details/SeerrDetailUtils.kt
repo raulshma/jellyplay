@@ -1,5 +1,45 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCast
+import com.raulshma.jellyplay.core.model.seerr.SeerrCast
+import com.raulshma.jellyplay.core.ui.components.formatDurationFromMinutes
+
+/**
+ * Neutral cast-member view used by the detail UI. The Seerr API exposes cast
+ * two ways — [SeerrAggregateCast] (TV, role-based) and [SeerrCast] (movie,
+ * single character) — with no shared interface. This value type is the single
+ * shape the cast row renders, mapped at the call site, so the composable no
+ * longer takes `List<Any>` and `when`-branches on the source type.
+ */
+internal data class SeerrCastMember(
+    val id: Int,
+    val name: String,
+    val character: String,
+    val profileUrl: String?,
+)
+
+/** Maps a TV aggregate-cast list to the neutral [SeerrCastMember] view. */
+internal fun List<SeerrAggregateCast>.toAggregateCastMembers(): List<SeerrCastMember> =
+    map { member ->
+        SeerrCastMember(
+            id = member.id,
+            name = member.name,
+            character = member.roles.firstOrNull()?.character ?: "",
+            profileUrl = member.profileUrl,
+        )
+    }
+
+/** Maps a movie cast list to the neutral [SeerrCastMember] view. */
+internal fun List<SeerrCast>.toCastMembers(): List<SeerrCastMember> =
+    map { member ->
+        SeerrCastMember(
+            id = member.id,
+            name = member.name,
+            character = member.character ?: "",
+            profileUrl = member.profileUrl,
+        )
+    }
+
 /**
  * Seerr-style date formatting. Parses an ISO date ("yyyy-MM-dd") and renders a
  * short locale-friendly form; falls back to the first 10 chars on parse failure.
@@ -19,17 +59,20 @@ internal fun formatDate(dateStr: String): String {
 /**
  * Runtime formatting (minutes → "Xh Ym" / "Xh" / "Ym").
  *
- * Extracted verbatim from `SeerrDetailScreen.kt`.
+ * Delegates to the shared [formatDurationFromMinutes] in core/ui — one
+ * implementation instead of the copy that previously lived here.
  */
-internal fun formatRuntime(minutes: Int): String {
-    val h = minutes / 60
-    val m = minutes % 60
-    return when {
-        h > 0 && m > 0 -> "${h}h ${m}m"
-        h > 0 -> "${h}h"
-        else -> "${m}m"
-    }
-}
+internal fun formatRuntime(minutes: Int): String = formatDurationFromMinutes(minutes.toLong())
+
+/**
+ * Builds a YouTube thumbnail URL for a related video, or null when the video is
+ * not hosted on YouTube (no thumbnail source is available for other sites).
+ * Centralized here so the media-detail and Seerr video rows share one builder.
+ */
+internal fun youTubeThumbnailUrl(site: String?, key: String?): String? =
+    if (site?.equals("youtube", ignoreCase = true) == true && !key.isNullOrBlank()) {
+        "https://img.youtube.com/vi/$key/mqdefault.jpg"
+    } else null
 
 /**
  * Converts a 2-letter ISO country code into its flag emoji.

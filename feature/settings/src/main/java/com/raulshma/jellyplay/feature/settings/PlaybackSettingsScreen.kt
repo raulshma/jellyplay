@@ -133,6 +133,10 @@ sealed class PlaybackSettingsDialog {
     object DvrRecordingQualityPicker : PlaybackSettingsDialog()
     object AutoPlayCountdownPicker : PlaybackSettingsDialog()
     object TvZoomModePicker : PlaybackSettingsDialog()
+    object DialogueBoostStrengthPicker : PlaybackSettingsDialog()
+    object DecoderPicker : PlaybackSettingsDialog()
+    object StreamingQualityPicker : PlaybackSettingsDialog()
+    data class SegmentBehaviorPicker(val type: com.raulshma.jellyplay.core.model.MediaSegmentType) : PlaybackSettingsDialog()
 }
 
 private val PLAYBACK_ADVANCED_GROUP_IDS = setOf("dialogue_boost", "decoder", "audio_passthrough", "frame_rate_matching", "streaming_quality", "audio_delay")
@@ -597,12 +601,7 @@ fun PlaybackSettingsScreen(
                             subtitle = preferences.dialogueBoostStrength.displayName,
                             trailingText = preferences.dialogueBoostStrength.displayName,
                             index = idx++, count = total,
-                            onClick = {
-                                val strengths = EffectStrength.entries
-                                val currentIndex = strengths.indexOf(preferences.dialogueBoostStrength)
-                                val nextIndex = (currentIndex + 1) % strengths.size
-                                viewModel.setDialogueBoostStrength(strengths[nextIndex])
-                            },
+                            onClick = { activeDialog = PlaybackSettingsDialog.DialogueBoostStrengthPicker },
                         )
                     }
                     SettingListItem(
@@ -612,12 +611,7 @@ fun PlaybackSettingsScreen(
                         trailingText = preferences.decoderMode.displayName.split(" ").first(),
                         highlighted = highlightSettingId == "decoder",
                         index = idx++, count = total,
-                        onClick = {
-                            val modes = DecoderMode.entries
-                            val currentIndex = modes.indexOf(preferences.decoderMode)
-                            val nextIndex = (currentIndex + 1) % modes.size
-                            viewModel.setDecoderMode(modes[nextIndex])
-                        },
+                        onClick = { activeDialog = PlaybackSettingsDialog.DecoderPicker },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Movie,
@@ -644,12 +638,7 @@ fun PlaybackSettingsScreen(
                         trailingText = streamingQualityShort(preferences.streamingQuality),
                         highlighted = highlightSettingId == "streaming_quality",
                         index = idx++, count = total,
-                        onClick = {
-                            val qualities = StreamingQuality.entries
-                            val currentIndex = qualities.indexOf(preferences.streamingQuality)
-                            val nextIndex = (currentIndex + 1) % qualities.size
-                            viewModel.setStreamingQuality(qualities[nextIndex])
-                        },
+                        onClick = { activeDialog = PlaybackSettingsDialog.StreamingQualityPicker },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Music,
@@ -958,12 +947,7 @@ fun PlaybackSettingsScreen(
                             subtitle = type.description,
                             trailingText = behavior.displayName,
                             index = index, count = totalTypes,
-                            onClick = {
-                                val behaviors = com.raulshma.jellyplay.core.model.SegmentBehavior.entries
-                                val currentIndex = behaviors.indexOf(behavior)
-                                val nextIndex = (currentIndex + 1) % behaviors.size
-                                viewModel.setSegmentBehavior(type, behaviors[nextIndex])
-                            },
+                            onClick = { activeDialog = PlaybackSettingsDialog.SegmentBehaviorPicker(type) },
                         )
                     }
                 }
@@ -1769,6 +1753,65 @@ fun PlaybackSettingsScreen(
             onDismiss = { activeDialog = PlaybackSettingsDialog.None },
             onSelect = {
                 viewModel.setTvZoomModePercent(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.DialogueBoostStrengthPicker) {
+        SettingsChipPickerSheet(
+            title = "Dialogue Boost Strength",
+            options = EffectStrength.entries.map { it.displayName },
+            selectedIndex = EffectStrength.entries.indexOf(preferences.dialogueBoostStrength),
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = { index ->
+                viewModel.setDialogueBoostStrength(EffectStrength.entries[index])
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.DecoderPicker) {
+        SettingsListPickerSheet(
+            title = "Decoder",
+            items = DecoderMode.entries,
+            label = { it.displayName },
+            isSelected = { it == preferences.decoderMode },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setDecoderMode(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog is PlaybackSettingsDialog.StreamingQualityPicker) {
+        SettingsListPickerSheet(
+            title = "Streaming Quality",
+            items = StreamingQuality.entries,
+            label = { streamingQualityLabel(it) },
+            isSelected = { it == preferences.streamingQuality },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setStreamingQuality(it)
+                activeDialog = PlaybackSettingsDialog.None
+            },
+        )
+    }
+
+    (activeDialog as? PlaybackSettingsDialog.SegmentBehaviorPicker)?.let { picker ->
+        val behaviors = com.raulshma.jellyplay.core.model.SegmentBehavior.entries
+        val current = preferences.segmentBehaviors[picker.type]
+            ?: com.raulshma.jellyplay.core.model.SegmentBehavior.IGNORE
+        SettingsListPickerSheet(
+            title = picker.type.displayName,
+            items = behaviors,
+            label = { it.displayName },
+            subtitle = { it.description },
+            isSelected = { it == current },
+            onDismiss = { activeDialog = PlaybackSettingsDialog.None },
+            onSelect = {
+                viewModel.setSegmentBehavior(picker.type, it)
                 activeDialog = PlaybackSettingsDialog.None
             },
         )

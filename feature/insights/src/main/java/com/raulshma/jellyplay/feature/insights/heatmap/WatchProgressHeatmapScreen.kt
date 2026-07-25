@@ -57,6 +57,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -130,6 +133,8 @@ fun WatchProgressHeatmapScreen(
         LaunchedEffect(state.shareRequested) {
             withContext(Dispatchers.IO) {
                 runCatching {
+                    // TODO(F-23): capture only the HeatmapGrid subtree once
+                    // rememberGraphicsLayer is available in the Compose BOM.
                     val bitmap = view.drawToBitmap()
                     shareHeatmapImage(context, bitmap)
                 }
@@ -582,6 +587,8 @@ private fun HeatmapGrid(
     val (grid, numWeeks) = remember(year, dailyActivities, minActivityDate) {
         calculateGrid(year, dailyActivities, minActivityDate)
     }
+    val activeDays = remember(grid) { grid.count { it != null && it.level > 0 } }
+    val heatmapSummary = "Watch activity heatmap for $year. $activeDays active ${if (activeDays == 1) "day" else "days"}."
 
     val cellSize = 11.dp
     val cellGap = 2.dp
@@ -635,7 +642,8 @@ private fun HeatmapGrid(
 
     val gridWidthDp = with(LocalDensity.current) { (numWeeks * (cellSizePx + cellGapPx)).toDp() }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = Modifier
+        .fillMaxWidth()) {
         DayLabels(
             dayLabels = dayLabels,
             cellSizePx = cellSizePx,
@@ -680,13 +688,14 @@ private fun HeatmapGrid(
                             ((cellSizePx + cellGapPx) * 7 + 4f).toDp()
                         }
                     )
+                    .semantics { contentDescription = heatmapSummary }
                     .pointerInput(numWeeks) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             val tapX = down.position.x
                             val tapY = down.position.y
-                            val weekIdx = (tapX / (cellSizePx + cellGapPx)).toInt()
-                            val dayIdx = (tapY / (cellSizePx + cellGapPx)).toInt()
+                            val weekIdx = (tapX / (cellSizePx + cellGapPx)).roundToInt()
+                            val dayIdx = (tapY / (cellSizePx + cellGapPx)).roundToInt()
                             if (weekIdx in 0 until numWeeks && dayIdx in 0 until 7) {
                                 val cell = grid.getOrNull(weekIdx * 7 + dayIdx)
                                 onDayClick(cell?.date)
