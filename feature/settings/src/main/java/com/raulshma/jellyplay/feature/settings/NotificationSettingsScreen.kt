@@ -3,17 +3,17 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Checkbox
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,12 +24,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.model.CheckFrequency
@@ -300,193 +300,161 @@ fun NotificationSettingsScreen(
     }
 
     if (activeDialog is NotificationSettingsDialog.FrequencyPicker) {
-        val notifPrefs = preferences
-        AlertDialog(
-            onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
-            title = { Text(stringResource(R.string.settings_check_frequency)) },
-            text = {
-                Column {
-                    CheckFrequency.entries.forEachIndexed { index, freq ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.updateNotificationPreferences {
-                                        it.copy(checkFrequency = CheckFrequency.entries[index])
-                                    }
-                                    activeDialog = NotificationSettingsDialog.None
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = index == CheckFrequency.entries.indexOf(notifPrefs.checkFrequency),
-                                onClick = {
-                                    viewModel.updateNotificationPreferences {
-                                        it.copy(checkFrequency = CheckFrequency.entries[index])
-                                    }
-                                    activeDialog = NotificationSettingsDialog.None
-                                },
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = freq.displayName,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                        }
-                    }
+        SettingsListPickerSheet(
+            title = stringResource(R.string.settings_check_frequency),
+            items = CheckFrequency.entries,
+            label = { it.displayName },
+            isSelected = { it == preferences.checkFrequency },
+            onDismiss = { activeDialog = NotificationSettingsDialog.None },
+            onSelect = {
+                viewModel.updateNotificationPreferences { prefs ->
+                    prefs.copy(checkFrequency = it)
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text(stringResource(R.string.settings_cancel)) }
+                activeDialog = NotificationSettingsDialog.None
             },
         )
     }
 
     if (activeDialog is NotificationSettingsDialog.QuietStartPicker) {
-        val notifPrefs = preferences
-        val timePickerState = rememberTimePickerState(
-            initialHour = notifPrefs.quietHoursStart / 60,
-            initialMinute = notifPrefs.quietHoursStart % 60,
-            is24Hour = false,
-        )
-        AlertDialog(
-            onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
-            title = { Text(stringResource(R.string.settings_quiet_hours_start)) },
-            text = {
-                androidx.compose.material3.TimePicker(state = timePickerState)
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.updateNotificationPreferences {
-                            it.copy(quietHoursStart = timePickerState.hour * 60 + timePickerState.minute)
-                        }
-                        activeDialog = NotificationSettingsDialog.None
-                    }
-                ) { Text(stringResource(R.string.settings_ok)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text(stringResource(R.string.settings_cancel)) }
+        QuietHoursTimeSheet(
+            title = stringResource(R.string.settings_quiet_hours_start),
+            initialMinutes = preferences.quietHoursStart,
+            onDismiss = { activeDialog = NotificationSettingsDialog.None },
+            onConfirm = { minutes ->
+                viewModel.updateNotificationPreferences { it.copy(quietHoursStart = minutes) }
+                activeDialog = NotificationSettingsDialog.None
             },
         )
     }
 
     if (activeDialog is NotificationSettingsDialog.QuietEndPicker) {
-        val notifPrefs = preferences
-        val timePickerState = rememberTimePickerState(
-            initialHour = notifPrefs.quietHoursEnd / 60,
-            initialMinute = notifPrefs.quietHoursEnd % 60,
-            is24Hour = false,
-        )
-        AlertDialog(
-            onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
-            title = { Text(stringResource(R.string.settings_quiet_hours_end)) },
-            text = {
-                androidx.compose.material3.TimePicker(state = timePickerState)
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.updateNotificationPreferences {
-                            it.copy(quietHoursEnd = timePickerState.hour * 60 + timePickerState.minute)
-                        }
-                        activeDialog = NotificationSettingsDialog.None
-                    }
-                ) { Text(stringResource(R.string.settings_ok)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text(stringResource(R.string.settings_cancel)) }
+        QuietHoursTimeSheet(
+            title = stringResource(R.string.settings_quiet_hours_end),
+            initialMinutes = preferences.quietHoursEnd,
+            onDismiss = { activeDialog = NotificationSettingsDialog.None },
+            onConfirm = { minutes ->
+                viewModel.updateNotificationPreferences { it.copy(quietHoursEnd = minutes) }
+                activeDialog = NotificationSettingsDialog.None
             },
         )
     }
 
     if (activeDialog is NotificationSettingsDialog.MaxPerCheckPicker) {
-        val notifPrefs = preferences
         val options = listOf(5, 10, 15, 20, 30, 50, 100)
-        AlertDialog(
-            onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
-            title = { Text(stringResource(R.string.settings_max_items_per_check)) },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    options.forEach { opt ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.updateNotificationPreferences { it.copy(maxPerCheck = opt) }
-                                    activeDialog = NotificationSettingsDialog.None
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = opt == notifPrefs.maxPerCheck,
-                                onClick = {
-                                    viewModel.updateNotificationPreferences { it.copy(maxPerCheck = opt) }
-                                    activeDialog = NotificationSettingsDialog.None
-                                }
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(text = stringResource(R.string.settings_items_count, opt), style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
-                }
+        val countFormat = stringResource(R.string.settings_items_count, 0)
+        SettingsListPickerSheet(
+            title = stringResource(R.string.settings_max_items_per_check),
+            items = options,
+            label = { count -> countFormat.format(count) },
+            isSelected = { it == preferences.maxPerCheck },
+            onDismiss = { activeDialog = NotificationSettingsDialog.None },
+            onSelect = { selected ->
+                viewModel.updateNotificationPreferences { it.copy(maxPerCheck = selected) }
+                activeDialog = NotificationSettingsDialog.None
             },
-            confirmButton = {
-                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text(stringResource(R.string.settings_cancel)) }
-            }
         )
     }
 
     if (activeDialog is NotificationSettingsDialog.LibrariesPicker) {
         val notifPrefs = preferences
-        AlertDialog(
-            onDismissRequest = { activeDialog = NotificationSettingsDialog.None },
-            title = { Text(stringResource(R.string.settings_monitored_libraries)) },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    if (libraryFolders.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.settings_no_libraries_found),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    } else {
-                        libraryFolders.forEach { folder ->
-                            val currentConfig = notifPrefs.libraryConfigs[folder.id] ?: LibraryNotificationConfig(enabled = true)
-                            val toggleLibrary = {
-                                val newConfig = currentConfig.copy(enabled = !currentConfig.enabled)
-                                val newConfigs = notifPrefs.libraryConfigs.toMutableMap().apply {
-                                    put(folder.id, newConfig)
-                                }
-                                viewModel.updateNotificationPreferences { it.copy(libraryConfigs = newConfigs) }
+        AdaptiveSheet(onDismissRequest = { activeDialog = NotificationSettingsDialog.None }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp),
+            ) {
+                Text(
+                    stringResource(R.string.settings_monitored_libraries),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                if (libraryFolders.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.settings_no_libraries_found),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                    )
+                } else {
+                    libraryFolders.forEach { folder ->
+                        val currentConfig = notifPrefs.libraryConfigs[folder.id] ?: LibraryNotificationConfig(enabled = true)
+                        val toggleLibrary = {
+                            val newConfig = currentConfig.copy(enabled = !currentConfig.enabled)
+                            val newConfigs = notifPrefs.libraryConfigs.toMutableMap().apply {
+                                put(folder.id, newConfig)
                             }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .toggleable(
-                                        value = currentConfig.enabled,
-                                        role = Role.Checkbox,
-                                        onValueChange = { toggleLibrary() },
-                                    )
-                                    .padding(vertical = 8.dp, horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = currentConfig.enabled,
-                                    onCheckedChange = null,
+                            viewModel.updateNotificationPreferences { it.copy(libraryConfigs = newConfigs) }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .toggleable(
+                                    value = currentConfig.enabled,
+                                    role = Role.Checkbox,
+                                    onValueChange = { toggleLibrary() },
                                 )
-                                Spacer(Modifier.width(8.dp))
-                                Text(text = folder.name, style = MaterialTheme.typography.bodyLarge)
-                            }
+                                .padding(vertical = 8.dp, horizontal = 24.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = currentConfig.enabled,
+                                onCheckedChange = null,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(text = folder.name, style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { activeDialog = NotificationSettingsDialog.None }) { Text(stringResource(R.string.settings_done)) }
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = { activeDialog = NotificationSettingsDialog.None },
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(horizontal = 24.dp),
+                ) { Text(stringResource(R.string.settings_done)) }
             }
-        )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuietHoursTimeSheet(
+    title: String,
+    initialMinutes: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    val timePickerState = rememberTimePickerState(
+        initialHour = initialMinutes / 60,
+        initialMinute = initialMinutes % 60,
+        is24Hour = false,
+    )
+    AdaptiveSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(20.dp))
+            TimePicker(state = timePickerState)
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = {
+                    onConfirm(timePickerState.hour * 60 + timePickerState.minute)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = ShapeCache.smoothPill,
+            ) {
+                Text(stringResource(R.string.settings_ok))
+            }
+        }
     }
 }

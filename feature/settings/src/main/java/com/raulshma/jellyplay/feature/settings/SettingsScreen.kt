@@ -104,6 +104,12 @@ import com.composables.icons.tabler.outline.*
 
 private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 
+private enum class DreamSettingsDialog {
+    None,
+    SlideshowIntervalPicker,
+    TransitionStylePicker,
+}
+
 /**
  * Bundles the sub-screen navigation callbacks passed into [SettingsScreen].
  *
@@ -235,6 +241,7 @@ fun SettingsScreen(
     var isSearchFocused by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var signOutFromServer by remember { mutableStateOf(false) }
+    var activeDialog by remember { mutableStateOf(DreamSettingsDialog.None) }
 
     // Debounced + off-main-thread fuzzy search. Each keystroke only re-runs the
     // matcher after a short quiet period, and the Damerau-Levenshtein work happens
@@ -1115,12 +1122,7 @@ fun SettingsScreen(
                                     subtitle = stringResource(R.string.settings_slideshow_interval_subtitle),
                                     trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
                                     index = 2, count = dreamTotal,
-                                    onClick = {
-                                        val intervals = listOf(5_000L, 10_000L, 15_000L, 30_000L, 60_000L)
-                                        val currentIndex = intervals.indexOf(preferences.dreamSlideshowIntervalMs)
-                                        val nextIndex = (currentIndex + 1) % intervals.size
-                                        viewModel.setDreamSlideshowIntervalMs(intervals[nextIndex])
-                                    },
+                                    onClick = { activeDialog = DreamSettingsDialog.SlideshowIntervalPicker },
                                 )
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Wand,
@@ -1136,12 +1138,7 @@ fun SettingsScreen(
                                     subtitle = preferences.dreamTransitionStyle.name,
                                     trailingText = preferences.dreamTransitionStyle.name,
                                     index = 4, count = dreamTotal,
-                                    onClick = {
-                                        val styles = DreamTransitionStyle.entries
-                                        val currentIndex = styles.indexOf(preferences.dreamTransitionStyle)
-                                        val nextIndex = (currentIndex + 1) % styles.size
-                                        viewModel.setDreamTransitionStyle(styles[nextIndex])
-                                    },
+                                    onClick = { activeDialog = DreamSettingsDialog.TransitionStylePicker },
                                 )
                             }
                         }
@@ -1222,6 +1219,40 @@ fun SettingsScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showSignOutConfirm = false }) { Text(stringResource(R.string.settings_cancel)) }
+                },
+            )
+        }
+
+        if (activeDialog == DreamSettingsDialog.SlideshowIntervalPicker) {
+            val intervals = listOf(5_000L, 10_000L, 15_000L, 30_000L, 60_000L)
+            SettingsListPickerSheet(
+                title = stringResource(R.string.settings_slideshow_interval),
+                items = intervals,
+                label = { "${it / 1000}s" },
+                isSelected = { it == preferences.dreamSlideshowIntervalMs },
+                onDismiss = { activeDialog = DreamSettingsDialog.None },
+                onSelect = {
+                    viewModel.setDreamSlideshowIntervalMs(it)
+                    activeDialog = DreamSettingsDialog.None
+                },
+            )
+        }
+
+        if (activeDialog == DreamSettingsDialog.TransitionStylePicker) {
+            val labels = mapOf(
+                DreamTransitionStyle.CROSSFADE to "Crossfade",
+                DreamTransitionStyle.SLIDE to "Slide",
+                DreamTransitionStyle.NONE to "None",
+            )
+            SettingsListPickerSheet(
+                title = stringResource(R.string.settings_transition_style),
+                items = DreamTransitionStyle.entries,
+                label = { labels[it] ?: it.name },
+                isSelected = { it == preferences.dreamTransitionStyle },
+                onDismiss = { activeDialog = DreamSettingsDialog.None },
+                onSelect = {
+                    viewModel.setDreamTransitionStyle(it)
+                    activeDialog = DreamSettingsDialog.None
                 },
             )
         }

@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
@@ -52,11 +53,17 @@ internal fun SettingsChipPickerSheet(
     onDismiss: () -> Unit,
     onSelect: (Int) -> Unit,
 ) {
+    // Horizontal chips stay legible only for short option sets; otherwise the
+    // equal-weight row squeezes each chip and the text wraps vertically. Fall
+    // back to the vertical list layout used by SettingsListPickerSheet when
+    // there are too many options or any label is too long to fit on one line.
+    val useVertical = options.size > MAX_HORIZONTAL_CHIPS ||
+        options.any { it.length > MAX_HORIZONTAL_CHIP_LABEL_CHARS }
+
     AdaptiveSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
             Text(
@@ -64,37 +71,135 @@ internal fun SettingsChipPickerSheet(
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
+                modifier = Modifier.padding(horizontal = 24.dp),
             )
-            Spacer(Modifier.height(20.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                options.forEachIndexed { index, label ->
-                    val isSelected = index == selectedIndex
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onSelect(index); onDismiss() },
-                        label = {
-                            Text(
-                                label,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            )
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = ShapeCache.smoothPill,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                            selectedLabelColor = MaterialTheme.colorScheme.primary,
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = Color.Transparent,
-                            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                            enabled = true,
-                            selected = isSelected,
-                        ),
-                    )
+            Spacer(Modifier.height(if (useVertical) 12.dp else 20.dp))
+            if (useVertical) {
+                LazyColumn {
+                    itemsIndexed(
+                        options,
+                        key = { _, label -> label },
+                        contentType = { _, _ -> "option" },
+                    ) { index, label ->
+                        ChipOptionRow(
+                            label = label,
+                            selected = index == selectedIndex,
+                            index = index,
+                            count = options.size,
+                            onClick = { onSelect(index); onDismiss() },
+                        )
+                    }
                 }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    options.forEachIndexed { index, label ->
+                        val isSelected = index == selectedIndex
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { onSelect(index); onDismiss() },
+                            label = {
+                                Text(
+                                    label,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = ShapeCache.smoothPill,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                selectedLabelColor = MaterialTheme.colorScheme.primary,
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = Color.Transparent,
+                                selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                enabled = true,
+                                selected = isSelected,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Max options rendered as horizontal chips before falling back to a vertical list.
+ * Beyond this the equal-weight row squeezes each chip and labels wrap vertically.
+ */
+private const val MAX_HORIZONTAL_CHIPS = 4
+
+/**
+ * Max characters per chip label for the horizontal layout. Longer labels (e.g.
+ * "Track Normalization") overflow a single line and get squished.
+ */
+private const val MAX_HORIZONTAL_CHIP_LABEL_CHARS = 8
+
+/**
+ * A single vertical option row matching [SettingsListPickerSheet]'s styling, so
+ * the horizontal chip fallback reads as the same picker rather than a different
+ * component.
+ */
+@Composable
+private fun ChipOptionRow(
+    label: String,
+    selected: Boolean,
+    index: Int,
+    count: Int,
+    onClick: () -> Unit,
+) {
+    val shape = when {
+        count == 1 -> ShapeCache.smooth16
+        index == 0 || index == count - 1 -> expressiveListShape(index, count)
+        else -> ShapeCache.smooth8
+    }
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .clip(shape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
+            )
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            ),
+            color = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurface,
+        )
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Tabler.Outline.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp),
+                )
             }
         }
     }
