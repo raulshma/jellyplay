@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import android.content.Context
+import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
@@ -56,27 +57,43 @@ class VideoPlayerCleanupTest {
     }
 
     @Test
-    fun playerLifecycleManager_reset_clearsAllState() {
+    fun playerLifecycleManager_reset_clearsActiveCallbacks() {
         val prefsStore = mockk<UserPreferencesStore>(relaxed = true)
         val manager = PlayerLifecycleManager(prefsStore)
 
-        // Set non-default values
         manager.activeCallbacks = mockk()
-        manager.setPipMode(true)
-        manager.requestAutoEnterPip(true)
-        manager.notifyPipDismissed()
-
-        assertTrue(manager.isInPipMode.value)
-        assertTrue(manager.shouldAutoEnterPip.value)
-        assertTrue(manager.pipDismissed.value)
-
-        // Reset
         manager.reset()
 
         assertNull(manager.activeCallbacks)
-        assertFalse(manager.isInPipMode.value)
-        assertFalse(manager.shouldAutoEnterPip.value)
-        assertFalse(manager.pipDismissed.value)
+    }
+
+    @Test
+    fun pipController_reset_clearsAllPipState() {
+        val pipController = PipController()
+
+        // Set non-default values
+        pipController.pipTransport = mockk()
+        pipController.pipHasNext = true
+        pipController.setPipMode(true)
+        pipController.requestAutoEnterPip(true)
+        pipController.setPlaying(true)
+        pipController.notifyPipDismissed()
+
+        assertTrue(pipController.isInPipMode.value)
+        assertTrue(pipController.shouldAutoEnterPip.value)
+        assertTrue(pipController.isPlaying.value)
+        assertTrue(pipController.pipDismissed.value)
+        assertTrue(pipController.pipHasNext)
+
+        // Reset
+        pipController.reset()
+
+        assertNull(pipController.pipTransport)
+        assertFalse(pipController.isInPipMode.value)
+        assertFalse(pipController.shouldAutoEnterPip.value)
+        assertFalse(pipController.isPlaying.value)
+        assertFalse(pipController.pipDismissed.value)
+        assertFalse(pipController.pipHasNext)
     }
 
     @Test
@@ -150,6 +167,7 @@ class VideoPlayerCleanupTest {
         }
         val activePlayerController = mockk<ActivePlayerController>(relaxed = true)
         val playerLifecycleManager = PlayerLifecycleManager(preferencesStore)
+        val pipController = PipController()
         val videoMiniPlayerState = mockk<VideoMiniPlayerState>(relaxed = true)
         val sleepTimerManager = mockk<SleepTimerManager>(relaxed = true)
 
@@ -177,6 +195,7 @@ class VideoPlayerCleanupTest {
             networkMonitor = networkMonitor,
             activePlayerController = activePlayerController,
             playerLifecycleManager = playerLifecycleManager,
+            pipController = pipController,
             videoMiniPlayerState = videoMiniPlayerState,
             sleepTimerManager = sleepTimerManager,
             userMessageBus = UserMessageBus(),
@@ -191,14 +210,14 @@ class VideoPlayerCleanupTest {
 
         // Set some media-specific states to verify they are cleared on release
         playerLifecycleManager.activeCallbacks = mockk()
-        playerLifecycleManager.setPipMode(true)
+        pipController.setPipMode(true)
 
         // Call release
         viewModel.release()
 
-        // Verify playerLifecycleManager was reset
+        // Verify playerLifecycleManager + pipController were reset
         assertNull(playerLifecycleManager.activeCallbacks)
-        assertFalse(playerLifecycleManager.isInPipMode.value)
+        assertFalse(pipController.isInPipMode.value)
 
         // Verify syncPlayManager.playbackCore was reset
         verify { playbackCore.reset() }

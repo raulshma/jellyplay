@@ -13,9 +13,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Controllable [MediaEngine] test double for ViewModel / [PlayerPlaybackModel]
- * / controller unit tests. Every state-holding property is a mutable flow the
- * test can drive; every control method records its invocation for assertion.
+ * Controllable [MediaEngine] test double for ViewModel / controller unit
+ * tests. Every state-holding property is a mutable flow the test can drive;
+ * every control method records its invocation for assertion.
  *
  * Production code never instantiates this — it lives in `src/main` so both
  * `:feature:player:core` tests and (via the project dependency) `:feature:player:video`

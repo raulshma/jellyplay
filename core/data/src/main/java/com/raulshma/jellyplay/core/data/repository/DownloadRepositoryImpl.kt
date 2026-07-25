@@ -230,6 +230,10 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun pauseDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
         if (DownloadStates.isActive(entity.status)) {
+            // Cancel the in-flight worker first so the foreground service stops
+            // promptly. Without this the worker keeps polling DB status until its
+            // next tick discovers the row is PAUSED.
+            cancelWorkForDownload(id)
             downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.PAUSED.name)
             // Mark as user-initiated so the reconnect auto-resume leaves it
             // alone; only NETWORK interruptions auto-resume.
@@ -255,14 +259,18 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     /**
+     * The unique-work name for a download. Delegates to [DownloadWorker.workName]
+     * so the prefix string has exactly one home.
+     */
+    private fun workName(downloadId: String): String = DownloadWorker.workName(downloadId)
+
+    /**
      * Cancels the unique WorkManager work associated with [downloadId], if any. Safe to call
      * even when no work is registered — WorkManager no-ops in that case.
      */
     private fun cancelWorkForDownload(downloadId: String) {
         try {
-            WorkManager.getInstance(context).cancelUniqueWork(
-                "${DownloadWorker.UNIQUE_WORK_PREFIX}$downloadId"
-            )
+            WorkManager.getInstance(context).cancelUniqueWork(workName(downloadId))
         } catch (e: Exception) {
             // WorkManager may not be initialised in some instrumented-test or fresh-install
             // edge cases. Log and continue — file cleanup is still valuable on its own.
@@ -872,7 +880,7 @@ class DownloadRepositoryImpl @Inject constructor(
             workRequestBuilder.setInitialDelay(initialDelayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
         }
         WorkManager.getInstance(context).enqueueUniqueWork(
-            "${DownloadWorker.UNIQUE_WORK_PREFIX}$downloadId",
+            workName(downloadId),
             ExistingWorkPolicy.KEEP,
             workRequestBuilder.build(),
         )
@@ -1020,17 +1028,6 @@ class DownloadRepositoryImpl @Inject constructor(
         // Mirrored by DownloadRecoveryInitializer so cold-start re-enqueues
         // back off identically. WorkManager caps each retry delay at 5h.
         const val DOWNLOAD_BACKOFF_DELAY_MS = 30_000L
-
-        // Deprecated aliases — the vocabulary's real home is now
-        // DownloadPauseReason / DOWNLOAD_MAX_AUTO_RETRY. Kept so existing call
-        // sites and tests compile during the transition; new code should use
-        // the typed enum.
-        @Deprecated("Use DownloadPauseReason.USER.persistedValue", ReplaceWith("DownloadPauseReason.USER.persistedValue"))
-        const val PAUSE_REASON_USER = "USER"
-        @Deprecated("Use DownloadPauseReason.NETWORK.persistedValue", ReplaceWith("DownloadPauseReason.NETWORK.persistedValue"))
-        const val PAUSE_REASON_NETWORK = "NETWORK"
-        @Deprecated("Use DOWNLOAD_MAX_AUTO_RETRY", ReplaceWith("DOWNLOAD_MAX_AUTO_RETRY"))
-        const val MAX_AUTO_RETRY = 3
 
         // Container strings from Jellyfin (mkv, mp4, ts, webm, flv, mov, ...).
         // Constrained to 2-8 alphanumerics so a malformed/missing value can

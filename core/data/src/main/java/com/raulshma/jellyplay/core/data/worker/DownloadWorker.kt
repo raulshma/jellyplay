@@ -460,6 +460,14 @@ class DownloadWorker @AssistedInject constructor(
         const val KEY_DOWNLOAD_ID = "download_id"
         const val UNIQUE_WORK_PREFIX = "download_"
         const val WORK_TAG = "download"
+
+        /**
+         * The unique-work name for a download. Single source of truth for the
+         * `"download_" + id` construction — every call site (this repo's enqueue/cancel,
+         * DownloadRecoveryInitializer) must route through here so a rename never drifts
+         * across modules.
+         */
+        fun workName(downloadId: String): String = "$UNIQUE_WORK_PREFIX$downloadId"
         private const val BUFFER_SIZE = 65536
         private const val MIN_MULTI_SIZE = 2L * 1024 * 1024
         // User-facing message written to DownloadEntity.errorMessage when the

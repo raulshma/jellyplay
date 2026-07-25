@@ -188,5 +188,19 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
      */
     fun invalidateSeriesCache(seriesId: String)
 
+    /**
+     * Single operation for "user data for [itemId] changed" (favorite flip,
+     * played/unplayed, playback position). Owns the series-resolution rule:
+     * drops the item's detail cache, its album tracks, and — if the item
+     * belongs to a series — that series' seasons/episodes caches.
+     *
+     * Prefer this over calling [invalidateDetailCache] +
+     * [invalidateSeriesCache] separately at a call site, which re-derives the
+     * "is this item part of a series?" rule locally. Callers that only have a
+     * series id (no item detail cached) should still call
+     * [invalidateSeriesCache] directly.
+     */
+    fun invalidateUserDataCaches(itemId: String)
+
     suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
 }

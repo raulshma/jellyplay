@@ -66,13 +66,6 @@ abstract class DataModule {
         @Singleton
         fun provideLyricsRepository(mediaRepository: MediaRepository): LyricsRepository =
             mediaRepository
-
-        // Note: GetHomeSectionsUseCase and GetMediaDetailUseCase previously had
-        // explicit @Provides @Singleton methods here. They were removed because
-        // each use case already has @Inject constructor — Hilt provides them
-        // automatically (unscoped, which is the correct scope for stateless
-        // transformers). No consumer in the codebase injects these directly
-        // today; they remain available for future use via constructor injection.
     }
 
     @Binds

@@ -78,6 +78,7 @@ class VideoPlayerViewModelTest {
         }
         val activePlayerController = mockk<ActivePlayerController>(relaxed = true)
         val playerLifecycleManager = PlayerLifecycleManager(preferencesStore)
+        val pipController = com.raulshma.jellyplay.core.data.playback.PipController()
         val videoMiniPlayerState = mockk<VideoMiniPlayerState>(relaxed = true)
         val sleepTimerManager = mockk<SleepTimerManager>(relaxed = true)
 
@@ -104,6 +105,7 @@ class VideoPlayerViewModelTest {
             networkMonitor = networkMonitor,
             activePlayerController = activePlayerController,
             playerLifecycleManager = playerLifecycleManager,
+            pipController = pipController,
             videoMiniPlayerState = videoMiniPlayerState,
             sleepTimerManager = sleepTimerManager,
             userMessageBus = UserMessageBus(),

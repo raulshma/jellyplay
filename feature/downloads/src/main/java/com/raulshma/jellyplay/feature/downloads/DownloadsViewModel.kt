@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.downloads
 
-import android.content.Context
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -10,7 +9,6 @@ import com.raulshma.jellyplay.core.model.formatEta
 import com.raulshma.jellyplay.core.model.formatSpeed
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
@@ -30,14 +28,8 @@ data class DownloadsUiState(
 
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
-    @ApplicationContext context: Context,
     private val downloadRepository: DownloadRepository,
 ) : JellyPlayViewModel() {
-
-    private val workManager = androidx.work.WorkManager.getInstance(context)
-
-    private fun workName(id: String) =
-        "${com.raulshma.jellyplay.core.data.worker.DownloadWorker.UNIQUE_WORK_PREFIX}$id"
 
     private val _uiState = stateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState.flow
@@ -69,7 +61,6 @@ class DownloadsViewModel @Inject constructor(
 
     fun cancelDownload(item: DownloadItem) {
         launch {
-            workManager.cancelUniqueWork(workName(item.id))
             downloadRepository.cancelDownload(item.id)
         }
     }
@@ -77,7 +68,6 @@ class DownloadsViewModel @Inject constructor(
     fun pauseDownload(item: DownloadItem) {
         launch {
             downloadRepository.pauseDownload(item.id)
-            workManager.cancelUniqueWork(workName(item.id))
         }
     }
 
@@ -90,7 +80,6 @@ class DownloadsViewModel @Inject constructor(
 
     fun deleteDownload(item: DownloadItem) {
         launch {
-            workManager.cancelUniqueWork(workName(item.id))
             downloadRepository.deleteDownload(item.id)
         }
     }
@@ -143,7 +132,6 @@ class DownloadsViewModel @Inject constructor(
         if (targets.isEmpty()) return
         launch {
             targets.forEach { item ->
-                workManager.cancelUniqueWork(workName(item.id))
                 downloadRepository.deleteDownload(item.id)
             }
             clearSelection()
@@ -158,7 +146,6 @@ class DownloadsViewModel @Inject constructor(
         launch {
             targets.forEach { item ->
                 downloadRepository.pauseDownload(item.id)
-                workManager.cancelUniqueWork(workName(item.id))
             }
         }
     }
@@ -189,7 +176,6 @@ class DownloadsViewModel @Inject constructor(
         if (targets.isEmpty()) return
         launch {
             targets.forEach { item ->
-                workManager.cancelUniqueWork(workName(item.id))
                 downloadRepository.cancelDownload(item.id)
             }
         }

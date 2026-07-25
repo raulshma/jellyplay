@@ -15,7 +15,6 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
-import com.raulshma.jellyplay.core.data.usecase.GetHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
@@ -78,7 +77,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    private val getHomeSections: GetHomeSectionsUseCase,
     private val orderHomeSections: OrderHomeSectionsUseCase,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
@@ -802,7 +800,15 @@ class HomeViewModel @Inject constructor(
                 hiddenCwItemIds = hiddenCwItemIds,
                 pinnedSections = pinnedHomeSections,
             )
-            getHomeSections(query)
+            mediaRepository.getHomeSections(
+                enabledSections = query.enabledSections,
+                libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
+                nextUpRewatching = query.nextUpRewatching,
+                nextUpMaxDays = query.nextUpMaxDays,
+                nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
+                hiddenCwItemIds = query.hiddenCwItemIds,
+                pinnedSections = query.pinnedSections,
+            )
                 .onSuccess { homeResult ->
                     val fetchedSections = homeResult.sections
                     // Surface a non-blocking notice only when a section type

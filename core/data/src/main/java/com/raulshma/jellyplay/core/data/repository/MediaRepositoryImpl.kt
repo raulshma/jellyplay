@@ -879,7 +879,7 @@ class MediaRepositoryImpl @Inject constructor(
      * (favorite, played, playback position) are reflected on re-entry instead
      * of serving the cached pre-mutation snapshot.
      */
-    private fun invalidateUserDataCaches(itemId: String) {
+    override fun invalidateUserDataCaches(itemId: String) {
         // Read the cached detail first to discover whether this item belongs
         // to a series (either is the series or is an episode of one) so we can
         // drop the series-scoped seasons/episodes caches too.
