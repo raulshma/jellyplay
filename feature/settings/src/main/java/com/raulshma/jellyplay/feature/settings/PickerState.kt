@@ -29,6 +29,7 @@ import androidx.compose.runtime.Immutable
  * Variants mirror the existing sheet composables:
  *  - [List]   → `SettingsListPickerSheet`
  *  - [Chip]   → `SettingsChipPickerSheet`
+ *  - [Slider] → `SettingsSliderSheet`
  */
 sealed interface PickerState<out T> {
 
@@ -42,7 +43,7 @@ sealed interface PickerState<out T> {
      */
     val kind: Kind
 
-    enum class Kind { List, Chip }
+    enum class Kind { List, Chip, Slider }
 
     @Immutable
     data class List<T>(
@@ -64,6 +65,25 @@ sealed interface PickerState<out T> {
         val onSelect: (Int) -> Unit,
     ) : PickerState<Int> {
         override val kind get() = Kind.Chip
+    }
+
+    /**
+     * Slider sheet — a continuous value with a confirm step. Mirrors
+     * [SettingsSliderSheet]. [onConfirm] receives the confirmed float; the
+     * dispatcher invokes [onDismiss] after [onConfirm].
+     */
+    @Immutable
+    data class Slider(
+        override val title: String,
+        val value: Float,
+        val valueRange: ClosedFloatingPointRange<Float>,
+        val steps: Int,
+        val valueLabel: (Float) -> String,
+        val rangeStartLabel: String,
+        val rangeEndLabel: String,
+        val onConfirm: (Float) -> Unit,
+    ) : PickerState<Float> {
+        override val kind get() = Kind.Slider
     }
 }
 
@@ -107,6 +127,23 @@ internal fun SettingsPickerDialog(
                 onDismiss = onDismiss,
                 onSelect = { index ->
                     chip.onSelect(index)
+                    onDismiss()
+                },
+            )
+        }
+        PickerState.Kind.Slider -> {
+            val slider = state as PickerState.Slider
+            SettingsSliderSheet(
+                title = slider.title,
+                value = slider.value,
+                valueRange = slider.valueRange,
+                steps = slider.steps,
+                valueLabel = slider.valueLabel,
+                rangeStartLabel = slider.rangeStartLabel,
+                rangeEndLabel = slider.rangeEndLabel,
+                onDismiss = onDismiss,
+                onConfirm = { value ->
+                    slider.onConfirm(value)
                     onDismiss()
                 },
             )

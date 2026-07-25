@@ -190,33 +190,49 @@ data class PlaybackMetadataSnapshot(
 )
 
 /**
- * Role interface: source loading & teardown.
+ * The strategy interface every playback backend implements.
  *
- * `release()` is inherited from [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine];
- * this role owns the engine-specific [load] entry point.
+ * This is intentionally a single wide contract rather than a composition of
+ * role interfaces: a previous split into [PlaybackLifecycle] / [PlaybackControl]
+ * / [PlaybackState] / [EngineConfigurable] / [TrackControl] / [SubtitleStyling]
+ * / [VideoSurfaceBinding] delivered no decoupling, because no consumer ever
+ * depended on a narrow role — every call site reached through [MediaEngine].
+ * The split was pure ceremony (see deletion-test note in the architecture
+ * review). The members are grouped below by concern to keep the surface
+ * navigable.
+ *
+ * Members declared directly here are either overrides of
+ * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine] or
+ * [PlayerLifecycleCallbacks], or special-case internal hooks.
  */
-interface PlaybackLifecycle {
-    fun load(request: PlaybackRequest)
-}
+@Stable
+interface MediaEngine :
+    PlayerLifecycleCallbacks,
+    com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine {
 
-/**
- * Role interface: speed control and the current playback-speed readback.
- */
-interface PlaybackControl {
+    // ── RemotePlayableEngine overrides (re-declared here to carry the contract
+    //     and, for some, a default). ──
+    override fun release()
+    override fun play()
+    override fun pause()
+    override fun stop()
+    override fun seekTo(positionMs: Long)
+    override val isPlaying: StateFlow<Boolean>
+    override val currentPositionMs: Long
+    override fun selectTrack(type: TrackType, index: Int)
+    override fun setMaxVideoBitrate(bps: Int?)
+    override val underlyingPlayer: androidx.media3.common.Player? get() = null
+
+    // ── Source loading & teardown ──
+    fun load(request: PlaybackRequest)
+
+    // ── Speed control ──
     fun setPlaybackSpeed(speed: Float)
     val playbackSpeed: Float
-}
 
-/**
- * Role interface: the reactive, hot state surface of an engine — playback
- * state, duration, position/buffering/video-stats flows, and the adaptive
- * polling knobs that drive the high-frequency tickers consumed by leaf UI.
- *
- * `isPlaying` / `currentPositionMs` are inherited from
- * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine]; this role
- * owns the engine-specific additions.
- */
-interface PlaybackState {
+    // ── Reactive, hot state surface: playback state, duration, position/
+    //    buffering/video-stats flows, and the adaptive polling knobs that drive
+    //    the high-frequency tickers consumed by leaf UI. ──
     val playbackState: StateFlow<EnginePlaybackState>
     val durationMs: Long
     val positionFlow: Flow<Long>
@@ -239,93 +255,29 @@ interface PlaybackState {
     fun setVideoStatsEnabled(enabled: Boolean)
 
     val audioSessionId: Int
-}
 
-/**
- * Role interface: capability advertisement and live configuration.
- *
- * [EngineCapabilities] remains the runtime query surface the UI reads to
- * show/hide controls — see [EngineCapabilityMatrix].
- */
-interface EngineConfigurable {
+    // ── Capability advertisement and live configuration.
+    //
+    //    [EngineCapabilities] is the runtime query surface the UI reads to
+    //    show/hide controls — see [EngineCapabilityMatrix]. ──
     val capabilities: EngineCapabilities
     fun updateConfig(config: EngineConfig)
-}
 
-/**
- * Role interface: track enumeration and runtime subtitle-track addition.
- *
- * `selectTrack` / `setMaxVideoBitrate` are inherited from
- * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine]; this role
- * owns the engine-specific track surface.
- */
-interface TrackControl {
+    // ── Track enumeration and runtime subtitle-track addition. ──
     val availableTracks: StateFlow<List<MediaTrack>>
     fun addExternalSubtitle(source: SubtitleSource) {}
-}
 
-/**
- * Role interface: per-engine subtitle styling applied to the engine's native
- * subtitle surface (Media3 `SubtitleView` / libass / VLC freetype).
- *
- * Subtitles are rendered by each engine's own native renderer; there is no
- * in-app Compose cue overlay (the previous `currentCues`/`MpvSubtitleOverlay`
- * path was reserved and never enabled, and has been removed).
- */
-interface SubtitleStyling {
+    // ── Per-engine subtitle styling applied to the engine's native subtitle
+    //    surface (Media3 `SubtitleView` / libass / VLC freetype). Subtitles are
+    //    rendered by each engine's own native renderer; there is no in-app
+    //    Compose cue overlay (the previous `currentCues`/`MpvSubtitleOverlay`
+    //    path was reserved and never enabled, and has been removed). ──
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
-}
 
-/**
- * Role interface: native surface creation and aspect-ratio control.
- */
-interface VideoSurfaceBinding {
+    // ── Native surface creation and aspect-ratio control. ──
     fun createSurfaceView(context: Context): View
     fun setAspectRatio(mode: Int, ratio: Float? = null)
-}
 
-/**
- * The composite strategy interface every backend implements.
- *
- * Historically a single ~60-member "fat interface". It is now composed of
- * cohesive role interfaces ([PlaybackLifecycle], [PlaybackControl],
- * [PlaybackState], [EngineConfigurable], [TrackControl], [SubtitleStyling],
- * [VideoSurfaceBinding]) so the surface is navigable and a consumer that only
- * needs, say, [TrackControl] can depend on the narrow role. Concrete engines
- * still declare `: MediaEngine` and `override` each member exactly as before —
- * the split is purely a re-distribution of the same contract, so behaviour and
- * all call sites are unchanged.
- *
- * Members declared directly here are either overrides of
- * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine] (which cannot
- * move into a role) or special-case internal hooks kept on the composite type.
- */
-@Stable
-interface MediaEngine :
-    PlayerLifecycleCallbacks,
-    com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine,
-    PlaybackLifecycle,
-    PlaybackControl,
-    PlaybackState,
-    EngineConfigurable,
-    TrackControl,
-    SubtitleStyling,
-    VideoSurfaceBinding {
-
-    // ── RemotePlayableEngine overrides (re-declared here to carry the contract
-    //     and, for some, a default). They cannot move into a role because roles
-    //     do not themselves extend RemotePlayableEngine. ──
-    override fun release()
-    override fun play()
-    override fun pause()
-    override fun stop()
-    override fun seekTo(positionMs: Long)
-    override val isPlaying: StateFlow<Boolean>
-    override val currentPositionMs: Long
-    override fun selectTrack(type: TrackType, index: Int)
-    override fun setMaxVideoBitrate(bps: Int?)
-    override val underlyingPlayer: androidx.media3.common.Player? get() = null
-
-    // ── Special-case internal hooks (kept on the composite; documented as such). ──
+    // ── Special-case internal hooks. ──
     fun setRenderer(renderer: Any?) {}
 }

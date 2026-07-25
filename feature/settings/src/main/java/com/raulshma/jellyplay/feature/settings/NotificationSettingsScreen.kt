@@ -64,10 +64,8 @@ private fun formatMinutes(minutes: Int): String {
 
 sealed class NotificationSettingsDialog {
     object None : NotificationSettingsDialog()
-    object FrequencyPicker : NotificationSettingsDialog()
     object QuietStartPicker : NotificationSettingsDialog()
     object QuietEndPicker : NotificationSettingsDialog()
-    object MaxPerCheckPicker : NotificationSettingsDialog()
     object LibrariesPicker : NotificationSettingsDialog()
 }
 
@@ -85,6 +83,7 @@ fun NotificationSettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<NotificationSettingsDialog>(NotificationSettingsDialog.None) }
+    var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
     val focusRequester = remember { FocusRequester() }
     TvGrabInitialFocus(
@@ -161,14 +160,27 @@ fun NotificationSettingsScreen(
                         },
                     )
                     if (notifPrefs.enabled) {
+                        val frequencyTitle = stringResource(R.string.settings_check_frequency)
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
-                            title = stringResource(R.string.settings_check_frequency),
+                            title = frequencyTitle,
                             subtitle = stringResource(R.string.settings_check_frequency_subtitle),
                             trailingText = notifPrefs.checkFrequency.displayName,
                             highlighted = highlightSettingId == "notification_check_frequency",
                             index = notifIdx++, count = notifTotal,
-                            onClick = { activeDialog = NotificationSettingsDialog.FrequencyPicker },
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = frequencyTitle,
+                                    items = CheckFrequency.entries,
+                                    label = { it.displayName },
+                                    isSelected = { it == preferences.checkFrequency },
+                                    onSelect = { freq ->
+                                        viewModel.updateNotificationPreferences { prefs ->
+                                            prefs.copy(checkFrequency = freq)
+                                        }
+                                    },
+                                )
+                            },
                         )
                         if (showAdvanced) {
                             SettingToggleItem(
@@ -261,14 +273,27 @@ fun NotificationSettingsScreen(
                             },
                         )
                         if (showAdvanced) {
+                            val maxPerCheckTitle = stringResource(R.string.settings_max_per_check)
+                            val countFormat = stringResource(R.string.settings_items_count, 0)
                             SettingListItem(
                                 icon = Tabler.Outline.LetterCase,
-                                title = stringResource(R.string.settings_max_per_check),
+                                title = maxPerCheckTitle,
                                 subtitle = stringResource(R.string.settings_max_per_check_subtitle),
                                 trailingText = "${notifPrefs.maxPerCheck}",
                                 highlighted = highlightSettingId == "max_per_check",
                                 index = notifIdx++, count = notifTotal,
-                                onClick = { activeDialog = NotificationSettingsDialog.MaxPerCheckPicker },
+                                onClick = {
+                                    val options = listOf(5, 10, 15, 20, 30, 50, 100)
+                                    activePicker = PickerState.List(
+                                        title = maxPerCheckTitle,
+                                        items = options,
+                                        label = { count -> countFormat.format(count) },
+                                        isSelected = { it == preferences.maxPerCheck },
+                                        onSelect = { selected ->
+                                            viewModel.updateNotificationPreferences { it.copy(maxPerCheck = selected) }
+                                        },
+                                    )
+                                },
                             )
                             val libraryCount = libraryFolders.size
                             val enabledLibraries = libraryFolders.count { folder ->
@@ -299,22 +324,6 @@ fun NotificationSettingsScreen(
         }
     }
 
-    if (activeDialog is NotificationSettingsDialog.FrequencyPicker) {
-        SettingsListPickerSheet(
-            title = stringResource(R.string.settings_check_frequency),
-            items = CheckFrequency.entries,
-            label = { it.displayName },
-            isSelected = { it == preferences.checkFrequency },
-            onDismiss = { activeDialog = NotificationSettingsDialog.None },
-            onSelect = {
-                viewModel.updateNotificationPreferences { prefs ->
-                    prefs.copy(checkFrequency = it)
-                }
-                activeDialog = NotificationSettingsDialog.None
-            },
-        )
-    }
-
     if (activeDialog is NotificationSettingsDialog.QuietStartPicker) {
         QuietHoursTimeSheet(
             title = stringResource(R.string.settings_quiet_hours_start),
@@ -334,22 +343,6 @@ fun NotificationSettingsScreen(
             onDismiss = { activeDialog = NotificationSettingsDialog.None },
             onConfirm = { minutes ->
                 viewModel.updateNotificationPreferences { it.copy(quietHoursEnd = minutes) }
-                activeDialog = NotificationSettingsDialog.None
-            },
-        )
-    }
-
-    if (activeDialog is NotificationSettingsDialog.MaxPerCheckPicker) {
-        val options = listOf(5, 10, 15, 20, 30, 50, 100)
-        val countFormat = stringResource(R.string.settings_items_count, 0)
-        SettingsListPickerSheet(
-            title = stringResource(R.string.settings_max_items_per_check),
-            items = options,
-            label = { count -> countFormat.format(count) },
-            isSelected = { it == preferences.maxPerCheck },
-            onDismiss = { activeDialog = NotificationSettingsDialog.None },
-            onSelect = { selected ->
-                viewModel.updateNotificationPreferences { it.copy(maxPerCheck = selected) }
                 activeDialog = NotificationSettingsDialog.None
             },
         )
@@ -415,6 +408,11 @@ fun NotificationSettingsScreen(
             }
         }
     }
+
+    SettingsPickerDialog(
+        state = activePicker,
+        onDismiss = { activePicker = null },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

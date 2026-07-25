@@ -61,23 +61,6 @@ private val STORAGE_CACHE_GROUP_IDS = setOf("clear_cache", "clear_image_cache", 
 private val STORAGE_NETWORK_GROUP_IDS = setOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync")
 private val STORAGE_DOWNLOADS_GROUP_IDS = setOf("download_quality", "smart_downloads", "auto_download_new_episodes", "download_schedule", "download_schedule_start", "download_schedule_end", "download_schedule_wifi_only", "max_download_storage_limit", "download_storage_location")
 
-sealed class StorageSettingsDialog {
-    object None : StorageSettingsDialog()
-    object ConnectionsPicker : StorageSettingsDialog()
-    object ConcurrentDownloadsPicker : StorageSettingsDialog()
-    object MaxCacheSizePicker : StorageSettingsDialog()
-    object BandwidthCapPicker : StorageSettingsDialog()
-    object MeteredBehaviorPicker : StorageSettingsDialog()
-    object CellularStreamingQualityPicker : StorageSettingsDialog()
-    object CellularDownloadWarningPicker : StorageSettingsDialog()
-    object NetworkTimeoutPicker : StorageSettingsDialog()
-    object DownloadQualityPicker : StorageSettingsDialog()
-    object ScheduleStartPicker : StorageSettingsDialog()
-    object ScheduleEndPicker : StorageSettingsDialog()
-    object MaxDownloadStoragePicker : StorageSettingsDialog()
-    object StorageLocationPicker : StorageSettingsDialog()
-}
-
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StorageSettingsScreen(
@@ -90,7 +73,7 @@ fun StorageSettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
-    var activeDialog by remember { mutableStateOf<StorageSettingsDialog>(StorageSettingsDialog.None) }
+    var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
 
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
@@ -257,23 +240,41 @@ fun StorageSettingsScreen(
                             index = storageIdx++, count = storageTotal,
                             onCheckedChange = { viewModel.setWifiOnlyDownloads(it) },
                         )
+                        val connectionsTitle = stringResource(R.string.settings_connections_per_download)
                         SettingListItem(
                             icon = Tabler.Outline.Download,
-                            title = stringResource(R.string.settings_connections_per_download),
+                            title = connectionsTitle,
                             subtitle = stringResource(R.string.settings_connections_per_download_subtitle),
                             trailingText = "${preferences.downloadConnections}",
                             highlighted = highlightSettingId == "download_connections",
                             index = storageIdx++, count = storageTotal,
-                            onClick = { activeDialog = StorageSettingsDialog.ConnectionsPicker },
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = connectionsTitle,
+                                    items = listOf(1, 2, 4, 8, 12, 16),
+                                    label = { it.toString() },
+                                    isSelected = { it == preferences.downloadConnections },
+                                    onSelect = { viewModel.setDownloadConnections(it) },
+                                )
+                            },
                         )
+                        val concurrentDownloadsTitle = stringResource(R.string.settings_max_simultaneous_downloads)
                         SettingListItem(
                             icon = Tabler.Outline.ArrowBarToDown,
-                            title = stringResource(R.string.settings_max_simultaneous_downloads),
+                            title = concurrentDownloadsTitle,
                             subtitle = stringResource(R.string.settings_max_simultaneous_downloads_subtitle),
                             trailingText = "${preferences.maxConcurrentDownloads}",
                             highlighted = highlightSettingId == "max_concurrent_downloads",
                             index = storageIdx++, count = storageTotal,
-                            onClick = { activeDialog = StorageSettingsDialog.ConcurrentDownloadsPicker },
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = concurrentDownloadsTitle,
+                                    items = listOf(1, 2, 3, 4, 5, 6),
+                                    label = { it.toString() },
+                                    isSelected = { it == preferences.maxConcurrentDownloads },
+                                    onSelect = { viewModel.setMaxConcurrentDownloads(it) },
+                                )
+                            },
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Refresh,
@@ -284,14 +285,24 @@ fun StorageSettingsScreen(
                             index = storageIdx++, count = storageTotal,
                             onCheckedChange = { viewModel.setAutoDeleteCache(it) },
                         )
+                        val maxCacheSizeTitle = stringResource(R.string.settings_max_cache_size)
+                        val maxCacheUnlimited = stringResource(R.string.settings_unlimited)
                         SettingListItem(
                             icon = Tabler.Outline.Database,
-                            title = stringResource(R.string.settings_max_cache_size),
+                            title = maxCacheSizeTitle,
                             subtitle = stringResource(R.string.settings_max_cache_size_subtitle),
-                            trailingText = if (preferences.maxCacheSizeMb == 0) stringResource(R.string.settings_unlimited) else "${preferences.maxCacheSizeMb} MB",
+                            trailingText = if (preferences.maxCacheSizeMb == 0) maxCacheUnlimited else "${preferences.maxCacheSizeMb} MB",
                             highlighted = highlightSettingId == "max_cache_size",
                             index = storageIdx, count = storageTotal,
-                            onClick = { activeDialog = StorageSettingsDialog.MaxCacheSizePicker },
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = maxCacheSizeTitle,
+                                    items = listOf(0, 250, 500, 1000, 2000, 5000),
+                                    label = { if (it == 0) maxCacheUnlimited else "$it MB" },
+                                    isSelected = { it == preferences.maxCacheSizeMb },
+                                    onSelect = { viewModel.setMaxCacheSize(it) },
+                                )
+                            },
                         )
                     }
                 }
@@ -342,47 +353,84 @@ fun StorageSettingsScreen(
                     )
 
                     val caps = listOf(0L, 1_000_000L, 2_000_000L, 5_000_000L, 10_000_000L, 20_000_000L)
-                    val capLabel = if (preferences.manualBandwidthCap == 0L) stringResource(R.string.settings_unlimited) else "${preferences.manualBandwidthCap / 1_000_000L} Mbps"
+                    val bandwidthCapTitle = stringResource(R.string.settings_manual_bandwidth_cap)
+                    val bandwidthUnlimited = stringResource(R.string.settings_unlimited)
+                    val capLabel = if (preferences.manualBandwidthCap == 0L) bandwidthUnlimited else "${preferences.manualBandwidthCap / 1_000_000L} Mbps"
 
                     SettingListItem(
                         icon = Tabler.Outline.Lock,
-                        title = stringResource(R.string.settings_manual_bandwidth_cap),
+                        title = bandwidthCapTitle,
                         subtitle = stringResource(R.string.settings_manual_bandwidth_cap_subtitle),
                         trailingText = capLabel,
                         highlighted = highlightSettingId == "bandwidth_cap",
                         index = networkIdx++, count = networkTotal,
-                        onClick = { activeDialog = StorageSettingsDialog.BandwidthCapPicker },
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = bandwidthCapTitle,
+                                items = caps,
+                                label = { if (it == 0L) bandwidthUnlimited else "${it / 1_000_000L} Mbps" },
+                                isSelected = { it == preferences.manualBandwidthCap },
+                                onSelect = { viewModel.setManualBandwidthCap(it) },
+                            )
+                        },
                     )
 
+                    val meteredTitle = stringResource(R.string.settings_metered_network_behavior)
                     SettingListItem(
                         icon = Tabler.Outline.Compass,
-                        title = stringResource(R.string.settings_metered_network_behavior),
+                        title = meteredTitle,
                         subtitle = stringResource(R.string.settings_metered_network_behavior_subtitle),
                         trailingText = preferences.meteredNetworkBehavior.displayName,
                         highlighted = highlightSettingId == "metered_network_behavior",
                         index = networkIdx++, count = networkTotal,
-                        onClick = { activeDialog = StorageSettingsDialog.MeteredBehaviorPicker },
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = meteredTitle,
+                                items = MeteredNetworkBehavior.entries,
+                                label = { it.displayName },
+                                isSelected = { it == preferences.meteredNetworkBehavior },
+                                onSelect = { viewModel.setMeteredNetworkBehavior(it) },
+                            )
+                        },
                     )
 
+                    val cellularQualityTitle = stringResource(R.string.settings_cellular_streaming_quality)
                     SettingListItem(
                         icon = Tabler.Outline.DeviceMobile,
-                        title = stringResource(R.string.settings_cellular_streaming_quality),
+                        title = cellularQualityTitle,
                         subtitle = stringResource(R.string.settings_cellular_streaming_quality_subtitle),
                         trailingText = streamingQualityLabel(preferences.cellularStreamingQuality),
                         highlighted = highlightSettingId == "cellular_streaming_quality",
                         index = networkIdx++, count = networkTotal,
-                        onClick = { activeDialog = StorageSettingsDialog.CellularStreamingQualityPicker },
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = cellularQualityTitle,
+                                items = StreamingQuality.entries,
+                                label = { streamingQualityLabel(it) },
+                                isSelected = { it == preferences.cellularStreamingQuality },
+                                onSelect = { viewModel.setCellularStreamingQuality(it) },
+                            )
+                        },
                     )
 
+                    val downloadWarningTitle = stringResource(R.string.settings_cellular_download_size_warning)
                     val downloadWarningLabel = if (preferences.cellularDownloadSizeWarningMb == 0) "Disabled" else "${preferences.cellularDownloadSizeWarningMb} MB"
                     SettingListItem(
                         icon = Tabler.Outline.AlertTriangle,
-                        title = stringResource(R.string.settings_cellular_download_size_warning),
+                        title = downloadWarningTitle,
                         subtitle = "Warn before downloading large files on cellular",
                         trailingText = downloadWarningLabel,
                         highlighted = highlightSettingId == "cellular_download_warning",
                         index = networkIdx++, count = networkTotal,
-                        onClick = { activeDialog = StorageSettingsDialog.CellularDownloadWarningPicker },
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = downloadWarningTitle,
+                                items = listOf(0, 100, 250, 500, 1000, 2000),
+                                label = { if (it == 0) "Disabled" else "$it MB" },
+                                isSelected = { it == preferences.cellularDownloadSizeWarningMb },
+                                onSelect = { viewModel.setCellularDownloadSizeWarningMb(it) },
+                            )
+                        },
                     )
 
                     SettingToggleItem(
@@ -401,7 +449,15 @@ fun StorageSettingsScreen(
                         trailingText = preferences.networkTimeoutPreset.displayName.substringBefore(" ("),
                         highlighted = highlightSettingId == "network_timeout",
                         index = networkIdx++, count = networkTotal,
-                        onClick = { activeDialog = StorageSettingsDialog.NetworkTimeoutPicker },
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = "Network Timeouts",
+                                items = com.raulshma.jellyplay.core.model.NetworkTimeoutPreset.entries,
+                                label = { it.displayName },
+                                isSelected = { it == preferences.networkTimeoutPreset },
+                                onSelect = { viewModel.setNetworkTimeoutPreset(it) },
+                            )
+                        },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Code,
@@ -442,7 +498,15 @@ fun StorageSettingsScreen(
                         trailingText = preferences.downloadQuality.displayName,
                         highlighted = highlightSettingId == "download_quality",
                         index = downloadIdx++, count = downloadTotal,
-                        onClick = { activeDialog = StorageSettingsDialog.DownloadQualityPicker }
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = "Download Quality",
+                                items = com.raulshma.jellyplay.core.model.DownloadQuality.entries,
+                                label = { it.displayName },
+                                isSelected = { it == preferences.downloadQuality },
+                                onSelect = { viewModel.setDownloadQuality(it) },
+                            )
+                        }
                     )
 
                     SettingToggleItem(
@@ -483,7 +547,16 @@ fun StorageSettingsScreen(
                             trailingText = "${preferences.downloadScheduleWindow.startHour}:00",
                             highlighted = highlightSettingId == "download_schedule_start",
                             index = downloadIdx++, count = downloadTotal,
-                            onClick = { activeDialog = StorageSettingsDialog.ScheduleStartPicker }
+                            onClick = {
+                                val current = preferences.downloadScheduleWindow
+                                activePicker = PickerState.List(
+                                    title = "Schedule Start",
+                                    items = (0..23).toList(),
+                                    label = { "$it:00" },
+                                    isSelected = { it == current.startHour },
+                                    onSelect = { viewModel.setDownloadScheduleWindow(current.copy(startHour = it)) },
+                                )
+                            }
                         )
 
                         SettingListItem(
@@ -493,7 +566,16 @@ fun StorageSettingsScreen(
                             trailingText = "${preferences.downloadScheduleWindow.endHour}:00",
                             highlighted = highlightSettingId == "download_schedule_end",
                             index = downloadIdx++, count = downloadTotal,
-                            onClick = { activeDialog = StorageSettingsDialog.ScheduleEndPicker }
+                            onClick = {
+                                val current = preferences.downloadScheduleWindow
+                                activePicker = PickerState.List(
+                                    title = "Schedule End",
+                                    items = (0..23).toList(),
+                                    label = { "$it:00" },
+                                    isSelected = { it == current.endHour },
+                                    onSelect = { viewModel.setDownloadScheduleWindow(current.copy(endHour = it)) },
+                                )
+                            }
                         )
 
                         SettingToggleItem(
@@ -517,7 +599,15 @@ fun StorageSettingsScreen(
                         trailingText = if (preferences.maxDownloadStorageGb == 0) "Unlimited" else "${preferences.maxDownloadStorageGb} GB",
                         highlighted = highlightSettingId == "max_download_storage_limit",
                         index = downloadIdx++, count = downloadTotal,
-                        onClick = { activeDialog = StorageSettingsDialog.MaxDownloadStoragePicker }
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = "Max Download Storage Limit",
+                                items = listOf(0, 5, 10, 20, 50),
+                                label = { if (it == 0) "Unlimited" else "$it GB" },
+                                isSelected = { it == preferences.maxDownloadStorageGb },
+                                onSelect = { viewModel.setMaxDownloadStorageGb(it) },
+                            )
+                        }
                     )
 
                     SettingListItem(
@@ -527,7 +617,15 @@ fun StorageSettingsScreen(
                         trailingText = if (preferences.downloadStorageLocation == "INTERNAL") "Internal Storage" else "External SD Card",
                         highlighted = highlightSettingId == "download_storage_location",
                         index = downloadIdx, count = downloadTotal,
-                        onClick = { activeDialog = StorageSettingsDialog.StorageLocationPicker }
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = "Download Storage Location",
+                                items = listOf("INTERNAL", "EXTERNAL"),
+                                label = { if (it == "INTERNAL") "Internal Storage" else "External SD Card" },
+                                isSelected = { it == preferences.downloadStorageLocation },
+                                onSelect = { viewModel.setDownloadStorageLocation(it) },
+                            )
+                        }
                     )
                 }
             }
@@ -544,122 +642,9 @@ fun StorageSettingsScreen(
         }
     }
 
-    // All storage pickers are list-shaped. Build the active one's
-    // [PickerState.List] here, then render it through the single
-    // [SettingsPickerDialog] dispatcher — replacing the prior 13-block
-    // `if (activeDialog == ...Picker)` ladder. The picker identity
-    // (StorageSettingsDialog) stays the state type so onClick handlers and
-    // settings-search deep-links are untouched; only the rendering collapses.
-    val activePickerState: PickerState<*>? = when (activeDialog) {
-        StorageSettingsDialog.None -> null
-        StorageSettingsDialog.ConnectionsPicker -> PickerState.List(
-            title = stringResource(R.string.settings_connections_per_download),
-            items = listOf(1, 2, 4, 8, 12, 16),
-            label = { it.toString() },
-            isSelected = { it == preferences.downloadConnections },
-            onSelect = { viewModel.setDownloadConnections(it) },
-        )
-        StorageSettingsDialog.ConcurrentDownloadsPicker -> PickerState.List(
-            title = stringResource(R.string.settings_max_simultaneous_downloads),
-            items = listOf(1, 2, 3, 4, 5, 6),
-            label = { it.toString() },
-            isSelected = { it == preferences.maxConcurrentDownloads },
-            onSelect = { viewModel.setMaxConcurrentDownloads(it) },
-        )
-        StorageSettingsDialog.MaxCacheSizePicker -> {
-            val unlimited = stringResource(R.string.settings_unlimited)
-            PickerState.List(
-                title = stringResource(R.string.settings_max_cache_size),
-                items = listOf(0, 250, 500, 1000, 2000, 5000),
-                label = { if (it == 0) unlimited else "$it MB" },
-                isSelected = { it == preferences.maxCacheSizeMb },
-                onSelect = { viewModel.setMaxCacheSize(it) },
-            )
-        }
-        StorageSettingsDialog.BandwidthCapPicker -> {
-            val unlimited = stringResource(R.string.settings_unlimited)
-            PickerState.List(
-                title = stringResource(R.string.settings_manual_bandwidth_cap),
-                items = listOf(0L, 1_000_000L, 2_000_000L, 5_000_000L, 10_000_000L, 20_000_000L),
-                label = { if (it == 0L) unlimited else "${it / 1_000_000L} Mbps" },
-                isSelected = { it == preferences.manualBandwidthCap },
-                onSelect = { viewModel.setManualBandwidthCap(it) },
-            )
-        }
-        StorageSettingsDialog.MeteredBehaviorPicker -> PickerState.List(
-            title = stringResource(R.string.settings_metered_network_behavior),
-            items = MeteredNetworkBehavior.entries,
-            label = { it.displayName },
-            isSelected = { it == preferences.meteredNetworkBehavior },
-            onSelect = { viewModel.setMeteredNetworkBehavior(it) },
-        )
-        StorageSettingsDialog.CellularStreamingQualityPicker -> PickerState.List(
-            title = stringResource(R.string.settings_cellular_streaming_quality),
-            items = StreamingQuality.entries,
-            label = { streamingQualityLabel(it) },
-            isSelected = { it == preferences.cellularStreamingQuality },
-            onSelect = { viewModel.setCellularStreamingQuality(it) },
-        )
-        StorageSettingsDialog.CellularDownloadWarningPicker -> PickerState.List(
-            title = stringResource(R.string.settings_cellular_download_size_warning),
-            items = listOf(0, 100, 250, 500, 1000, 2000),
-            label = { if (it == 0) "Disabled" else "$it MB" },
-            isSelected = { it == preferences.cellularDownloadSizeWarningMb },
-            onSelect = { viewModel.setCellularDownloadSizeWarningMb(it) },
-        )
-        StorageSettingsDialog.NetworkTimeoutPicker -> PickerState.List(
-            title = "Network Timeouts",
-            items = com.raulshma.jellyplay.core.model.NetworkTimeoutPreset.entries,
-            label = { it.displayName },
-            isSelected = { it == preferences.networkTimeoutPreset },
-            onSelect = { viewModel.setNetworkTimeoutPreset(it) },
-        )
-        StorageSettingsDialog.DownloadQualityPicker -> PickerState.List(
-            title = "Download Quality",
-            items = com.raulshma.jellyplay.core.model.DownloadQuality.entries,
-            label = { it.displayName },
-            isSelected = { it == preferences.downloadQuality },
-            onSelect = { viewModel.setDownloadQuality(it) },
-        )
-        StorageSettingsDialog.ScheduleStartPicker -> {
-            val current = preferences.downloadScheduleWindow
-            PickerState.List(
-                title = "Schedule Start",
-                items = (0..23).toList(),
-                label = { "$it:00" },
-                isSelected = { it == current.startHour },
-                onSelect = { viewModel.setDownloadScheduleWindow(current.copy(startHour = it)) },
-            )
-        }
-        StorageSettingsDialog.ScheduleEndPicker -> {
-            val current = preferences.downloadScheduleWindow
-            PickerState.List(
-                title = "Schedule End",
-                items = (0..23).toList(),
-                label = { "$it:00" },
-                isSelected = { it == current.endHour },
-                onSelect = { viewModel.setDownloadScheduleWindow(current.copy(endHour = it)) },
-            )
-        }
-        StorageSettingsDialog.MaxDownloadStoragePicker -> PickerState.List(
-            title = "Max Download Storage Limit",
-            items = listOf(0, 5, 10, 20, 50),
-            label = { if (it == 0) "Unlimited" else "$it GB" },
-            isSelected = { it == preferences.maxDownloadStorageGb },
-            onSelect = { viewModel.setMaxDownloadStorageGb(it) },
-        )
-        StorageSettingsDialog.StorageLocationPicker -> PickerState.List(
-            title = "Download Storage Location",
-            items = listOf("INTERNAL", "EXTERNAL"),
-            label = { if (it == "INTERNAL") "Internal Storage" else "External SD Card" },
-            isSelected = { it == preferences.downloadStorageLocation },
-            onSelect = { viewModel.setDownloadStorageLocation(it) },
-        )
-    }
-
     SettingsPickerDialog(
-        state = activePickerState,
-        onDismiss = { activeDialog = StorageSettingsDialog.None },
+        state = activePicker,
+        onDismiss = { activePicker = null },
     )
 }
 

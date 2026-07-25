@@ -56,6 +56,11 @@ class DownloadRepositoryImplResumeTest {
     // downloadSeries delegates the per-episode bundle here; the resume tests
     // never exercise it, so a relaxed mock behind a dagger.Lazy is sufficient.
     private val downloadDelegate: Lazy<DownloadDelegate> = mockk(relaxed = true)
+    // Storage cap + WorkManager enqueue were extracted out of the repo into
+    // their own modules. The resume path exercises neither, so relaxed mocks
+    // suffice.
+    private val storagePolicy: StoragePolicy = mockk(relaxed = true)
+    private val downloadEnqueuer: DownloadEnqueuer = mockk(relaxed = true)
 
     private fun repository() = DownloadRepositoryImpl(
         context = context,
@@ -68,6 +73,8 @@ class DownloadRepositoryImplResumeTest {
         preferencesStore = preferencesStore,
         json = json,
         downloadDelegate = downloadDelegate,
+        storagePolicy = storagePolicy,
+        downloadEnqueuer = downloadEnqueuer,
     )
 
     @Before

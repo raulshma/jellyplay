@@ -59,6 +59,21 @@ abstract class DataModule {
             playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
         ): DownloadDelegate = DownloadDelegate(context, downloadRepository, playbackRepository)
 
+        // StoragePolicy takes the download-byte aggregate as a suspend lambda so
+        // it stays pure logic (testable without a DAO). Bound here so the cap
+        // rule has a single owner instead of being duplicated across
+        // DownloadRepositoryImpl.startDownload / downloadSeries.
+        @dagger.Provides
+        @Singleton
+        fun provideStoragePolicy(
+            preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+            downloadDao: com.raulshma.jellyplay.core.database.dao.DownloadDao,
+        ): com.raulshma.jellyplay.core.data.repository.StoragePolicy =
+            com.raulshma.jellyplay.core.data.repository.StoragePolicy(
+                preferencesStore = preferencesStore,
+                currentBytesProvider = { downloadDao.getTotalDownloadedBytes() },
+            )
+
         // LyricsRepository is a narrow (ISP) view of the same MediaRepository singleton
         // (MediaRepository extends LyricsRepository). Providing it via delegation guarantees
         // a single shared instance — no duplicate caches.
