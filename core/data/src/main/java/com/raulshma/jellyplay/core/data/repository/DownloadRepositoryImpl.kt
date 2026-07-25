@@ -229,20 +229,21 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun pauseDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
-        if (entity.status == DownloadStatus.DOWNLOADING.name ||
-            entity.status == DownloadStatus.QUEUED.name ||
-            entity.status == DownloadStatus.PENDING.name
-        ) {
+        if (DownloadStates.isActive(entity.status)) {
+            // Cancel the in-flight worker first so the foreground service stops
+            // promptly. Without this the worker keeps polling DB status until its
+            // next tick discovers the row is PAUSED.
+            cancelWorkForDownload(id)
             downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.PAUSED.name)
             // Mark as user-initiated so the reconnect auto-resume leaves it
             // alone; only NETWORK interruptions auto-resume.
-            downloadDao.updatePausedReason(id, PAUSE_REASON_USER)
+            downloadDao.updatePausedReason(id, DownloadPauseReason.USER.persistedValue)
         }
     }
 
     override suspend fun resumeDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
-        if (entity.status == DownloadStatus.PAUSED.name || entity.status == DownloadStatus.FAILED.name) {
+        if (DownloadStates.isPausedOrFailed(entity.status)) {
             downloadDao.updateProgress(id, entity.downloadedBytes, DownloadStatus.PENDING.name)
             // Manual resume/retry clears both the pause reason and the
             // auto-retry budget — the user has taken ownership of this row.
@@ -263,9 +264,7 @@ class DownloadRepositoryImpl @Inject constructor(
      */
     private fun cancelWorkForDownload(downloadId: String) {
         try {
-            WorkManager.getInstance(context).cancelUniqueWork(
-                "${DownloadWorker.UNIQUE_WORK_PREFIX}$downloadId"
-            )
+            WorkManager.getInstance(context).cancelUniqueWork(DownloadWorker.workName(downloadId))
         } catch (e: Exception) {
             // WorkManager may not be initialised in some instrumented-test or fresh-install
             // edge cases. Log and continue — file cleanup is still valuable on its own.
@@ -292,10 +291,10 @@ class DownloadRepositoryImpl @Inject constructor(
         for (row in candidates) {
             try {
                 // A user-paused download stays paused until the user resumes it.
-                if (row.status == DownloadStatus.PAUSED.name && row.pausedReason == PAUSE_REASON_USER) continue
+                if (DownloadStates.isUserPaused(row.status, row.pausedReason)) continue
                 // Exhausted the auto-retry budget — leave it FAILED for a manual
                 // retry rather than spinning on every reconnect.
-                if (row.retryCount >= MAX_AUTO_RETRY) continue
+                if (DownloadStates.isExhausted(row.retryCount)) continue
                 // A FAILED partial was deleted by cleanupStuckDownloads (multi-
                 // connection scattered writes can't be appended to), so resume
                 // FAILED rows from 0. A NETWORK-paused single-connection row has
@@ -874,8 +873,8 @@ class DownloadRepositoryImpl @Inject constructor(
         if (initialDelayMs > 0) {
             workRequestBuilder.setInitialDelay(initialDelayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
         }
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            "${DownloadWorker.UNIQUE_WORK_PREFIX}$downloadId",
+            WorkManager.getInstance(context).enqueueUniqueWork(
+            DownloadWorker.workName(downloadId),
             ExistingWorkPolicy.KEEP,
             workRequestBuilder.build(),
         )
@@ -927,7 +926,7 @@ class DownloadRepositoryImpl @Inject constructor(
         // Seed playback progress from server UserData so the download shows its
         // watched/resume state immediately.
         playbackPositionTicks = playbackPositionTicks,
-        playedPercentage = computePlayedPercentage(playbackPositionTicks, runTimeTicks, isPlayed),
+        playedPercentage = PlayedStateSync.computePlayedPercentage(playbackPositionTicks, runTimeTicks, isPlayed),
         isPlayed = isPlayed,
         lastPlayedDate = null,
     )
@@ -960,16 +959,6 @@ class DownloadRepositoryImpl @Inject constructor(
             peopleJson = if (cast.isEmpty()) null else encodeCast(cast),
         )
     }
-
-    /** Derives a 0–100 played percentage, guarding against divide-by-zero. */
-    private fun computePlayedPercentage(positionTicks: Long?, runTimeTicks: Long?, isPlayed: Boolean): Double =
-        when {
-            isPlayed -> 100.0
-            positionTicks == null || positionTicks <= 0L -> 0.0
-            runTimeTicks == null || runTimeTicks <= 0L -> 0.0
-            else -> ((positionTicks.toDouble() / runTimeTicks.toDouble()) * 100.0)
-                .coerceIn(0.0, 100.0)
-        }
 
     private suspend fun cleanupDownloadFiles(entity: DownloadEntity) {
         if (entity.downloadPath.isNotBlank()) {
@@ -1033,21 +1022,6 @@ class DownloadRepositoryImpl @Inject constructor(
         // Mirrored by DownloadRecoveryInitializer so cold-start re-enqueues
         // back off identically. WorkManager caps each retry delay at 5h.
         const val DOWNLOAD_BACKOFF_DELAY_MS = 30_000L
-
-        // Values written to `downloads.pausedReason`. USER = a long-press Pause;
-        // NETWORK = an in-flight transfer interrupted by a connectivity drop.
-        // The reconnect auto-resume resumes only NETWORK pauses.
-        const val PAUSE_REASON_USER = "USER"
-        const val PAUSE_REASON_NETWORK = "NETWORK"
-
-        // Maximum auto-resume attempts the reconnect listener will make for a
-        // single download before dead-lettering it (leaving it FAILED for a
-        // manual retry). Mirrors the playback-outbox dead-letter budget. The
-        // listener enqueues fresh WorkManager jobs (KEEP policy) that bypass
-        // WorkManager's own run-attempt cap, so without this DB-side budget a
-        // persistently failing download (storage full, 404, auth) would
-        // re-attempt on every reconnect indefinitely.
-        const val MAX_AUTO_RETRY = 3
 
         // Container strings from Jellyfin (mkv, mp4, ts, webm, flv, mov, ...).
         // Constrained to 2-8 alphanumerics so a malformed/missing value can

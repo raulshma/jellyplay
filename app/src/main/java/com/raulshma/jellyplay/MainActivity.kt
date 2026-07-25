@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -46,6 +47,7 @@ import android.util.Rational
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.raulshma.jellyplay.core.data.playback.PipAction
+import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -63,6 +65,7 @@ import javax.inject.Inject
 class MainActivity : FragmentActivity() {
 
     @Inject lateinit var playerLifecycleManager: PlayerLifecycleManager
+    @Inject lateinit var pipController: PipController
 
     private val viewModel: MainViewModel by viewModels()
 
@@ -144,7 +147,7 @@ class MainActivity : FragmentActivity() {
         ) {
             lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    playerLifecycleManager.shouldAutoEnterPip.collect { shouldAutoEnter ->
+                    pipController.shouldAutoEnterPip.collect { shouldAutoEnter ->
                         val params = PictureInPictureParams.Builder()
                             .setAutoEnterEnabled(shouldAutoEnter)
                             .build()
@@ -155,7 +158,7 @@ class MainActivity : FragmentActivity() {
             // Keep the PiP play/pause action icon in sync with playback state.
             lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    playerLifecycleManager.isPlaying.collect {
+                    pipController.isPlaying.collect {
                         refreshPipActions()
                     }
                 }
@@ -229,8 +232,19 @@ class MainActivity : FragmentActivity() {
                 derivedStateOf { hasLockEnabled && !isPinUnlocked.value }
             }
 
+            var themeClockTick by remember { mutableLongStateOf(0L) }
+            LaunchedEffect(preferences.themeMode) {
+                if (preferences.themeMode == ThemeMode.SCHEDULED) {
+                    while (true) {
+                        kotlinx.coroutines.delay(60_000L)
+                        themeClockTick = System.currentTimeMillis()
+                    }
+                }
+            }
+
             val darkTheme by remember {
                 derivedStateOf {
+                    @Suppress("UnusedExpression") themeClockTick // time-based input
                     preferences.synthwaveMode || when (preferences.themeMode) {
                         ThemeMode.DARK -> true
                         ThemeMode.LIGHT -> false
@@ -410,7 +424,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (playerLifecycleManager.shouldAutoEnterPip.value) {
+        if (pipController.shouldAutoEnterPip.value) {
             enterPipMode()
         }
     }
@@ -425,8 +439,8 @@ class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             !isTopResumed &&
             !isInPictureInPictureMode &&
-            playerLifecycleManager.shouldAutoEnterPip.value &&
-            playerLifecycleManager.isPlaying.value
+            pipController.shouldAutoEnterPip.value &&
+            pipController.isPlaying.value
         ) {
             enterPipMode()
         }
@@ -455,11 +469,17 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun onPipModeChanged(isInPictureInPictureMode: Boolean) {
-        if (!isInPictureInPictureMode) {
+        if (isInPictureInPictureMode) {
+            // Register the receiver + attach actions on EVERY PiP entry, including
+            // auto-entry (home-press while playing) which bypasses enterPipMode()
+            // and would otherwise leave the remote actions dead.
+            registerPipActionReceiver()
+            refreshPipActions()
+        } else {
             justExitedPip = true
             unregisterPipActionReceiver()
         }
-        playerLifecycleManager.setPipMode(isInPictureInPictureMode)
+        pipController.setPipMode(isInPictureInPictureMode)
     }
 
     override fun onPause() {
@@ -491,7 +511,7 @@ class MainActivity : FragmentActivity() {
         super.onStop()
         if (justExitedPip) {
             justExitedPip = false
-            playerLifecycleManager.notifyPipDismissed()
+            pipController.notifyPipDismissed()
         }
     }
 
@@ -499,7 +519,7 @@ class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
 
-        val shouldAutoEnter = playerLifecycleManager.shouldAutoEnterPip.value
+        val shouldAutoEnter = pipController.shouldAutoEnterPip.value
 
         registerPipActionReceiver()
 
@@ -525,8 +545,8 @@ class MainActivity : FragmentActivity() {
      * reflects the current playback state so the toggle stays in sync.
      */
     private fun buildPipActions(): List<RemoteAction> {
-        val isPlaying = playerLifecycleManager.isPlaying.value
-        val hasNext = playerLifecycleManager.pipHasNext
+        val isPlaying = pipController.isPlaying.value
+        val hasNext = pipController.pipHasNext
         val actions = mutableListOf<RemoteAction>()
 
         actions += pipRemoteAction(
@@ -597,7 +617,7 @@ class MainActivity : FragmentActivity() {
                     PIP_ACTION_NEXT -> PipAction.NEXT
                     else -> return
                 }
-                playerLifecycleManager.pipTransport?.handle(action)
+                pipController.pipTransport?.handle(action)
                 // The play/pause toggle changes the icon — refresh immediately.
                 refreshPipActions()
             }
@@ -647,6 +667,12 @@ private fun formatLockoutMessage(remainingMs: Long): String {
     return when {
         seconds < 60 -> "Too many attempts. Try again in ${seconds}s."
         seconds < 3600 -> "Too many attempts. Try again in ${seconds / 60}m."
+        seconds < 86400 -> {
+            val h = seconds / 3600
+            val m = (seconds % 3600) / 60
+            if (m == 0L) "Too many attempts. Try again in ${h}h."
+            else "Too many attempts. Try again in ${h}h ${m}m."
+        }
         else -> "Too many attempts. Try again in ${seconds / 3600}h."
     }
 }

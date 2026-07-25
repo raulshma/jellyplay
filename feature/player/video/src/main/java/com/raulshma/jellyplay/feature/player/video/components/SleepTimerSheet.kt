@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -213,11 +214,13 @@ internal fun SleepTimerSheet(
                     }
                 }
             } else {
+                var showCustomDialog by remember { mutableStateOf(false) }
                 Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                     if (isActive) {
                         ActiveTimerSection(
                             isEndOfEpisodeMode = isEndOfEpisodeMode,
                             remainingMs = remainingMs,
+                            originalMs = lastUsedDurationMs,
                             onCancel = onCancel,
                         )
                         Spacer(Modifier.height(16.dp))
@@ -248,12 +251,32 @@ internal fun SleepTimerSheet(
 
                     Spacer(Modifier.height(12.dp))
 
+                    SleepTimerChip(
+                        label = "Custom…",
+                        isSelected = false,
+                        onClick = { showCustomDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
                     val isEndSelected = isActive && isEndOfEpisodeMode
                     SleepTimerChip(
                         label = "End of episode",
                         isSelected = isEndSelected,
                         onClick = { onSelectEndOfEpisode(); onDismiss() },
                         modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                if (showCustomDialog) {
+                    CustomSleepDurationDialog(
+                        onConfirm = { minutes ->
+                            onSelectDuration(minutes * 60_000L)
+                            showCustomDialog = false
+                            onDismiss()
+                        },
+                        onDismiss = { showCustomDialog = false },
                     )
                 }
             }
@@ -265,6 +288,7 @@ internal fun SleepTimerSheet(
 private fun ActiveTimerSection(
     isEndOfEpisodeMode: Boolean,
     remainingMs: Long,
+    originalMs: Long,
     onCancel: () -> Unit,
 ) {
     var displayRemaining by remember(remainingMs) { mutableLongStateOf(remainingMs) }
@@ -317,8 +341,13 @@ private fun ActiveTimerSection(
         }
         if (!isEndOfEpisodeMode) {
             Spacer(Modifier.height(8.dp))
+            val progressFraction = if (originalMs > 0) {
+                (displayRemaining.toFloat() / originalMs.toFloat()).coerceIn(0f, 1f)
+            } else {
+                1f
+            }
             JellyPlayLinearProgressIndicator(
-                progress = { 1f },
+                progress = { progressFraction },
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -370,6 +399,48 @@ private fun formatDurationLabel(ms: Long): String {
         minutes % 60L == 0L -> "${minutes / 60}h"
         else -> "${minutes}m"
     }
+}
+
+/**
+ * Lets the user enter an arbitrary sleep-timer duration in minutes rather
+ * than being limited to the 5 fixed presets.
+ */
+@Composable
+private fun CustomSleepDurationDialog(
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var minutesText by remember { mutableStateOf("") }
+    val parsed = minutesText.toIntOrNull()
+    val isValid = parsed != null && parsed in 1..600
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Custom duration") },
+        text = {
+            androidx.compose.material3.OutlinedTextField(
+                value = minutesText,
+                onValueChange = { minutesText = it.filter { c -> c.isDigit() }.take(3) },
+                label = { Text("Minutes") },
+                singleLine = true,
+                isError = minutesText.isNotEmpty() && !isValid,
+                supportingText = if (minutesText.isNotEmpty() && !isValid) {
+                    { Text("Enter 1–600") }
+                } else null,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                ),
+            )
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = { parsed?.let(onConfirm) },
+                enabled = isValid,
+            ) { Text("Start") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 private fun formatTime(ms: Long): String {

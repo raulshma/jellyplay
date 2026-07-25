@@ -387,7 +387,11 @@ fun PosterCard(
                 .jellyFocusIndicator(focusInteraction, cardShape)
                 .combinedClickable(
                     interactionSource = interactionSource,
-                    indication = null,
+                    indication = if (com.raulshma.jellyplay.core.ui.animation.isReducedMotion()) {
+                        androidx.compose.foundation.LocalIndication.current
+                    } else {
+                        null
+                    },
                     onClick = onClick,
                     onLongClick = peek?.onLongClick,
                 ),
@@ -570,57 +574,6 @@ fun PosterCard(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun MediaRow(
-    title: String,
-    items: List<MediaItem>,
-    imageUrlBuilder: (MediaItem) -> String,
-    fallbackImageUrlBuilder: (MediaItem) -> List<String> = { emptyList() },
-    onItemClick: (MediaItem) -> Unit,
-    modifier: Modifier = Modifier,
-    blurHashBuilder: (MediaItem) -> String? = { it.blurHashes.primary },
-    onPlayClick: ((MediaItem) -> Unit)? = null,
-    photoFolderChildUrls: Map<String, List<String>> = emptyMap(),
-) {
-    val uiEnvironment = LocalJellyPlayUi.current
-    val isTv = uiEnvironment.isTv
-    val layout = uiEnvironment.layout
-    val cardWidth = layout.rowCardWidth
-    val contentPad = layout.contentPadding
-    val spacing = layout.itemSpacing
-    val titleStyle = if (isTv) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium
-
-    Column(modifier = modifier.background(MaterialTheme.colorScheme.background)) {
-        Text(
-            text = title,
-            style = titleStyle,
-            modifier = Modifier.padding(horizontal = contentPad, vertical = 8.dp),
-        )
-        TvFocusableItemRow(
-            items = items,
-            key = { "${title}_${it.id}" },
-            contentPadding = PaddingValues(horizontal = contentPad),
-            horizontalArrangement = Arrangement.spacedBy(spacing),
-        ) { _, item, focusModifier ->
-            val memoizedClick = remember(item) { { onItemClick(item) } }
-            PosterCard(
-                item = item,
-                imageUrl = imageUrlBuilder(item),
-                fallbackUrls = fallbackImageUrlBuilder(item),
-                onClick = memoizedClick,
-                modifier = focusModifier.width(cardWidth),
-                showProgress = item.playbackPositionTicks != null && item.playbackPositionTicks!! > 0,
-                progressPercent = if (item.runTimeTicks != null && item.runTimeTicks!! > 0) {
-                    (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                } else 0f,
-                blurHash = blurHashBuilder(item),
-                onPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } },
-                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
-            )
         }
     }
 }

@@ -39,6 +39,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -290,22 +291,9 @@ private fun PlaybackOutboxEntry.eventTypeLabel(): String = when (eventType) {
  * Position uses Jellyfin's 10,000,000 ticks/second scale.
  */
 private fun formatEntryDetail(entry: PlaybackOutboxEntry): String {
-    val positionLabel = formatTicks(entry.positionTicks)
+    val positionLabel = formatDurationMs(entry.positionTicks / 10_000)
     val ageLabel = formatAge(System.currentTimeMillis() - entry.recordedAt)
     return "$positionLabel  ·  $ageLabel"
-}
-
-private fun formatTicks(ticks: Long): String {
-    if (ticks <= 0L) return "0:00"
-    val totalSeconds = ticks / 10_000_000
-    val hours = totalSeconds / 3_600
-    val minutes = (totalSeconds % 3_600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%d:%02d", minutes, seconds)
-    }
 }
 
 private fun formatAge(deltaMillis: Long): String {

@@ -58,6 +58,19 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
 private val THEME_HIGHLIGHT_IDS = setOf("theme_mode", "theme_scheduler")
+
+sealed class AppearanceSettingsDialog {
+    object None : AppearanceSettingsDialog()
+    object ThemeModePicker : AppearanceSettingsDialog()
+    object ContinueWatchingClickPicker : AppearanceSettingsDialog()
+    object NextUpMaxDaysPicker : AppearanceSettingsDialog()
+    object DateFormatPicker : AppearanceSettingsDialog()
+    object FontScalePicker : AppearanceSettingsDialog()
+    object ScheduledStartPicker : AppearanceSettingsDialog()
+    object ScheduledEndPicker : AppearanceSettingsDialog()
+    object ColorBlindModePicker : AppearanceSettingsDialog()
+    object HandModePicker : AppearanceSettingsDialog()
+}
 private val APPEARANCE_LIBRARY_GROUP_IDS = setOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings")
 private val PERFORMANCE_GROUP_IDS = setOf("performance_mode", "reduce_motion")
 private val BLUE_LIGHT_GROUP_IDS = setOf("blue_light_filter", "blue_light_strength")
@@ -131,6 +144,7 @@ fun AppearanceSettingsScreen(
 
     var showResetDialog by remember { mutableStateOf(false) }
     var showBlueLightStrengthSheet by remember { mutableStateOf(false) }
+    var activeDialog by remember { mutableStateOf<AppearanceSettingsDialog>(AppearanceSettingsDialog.None) }
 
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_appearance_title),
@@ -292,13 +306,7 @@ fun AppearanceSettingsScreen(
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
                                         if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
-                                            val next = when (preferences.themeMode) {
-                                                ThemeMode.SYSTEM -> ThemeMode.LIGHT
-                                                ThemeMode.LIGHT -> ThemeMode.DARK
-                                                ThemeMode.DARK -> ThemeMode.SCHEDULED
-                                                ThemeMode.SCHEDULED -> ThemeMode.SYSTEM
-                                            }
-                                            viewModel.setThemeMode(next)
+                                            activeDialog = AppearanceSettingsDialog.ThemeModePicker
                                         }
                                     },
                                 )
@@ -485,12 +493,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.continueWatchingClickBehavior.displayName,
                                     highlighted = highlightSettingId == "continue_watching_click",
                                     index = currentIdx++, count = totalCount,
-                                    onClick = {
-                                        val options = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.entries
-                                        val currentIndex = options.indexOf(preferences.continueWatchingClickBehavior)
-                                        val nextIndex = (currentIndex + 1) % options.size
-                                        viewModel.setContinueWatchingClickBehavior(options[nextIndex])
-                                    },
+                                    onClick = { activeDialog = AppearanceSettingsDialog.ContinueWatchingClickPicker },
                                 )
                             }
                             "unhide_cw" -> {
@@ -515,7 +518,6 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                             "next_up_max_days" -> {
-                                val dayOptions = listOf(0, 7, 14, 30, 60, 90)
                                 val dayLabels = mapOf(0 to "Unlimited", 7 to "7 days", 14 to "14 days", 30 to "30 days", 60 to "60 days", 90 to "90 days")
                                 SettingListItem(
                                     icon = Tabler.Outline.CalendarTime,
@@ -524,11 +526,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = dayLabels[preferences.nextUpMaxDays] ?: "${preferences.nextUpMaxDays} days",
                                     highlighted = highlightSettingId == "next_up_max_days",
                                     index = currentIdx++, count = totalCount,
-                                    onClick = {
-                                        val currentIndex = dayOptions.indexOf(preferences.nextUpMaxDays)
-                                        val nextIndex = (currentIndex + 1) % dayOptions.size
-                                        viewModel.setNextUpMaxDays(dayOptions[nextIndex])
-                                    },
+                                    onClick = { activeDialog = AppearanceSettingsDialog.NextUpMaxDaysPicker },
                                 )
                             }
                             "next_up_rewatching" -> {
@@ -572,17 +570,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.dateFormatPreference.displayName,
                                     highlighted = highlightSettingId == "date_format",
                                     index = currentIdx++, count = totalCount,
-                                    onClick = {
-                                        val next = when (preferences.dateFormatPreference) {
-                                            DateFormatPreference.SYSTEM -> DateFormatPreference.US
-                                            DateFormatPreference.US -> DateFormatPreference.ISO
-                                            DateFormatPreference.ISO -> DateFormatPreference.EU
-                                            DateFormatPreference.EU -> DateFormatPreference.LONG
-                                            DateFormatPreference.LONG -> DateFormatPreference.SHORT
-                                            DateFormatPreference.SHORT -> DateFormatPreference.SYSTEM
-                                        }
-                                        viewModel.setDateFormatPreference(next)
-                                    },
+                                    onClick = { activeDialog = AppearanceSettingsDialog.DateFormatPicker },
                                 )
                             }
                             "font_scale" -> {
@@ -593,16 +581,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.appFontScale.displayName,
                                     highlighted = highlightSettingId == "font_scale",
                                     index = currentIdx++, count = totalCount,
-                                    onClick = {
-                                        val next = when (preferences.appFontScale) {
-                                            AppFontScale.SMALL -> AppFontScale.DEFAULT
-                                            AppFontScale.DEFAULT -> AppFontScale.MEDIUM
-                                            AppFontScale.MEDIUM -> AppFontScale.LARGE
-                                            AppFontScale.LARGE -> AppFontScale.EXTRA_LARGE
-                                            AppFontScale.EXTRA_LARGE -> AppFontScale.SMALL
-                                        }
-                                        viewModel.setAppFontScale(next)
-                                    },
+                                    onClick = { activeDialog = AppearanceSettingsDialog.FontScalePicker },
                                 )
                             }
                             "scheduled_start" -> {
@@ -613,10 +592,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = "${preferences.scheduledThemeStartHour}:00",
                                     highlighted = highlightSettingId == "scheduled_start",
                                     index = currentIdx++, count = totalCount,
-                                    onClick = {
-                                        val next = (preferences.scheduledThemeStartHour + 1) % 24
-                                        viewModel.setScheduledThemeStartHour(next)
-                                    },
+                                    onClick = { activeDialog = AppearanceSettingsDialog.ScheduledStartPicker },
                                 )
                             }
                             "scheduled_end" -> {
@@ -627,10 +603,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = "${preferences.scheduledThemeEndHour}:00",
                                     highlighted = highlightSettingId == "scheduled_end",
                                     index = currentIdx++, count = totalCount,
-                                    onClick = {
-                                        val next = (preferences.scheduledThemeEndHour + 1) % 24
-                                        viewModel.setScheduledThemeEndHour(next)
-                                    },
+                                    onClick = { activeDialog = AppearanceSettingsDialog.ScheduledEndPicker },
                                 )
                             }
                             "color_blind_mode" -> {
@@ -641,11 +614,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.colorBlindMode.displayName,
                                     highlighted = highlightSettingId == "color_blind_mode",
                                     index = currentIdx++, count = totalCount,
-                                    onClick = {
-                                        val modes = com.raulshma.jellyplay.core.model.ColorBlindMode.entries
-                                        val nextIndex = (modes.indexOf(preferences.colorBlindMode) + 1) % modes.size
-                                        viewModel.setColorBlindMode(modes[nextIndex])
-                                    },
+                                    onClick = { activeDialog = AppearanceSettingsDialog.ColorBlindModePicker },
                                 )
                             }
                             "hand_mode" -> {
@@ -656,14 +625,7 @@ fun AppearanceSettingsScreen(
                                     trailingText = preferences.handMode.displayName,
                                     highlighted = highlightSettingId == "hand_mode",
                                     index = currentIdx++, count = totalCount,
-                                    onClick = {
-                                        val next = if (preferences.handMode == com.raulshma.jellyplay.core.model.HandMode.RIGHT) {
-                                            com.raulshma.jellyplay.core.model.HandMode.LEFT
-                                        } else {
-                                            com.raulshma.jellyplay.core.model.HandMode.RIGHT
-                                        }
-                                        viewModel.setHandMode(next)
-                                    },
+                                    onClick = { activeDialog = AppearanceSettingsDialog.HandModePicker },
                                 )
                             }
                         }
@@ -1199,6 +1161,145 @@ fun AppearanceSettingsScreen(
                 TextButton(onClick = { showResetDialog = false }) {
                     Text("Cancel")
                 }
+            },
+        )
+    }
+
+    if (activeDialog == AppearanceSettingsDialog.ThemeModePicker) {
+        val themeLabels = mapOf(
+            ThemeMode.SYSTEM to stringResource(R.string.settings_theme_follow_system),
+            ThemeMode.LIGHT to stringResource(R.string.settings_theme_always_light),
+            ThemeMode.DARK to stringResource(R.string.settings_theme_always_dark),
+            ThemeMode.SCHEDULED to "Scheduled",
+        )
+        SettingsListPickerSheet(
+            title = stringResource(R.string.settings_theme_mode),
+            items = ThemeMode.entries,
+            label = { themeLabels[it] ?: it.name },
+            isSelected = { it == preferences.themeMode },
+            onDismiss = { activeDialog = AppearanceSettingsDialog.None },
+            onSelect = {
+                viewModel.setThemeMode(it)
+                activeDialog = AppearanceSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog == AppearanceSettingsDialog.ContinueWatchingClickPicker) {
+        SettingsListPickerSheet(
+            title = stringResource(R.string.settings_continue_watching_tap),
+            items = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.entries,
+            label = { it.displayName },
+            isSelected = { it == preferences.continueWatchingClickBehavior },
+            onDismiss = { activeDialog = AppearanceSettingsDialog.None },
+            onSelect = {
+                viewModel.setContinueWatchingClickBehavior(it)
+                activeDialog = AppearanceSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog == AppearanceSettingsDialog.NextUpMaxDaysPicker) {
+        val options = listOf(0, 7, 14, 30, 60, 90)
+        val dayLabels: Map<Int, String> = mapOf(
+            0 to "Unlimited", 7 to "7 days", 14 to "14 days",
+            30 to "30 days", 60 to "60 days", 90 to "90 days",
+        )
+        SettingsListPickerSheet(
+            title = "Next Up Time Window",
+            items = options,
+            label = { dayLabels[it] ?: "$it days" },
+            isSelected = { it == preferences.nextUpMaxDays },
+            onDismiss = { activeDialog = AppearanceSettingsDialog.None },
+            onSelect = {
+                viewModel.setNextUpMaxDays(it)
+                activeDialog = AppearanceSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog == AppearanceSettingsDialog.DateFormatPicker) {
+        SettingsListPickerSheet(
+            title = "Date Format",
+            items = DateFormatPreference.entries,
+            label = { it.displayName },
+            isSelected = { it == preferences.dateFormatPreference },
+            onDismiss = { activeDialog = AppearanceSettingsDialog.None },
+            onSelect = {
+                viewModel.setDateFormatPreference(it)
+                activeDialog = AppearanceSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog == AppearanceSettingsDialog.FontScalePicker) {
+        SettingsListPickerSheet(
+            title = "Font Size",
+            items = AppFontScale.entries,
+            label = { it.displayName },
+            isSelected = { it == preferences.appFontScale },
+            onDismiss = { activeDialog = AppearanceSettingsDialog.None },
+            onSelect = {
+                viewModel.setAppFontScale(it)
+                activeDialog = AppearanceSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog == AppearanceSettingsDialog.ScheduledStartPicker) {
+        val hours = (0..23).toList()
+        SettingsListPickerSheet(
+            title = "Night Starts At",
+            items = hours,
+            label = { "$it:00" },
+            isSelected = { it == preferences.scheduledThemeStartHour },
+            onDismiss = { activeDialog = AppearanceSettingsDialog.None },
+            onSelect = {
+                viewModel.setScheduledThemeStartHour(it)
+                activeDialog = AppearanceSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog == AppearanceSettingsDialog.ScheduledEndPicker) {
+        val hours = (0..23).toList()
+        SettingsListPickerSheet(
+            title = "Morning Starts At",
+            items = hours,
+            label = { "$it:00" },
+            isSelected = { it == preferences.scheduledThemeEndHour },
+            onDismiss = { activeDialog = AppearanceSettingsDialog.None },
+            onSelect = {
+                viewModel.setScheduledThemeEndHour(it)
+                activeDialog = AppearanceSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog == AppearanceSettingsDialog.ColorBlindModePicker) {
+        SettingsListPickerSheet(
+            title = "Color Blind Mode",
+            items = com.raulshma.jellyplay.core.model.ColorBlindMode.entries,
+            label = { it.displayName },
+            isSelected = { it == preferences.colorBlindMode },
+            onDismiss = { activeDialog = AppearanceSettingsDialog.None },
+            onSelect = {
+                viewModel.setColorBlindMode(it)
+                activeDialog = AppearanceSettingsDialog.None
+            },
+        )
+    }
+
+    if (activeDialog == AppearanceSettingsDialog.HandModePicker) {
+        SettingsListPickerSheet(
+            title = "Handedness",
+            items = com.raulshma.jellyplay.core.model.HandMode.entries,
+            label = { it.displayName },
+            isSelected = { it == preferences.handMode },
+            onDismiss = { activeDialog = AppearanceSettingsDialog.None },
+            onSelect = {
+                viewModel.setHandMode(it)
+                activeDialog = AppearanceSettingsDialog.None
             },
         )
     }

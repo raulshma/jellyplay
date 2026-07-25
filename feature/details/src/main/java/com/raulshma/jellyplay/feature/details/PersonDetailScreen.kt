@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
@@ -133,13 +135,12 @@ private fun PersonHeader(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (!biography.isNullOrBlank()) {
-            Text(
+            ExpandableText(
                 text = biography,
+                collapsedMaxLines = 4,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = contentPad),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = contentPad),
             )
         }
         androidx.compose.foundation.layout.Row(

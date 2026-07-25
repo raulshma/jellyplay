@@ -74,6 +74,7 @@ fun NextEpisodeOverlay(
     autoplayEnabled: Boolean = true,
     onPlayNext: () -> Unit,
     onCancel: () -> Unit,
+    onToggleAutoplay: (() -> Unit)? = null,
     isPlaying: Boolean,
     // Pauses the auto-play countdown while a settings sheet is open or the player
     // is locked, so the user isn't rushed out of a menu (or surprised by an
@@ -112,11 +113,18 @@ fun NextEpisodeOverlay(
     }
 
     val show = isVisible && !dismissed
+    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
+    val slideEnter: androidx.compose.animation.EnterTransition =
+        if (reducedMotion) androidx.compose.animation.EnterTransition.None
+        else slideInVertically(animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(), initialOffsetY = { it })
+    val slideExit: androidx.compose.animation.ExitTransition =
+        if (reducedMotion) androidx.compose.animation.ExitTransition.None
+        else slideOutVertically(animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(), targetOffsetY = { it })
 
     AnimatedVisibility(
         visible = show,
-        enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + slideInVertically(animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(), initialOffsetY = { it }),
-        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(), targetOffsetY = { it }),
+        enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()) + slideEnter,
+        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideExit,
         modifier = modifier,
     ) {
         Surface(
@@ -275,6 +283,23 @@ fun NextEpisodeOverlay(
                                     fontWeight = FontWeight.SemiBold,
                                 ),
                                 color = playerOnScrim().copy(alpha = 0.85f),
+                            )
+                        }
+                    }
+
+                    if (show && !autoplayEnabled && onToggleAutoplay != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        val toggleFocusState = rememberTvFocusState()
+                        androidx.compose.material3.FilledTonalButton(
+                            onClick = onToggleAutoplay,
+                            modifier = Modifier
+                                .then(toggleFocusState.focusModifier)
+                                .tvFocusIndicator(toggleFocusState, ShapeCache.smoothPill),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = "Turn on autoplay",
+                                style = MaterialTheme.typography.labelSmall,
                             )
                         }
                     }

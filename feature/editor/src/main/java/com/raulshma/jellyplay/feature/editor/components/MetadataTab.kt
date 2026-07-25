@@ -121,21 +121,27 @@ fun MetadataTab(
         }
 
         SectionHeader(title = "Ratings") {
+            val communityInvalid = state.communityRating.isNotEmpty() && state.communityRating.toFloatOrNull() == null
             OutlinedTextField(
                 value = state.communityRating,
                 onValueChange = { viewModel.updateField { s -> s.copy(communityRating = it) } },
                 label = { Text("Community Rating (0-10)") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                isError = communityInvalid,
+                supportingText = if (communityInvalid) { { Text("Must be a number") } } else null,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
             )
             if (mediaType == MediaType.MOVIE) {
+                val criticInvalid = state.criticRating.isNotEmpty() && state.criticRating.toFloatOrNull() == null
                 OutlinedTextField(
                     value = state.criticRating,
                     onValueChange = { viewModel.updateField { s -> s.copy(criticRating = it) } },
                     label = { Text("Critic Rating") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    isError = criticInvalid,
+                    supportingText = if (criticInvalid) { { Text("Must be a number") } } else null,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
             }
@@ -201,12 +207,15 @@ fun MetadataTab(
         }
 
         SectionHeader(title = "Dates & Numbers") {
+            val yearInvalid = state.productionYear.isNotEmpty() && state.productionYear.toIntOrNull() == null
             OutlinedTextField(
                 value = state.productionYear,
                 onValueChange = { viewModel.updateField { s -> s.copy(productionYear = it) } },
                 label = { Text("Production Year") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                isError = yearInvalid,
+                supportingText = if (yearInvalid) { { Text("Must be a number") } } else null,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
             )
             OutlinedTextField(
@@ -226,22 +235,28 @@ fun MetadataTab(
                     singleLine = true,
                     placeholder = { Text("YYYY-MM-DD") },
                 )
+                val runtimeInvalid = state.runtimeMinutes.isNotEmpty() && state.runtimeMinutes.toIntOrNull() == null
                 OutlinedTextField(
                     value = state.runtimeMinutes,
                     onValueChange = { viewModel.updateField { s -> s.copy(runtimeMinutes = it) } },
                     label = { Text("Runtime (minutes)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    isError = runtimeInvalid,
+                    supportingText = if (runtimeInvalid) { { Text("Must be a number") } } else null,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
             if (mediaType == MediaType.EPISODE) {
+                val indexInvalid = state.indexNumber.isNotEmpty() && state.indexNumber.toIntOrNull() == null
                 OutlinedTextField(
                     value = state.indexNumber,
                     onValueChange = { viewModel.updateField { s -> s.copy(indexNumber = it) } },
                     label = { Text("Episode Number") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    isError = indexInvalid,
+                    supportingText = if (indexInvalid) { { Text("Must be a number") } } else null,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
                 OutlinedTextField(

@@ -78,7 +78,7 @@ class DownloadRepositoryImplResumeTest {
     @Test
     fun `user-paused download is skipped on auto-resume`() = runTest {
         coEvery { downloadDao.getInterruptedResumeRows(any()) } returns listOf(
-            row("dl-1", status = DownloadStatus.PAUSED.name, pausedReason = DownloadRepositoryImpl.PAUSE_REASON_USER),
+            row("dl-1", status = DownloadStatus.PAUSED.name, pausedReason = DownloadPauseReason.USER.persistedValue),
         )
 
         repository().resumeInterruptedDownloads()
@@ -90,7 +90,7 @@ class DownloadRepositoryImplResumeTest {
     @Test
     fun `network-paused download resumes preserving its byte offset`() = runTest {
         coEvery { downloadDao.getInterruptedResumeRows(any()) } returns listOf(
-            row("dl-2", downloadedBytes = 500L, status = DownloadStatus.PAUSED.name, pausedReason = DownloadRepositoryImpl.PAUSE_REASON_NETWORK),
+            row("dl-2", downloadedBytes = 500L, status = DownloadStatus.PAUSED.name, pausedReason = DownloadPauseReason.NETWORK.persistedValue),
         )
 
         repository().resumeInterruptedDownloads()
@@ -117,7 +117,7 @@ class DownloadRepositoryImplResumeTest {
     @Test
     fun `download past the auto-retry budget is dead-lettered`() = runTest {
         coEvery { downloadDao.getInterruptedResumeRows(any()) } returns listOf(
-            row("dl-4", retryCount = DownloadRepositoryImpl.MAX_AUTO_RETRY),
+            row("dl-4", retryCount = DOWNLOAD_MAX_AUTO_RETRY),
         )
 
         repository().resumeInterruptedDownloads()
@@ -129,8 +129,8 @@ class DownloadRepositoryImplResumeTest {
     @Test
     fun `a bad row does not abort the rest of the batch`() = runTest {
         coEvery { downloadDao.getInterruptedResumeRows(any()) } returns listOf(
-            row("dl-bad", status = DownloadStatus.PAUSED.name, pausedReason = DownloadRepositoryImpl.PAUSE_REASON_NETWORK),
-            row("dl-good", downloadedBytes = 200L, status = DownloadStatus.PAUSED.name, pausedReason = DownloadRepositoryImpl.PAUSE_REASON_NETWORK),
+            row("dl-bad", status = DownloadStatus.PAUSED.name, pausedReason = DownloadPauseReason.NETWORK.persistedValue),
+            row("dl-good", downloadedBytes = 200L, status = DownloadStatus.PAUSED.name, pausedReason = DownloadPauseReason.NETWORK.persistedValue),
         )
         // The bad row's reset throws (e.g. a DB transient); the good row must
         // still be processed so one failure can't strand every interrupted

@@ -72,6 +72,13 @@ class EngineErrorTest {
     }
 
     @Test
+    fun timeout_isRetryable() {
+        val error = EngineError.Timeout()
+        assertTrue(error.retryable)
+        assertEquals("Playback failed to start. Try a different player engine.", error.message)
+    }
+
+    @Test
     fun unknown_isNotRetryableAndCarriesRaw() {
         val error = EngineError.Unknown(raw = "mpv error -7")
         assertFalse(error.retryable)

@@ -4,7 +4,8 @@ import android.content.Context
 import android.util.Log
 import androidx.work.ForegroundInfo
 import androidx.work.ListenableWorker.Result
-import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.DownloadPauseReason
+import com.raulshma.jellyplay.core.data.repository.DownloadStates
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -86,10 +87,7 @@ internal object MultiConnectionDownloadStrategy {
                         val now = System.currentTimeMillis()
                         val currentDownloaded = totalDownloaded.get()
                         val currentEntity = dao.getDownloadById(downloadId)
-                        if (currentEntity == null ||
-                            currentEntity.status == DownloadStatus.PAUSED.name ||
-                            currentEntity.status == DownloadStatus.CANCELLED.name
-                        ) {
+                        if (currentEntity == null || DownloadStates.isInactive(currentEntity.status)) {
                             cancelled.set(true)
                             break
                         }
@@ -176,7 +174,7 @@ internal object MultiConnectionDownloadStrategy {
                 dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.PAUSED.name, 0L)
                 // Network interruption: mark so the reconnect auto-resume picks
                 // it up, and count toward the dead-letter budget.
-                dao.updatePausedReason(downloadId, DownloadRepositoryImpl.PAUSE_REASON_NETWORK)
+                dao.updatePausedReason(downloadId, DownloadPauseReason.NETWORK.persistedValue)
                 dao.incrementRetryCount(downloadId)
             }
             Result.retry()

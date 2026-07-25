@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.library
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -105,6 +106,7 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.feature.library.components.ThumbCard
@@ -173,6 +175,13 @@ fun LibraryScreen(
             filters.mediaTypes.isNotEmpty() ||
                 filters.genres.isNotEmpty() ||
                 filters.playedStatus != PlayedStatus.ALL
+        }
+    }
+
+    BackHandler(enabled = showFilters || hasActiveFilters) {
+        when {
+            showFilters -> viewModel.toggleShowFilters() // closes when open
+            hasActiveFilters -> viewModel.clearFilters()
         }
     }
 

@@ -117,7 +117,7 @@ fun EditorScreen(
             val saveFocusState = rememberTvFocusState()
             FilledTonalButton(
                 onClick = { viewModel.saveMetadata() },
-                enabled = uiState.isDirty && !uiState.isSaving,
+                enabled = uiState.isAdmin && uiState.isDirty && !uiState.isSaving,
                 modifier = Modifier
                     .padding(end = 8.dp)
                     .then(saveFocusState.focusModifier)

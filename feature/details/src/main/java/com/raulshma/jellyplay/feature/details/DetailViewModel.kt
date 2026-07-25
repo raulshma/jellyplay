@@ -56,8 +56,6 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
-private val TMDB_ID_REGEX = Regex("""/(\d+)(?:$|/|\?)""")
-
 /**
  * Ceiling on the number of season-episode fetches that may run concurrently
  * for the download-sheet path (which still fetches per-season on demand).
@@ -631,62 +629,13 @@ class DetailViewModel @Inject constructor(
             val seasonsPending = state.seasons.any { s -> !state.fetchedSeasonIds.contains(s.id) }
             if (seasonsPending) return@launch
             val sorted = sortedEpisodesSnapshot(state)
-            if (sorted.isEmpty()) {
+            val result = SmartPlayResolver.resolveSeries(sorted)
+            if (result == null) {
                 _uiState.update { it.copy(smartPlayTarget = null) }
                 return@launch
             }
-
-            val resumeEpisode = sorted.firstOrNull { it.hasResumeProgress() }
-            if (resumeEpisode != null) {
-                val s = resumeEpisode.seasonNumber ?: 1
-                val e = resumeEpisode.episodeNumber ?: resumeEpisode.indexNumber ?: 1
-                _uiState.update {
-                    it.copy(
-                        smartPlayTarget = DetailUiState.SmartPlayTarget(
-                            episode = resumeEpisode,
-                            label = context.getString(R.string.detail_resume_episode, s, e),
-                            startPositionTicks = resumeEpisode.playbackPositionTicks ?: 0,
-                        )
-                    )
-                }
-                return@launch
-            }
-
-            val nextEpisode = sorted.firstOrNull { !it.isPlayed }
-            if (nextEpisode != null) {
-                val s = nextEpisode.seasonNumber ?: 1
-                val e = nextEpisode.episodeNumber ?: nextEpisode.indexNumber ?: 1
-                val hasWatchedBefore = sorted
-                    .takeWhile { it.id != nextEpisode.id }
-                    .any { it.isPlayed || (it.playbackPositionTicks ?: 0L) > 0L }
-                val label = if (hasWatchedBefore) context.getString(R.string.detail_next_up_episode, s, e)
-                    else context.getString(R.string.detail_play_episode, s, e)
-                _uiState.update {
-                    it.copy(
-                        smartPlayTarget = DetailUiState.SmartPlayTarget(
-                            episode = nextEpisode,
-                            label = label,
-                            startPositionTicks = 0,
-                        )
-                    )
-                }
-                return@launch
-            }
-
-            // All episodes played — fall back to a replay of the first episode.
-            // (Seasons-pending was already ruled out by the early-return at the
-            // top of this function, so no further guard is needed here.)
-            val first = sorted.first()
-            val s = first.seasonNumber ?: 1
-            val e = first.episodeNumber ?: first.indexNumber ?: 1
             _uiState.update {
-                it.copy(
-                    smartPlayTarget = DetailUiState.SmartPlayTarget(
-                        episode = first,
-                        label = context.getString(R.string.detail_replay_episode, s, e),
-                        startPositionTicks = 0,
-                    )
-                )
+                it.copy(smartPlayTarget = result.toUiTarget())
             }
         }
     }
@@ -694,34 +643,33 @@ class DetailViewModel @Inject constructor(
     private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
         launch(Dispatchers.Default) {
             val sorted = sortedEpisodesSnapshot(_uiState.value)
-            if (sorted.isEmpty()) {
+            // The episode must still be present in the current sorted view.
+            if (sorted.none { it.id == currentEpisode.id }) {
                 _uiState.update { it.copy(smartPlayTarget = null) }
                 return@launch
             }
-            val currentIndex = sorted.indexOfFirst { it.id == currentEpisode.id }
-            if (currentIndex < 0) {
-                _uiState.update { it.copy(smartPlayTarget = null) }
-                return@launch
-            }
-            val s = currentEpisode.seasonNumber ?: 1
-            val e = currentEpisode.episodeNumber ?: currentEpisode.indexNumber ?: 1
-            val hasProgress = (currentEpisode.playbackPositionTicks ?: 0) > 0 && !currentEpisode.isPlayed
-            val label = if (hasProgress) context.getString(R.string.detail_resume_episode, s, e)
-                else context.getString(R.string.detail_play_episode, s, e)
             _uiState.update {
-                it.copy(
-                    smartPlayTarget = DetailUiState.SmartPlayTarget(
-                        episode = currentEpisode,
-                        label = label,
-                        startPositionTicks = currentEpisode.playbackPositionTicks ?: 0,
-                    )
-                )
+                it.copy(smartPlayTarget = SmartPlayResolver.resolveEpisode(currentEpisode).toUiTarget())
             }
         }
     }
 
-    private fun MediaItem.hasResumeProgress(): Boolean =
-        (playbackPositionTicks ?: 0L) > 0L && !isPlayed
+    /** Maps a pure [SmartPlayResult] to the localized UI target. */
+    private fun SmartPlayResult.toUiTarget(): DetailUiState.SmartPlayTarget {
+        val s = episode.seasonNumber ?: 1
+        val e = episode.episodeNumber ?: episode.indexNumber ?: 1
+        val label = when (label) {
+            LabelKind.RESUME_EPISODE -> context.getString(R.string.detail_resume_episode, s, e)
+            LabelKind.NEXT_UP_EPISODE -> context.getString(R.string.detail_next_up_episode, s, e)
+            LabelKind.PLAY_EPISODE -> context.getString(R.string.detail_play_episode, s, e)
+            LabelKind.REPLAY_EPISODE -> context.getString(R.string.detail_replay_episode, s, e)
+        }
+        return DetailUiState.SmartPlayTarget(
+            episode = episode,
+            label = label,
+            startPositionTicks = startPositionTicks,
+        )
+    }
 
     /**
      * Returns the flattened + playback-sorted episode list, cached keyed on
@@ -1186,7 +1134,7 @@ class DetailViewModel @Inject constructor(
             val mediaType = detail.item.mediaType
             if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@launch
 
-            val tmdbId = resolveTmdbId(detail)
+            val tmdbId = resolveTmdbId(detail) // top-level fn in TmdbIdResolver.kt
             if (tmdbId == null) return@launch
 
             // Read the already-resolved Seerr connection booleans from the
@@ -1256,22 +1204,6 @@ class DetailViewModel @Inject constructor(
         seerrDataLoaded = true
         val generation = ++seerrDataGeneration
         loadSeerrData(detail, generation)
-    }
-
-    private fun resolveTmdbId(detail: MediaDetail): Int? {
-        val providerIds = detail.providerIds
-        providerIds["tmdb"]?.toIntOrNull()?.let { return it }
-        providerIds["tmdbid"]?.toIntOrNull()?.let { return it }
-
-        for (url in detail.externalUrls) {
-            if (url.url.contains("themoviedb.org") || url.url.contains("themoviedb")) {
-                val match = TMDB_ID_REGEX.find(url.url)
-                if (match != null) {
-                    return match.groupValues[1].toIntOrNull()
-                }
-            }
-        }
-        return null
     }
 
     fun getSeerrPosterUrl(posterPath: String?): String? =

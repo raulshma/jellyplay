@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -71,6 +72,8 @@ fun HomeSearchResultsOverlay(
 ) {
     val totalItems = jellyfinResults.size + seerrResults.size + settingsResults.size
     val hasAnyResults = totalItems > 0
+
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -134,7 +137,7 @@ fun HomeSearchResultsOverlay(
                                     .then(clearAllFocusState.focusModifier)
                                     .tvFocusIndicator(clearAllFocusState, ShapeCache.smooth8)
                                     .clip(ShapeCache.smooth8)
-                                    .clickable { onClearHistory() }
+                                    .clickable { showClearHistoryDialog = true }
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
@@ -417,6 +420,17 @@ fun HomeSearchResultsOverlay(
                 }
             }
         }
+    }
+
+    if (showClearHistoryDialog) {
+        com.raulshma.jellyplay.core.ui.components.ConfirmDialog(
+            title = "Clear search history?",
+            message = "This removes all of your recent searches. This can't be undone.",
+            confirmText = "Clear",
+            dismissText = "Cancel",
+            onConfirm = onClearHistory,
+            onDismiss = { showClearHistoryDialog = false },
+        )
     }
 }
 

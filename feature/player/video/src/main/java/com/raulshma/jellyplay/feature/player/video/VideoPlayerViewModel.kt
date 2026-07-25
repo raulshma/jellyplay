@@ -14,6 +14,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.PipAction
+import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PipTransport
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
@@ -64,6 +65,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayManager
@@ -198,6 +200,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val networkMonitor: NetworkMonitor,
     private val activePlayerController: ActivePlayerController,
     val playerLifecycleManager: PlayerLifecycleManager,
+    val pipController: PipController,
     val videoMiniPlayerState: VideoMiniPlayerState,
     private val sleepTimerManager: SleepTimerManager,
     private val userMessageBus: UserMessageBus,
@@ -274,6 +277,7 @@ class VideoPlayerViewModel @Inject constructor(
         playerLifecycleManager = playerLifecycleManager,
         adaptiveBitrateManager = adaptiveBitrateManager,
         playerEngineFactory = playerEngineFactory,
+        pipController = pipController,
     )
 
     // @Volatile: written from launched coroutines (applyMediaDetail) and read
@@ -645,7 +649,7 @@ class VideoPlayerViewModel @Inject constructor(
         // Register the PiP transport bridge so the Activity can dispatch PiP
         // remote-action intents (play/pause/skip/next) to the active engine
         //. Cleared on reset() when playback ends.
-        playerLifecycleManager.pipTransport = PipTransport { action ->
+        pipController.pipTransport = PipTransport { action ->
             val engine = playerSessionManager.engine ?: return@PipTransport
             when (action) {
                 PipAction.PLAY -> engine.play()
@@ -770,7 +774,7 @@ class VideoPlayerViewModel @Inject constructor(
                 engineJob?.cancel()
                 if (engine != null) {
                     // Expose whether a "next" action is available for the PiP window.
-                    playerLifecycleManager.pipHasNext = mediaDetail?.item?.seriesId != null
+                    pipController.pipHasNext = mediaDetail?.item?.seriesId != null
                     engineJob = launch {
                         val wasPlaying = booleanArrayOf(false)
                         engine.isPlaying.collect { playing ->
@@ -921,7 +925,7 @@ class VideoPlayerViewModel @Inject constructor(
                                 syncPlayBridge.onIsPlayingChanged(isPlaying)
                                 // Mirror play state so the Activity can render the correct
                                 // play/pause icon on the PiP window.
-                                playerLifecycleManager.setPlaying(isPlaying)
+                                pipController.setPlaying(isPlaying)
                             } }
                             launch { engine.playbackState.collect { state ->
                                 val stateInt = when (state) {
@@ -1007,12 +1011,16 @@ class VideoPlayerViewModel @Inject constructor(
                                                 watchdogJob = launch {
                                                     delay(BUFFERING_TIMEOUT_MS)
                                                     if (!hasReachedReady) {
+                                                        // Route through the EngineError taxonomy rather
+                                                        // than hand-rolling a string, so the timeout
+                                                        // path matches the errorFlow path's contract.
+                                                        val error = com.raulshma.jellyplay.feature.player.video.engine.EngineError.Timeout()
                                                         _uiState.update { s -> s.copy(
-                                                            playerError = "Playback failed to start. Try a different player engine.",
+                                                            playerError = error.message,
                                                             // Start-up timeout is recoverable on the same engine
                                                             // (often a slow first-segment fetch) — offer retry too,
                                                             // not just switch-engine.
-                                                            playerErrorRetryable = true,
+                                                            playerErrorRetryable = error.retryable,
                                                             showPlaybackErrorDialog = true,
                                                             isBuffering = false,
                                                         ) }
@@ -1041,7 +1049,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         launch {
-            playerLifecycleManager.pipDismissed.collect { dismissed ->
+            pipController.pipDismissed.collect { dismissed ->
                 if (dismissed) {
                     playerSessionManager.engine?.pause()
                 }
@@ -1221,7 +1229,7 @@ class VideoPlayerViewModel @Inject constructor(
                     progressReporter.startPositionTracking()
                     progressReporter.startProgressReporting()
                     fetchMediaSegments(itemId)
-                    fetchNextEpisode(detail)
+                    fetchAdjacentEpisodes(detail)
                     loadSeriesEpisodes(detail)
                 }
             }
@@ -1299,7 +1307,18 @@ class VideoPlayerViewModel @Inject constructor(
                 aspectRatio = defaultAspectRatio,
                 trickplayEnabled = prefs.trickplayEnabled,
                 trickplayOnSeekGesture = prefs.trickplayOnSeekGesture,
-                segmentBehaviors = prefs.segmentBehaviors,
+                segmentBehaviors = run {
+                    val base = prefs.segmentBehaviors.toMutableMap()
+                    if (prefs.videoAutoSkipIntro) {
+                        base[com.raulshma.jellyplay.core.model.MediaSegmentType.INTRO] =
+                            com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
+                    }
+                    if (prefs.videoAutoSkipOutro) {
+                        base[com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO] =
+                            com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
+                    }
+                    base.toMap()
+                },
                 videoEpisodeBrowserEnabled = prefs.videoEpisodeBrowserEnabled,
                 showPlaybackMetadata = prefs.videoShowPlaybackMetadata,
                 showClock = prefs.showClockInPlayer,
@@ -1311,8 +1330,27 @@ class VideoPlayerViewModel @Inject constructor(
                 playbackMode = prefs.playbackMode,
                 videoAutoplayNext = prefs.videoAutoplayNext,
                 autoPlayCountdownSec = prefs.autoPlayCountdownSec,
+                rememberVolume = prefs.videoRememberVolume,
+                volumeLevel = prefs.videoVolumeLevel,
             ) }
             autoplayController.setEnabled(prefs.videoAutoplayNext)
+
+            // Reapply persisted volume/mute to the active engine when remembered.
+            if (prefs.videoRememberVolume) {
+                val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                if (am != null) {
+                    val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                    am.setStreamVolume(
+                        android.media.AudioManager.STREAM_MUSIC,
+                        (prefs.videoVolumeLevel * max).toInt().coerceIn(0, max),
+                        0,
+                    )
+                }
+            }
+            if (prefs.videoRememberMuted && prefs.videoMuted) {
+                _uiState.update { it.copy(isMuted = true) }
+                playerSessionManager.engine?.setMuted(true)
+            }
 
             if (allowCinemaMode && shouldAttemptCinemaMode(prefs, itemId, startPositionTicks)) {
                 val intros = mediaRepository.getIntros(itemId).getOrDefault(emptyList())
@@ -1426,7 +1464,7 @@ class VideoPlayerViewModel @Inject constructor(
             fetchMediaSegments(itemId)
             if (detail != null) {
                 kotlinx.coroutines.coroutineScope {
-                    launch { fetchNextEpisode(detail) }
+                    launch { fetchAdjacentEpisodes(detail) }
                     launch { loadSeriesEpisodes(detail) }
                 }
             }
@@ -1607,21 +1645,6 @@ class VideoPlayerViewModel @Inject constructor(
         if (ratio == AspectRatio.AUTO) {
             val detected = detectAspectRatio(_uiState.value.mediaStreams)
             _uiState.update { it.copy(detectedAspectRatio = detected) }
-        }
-    }
-
-    private fun detectAspectRatio(streams: List<MediaStream>): AspectRatio? {
-        val videoStream = streams.firstOrNull { it.type == StreamType.VIDEO } ?: return null
-        val width = videoStream.width ?: return null
-        val height = videoStream.height ?: return null
-        if (height == 0) return null
-
-        val nativeRatio = width.toFloat() / height.toFloat()
-        return when {
-            nativeRatio >= 2.3f -> AspectRatio.RATIO_21_9
-            nativeRatio >= 1.7f -> AspectRatio.RATIO_16_9
-            nativeRatio >= 1.3f -> AspectRatio.RATIO_4_3
-            else -> AspectRatio.FIT
         }
     }
 
@@ -1995,6 +2018,33 @@ class VideoPlayerViewModel @Inject constructor(
         configChangeIntent.tryEmit(Unit)
     }
 
+    fun playPreviousEpisode() {
+        val detail = mediaDetail ?: return
+        val seriesId = detail.item.seriesId ?: return
+        val seasonId = detail.item.seasonId ?: return
+        val currentItemId = playerSessionManager.sessionState.value.currentItemId ?: return
+        launch {
+            val episodes = resolveEpisodes(seriesId, seasonId)
+            val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
+            if (currentIndex <= 0) return@launch
+            val previous = episodes[currentIndex - 1]
+
+            if (syncPlayManager.isInSyncPlaySession) {
+                val group = syncPlayManager.currentGroup
+                val currentPlaylistItemId = group?.playingPlaylistItemId
+                val previousExistsInQueue = group?.playlistItemMap?.values?.contains(previous.id) == true
+                if (currentPlaylistItemId != null && previousExistsInQueue) {
+                    syncPlayBridge.sendPreviousItem(currentPlaylistItemId)
+                    return@launch
+                }
+            }
+
+            // Resume the previous episode from its saved position (mirrors the
+            // episode picker), falling back to the start when none is recorded.
+            initialize(previous.id, null, previous.playbackPositionTicks ?: 0L)
+        }
+    }
+
     fun playNextEpisode() {
         val detail = mediaDetail ?: return
         val seriesId = detail.item.seriesId ?: return
@@ -2065,6 +2115,18 @@ class VideoPlayerViewModel @Inject constructor(
             launch {
                 preferencesStore.setVideoBrightnessLevel(level)
             }
+        }
+    }
+
+    /**
+     * Persist the gesture-adjusted system volume (0..1) when "remember volume"
+     * is on. Mirrors [saveBrightness]; the engine itself doesn't store
+     * volume — the value is reapplied to STREAM_MUSIC on next-session restore.
+     */
+    fun saveVolume(normalizedLevel: Float) {
+        _uiState.update { it.copy(volumeLevel = normalizedLevel) }
+        if (_uiState.value.rememberVolume) {
+            launch { preferencesStore.setVideoVolumeLevel(normalizedLevel) }
         }
     }
 
@@ -2181,18 +2243,18 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    private fun fetchNextEpisode(currentDetail: MediaDetail) {
+    private fun fetchAdjacentEpisodes(currentDetail: MediaDetail) {
         val seriesId = currentDetail.item.seriesId ?: return
         val seasonId = currentDetail.item.seasonId ?: return
         launch {
             val episodes = resolveEpisodes(seriesId, seasonId)
             val currentItemId = playerSessionManager.sessionState.value.currentItemId
             val currentIndex = episodes.indexOfFirst { it.id == currentItemId }
-            if (currentIndex >= 0 && currentIndex + 1 < episodes.size) {
-                _uiState.update { it.copy(nextEpisode = episodes[currentIndex + 1]) }
-            } else {
-                _uiState.update { it.copy(nextEpisode = null) }
-            }
+            val next = if (currentIndex >= 0 && currentIndex + 1 < episodes.size) {
+                episodes[currentIndex + 1]
+            } else null
+            val previous = if (currentIndex > 0) episodes[currentIndex - 1] else null
+            _uiState.update { it.copy(nextEpisode = next, previousEpisode = previous) }
         }
     }
 
@@ -2466,13 +2528,10 @@ class VideoPlayerViewModel @Inject constructor(
                 }
                 if (subUrl.isNullOrBlank()) return@mapNotNull null
 
-                val mimeType = when ((stream.codec ?: "").lowercase()) {
-                    "vtt", "webvtt" -> MimeTypes.TEXT_VTT
-                    "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
-                    "ttml", "dfxp", "tt" -> MimeTypes.APPLICATION_TTML
-                    "ssa", "ass" -> MimeTypes.TEXT_SSA
-                    else -> MimeTypes.TEXT_VTT
-                }
+                // Reuse the shared SubtitleMimeMapper (one codec→mime table instead
+                // of the inline copy that previously lived here and had drifted).
+                // Cast defaults unknown codecs to VTT — the most broadly supported.
+                val mimeType = SubtitleMimeMapper.mapCodecToMime(stream.codec) ?: MimeTypes.TEXT_VTT
 
                 MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                     .setMimeType(mimeType)
@@ -2561,12 +2620,23 @@ class VideoPlayerViewModel @Inject constructor(
     fun toggleMute() {
         val engine = playerSessionManager.engine ?: return
         val currentlyMuted = _uiState.value.isMuted
-        engine.setMuted(!currentlyMuted)
-        _uiState.update { it.copy(isMuted = !currentlyMuted) }
+        val nowMuted = !currentlyMuted
+        engine.setMuted(nowMuted)
+        _uiState.update { it.copy(isMuted = nowMuted) }
+        if (preferencesStore.preferences.value.videoRememberMuted) {
+            launch { preferencesStore.setVideoMuted(nowMuted) }
+        }
     }
 
     fun setControlsVisible(visible: Boolean) {
         playerSessionManager.engine?.setPollingIntervalMs(if (visible) 250L else 1000L)
+    }
+
+    /** Toggle the autoplay-next-episode preference from the in-player Up Next card. */
+    fun setVideoAutoplayNext(enabled: Boolean) {
+        _uiState.update { it.copy(videoAutoplayNext = enabled) }
+        autoplayController.setEnabled(enabled)
+        launch { preferencesStore.setVideoAutoplayNext(enabled) }
     }
 
     suspend fun getTrickplayThumbnail(positionMs: Long): Bitmap? {
@@ -2649,6 +2719,14 @@ class VideoPlayerViewModel @Inject constructor(
         releaseVideoMediaSession()
         playerSessionManager.release()
         playerLifecycleManager.reset()
+        // Clear per-item PiP mirrors but KEEP pipTransport: it is a VM-owned
+        // bridge registered once in init and read by the Activity's PiP
+        // BroadcastReceiver. Nulling it here (as reset() does) would deaden
+        // every PiP control, because initialize() calls releaseInternals() on
+        // every item load and the transport is never re-registered. Full
+        // reset() (transport included) runs in performRelease() on teardown.
+        pipController.setPlaying(false)
+        pipController.pipHasNext = false
         trickplayManager.clear()
         trackSelectionHelper.reset()
         mediaDetail = null
@@ -2793,7 +2871,7 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.detachEngine()
         progressReporter.cancelJobs()
         playerLifecycleManager.activeCallbacks = null
-        playerLifecycleManager.requestAutoEnterPip(false)
+        pipController.requestAutoEnterPip(false)
     }
 
     private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -2819,7 +2897,7 @@ class VideoPlayerViewModel @Inject constructor(
         val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = currentPlaySessionId
         val positionTicks = getReportPositionMs() * 10_000
-        playerLifecycleManager.requestAutoEnterPip(false)
+        pipController.requestAutoEnterPip(false)
         // Unregister headphone unplug receiver
         becomingNoisyReceiver?.let {
             try { context.unregisterReceiver(it) } catch (_: Exception) {}
@@ -2828,6 +2906,9 @@ class VideoPlayerViewModel @Inject constructor(
         unregisterTransientFocusLossListener()
         sleepTimerManager.setOnFadeProgress(null)
         releaseInternals()
+        // Full teardown: clear the transport too (releaseInternals keeps it so
+        // PiP stays usable across per-item reloads while the VM is alive).
+        pipController.reset()
         castManager.releaseConsumer()
         activePlayerController.clearEngine()
         // Skip the second Stop if reportCurrentPlaybackStopped already
@@ -2869,10 +2950,9 @@ class VideoPlayerViewModel @Inject constructor(
      */
     private suspend fun invalidatePlaybackCaches(itemId: String) {
         runCatching {
-            mediaRepository.invalidateDetailCache(itemId)
-            playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId?.let { seriesId ->
-                mediaRepository.invalidateSeriesCache(seriesId)
-            }
+            // One operation owns the series-resolution rule — no need to
+            // re-derive "is this item part of a series?" at the call site.
+            mediaRepository.invalidateUserDataCaches(itemId)
         }
     }
 }

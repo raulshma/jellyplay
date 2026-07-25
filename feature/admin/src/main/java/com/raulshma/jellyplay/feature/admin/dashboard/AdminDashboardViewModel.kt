@@ -129,18 +129,36 @@ class AdminDashboardViewModel @Inject constructor(
     fun restartServer() {
         launch {
             _uiState.update { it.copy(isRestarting = true) }
-            apiClient.restartServer()
-            delay(3000)
-            _uiState.update { it.copy(isRestarting = false) }
-            loadDashboard()
+            val result = apiClient.restartServer()
+            if (result.isSuccess) {
+                delay(3000)
+                _uiState.update { it.copy(isRestarting = false, error = null) }
+                loadDashboard()
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isRestarting = false,
+                        error = "Restart failed: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                    )
+                }
+            }
         }
     }
 
     fun shutdownServer() {
         launch {
             _uiState.update { it.copy(isShuttingDown = true) }
-            apiClient.shutdownServer()
-            _uiState.update { it.copy(isShuttingDown = false) }
+            val result = apiClient.shutdownServer()
+            if (result.isSuccess) {
+                _uiState.update { it.copy(isShuttingDown = false, error = null) }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isShuttingDown = false,
+                        error = "Shutdown failed: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                    )
+                }
+            }
         }
     }
 

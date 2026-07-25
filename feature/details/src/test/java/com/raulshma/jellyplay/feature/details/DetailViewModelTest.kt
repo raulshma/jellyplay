@@ -689,11 +689,7 @@ class DetailViewModelTest {
         assertNull(callResolveTmdbId(detail))
     }
 
-    private fun callResolveTmdbId(detail: MediaDetail): Int? {
-        val fn = DetailViewModel::class.java.getDeclaredMethod("resolveTmdbId", MediaDetail::class.java)
-        fn.isAccessible = true
-        return fn.invoke(viewModel, detail) as Int?
-    }
+    private fun callResolveTmdbId(detail: MediaDetail): Int? = resolveTmdbId(detail)
 
     private fun stubSeries(seriesId: String, season: MediaItem, episodes: List<MediaItem>) {
         coEvery { mediaRepository.getMediaDetail(seriesId) } returns Result.success(

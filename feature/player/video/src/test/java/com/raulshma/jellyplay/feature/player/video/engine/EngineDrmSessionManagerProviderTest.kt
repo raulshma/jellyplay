@@ -6,7 +6,7 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 
 /**
- * Pins the DRM extension point on [EngineConfig] (recommendation #5).
+ * Pins the DRM extension point on [EngineConfig].
  *
  * DRM content isn't shipped yet; these tests guard that the hook exists, stays
  * opt-in (default `null`), and round-trips a supplied provider — so the day DRM

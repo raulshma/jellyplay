@@ -94,7 +94,7 @@ class DownloadRecoveryInitializer @Inject constructor(
                     .addTag(DownloadWorker.WORK_TAG)
                     .build()
                 WorkManager.getInstance(context).enqueueUniqueWork(
-                    "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
+                    DownloadWorker.workName(download.id),
                     ExistingWorkPolicy.KEEP,
                     workRequest,
                 )
@@ -121,7 +121,7 @@ class DownloadRecoveryInitializer @Inject constructor(
                     .addTag(DownloadWorker.WORK_TAG)
                     .build()
                 WorkManager.getInstance(context).enqueueUniqueWork(
-                    "${DownloadWorker.UNIQUE_WORK_PREFIX}${download.id}",
+                    DownloadWorker.workName(download.id),
                     ExistingWorkPolicy.KEEP,
                     workRequest,
                 )
