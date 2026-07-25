@@ -64,6 +64,13 @@ class DownloadRepositoryImpl @Inject constructor(
     private val httpClient: OkHttpClient,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
     private val json: Json,
+    /**
+     * Lazy to break the Hilt cycle: [DownloadDelegate] injects
+     * [DownloadRepository] (this impl, via its interface), and [downloadSeries]
+     * delegates the per-episode artifact bundle to it. `dagger.Lazy` defers
+     * resolution until first use, so the graph still constructs.
+     */
+    private val downloadDelegate: dagger.Lazy<com.raulshma.jellyplay.core.data.util.DownloadDelegate>,
 ) : DownloadRepository {
 
     // Caps the number of episodes processed concurrently when queueing a series
@@ -99,10 +106,11 @@ class DownloadRepositoryImpl @Inject constructor(
         episodeNumber: Int?,
         seasonNumber: Int?,
         container: String?,
+        precomputedCurrentBytes: Long?,
     ): Result<DownloadItem> = startDownloadInternal(
         mediaItemId, name, mediaType, mediaSourceId, downloadUrl,
         imageUrl, imageBlurHash, seriesId, seasonId, seriesName, seasonName,
-        episodeNumber, seasonNumber, container, precomputedCurrentBytes = null,
+        episodeNumber, seasonNumber, container, precomputedCurrentBytes,
     )
 
     private suspend fun startDownloadInternal(
@@ -419,7 +427,6 @@ class DownloadRepositoryImpl @Inject constructor(
             }
 
             val detail = mediaRepository.getMediaDetail(seriesId).getOrThrow()
-            val seriesItem = detail.item
             val imageUrl = playbackRepository.getImageUrl(seriesId, maxWidth = 300)
             val backdropUrl = playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
 
@@ -434,6 +441,17 @@ class DownloadRepositoryImpl @Inject constructor(
                 seasons
             }
 
+            // Per-episode artifact bundle (local poster/backdrop, trickplay,
+            // external subtitles, intro/outro segments, rich offline metadata)
+            // is delegated to DownloadDelegate — the same code path the single-
+            // item intake uses (DownloadIntakeImpl.start). This is deliberate:
+            // the series path must not re-implement the bundle recipe and risk
+            // silently dropping an artifact (see DownloadIntake kdoc). Only the
+            // series/season metadata + budget guard + concurrency permit live
+            // here; everything else is DownloadDelegate.executeDownload.
+            val delegate = downloadDelegate.get()
+            val qualityMaxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
+            val budgetHint = if (batchCurrentBytes >= 0) batchCurrentBytes else null
             val downloadIds = mutableListOf<String>()
 
             for (season in targetSeasons) {
@@ -446,142 +464,42 @@ class DownloadRepositoryImpl @Inject constructor(
                 } else {
                     allEpisodes
                 }
-                val offlineEntities = mutableListOf<OfflineMediaEntity>()
 
                 val episodeResults = coroutineScope {
                     episodes.map { episode ->
                         async {
                             downloadPermits.withPermit {
-                            try {
-                                val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
-                                val source = episodeDetail?.mediaSources?.firstOrNull()
-                                // Apply the user's download quality preference by passing the
-                                // corresponding max bitrate to the stream URL builder. ORIGINAL
-                                // leaves the stream unbounded so the server picks the best
-                                // direct-playable source.
-                                val qualityMaxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
-                                val streamUrl = if (source != null) {
-                                    playbackRepository.getStreamUrl(
-                                        itemId = episode.id,
-                                        mediaSourceId = source.id,
-                                        maxBitrate = qualityMaxBitrate,
-                                    )
-                                } else {
-                                    playbackRepository.getStreamUrl(
-                                        itemId = episode.id,
-                                        mediaSourceId = episode.id,
-                                        maxBitrate = qualityMaxBitrate,
-                                    )
-                                }
-
-                                if (streamUrl.isNotBlank()) {
-                                    val epImageUrl = playbackRepository.getImageUrl(episode.id, maxWidth = 300)
-                                    // Use the rich MediaDetail mapper when available so
-                                    // episodes persist cast/studios/criticRating/tagline;
-                                    // otherwise fall back to the item-level mapper.
-                                    val offlineEntity = if (episodeDetail != null) {
-                                        episodeDetail.toOfflineMediaEntity(epImageUrl, null)
-                                    } else {
-                                        episode.toOfflineMediaEntity(epImageUrl, null)
+                                try {
+                                    val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
+                                    val request = episodeDetail?.let {
+                                        delegate.prepareDownloadRequest(it, qualityMaxBitrate)
                                     }
-
-                                    val download = startDownloadInternal(
-                                        mediaItemId = episode.id,
-                                        name = episode.name,
-                                        mediaType = MediaType.EPISODE.name,
-                                        mediaSourceId = source?.id ?: episode.id,
-                                        downloadUrl = streamUrl,
-                                        imageUrl = epImageUrl,
-                                        imageBlurHash = episode.blurHashes.primary,
-                                        seriesId = seriesId,
-                                        seasonId = season.id,
-                                        seriesName = seriesItem.name,
-                                        seasonName = season.name,
-                                        episodeNumber = episode.episodeNumber,
-                                        seasonNumber = episode.seasonNumber,
-                                        container = source?.container,
-                                        precomputedCurrentBytes = if (batchCurrentBytes >= 0) batchCurrentBytes else null,
-                                    ).getOrNull()
-
-                                    if (download != null) {
-                                        preloadImageToCache(epImageUrl)
-                                        // Download the episode poster + backdrop locally so the
-                                        // offline series-episode cards render them (otherwise only
-                                        // blurHash shows). Fall back to the remote URL on failure.
-                                        // Filenames are keyed by episode.id so sibling episodes in the
-                                        // shared downloads dir don't overwrite each other.
-                                        var localEpPoster = epImageUrl
-                                        var localEpBackdrop: String? = null
-                                        try {
-                                            val epParentDir = File(download.downloadPath).parentFile
-                                            if (epParentDir != null) {
-                                                downloadImageToDisk(
-                                                    episode.id, "Primary", 300,
-                                                    epParentDir, DownloadArtifacts.posterFile(episode.id),
-                                                )?.let { localEpPoster = it }
-                                                localEpBackdrop = downloadImageToDisk(
-                                                    episode.id, "Backdrop", 1280,
-                                                    epParentDir, DownloadArtifacts.backdropFile(episode.id),
-                                                )
-                                            }
-                                        } catch (e: Exception) {
-                                            Log.d(TAG, "Failed to download offline images for episode ${episode.id}", e)
-                                        }
-                                        val finalEntity = offlineEntity.copy(
-                                            posterPath = localEpPoster,
-                                            backdropPath = localEpBackdrop,
-                                        )
-                                        enqueueDownloadWorker(download.id)
-                                        source?.trickplayInfo?.let { info ->
-                                            try {
-                                                downloadTrickplayData(episode.id, info, download.downloadPath)
-                                            } catch (e: Exception) { Log.d(TAG, "Failed to download trickplay data", e) }
-                                        }
-                                        // Bundle external subtitles + intro/outro segments for offline use.
-                                        if (source != null) {
-                                            try {
-                                                downloadExternalSubtitles(episode.id, source.id, source.mediaStreams, download.downloadPath)
-                                            } catch (e: Exception) { Log.d(TAG, "Failed to download external subtitles", e) }
-                                        }
-                                        try {
-                                            downloadMediaSegments(episode.id, download.downloadPath)
-                                        } catch (e: Exception) { Log.d(TAG, "Failed to download media segments", e) }
-                                        Pair(finalEntity, download.id)
+                                    if (request == null) {
+                                        null
                                     } else {
-                                        Pair(offlineEntity, null)
+                                        val result = delegate.executeDownload(request, budgetHint)
+                                        result.downloadItem?.id
                                     }
-                                } else {
+                                } catch (ce: CancellationException) {
+                                    // Preserve structured concurrency: if the parent
+                                    // scope (e.g. user navigated away) is cancelled,
+                                    // the cancellation must propagate instead of
+                                    // being silently turned into a null result.
+                                    throw ce
+                                } catch (e: Exception) {
+                                    // Surface the per-episode failure so the user
+                                    // has a clue why an episode is missing from the
+                                    // queue. Future: aggregate a failure count and
+                                    // expose it through the Result/uiState.
+                                    Log.w(TAG, "Failed to queue episode ${episode.id} (${episode.name})", e)
                                     null
                                 }
-                            } catch (ce: CancellationException) {
-                                // Preserve structured concurrency: if the parent
-                                // scope (e.g. user navigated away) is cancelled,
-                                // the cancellation must propagate instead of
-                                // being silently turned into a null result.
-                                throw ce
-                            } catch (e: Exception) {
-                                // Surface the per-episode failure so the user
-                                // has a clue why an episode is missing from the
-                                // queue. Future: aggregate a failure count and
-                                // expose it through the Result/uiState.
-                                Log.w(TAG, "Failed to queue episode ${episode.id} (${episode.name})", e)
-                                null
-                            }
                             }
                         }
                     }.awaitAll()
                 }
 
-                for (result in episodeResults) {
-                    if (result != null) {
-                        offlineEntities.add(result.first)
-                        result.second?.let { downloadIds.add(it) }
-                    }
-                }
-
-                if (offlineEntities.isNotEmpty()) {
-                    offlineMediaDao.upsertAll(offlineEntities)
-                }
+                episodeResults.filterNotNull().forEach { downloadIds.add(it) }
             }
 
             downloadIds

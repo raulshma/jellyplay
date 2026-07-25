@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
@@ -52,7 +53,6 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isMusicTrack
@@ -189,6 +189,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
+    private val offlinePlaybackFacade: OfflinePlaybackFacade,
     private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
     private val preferencesStore: UserPreferencesStore,
     private val sessionManager: PlaybackSessionManager,
@@ -538,7 +539,7 @@ class VideoPlayerViewModel @Inject constructor(
             // Mark the offline copy as fully watched so its row shows the
             // watched state. No-op for non-downloaded items.
             launch {
-                offlineRepository.updatePlaybackProgress(itemId, positionTicks = null, percentage = 100.0, isPlayed = true)
+                offlinePlaybackFacade.recordPlayed(itemId)
             }
         },
         onPositionPersisted = { positionMs -> persistPlaybackPosition(positionMs, force = false) },
@@ -589,8 +590,7 @@ class VideoPlayerViewModel @Inject constructor(
         if (!cachedPreferences.smartDownloadsEnabled) return
         if (_uiState.value.duration < MIN_DURATION_FOR_SMART_DELETE_MS) return
         launch {
-            val download = downloadRepository.getDownloadByMediaItemId(itemId) ?: return@launch
-            downloadRepository.deleteDownload(download.id)
+            if (!offlinePlaybackFacade.deleteDownload(itemId)) return@launch
             userMessageBus.info(
                 com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
                     com.raulshma.jellyplay.core.ui.R.string.msg_smart_download_deleted,
@@ -1120,10 +1120,7 @@ class VideoPlayerViewModel @Inject constructor(
      */
     internal suspend fun resolveOfflineResumeTicks(itemId: String, startPositionTicks: Long): Long {
         if (startPositionTicks != 0L) return startPositionTicks
-        val download = downloadRepository.getDownloadByMediaItemId(itemId)
-        if (download?.status != com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) return 0L
-        return offlineRepository.getOfflineItem(itemId)?.playbackPositionTicks
-            ?.takeIf { it > 0L } ?: 0L
+        return offlinePlaybackFacade.getResumePositionTicks(itemId)
     }
 
     /**
@@ -1147,7 +1144,7 @@ class VideoPlayerViewModel @Inject constructor(
             (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
         } else 0.0
         launch {
-            offlineRepository.updatePlaybackProgress(itemId, positionTicks, percentage, isPlayed = false)
+            offlinePlaybackFacade.recordProgress(itemId, positionTicks, percentage, isPlayed = false)
         }
     }
 
@@ -1402,8 +1399,7 @@ class VideoPlayerViewModel @Inject constructor(
             }
 
             source?.trickplayInfo?.let { info ->
-                val download = downloadRepository.getDownloadByMediaItemId(itemId)
-                val downloadPath = download?.downloadPath
+                val downloadPath = offlinePlaybackFacade.getDownloadPath(itemId)
                 if (downloadPath != null) {
                     val cacheDir = java.io.File(java.io.File(downloadPath).parentFile, "trickplay")
                     trickplayManager.initializeWithCache(itemId, info, cacheDir)
@@ -1414,8 +1410,7 @@ class VideoPlayerViewModel @Inject constructor(
             }
 
             if (source?.trickplayInfo == null) {
-                val download = downloadRepository.getDownloadByMediaItemId(itemId)
-                val downloadPath = download?.downloadPath
+                val downloadPath = offlinePlaybackFacade.getDownloadPath(itemId)
                 if (downloadPath != null) {
                     val localInfo = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
                         .loadLocalTrickplayInfo(downloadPath)
@@ -1503,7 +1498,7 @@ class VideoPlayerViewModel @Inject constructor(
      */
     private suspend fun resolveSeasons(seriesId: String): List<JellyfinMediaItem> =
         if (playerSessionManager.sessionState.value.isOffline) {
-            offlineRepository.getSeasonsForSeries(seriesId).first().map { it.toMediaItem() }
+            offlinePlaybackFacade.resolveSeasons(seriesId)
         } else {
             mediaRepository.getSeasons(seriesId).getOrDefault(emptyList())
         }
@@ -1516,7 +1511,7 @@ class VideoPlayerViewModel @Inject constructor(
      */
     private suspend fun resolveEpisodes(seriesId: String, seasonId: String): List<JellyfinMediaItem> =
         if (playerSessionManager.sessionState.value.isOffline) {
-            offlineRepository.getEpisodesForSeason(seasonId).first().map { it.toMediaItem() }
+            offlinePlaybackFacade.resolveEpisodes(seasonId)
         } else {
             mediaRepository.getEpisodes(seriesId, seasonId).getOrDefault(emptyList())
         }
@@ -2233,7 +2228,7 @@ class VideoPlayerViewModel @Inject constructor(
         launch {
             // Offline-first: prefer segments bundled with the download so skip
             // controls (intro/outro/recap) work without a server round-trip.
-            val local = downloadRepository.loadLocalSegments(itemId)
+            val local = offlinePlaybackFacade.loadSegments(itemId)
             if (local != null) {
                 _uiState.update { it.copy(segments = local) }
                 return@launch

@@ -199,7 +199,7 @@ fun SeriesDownloadSheet(
                     seasonEpisodes.count { it.id in downloadedEpisodeIds }
                 }
                 val selectedInSeason = selection.selectedForSeason(season.id)
-                val triState = selection.triStateForSeason(season.id, downloadedInSeason)
+                val triState = selection.triStateForSeason(season.id)
 
                 fun onSeasonCheckboxToggle() {
                     selection.toggleSeason(season.id)

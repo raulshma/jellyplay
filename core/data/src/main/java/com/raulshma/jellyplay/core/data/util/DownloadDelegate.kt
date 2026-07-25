@@ -79,7 +79,16 @@ class DownloadDelegate @Inject constructor(
         )
     }
 
-    suspend fun executeDownload(request: DownloadRequest): DownloadResult {
+    suspend fun executeDownload(
+        request: DownloadRequest,
+        /**
+         * Pre-fetched `SUM(downloadedBytes)` to skip the per-call budget query.
+         * Series batches pass the value computed once up-front (see
+         * `DownloadRepositoryImpl.downloadSeries`); single-item callers leave
+         * this null and let `startDownload` query the DAO normally.
+         */
+        precomputedCurrentBytes: Long? = null,
+    ): DownloadResult {
         // For episodes, propagate the parent series/season ids so the downloads
         // row is linked to its series. Without these, deleteOfflineSeries
         // (WHERE seriesId = :seriesId) finds no rows and leaves episode files +
@@ -102,6 +111,7 @@ class DownloadDelegate @Inject constructor(
             seasonName = if (isEpisode && detailItem != null) detailItem.seasonName else null,
             episodeNumber = if (isEpisode && detailItem != null) detailItem.episodeNumber else null,
             seasonNumber = if (isEpisode && detailItem != null) detailItem.seasonNumber else null,
+            precomputedCurrentBytes = precomputedCurrentBytes,
         )
         return result.fold(
             onSuccess = { downloadItem ->

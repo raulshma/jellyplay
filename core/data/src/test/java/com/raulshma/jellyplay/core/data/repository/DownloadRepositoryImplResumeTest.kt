@@ -9,7 +9,9 @@ import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.InterruptedResumeRow
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import dagger.Lazy
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.UserPreferences
 import io.mockk.coEvery
@@ -51,6 +53,9 @@ class DownloadRepositoryImplResumeTest {
     private val httpClient: OkHttpClient = mockk()
     private val preferencesStore: UserPreferencesStore = mockk()
     private val json: Json = Json
+    // downloadSeries delegates the per-episode bundle here; the resume tests
+    // never exercise it, so a relaxed mock behind a dagger.Lazy is sufficient.
+    private val downloadDelegate: Lazy<DownloadDelegate> = mockk(relaxed = true)
 
     private fun repository() = DownloadRepositoryImpl(
         context = context,
@@ -62,6 +67,7 @@ class DownloadRepositoryImplResumeTest {
         httpClient = httpClient,
         preferencesStore = preferencesStore,
         json = json,
+        downloadDelegate = downloadDelegate,
     )
 
     @Before

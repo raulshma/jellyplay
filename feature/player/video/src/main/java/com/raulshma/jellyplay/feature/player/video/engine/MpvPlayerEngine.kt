@@ -672,8 +672,14 @@ class MpvPlayerEngine(
                     // The boost overlay rides on the EqualizerHelper's
                     // priority-0 Equalizer; attach + enable it whenever
                     // boost is on so the overlay has somewhere to land.
+                    // See [EqualizerHelper.shouldEnableFor].
                     equalizerHelper.attach(sid)
-                    equalizerHelper.setEnabled(newAudioFx.dialogueBoostEnabled)
+                    equalizerHelper.setEnabled(
+                        EqualizerHelper.shouldEnableFor(
+                            equalizerEnabled = newAudioFx.equalizerEnabled,
+                            dialogueBoostEnabled = newAudioFx.dialogueBoostEnabled,
+                        )
+                    )
                     dialogueBoost.attach(sid)
                     dialogueBoost.setStrength(newAudioFx.dialogueBoostStrength)
                     dialogueBoost.setEnabled(newAudioFx.dialogueBoostEnabled)

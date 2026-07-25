@@ -143,5 +143,23 @@ class EqualizerHelper {
 
     companion object {
         private const val TAG = "EqualizerHelper"
+
+        /**
+         * The single source of truth for the equalizer / dialogue-boost
+         * co-enabling rule.
+         *
+         * Android exposes exactly one priority-0 `Equalizer` per audio
+         * session, so the user-facing EQ and [DialogueBoostHelper] share it
+         * (the boost overlay is layered on top via [setBandOffsets]). The
+         * underlying effect must stay **enabled while EITHER is on**;
+         * when both are off, the engine is free to disable it so the system
+         * effect is not held open needlessly.
+         *
+         * Centralising this predicate here stops the rule from drifting
+         * across the three apply sites that previously each re-derived it
+         * (`AudioEffectsProcessor`, `AudioEffectChain`, `MpvPlayerEngine`).
+         */
+        fun shouldEnableFor(equalizerEnabled: Boolean, dialogueBoostEnabled: Boolean): Boolean =
+            equalizerEnabled || dialogueBoostEnabled
     }
 }
