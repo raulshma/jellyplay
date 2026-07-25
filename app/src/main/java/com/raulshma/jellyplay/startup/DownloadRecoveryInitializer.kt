@@ -2,18 +2,11 @@ package com.raulshma.jellyplay.startup
 
 import android.content.Context
 import android.util.Log
-import androidx.work.BackoffPolicy
-import androidx.work.Data
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
-import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
-import com.raulshma.jellyplay.core.data.worker.DownloadWorker
+import com.raulshma.jellyplay.core.data.repository.DownloadEnqueuer
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /**
@@ -28,6 +21,7 @@ import javax.inject.Inject
 class DownloadRecoveryInitializer @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadDao: DownloadDao,
+    private val downloadEnqueuer: DownloadEnqueuer,
 ) {
     suspend fun recover() {
         // Must run first: reconciliation resets truncated/missing completed
@@ -80,24 +74,13 @@ class DownloadRecoveryInitializer @Inject constructor(
             // worker's setForeground call.
             val pending = downloadDao.getRecoveryRows(DownloadStatus.PENDING.name)
             for (download in pending) {
-                val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-                    .setBackoffCriteria(
-                        BackoffPolicy.EXPONENTIAL,
-                        DownloadRepositoryImpl.DOWNLOAD_BACKOFF_DELAY_MS,
-                        TimeUnit.MILLISECONDS,
-                    )
-                    .setInputData(
-                        Data.Builder()
-                            .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
-                            .build()
-                    )
-                    .addTag(DownloadWorker.WORK_TAG)
-                    .build()
-                WorkManager.getInstance(context).enqueueUniqueWork(
-                    DownloadWorker.workName(download.id),
-                    ExistingWorkPolicy.KEEP,
-                    workRequest,
-                )
+                // honorScheduleAndNetwork = false: these rows were already
+                // PENDING before the restart (so they had cleared the schedule
+                // gate once), and a process restart must not strand downloads
+                // by re-applying the gate. KEEP ensures an in-flight worker is
+                // never cancelled. The shared backoff/tag/unique-work recipe
+                // lives in DownloadEnqueuer.
+                downloadEnqueuer.enqueue(download.id, honorScheduleAndNetwork = false)
             }
             // Both DOWNLOADING and QUEUED rows belong to workers that were
             // interrupted mid-flight (transferring or waiting on a concurrency
@@ -107,24 +90,7 @@ class DownloadRecoveryInitializer @Inject constructor(
                 downloadDao.getRecoveryRows(DownloadStatus.QUEUED.name)
             for (download in stale) {
                 downloadDao.updateProgress(download.id, download.downloadedBytes, DownloadStatus.PENDING.name)
-                val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
-                    .setBackoffCriteria(
-                        BackoffPolicy.EXPONENTIAL,
-                        DownloadRepositoryImpl.DOWNLOAD_BACKOFF_DELAY_MS,
-                        TimeUnit.MILLISECONDS,
-                    )
-                    .setInputData(
-                        Data.Builder()
-                            .putString(DownloadWorker.KEY_DOWNLOAD_ID, download.id)
-                            .build()
-                    )
-                    .addTag(DownloadWorker.WORK_TAG)
-                    .build()
-                WorkManager.getInstance(context).enqueueUniqueWork(
-                    DownloadWorker.workName(download.id),
-                    ExistingWorkPolicy.KEEP,
-                    workRequest,
-                )
+                downloadEnqueuer.enqueue(download.id, honorScheduleAndNetwork = false)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to recover pending downloads", e)

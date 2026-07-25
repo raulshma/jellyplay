@@ -71,6 +71,8 @@ class DownloadRepositoryImpl @Inject constructor(
      * resolution until first use, so the graph still constructs.
      */
     private val downloadDelegate: dagger.Lazy<com.raulshma.jellyplay.core.data.util.DownloadDelegate>,
+    private val storagePolicy: StoragePolicy,
+    private val downloadEnqueuer: DownloadEnqueuer,
 ) : DownloadRepository {
 
     // Caps the number of episodes processed concurrently when queueing a series
@@ -148,20 +150,9 @@ class DownloadRepositoryImpl @Inject constructor(
         }
 
         val prefs = preferencesStore.preferences.first()
-        val maxBytes = prefs.maxCacheSizeMb.toLong() * 1024 * 1024
-        // Enforce the user-facing download storage cap (in GB). 0 = unlimited.
-        val maxBytesFromGb = prefs.maxDownloadStorageGb.toLong() * 1024L * 1024L * 1024L
-        // Compute the current downloaded bytes once and compare against both
-        // caps (was two identical SUM queries back-to-back when both caps set).
-        if (maxBytes > 0 || maxBytesFromGb > 0) {
-            val currentBytes = precomputedCurrentBytes ?: downloadDao.getTotalDownloadedBytes()
-            if (maxBytes > 0 && currentBytes >= maxBytes) {
-                throw IllegalStateException("Download limit reached (${prefs.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.")
-            }
-            if (maxBytesFromGb > 0 && currentBytes >= maxBytesFromGb) {
-                throw IllegalStateException("Download storage limit reached (${prefs.maxDownloadStorageGb} GB). Free up space in Settings › Storage or increase the limit.")
-            }
-        }
+        // Storage cap (MB + GB): single owner is StoragePolicy. Previously
+        // duplicated here and in downloadSeries; the two could drift.
+        storagePolicy.enforce(precomputedCurrentBytes = precomputedCurrentBytes)
 
         val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
         val dirType = if (isAudioType) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
@@ -410,21 +401,12 @@ class DownloadRepositoryImpl @Inject constructor(
             // The storage cap only needs to be evaluated once for the whole
             // enqueue batch: no bytes are actually downloaded here (the
             // DownloadWorker runs later), so every per-episode SUM(downloadedBytes)
-            // would return an identical value. Computing it up-front turns N
-            // redundant aggregate queries into one and fails fast when over cap.
-            val maxBytesBatch = prefs.maxCacheSizeMb.toLong() * 1024 * 1024
-            val maxBytesFromGbBatch = prefs.maxDownloadStorageGb.toLong() * 1024L * 1024L * 1024L
-            val batchCurrentBytes = if (maxBytesBatch > 0 || maxBytesFromGbBatch > 0) {
-                downloadDao.getTotalDownloadedBytes()
-            } else -1L
-            if (batchCurrentBytes >= 0) {
-                if (maxBytesBatch > 0 && batchCurrentBytes >= maxBytesBatch) {
-                    throw IllegalStateException("Download limit reached (${prefs.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.")
-                }
-                if (maxBytesFromGbBatch > 0 && batchCurrentBytes >= maxBytesFromGbBatch) {
-                    throw IllegalStateException("Download storage limit reached (${prefs.maxDownloadStorageGb} GB). Free up space in Settings › Storage or increase the limit.")
-                }
-            }
+            // would return an identical value. StoragePolicy.enforce reads the
+            // current bytes once (via its injected provider) and compares
+            // against both ceilings. The returned currentBytes is handed to
+            // each per-episode start as a precomputed hint so the cap check
+            // inside startDownload skips its own aggregate query.
+            val batchCurrentBytes = storagePolicy.enforce()
 
             val detail = mediaRepository.getMediaDetail(seriesId).getOrThrow()
             val imageUrl = playbackRepository.getImageUrl(seriesId, maxWidth = 300)
@@ -739,63 +721,10 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     private fun enqueueDownloadWorker(downloadId: String) {
-        val prefs = preferencesStore.preferences.value
-        val wifiOnly = prefs.wifiOnlyDownloads
-        val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
-        val constraintsBuilder = Constraints.Builder()
-            .setRequiredNetworkType(networkType)
-
-        var initialDelayMs = 0L
-        if (prefs.downloadScheduleEnabled) {
-            val now = java.util.Calendar.getInstance()
-            val currentHour = now.get(java.util.Calendar.HOUR_OF_DAY)
-            val window = prefs.downloadScheduleWindow
-            val start = window.startHour
-            val end = window.endHour
-            val inWindow = if (start <= end) {
-                currentHour in start until end
-            } else {
-                currentHour >= start || currentHour < end
-            }
-            if (!inWindow) {
-                val target = now.clone() as java.util.Calendar
-                target.set(java.util.Calendar.HOUR_OF_DAY, start)
-                target.set(java.util.Calendar.MINUTE, 0)
-                target.set(java.util.Calendar.SECOND, 0)
-                target.set(java.util.Calendar.MILLISECOND, 0)
-                if (target.before(now)) target.add(java.util.Calendar.DAY_OF_MONTH, 1)
-                initialDelayMs = target.timeInMillis - now.timeInMillis
-            }
-            if (window.wifiOnly) {
-                constraintsBuilder.setRequiredNetworkType(NetworkType.UNMETERED)
-            }
-        }
-
-        val workRequestBuilder = OneTimeWorkRequestBuilder<DownloadWorker>()
-            .setConstraints(constraintsBuilder.build())
-            // Explicit exponential backoff so a flaky server returning 503/429
-            // is not hammered by all concurrent downloads retrying as fast as
-            // WorkManager allows. 30s base multiplies load far less than the
-            // implicit default while still recovering promptly.
-            .setBackoffCriteria(
-                androidx.work.BackoffPolicy.EXPONENTIAL,
-                DOWNLOAD_BACKOFF_DELAY_MS,
-                java.util.concurrent.TimeUnit.MILLISECONDS,
-            )
-            .setInputData(
-                Data.Builder()
-                    .putString(DownloadWorker.KEY_DOWNLOAD_ID, downloadId)
-                    .build()
-            )
-            .addTag(DownloadWorker.WORK_TAG)
-        if (initialDelayMs > 0) {
-            workRequestBuilder.setInitialDelay(initialDelayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-        }
-            WorkManager.getInstance(context).enqueueUniqueWork(
-            DownloadWorker.workName(downloadId),
-            ExistingWorkPolicy.KEEP,
-            workRequestBuilder.build(),
-        )
+        // Runtime enqueue honours the user's wifi-only + schedule-window
+        // preferences (cold-start recovery in DownloadRecoveryInitializer calls
+        // DownloadEnqueuer directly with honorScheduleAndNetwork = false).
+        downloadEnqueuer.enqueue(downloadId)
     }
 
     private fun preloadImageToCache(url: String?) {
