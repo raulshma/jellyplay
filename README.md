@@ -565,7 +565,6 @@ Other open-source projects in the Jellyfin ecosystem:
 | External integrations | Jellyfin, Jellyseerr/Overseerr, Radarr, Sonarr, LRCLIB, TMDB, Google Cast, Sentry |
 | Min SDK | 28 (Android 9.0) |
 | Target/Compile SDK | 37 |
-| Current version | v0.8.3 (Active Beta) |
 
 ---
 
