@@ -59,17 +59,17 @@ import com.composables.icons.tabler.outline.*
 
 private val THEME_HIGHLIGHT_IDS = setOf("theme_mode", "theme_scheduler")
 
-private enum class AppearanceSettingsDialog {
-    None,
-    ThemeModePicker,
-    ContinueWatchingClickPicker,
-    NextUpMaxDaysPicker,
-    DateFormatPicker,
-    FontScalePicker,
-    ScheduledStartPicker,
-    ScheduledEndPicker,
-    ColorBlindModePicker,
-    HandModePicker,
+sealed class AppearanceSettingsDialog {
+    object None : AppearanceSettingsDialog()
+    object ThemeModePicker : AppearanceSettingsDialog()
+    object ContinueWatchingClickPicker : AppearanceSettingsDialog()
+    object NextUpMaxDaysPicker : AppearanceSettingsDialog()
+    object DateFormatPicker : AppearanceSettingsDialog()
+    object FontScalePicker : AppearanceSettingsDialog()
+    object ScheduledStartPicker : AppearanceSettingsDialog()
+    object ScheduledEndPicker : AppearanceSettingsDialog()
+    object ColorBlindModePicker : AppearanceSettingsDialog()
+    object HandModePicker : AppearanceSettingsDialog()
 }
 private val APPEARANCE_LIBRARY_GROUP_IDS = setOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings")
 private val PERFORMANCE_GROUP_IDS = setOf("performance_mode", "reduce_motion")
@@ -144,7 +144,7 @@ fun AppearanceSettingsScreen(
 
     var showResetDialog by remember { mutableStateOf(false) }
     var showBlueLightStrengthSheet by remember { mutableStateOf(false) }
-    var activeDialog by remember { mutableStateOf(AppearanceSettingsDialog.None) }
+    var activeDialog by remember { mutableStateOf<AppearanceSettingsDialog>(AppearanceSettingsDialog.None) }
 
     JellyPlayScreenScaffold(
         title = stringResource(R.string.settings_appearance_title),

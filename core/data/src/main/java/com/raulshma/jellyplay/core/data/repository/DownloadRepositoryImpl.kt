@@ -259,18 +259,12 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     /**
-     * The unique-work name for a download. Delegates to [DownloadWorker.workName]
-     * so the prefix string has exactly one home.
-     */
-    private fun workName(downloadId: String): String = DownloadWorker.workName(downloadId)
-
-    /**
      * Cancels the unique WorkManager work associated with [downloadId], if any. Safe to call
      * even when no work is registered — WorkManager no-ops in that case.
      */
     private fun cancelWorkForDownload(downloadId: String) {
         try {
-            WorkManager.getInstance(context).cancelUniqueWork(workName(downloadId))
+            WorkManager.getInstance(context).cancelUniqueWork(DownloadWorker.workName(downloadId))
         } catch (e: Exception) {
             // WorkManager may not be initialised in some instrumented-test or fresh-install
             // edge cases. Log and continue — file cleanup is still valuable on its own.
@@ -879,8 +873,8 @@ class DownloadRepositoryImpl @Inject constructor(
         if (initialDelayMs > 0) {
             workRequestBuilder.setInitialDelay(initialDelayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
         }
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            workName(downloadId),
+            WorkManager.getInstance(context).enqueueUniqueWork(
+            DownloadWorker.workName(downloadId),
             ExistingWorkPolicy.KEEP,
             workRequestBuilder.build(),
         )
