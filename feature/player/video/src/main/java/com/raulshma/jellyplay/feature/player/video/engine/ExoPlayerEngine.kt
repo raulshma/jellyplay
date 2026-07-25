@@ -224,13 +224,10 @@ class ExoPlayerEngine(
     private val replayGainProcessor = ReplayGainAudioProcessor()
 
     /**
-     * Collapses the prior 9-helper + 3-processor sprawl behind a single
+     * Collapses the prior 7-helper + 3-processor sprawl behind a single
      * attach/apply/release surface. Owns the bookkeeping
      * (`audioEffectsAttached`, `lastAudioEffectsConfig`,
-     * `lastAppliedReverbPreset`) that used to live on the engine. The two
-     * legacy dead helpers (`AudioNormalizationHelper`, `ChannelMixHelper`)
-     * that existed only to be configured-then-disabled every tick are gone
-     * — their load-bearing work is done by the in-sink processors.
+     * `lastAppliedReverbPreset`) that used to live on the engine.
      */
     private val audioEffectChain = AudioEffectChain(
         dialogueBoost = dialogueBoost,

@@ -2,101 +2,84 @@ package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.ui.components.MultiEpisodeSelection
 
 /**
  * Mutable selection state for the offline series **delete** sheet, hoisted out
- * of the [DeleteSeriesSheet] composable. The delete counterpart of the online
- * [com.raulshma.jellyplay.feature.details.SeriesDownloadSelection].
+ * of the [DeleteSeriesSheet] composable.
  *
- * Unlike the download selection, every episode in the map is already
- * downloaded, so the "selectable" set is simply the full episode list for each
- * season — there is no `downloadedEpisodeIds` exclusion and no lazy-load
- * machinery (the [OfflineSeriesViewModel] pre-loads every season's episodes).
- *
- * Owns the per-season selected-episode-id sets plus the toggle/selection
- * operations (select-all, deselect-all, toggle-season, toggle-episode). The
- * sheet reads [selectedEpisodeIds], [totalSelectedCount], [totalSelectedBytes],
- * [allSelected], and [triStateForSeason] and delegates mutations here.
- *
- * @param episodes keyed by season id; used to resolve sizes for the byte totals
- *   and to drive the select-all/toggle-season logic.
+ * Thin wrapper over [MultiEpisodeSelection]. Every episode in the map is
+ * already downloaded, so the selectability rule is simply the full episode
+ * list per season — there is no `downloadedEpisodeIds` exclusion and no
+ * lazy-load machinery (the [OfflineSeriesViewModel] pre-loads every season's
+ * episodes). The byte-total ([totalSelectedBytes]) is the one delete-specific
+ * derived value the base class does not own.
  */
 @Stable
 internal class SeriesDeleteSelection(
-    private val episodes: Map<String, List<OfflineMediaItem>>,
+    episodes: Map<String, List<OfflineMediaItem>>,
 ) {
-    var selectedEpisodeIds: Map<String, Set<String>> by mutableStateOf(
-        episodes.keys.associateWith { emptySet() },
-    )
+    /**
+     * Caller-owned episode map; refreshes selectability when it changes.
+     * Write-private: [rememberSeriesDeleteSelection] keys `remember` on this
+     * value (episodes arrive pre-loaded once), so the field is never assigned
+     * after construction — kept as `mutableStateOf` only so Compose observes
+     * reads inside [syncSelectability].
+     */
+    var episodes: Map<String, List<OfflineMediaItem>> by mutableStateOf(episodes)
         private set
 
-    /** Every downloadable episode id across all seasons (all are deletable). */
-    val allSelectableIds: Set<String> by derivedStateOf {
-        episodes.values.flatten().map { it.id }.toSet()
+    private val selection = MultiEpisodeSelection(episodes.keys)
+
+    private val episodeById: Map<String, OfflineMediaItem>
+        get() = episodes.values.flatten().associateBy { it.id }
+
+    private fun syncSelectability() {
+        selection.selectableIdsBySeason = episodes.mapValues { (_, list) -> list.map { it.id }.toSet() }
     }
 
-    /** Flat id → episode lookup so byte totals can be summed without re-searching. */
-    private val episodeById: Map<String, OfflineMediaItem> by derivedStateOf {
-        episodes.values.flatten().associateBy { it.id }
-    }
+    val selectedEpisodeIds: Map<String, Set<String>>
+        get() { syncSelectability(); return selection.selectedEpisodeIds }
 
-    val totalSelectedCount: Int by derivedStateOf { selectedEpisodeIds.values.sumOf { it.size } }
+    val allSelectableIds: Set<String>
+        get() { syncSelectability(); return selection.allSelectableIds }
+
+    val totalSelectedCount: Int
+        get() = selection.totalSelectedCount
 
     /** Total bytes that will be freed by the current selection. */
-    val totalSelectedBytes: Long by derivedStateOf {
-        selectedEpisodeIds.values.flatten().sumOf { id -> episodeById[id]?.totalSizeBytes ?: 0L }
+    val totalSelectedBytes: Long
+        get() {
+            val byId = episodeById
+            return selection.selectedEpisodeIds.values.flatten().sumOf { id -> byId[id]?.totalSizeBytes ?: 0L }
+        }
+
+    val allSelected: Boolean
+        get() { syncSelectability(); return selection.allSelected }
+
+    fun selectableEpisodeIdsForSeason(seasonId: String): Set<String> {
+        syncSelectability()
+        return selection.selectableEpisodeIdsForSeason(seasonId)
     }
 
-    val allSelected: Boolean by derivedStateOf {
-        val selectedFlat = selectedEpisodeIds.values.flatten().toHashSet()
-        allSelectableIds.isNotEmpty() && allSelectableIds.all { it in selectedFlat }
-    }
-
-    fun selectableEpisodeIdsForSeason(seasonId: String): Set<String> =
-        episodes[seasonId].orEmpty().map { it.id }.toSet()
-
-    fun selectedForSeason(seasonId: String): Set<String> = selectedEpisodeIds[seasonId].orEmpty()
+    fun selectedForSeason(seasonId: String): Set<String> = selection.selectedForSeason(seasonId)
 
     fun triStateForSeason(seasonId: String): androidx.compose.ui.state.ToggleableState {
-        val selectable = selectableEpisodeIdsForSeason(seasonId)
-        if (selectable.isEmpty()) return androidx.compose.ui.state.ToggleableState.Off
-        val selected = selectedForSeason(seasonId)
-        return when {
-            selectable.all { it in selected } -> androidx.compose.ui.state.ToggleableState.On
-            selectable.none { it in selected } -> androidx.compose.ui.state.ToggleableState.Off
-            else -> androidx.compose.ui.state.ToggleableState.Indeterminate
-        }
+        syncSelectability()
+        return selection.triStateForSeason(seasonId)
     }
 
-    fun toggleSelectAll() {
-        selectedEpisodeIds = if (allSelected) {
-            episodes.keys.associateWith { emptySet() }
-        } else {
-            episodes.mapValues { (_, list) -> list.map { it.id }.toSet() }
-        }
-    }
-
-    fun toggleSeason(seasonId: String) {
-        val selectable = selectableEpisodeIdsForSeason(seasonId)
-        val current = selectedForSeason(seasonId)
-        val newSet = if (selectable.all { it in current }) current - selectable else current + selectable
-        selectedEpisodeIds = selectedEpisodeIds + (seasonId to newSet)
-    }
-
-    fun toggleEpisode(seasonId: String, episodeId: String) {
-        val current = selectedForSeason(seasonId)
-        val newSet = if (episodeId in current) current - episodeId else current + episodeId
-        selectedEpisodeIds = selectedEpisodeIds + (seasonId to newSet)
-    }
+    fun toggleSelectAll() { syncSelectability(); selection.toggleSelectAll() }
+    fun toggleSeason(seasonId: String) { syncSelectability(); selection.toggleSeason(seasonId) }
+    fun toggleEpisode(seasonId: String, episodeId: String) { selection.toggleEpisode(seasonId, episodeId) }
 
     /** Flat snapshot of every selected episode id across all seasons. */
-    fun toDeleteIds(): Set<String> = selectedEpisodeIds.values.flatten().toSet()
+    fun toDeleteIds(): Set<String> = selection.selectedEpisodeIds.values.flatten().toSet()
 }
 
 @Composable

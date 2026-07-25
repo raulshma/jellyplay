@@ -31,6 +31,14 @@ interface DownloadRepository {
         episodeNumber: Int? = null,
         seasonNumber: Int? = null,
         container: String? = null,
+        /**
+         * Pre-fetched `SUM(downloadedBytes)` across the download table, used to
+         * skip the per-call budget query when the caller has already evaluated
+         * the cap (notably [downloadSeries], which enqueues many episodes in a
+         * batch where no bytes are actually transferred yet). `null` (default)
+         * queries the DAO normally.
+         */
+        precomputedCurrentBytes: Long? = null,
     ): Result<DownloadItem>
 
     suspend fun cancelDownload(id: String): Result<Unit>
