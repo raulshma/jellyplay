@@ -69,6 +69,7 @@ class PlayerSessionManager(
     private val offlineRepository: OfflineRepository,
     private val preferencesStore: UserPreferencesStore,
     private val playerLifecycleManager: PlayerLifecycleManager,
+    private val pipController: com.raulshma.jellyplay.core.data.playback.PipController,
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
     private val playerEngineFactory: PlayerEngineFactory,
 ) {
@@ -108,8 +109,7 @@ class PlayerSessionManager(
     fun bindReclaimedEngine(engine: MediaEngine, itemId: String, detail: MediaDetail) {
         _engine.value = engine
         playerLifecycleManager.activeCallbacks = engine
-        playerLifecycleManager.requestAutoEnterPip(engine.capabilities.supportsPip)
-        
+        pipController.requestAutoEnterPip(engine.capabilities.supportsPip)
         _sessionState.update { 
             it.copy(
                 currentItemId = itemId,
@@ -376,7 +376,7 @@ class PlayerSessionManager(
         lastPlayerType = playerType
 
         playerLifecycleManager.activeCallbacks = eng
-        playerLifecycleManager.requestAutoEnterPip(eng.capabilities.supportsPip)
+        pipController.requestAutoEnterPip(eng.capabilities.supportsPip)
 
         val config = EngineConfigBuilder.buildFromPreferences(
             prefs = prefs,
@@ -587,7 +587,7 @@ class PlayerSessionManager(
         lastPlayerType = playerType
 
         playerLifecycleManager.activeCallbacks = eng
-        playerLifecycleManager.requestAutoEnterPip(eng.capabilities.supportsPip)
+        pipController.requestAutoEnterPip(eng.capabilities.supportsPip)
 
         val state = _sessionState.value
         val config = EngineConfigBuilder.buildFromPreferences(

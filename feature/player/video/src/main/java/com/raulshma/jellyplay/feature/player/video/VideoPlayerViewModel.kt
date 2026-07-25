@@ -14,6 +14,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.PipAction
+import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PipTransport
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
@@ -199,6 +200,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val networkMonitor: NetworkMonitor,
     private val activePlayerController: ActivePlayerController,
     val playerLifecycleManager: PlayerLifecycleManager,
+    val pipController: PipController,
     val videoMiniPlayerState: VideoMiniPlayerState,
     private val sleepTimerManager: SleepTimerManager,
     private val userMessageBus: UserMessageBus,
@@ -275,6 +277,7 @@ class VideoPlayerViewModel @Inject constructor(
         playerLifecycleManager = playerLifecycleManager,
         adaptiveBitrateManager = adaptiveBitrateManager,
         playerEngineFactory = playerEngineFactory,
+        pipController = pipController,
     )
 
     // @Volatile: written from launched coroutines (applyMediaDetail) and read
@@ -646,7 +649,7 @@ class VideoPlayerViewModel @Inject constructor(
         // Register the PiP transport bridge so the Activity can dispatch PiP
         // remote-action intents (play/pause/skip/next) to the active engine
         //. Cleared on reset() when playback ends.
-        playerLifecycleManager.pipTransport = PipTransport { action ->
+        pipController.pipTransport = PipTransport { action ->
             val engine = playerSessionManager.engine ?: return@PipTransport
             when (action) {
                 PipAction.PLAY -> engine.play()
@@ -771,7 +774,7 @@ class VideoPlayerViewModel @Inject constructor(
                 engineJob?.cancel()
                 if (engine != null) {
                     // Expose whether a "next" action is available for the PiP window.
-                    playerLifecycleManager.pipHasNext = mediaDetail?.item?.seriesId != null
+                    pipController.pipHasNext = mediaDetail?.item?.seriesId != null
                     engineJob = launch {
                         val wasPlaying = booleanArrayOf(false)
                         engine.isPlaying.collect { playing ->
@@ -922,7 +925,7 @@ class VideoPlayerViewModel @Inject constructor(
                                 syncPlayBridge.onIsPlayingChanged(isPlaying)
                                 // Mirror play state so the Activity can render the correct
                                 // play/pause icon on the PiP window.
-                                playerLifecycleManager.setPlaying(isPlaying)
+                                pipController.setPlaying(isPlaying)
                             } }
                             launch { engine.playbackState.collect { state ->
                                 val stateInt = when (state) {
@@ -1008,12 +1011,16 @@ class VideoPlayerViewModel @Inject constructor(
                                                 watchdogJob = launch {
                                                     delay(BUFFERING_TIMEOUT_MS)
                                                     if (!hasReachedReady) {
+                                                        // Route through the EngineError taxonomy rather
+                                                        // than hand-rolling a string, so the timeout
+                                                        // path matches the errorFlow path's contract.
+                                                        val error = com.raulshma.jellyplay.feature.player.video.engine.EngineError.Timeout()
                                                         _uiState.update { s -> s.copy(
-                                                            playerError = "Playback failed to start. Try a different player engine.",
+                                                            playerError = error.message,
                                                             // Start-up timeout is recoverable on the same engine
                                                             // (often a slow first-segment fetch) — offer retry too,
                                                             // not just switch-engine.
-                                                            playerErrorRetryable = true,
+                                                            playerErrorRetryable = error.retryable,
                                                             showPlaybackErrorDialog = true,
                                                             isBuffering = false,
                                                         ) }
@@ -1042,7 +1049,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
 
         launch {
-            playerLifecycleManager.pipDismissed.collect { dismissed ->
+            pipController.pipDismissed.collect { dismissed ->
                 if (dismissed) {
                     playerSessionManager.engine?.pause()
                 }
@@ -2712,6 +2719,14 @@ class VideoPlayerViewModel @Inject constructor(
         releaseVideoMediaSession()
         playerSessionManager.release()
         playerLifecycleManager.reset()
+        // Clear per-item PiP mirrors but KEEP pipTransport: it is a VM-owned
+        // bridge registered once in init and read by the Activity's PiP
+        // BroadcastReceiver. Nulling it here (as reset() does) would deaden
+        // every PiP control, because initialize() calls releaseInternals() on
+        // every item load and the transport is never re-registered. Full
+        // reset() (transport included) runs in performRelease() on teardown.
+        pipController.setPlaying(false)
+        pipController.pipHasNext = false
         trickplayManager.clear()
         trackSelectionHelper.reset()
         mediaDetail = null
@@ -2856,7 +2871,7 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.detachEngine()
         progressReporter.cancelJobs()
         playerLifecycleManager.activeCallbacks = null
-        playerLifecycleManager.requestAutoEnterPip(false)
+        pipController.requestAutoEnterPip(false)
     }
 
     private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -2882,7 +2897,7 @@ class VideoPlayerViewModel @Inject constructor(
         val itemId = playerSessionManager.sessionState.value.currentItemId
         val sessionId = currentPlaySessionId
         val positionTicks = getReportPositionMs() * 10_000
-        playerLifecycleManager.requestAutoEnterPip(false)
+        pipController.requestAutoEnterPip(false)
         // Unregister headphone unplug receiver
         becomingNoisyReceiver?.let {
             try { context.unregisterReceiver(it) } catch (_: Exception) {}
@@ -2891,6 +2906,9 @@ class VideoPlayerViewModel @Inject constructor(
         unregisterTransientFocusLossListener()
         sleepTimerManager.setOnFadeProgress(null)
         releaseInternals()
+        // Full teardown: clear the transport too (releaseInternals keeps it so
+        // PiP stays usable across per-item reloads while the VM is alive).
+        pipController.reset()
         castManager.releaseConsumer()
         activePlayerController.clearEngine()
         // Skip the second Stop if reportCurrentPlaybackStopped already
@@ -2932,10 +2950,9 @@ class VideoPlayerViewModel @Inject constructor(
      */
     private suspend fun invalidatePlaybackCaches(itemId: String) {
         runCatching {
-            mediaRepository.invalidateDetailCache(itemId)
-            playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId?.let { seriesId ->
-                mediaRepository.invalidateSeriesCache(seriesId)
-            }
+            // One operation owns the series-resolution rule — no need to
+            // re-derive "is this item part of a series?" at the call site.
+            mediaRepository.invalidateUserDataCaches(itemId)
         }
     }
 }

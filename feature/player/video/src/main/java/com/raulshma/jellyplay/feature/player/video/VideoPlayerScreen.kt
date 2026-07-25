@@ -207,7 +207,7 @@ fun VideoPlayerScreen(
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val isInPipMode by viewModel.playerLifecycleManager.isInPipMode.collectAsStateWithLifecycle()
+    val isInPipMode by viewModel.pipController.isInPipMode.collectAsStateWithLifecycle()
 
     // Ephemeral UI state. Migrated to `rememberSaveable` so a configuration
     // change (locale switch, rotation outside the player's locked orientation)
@@ -319,10 +319,10 @@ fun VideoPlayerScreen(
     // ensures the dismiss signal survives lifecycle STOPPED→STARTED transitions.
     // The old SharedFlow approach lost the event because LaunchedEffect's coroutine is
     // cancelled during STOPPED and SharedFlow(replay=0) doesn't replay to new subscribers.
-    val pipDismissed by viewModel.playerLifecycleManager.pipDismissed.collectAsStateWithLifecycle()
+    val pipDismissed by viewModel.pipController.pipDismissed.collectAsStateWithLifecycle()
     LaunchedEffect(pipDismissed) {
         if (pipDismissed) {
-            viewModel.playerLifecycleManager.clearPipDismissed()
+            viewModel.pipController.clearPipDismissed()
             onBack()
         }
     }
@@ -382,7 +382,7 @@ fun VideoPlayerScreen(
         }
 
         onDispose {
-            val currentlyInPip = viewModel.playerLifecycleManager.isInPipMode.value
+            val currentlyInPip = viewModel.pipController.isInPipMode.value
             val isBgCasting = viewModel.isCastConnected && viewModel.castIsPlaying.value &&
                 viewModel.backgroundCastingEnabled
             val restoreOrientation = if (isTv)

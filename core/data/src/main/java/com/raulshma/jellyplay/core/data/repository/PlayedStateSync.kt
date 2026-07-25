@@ -121,8 +121,9 @@ class PlayedStateSyncImpl @Inject constructor(
     override suspend fun reconcileOfflineRow(itemId: String): ComputeResult? {
         val offline = offlineRepository.getOfflineItem(itemId) ?: return null
         // Pull a fresh server view (bypass any cached detail so a stale cache
-        // cannot mask a newer played/position state).
-        mediaRepository.get().invalidateDetailCache(itemId)
+        // cannot mask a newer played/position state). One operation also drops
+        // the series-scoped caches if this item belongs to one.
+        mediaRepository.get().invalidateUserDataCaches(itemId)
         val serverItem = mediaRepository.get().getMediaDetail(itemId).getOrNull()?.item ?: return null
 
         // Server watched (e.g. finished online) always wins — reset the local
