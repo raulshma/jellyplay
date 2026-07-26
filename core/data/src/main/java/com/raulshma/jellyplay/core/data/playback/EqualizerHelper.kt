@@ -63,9 +63,30 @@ class EqualizerHelper {
         }
     }
 
-    fun setEnabled(enabled: Boolean) {
+    /**
+     * Apply the equalizer / dialogue-boost co-enabling rule and set the
+     * underlying effect's enabled state.
+     *
+     * Android exposes exactly one priority-0 `Equalizer` per audio session,
+     * so the user-facing EQ and [DialogueBoostHelper] share it (the boost
+     * overlay is layered on top via [setBandOffsets]). The underlying effect
+     * must stay **enabled while EITHER is on**; when both are off, the engine
+     * is free to disable it so the system effect is not held open needlessly.
+     *
+     * Folding this rule in here means the three apply sites
+     * (`AudioEffectsProcessor`, `AudioEffectChain`, `MpvPlayerEngine`) cannot
+     * drift — they pass the two user-facing flags and this method owns the
+     * `||`. Previously the rule lived in a companion `shouldEnableFor` that
+     * each site had to remember to call, and callers then re-derived the
+     * same `||` to decide follow-up work. The resolved flag is returned so
+     * callers reuse it instead of re-deriving the rule at each call site
+     * (the "rule in three places" smell the original fold left behind).
+     */
+    fun setEnabled(equalizerEnabled: Boolean, dialogueBoostEnabled: Boolean = false): Boolean {
+        val enabled = equalizerEnabled || dialogueBoostEnabled
         isEnabled = enabled
         equalizer?.enabled = enabled
+        return enabled
     }
 
     fun setSettings(settings: EqualizerSettings) {
@@ -143,23 +164,5 @@ class EqualizerHelper {
 
     companion object {
         private const val TAG = "EqualizerHelper"
-
-        /**
-         * The single source of truth for the equalizer / dialogue-boost
-         * co-enabling rule.
-         *
-         * Android exposes exactly one priority-0 `Equalizer` per audio
-         * session, so the user-facing EQ and [DialogueBoostHelper] share it
-         * (the boost overlay is layered on top via [setBandOffsets]). The
-         * underlying effect must stay **enabled while EITHER is on**;
-         * when both are off, the engine is free to disable it so the system
-         * effect is not held open needlessly.
-         *
-         * Centralising this predicate here stops the rule from drifting
-         * across the three apply sites that previously each re-derived it
-         * (`AudioEffectsProcessor`, `AudioEffectChain`, `MpvPlayerEngine`).
-         */
-        fun shouldEnableFor(equalizerEnabled: Boolean, dialogueBoostEnabled: Boolean): Boolean =
-            equalizerEnabled || dialogueBoostEnabled
     }
 }

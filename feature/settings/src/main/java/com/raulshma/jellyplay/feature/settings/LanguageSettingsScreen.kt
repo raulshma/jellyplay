@@ -41,6 +41,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.SettingListItem
+import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -55,17 +58,15 @@ import androidx.compose.ui.draw.clip
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+/**
+ * Residual custom dialog tag. Most language/subtitle pickers flow through the
+ * shared `PickerState` dispatcher; only the subtitle-background sheet stays
+ * here because it mixes a colour list with an opacity slider — a shape
+ * `PickerState` has no variant for.
+ */
 sealed class LanguageSettingsDialog {
     object None : LanguageSettingsDialog()
-    object AudioLanguagePicker : LanguageSettingsDialog()
-    object SubtitleLanguagePicker : LanguageSettingsDialog()
-    object SubtitleFontPicker : LanguageSettingsDialog()
-    object SubtitleColorPicker : LanguageSettingsDialog()
     object SubtitleBgColorPicker : LanguageSettingsDialog()
-    object SubtitleEdgePicker : LanguageSettingsDialog()
-    object SubtitleOffsetPicker : LanguageSettingsDialog()
-    object SubtitlePositionPicker : LanguageSettingsDialog()
-    object AppLanguagePicker : LanguageSettingsDialog()
 }
 
 // TODO(i18n): ship values-*/strings.xml for these locales before re-enabling them.
@@ -95,6 +96,7 @@ fun LanguageSettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<LanguageSettingsDialog>(LanguageSettingsDialog.None) }
+    var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     val focusRequester = remember { FocusRequester() }
@@ -181,7 +183,15 @@ fun LanguageSettingsScreen(
                         trailingText = appLangLabel,
                         highlighted = highlightSettingId == "app_language",
                         index = 0, count = 3,
-                        onClick = { activeDialog = LanguageSettingsDialog.AppLanguagePicker },
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = "Display Language",
+                                items = appLanguages.map { it.first },
+                                label = { code -> appLanguageNameByCode[code] ?: code ?: "System Default" },
+                                isSelected = { it == preferences.appLanguage },
+                                onSelect = { viewModel.setAppLanguage(it) },
+                            )
+                        },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Language,
@@ -190,7 +200,15 @@ fun LanguageSettingsScreen(
                         trailingText = preferences.preferredAudioLanguage ?: stringResource(R.string.settings_lang_default),
                         highlighted = highlightSettingId == "audio_language",
                         index = 1, count = 3,
-                        onClick = { activeDialog = LanguageSettingsDialog.AudioLanguagePicker },
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = "Audio Language",
+                                items = langs.map { it.first },
+                                label = { code -> languageNameByCode[code] ?: code ?: "Default" },
+                                isSelected = { it == preferences.preferredAudioLanguage },
+                                onSelect = { viewModel.setPreferredAudioLanguage(it) },
+                            )
+                        },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Subtitles,
@@ -199,7 +217,15 @@ fun LanguageSettingsScreen(
                         trailingText = preferences.preferredSubtitleLanguage ?: stringResource(R.string.settings_lang_default),
                         highlighted = highlightSettingId == "subtitle_language",
                         index = 2, count = 3,
-                        onClick = { activeDialog = LanguageSettingsDialog.SubtitleLanguagePicker },
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = "Subtitle Language",
+                                items = langs.map { it.first },
+                                label = { code -> languageNameByCode[code] ?: code ?: "Default" },
+                                isSelected = { it == preferences.preferredSubtitleLanguage },
+                                onSelect = { viewModel.setPreferredSubtitleLanguage(it) },
+                            )
+                        },
                     )
                 }
             }
@@ -237,7 +263,17 @@ fun LanguageSettingsScreen(
                         trailingText = "${preferences.subtitleStyle.fontSize}sp",
                         highlighted = highlightSettingId == "subtitle_font_size",
                         index = subIdx++, count = subTotal,
-                        onClick = { activeDialog = LanguageSettingsDialog.SubtitleFontPicker },
+                        onClick = {
+                            val sizes = listOf(14, 18, 22, 24, 28, 32, 36, 40)
+                            activePicker = PickerState.Chip(
+                                title = "Subtitle Font Size",
+                                options = sizes.map { "${it}sp" },
+                                selectedIndex = sizes.indexOf(preferences.subtitleStyle.fontSize),
+                                onSelect = { index ->
+                                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontSize = sizes[index]))
+                                },
+                            )
+                        },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.TextSize,
@@ -298,7 +334,17 @@ fun LanguageSettingsScreen(
                             trailingText = preferences.subtitleStyle.fontColor.name,
                             highlighted = highlightSettingId == "subtitle_color",
                             index = subIdx++, count = subTotal,
-                            onClick = { activeDialog = LanguageSettingsDialog.SubtitleColorPicker },
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = "Subtitle Text Color",
+                                    items = SubtitleColor.entries,
+                                    label = { it.name },
+                                    isSelected = { it == preferences.subtitleStyle.fontColor },
+                                    onSelect = {
+                                        viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontColor = it))
+                                    },
+                                )
+                            },
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Background,
@@ -316,7 +362,17 @@ fun LanguageSettingsScreen(
                             trailingText = preferences.subtitleStyle.edgeType.name,
                             highlighted = highlightSettingId == "subtitle_edge_style",
                             index = subIdx++, count = subTotal,
-                            onClick = { activeDialog = LanguageSettingsDialog.SubtitleEdgePicker },
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = "Subtitle Edge Style",
+                                    items = SubtitleEdgeType.entries,
+                                    label = { it.name },
+                                    isSelected = { it == preferences.subtitleStyle.edgeType },
+                                    onSelect = {
+                                        viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(edgeType = it))
+                                    },
+                                )
+                            },
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
@@ -325,7 +381,20 @@ fun LanguageSettingsScreen(
                             trailingText = "${preferences.subtitleStyle.offsetMs}ms",
                             highlighted = highlightSettingId == "subtitle_sync_offset",
                             index = subIdx++, count = subTotal,
-                            onClick = { activeDialog = LanguageSettingsDialog.SubtitleOffsetPicker },
+                            onClick = {
+                                activePicker = PickerState.Slider(
+                                    title = "Subtitle Sync Offset",
+                                    value = preferences.subtitleStyle.offsetMs.toFloat(),
+                                    valueRange = -5000f..5000f,
+                                    steps = 99,
+                                    valueLabel = { "${it.toLong()}ms" },
+                                    rangeStartLabel = "-5s",
+                                    rangeEndLabel = "+5s",
+                                    onConfirm = {
+                                        viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(offsetMs = it.toLong()))
+                                    },
+                                )
+                            },
                         )
                         SettingListItem(
                             icon = Tabler.Outline.ArrowBarDown,
@@ -334,7 +403,20 @@ fun LanguageSettingsScreen(
                             trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
                             highlighted = highlightSettingId == "subtitle_vertical_position",
                             index = subIdx, count = subTotal,
-                            onClick = { activeDialog = LanguageSettingsDialog.SubtitlePositionPicker },
+                            onClick = {
+                            activePicker = PickerState.Slider(
+                                title = "Subtitle Vertical Position",
+                                value = preferences.subtitleStyle.verticalPosition,
+                                valueRange = 0f..0.4f,
+                                steps = 7,
+                                valueLabel = { "${(it * 100).toInt()}%" },
+                                rangeStartLabel = "Bottom",
+                                rangeEndLabel = "40%",
+                                onConfirm = {
+                                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(verticalPosition = it))
+                                },
+                            )
+                        },
                         )
                     }
                 }
@@ -352,79 +434,9 @@ fun LanguageSettingsScreen(
         }
     }
 
-    if (activeDialog is LanguageSettingsDialog.AppLanguagePicker) {
-        SettingsListPickerSheet(
-            title = "Display Language",
-            items = appLanguages.map { it.first },
-            label = { code -> appLanguageNameByCode[code] ?: code ?: "System Default" },
-            isSelected = { it == preferences.appLanguage },
-            onDismiss = { activeDialog = LanguageSettingsDialog.None },
-            onSelect = {
-                viewModel.setAppLanguage(it)
-                activeDialog = LanguageSettingsDialog.None
-            },
-        )
-    }
-
-    if (activeDialog is LanguageSettingsDialog.AudioLanguagePicker) {
-        SettingsListPickerSheet(
-            title = "Audio Language",
-            items = langs.map { it.first },
-            label = { code -> languageNameByCode[code] ?: code ?: "Default" },
-            isSelected = { it == preferences.preferredAudioLanguage },
-            onDismiss = { activeDialog = LanguageSettingsDialog.None },
-            onSelect = {
-                viewModel.setPreferredAudioLanguage(it)
-                activeDialog = LanguageSettingsDialog.None
-            },
-        )
-    }
-
-    if (activeDialog is LanguageSettingsDialog.SubtitleLanguagePicker) {
-        SettingsListPickerSheet(
-            title = "Subtitle Language",
-            items = langs.map { it.first },
-            label = { code -> languageNameByCode[code] ?: code ?: "Default" },
-            isSelected = { it == preferences.preferredSubtitleLanguage },
-            onDismiss = { activeDialog = LanguageSettingsDialog.None },
-            onSelect = {
-                viewModel.setPreferredSubtitleLanguage(it)
-                activeDialog = LanguageSettingsDialog.None
-            },
-        )
-    }
-
-    if (activeDialog is LanguageSettingsDialog.SubtitleFontPicker) {
-        val sizes = listOf(14, 18, 22, 24, 28, 32, 36, 40)
-        SettingsChipPickerSheet(
-            title = "Subtitle Font Size",
-            options = sizes.map { "${it}sp" },
-            selectedIndex = sizes.indexOf(preferences.subtitleStyle.fontSize),
-            onDismiss = { activeDialog = LanguageSettingsDialog.None },
-            onSelect = { index ->
-                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontSize = sizes[index]))
-                activeDialog = LanguageSettingsDialog.None
-            },
-        )
-    }
-
-    if (activeDialog is LanguageSettingsDialog.SubtitleColorPicker) {
-        SettingsListPickerSheet(
-            title = "Subtitle Text Color",
-            items = SubtitleColor.entries,
-            label = { it.name },
-            isSelected = { it == preferences.subtitleStyle.fontColor },
-            onDismiss = { activeDialog = LanguageSettingsDialog.None },
-            onSelect = {
-                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontColor = it))
-                activeDialog = LanguageSettingsDialog.None
-            },
-        )
-    }
-
     if (activeDialog is LanguageSettingsDialog.SubtitleBgColorPicker) {
         var bgOpacity by remember { mutableStateOf(preferences.subtitleStyle.backgroundOpacity) }
-        AdaptiveSheet(onDismissRequest = { activeDialog = LanguageSettingsDialog.None }) {
+        TvSafeSheet(onDismissRequest = { activeDialog = LanguageSettingsDialog.None }) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -489,51 +501,8 @@ fun LanguageSettingsScreen(
         }
     }
 
-    if (activeDialog is LanguageSettingsDialog.SubtitleEdgePicker) {
-        SettingsListPickerSheet(
-            title = "Subtitle Edge Style",
-            items = SubtitleEdgeType.entries,
-            label = { it.name },
-            isSelected = { it == preferences.subtitleStyle.edgeType },
-            onDismiss = { activeDialog = LanguageSettingsDialog.None },
-            onSelect = {
-                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(edgeType = it))
-                activeDialog = LanguageSettingsDialog.None
-            },
-        )
-    }
-
-    if (activeDialog is LanguageSettingsDialog.SubtitleOffsetPicker) {
-        SettingsSliderSheet(
-            title = "Subtitle Sync Offset",
-            value = preferences.subtitleStyle.offsetMs.toFloat(),
-            valueRange = -5000f..5000f,
-            steps = 99,
-            valueLabel = { "${it.toLong()}ms" },
-            rangeStartLabel = "-5s",
-            rangeEndLabel = "+5s",
-            onDismiss = { activeDialog = LanguageSettingsDialog.None },
-            onConfirm = {
-                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(offsetMs = it.toLong()))
-                activeDialog = LanguageSettingsDialog.None
-            },
-        )
-    }
-
-    if (activeDialog is LanguageSettingsDialog.SubtitlePositionPicker) {
-        SettingsSliderSheet(
-            title = "Subtitle Vertical Position",
-            value = preferences.subtitleStyle.verticalPosition,
-            valueRange = 0f..0.4f,
-            steps = 7,
-            valueLabel = { "${(it * 100).toInt()}%" },
-            rangeStartLabel = "Bottom",
-            rangeEndLabel = "40%",
-            onDismiss = { activeDialog = LanguageSettingsDialog.None },
-            onConfirm = {
-                viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(verticalPosition = it))
-                activeDialog = LanguageSettingsDialog.None
-            },
-        )
-    }
+    SettingsPickerDialog(
+        state = activePicker,
+        onDismiss = { activePicker = null },
+    )
 }

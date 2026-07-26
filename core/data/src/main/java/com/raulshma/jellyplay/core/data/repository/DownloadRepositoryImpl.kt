@@ -65,10 +65,20 @@ class DownloadRepositoryImpl @Inject constructor(
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
     private val json: Json,
     /**
-     * Lazy to break the Hilt cycle: [DownloadDelegate] injects
-     * [DownloadRepository] (this impl, via its interface), and [downloadSeries]
-     * delegates the per-episode artifact bundle to it. `dagger.Lazy` defers
-     * resolution until first use, so the graph still constructs.
+     * Lazy to break the Hilt construction cycle: [downloadSeries] (below)
+     * delegates the per-episode artifact bundle to [DownloadDelegate], and
+     * [DownloadDelegate] now depends on [OfflineDownloadWriter] — which this
+     * class implements. That's still a cycle at graph-construction time
+     * (`DownloadRepositoryImpl → DownloadDelegate → OfflineDownloadWriter →
+     * DownloadRepositoryImpl`), so `dagger.Lazy` defers resolution until first
+     * use.
+     *
+     * What changed vs the old NOTE: the delegate no longer depends on the full
+     * 25-method [DownloadRepository] interface — it was narrowed to the
+     * 8-method [OfflineDownloadWriter] write surface. The *coupling* disease
+     * the old comment named is fixed; `Lazy` here is purely the structural
+     * construction-cycle breaker it should always have been, not a paper-over
+     * for a god-interface dependency.
      */
     private val downloadDelegate: dagger.Lazy<com.raulshma.jellyplay.core.data.util.DownloadDelegate>,
     private val storagePolicy: StoragePolicy,
@@ -297,8 +307,11 @@ class DownloadRepositoryImpl @Inject constructor(
                 // A FAILED partial was deleted by cleanupStuckDownloads (multi-
                 // connection scattered writes can't be appended to), so resume
                 // FAILED rows from 0. A NETWORK-paused single-connection row has
-                // a contiguous prefix, so preserve its byte offset.
-                val startBytes = if (row.status == DownloadStatus.PAUSED.name) row.downloadedBytes else 0L
+                // a contiguous prefix, so preserve its byte offset. The rule
+                // lives in [DownloadStates.resumeByteOffset] — the single home
+                // shared with the recovery initializer and the multi-connection
+                // strategy.
+                val startBytes = DownloadStates.resumeByteOffset(row.status, row.downloadedBytes)
                 downloadDao.updateProgress(row.id, startBytes, DownloadStatus.PENDING.name)
                 downloadDao.updatePausedReason(row.id, null)
                 enqueueDownload(row.id)
@@ -453,15 +466,13 @@ class DownloadRepositoryImpl @Inject constructor(
                             downloadPermits.withPermit {
                                 try {
                                     val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
-                                    val request = episodeDetail?.let {
-                                        delegate.prepareDownloadRequest(it, qualityMaxBitrate)
+                                    // Single per-episode recipe shared with DownloadIntake.start
+                                    // via DownloadDelegate.startOne — no inline prepare/execute to
+                                    // drift out of sync.
+                                    val result = episodeDetail?.let {
+                                        delegate.startOne(it, qualityMaxBitrate, budgetHint)
                                     }
-                                    if (request == null) {
-                                        null
-                                    } else {
-                                        val result = delegate.executeDownload(request, budgetHint)
-                                        result.downloadItem?.id
-                                    }
+                                    result?.downloadItem?.id
                                 } catch (ce: CancellationException) {
                                     // Preserve structured concurrency: if the parent
                                     // scope (e.g. user navigated away) is cancelled,

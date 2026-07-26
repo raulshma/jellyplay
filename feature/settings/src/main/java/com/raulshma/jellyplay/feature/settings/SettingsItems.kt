@@ -63,63 +63,10 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.TooltipAnchorPosition
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 
-// Thin delegating re-exports of the canonical settings row components, which now live in
-// `core/ui/.../components/SettingItems.kt` so non-settings surfaces (e.g. admin user-detail) can
-// reuse the same TV-aware focus/press-scale/bring-into-view/marquee machinery. The `internal`
-// wrappers preserve existing call sites within this module without import changes.
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal fun SettingListItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    index: Int = 0,
-    count: Int = 1,
-    trailingText: String? = null,
-    isDestructive: Boolean = false,
-    highlighted: Boolean = false,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) = com.raulshma.jellyplay.core.ui.components.SettingListItem(
-    icon = icon,
-    title = title,
-    subtitle = subtitle,
-    index = index,
-    count = count,
-    trailingText = trailingText,
-    isDestructive = isDestructive,
-    highlighted = highlighted,
-    modifier = modifier,
-    onClick = onClick,
-)
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal fun SettingToggleItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    index: Int = 0,
-    count: Int = 1,
-    highlighted: Boolean = false,
-    enabled: Boolean = true,
-    modifier: Modifier = Modifier,
-    onCheckedChange: (Boolean) -> Unit,
-    onClick: (() -> Unit)? = null,
-) = com.raulshma.jellyplay.core.ui.components.SettingToggleItem(
-    icon = icon,
-    title = title,
-    subtitle = subtitle,
-    checked = checked,
-    index = index,
-    count = count,
-    highlighted = highlighted,
-    enabled = enabled,
-    modifier = modifier,
-    onCheckedChange = onCheckedChange,
-    onClick = onClick,
-)
+// `SettingListItem` / `SettingToggleItem` live canonically in
+// `core/ui/.../components/SettingItems.kt` (shared with feature/admin). Call sites in this module
+// import them directly; no re-export wrapper is kept here. This file holds the settings-specific
+// row variants (reorderable, info-only) and the advanced-settings affordances.
 
 @Composable
 internal fun SettingReorderableToggleItem(

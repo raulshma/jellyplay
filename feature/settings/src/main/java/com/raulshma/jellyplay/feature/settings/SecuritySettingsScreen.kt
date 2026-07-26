@@ -40,6 +40,8 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndica
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.findFragmentActivity
 import com.raulshma.jellyplay.core.ui.components.rememberBiometricAvailability
+import com.raulshma.jellyplay.core.ui.components.SettingListItem
+import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
@@ -51,12 +53,17 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+/**
+ * Custom (non-picker) dialogs only. Picker sheets (auto-lock timer, …) flow
+ * through the shared `PickerState` dispatcher instead of this enum — keeping
+ * the residual sealed-class role narrow: tagging genuinely bespoke dialogs
+ * (`PickerState` has no variant for a PIN entry or a QuickConnect auth flow).
+ */
 sealed class SecuritySettingsDialog {
     object None : SecuritySettingsDialog()
     object PinDialog : SecuritySettingsDialog()
     object PinDisableAuth : SecuritySettingsDialog()
     object QuickConnectAuthorize : SecuritySettingsDialog()
-    object AutoLockTimerPicker : SecuritySettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -71,6 +78,7 @@ fun SecuritySettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activeDialog by remember { mutableStateOf<SecuritySettingsDialog>(SecuritySettingsDialog.None) }
+    var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
     var pinInput by remember { mutableStateOf("") }
     var pinConfirm by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -219,6 +227,7 @@ fun SecuritySettingsScreen(
                             stringResource(R.string.settings_lock_5_minutes),
                             stringResource(R.string.settings_lock_10_minutes),
                         )
+                        val autoLockTimerTitle = stringResource(R.string.settings_auto_lock_timer)
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
                             title = stringResource(R.string.settings_auto_lock_timer),
@@ -226,7 +235,15 @@ fun SecuritySettingsScreen(
                             trailingText = lockTimerLabels[lockTimerOptions.indexOf(preferences.autoLockTimerMs).coerceAtMost(lockTimerOptions.lastIndex)],
                             highlighted = highlightSettingId == "auto_lock_timer",
                             index = secIdx, count = secTotal,
-                            onClick = { activeDialog = SecuritySettingsDialog.AutoLockTimerPicker },
+                            onClick = {
+                                activePicker = PickerState.List(
+                                    title = autoLockTimerTitle,
+                                    items = lockTimerOptions,
+                                    label = { lockTimerLabels[lockTimerOptions.indexOf(it).coerceAtMost(lockTimerOptions.lastIndex)] },
+                                    isSelected = { it == preferences.autoLockTimerMs },
+                                    onSelect = { viewModel.setAutoLockTimerMs(it) },
+                                )
+                            },
                         )
                     }
                 }
@@ -542,25 +559,8 @@ fun SecuritySettingsScreen(
         )
     }
 
-    if (activeDialog is SecuritySettingsDialog.AutoLockTimerPicker) {
-        val options = listOf(0L, 30_000L, 60_000L, 300_000L, 600_000L)
-        val labels = listOf(
-            stringResource(R.string.settings_lock_immediately),
-            stringResource(R.string.settings_lock_30_seconds),
-            stringResource(R.string.settings_lock_1_minute),
-            stringResource(R.string.settings_lock_5_minutes),
-            stringResource(R.string.settings_lock_10_minutes),
-        )
-        SettingsListPickerSheet(
-            title = stringResource(R.string.settings_auto_lock_timer),
-            items = options,
-            label = { labels[options.indexOf(it).coerceAtMost(options.lastIndex)] },
-            isSelected = { it == preferences.autoLockTimerMs },
-            onDismiss = { activeDialog = SecuritySettingsDialog.None },
-            onSelect = {
-                viewModel.setAutoLockTimerMs(it)
-                activeDialog = SecuritySettingsDialog.None
-            },
-        )
-    }
+    SettingsPickerDialog(
+        state = activePicker,
+        onDismiss = { activePicker = null },
+    )
 }
