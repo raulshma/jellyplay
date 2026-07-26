@@ -13,37 +13,32 @@ import androidx.compose.runtime.Immutable
  * blocks — one per picker — each structurally identical: build an option
  * list, render `SettingsList/Chip/SliderSheet`, wire `isSelected` /
  * `onSelect` to a ViewModel setter. Across 9 screens that ladder ran ~110
- * times. The recent "convert dialog enums to sealed classes" refactor
- * promised exhaustive `when` dispatch but delivered 0 — the type change
- * happened, the call-site pattern did not.
+ * times. The "convert dialog enums to sealed classes" refactor promised
+ * exhaustive `when` dispatch but delivered 0 — the type change happened, the
+ * call-site pattern did not.
  *
  * `PickerState` carries the picker's *payload* (title, options, label,
  * selection predicate, select callback) instead of just an identity tag, so a
  * single [SettingsPickerDialog] composable can render any picker via an
- * exhaustive `when` over the [kind]. Call sites build a `PickerState` and
- * assign it to one `activePicker: PickerState<*>?` state field; the ladder
- * collapses to one call. The caller still owns dismissal (clearing the active
- * state) — it passes an [onDismiss] to [SettingsPickerDialog] alongside the
- * state.
+ * exhaustive `when` over the sealed subtype itself. Call sites build a
+ * `PickerState` and assign it to one `activePicker: PickerState<*>?` state
+ * field; the ladder collapses to one call. The caller still owns dismissal
+ * (clearing the active state) — it passes an [onDismiss] to
+ * [SettingsPickerDialog] alongside the state.
  *
  * Variants mirror the existing sheet composables:
  *  - [List]   → `SettingsListPickerSheet`
  *  - [Chip]   → `SettingsChipPickerSheet`
  *  - [Slider] → `SettingsSliderSheet`
+ *
+ * Adding a variant forces the dispatcher to handle it: Kotlin's exhaustive
+ * `when` over the sealed hierarchy is the discriminator — no parallel `Kind`
+ * enum, no unchecked casts.
  */
 sealed interface PickerState<out T> {
 
     /** Human-readable sheet title (already resolved from string resources). */
     val title: String
-
-    /**
-     * Render-time discriminator. Kept as a separate enum so [SettingsPickerDialog]
-     * can `when` over it exhaustively without reflective type checks, and so a
-     * future picker variant added here forces the dispatcher to handle it.
-     */
-    val kind: Kind
-
-    enum class Kind { List, Chip, Slider }
 
     @Immutable
     data class List<T>(
@@ -53,9 +48,7 @@ sealed interface PickerState<out T> {
         val subtitle: (T) -> String = { "" },
         val isSelected: (T) -> Boolean,
         val onSelect: (T) -> Unit,
-    ) : PickerState<T> {
-        override val kind get() = Kind.List
-    }
+    ) : PickerState<T>
 
     @Immutable
     data class Chip(
@@ -63,9 +56,7 @@ sealed interface PickerState<out T> {
         val options: kotlin.collections.List<String>,
         val selectedIndex: Int,
         val onSelect: (Int) -> Unit,
-    ) : PickerState<Int> {
-        override val kind get() = Kind.Chip
-    }
+    ) : PickerState<Int>
 
     /**
      * Slider sheet — a continuous value with a confirm step. Mirrors
@@ -82,27 +73,29 @@ sealed interface PickerState<out T> {
         val rangeStartLabel: String,
         val rangeEndLabel: String,
         val onConfirm: (Float) -> Unit,
-    ) : PickerState<Float> {
-        override val kind get() = Kind.Slider
-    }
+    ) : PickerState<Float>
 }
 
 /**
  * Renders whichever [PickerState] is currently active via an exhaustive
- * `when` over its [PickerState.kind], or nothing for `null`. The single
+ * `when` over the sealed subtype, or nothing for `null`. The single
  * dispatcher that replaces the per-screen `if`-ladders.
  *
  * [onDismiss] is the caller's "clear the active picker" callback — invoked
- * when the user dismisses the sheet (back gesture / scrim tap / swipe).
+ * when the user dismisses the sheet (back gesture / scrim tap / swipe), and
+ * again after a successful select/confirm so the caller can clear the state.
  */
 @Composable
 internal fun SettingsPickerDialog(
     state: PickerState<*>?,
     onDismiss: () -> Unit,
 ) {
-    when (state?.kind) {
+    when (state) {
         null -> Unit
-        PickerState.Kind.List -> {
+        is PickerState.List<*> -> {
+            // Star-projection captures the element type; cast through Any? to satisfy the
+            // sheet's invariant `(T) -> …` lambdas. Safe because `items: List<T>` and the
+            // lambdas all share the same `T` from the originating `PickerState.List<T>`.
             @Suppress("UNCHECKED_CAST")
             val list = state as PickerState.List<Any?>
             SettingsListPickerSheet(
@@ -118,35 +111,29 @@ internal fun SettingsPickerDialog(
                 },
             )
         }
-        PickerState.Kind.Chip -> {
-            val chip = state as PickerState.Chip
-            SettingsChipPickerSheet(
-                title = chip.title,
-                options = chip.options,
-                selectedIndex = chip.selectedIndex,
-                onDismiss = onDismiss,
-                onSelect = { index ->
-                    chip.onSelect(index)
-                    onDismiss()
-                },
-            )
-        }
-        PickerState.Kind.Slider -> {
-            val slider = state as PickerState.Slider
-            SettingsSliderSheet(
-                title = slider.title,
-                value = slider.value,
-                valueRange = slider.valueRange,
-                steps = slider.steps,
-                valueLabel = slider.valueLabel,
-                rangeStartLabel = slider.rangeStartLabel,
-                rangeEndLabel = slider.rangeEndLabel,
-                onDismiss = onDismiss,
-                onConfirm = { value ->
-                    slider.onConfirm(value)
-                    onDismiss()
-                },
-            )
-        }
+        is PickerState.Chip -> SettingsChipPickerSheet(
+            title = state.title,
+            options = state.options,
+            selectedIndex = state.selectedIndex,
+            onDismiss = onDismiss,
+            onSelect = { index ->
+                state.onSelect(index)
+                onDismiss()
+            },
+        )
+        is PickerState.Slider -> SettingsSliderSheet(
+            title = state.title,
+            value = state.value,
+            valueRange = state.valueRange,
+            steps = state.steps,
+            valueLabel = state.valueLabel,
+            rangeStartLabel = state.rangeStartLabel,
+            rangeEndLabel = state.rangeEndLabel,
+            onDismiss = onDismiss,
+            onConfirm = { value ->
+                state.onConfirm(value)
+                onDismiss()
+            },
+        )
     }
 }

@@ -45,6 +45,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.SettingListItem
+import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
@@ -350,7 +353,7 @@ fun NotificationSettingsScreen(
 
     if (activeDialog is NotificationSettingsDialog.LibrariesPicker) {
         val notifPrefs = preferences
-        AdaptiveSheet(onDismissRequest = { activeDialog = NotificationSettingsDialog.None }) {
+        TvSafeSheet(onDismissRequest = { activeDialog = NotificationSettingsDialog.None }) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -428,7 +431,7 @@ private fun QuietHoursTimeSheet(
         initialMinute = initialMinutes % 60,
         is24Hour = false,
     )
-    AdaptiveSheet(onDismissRequest = onDismiss) {
+    TvSafeSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

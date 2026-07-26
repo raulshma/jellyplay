@@ -83,14 +83,12 @@ internal class AudioEffectChain(
 
         // equalizerHelper owns the single priority-0 Equalizer for this
         // session and DialogueBoostHelper overlays its vocal-band gains on
-        // top. The underlying effect must stay enabled while EITHER is on
-        // (see [EqualizerHelper.shouldEnableFor] — the single source of truth).
+        // top. The co-enabling rule (on while EITHER is on) lives inside
+        // [EqualizerHelper.setEnabled] — callers pass both flags.
         equalizerHelper.setSettings(config.equalizerSettings)
         equalizerHelper.setEnabled(
-            EqualizerHelper.shouldEnableFor(
-                equalizerEnabled = config.equalizerEnabled,
-                dialogueBoostEnabled = config.dialogueBoostEnabled,
-            )
+            equalizerEnabled = config.equalizerEnabled,
+            dialogueBoostEnabled = config.dialogueBoostEnabled,
         )
 
         // Normalization modes — handled by the in-sink AudioProcessor chain

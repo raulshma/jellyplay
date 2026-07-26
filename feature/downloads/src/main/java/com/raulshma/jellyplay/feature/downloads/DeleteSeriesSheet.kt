@@ -54,6 +54,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.ui.components.rememberMultiEpisodeSelectionForDelete
 
 /**
  * Multi-select delete sheet for an offline series. Mirrors the online
@@ -84,11 +85,17 @@ fun DeleteSeriesSheet(
     onDelete: (episodeIds: Set<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val selection = rememberSeriesDeleteSelection(episodes)
+    val selection = rememberMultiEpisodeSelectionForDelete(episodes)
     var expandedSeasonIds by remember { mutableStateOf(emptySet<String>()) }
 
     val totalSelectedCount = selection.totalSelectedCount
-    val totalSelectedBytes = selection.totalSelectedBytes
+    // Delete-specific: bytes freed by the current selection. The base class
+    // owns selection algebra; the byte total is a pure lookup over the selected
+    // ids against the episode map this sheet already holds.
+    val episodeById = remember(episodes) { episodes.values.flatten().associateBy { it.id } }
+    val totalSelectedBytes = selection.selectedEpisodeIds.values.flatten().sumOf { id ->
+        episodeById[id]?.totalSizeBytes ?: 0L
+    }
     val allSelected = selection.allSelected
     val allSelectableIds = selection.allSelectableIds
 
@@ -358,7 +365,7 @@ fun DeleteSeriesSheet(
                 Text("Cancel")
             }
             Button(
-                onClick = { onDelete(selection.toDeleteIds()) },
+                onClick = { onDelete(selection.toSelectedIds()) },
                 enabled = totalSelectedCount > 0,
                 shape = ShapeCache.smoothPill,
                 colors = ButtonDefaults.buttonColors(

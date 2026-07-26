@@ -55,9 +55,9 @@ abstract class DataModule {
         @Singleton
         fun provideDownloadDelegate(
             @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
-            downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
+            writer: com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter,
             playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
-        ): DownloadDelegate = DownloadDelegate(context, downloadRepository, playbackRepository)
+        ): DownloadDelegate = DownloadDelegate(context, writer, playbackRepository)
 
         // StoragePolicy takes the download-byte aggregate as a suspend lambda so
         // it stays pure logic (testable without a DAO). Bound here so the cap
@@ -106,6 +106,13 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindDownloadRepository(impl: DownloadRepositoryImpl): DownloadRepository
+
+    // The narrow write surface shared by DownloadDelegate. Bound to the same
+    // DownloadRepositoryImpl singleton — a real seam in the type graph, not a
+    // second instance. Keeps DownloadDelegate off the 25-method god-interface.
+    @Binds
+    @Singleton
+    abstract fun bindOfflineDownloadWriter(impl: DownloadRepositoryImpl): com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 
     @Binds
     @Singleton

@@ -24,6 +24,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberMultiEpisodeSelectionForDownload
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -72,7 +73,7 @@ fun SeriesDownloadSheet(
     onDownload: (selectedEpisodes: Map<String, List<String>>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val selection = rememberSeriesDownloadSelection(seasons, episodes, downloadedEpisodeIds)
+    val selection = rememberMultiEpisodeSelectionForDownload(seasons, episodes, downloadedEpisodeIds)
     var expandedSeasonId by remember { mutableStateOf<String?>(null) }
 
     val totalSelectedCount = selection.totalSelectedCount
@@ -403,7 +404,7 @@ fun SeriesDownloadSheet(
                 Text(stringResource(R.string.detail_cancel))
             }
             Button(
-                onClick = { onDownload(selection.toDownloadMap()) },
+                onClick = { onDownload(selection.toSelectedMap()) },
                 enabled = totalSelectedCount > 0 && !isDownloading,
                 shape = ShapeCache.smoothPill,
             ) {

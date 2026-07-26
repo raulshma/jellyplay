@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
