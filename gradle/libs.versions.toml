@@ -54,7 +54,6 @@ biometric = "1.4.0-alpha07"
 # Used only by SeerrSecureCredentialsStore (AES256-GCM + AES256-SIV via Keystore-backed MasterKey).
 # Track for deprecation; if a Tink migration becomes necessary
 security = "1.1.0-alpha06"
-sentry = "8.14.0"
 benchmarkMacro = "1.5.0-alpha07"
 # androidx.benchmark 1.5.x alphas: required for the Baseline Profile Gradle plugin
 # to be compatible with AGP 9.x (fixes b/443311090 in 1.5.0-alpha01). The plugin
@@ -206,8 +205,6 @@ biometric-ktx = { group = "androidx.biometric", name = "biometric", version.ref 
 # Security (encrypted prefs)
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "security" }
 
-# Sentry
-sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentry" }
 benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmarkMacro" }
 
 # AboutLibraries (auto-collected open-source license metadata at build time)

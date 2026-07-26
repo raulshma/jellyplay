@@ -4,11 +4,15 @@ import android.content.Context
 import android.util.Log
 import androidx.work.ForegroundInfo
 import androidx.work.ListenableWorker.Result
-import com.raulshma.jellyplay.core.data.repository.DownloadPauseReason
+import com.raulshma.jellyplay.core.data.repository.DownloadFailurePolicy
 import com.raulshma.jellyplay.core.data.repository.DownloadStates
+import com.raulshma.jellyplay.core.data.repository.Outcome
+import com.raulshma.jellyplay.core.data.repository.applyTo
+import com.raulshma.jellyplay.core.data.repository.toWorkResult
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -167,25 +171,25 @@ internal object MultiConnectionDownloadStrategy {
             dao.resetRetryCount(downloadId)
             DownloadNotificationHelper.dismissNotification(context, notificationId)
             Result.success()
-        } catch (e: IOException) {
-            if (totalDownloaded.get() > 0) {
-                runCatching { if (file.exists()) file.delete() }
-                    .onFailure { Log.w("DownloadWorker", "Failed to delete partial after IO error", it) }
-                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.PAUSED.name, 0L)
-                // Network interruption: mark so the reconnect auto-resume picks
-                // it up, and count toward the dead-letter budget.
-                dao.updatePausedReason(downloadId, DownloadPauseReason.NETWORK.persistedValue)
-                dao.incrementRetryCount(downloadId)
-            }
-            Result.retry()
-        } catch (e: Exception) {
-            if (totalDownloaded.get() > 0) {
-                runCatching { if (file.exists()) file.delete() }
-                    .onFailure { Log.w("DownloadWorker", "Failed to delete partial after error", it) }
-                dao.updateErrorMessage(downloadId, failureMessage(e))
-                dao.updateProgressWithSpeed(downloadId, 0L, DownloadStatus.FAILED.name, 0L)
-            }
-            Result.failure()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // Multi-connection partials are never resumable (scattered
+            // RandomAccessFile offsets), so isResumablePartial = false and the
+            // applicator deletes the partial + resets bytes on every outcome.
+            val outcome = DownloadFailurePolicy.decide(
+                error = e,
+                madeProgress = totalDownloaded.get() > 0,
+                currentStatus = dao.getDownloadById(downloadId)?.status ?: DownloadStatus.DOWNLOADING.name,
+                isResumablePartial = false,
+            )
+            // Override the default error message with the richer per-exception
+            // mapping this strategy already owned.
+            val resolved = if (outcome is Outcome.MarkFailed && outcome.errorMessage != null) {
+                outcome.copy(errorMessage = failureMessage(e))
+            } else outcome
+            resolved.applyTo(dao, downloadId, file)
+            resolved.toWorkResult()
         }
     }
 

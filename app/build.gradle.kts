@@ -22,7 +22,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += listOf("en", "de", "es", "fr", "it", "pt", "ja", "ko", "zh")
 
-        manifestPlaceholders["sentryDsn"] = (project.findProperty("sentryDsn") as? String).orEmpty()
         manifestPlaceholders["versionName"] = versionName ?: "1.0"
     }
 
@@ -190,8 +189,6 @@ dependencies {
     coreLibraryDesugaring(libs.android.desugar.jdk)
 
     implementation(libs.media3.session)
-
-    implementation(libs.sentry.android)
 
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
