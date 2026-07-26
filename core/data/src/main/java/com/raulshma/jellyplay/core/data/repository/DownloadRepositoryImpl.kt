@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import android.content.Context
-import android.os.Environment
 import android.util.Log
 import androidx.room.withTransaction
 import androidx.work.Constraints
@@ -83,6 +82,7 @@ class DownloadRepositoryImpl @Inject constructor(
     private val downloadDelegate: dagger.Lazy<com.raulshma.jellyplay.core.data.util.DownloadDelegate>,
     private val storagePolicy: StoragePolicy,
     private val downloadEnqueuer: DownloadEnqueuer,
+    private val storageLayout: DownloadStorageLayout,
 ) : DownloadRepository {
 
     // Caps the number of episodes processed concurrently when queueing a series
@@ -164,43 +164,19 @@ class DownloadRepositoryImpl @Inject constructor(
         // duplicated here and in downloadSeries; the two could drift.
         storagePolicy.enforce(precomputedCurrentBytes = precomputedCurrentBytes)
 
-        val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
-        val dirType = if (isAudioType) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
-        // downloadStorageLocation: "EXTERNAL" prefers the primary external storage
-        // mount (still app-private externalFilesDir, scoped to MEDIA_ROOT).
-        // "INTERNAL" falls back to filesDir which is never visible to other apps
-        // and survives media scan indexing. Both remain app-private post-uninstall.
-        val useInternalStorage = prefs.downloadStorageLocation.equals("INTERNAL", ignoreCase = true) &&
-            prefs.downloadStorageLocation != "EXTERNAL"
-        val baseDir = when {
-            useInternalStorage && !isAudioType -> File(context.filesDir, "downloads")
-            useInternalStorage && isAudioType -> File(context.filesDir, "downloads/music")
-            else -> context.getExternalFilesDir(dirType)
-                ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
-        }
-        val downloadDir = baseDir
-        if (!downloadDir.exists()) {
-            downloadDir.mkdirs()
-        }
-        val statFs = android.os.StatFs(downloadDir.absolutePath)
-        val availableBytes = statFs.availableBlocksLong * statFs.blockSizeLong
-        if (availableBytes < 100L * 1024 * 1024) {
-            throw IllegalStateException("Insufficient storage space. Less than 100 MB available on device.")
-        }
-
+        // Path-layout policy (internal vs external dir, filename sanitize,
+        // container extension, free-space floor) lives in DownloadStorageLayout
+        // — previously inlined ~40 LOC in this method, unreachable from any
+        // other call site and untestable without a full repo construction.
         val id = UUID.randomUUID().toString()
-        val dir = baseDir
-        val safeName = name.replace(FILENAME_SANITIZE_REGEX, "_")
-        // Prefer the original container reported by the Jellyfin MediaSource so
-        // the on-disk extension reflects the real bytes — ExoPlayer selects its
-        // extractor from the URI extension and hangs silently when the extension
-        // lies (e.g. an MKV stream saved as `.mp4`). Sanitize and fall back to
-        // the legacy hardcoded extension for audio/video when the container is
-        // missing or unsafe (path-traversal / weird chars).
-        val extension = container
-            ?.takeIf { it.isNotBlank() && FILENAME_CONTAINER_REGEX.matches(it) }
-            ?: if (isAudioType) "mp3" else "mp4"
-        val filePath = File(dir, "${safeName}_${id.take(8)}.$extension").absolutePath
+        val resolved = storageLayout.resolve(
+            mediaType = mediaType,
+            storageLocationPref = prefs.downloadStorageLocation,
+            name = name,
+            idHint = id.take(8),
+            container = container,
+        )
+        val filePath = resolved.filePath
 
         val entity = DownloadEntity(
             id = id,
@@ -873,18 +849,11 @@ class DownloadRepositoryImpl @Inject constructor(
 
     companion object {
         private const val TAG = "DownloadRepository"
-        private val FILENAME_SANITIZE_REGEX = Regex("[^a-zA-Z0-9.\\-]")
 
         // Exponential backoff base delay applied to every DownloadWorker
         // request so a flaky server is not hammered by concurrent retries.
         // Mirrored by DownloadRecoveryInitializer so cold-start re-enqueues
         // back off identically. WorkManager caps each retry delay at 5h.
         const val DOWNLOAD_BACKOFF_DELAY_MS = 30_000L
-
-        // Container strings from Jellyfin (mkv, mp4, ts, webm, flv, mov, ...).
-        // Constrained to 2-8 alphanumerics so a malformed/missing value can
-        // never leak into the on-disk filename; the caller falls back to the
-        // legacy mp4/mp3 default otherwise.
-        private val FILENAME_CONTAINER_REGEX = Regex("[A-Za-z0-9]{2,8}")
     }
 }

@@ -61,6 +61,9 @@ class DownloadRepositoryImplResumeTest {
     // suffice.
     private val storagePolicy: StoragePolicy = mockk(relaxed = true)
     private val downloadEnqueuer: DownloadEnqueuer = mockk(relaxed = true)
+    // Path-layout policy was extracted out of the repo; the resume path never
+    // starts a new download, so a relaxed mock suffices.
+    private val storageLayout: DownloadStorageLayout = mockk(relaxed = true)
 
     private fun repository() = DownloadRepositoryImpl(
         context = context,
@@ -75,6 +78,7 @@ class DownloadRepositoryImplResumeTest {
         downloadDelegate = downloadDelegate,
         storagePolicy = storagePolicy,
         downloadEnqueuer = downloadEnqueuer,
+        storageLayout = storageLayout,
     )
 
     @Before

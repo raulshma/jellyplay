@@ -7,7 +7,8 @@ import com.raulshma.jellyplay.core.model.EffectStrength
  * from an [EffectStrength] rather than supplied explicitly. Delegates the
  * `LoudnessEnhancer` lifecycle (attach / enable / detach) to
  * [loudnessEnhancer] so the two do not maintain parallel copies of the same
- * Android-audiofx plumbing; only the strength→millibel mapping lives here.
+ * Android-audiofx plumbing; the strength→millibel mapping lives in
+ * [EffectStrengthMapping] (single home shared with the audio path).
  */
 class NightModeHelper {
 
@@ -20,12 +21,7 @@ class NightModeHelper {
         private set
 
     private val targetGainForStrength: Int
-        get() = when (strength) {
-            EffectStrength.NONE -> 0
-            EffectStrength.LOW -> 1500
-            EffectStrength.MODERATE -> 3000
-            EffectStrength.HIGH -> 4500
-        }
+        get() = EffectStrengthMapping.nightModeGainMb(strength)
 
     fun setStrength(strength: EffectStrength) {
         this.strength = strength
