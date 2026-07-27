@@ -4,17 +4,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -38,13 +32,13 @@ import com.composables.icons.tabler.outline.*
 @Composable
 fun BackupSettingsScreen(
     onBack: () -> Unit,
+    onFactoryReset: () -> Unit,
     highlightSettingId: String? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val userMessageBus = LocalUserMessageBus.current
-    var showFactoryResetDialog by remember { mutableStateOf(false) }
 
     val settingsLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
@@ -121,10 +115,9 @@ fun BackupSettingsScreen(
                         title = stringResource(R.string.settings_factory_reset),
                         subtitle = stringResource(R.string.settings_factory_reset_subtitle),
                         index = 2, count = 3,
+                        isDestructive = true,
                         highlighted = highlightSettingId == "factory_reset",
-                        onClick = {
-                            showFactoryResetDialog = true
-                        },
+                        onClick = onFactoryReset,
                     )
                 }
 
@@ -137,34 +130,5 @@ fun BackupSettingsScreen(
             }
         }
         }
-    }
-
-    if (showFactoryResetDialog) {
-        AlertDialog(
-            onDismissRequest = { showFactoryResetDialog = false },
-            title = { Text(stringResource(R.string.settings_factory_reset)) },
-            text = {
-                Text(
-                    text = stringResource(R.string.settings_factory_reset_message),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showFactoryResetDialog = false
-                        viewModel.clearAllPreferences()
-                        onBack()
-                    }
-                ) {
-                    Text(stringResource(R.string.settings_reset), color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showFactoryResetDialog = false }) {
-                    Text(stringResource(R.string.settings_cancel))
-                }
-            },
-        )
     }
 }

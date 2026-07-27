@@ -84,6 +84,13 @@ sealed class Route : NavKey {
     @Serializable data class ExperimentalSettings(val highlightSettingId: String? = null) : Route()
 
     /**
+     * Factory-reset review screen. Lists every preference category with its
+     * current-vs-factory values and exposes Reset-All + per-category Reset
+     * actions. Reached from [BackupSettings].
+     */
+    @Serializable data class FactoryReset(val highlightSettingId: String? = null) : Route()
+
+    /**
      * Integrations hub — top-level list of every third-party service JellyPlay
      * talks to (Seerr, Radarr/Sonarr). Each entry drills into its own screen
      * ([SeerrSettings] / [ArrSettings]).

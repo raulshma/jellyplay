@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.feature.settings.AppearanceSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AudioSettingsScreen
 import com.raulshma.jellyplay.feature.settings.BackupSettingsScreen
 import com.raulshma.jellyplay.feature.settings.ExperimentalSettingsScreen
+import com.raulshma.jellyplay.feature.settings.FactoryResetScreen
 import com.raulshma.jellyplay.feature.settings.IntegrationsScreen
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.LicensesScreen
@@ -174,6 +175,14 @@ fun EntryProviderScope<NavKey>.settingsSection(
 
     entry<Route.BackupSettings> { entry ->
         BackupSettingsScreen(
+            onBack = { navigator.goBack() },
+            onFactoryReset = { navigator.navigate(Route.FactoryReset()) },
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.FactoryReset> { entry ->
+        FactoryResetScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
         )
