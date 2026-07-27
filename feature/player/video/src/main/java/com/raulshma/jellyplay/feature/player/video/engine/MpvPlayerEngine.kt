@@ -148,6 +148,13 @@ class MpvPlayerEngine(
 
     private var wasPlayingBeforeActivityPause = false
 
+    // Set true by [release] before the async native destroy. Observer callbacks
+    // read this at entry and bail, so a callback that races in during the
+    // teardown window (after removeObserver but before mpv_terminate_destroy
+    // finishes on the release thread) cannot touch torn-down state. Matches
+    // mpvkt's `player.isExiting` guard.
+    @Volatile private var released = false
+
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /**
@@ -203,6 +210,7 @@ class MpvPlayerEngine(
                 }
             }
             override fun eventProperty(property: String, value: Boolean) {
+                if (released) return
                 if (property == "pause") {
                     _isPlaying.value = !value
                 }
@@ -236,6 +244,7 @@ class MpvPlayerEngine(
                 }
             }
             override fun event(eventId: Int, data: MPVNode) {
+                if (released) return
                 when (eventId) {
                     MPV.mpvEvent.MPV_EVENT_START_FILE -> {
                         Log.d(TAG, "MPV start file; adding ${pendingSubtitles.size} Jellyfin subtitle source(s)")
@@ -289,7 +298,9 @@ class MpvPlayerEngine(
 
             val fontsDir = fontProvider.provideFontsDir()
             mpv.setOptionString("sub-fonts-dir", fontsDir.absolutePath)
-            mpv.setOptionString("sub-font-provider", "none")
+            // Leave sub-font-provider at its default (fontconfig). Setting "none"
+            // disabled libass font resolution, so the user's sub-font selection
+            // and ASS font-family fallbacks were silently dropped.
 
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
@@ -302,8 +313,11 @@ class MpvPlayerEngine(
                 mpvCfg.audioFallback?.let { append(",").append(it.key) }
             }
             mpv.setOptionString("ao", aoValue)
-            mpv.setOptionString("gpu-context", "android")
-            mpv.setOptionString("opengl-es", "yes")
+            // gpu-context / opengl-es are NOT set: the is.xyz.mpv BaseMPVView
+            // binding (io.github.abdallahmehiz:mpv-android-lib) creates its own
+            // GLES context internally, so these options are redundant and can
+            // race with the binding's own context setup. mpvkt — the reference
+            // app for this exact binding — sets neither.
             // Size subtitles against the video frame, not the OS window. With
             // "yes" (window-relative), rotating to portrait grows the window
             // height ~2x and blows the captions up, while the video itself is
@@ -378,6 +392,10 @@ class MpvPlayerEngine(
             if (currentConfig.audioPassthrough) {
                 mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
             }
+
+            // Tag the output stream so Android routes it correctly (movie role →
+            // speaker, ignores notifications). findroid sets this unconditionally.
+            mpv.setOptionString("audio-set-media-role", "yes")
 
             mpv.setOptionString("audio-channels", channelMixModeToAudioChannels(currentConfig.audioEffects.channelMixMode))
 
@@ -454,6 +472,9 @@ class MpvPlayerEngine(
         if (!engineScope.isActive) {
             engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         }
+        // Engine may have been release()d and is being reused — clear the
+        // teardown guard so observer callbacks are honoured again.
+        released = false
         pendingRequest = request
         pendingSubtitles = request.externalSubtitles
         // Reset observer-driven caches for the new item. The first time-pos /
@@ -482,6 +503,11 @@ class MpvPlayerEngine(
     }
 
     override fun release() {
+        // Mark torn-down first so any observer callback that races in during
+        // the async native destroy bails at its `released` guard instead of
+        // mutating state (e.g. a late `pause=false` would otherwise flip
+        // _isPlaying back true on a half-destroyed engine).
+        released = true
         pendingRequest = null
         pendingSubtitles = emptyList()
         // Note: there is no AudioManager.releaseAudioSessionId() —
@@ -1201,9 +1227,26 @@ class MpvPlayerEngine(
         }
 
         if (request.headers.isNotEmpty()) {
-            val headerStr = request.headers.entries.joinToString(",") { "${it.key}: ${it.value}" }
-            try { view.mpv.setOptionString("http-header-fields", headerStr) } catch (_: Exception) {}
-            try { view.mpv.setPropertyString("http-header-fields", headerStr) } catch (_: Exception) {}
+            // mpv handles User-Agent as its own property (it drives the default
+            // UA for all requests, including the one mpv sends for stream
+            // probing). Pull it out so it lands in `user-agent` rather than
+            // being buried in http-header-fields, which some servers parse
+            // inconsistently. Remaining headers stay in http-header-fields,
+            // comma-joined per mpv's documented format.
+            val userAgent = request.headers.entries
+                .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }
+                ?.value
+            if (!userAgent.isNullOrBlank()) {
+                try { view.mpv.setOptionString("user-agent", userAgent) } catch (_: Exception) {}
+                try { view.mpv.setPropertyString("user-agent", userAgent) } catch (_: Exception) {}
+            }
+            val headerStr = request.headers.entries
+                .filter { !it.key.equals("User-Agent", ignoreCase = true) }
+                .joinToString(",") { "${it.key}: ${it.value}" }
+            if (headerStr.isNotBlank()) {
+                try { view.mpv.setOptionString("http-header-fields", headerStr) } catch (_: Exception) {}
+                try { view.mpv.setPropertyString("http-header-fields", headerStr) } catch (_: Exception) {}
+            }
             Log.d(TAG, "Applied MPV HTTP headers: ${request.headers.keys}")
         }
 
@@ -1331,17 +1374,20 @@ class MpvPlayerEngine(
         if (style.applyCustomStyle) {
             customSubtitleStyleEntries(style, values).forEach { (k, v) -> mpv.safeSetPropertyString(k, v) }
             // Numeric properties are typed (Double) for the runtime path.
-            mpv.safeSetPropertyDouble("sub-outline-size", values.outlineSize)
+            // sub-border-* are the canonical mpv/libass names; sub-outline-* are
+            // deprecated aliases that silently no-op on some libass versions.
+            mpv.safeSetPropertyDouble("sub-border-size", values.outlineSize)
             mpv.safeSetPropertyDouble("sub-shadow-offset", values.shadowOffset)
         } else {
             // Reset to defaults
             mpv.safeSetPropertyString("sub-color", "#FFFFFFFF")
             mpv.safeSetPropertyString("sub-back-color", "#00000000")
-            mpv.safeSetPropertyString("sub-outline-color", "#FF000000")
+            mpv.safeSetPropertyString("sub-border-color", "#FF000000")
             mpv.safeSetPropertyString("sub-shadow-color", "#FF000000")
             mpv.safeSetPropertyString("sub-border-style", "outline-and-shadow")
             mpv.safeSetPropertyString("sub-ass-override", "no")
-            mpv.safeSetPropertyDouble("sub-outline-size", 3.0)
+            mpv.safeSetPropertyBoolean("sub-ass-justify", false)
+            mpv.safeSetPropertyDouble("sub-border-size", 3.0)
             mpv.safeSetPropertyDouble("sub-shadow-offset", 0.0)
         }
 

@@ -57,11 +57,18 @@ internal object MpvStyleMapping {
         val values = computeValues(style)
         add("sub-color" to values.textColor)
         add("sub-back-color" to values.backgroundColor)
-        add("sub-outline-color" to values.edgeColor)
+        // sub-border-color is the canonical mpv name; sub-outline-color is a
+        // deprecated alias that some libass versions silently ignore. mpvkt
+        // uses sub-border-color exclusively.
+        add("sub-border-color" to values.edgeColor)
         add("sub-shadow-color" to values.edgeColor)
         // borderStyle drives the mpv property; BACKGROUND_BOX also folds in backgroundOpacity above.
         add("sub-border-style" to style.borderStyle.toMpvBorderStyle())
         add("sub-ass-override" to style.assOverride.toMpvAssOverride())
+        // Apply justification to ASS tracks too. With sub-ass-override active,
+        // sub-justify alone only affects SRT/VTT; sub-ass-justify=yes extends
+        // the user's alignment to ASS/SSA events. mpvkt pairs these the same way.
+        add("sub-ass-justify" to "yes")
         add("sub-bold" to if (style.bold) "yes" else "no")
         add("sub-italic" to if (style.italic) "yes" else "no")
         // sub-font is owned by the engine (set unconditionally below the
