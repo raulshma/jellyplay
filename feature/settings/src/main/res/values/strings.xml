@@ -247,8 +247,36 @@
     <string name="settings_import_settings_subtitle">Restore settings from a backup file</string>
     <string name="settings_factory_reset">Factory Reset</string>
     <string name="settings_factory_reset_subtitle">Reset all settings to factory defaults</string>
-    <string name="settings_factory_reset_message">This will reset ALL settings to factory defaults. You will be logged out and all app data will be cleared. This action cannot be undone.</string>
+    <string name="settings_factory_reset_message">This will reset ALL settings to their factory defaults. Your account stays signed in and your downloads are not affected. This action cannot be undone.</string>
     <string name="settings_reset">Reset</string>
+
+    <!-- FactoryResetScreen.kt -->
+    <string name="settings_factory_reset_all">Reset All Settings</string>
+    <string name="settings_factory_reset_all_message">This will reset every setting across all categories to its factory default. Your account stays signed in and your downloads are not affected. This action cannot be undone.</string>
+    <string name="settings_factory_reset_category_message">Reset all settings in this category to their factory defaults? This action cannot be undone.</string>
+    <string name="settings_factory_reset_changed_count">%1$d of %2$d changed</string>
+    <string name="settings_factory_reset_up_to_date">Up to date</string>
+    <string name="settings_factory_reset_current_value">Current</string>
+    <string name="settings_factory_reset_factory_value">Factory</string>
+    <string name="settings_factory_reset_summary_card">%1$d of %2$d settings differ from factory defaults</string>
+    <string name="settings_factory_reset_category_done">Category reset to factory defaults</string>
+    <string name="settings_factory_reset_all_done">All settings reset to factory defaults</string>
+    <string name="settings_factory_reset_integrations_note">Third-party integration settings (Seerr, Radarr/Sonarr) live separately and are not reset here — manage them under Integrations.</string>
+    <string name="factory_reset_cat_appearance">Appearance</string>
+    <string name="factory_reset_cat_playback">Playback</string>
+    <string name="factory_reset_cat_audio">Audio</string>
+    <string name="factory_reset_cat_subtitles_language">Subtitles &amp; Language</string>
+    <string name="factory_reset_cat_downloads_network">Downloads &amp; Network</string>
+    <string name="factory_reset_cat_home_discovery">Home &amp; Discovery</string>
+    <string name="factory_reset_cat_audio_cache">Audio Cache</string>
+    <string name="factory_reset_cat_security">Security</string>
+    <string name="factory_reset_cat_notifications">Notifications</string>
+    <string name="factory_reset_cat_screensaver">Screensaver</string>
+    <string name="factory_reset_cat_newsletter">Newsletter</string>
+    <string name="factory_reset_cat_syncplay_casting">SyncPlay &amp; Casting</string>
+    <string name="factory_reset_cat_player_engines">Player Engines</string>
+    <string name="factory_reset_cat_experimental">Experimental</string>
+    <string name="factory_reset_cat_misc_app">Miscellaneous</string>
 
     <!-- ActiveDevicesRow.kt -->
     <string name="settings_active_devices">Active Devices</string>
