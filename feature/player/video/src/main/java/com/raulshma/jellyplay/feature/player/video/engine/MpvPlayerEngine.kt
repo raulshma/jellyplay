@@ -49,7 +49,7 @@ import kotlinx.coroutines.cancel
 class MpvPlayerEngine(
     private val context: Context,
     private val fontProvider: FontProvider,
-) : MediaEngine {
+) : BasePlayerEngine() {
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
@@ -82,34 +82,8 @@ class MpvPlayerEngine(
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
-    // `var` because [release] cancels the SupervisorJob and immediately
-    // recreates a fresh scope, keeping the engine reusable without a `load`.
-    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilityMatrix.MPV
-
-    private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
-    override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()
-
-    private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
-    override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
-
-    private val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 1)
-    override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
-
-    private val _bufferedPositionMs = MutableStateFlow(0L)
-    override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
-
-    private val _videoStats = MutableStateFlow(EngineVideoStats())
-    override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
-
-    private val _pollingIntervalMs = MutableStateFlow(1000L)
-    override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
-    private val _videoStatsEnabled = MutableStateFlow(false)
-    override val videoStatsEnabled: StateFlow<Boolean> = _videoStatsEnabled.asStateFlow()
 
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
@@ -136,7 +110,6 @@ class MpvPlayerEngine(
 
     @Volatile private var lastUnmuteVolume: Float = 1f
 
-    private var currentConfig = EngineConfig()
     // mpv handles its own internal EQ via af filters; this helper exists
     // solely to host the dialogue-boost overlay (see DialogueBoostHelper
     // kdoc) on the engine's audio session. User EQ settings never flow
@@ -154,8 +127,6 @@ class MpvPlayerEngine(
     // finishes on the release thread) cannot touch torn-down state. Matches
     // mpvkt's `player.isExiting` guard.
     @Volatile private var released = false
-
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     // Coalesces the burst of immediate refreshTracks() calls that fire when a
     // track changes: a single subtitle pick triggers `select-${type}` plus the
@@ -499,9 +470,7 @@ class MpvPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
-        if (!engineScope.isActive) {
-            engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        }
+        recreateEngineScopeIfInactive()
         // Engine may have been release()d and is being reused — clear the
         // teardown guard so observer callbacks are honoured again.
         released = false
@@ -583,7 +552,7 @@ class MpvPlayerEngine(
         // Recreate the scope so a re-used engine stays usable without waiting
         // for the next load(). A cancelled scope silently swallows new
         // launches (no-ops), which would otherwise lose the position ticker.
-        engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        recreateEngineScopeIfInactive()
         // Stop the dedicated release thread once the engine is fully
         // torn down. The last scheduled runnable has already captured `view`
         // and will run to completion, but no new work can be enqueued because
@@ -628,29 +597,26 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.setPropertyDouble("speed", speed.toDouble()) } catch (e: Exception) { Log.w(TAG, "setPlaybackSpeed failed", e) }
     }
 
-    override fun updateConfig(config: EngineConfig) {
-        if (currentConfig == config) return
-        val oldConfig = currentConfig
-        currentConfig = config
-        val mpvCfg = (config.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
+    override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
+        val mpvCfg = (newConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
         try {
             val mpv = mpvView?.mpv ?: return
 
-            if (oldConfig.audioDelayMs != config.audioDelayMs) {
-                mpv.setPropertyDouble("audio-delay", config.audioDelayMs / 1000.0)
+            if (oldConfig.audioDelayMs != newConfig.audioDelayMs) {
+                mpv.setPropertyDouble("audio-delay", newConfig.audioDelayMs / 1000.0)
             }
-            if (oldConfig.subtitleDelayMs != config.subtitleDelayMs) {
-                mpv.setPropertyDouble("sub-delay", config.subtitleDelayMs / 1000.0)
+            if (oldConfig.subtitleDelayMs != newConfig.subtitleDelayMs) {
+                mpv.setPropertyDouble("sub-delay", newConfig.subtitleDelayMs / 1000.0)
             }
 
-            if (oldConfig.decoderMode != config.decoderMode || (oldConfig.engineSpecific as? MpvEngineConfig)?.hwdecOverride != mpvCfg.hwdecOverride) {
-                val hwdecValue = mpvCfg.hwdecOverride?.key ?: decoderModeToHwdec(config.decoderMode)
+            if (oldConfig.decoderMode != newConfig.decoderMode || (oldConfig.engineSpecific as? MpvEngineConfig)?.hwdecOverride != mpvCfg.hwdecOverride) {
+                val hwdecValue = mpvCfg.hwdecOverride?.key ?: decoderModeToHwdec(newConfig.decoderMode)
                 mpv.setPropertyString("hwdec", hwdecValue)
             }
 
-            if (oldConfig.audioPassthrough != config.audioPassthrough) {
-                if (config.audioPassthrough) {
+            if (oldConfig.audioPassthrough != newConfig.audioPassthrough) {
+                if (newConfig.audioPassthrough) {
                     mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
                 } else {
                     mpv.setOptionString("audio-spdif", "")
@@ -688,16 +654,16 @@ class MpvPlayerEngine(
                 mpv.setPropertyString("vd-lavc-skiploopfilter", mpvCfg.skipLoopFilter.key)
             }
 
-            if (oldConfig.subtitleStyle != config.subtitleStyle) {
-                applySubtitleStyleInternal(config.subtitleStyle)
+            if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
+                applySubtitleStyleInternal(newConfig.subtitleStyle)
             }
 
-            if (oldConfig.audioEffects.channelMixMode != config.audioEffects.channelMixMode) {
-                mpv.setPropertyString("audio-channels", channelMixModeToAudioChannels(config.audioEffects.channelMixMode))
+            if (oldConfig.audioEffects.channelMixMode != newConfig.audioEffects.channelMixMode) {
+                mpv.setPropertyString("audio-channels", channelMixModeToAudioChannels(newConfig.audioEffects.channelMixMode))
             }
 
             val oldAudioFx = oldConfig.audioEffects
-            val newAudioFx = config.audioEffects
+            val newAudioFx = newConfig.audioEffects
             // Rebuild the af chain when normalization OR dialogue-boost changes,
             // since dialogue boost contributes a highpass stage to the chain.
             if (oldAudioFx.audioNormalizationEnabled != newAudioFx.audioNormalizationEnabled ||
@@ -722,8 +688,8 @@ class MpvPlayerEngine(
                 }
             }
 
-            if (oldConfig.videoEffects != config.videoEffects) {
-                applyVideoFilters(config.videoEffects)
+            if (oldConfig.videoEffects != newConfig.videoEffects) {
+                applyVideoFilters(newConfig.videoEffects)
             }
 
             val sid = audioSessionId
@@ -1005,9 +971,6 @@ class MpvPlayerEngine(
 
     override val audioSessionId: Int
         get() = generatedAudioSessionId
-
-    override fun setPollingIntervalMs(ms: Long) { _pollingIntervalMs.value = ms }
-    override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
 
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)

@@ -83,6 +83,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -1737,6 +1738,48 @@ fun VideoPlayerScreen(
     }
 }
 
+/**
+ * Transient top-center pill badge that fades in when [show] turns true. The
+ * show/hide timing is owned by each caller's `LaunchedEffect` (see
+ * [AutoAspectRatioBadge] / [ZoomBadge]); this composable only renders the pill.
+ * Shared by the Auto-aspect-ratio and zoom badges, which were previously two
+ * ~40-line near-identical composables.
+ */
+@Composable
+private fun BoxScope.PlayerBadge(
+    show: Boolean,
+    text: String,
+    topPadding: Dp,
+) {
+    AnimatedVisibility(
+        visible = show,
+        enter = fadeIn(tween(150, easing = AlphaEasing)),
+        exit = fadeOut(tween(200, easing = AlphaEasing)),
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = topPadding),
+    ) {
+        Surface(
+            shape = ShapeCache.smoothPill,
+            color = playerOnScrim().copy(alpha = 0.12f),
+        ) {
+            Text(
+                text = text,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            )
+        }
+    }
+}
+
+/**
+ * Transient badge shown when the player auto-selects a detected aspect ratio
+ * (e.g. cropping letterboxed content to fill the screen). Auto-dismisses after
+ * [ASPECT_BADGE_DURATION_MS].
+ */
 @Composable
 private fun BoxScope.AutoAspectRatioBadge(
     detectedAspectRatio: AspectRatio?,
@@ -1753,28 +1796,11 @@ private fun BoxScope.AutoAspectRatioBadge(
         }
     }
 
-    AnimatedVisibility(
-        visible = showBadge,
-        enter = fadeIn(tween(150, easing = AlphaEasing)),
-        exit = fadeOut(tween(200, easing = AlphaEasing)),
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .padding(top = 60.dp),
-    ) {
-        Surface(
-            shape = ShapeCache.smoothPill,
-            color = playerOnScrim().copy(alpha = 0.12f),
-        ) {
-            Text(
-                text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                ),
-            )
-        }
-    }
+    PlayerBadge(
+        show = showBadge,
+        text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",
+        topPadding = 60.dp,
+    )
 }
 
 /**
@@ -1798,28 +1824,11 @@ private fun BoxScope.ZoomBadge(videoZoom: Float) {
     // Format once per distinct zoom value rather than per badge recompose.
     val zoomText = remember(videoZoom) { "${formatFixed(videoZoom.toDouble(), 1)}×" }
 
-    AnimatedVisibility(
-        visible = showBadge,
-        enter = fadeIn(tween(150, easing = AlphaEasing)),
-        exit = fadeOut(tween(200, easing = AlphaEasing)),
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .padding(top = 100.dp),
-    ) {
-        Surface(
-            shape = ShapeCache.smoothPill,
-            color = playerOnScrim().copy(alpha = 0.12f),
-        ) {
-            Text(
-                text = zoomText,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                ),
-            )
-        }
-    }
+    PlayerBadge(
+        show = showBadge,
+        text = zoomText,
+        topPadding = 100.dp,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

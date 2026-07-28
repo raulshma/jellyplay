@@ -40,7 +40,7 @@ import org.videolan.libvlc.util.VLCVideoLayout
 class LibVlcPlayerEngine(
     private val context: Context,
     private val fontProvider: FontProvider,
-) : MediaEngine {
+) : BasePlayerEngine() {
 
     companion object {
         private const val TAG = "LibVlcPlayerEngine"
@@ -50,52 +50,20 @@ class LibVlcPlayerEngine(
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
-    // `var` so [load] can recreate it if a prior [release] cancelled the
-    // SupervisorJob. Without this the engine is permanently unusable after
-    // release() (positionFlow's ticker launches on this scope and would
-    // silently never emit). Recreated lazily, only when inactive.
-    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilityMatrix.LIBVLC
-
-    private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
-    override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()
-
-    private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
-    override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
-
-    private val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 1)
-    override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
-
-    private val _bufferedPositionMs = MutableStateFlow(0L)
-    override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
-
-    private val _videoStats = MutableStateFlow(EngineVideoStats())
-    override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
-
-    private val _pollingIntervalMs = MutableStateFlow(1000L)
-    override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
-    private val _videoStatsEnabled = MutableStateFlow(false)
-    override val videoStatsEnabled: StateFlow<Boolean> = _videoStatsEnabled.asStateFlow()
 
     private var libVLC: LibVLC? = null
     val libVlc: LibVLC? get() = libVLC
     private var mediaPlayer: MediaPlayer? = null
     private var videoLayout: VLCVideoLayout? = null
     private var currentPlaybackRequest: PlaybackRequest? = null
-    
-    private var currentConfig = EngineConfig()
 
     private var pendingPlay = false
     private var wasPlayingBeforeActivityPause = false
     private var hasRenderer = false
     private var pendingRendererItem: RendererItem? = null
     private var cachedDurationMs: Long = 0L
-
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onActivityPause() {
         wasPlayingBeforeActivityPause = _isPlaying.value
@@ -156,9 +124,7 @@ class LibVlcPlayerEngine(
     }
 
     override fun load(request: PlaybackRequest) {
-        if (!engineScope.isActive) {
-            engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        }
+        recreateEngineScopeIfInactive()
         releaseInternal(releaseVlc = true)
 
         currentPlaybackRequest = request
@@ -376,20 +342,16 @@ class LibVlcPlayerEngine(
         try { mediaPlayer?.rate = speed } catch (_: Exception) {}
     }
 
-    override fun updateConfig(config: EngineConfig) {
-        if (currentConfig == config) return
-        val oldConfig = currentConfig
-        currentConfig = config
-
+    override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
         try {
             val mp = mediaPlayer ?: return
 
             // Audio delay and subtitle delay apply live via libvlc setters.
-            if (oldConfig.audioDelayMs != config.audioDelayMs) {
-                mp.setAudioDelay(config.audioDelayMs)
+            if (oldConfig.audioDelayMs != newConfig.audioDelayMs) {
+                mp.setAudioDelay(newConfig.audioDelayMs)
             }
-            if (oldConfig.subtitleDelayMs != config.subtitleDelayMs) {
-                mp.setSpuDelay(config.subtitleDelayMs * 1000L)
+            if (oldConfig.subtitleDelayMs != newConfig.subtitleDelayMs) {
+                mp.setSpuDelay(newConfig.subtitleDelayMs * 1000L)
             }
 
             // Known limitation: channel-mix mode, audio-normalization,
@@ -400,7 +362,7 @@ class LibVlcPlayerEngine(
             // a reload below (subtitle style does; the rest require the user
             // to back out and re-enter the player). Documented here so future
             // contributors don't assume the toggle is silently dropped.
-            if (oldConfig.subtitleStyle != config.subtitleStyle || oldConfig.videoEffects != config.videoEffects) {
+            if (oldConfig.subtitleStyle != newConfig.subtitleStyle || oldConfig.videoEffects != newConfig.videoEffects) {
                 reloadMediaForSubtitleStyleChange()
             }
         } catch (_: Exception) {}
@@ -819,9 +781,6 @@ class LibVlcPlayerEngine(
         // Return the unset sentinel (0 == C.AUDIO_SESSION_ID_UNSET) so the
         // helpers' `if (sid == UNSET) return` guard short-circuits cleanly.
         get() = 0
-
-    override fun setPollingIntervalMs(ms: Long) { _pollingIntervalMs.value = ms }
-    override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
 
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
