@@ -121,7 +121,17 @@ data class SubtitleStyle(
 
     val bold: Boolean = false,
     val italic: Boolean = false,
-)
+) {
+    companion object {
+        /**
+         * Canonical default for the no-edit user. Identical to the zero-arg
+         * constructor except [applyCustomStyle] is forced true so every engine
+         * reads the stored style as authoritative rather than falling back to
+         * its own hardcoded defaults.
+         */
+        val DEFAULT: SubtitleStyle = SubtitleStyle(applyCustomStyle = true)
+    }
+}
 
 @Immutable
 @Serializable

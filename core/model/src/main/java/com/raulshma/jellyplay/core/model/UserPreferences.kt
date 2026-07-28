@@ -272,8 +272,8 @@ data class UserPreferences(
             offsetMs = subtitleStyle.offsetMs,
             verticalPosition = subtitleStyle.verticalPosition,
         )
-        isHdr && hdrSubtitleStyleEnabled -> hdrSubtitleStyle
-        else -> subtitleStyle
+        isHdr && hdrSubtitleStyleEnabled -> hdrSubtitleStyle.copy(applyCustomStyle = true)
+        else -> subtitleStyle.copy(applyCustomStyle = true)
     }
 
     /**
