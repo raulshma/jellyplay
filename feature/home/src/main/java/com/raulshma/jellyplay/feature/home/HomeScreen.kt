@@ -76,7 +76,7 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 @androidx.compose.runtime.Immutable
 data class HomeCallbacks(
     val onItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit,
-    val onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?) -> Unit = { _, _, _, _, _ -> },
+    val onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long, mediaType: com.raulshma.jellyplay.core.model.MediaType, parentId: String?, itemName: String) -> Unit = { _, _, _, _, _, _ -> },
     val onSettingsClick: () -> Unit = {},
     val onSyncPlayClick: () -> Unit = {},
     val onDownloadsClick: () -> Unit = {},
@@ -224,7 +224,7 @@ private fun MainHomeContent(
     val mediaOnItemClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem -> currentOnItemClick(item.id, item.mediaType, item.parentId, item.name) } }
     val currentOnPlayClick by rememberUpdatedState(callbacks.onPlayClick)
     val mediaOnPlayClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem ->
-        currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L, item.mediaType, item.parentId)
+        currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L, item.mediaType, item.parentId, item.name)
     } }
 
     val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
