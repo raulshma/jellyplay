@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
+import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -191,29 +191,16 @@ private fun DelayRow(
                 }
             }
 
-            if (isTv) {
-                DpadSlider(
-                    value = delayMs.toFloat(),
-                    onValueChange = { onValueChange((it / 50f).roundToLong() * 50) },
-                    valueRange = -5000f..5000f,
-                    steps = 199,
-                    dpadStep = 100f,
-                    focusRequester = focusRequester,
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
-                androidx.compose.material3.Slider(
-                    value = delayMs.toFloat(),
-                    onValueChange = { onValueChange((it / 50f).roundToLong() * 50) },
-                    valueRange = -5000f..5000f,
-                    steps = 199,
-                    colors = androidx.compose.material3.SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            TvOrTouchSlider(
+                value = delayMs.toFloat(),
+                onValueChange = { onValueChange((it / 50f).roundToLong() * 50) },
+                valueRange = -5000f..5000f,
+                modifier = Modifier.weight(1f),
+                isTv = isTv,
+                steps = 199,
+                dpadStep = 100f,
+                focusRequester = focusRequester,
+            )
 
             if (isTv) {
                 DelayStepper(icon = Tabler.Outline.Plus, description = "Increase $label") {

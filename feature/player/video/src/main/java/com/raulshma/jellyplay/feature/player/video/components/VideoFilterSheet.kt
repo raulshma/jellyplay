@@ -33,7 +33,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
-import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
+import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -294,29 +294,17 @@ private fun FilterSlider(
                 }
             }
         }
-        if (isTv) {
-            DpadSlider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = valueRange,
-                focusRequester = focusRequester,
-                colors = androidx.compose.material3.SliderDefaults.colors(
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else {
-            androidx.compose.material3.Slider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = valueRange,
-                colors = androidx.compose.material3.SliderDefaults.colors(
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        TvOrTouchSlider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            modifier = Modifier.fillMaxWidth(),
+            isTv = isTv,
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+            ),
+            focusRequester = focusRequester,
+        )
     }
 }
