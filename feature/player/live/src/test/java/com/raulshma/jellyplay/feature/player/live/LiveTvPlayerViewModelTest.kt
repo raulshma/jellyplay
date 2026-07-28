@@ -69,7 +69,6 @@ class LiveTvPlayerViewModelTest {
             val newFavs = firstArg<Set<String>>()
             preferencesFlow.value = preferencesFlow.value.copy(favoriteChannels = newFavs)
         }
-        every { playbackRepo.getServerUrl() } returns "https://srv"
         every { playbackRepo.getAccessToken() } returns "tok"
         every { engineFactory.create(any(), any()) } returns fakeEngine
         every { fakeEngine.state } returns MutableStateFlow(
@@ -98,7 +97,7 @@ class LiveTvPlayerViewModelTest {
 
     private fun stubResolve() {
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any())
+            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns ResolvedPlayback(
             mediaSourceId = "src",
             streamUrl = "https://srv/Videos/x/stream",
@@ -162,11 +161,11 @@ class LiveTvPlayerViewModelTest {
             liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
         } returns Result.success(channels(2))
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any())
+            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns null
         // fetchPlaybackInfo fallback must also fail to surface the error.
         coEvery {
-            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.failure(RuntimeException("server down"))
 
         val vm = createVm()
@@ -183,11 +182,11 @@ class LiveTvPlayerViewModelTest {
         } returns Result.success(channels(1))
         // resolvePlayback returns null (e.g. device profile didn't match).
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any())
+            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns null
         // fetchPlaybackInfo fallback returns a live source.
         coEvery {
-            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
             PlaybackInfoResult(
                 playSessionId = "psid",
@@ -229,10 +228,10 @@ class LiveTvPlayerViewModelTest {
             liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
         } returns Result.success(channels(1))
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any())
+            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns null
         coEvery {
-            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any())
+            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
             PlaybackInfoResult(
                 playSessionId = "psid",

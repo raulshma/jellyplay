@@ -12,6 +12,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
+import com.raulshma.jellyplay.core.data.playback.PlayerAudioLifecycle
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
@@ -350,10 +351,39 @@ class VideoPlayerViewModel @Inject constructor(
         onMediaDetailRefreshed = { detail -> applyMediaDetailAndSourceState(detail) },
     )
     private var videoMediaSession: MediaSession? = null
-    private var becomingNoisyReceiver: android.content.BroadcastReceiver? = null
-    private var transientAudioFocusRequest: android.media.AudioFocusRequest? = null
-    private var preDuckVolume: Float? = null
-    private var wasPlayingBeforeTransientLoss = false
+
+    /**
+     * Owns audio-focus (duck/restore) + becoming-noisy auto-pause. Shared with
+     * the live TV VM to eliminate the prior copy-paste. [control] reads the
+     * current engine on every callback so engine swaps (retry/fallback) and
+     * teardown stay correct. [onRegain] applies the `videoSkipBackOnResumeMs`
+     * resume-skip the VOD path needs (live has no equivalent).
+     */
+    private val playerAudioLifecycle = PlayerAudioLifecycle(
+        context = context,
+        control = {
+            playerSessionManager.engine?.let { engine ->
+                PlayerAudioLifecycle.PlaybackControl(
+                    isPlaying = { engine.isPlaying.value },
+                    volume = { engine.volume },
+                    pause = { engine.pause() },
+                    play = { engine.play() },
+                    setVolume = { engine.setVolume(it) },
+                    setMuted = { engine.setMuted(it) },
+                )
+            }
+        },
+        isMuted = { _uiState.value.isMuted },
+        onRegain = {
+            val skipMs = preferencesStore.preferences.value.videoSkipBackOnResumeMs
+            if (skipMs > 0L) {
+                val target = ((playerSessionManager.engine?.currentPositionMs ?: 0L) - skipMs)
+                    .coerceAtLeast(0L)
+                seekTo(target)
+            }
+        },
+    )
+
     // Volume captured when a sleep timer starts fading, so cancelSleepTimer can
     // restore the user's level instead of slamming to 1f. Mirrors preDuckVolume
     // in the audio-focus listener. Null when the user is muted (mute wins) or
@@ -428,80 +458,6 @@ class VideoPlayerViewModel @Inject constructor(
             seekTo(target)
         }
         engine.play()
-    }
-
-    private fun registerTransientFocusLossListener() {
-        if (transientAudioFocusRequest != null) return
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-            ?: return
-        val listener = android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
-            val engine = playerSessionManager.engine ?: return@OnAudioFocusChangeListener
-            when (focusChange) {
-                android.media.AudioManager.AUDIOFOCUS_LOSS -> {
-                    // Permanent loss — abandon; system will not hand focus back automatically.
-                    engine.pause()
-                    preDuckVolume = null
-                    wasPlayingBeforeTransientLoss = false
-                    unregisterTransientFocusLossListener()
-                }
-                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                    // Store the raw engine volume without clamping: VLC's
-                    // range is 0..2 (to support >100% boost) while ExoPlayer/MPV
-                    // use 0..1. A previous coerceIn(0f, 1f) here permanently
-                    // halved VLC volumes above 100% on the first duck cycle.
-                    // Each engine's setVolume accepts its own native range, so
-                    // round-tripping the unclamped value is correct.
-                    if (preDuckVolume == null) preDuckVolume = engine.volume
-                    wasPlayingBeforeTransientLoss = engine.isPlaying.value
-                    engine.setVolume(0.2f)
-                }
-                android.media.AudioManager.AUDIOFOCUS_GAIN -> {
-                    // Restore pre-duck volume only if user hasn't muted in the meantime.
-                    if (_uiState.value.isMuted) {
-                        engine.setMuted(true)
-                    } else {
-                        preDuckVolume?.let { engine.setVolume(it) }
-                    }
-                    val skipMs = preferencesStore.preferences.value.videoSkipBackOnResumeMs
-                    if (skipMs > 0L && wasPlayingBeforeTransientLoss) {
-                        val target = (engine.currentPositionMs - skipMs).coerceAtLeast(0L)
-                        seekTo(target)
-                    }
-                    if (wasPlayingBeforeTransientLoss) {
-                        engine.play()
-                    }
-                    preDuckVolume = null
-                    wasPlayingBeforeTransientLoss = false
-                }
-            }
-        }
-        val audioAttributes = android.media.AudioAttributes.Builder()
-            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE)
-            .build()
-        val request = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(audioAttributes)
-            .setAcceptsDelayedFocusGain(true)
-            .setOnAudioFocusChangeListener(listener)
-            .build()
-        this.transientAudioFocusRequest = request
-        try {
-            audioManager.requestAudioFocus(request)
-        } catch (_: Exception) {
-            this.transientAudioFocusRequest = null
-        }
-    }
-
-    private fun unregisterTransientFocusLossListener() {
-        val request = transientAudioFocusRequest ?: return
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-        try {
-            audioManager?.abandonAudioFocusRequest(request)
-        } catch (_: Exception) {}
-        transientAudioFocusRequest = null
-        preDuckVolume = null
-        wasPlayingBeforeTransientLoss = false
     }
 
     private fun getReportPositionMs(): Long {
@@ -749,10 +705,10 @@ class VideoPlayerViewModel @Inject constructor(
                 // Duck on transient audio focus loss (phone calls). Folded into
                 // this single preferences collector (was a duplicate collector)
                 // so a pref write rebuilds the snapshot once, not twice.
-                if (prefs.duckOnTransientFocusLoss && transientAudioFocusRequest == null) {
-                    registerTransientFocusLossListener()
-                } else if (!prefs.duckOnTransientFocusLoss && transientAudioFocusRequest != null) {
-                    unregisterTransientFocusLossListener()
+                if (prefs.duckOnTransientFocusLoss && !playerAudioLifecycle.isAudioFocusActive()) {
+                    playerAudioLifecycle.registerAudioFocus()
+                } else if (!prefs.duckOnTransientFocusLoss && playerAudioLifecycle.isAudioFocusActive()) {
+                    playerAudioLifecycle.unregisterAudioFocus()
                 }
             }
         }
@@ -808,26 +764,8 @@ class VideoPlayerViewModel @Inject constructor(
         }
         syncPlayBridge.start()
 
-        // Headphone unplug auto-pause
-        val becomingNoisyReceiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: android.content.Intent?) {
-                if (intent?.action == android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
-                    playerSessionManager.engine?.pause()
-                }
-            }
-        }
-        this.becomingNoisyReceiver = becomingNoisyReceiver
-        val filter = android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY)
-        try {
-            context.registerReceiver(
-                becomingNoisyReceiver,
-                filter,
-                // Private receiver for a system broadcast — explicit flag required on API 34+.
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    Context.RECEIVER_NOT_EXPORTED
-                } else 0,
-            )
-        } catch (_: Exception) {}
+        // Headphone unplug auto-pause (delegated to the shared audio-lifecycle owner).
+        playerAudioLifecycle.registerBecomingNoisy()
 
         launch {
             var lastItemId: String? = null
@@ -2893,12 +2831,8 @@ class VideoPlayerViewModel @Inject constructor(
         val sessionId = currentPlaySessionId
         val positionTicks = getReportPositionMs() * 10_000
         pipController.requestAutoEnterPip(false)
-        // Unregister headphone unplug receiver
-        becomingNoisyReceiver?.let {
-            try { context.unregisterReceiver(it) } catch (_: Exception) {}
-        }
-        becomingNoisyReceiver = null
-        unregisterTransientFocusLossListener()
+        // Tear down audio-focus + becoming-noisy (idempotent; safe if never registered).
+        playerAudioLifecycle.release()
         sleepTimerManager.setOnFadeProgress(null)
         releaseInternals()
         // Full teardown: clear the transport too (releaseInternals keeps it so

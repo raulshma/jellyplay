@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -65,6 +66,7 @@ class PreferencesEditor @Inject constructor(
     fun setNavBarShowLabels(show: Boolean) = edit { setNavBarShowLabels(show) }
     fun setPreferredPlayer(playerType: PlayerType) = edit { setPreferredPlayer(playerType) }
     fun setStreamingQuality(quality: StreamingQuality) = edit { setStreamingQuality(quality) }
+    fun setLiveStreamOption(option: LiveStreamOption) = edit { setLiveStreamOption(option) }
     fun setVideoSeekDurationMs(ms: Long) = edit { setVideoSeekDurationMs(ms) }
     fun setVideoGesturesEnabled(enabled: Boolean) = edit { setVideoGesturesEnabled(enabled) }
     fun setVideoDefaultOrientation(mode: OrientationMode) = edit { setVideoDefaultOrientation(mode) }

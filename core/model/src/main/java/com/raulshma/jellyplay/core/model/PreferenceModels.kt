@@ -205,6 +205,19 @@ enum class PlaybackMode(val displayName: String) {
     FORCE_TRANSCODE("Force Transcode"),
 }
 
+/**
+ * Live TV stream delivery option. Unlike VOD [PlaybackMode], live tuners
+ * cannot be served verbatim (their output is non-seekable), so Force Direct
+ * Play is not offered — the real choice is whether the server re-encodes.
+ */
+@Immutable
+@Serializable
+enum class LiveStreamOption(val displayName: String) {
+    AUTO("Auto"),
+    DIRECT_STREAM("Direct Stream"),
+    TRANSCODE("Transcode"),
+}
+
 @Immutable
 @Serializable
 data class EqualizerSettings(

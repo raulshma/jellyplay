@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.live
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
@@ -23,6 +24,7 @@ data class LiveTvPlayerUiState(
     val isSwitchingChannel: Boolean = false,
     val favorites: Set<String> = emptySet(),
     val isMuted: Boolean = false,
+    val liveStreamOption: LiveStreamOption = LiveStreamOption.AUTO,
 ) {
     val hasNext: Boolean get() = currentIndex < channels.lastIndex
     val hasPrevious: Boolean get() = currentIndex > 0

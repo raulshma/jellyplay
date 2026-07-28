@@ -19,6 +19,7 @@ data class UserPreferences(
     val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val playbackMode: PlaybackMode = PlaybackMode.AUTO,
+    val liveStreamOption: LiveStreamOption = LiveStreamOption.AUTO,
     val maxCacheSizeMb: Int = 0,
     val autoDeleteCache: Boolean = true,
     val pinLockEnabled: Boolean = false,
