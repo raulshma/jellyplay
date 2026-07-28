@@ -649,9 +649,9 @@ class VideoPlayerViewModel @Inject constructor(
                 cachedPreferences = prefs
                 // Pure prefs → uiState projection (each field guarded so an
                 // unrelated pref emission does not re-emit to every collector).
-                val projection = settingsProjector.project(prefs)
+                val subtitleStyleChanged = settingsProjector.project(prefs)
                 // Subtitle-style change needs an engine-config rebuild.
-                if (projection.subtitleStyleChanged) {
+                if (subtitleStyleChanged) {
                     playerSessionManager.engine?.let { updateConfigWithUiState() }
                 }
                 // Autoplay-next flip also toggles the autoplay controller.
@@ -2344,7 +2344,7 @@ class VideoPlayerViewModel @Inject constructor(
 
         val castPlayer = castManager.castPlayerForSession
         if (castPlayer != null) {
-            mediaSessionController.setActive(castPlayer, "jellyplay_cast_bg")
+            mediaSessionController.createForPlayer(castPlayer, "jellyplay_cast_bg")
         }
     }
 
@@ -2358,7 +2358,7 @@ class VideoPlayerViewModel @Inject constructor(
             val sessionState = playerSessionManager.sessionState.value
             val itemId = sessionState.currentItemId ?: return
             val player = engine.underlyingPlayer ?: return
-            mediaSessionController.setActive(player, "jellyplay_video_$itemId")
+            mediaSessionController.createForPlayer(player, "jellyplay_video_$itemId")
         }
     }
 

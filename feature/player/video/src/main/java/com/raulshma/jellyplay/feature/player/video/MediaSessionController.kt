@@ -23,9 +23,9 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
  *    and restarted seeks from 0 on transcoded media. Overriding
  *    `getMediaMetadata()` here is non-destructive: the underlying timeline and
  *    position are untouched.
- *  - [setActive]: builds a bare session around an arbitrary [Player] (used by
- *    the background-cast detach/reattach path, which swaps the local engine
- *    player for the cast receiver's player).
+ *  - [createForPlayer]: builds a bare session around an arbitrary [Player]
+ *    (used by the background-cast detach/reattach path, which swaps the local
+ *    engine player for the cast receiver's player).
  *  - [release]: tears down the active session (idempotent).
  *
  * The controller is the sole owner of the [MediaSession] reference; the VM no
@@ -72,7 +72,7 @@ internal class MediaSessionController(
      * (used by background-cast detach/reattach, which swap the player surface).
      * Releases any prior session first.
      */
-    fun setActive(player: Player, sessionId: String) {
+    fun createForPlayer(player: Player, sessionId: String) {
         release()
         activate(MediaSession.Builder(context, player)
             .setId(sessionId)

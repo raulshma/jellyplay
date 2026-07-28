@@ -32,18 +32,15 @@ internal class SettingsProjector(
 ) {
 
     /**
-     * Result of a projection pass. [subtitleStyleChanged] tells the VM whether
-     * it must rebuild the engine config (`updateConfigWithUiState`) for the new
-     * subtitle style; every other projected field has no downstream side effect.
-     */
-    data class Result(val subtitleStyleChanged: Boolean)
-
-    /**
      * Apply the prefs-derived uiState slice. Each field is guarded so an
      * unrelated pref write (dozens emit UserPreferences) does not allocate a
      * fresh uiState copy or re-emit to every collector.
+     *
+     * Returns `true` when the resolved subtitle style changed — the VM must
+     * then rebuild the engine config (`updateConfigWithUiState`); every other
+     * projected field has no downstream side effect.
      */
-    fun project(prefs: UserPreferences): Result {
+    fun project(prefs: UserPreferences): Boolean {
         val state = getUiState()
         var subtitleStyleChanged = false
 
@@ -106,7 +103,7 @@ internal class SettingsProjector(
             updateUiState { it.copy(defaultSearchLanguage = searchLang) }
         }
 
-        return Result(subtitleStyleChanged = subtitleStyleChanged)
+        return subtitleStyleChanged
     }
 
     /**
