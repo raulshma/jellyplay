@@ -367,6 +367,12 @@ class VideoPlayerViewModel @Inject constructor(
         getCurrentPlaybackMode = { _uiState.value.playbackMode },
         getSessionState = { playerSessionManager.sessionState.value },
     )
+    private val settingsProjector = SettingsProjector(
+        getUiState = { _uiState.value },
+        updateUiState = { transform -> _uiState.update(transform) },
+        getItemId = { playerSessionManager.sessionState.value.currentItemId },
+        getMediaStreams = { _uiState.value.mediaStreams },
+    )
     private var videoMediaSession: MediaSession? = null
 
     /**
@@ -636,74 +642,17 @@ class VideoPlayerViewModel @Inject constructor(
             preferencesStore.preferences.collect { prefs ->
                 val oldPrefs = cachedPreferences
                 cachedPreferences = prefs
-                val itemId = playerSessionManager.sessionState.value.currentItemId
-                val stored = itemId?.let { prefs.mediaStreamSelections[it] }
-                // Skip the (≈95-field) state copy + collector re-emit when the
-                // two flags haven't changed. Every UserPreferences emission
-                // (dozens of unrelated pref writes trigger this) used to
-                // allocate a fresh copy and re-emit to every uiState collector
-                // even though hasAudioOverride/hasSubtitleOverride rarely
-                // change. The surrounding blocks already guard every other
-                // field with `if (_uiState.value.X != prefs.X)`; this is the
-                // exception.
-                val newAudio = stored?.audioStreamIndex != null
-                val newSub = stored?.subtitleStreamIndex != null
-                if (_uiState.value.hasAudioOverride != newAudio ||
-                    _uiState.value.hasSubtitleOverride != newSub
-                ) {
-                    _uiState.update {
-                        it.copy(hasAudioOverride = newAudio, hasSubtitleOverride = newSub)
-                    }
+                // Pure prefs → uiState projection (each field guarded so an
+                // unrelated pref emission does not re-emit to every collector).
+                val projection = settingsProjector.project(prefs)
+                // Subtitle-style change needs an engine-config rebuild.
+                if (projection.subtitleStyleChanged) {
+                    playerSessionManager.engine?.let { updateConfigWithUiState() }
                 }
-                val resolvedSubtitleStyle = prefs.resolvedSubtitleStyle(
-                    isHdr = prefs.isHdrFromStreams(_uiState.value.mediaStreams),
-                )
-                if (_uiState.value.subtitleStyle != resolvedSubtitleStyle) {
-                    _uiState.update { it.copy(subtitleStyle = resolvedSubtitleStyle) }
-                    playerSessionManager.engine?.let {
-                        updateConfigWithUiState()
-                    }
-                }
-                if (_uiState.value.sleepTimerLastUsedDurationMs != prefs.sleepTimerDurationMs) {
-                    _uiState.update { it.copy(sleepTimerLastUsedDurationMs = prefs.sleepTimerDurationMs) }
-                }
-                if (_uiState.value.showPlaybackMetadata != prefs.videoShowPlaybackMetadata) {
-                    _uiState.update { it.copy(showPlaybackMetadata = prefs.videoShowPlaybackMetadata) }
-                }
-                if (_uiState.value.showClock != prefs.showClockInPlayer) {
-                    _uiState.update { it.copy(showClock = prefs.showClockInPlayer) }
-                }
-                if (_uiState.value.showTimeRemaining != prefs.showTimeRemaining) {
-                    _uiState.update { it.copy(showTimeRemaining = prefs.showTimeRemaining) }
-                }
-                if (_uiState.value.tvZoomModePercent != prefs.tvZoomModePercent) {
-                    _uiState.update { it.copy(tvZoomModePercent = prefs.tvZoomModePercent) }
-                }
-                 if (_uiState.value.keepScreenOnDuringVideo != prefs.keepScreenOnDuringVideo) {
-                    _uiState.update { it.copy(keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo) }
-                }
-                if (_uiState.value.usePinForPlayerLock != prefs.usePinForPlayerLock ||
-                    _uiState.value.hasPin != (prefs.pinHash != null)) {
-                    _uiState.update { it.copy(
-                        usePinForPlayerLock = prefs.usePinForPlayerLock,
-                        hasPin = prefs.pinHash != null,
-                    ) }
-                }
-                if (_uiState.value.passOutProtectionHours != prefs.videoPassOutProtectionHours) {
-                    _uiState.update { it.copy(passOutProtectionHours = prefs.videoPassOutProtectionHours) }
-                }
+                // Autoplay-next flip also toggles the autoplay controller.
                 if (_uiState.value.videoAutoplayNext != prefs.videoAutoplayNext) {
                     _uiState.update { it.copy(videoAutoplayNext = prefs.videoAutoplayNext) }
                     autoplayController.setEnabled(prefs.videoAutoplayNext)
-                }
-                if (_uiState.value.autoPlayCountdownSec != prefs.autoPlayCountdownSec) {
-                    _uiState.update { it.copy(autoPlayCountdownSec = prefs.autoPlayCountdownSec) }
-                }
-                // Default the Subtitle Manager's Search-tab language to the
-                // user's preferred subtitle language (ISO 639-2/3, e.g. "eng").
-                val searchLang = prefs.preferredSubtitleLanguage ?: "eng"
-                if (_uiState.value.defaultSearchLanguage != searchLang) {
-                    _uiState.update { it.copy(defaultSearchLanguage = searchLang) }
                 }
                 if (oldPrefs.volumeBoostEnabled != prefs.volumeBoostEnabled ||
                     oldPrefs.volumeBoostGain != prefs.volumeBoostGain ||
