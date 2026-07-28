@@ -570,6 +570,32 @@ internal fun PlayerControls(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // The primary control cluster (quality / speed / audio / subtitle
+                    // / chapters / episodes / syncplay / aspect / info) is identical
+                    // in both layouts — hoist it once so the 12-arg call lives in a
+                    // single place. The portrait vs landscape branches differ only
+                    // in which Row wraps it and which right-cluster buttons pin.
+                    val primaryControls: @Composable () -> Unit = {
+                        PrimaryMediaControls(
+                            supportsLiveQualitySwitch = supportsLiveQualitySwitch,
+                            streamingQuality = streamingQuality,
+                            onQualityClick = onQualityClick,
+                            playbackSpeed = playbackSpeed,
+                            onSpeedClick = onSpeedClick,
+                            onAudioClick = onAudioClick,
+                            onSubtitleClick = onSubtitleClick,
+                            chapters = chapters,
+                            onChapterClick = onChapterClick,
+                            hasEpisodes = hasEpisodes,
+                            episodeBrowserEnabled = episodeBrowserEnabled,
+                            onEpisodesClick = onEpisodesClick,
+                            isInSyncPlaySession = isInSyncPlaySession,
+                            onSyncPlayClick = onSyncPlayClick,
+                            currentAspectRatio = currentAspectRatio,
+                            onAspectRatioClick = onAspectRatioClick,
+                            onInfoClick = onInfoClick,
+                        )
+                    }
                     if (splitBottomControlsEvenly) {
                         // PORTRAIT: one horizontally scrollable row holds every
                         // control; PiP, Rotate and the More (⋮) menu stay pinned at
@@ -583,25 +609,7 @@ internal fun PlayerControls(
                             horizontalArrangement = Arrangement.spacedBy(0.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            PrimaryMediaControls(
-                                supportsLiveQualitySwitch = supportsLiveQualitySwitch,
-                                streamingQuality = streamingQuality,
-                                onQualityClick = onQualityClick,
-                                playbackSpeed = playbackSpeed,
-                                onSpeedClick = onSpeedClick,
-                                onAudioClick = onAudioClick,
-                                onSubtitleClick = onSubtitleClick,
-                                chapters = chapters,
-                                onChapterClick = onChapterClick,
-                                hasEpisodes = hasEpisodes,
-                                episodeBrowserEnabled = episodeBrowserEnabled,
-                                onEpisodesClick = onEpisodesClick,
-                                isInSyncPlaySession = isInSyncPlaySession,
-                                onSyncPlayClick = onSyncPlayClick,
-                                currentAspectRatio = currentAspectRatio,
-                                onAspectRatioClick = onAspectRatioClick,
-                                onInfoClick = onInfoClick,
-                            )
+                            primaryControls()
                             PlayerIconButton(
                                 icon = Tabler.Outline.Lock,
                                 contentDescription = "Lock screen",
@@ -640,25 +648,7 @@ internal fun PlayerControls(
                             horizontalArrangement = if (isTv) Arrangement.spacedBy(2.dp) else Arrangement.Start,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            PrimaryMediaControls(
-                                supportsLiveQualitySwitch = supportsLiveQualitySwitch,
-                                streamingQuality = streamingQuality,
-                                onQualityClick = onQualityClick,
-                                playbackSpeed = playbackSpeed,
-                                onSpeedClick = onSpeedClick,
-                                onAudioClick = onAudioClick,
-                                onSubtitleClick = onSubtitleClick,
-                                chapters = chapters,
-                                onChapterClick = onChapterClick,
-                                hasEpisodes = hasEpisodes,
-                                episodeBrowserEnabled = episodeBrowserEnabled,
-                                onEpisodesClick = onEpisodesClick,
-                                isInSyncPlaySession = isInSyncPlaySession,
-                                onSyncPlayClick = onSyncPlayClick,
-                                currentAspectRatio = currentAspectRatio,
-                                onAspectRatioClick = onAspectRatioClick,
-                                onInfoClick = onInfoClick,
-                            )
+                            primaryControls()
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
