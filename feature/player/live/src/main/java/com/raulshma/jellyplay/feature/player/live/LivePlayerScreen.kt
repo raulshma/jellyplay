@@ -44,11 +44,18 @@ import com.raulshma.jellyplay.feature.player.live.components.LiveChannelListShee
 import com.raulshma.jellyplay.feature.player.live.components.LiveErrorBanner
 import com.raulshma.jellyplay.feature.player.live.components.LivePlayerBottomBar
 import com.raulshma.jellyplay.feature.player.live.components.LivePlayerTopBar
+import com.raulshma.jellyplay.feature.player.live.components.LiveStreamOptionSheet
 import kotlinx.coroutines.delay
 
 private const val CONTROLS_AUTO_HIDE_MS = 4_000L
 private const val ZAP_TOAST_MS = 3_000L
 private const val POSITION_TICK_MS = 500L
+
+/**
+ * Which bottom sheet (if any) is open over the live player. The more-menu
+ * can open either the channel list or the stream-option picker.
+ */
+private enum class LiveSheet { Channels, StreamOption }
 
 @Composable
 @UnstableApi
@@ -64,7 +71,7 @@ fun LivePlayerScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var overlayVisible by remember { mutableStateOf(true) }
-    var sheetOpen by remember { mutableStateOf(false) }
+    var activeSheet by remember { mutableStateOf<LiveSheet?>(null) }
     var zapToastChannelId by remember { mutableStateOf<String?>(null) }
     val isTv = LocalTvMode.current
     val context = LocalContext.current
@@ -92,7 +99,7 @@ fun LivePlayerScreen(
     if (!isTv) {
         BackHandler {
             when {
-                sheetOpen -> sheetOpen = false
+                activeSheet != null -> activeSheet = null
                 overlayVisible -> overlayVisible = false
                 else -> onBack()
             }
@@ -144,7 +151,7 @@ fun LivePlayerScreen(
 
     // Controls auto-hide: 4s after showing, unless the sheet is open.
     LaunchedEffect(overlayVisible, state.currentIndex) {
-        if (overlayVisible && !sheetOpen) {
+        if (overlayVisible && activeSheet == null) {
             delay(CONTROLS_AUTO_HIDE_MS)
             overlayVisible = false
         }
@@ -168,13 +175,13 @@ fun LivePlayerScreen(
                         detectTapGestures {
                             // Toggle chrome on tap when the channel sheet is closed.
                             // Tapping also restarts the auto-hide timer via overlayVisible.
-                            if (!sheetOpen) overlayVisible = !overlayVisible
+                            if (activeSheet == null) overlayVisible = !overlayVisible
                         }
                     } else Modifier,
                 )
                 .onDpadKeyEvent(
                     onUp = { key ->
-                        if (sheetOpen) return@onDpadKeyEvent false
+                        if (activeSheet != null) return@onDpadKeyEvent false
                         if (key.isKeyUp) {
                             viewModel.channelUp(audioStreamIndex, subtitleStreamIndex)
                             overlayVisible = false
@@ -182,7 +189,7 @@ fun LivePlayerScreen(
                         } else false
                     },
                     onDown = { key ->
-                        if (sheetOpen) return@onDpadKeyEvent false
+                        if (activeSheet != null) return@onDpadKeyEvent false
                         if (key.isKeyUp) {
                             viewModel.channelDown(audioStreamIndex, subtitleStreamIndex)
                             overlayVisible = false
@@ -190,8 +197,8 @@ fun LivePlayerScreen(
                         } else false
                     },
                     onSelect = {
-                        if (sheetOpen) {
-                            sheetOpen = false
+                        if (activeSheet != null) {
+                            activeSheet = null
                         } else {
                             overlayVisible = !overlayVisible
                         }
@@ -199,7 +206,7 @@ fun LivePlayerScreen(
                     },
                     onBack = {
                         when {
-                            sheetOpen -> sheetOpen = false
+                            activeSheet != null -> activeSheet = null
                             overlayVisible -> overlayVisible = false
                             else -> onBack()
                         }
@@ -270,7 +277,8 @@ fun LivePlayerScreen(
                     },
                     onChannelUp = { viewModel.channelUp(audioStreamIndex, subtitleStreamIndex) },
                     onChannelDown = { viewModel.channelDown(audioStreamIndex, subtitleStreamIndex) },
-                    onMore = { sheetOpen = true },
+                    onMore = { activeSheet = LiveSheet.StreamOption },
+                    onChannels = { activeSheet = LiveSheet.Channels },
                     onSeek = viewModel::seekWithinDvr,
                     onSeekToLiveEdge = viewModel::seekToLiveEdge,
                 )
@@ -294,20 +302,30 @@ fun LivePlayerScreen(
                 }
             }
 
-            // Channel list sheet
-            if (sheetOpen) {
-                LiveChannelListSheet(
-                    channels = state.channels,
-                    currentChannelId = state.currentChannel?.id,
-                    favorites = state.favorites,
-                    logoUrlFor = viewModel::logoUrlFor,
-                    onChannelSelected = { id ->
-                        viewModel.selectChannelById(id)
-                        overlayVisible = false
-                    },
-                    onToggleFavorite = viewModel::toggleFavorite,
-                    onDismiss = { sheetOpen = false },
-                )
+            // Sheets
+            when (activeSheet) {
+                LiveSheet.Channels -> {
+                    LiveChannelListSheet(
+                        channels = state.channels,
+                        currentChannelId = state.currentChannel?.id,
+                        favorites = state.favorites,
+                        logoUrlFor = viewModel::logoUrlFor,
+                        onChannelSelected = { id ->
+                            viewModel.selectChannelById(id)
+                            overlayVisible = false
+                        },
+                        onToggleFavorite = viewModel::toggleFavorite,
+                        onDismiss = { activeSheet = null },
+                    )
+                }
+                LiveSheet.StreamOption -> {
+                    LiveStreamOptionSheet(
+                        currentOption = state.liveStreamOption,
+                        onSelect = { viewModel.setLiveStreamOption(it) },
+                        onDismiss = { activeSheet = null },
+                    )
+                }
+                null -> {}
             }
 
             // Error / loading

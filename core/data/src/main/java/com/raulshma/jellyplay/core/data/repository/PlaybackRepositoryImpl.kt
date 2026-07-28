@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
@@ -135,6 +136,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         maxStreamingBitrateBits: Long?,
         mode: PlaybackMode,
         playerType: PlayerType,
+        liveStreamOption: LiveStreamOption?,
     ): Result<PlaybackInfoResult> = apiClient.fetchPlaybackInfo(
         itemId = itemId,
         mediaSourceId = mediaSourceId,
@@ -144,6 +146,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         maxStreamingBitrateBits = maxStreamingBitrateBits,
         mode = mode,
         playerType = playerType,
+        liveStreamOption = liveStreamOption,
     )
 
     override suspend fun resolvePlayback(
@@ -155,6 +158,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         maxStreamingBitrateBits: Long?,
         mode: PlaybackMode,
         playerType: PlayerType,
+        liveStreamOption: LiveStreamOption?,
     ): ResolvedPlayback? {
         val result = fetchPlaybackInfo(
             itemId = itemId,
@@ -165,6 +169,7 @@ class PlaybackRepositoryImpl @Inject constructor(
             maxStreamingBitrateBits = maxStreamingBitrateBits,
             mode = mode,
             playerType = playerType,
+            liveStreamOption = liveStreamOption,
         ).getOrNull() ?: return null
 
         val source = result.mediaSources.firstOrNull { it.id == mediaSourceId }

@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.VlcAudioOutput
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
@@ -72,6 +73,12 @@ private fun streamingQualityShort(quality: StreamingQuality): String = when (qua
     StreamingQuality.HD_720P -> "720p"
     StreamingQuality.FHD_1080P -> "1080p"
     StreamingQuality.UHD_4K -> "4K"
+}
+
+private fun liveStreamOptionLabel(option: LiveStreamOption): String = when (option) {
+    LiveStreamOption.AUTO -> "Auto (server decides)"
+    LiveStreamOption.DIRECT_STREAM -> "Direct Stream (best quality)"
+    LiveStreamOption.TRANSCODE -> "Transcode (lower bandwidth)"
 }
 
 private fun vlcSkipLoopFilterLabel(level: Int): String = when (level) {
@@ -748,6 +755,23 @@ fun PlaybackSettingsScreen(
                                 label = { streamingQualityLabel(it) },
                                 isSelected = { it == preferences.streamingQuality },
                                 onSelect = { viewModel.setStreamingQuality(it) },
+                            )
+                        },
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.DeviceTv,
+                        title = "Live TV Stream",
+                        subtitle = liveStreamOptionLabel(preferences.liveStreamOption),
+                        trailingText = preferences.liveStreamOption.displayName,
+                        highlighted = highlightSettingId == "live_stream_option",
+                        index = idx++, count = total,
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = "Live TV Stream",
+                                items = LiveStreamOption.entries,
+                                label = { liveStreamOptionLabel(it) },
+                                isSelected = { it == preferences.liveStreamOption },
+                                onSelect = { viewModel.setLiveStreamOption(it) },
                             )
                         },
                     )

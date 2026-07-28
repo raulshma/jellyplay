@@ -29,6 +29,7 @@ import com.composables.icons.tabler.outline.PlayerTrackNext
 import com.composables.icons.tabler.outline.PlayerTrackPrev
 import com.composables.icons.tabler.outline.Volume
 import com.composables.icons.tabler.outline.VolumeOff
+import com.composables.icons.tabler.outline.Menu2
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -117,6 +118,7 @@ fun LivePlayerBottomBar(
     onChannelUp: () -> Unit,
     onChannelDown: () -> Unit,
     onMore: () -> Unit,
+    onChannels: () -> Unit,
     onSeek: (Long) -> Unit,
     onSeekToLiveEdge: () -> Unit,
     modifier: Modifier = Modifier,
@@ -190,8 +192,13 @@ fun LivePlayerBottomBar(
             )
             Spacer(Modifier.width(16.dp))
             PlayerIconButton(
-                icon = Tabler.Outline.DotsVertical,
+                icon = Tabler.Outline.Menu2,
                 contentDescription = "Channels",
+                onClick = onChannels,
+            )
+            PlayerIconButton(
+                icon = Tabler.Outline.DotsVertical,
+                contentDescription = "Stream options",
                 onClick = onMore,
             )
         }

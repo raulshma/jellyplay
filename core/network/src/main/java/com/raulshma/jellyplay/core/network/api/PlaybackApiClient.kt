@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -49,7 +50,12 @@ interface PlaybackApiClient {
      *   `enableTranscoding` / `allowVideoStreamCopy` flags on the request.
      *   `AUTO` enables everything; `FORCE_DIRECT_PLAY` disables stream copy
      *   and transcoding; `FORCE_TRANSCODE` disables direct play and direct
-     *   stream.
+     *   stream. Ignored when [liveStreamOption] is non-null.
+     * @param liveStreamOption when non-null, overrides [mode] for live TV
+     *   items using a live-specific flag table (see [LiveStreamOption]).
+     *   `AUTO` enables all methods; `DIRECT_STREAM` disables direct play and
+     *   transcoding so the open tuner is read verbatim; `TRANSCODE` disables
+     *   direct play and direct stream.
      * @param maxStreamingBitrateBits optional bitrate ceiling (bits/s) derived
      *   from the streaming-quality picker. Sent for `AUTO` and
      *   `FORCE_TRANSCODE` so a forced transcode still targets the chosen
@@ -64,6 +70,7 @@ interface PlaybackApiClient {
         maxStreamingBitrateBits: Long?,
         mode: PlaybackMode,
         playerType: PlayerType,
+        liveStreamOption: LiveStreamOption? = null,
     ): Result<PlaybackInfoResult>
 
     /**

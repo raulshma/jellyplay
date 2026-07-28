@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -126,6 +127,7 @@ class UserPreferencesStore @Inject constructor(
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
         val FORCE_DIRECT_PLAY = booleanPreferencesKey("force_direct_play")
         val PLAYBACK_MODE = stringPreferencesKey("playback_mode")
+        val LIVE_STREAM_OPTION = stringPreferencesKey("live_stream_option")
         val PIN_HASH = stringPreferencesKey("pin_hash")
         val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey("dialogue_boost_strength")
         val DECODER_MODE = stringPreferencesKey("decoder_mode")
@@ -929,6 +931,9 @@ class UserPreferencesStore @Inject constructor(
                 StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
             } catch (_: Exception) { StreamingQuality.AUTO },
             playbackMode = readPlaybackMode(prefs),
+            liveStreamOption = try {
+                LiveStreamOption.valueOf(prefs[Keys.LIVE_STREAM_OPTION] ?: LiveStreamOption.AUTO.name)
+            } catch (_: Exception) { LiveStreamOption.AUTO },
             maxCacheSizeMb = readInt(prefs, Keys.MAX_CACHE_SIZE_MB, "max_cache_size_mb", 0),
             autoDeleteCache = readBool(prefs, Keys.AUTO_DELETE_CACHE, "auto_delete_cache", true),
             pinLockEnabled = readBool(prefs, Keys.PIN_LOCK_ENABLED, "pin_lock_enabled", false),
@@ -1324,6 +1329,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setPreferredPlayer(playerType: PlayerType) {
         dataStore.edit { it[Keys.PREFERRED_PLAYER] = playerType.name }
+    }
+
+    suspend fun setLiveStreamOption(option: LiveStreamOption) {
+        dataStore.edit { it[Keys.LIVE_STREAM_OPTION] = option.name }
     }
 
     suspend fun setPreferredSubtitleLanguage(language: String?) {
