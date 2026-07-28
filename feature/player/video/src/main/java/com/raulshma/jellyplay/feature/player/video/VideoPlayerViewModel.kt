@@ -373,7 +373,12 @@ class VideoPlayerViewModel @Inject constructor(
         getItemId = { playerSessionManager.sessionState.value.currentItemId },
         getMediaStreams = { _uiState.value.mediaStreams },
     )
-    private var videoMediaSession: MediaSession? = null
+    private val mediaSessionController = MediaSessionController(
+        context = context,
+        sessionManager = sessionManager,
+        getPlayer = { playerSessionManager.engine?.underlyingPlayer },
+        getImageUrl = { itemId, maxWidth -> playbackRepository.getImageUrl(itemId = itemId, maxWidth = maxWidth) },
+    )
 
     /**
      * Owns audio-focus (duck/restore) + becoming-noisy auto-pause. Shared with
@@ -2339,12 +2344,7 @@ class VideoPlayerViewModel @Inject constructor(
 
         val castPlayer = castManager.castPlayerForSession
         if (castPlayer != null) {
-            releaseVideoMediaSession()
-            val session = MediaSession.Builder(context, castPlayer)
-                .setId("jellyplay_cast_bg")
-                .build()
-            videoMediaSession = session
-            sessionManager.setActiveSession(session)
+            mediaSessionController.setActive(castPlayer, "jellyplay_cast_bg")
         }
     }
 
@@ -2357,13 +2357,8 @@ class VideoPlayerViewModel @Inject constructor(
         if (engine != null) {
             val sessionState = playerSessionManager.sessionState.value
             val itemId = sessionState.currentItemId ?: return
-            releaseVideoMediaSession()
             val player = engine.underlyingPlayer ?: return
-            val session = MediaSession.Builder(context, player)
-                .setId("jellyplay_video_$itemId")
-                .build()
-            videoMediaSession = session
-            sessionManager.setActiveSession(session)
+            mediaSessionController.setActive(player, "jellyplay_video_$itemId")
         }
     }
 
@@ -2425,51 +2420,9 @@ class VideoPlayerViewModel @Inject constructor(
         itemId: String,
         title: String,
         subtitle: String,
-    ) {
-        releaseVideoMediaSession()
+    ) = mediaSessionController.createForItem(itemId, title, subtitle)
 
-        val engine = playerSessionManager.engine ?: return
-        val player = engine.underlyingPlayer ?: return
-
-        // Pin the caller-supplied title/artwork at the MediaSession layer via a
-        // ForwardingPlayer. ExoPlayer's HLS playlist parser resolves an empty
-        // MediaMetadata for Jellyfin transcode manifests (which carry no
-        // metadata), which would blank the system now-playing / lock-screen
-        // notification. We previously re-applied the title by calling
-        // player.replaceMediaItem() from ExoPlayerEngine's onMediaMetadataChanged
-        // — but mutating the currently-playing MediaItem mid-playback disrupts
-        // ExoPlayer's HLS timeline/seek state and was the root cause of seeks
-        // restarting from 0 on transcoded media. Overriding getMediaMetadata()
-        // here is non-destructive: the underlying player's timeline and position
-        // are untouched, so HLS seeking stays intact while the notification
-        // continues to show the pinned title/artwork.
-        val artworkUri = playbackRepository.getImageUrl(itemId, maxWidth = 300)
-            .takeIf { it.isNotBlank() }
-            ?.let { runCatching { Uri.parse(it) }.getOrNull() }
-        val pinnedMetadata = MediaMetadata.Builder()
-            .setTitle(title)
-            .setSubtitle(subtitle)
-            .apply { artworkUri?.let { setArtworkUri(it) } }
-            .build()
-        val sessionPlayer = object : androidx.media3.common.ForwardingPlayer(player) {
-            override fun getMediaMetadata(): MediaMetadata = pinnedMetadata
-        }
-
-        val session = MediaSession.Builder(context, sessionPlayer)
-            .setId("jellyplay_video_${itemId}")
-            .build()
-        videoMediaSession = session
-        sessionManager.setActiveSession(session)
-    }
-
-    private fun releaseVideoMediaSession() {
-        val session = videoMediaSession ?: return
-        if (sessionManager.currentSession === session) {
-            sessionManager.clearSession(session)
-        }
-        try { session.release() } catch (_: Exception) { }
-        videoMediaSession = null
-    }
+    private fun releaseVideoMediaSession() = mediaSessionController.release()
 
     private fun releaseInternals() {
         loadJob?.cancel()
