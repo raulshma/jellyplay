@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
+import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
@@ -225,6 +226,11 @@ class PlaybackApiClientImpl @Inject constructor(
     ): String {
         val server = engine.currentServer.value ?: return ""
         val user = engine.currentUser.value ?: return ""
+        // The Jellyfin subtitle endpoint only serves text formats. Refusing
+        // image codecs (PGS/VOBSUB/DVB) here — instead of emitting a URL the
+        // endpoint will reject — lets the caller drop the stream cleanly and
+        // fall back to burn-in / container demux.
+        if (isImageSubtitleCodec(codec)) return ""
         val format = when ((codec ?: "srt").lowercase()) {
             "subrip" -> "srt"
             "ass", "ssa" -> codec!!.lowercase()
