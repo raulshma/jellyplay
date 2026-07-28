@@ -157,6 +157,36 @@ class MpvPlayerEngine(
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    // Coalesces the burst of immediate refreshTracks() calls that fire when a
+    // track changes: a single subtitle pick triggers `select-${type}` plus the
+    // `sid`/`aid`/`track-list` observers within ~50 ms, each previously posting
+    // its own synchronous getPropertyNode("track-list") JNI read (plus the
+    // debug-only logSubtitleRenderState reads) onto the main looper. That burst
+    // was a primary cause of the MPV playback ANR. See [TrackRefreshCoalescer];
+    // delayed refreshes (late-arriving track enumeration for HLS/transcoded
+    // streams) keep their own mainHandler.postDelayed slot so they are not
+    // cancelled by an intervening immediate refresh.
+    private val trackRefresh = TrackRefreshCoalescer(
+        scopeProvider = { engineScope },
+        onRefresh = { performCoalescedRefresh() },
+    )
+
+    /**
+     * The coalesced refresh body. Runs on engineScope = Dispatchers.Main so
+     * buildTracks() stays main-threaded to serialise against
+     * mpv_terminate_destroy (see refreshTracks). The coalescer already collapsed
+     * the observer burst into this single read.
+     */
+    private fun performCoalescedRefresh() {
+        if (released) return
+        val tracks = try {
+            buildTracks()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to refresh MPV tracks (coalesced)", e); return
+        }
+        publishTracks(tracks, "coalesced")
+    }
+
     /**
      * Dedicated background thread for native mpv teardown. [release] is invoked
      * from the Compose `onDispose` on the main thread; `BaseMPVView.destroy()`
@@ -516,6 +546,12 @@ class MpvPlayerEngine(
         // Just drop our handle so the next load() allocates a fresh one.
         generatedAudioSessionId = 0
         mainHandler.removeCallbacksAndMessages(null)
+        // Cancel the coalescer's pending debounce before the scope cancel so a
+        // not-yet-fired buildTracks() can never race mpv_terminate_destroy.
+        // Because buildTracks() now runs on the main thread (see refreshTracks),
+        // any read that already started is guaranteed to finish before this
+        // release() runs — the main looper is single-threaded.
+        trackRefresh.cancel()
         dialogueBoost.detach()
         equalizerHelper.detach()
         nightMode.detach()
@@ -998,11 +1034,16 @@ class MpvPlayerEngine(
                     _bufferedPositionMs.value = cachedBufferedPositionMs
                 }
                 if (_videoStatsEnabled.value) {
-                    // Stats require ~12 property reads; run them off the main
-                    // thread (see updateVideoStatsOnly).
-                    engineScope.launch(Dispatchers.IO) {
-                        updateVideoStatsOnly(posMs)
-                    }
+                    // Stats require ~12 property reads. Run them on the MAIN
+                    // thread (the ticker's onActive already runs on engineScope
+                    // = Dispatchers.Main) to serialise against
+                    // mpv_terminate_destroy. Offloading to Dispatchers.IO would
+                    // race the destroy posted to releaseThread during teardown
+                    // (same use-after-free window that hung the player on
+                    // subtitle-reload engine swaps). The reads are quick
+                    // individual property gets and only run while the stats
+                    // overlay is open.
+                    updateVideoStatsOnly(posMs)
                 }
             },
         ).launch()
@@ -1318,27 +1359,50 @@ class MpvPlayerEngine(
             .joinToString(",")
 
     private fun refreshTracks(reason: String, delayMs: Long = 0L) {
-        val action = Runnable {
-            try {
-                val tracks = buildTracks()
-                val previous = _availableTracks.value
-                // Only assign when changed — _availableTracks is a StateFlow so
-                // a no-op set still triggers a distinctUntilChanged comparison
-                // downstream plus the assignment itself. mpv emits track-list
-                // node updates frequently during initial load and on internal
-                // re-selection, so skipping identical rebuilds avoids that churn.
-                if (tracks != previous) {
-                    _availableTracks.value = tracks
+        if (released) return
+        if (delayMs > 0) {
+            // Delayed refreshes enumerate late-arriving tracks on HLS/transcoded
+            // streams and must NOT be cancelled by an intervening immediate
+            // refresh, so they keep their own postDelayed slot.
+            //
+            // buildTracks() runs on the MAIN thread (not Dispatchers.IO):
+            // release() also runs on main and posts mpv_terminate_destroy to a
+            // background thread. Reading on main serialises the getPropertyNode
+            // JNI call against destroy — a main-thread read that has already
+            // started always finishes before release() can post destroy, so the
+            // mpv handle is never used concurrently from two threads. Offloading
+            // to Dispatchers.IO previously widened a use-after-free window that
+            // hung the player during subtitle-reload engine swaps (ANR).
+            val action = Runnable {
+                if (released) return@Runnable
+                val tracks = try { buildTracks() } catch (e: Exception) {
+                    Log.w(TAG, "Failed to refresh MPV tracks ($reason)", e); return@Runnable
                 }
-                if (tracks != previous || reason.startsWith("select")) {
-                    Log.d(TAG, "MPV tracks refreshed ($reason): ${describeTracks(tracks)}")
-                    logSubtitleRenderState(reason)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to refresh MPV tracks ($reason)", e)
+                publishTracks(tracks, reason)
             }
+            mainHandler.postDelayed(action, delayMs)
+        } else {
+            // Immediate refresh: route through the coalescer so the select +
+            // sid/aid/track-list observer burst collapses into a single
+            // buildTracks() read (see TrackRefreshCoalescer). The coalescer
+            // launches on engineScope (Dispatchers.Main), so the read stays
+            // main-threaded for the destroy-serialization reason above.
+            trackRefresh.request()
         }
-        if (delayMs > 0) mainHandler.postDelayed(action, delayMs) else mainHandler.post(action)
+    }
+
+    /**
+     * Assigns the freshly-built track list to [_availableTracks] (only when it
+     * actually changed — a no-op StateFlow set still propagates a comparison)
+     * and logs the refresh. Reads the current value inline so coalesced
+     * refreshes compare against the latest published list.
+     */
+    private fun publishTracks(tracks: List<MediaTrack>, reason: String) {
+        val prior = _availableTracks.value
+        if (tracks != prior) {
+            _availableTracks.value = tracks
+        }
+        Log.d(TAG, "MPV tracks refreshed ($reason): ${describeTracks(tracks)}")
     }
 
     private fun describeTracks(tracks: List<MediaTrack>): String {
@@ -1442,8 +1506,17 @@ class MpvPlayerEngine(
     private fun MPVNode?.asTrackId(): Int? =
         this?.asInt()?.toInt() ?: this?.asString()?.toIntOrNull()
 
+    /**
+     * Diagnostic-only snapshot of the subtitle render state. Each call performs
+     * ~7 synchronous mpv property reads on the MAIN thread — never call this
+     * from the hot observer/refresh path. Runs on main to serialise against
+     * mpv_terminate_destroy (same reasoning as buildTracks in refreshTracks);
+     * debug-only and restricted to explicit user-action entry points (selectTrack,
+     * subtitle style apply, external sub-add).
+     */
     private fun logSubtitleRenderState(reason: String) {
         if (!com.raulshma.jellyplay.feature.player.video.BuildConfig.DEBUG) return
+        if (released) return
         val m = mpvView?.mpv ?: return
         try {
             val sid = m.getPropertyString("sid")

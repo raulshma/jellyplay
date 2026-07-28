@@ -393,6 +393,12 @@ fun VideoPlayerScreen(
                     if (!it.isDestroyed && !it.isFinishing) {
                         it.requestedOrientation = restoreOrientation
                         it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        // Restore OS-default brightness when leaving the player; otherwise a
+                        // gesture-set level persists on the host window after the screen exits.
+                        val layout = it.window.attributes
+                        layout.screenBrightness =
+                            WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                        it.window.attributes = layout
                         val window = it.window
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
                         controller.show(WindowInsetsCompat.Type.systemBars())
@@ -410,6 +416,12 @@ fun VideoPlayerScreen(
                     if (!it.isDestroyed && !it.isFinishing) {
                         it.requestedOrientation = restoreOrientation
                         it.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        // Restore OS-default brightness when leaving the player; otherwise a
+                        // gesture-set level persists on the host window after the screen exits.
+                        val layout = it.window.attributes
+                        layout.screenBrightness =
+                            WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                        it.window.attributes = layout
                         val window = it.window
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
                         controller.show(WindowInsetsCompat.Type.systemBars())

@@ -36,10 +36,12 @@ class DeviceProfileProvider @Inject constructor(
 ) {
 
     /**
-     * @param pgsDirectPlay when `true`, PGS subtitles are advertised as a
-     * direct-play codec so the server will send them unmodified (MPV renders
-     * them natively). When `false` (default), PGS is omitted from the
-     * direct-play profile so the server burns them into the video track.
+     * @param pgsDirectPlay when `true`, image-based subtitles (PGS, HDMV-PGS,
+     * VOBSUB, DVB) are advertised as direct-playable external profiles so the
+     * server sends them unmodified (MPV renders them natively via libav). When
+     * `false` (default), they are omitted from the profile so the server burns
+     * them into the video track. Named for PGS (the common case) but covers
+     * the full image-subtitle family.
      */
     fun forPlayer(
         playerType: PlayerType,
@@ -131,14 +133,21 @@ class DeviceProfileProvider @Inject constructor(
         }
 
         subtitleFormats.forEach { (format, method) -> subtitleProfile(format, method) }
-        // PGS subtitles are image-based and only the MPV engine can render
-        // them locally. When the user opts into PGS direct play we advertise
-        // it as an external (deliver-as-is) subtitle profile; otherwise it is
-        // omitted, which causes the server to burn the subtitles into the
-        // video during transcoding.
+        // Image-based subtitles can only be rendered locally by the MPV engine
+        // (via libav's PGS/VOBSUB/DVB decoders). When the user opts into PGS
+        // direct play we advertise the whole image-subtitle family as external
+        // (deliver-as-is) profiles so the server populates a `deliveryUrl` for
+        // them rather than burning them in; otherwise they are omitted, which
+        // causes the server to burn the subtitles into the video during
+        // transcoding. The setting is named for PGS (the most common case) but
+        // covers VOBSUB/DVB/HDMV-PGS so Blu-ray/DVD rips are handled too.
         if (pgsDirectPlay) {
             subtitleProfile("pgssub", SubtitleDeliveryMethod.EXTERNAL)
             subtitleProfile("pgs", SubtitleDeliveryMethod.EXTERNAL)
+            subtitleProfile("hdmv_pgs_subtitle", SubtitleDeliveryMethod.EXTERNAL)
+            subtitleProfile("dvd_subtitle", SubtitleDeliveryMethod.EXTERNAL)
+            subtitleProfile("vobsub", SubtitleDeliveryMethod.EXTERNAL)
+            subtitleProfile("dvb_subtitle", SubtitleDeliveryMethod.EXTERNAL)
         }
     }
 
