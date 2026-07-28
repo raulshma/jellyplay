@@ -563,9 +563,14 @@ class LiveTvPlayerViewModel @Inject constructor(
     fun toggleMute() {
         val player = engine?.media3Player ?: return
         if (_state.value.isMuted) {
+            // Restore the pre-mute level captured when muting; never slam to a
+            // fixed default. Null (e.g. mute set externally, or player swapped)
+            // means leave the current volume untouched.
             preMuteVolume?.let { player.volume = it }
+            preMuteVolume = null
             _state.value = _state.value.copy(isMuted = false)
         } else {
+            // Capture the raw player volume so unmute restores it exactly.
             preMuteVolume = player.volume
             player.volume = 0f
             _state.value = _state.value.copy(isMuted = true)
@@ -632,6 +637,10 @@ class LiveTvPlayerViewModel @Inject constructor(
         engine?.release()
         engine = null
         initialized = false
+        // Clear the captured pre-mute volume so a stale value from the previous
+        // player is never restored on a later unmute (e.g. mute → leave screen →
+        // return to a fresh engine). isMuted is reset via the fresh uiState below.
+        preMuteVolume = null
         _state.value = LiveTvPlayerUiState()
     }
 
