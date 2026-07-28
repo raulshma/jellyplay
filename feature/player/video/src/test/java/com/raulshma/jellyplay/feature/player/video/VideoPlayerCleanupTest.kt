@@ -184,6 +184,7 @@ class VideoPlayerCleanupTest {
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
+            offlinePlaybackFacade = mockk(relaxed = true),
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
             preferencesStore = preferencesStore,
             sessionManager = sessionManager,
