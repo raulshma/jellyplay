@@ -104,7 +104,7 @@ data class VideoPlayerUiState(
     val detectedAspectRatio: AspectRatio? = null,
     val playMethod: String = "",
     val isDirectPlayForced: Boolean = false,
-    val subtitleStyle: SubtitleStyle = SubtitleStyle(),
+    val subtitleStyle: SubtitleStyle = SubtitleStyle.DEFAULT,
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val nightModeEnabled: Boolean = false,

@@ -51,7 +51,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -817,13 +816,16 @@ class HomeViewModel @Inject constructor(
                     // NOT failures — previously the size-mismatch heuristic
                     // false-positived on new users and after merges.
                     _uiState.update { it.copy(partialLoadError = homeResult.failedSectionTypes.isNotEmpty()) }
-                    val finalSections = withContext(Dispatchers.Default) {
-                        orderHomeSections(
-                            sections = fetchedSections,
-                            order = homeSectionOrder,
-                            mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
-                        )
-                    }
+                    // OrderHomeSectionsUseCase is pure and operates on a handful
+                    // of sections (sub-microsecond), so no thread offload. The
+                    // previous withContext(Dispatchers.Default) hop escaped the
+                    // test scheduler and made isRefreshing/isLoading assertions
+                    // racy under StandardTestDispatcher.
+                    val finalSections = orderHomeSections(
+                        sections = fetchedSections,
+                        order = homeSectionOrder,
+                        mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
+                    )
 
                     _uiState.update { it.copy(sections = finalSections) }
 
