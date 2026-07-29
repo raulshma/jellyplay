@@ -72,6 +72,12 @@ class ExoLiveEngine(
 
     private var currentMethod: LivePlayMethod = LivePlayMethod.DIRECT_STREAM
 
+    /** Sticky latch: once a terminal error surfaces (no fallback available),
+     *  hold ERROR until the next [load] so the follow-up STATE_IDLE ExoPlayer
+     *  emits after a PlaybackException does not mask it as BUFFERING. */
+    @Volatile
+    private var errorTerminal: Boolean = false
+
     /** Latch: once release() runs, every subsequent method short-circuits. */
     @Volatile
     private var released: Boolean = false
@@ -115,11 +121,13 @@ class ExoLiveEngine(
     override fun load(request: LivePlaybackRequest) {
         if (released) return
         _errorMessage.value = null
+        _errorDetail.value = null
         currentMethod = request.playMethod
         // Per-load reset: a previous channel's fallback latch must not carry
         // over — otherwise a reused engine could never fire the transcode
-        // fallback for the new channel after one fallback fired on the old.
+        // fallback for a new channel after one fallback fired on the old.
         fallbackInvoked = false
+        errorTerminal = false
 
         val mediaItem = MediaItem.Builder()
             .setUri(request.url)
@@ -181,6 +189,13 @@ class ExoLiveEngine(
 
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
+            // After a terminal error ExoPlayer emits STATE_IDLE; ignore it so
+            // it doesn't overwrite ERROR (which would re-show the spinner and
+            // hide the error dialog). The latch clears on the next load().
+            if (errorTerminal) {
+                refreshLiveWindow()
+                return
+            }
             _state.value = when (playbackState) {
                 Player.STATE_BUFFERING -> LiveEngineState.BUFFERING
                 Player.STATE_READY -> LiveEngineState.READY
@@ -212,7 +227,9 @@ class ExoLiveEngine(
                 onTranscodeFallbackNeeded?.invoke()
             } else {
                 // No fallback available (already on transcode, or already
-                // retried) — surface the error and stop.
+                // retried) — surface the error and stop. Latch so the
+                // follow-up STATE_IDLE does not mask it.
+                errorTerminal = true
                 _state.value = LiveEngineState.ERROR
             }
         }
