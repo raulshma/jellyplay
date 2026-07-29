@@ -361,13 +361,13 @@ fun HeroHeader(
             blurHash = item.blurHashes.backdrop,
             modifier = Modifier
                 .fillMaxSize()
+                // OUTER layer — fixed (no translation). Its only job is to isolate
+                // the DstIn erase below into an offscreen buffer so the erased
+                // pixels become transparent (letting the ambient backdrop show
+                // through) instead of blending against whatever sits behind the
+                // hero. Because this layer never moves, the dissolve mask drawn
+                // inside it stays anchored to the hero box.
                 .graphicsLayer {
-                    translationY = parallaxOffset
-                    scaleX = breathScale
-                    scaleY = breathScale
-                    // DstIn mask below erases pixels directly; an offscreen layer
-                    // scopes the erase to this node's content instead of blending
-                    // against whatever happens to sit behind it.
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
                 // Dissolve the bottom edge into transparency so the hero melts
@@ -375,8 +375,16 @@ fun HeroHeader(
                 // instead of hard-cutting at a rectangular edge. DstIn keeps the
                 // image where the mask alpha is opaque and erases it to transparent
                 // where it isn't, letting whatever sits behind (HomeBackdrop, or
-                // the flat fill when the backdrop is off) show through. The mask
-                // is fixed to the hero Box, so it doesn't ride the parallax scroll.
+                // the flat fill when the backdrop is off) show through.
+                //
+                // The mask is evaluated in THIS node's local coordinates, which
+                // belong to the fixed outer layer above — NOT the parallaxing
+                // inner layer below. That is deliberate: if the mask shared the
+                // parallax layer it would slide down with the image as you scroll,
+                // sliding the melt zone below the hero's clipped bottom edge and
+                // leaving a hard rectangular cut against the content. Keeping the
+                // melt anchored to the box means the bottom always dissolves, so
+                // the hero stays seamless with the content at every scroll offset.
                 .drawWithContent {
                     drawContent()
                     drawRect(
@@ -390,6 +398,14 @@ fun HeroHeader(
                         ),
                         blendMode = BlendMode.DstIn,
                     )
+                }
+                // INNER layer — the image itself parallaxes (scrolls slower than
+                // the list) and breathes. It moves underneath the fixed dissolve
+                // mask above, so the artwork shifts while the melt stays put.
+                .graphicsLayer {
+                    translationY = parallaxOffset
+                    scaleX = breathScale
+                    scaleY = breathScale
                 },
             contentScale = ContentScale.Crop,
             // Full-bleed hero: decode large enough to stay sharp on a 4K TV.
