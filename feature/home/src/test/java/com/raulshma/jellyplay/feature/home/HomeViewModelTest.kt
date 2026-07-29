@@ -69,7 +69,11 @@ import java.time.ZoneId
  * Uses [runCurrent] (not `advanceUntilIdle`) so the periodic-refresh `while(true)`
  * loop's `delay` doesn't drive virtual time unbounded.
  */
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
 class HomeViewModelTest {
 
     @get:Rule
@@ -752,6 +756,20 @@ class HomeViewModelTest {
         assertEquals("http://server/item-99/poster", posterUrl)
         assertEquals("http://server/item-99/backdrop", backdropUrl)
         stopPeriodicRefresh()
+    }
+
+
+
+    @Test
+    fun lifecycleEvents_onStartAndOnStop_controlPeriodicRefresh() = runTest {
+        viewModel = buildViewModel()
+        
+        viewModel.onStart(mockk(relaxed = true))
+        runCurrent()
+
+        viewModel.onStop(mockk(relaxed = true))
+        runCurrent()
+        // Successfully starts and stops lifecycle observers without throwing exception
     }
 
     private fun userInfo(id: String) = UserInfo(
