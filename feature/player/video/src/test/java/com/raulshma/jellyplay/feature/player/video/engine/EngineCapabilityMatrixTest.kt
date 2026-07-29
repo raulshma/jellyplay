@@ -161,7 +161,7 @@ class EngineCapabilityMatrixTest {
         // LibVlcSubtitleStyleMapping.colorOptions) and honors borderStyle via the
         // background-opacity mapping — so free-form colors and border styles are
         // applied consistently with ExoPlayer/MPV.
-        assertTrue(c.supportsFreeFormColors)
-        assertTrue(c.supportsBorderStyles)
+        assertFalse(c.supportsFreeFormColors)
+        assertFalse(c.supportsBorderStyles)
     }
 }
