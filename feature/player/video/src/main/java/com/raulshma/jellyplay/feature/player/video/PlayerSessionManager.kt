@@ -388,7 +388,7 @@ class PlayerSessionManager(
         eng.updateConfig(config)
         eng.setPlaybackSpeed(prefs.videoDefaultSpeed)
 
-        val externalSubtitles = buildExternalSubtitles(detail, source, playMethod, playerType)
+        val externalSubtitles = buildExternalSubtitles(detail, source, playMethod)
 
         val artworkUri = playbackRepository.getImageUrl(detail.item.id, maxWidth = 300)
         
@@ -488,7 +488,7 @@ class PlayerSessionManager(
         val engineMaxBitrate = if (mode == PlaybackMode.AUTO) maxBitrate?.toInt() else null
         val state = _sessionState.value
         val rebuiltSubtitles = state.mediaDetail?.let { detail ->
-            buildExternalSubtitles(detail, state.currentMediaSource, playMethod, playerType)
+            buildExternalSubtitles(detail, state.currentMediaSource, playMethod)
         } ?: emptyList()
         reloadWithEngine(
             playerType = playerType,
@@ -553,7 +553,7 @@ class PlayerSessionManager(
         val engineMaxBitrate = if (mode == PlaybackMode.AUTO) maxBitrate?.toInt() else null
         val state = _sessionState.value
         val rebuiltSubtitles = state.mediaDetail?.let { detail ->
-            buildExternalSubtitles(detail, state.currentMediaSource, playMethod, playerType)
+            buildExternalSubtitles(detail, state.currentMediaSource, playMethod)
         } ?: emptyList()
         reloadWithEngine(
             playerType = playerType,
@@ -629,21 +629,19 @@ class PlayerSessionManager(
      * transcode, or container demux on direct play).
      *
      * For the text subs that survive the codec gate, side-loading is
-     * engine- and method-dependent: external subs are always side-loaded;
-     * embedded text subs are side-loaded on transcode/direct-stream (HLS
-     * does not reliably expose them in-manifest); and MPV additionally
-     * side-loads embedded text subs on DIRECT_PLAY, since it cannot reliably
-     * enumerate them from a remote container (unlike ExoPlayer/LibVLC, which
-     * demux the container natively). Without that MPV exception, the subtitle
-     * picker stays empty for direct-played files with embedded subs (the
-     * classic "movie subs missing, anime subs work" case, since anime
-     * typically uses external/transcoded subs).
+     * method-dependent: external subs are always side-loaded; embedded text
+     * subs are side-loaded only when NOT direct-playing (transcoded HLS does
+     * not reliably expose them in-manifest). On DIRECT_PLAY every engine
+     * (ExoPlayer, LibVLC, MPV) demuxes embedded text subs from the container
+     * natively — confirmed for MPV via logcat, which lists the demuxed tracks
+     * — so side-loading them too would duplicate each track and could render
+     * the selected sub twice. This matches mpvkt and findroid, which never
+     * side-load embedded subs alongside container demuxing.
      */
     private fun buildExternalSubtitles(
         detail: MediaDetail,
         source: MediaSource?,
         playMethod: PlayMethod,
-        playerType: PlayerType,
     ): List<SubtitleSource> {
         val streams = source?.mediaStreams ?: return emptyList()
         return streams.filter { it.type == StreamType.SUBTITLE }.mapNotNull { stream ->
@@ -658,15 +656,10 @@ class PlayerSessionManager(
                 // the server's burn-in (transcode) or the player's container
                 // demux (direct play on MPV).
                 !isSideLoadableEmbeddedSubtitle(stream.codec) -> return@mapNotNull null
-                // External subs are always side-loaded; embedded text subs are
-                // also side-loaded when not direct-playing, because transcoded
-                // HLS does not reliably expose them in-manifest. MPV
-                // additionally side-loads embedded text subs on DIRECT_PLAY: it
-                // cannot reliably surface them from a remote container, unlike
-                // ExoPlayer/LibVLC which demux the container natively.
+                // See the KDoc above for the DIRECT_PLAY rationale: embedded
+                // text subs are side-loaded only when not direct-playing.
                 stream.isExternal ||
-                    playMethod != PlayMethod.DIRECT_PLAY ||
-                    playerType == PlayerType.MPV ->
+                    playMethod != PlayMethod.DIRECT_PLAY ->
                     playbackRepository.buildSubtitleDeliveryUrl(
                         detail.item.id, source.id, stream.index, stream.codec,
                     )

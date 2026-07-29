@@ -74,8 +74,12 @@ class MpvPlayerEngine(
         private const val MPV_ERROR_UNKNOWN_FORMAT = -17
         private const val MPV_ERROR_UNSUPPORTED = -18
         private const val MPV_ERROR_NOT_IMPLEMENTED = -19
+        // Prefix/text filter for which verbose (below WARN) mpv messages are
+        // surfaced in debug builds. Covers the subtitle/font/render pipeline
+        // (sub/ass/libass/vtt/srt) plus the demux/vo/decode paths that feed it,
+        // so a no-render bug can be traced end-to-end without logcat drowning.
         private val MPV_SUBTITLE_LOG_PATTERN =
-            Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream)")
+            Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream|vo/|demux|cplayer|vd)")
         private val REDACT_API_KEY = Regex("(?i)(api_key=)[^&\\s]+")
         private val REDACT_API_KEY_ENCODED = Regex("(?i)(api_key%3D)[^&\\s]+")
         private val REDACT_EMBY_TOKEN = Regex("(?i)(X-Emby-Token:\\s*)[^,\\s]+")
@@ -299,9 +303,23 @@ class MpvPlayerEngine(
 
             val fontsDir = fontProvider.provideFontsDir()
             mpv.setOptionString("sub-fonts-dir", fontsDir.absolutePath)
-            // Leave sub-font-provider at its default (fontconfig). Setting "none"
-            // disabled libass font resolution, so the user's sub-font selection
-            // and ASS font-family fallbacks were silently dropped.
+            // Force the libass font provider off. On some devices libass's
+            // fontconfig provider fails to initialize ("can't find selected font
+            // provider" — observed on Adreno 509 / Nokia 6.1 Plus under app
+            // isolation, with OR without a FONTCONFIG_FILE env override), and
+            // EVERY subtitle then rasterizes to an empty bitmap. With "none",
+            // libass resolves fonts solely from sub-fonts-dir (the bundled
+            // subfont.ttf + any user-installed .ttf) plus the ASS `sub-font`
+            // default set below. System fontconfig aliasing is lost, but that is
+            // strictly better than no subtitles at all, and ASS tracks usually
+            // embed their own fonts (mkv attachments), which libass loads via
+            // the demuxer regardless of provider.
+            mpv.setOptionString("sub-font-provider", "none")
+            // Default the requested family to the bundled fallback's own family
+            // so libass matches it exactly under the none provider. Overridden
+            // per-style in applySubtitleStyleProperties when the user picks a
+            // font, and ASS tracks ignore sub-font unless sub-ass-override=force.
+            fontProvider.bundledFallbackFamilyName()?.let { mpv.setOptionString("sub-font", it) }
 
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
@@ -329,7 +347,6 @@ class MpvPlayerEngine(
             mpv.setOptionString("sub-scale-with-window", "no")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("sub-visibility", "yes")
-            mpv.setOptionString("secondary-sub-visibility", "yes")
             mpv.setOptionString("sub-ass-override", "scale")
             mpv.setOptionString("keep-open", "yes")
             applySubtitleStyleOptions(mpv, currentConfig.subtitleStyle)
@@ -378,7 +395,14 @@ class MpvPlayerEngine(
             mpv.setOptionString("demuxer-max-bytes", demuxerMax.toString())
             mpv.setOptionString("demuxer-max-back-bytes", demuxerMaxBack.toString())
 
-            mpv.setOptionString("msg-level", "all=warn")
+            // Debug builds surface libass/vo/demuxer trace messages so subtitle
+            // render/decode issues (font-provider death, empty bitmaps) are
+            // visible without recompiling; release keeps warn to stay quiet and
+            // cheap. Mirrors mpvkt's per-build msg-level (all=v debug / all=warn
+            // release). A debug-build sub/ass trace is what pinpointed the
+            // "can't find selected font provider" → empty-bitmap subtitle bug.
+            val msgLevel = if (com.raulshma.jellyplay.feature.player.video.BuildConfig.DEBUG) "all=v" else "all=warn"
+            mpv.setOptionString("msg-level", msgLevel)
 
             // `fast` bundles vd-lavc-fast (skips some loop-filter / ref-frame
             // work) and cheap scaler defaults — a steady per-frame decode/render
@@ -788,7 +812,6 @@ class MpvPlayerEngine(
                         m.setPropertyString("sid", "$index")
                     }
                     m.setPropertyBoolean("sub-visibility", true)
-                    m.setPropertyBoolean("secondary-sub-visibility", true)
                 }
             }
             refreshTracks("select-${type.name.lowercase()}")
@@ -869,13 +892,14 @@ class MpvPlayerEngine(
             configDir.mkdirs()
         }
 
-        try {
-            android.system.Os.setenv("FONTCONFIG_FILE", java.io.File(fontsDir, "fonts.conf").absolutePath, true)
-            android.system.Os.setenv("FONTCONFIG_PATH", fontsDir.absolutePath, true)
-            Log.d(TAG, "Set FONTCONFIG environment variables successfully")
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to set FONTCONFIG environment variables via Os.setenv", t)
-        }
+        // NOTE: do NOT set FONTCONFIG_FILE / FONTCONFIG_PATH. Pointing fontconfig
+        // at a minimal app-written fonts.conf breaks libass's font-provider init
+        // on some devices (e.g. Adreno 509 / Nokia 6.1 Plus: "can't find selected
+        // font provider"), which makes every subtitle rasterize to an empty
+        // bitmap. libass uses the system fontconfig by default, which resolves
+        // the ASS/SRT font families against /system/fonts; the bundled fallback
+        // is still picked up via sub-fonts-dir above. This matches mpvkt, which
+        // sets neither env var.
 
         val view = try {
             PlayerMPVView(context)
@@ -1095,8 +1119,13 @@ class MpvPlayerEngine(
             val title = track["title"]?.asString()
             val codec = track["codec"]?.asString()
             val selected = track["selected"]?.asBoolean() ?: false
+            // ff-index is the demuxer/container stream index — present for
+            // container-demuxed tracks (== the server's MediaStream.index), null
+            // for side-loaded (sub-add) tracks. Used as the robust resolution key
+            // in TrackSelectionHelper instead of fragile label matching.
+            val ffIndex = track["ff-index"].asTrackId()
             val label = buildTrackLabel(trackType, id, lang, title, codec)
-            
+
             result.add(
                 MediaTrack(
                     id = "mpv_${t}_${id}",
@@ -1105,6 +1134,7 @@ class MpvPlayerEngine(
                     language = lang,
                     isSelected = selected,
                     type = trackType,
+                    streamIndex = ffIndex,
                 )
             )
         }
@@ -1222,7 +1252,6 @@ class MpvPlayerEngine(
 
         view.mpv.setOptionString("sub-visibility", "yes")
         view.mpv.setPropertyBoolean("sub-visibility", true)
-        view.mpv.setPropertyBoolean("secondary-sub-visibility", true)
         request.preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
             view.mpv.setOptionString("alang", normalizeLanguageList(language))
         }
@@ -1261,11 +1290,41 @@ class MpvPlayerEngine(
         }
     }
 
+    /**
+     * Labels of every subtitle currently in mpv's track-list (demuxed + sub-add'd).
+     * Used to dedup sub-add calls — matching on label is robust because it is the
+     * exact `title` arg passed to `sub-add`. Best-effort: returns an empty set on
+     * any track-list read failure so the caller proceeds to add.
+     */
+    private fun existingSubLabels(): Set<String> = try {
+        buildTracks()
+            .asSequence()
+            .filter { it.type == TrackType.SUBTITLE }
+            .mapNotNull { it.label }
+            .toSet()
+    } catch (_: Exception) {
+        emptySet()
+    }
+
     private fun addPendingSubtitles(mpv: MPV) {
         val subtitles = pendingSubtitles
         if (subtitles.isEmpty()) return
 
+        // Guard against duplicate sub-add. mpv lists every track (demuxed +
+        // previously sub-add'd) in track-list; if a side-load with the same
+        // label is already present, skip it. findroid hit the same class of bug
+        // (START_FILE re-firing re-flushed its initialCommands) and fixed it by
+        // clearing the buffer; here the equivalent is checking the live
+        // track-list, which also covers a load() called twice without a
+        // release() in between. Matching on label (the title passed to sub-add)
+        // is robust because that's the exact arg we pass below.
+        val existingSubLabels = existingSubLabels()
+
         subtitles.forEach { sub ->
+            if (sub.label in existingSubLabels) {
+                Log.d(TAG, "Skipping duplicate Jellyfin subtitle (already in track-list): id=${sub.id}, label=${sub.label}")
+                return@forEach
+            }
             // "select" forces the track active; "auto" leaves selection to mpv's
             // slang/sub-auto heuristics, which drop a side-loaded track that has
             // no language and no matching slang. A subtitle flagged isDefault is
@@ -1298,6 +1357,13 @@ class MpvPlayerEngine(
 
     override fun addExternalSubtitle(source: SubtitleSource) {
         val mpv = mpvView?.mpv ?: return
+        // Skip if a track with the same label is already present (double-tap in
+        // the picker, or a re-add after a config reload). See addPendingSubtitles
+        // for the rationale on label-keyed dedup.
+        if (source.label in existingSubLabels()) {
+            Log.d(TAG, "Skipping duplicate external subtitle (already in track-list): label=${source.label}")
+            return
+        }
         try {
             if (source.language.isNullOrBlank()) {
                 mpv.command("sub-add", source.url, "select", source.label)
@@ -1385,7 +1451,7 @@ class MpvPlayerEngine(
             mpv.safeSetOption("sub-ass-override", "no")
         }
 
-        mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: "sans-serif")
+        mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
         mpv.safeSetOption("sub-font-size", "55")
         mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / 24.0).toString())
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
@@ -1397,7 +1463,6 @@ class MpvPlayerEngine(
     private fun applySubtitleStyleProperties(mpv: MPV, style: SubtitleStyle) {
         val values = subtitleStyleValues(style)
         mpv.safeSetPropertyBoolean("sub-visibility", true)
-        mpv.safeSetPropertyBoolean("secondary-sub-visibility", true)
         if (style.applyCustomStyle) {
             customSubtitleStyleEntries(style, values).forEach { (k, v) -> mpv.safeSetPropertyString(k, v) }
             // Numeric properties are typed (Double) for the runtime path.
@@ -1418,7 +1483,7 @@ class MpvPlayerEngine(
             mpv.safeSetPropertyDouble("sub-shadow-offset", 0.0)
         }
 
-        mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: "sans-serif")
+        mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
         mpv.safeSetPropertyDouble("sub-font-size", 55.0)
         mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / 24.0)
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)

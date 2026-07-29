@@ -150,6 +150,15 @@ data class MediaTrack(
     val language: String?,
     val isSelected: Boolean,
     val type: TrackType,
+    /**
+     * The demuxer/container stream index (mpv `ff-index`), when available. For
+     * container-demuxed tracks this matches the server's `MediaStream.index`,
+     * so it is the robust key for resolving a stored Jellyfin stream selection
+     * to an engine track — label-based matching breaks when titles are blank,
+     * duplicated, or translated. Null for side-loaded (`sub-add`) tracks, which
+     * have no container index and are matched by label/url instead.
+     */
+    val streamIndex: Int? = null,
 )
 
 @Immutable
