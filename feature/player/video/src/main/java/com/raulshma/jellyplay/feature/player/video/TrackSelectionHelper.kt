@@ -17,6 +17,13 @@ data class TrackOption(
     val label: String,
     val language: String?,
     val isSelected: Boolean,
+    /**
+     * The engine track's container stream index (mpv `ff-index`), when exposed.
+     * Equals the server's `MediaStream.index` for demuxed tracks, so it is the
+     * robust key for resolving a stored Jellyfin stream selection. Null for
+     * side-loaded tracks / engines that don't expose it (matched by label).
+     */
+    val streamIndex: Int? = null,
 )
 
 internal class TrackSelectionHelper(
@@ -187,7 +194,7 @@ internal class TrackSelectionHelper(
         }
 
         val audioOptions = rawAudioTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected)
+            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex)
         }
 
         // For transcoded / direct-stream playback the server bakes a single
@@ -223,7 +230,7 @@ internal class TrackSelectionHelper(
         }
 
         val engineSubOptions = rawSubTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected)
+            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex)
         }
 
         // Same merge for subtitles: side-loaded external subs may take a moment
@@ -265,12 +272,12 @@ internal class TrackSelectionHelper(
                 val targetStream = streams.firstOrNull {
                     it.type == StreamType.AUDIO && it.index == pendingAudio
                 }
-                val matchByIndex = audioTracks.firstOrNull { it.index >= 0 && it.index == pendingAudio }
-                val matchByLabel = if (matchByIndex == null && targetStream != null) {
-                    val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
-                    audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
-                } else null
-                (matchByIndex ?: matchByLabel)?.let { selectAudioTrack(it, isUserOverride = false) }
+                // pendingAudio is a server/Jellyfin stream index, so match it
+                // against the engine track's container stream index (mpv ff-index)
+                // — NOT the engine track id, which is unrelated to the server
+                // index. Fall back to label for engines/tracks without one.
+                resolveByStreamIndex(audioTracks, pendingAudio, targetStream)
+                    ?.let { selectAudioTrack(it, isUserOverride = false) }
             }
         } else if (!audioSelectionHeld) {
             // Re-resolve stored/per-item/series/global preference — but only when
@@ -293,13 +300,16 @@ internal class TrackSelectionHelper(
                         val targetStream = streams.firstOrNull {
                             it.type == StreamType.AUDIO && it.index == audioIdx
                         }
-                        val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
-                        if (targetLabel != null) {
-                            audioTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectAudioTrack(it, isUserOverride = false) }
+                        // Prefer container stream index (mpv ff-index == stored
+                        // server index); fall back to label for engines/side-loaded
+                        // tracks that don't expose one. Offline (no server streams)
+                        // falls through to the engine positional index.
+                        val resolved = resolveByStreamIndex(audioTracks, audioIdx, targetStream)
+                        if (resolved != null) {
+                            selectAudioTrack(resolved, isUserOverride = false)
                         } else if (streams.isEmpty()) {
-                            // Offline restore: stored index is the engine
-                            // positional index (no server streams to map a label).
-                            audioTracks.firstOrNull { it.index == audioIdx }?.let { selectAudioTrack(it, isUserOverride = false) }
+                            audioTracks.firstOrNull { it.index == audioIdx }
+                                ?.let { selectAudioTrack(it, isUserOverride = false) }
                         }
                     }
                 } else {
@@ -331,8 +341,11 @@ internal class TrackSelectionHelper(
                 val subStreams = getUiState().mediaStreams
                 val targetStream = subStreams.firstOrNull { it.type == StreamType.SUBTITLE && it.index == pending }
                 if (targetStream != null) {
-                    val targetLabel = targetStream.displayTitle ?: targetStream.title ?: targetStream.language
-                    val match = subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
+                    // Prefer the container stream index (mpv ff-index == the
+                    // server's MediaStream.index) — robust against blank/dup/
+                    // translated titles. Fall back to label only for engines or
+                    // side-loaded tracks that don't expose a stream index.
+                    val match = resolveByStreamIndex(subtitleTracks, pending, targetStream)
                     if (match != null) {
                         selectSubtitleTrack(match, isUserOverride = false)
                     }
@@ -360,16 +373,17 @@ internal class TrackSelectionHelper(
                         val targetStream = streams.firstOrNull {
                             it.type == StreamType.SUBTITLE && it.index == subIdx
                         }
-                        val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
-                        if (targetLabel != null) {
-                            subtitleTracks.firstOrNull { it.index >= 0 && it.label == targetLabel }?.let { selectSubtitleTrack(it, isUserOverride = false) }
+                        // Prefer the container stream index (mpv ff-index), which
+                        // equals the stored server index; fall back to label for
+                        // engines/side-loaded tracks without one. Offline (no
+                        // server streams) falls through to the engine positional
+                        // index (see resolveMediaStreamIndex).
+                        val resolved = resolveByStreamIndex(subtitleTracks, subIdx, targetStream)
+                        if (resolved != null) {
+                            selectSubtitleTrack(resolved, isUserOverride = false)
                         } else if (streams.isEmpty()) {
-                            // Offline restore: no server streams to map a label
-                            // from, so the stored index is an engine positional
-                            // index (see resolveMediaStreamIndex). Match it
-                            // directly so a prior offline subtitle selection
-                            // survives a session reload.
-                            subtitleTracks.firstOrNull { it.index == subIdx }?.let { selectSubtitleTrack(it, isUserOverride = false) }
+                            subtitleTracks.firstOrNull { it.index == subIdx }
+                                ?.let { selectSubtitleTrack(it, isUserOverride = false) }
                         }
                     }
                 } else {
@@ -383,8 +397,8 @@ internal class TrackSelectionHelper(
                             .firstOrNull { it.type == StreamType.SUBTITLE && it.isForced && isLanguageMatch(it.language, resolvedSubLang) }
                             ?: streams.firstOrNull { it.type == StreamType.SUBTITLE && it.isForced }
                         if (forcedStream != null) {
-                            val forcedLabel = forcedStream.displayTitle ?: forcedStream.title ?: forcedStream.language
-                            subtitleTracks.firstOrNull { it.index >= 0 && it.label == forcedLabel }
+                            // Prefer container stream index (robust); fall back to label.
+                            resolveByStreamIndex(subtitleTracks, forcedStream.index, forcedStream)
                         } else {
                             null
                         }
@@ -515,6 +529,27 @@ internal class TrackSelectionHelper(
                 subtitleStreamIndex = subtitleStreamIndex,
             )
         }
+    }
+
+    /**
+     * Resolves a stored/pending server [MediaStream.index] to an engine
+     * [TrackOption]. Prefers the engine track's container stream index (mpv
+     * `ff-index`, which equals the server index for demuxed tracks) — robust
+     * against blank/duplicate/translated titles — and falls back to matching
+     * [targetStream]'s label for engines or side-loaded tracks that don't
+     * expose a stream index. Returns null if neither matches (the caller then
+     * handles the offline-positional-index case).
+     */
+    private fun resolveByStreamIndex(
+        tracks: List<TrackOption>,
+        streamIndex: Int,
+        targetStream: MediaStream?,
+    ): TrackOption? {
+        val byStreamIndex = tracks.firstOrNull { it.index >= 0 && it.streamIndex == streamIndex }
+        if (byStreamIndex != null) return byStreamIndex
+        val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
+            ?: return null
+        return tracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
     }
 
     private fun resolveMediaStreamIndex(

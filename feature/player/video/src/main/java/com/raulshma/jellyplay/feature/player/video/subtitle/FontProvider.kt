@@ -15,13 +15,15 @@ import kotlinx.coroutines.withContext
 /**
  * Shared font infrastructure for libass-based subtitle rendering on both the
  * ExoPlayer (ass-media) and mpv backends. Ensures a fonts directory containing
- * the bundled fallback [subfont.ttf] and a fontconfig `fonts.conf` exists, and
- * optionally installs a user-picked font (copied from a SAF uri) so ASS files
- * referencing a specific font family can resolve it.
+ * the bundled fallback [subfont.ttf] exists, and optionally installs a
+ * user-picked font (copied from a SAF uri) so ASS files referencing a specific
+ * font family can resolve it.
  *
- * Extracted from [com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine]'s
- * private `setupFonts` / `writeFontsConf` so both engines share one source of
- * truth for font setup.
+ * The fonts directory holds ONLY `.ttf` files: libass scans `sub-fonts-dir` and
+ * treats every file there as a font, so a non-font file (a `fonts.conf`) makes
+ * libass emit "Error opening memory font 'fonts.conf'" and can fail font-provider
+ * init on some builds (every subtitle then rasterizes to an empty bitmap). A
+ * stale `fonts.conf` left by older app versions is removed on sight.
  */
 @Singleton
 class FontProvider @Inject constructor(
@@ -43,13 +45,21 @@ class FontProvider @Inject constructor(
     }
 
     /**
-     * Ensures the fonts directory, bundled fallback, and fonts.conf are ready.
-     * Returns the directory both engines point libass at (mpv `sub-fonts-dir`,
-     * ass-media `AssHandler` font config). Idempotent.
+     * Ensures the fonts directory and bundled fallback are ready. Returns the
+     * directory both engines point libass at (mpv `sub-fonts-dir`, ass-media
+     * `AssHandler` font config). Idempotent.
+     *
+     * The directory holds ONLY `.ttf` files: libass enumerates `sub-fonts-dir`
+     * and tries every file as a font, so a non-font file (a `fonts.conf`) here
+     * makes libass emit "Error opening memory font 'fonts.conf'" and can fail
+     * font-provider init on some builds. Older app versions wrote a `fonts.conf`
+     * into this dir; delete it on sight so existing installs pick up the fix on
+     * upgrade without a data clear. No replacement `fonts.conf` is written —
+     * libass uses the system fontconfig by default (matching mpvkt).
      */
     fun provideFontsDir(): File {
         bundledFallback // force lazy init
-        writeFontsConf(fontsDir, File(context.cacheDir, "fontconfig"))
+        runCatching { File(fontsDir, "fonts.conf").delete() }
         return fontsDir
     }
 
@@ -80,6 +90,22 @@ class FontProvider @Inject constructor(
     fun bundledFallbackPath(): String = bundledFallback.absolutePath
 
     /**
+     * The font family name parsed from the bundled fallback [subfont.ttf], e.g.
+     * "Droid Sans Fallback". Used as mpv's `sub-font` default so that with
+     * `sub-font-provider=none` (required on devices where libass's fontconfig
+     * provider fails to init — every subtitle else rasterizes empty) libass
+     * resolves the requested family to the one font it has loaded from
+     * `sub-fonts-dir`. Cached; null if the bundled font failed to parse.
+     */
+    private val bundledFallbackFamily: String? by lazy {
+        bundledFallback // ensure copied
+        parseFontFamily(bundledFallback)
+    }
+
+    /** The bundled fallback font family name, or null if unparseable. */
+    fun bundledFallbackFamilyName(): String? = bundledFallbackFamily
+
+    /**
      * Copies a user-picked font (from a SAF uri) into the fonts dir and parses
      * its family name. Returns null on copy/parse failure (caller keeps the
      * bundled fallback). The copied file is named deterministically from the
@@ -107,33 +133,6 @@ class FontProvider @Inject constructor(
         name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifEmpty { "user" }
 
     companion object {
-        /**
-         * Writes a fontconfig `fonts.conf` into [dir] aliasing common generic
-         * families (serif/sans-serif/monospace) to their Android system font
-         * equivalents, with [cacheDir] as the fontconfig cache. Mirrors the
-         * config previously inlined in MpvPlayerEngine.writeFontsConf.
-         *
-         * Internal so the pure XML-generation logic is unit-testable without a
-         * Context.
-         */
-        internal fun writeFontsConf(dir: File, cacheDir: File) {
-            if (!cacheDir.exists()) cacheDir.mkdirs()
-            val configFile = File(dir, "fonts.conf")
-            val config = """
-                |<fontconfig>
-                |  <dir>/system/fonts/</dir>
-                |  <dir>/product/fonts/</dir>
-                |  <dir>${dir.absolutePath}</dir>
-                |  <cachedir>${cacheDir.absolutePath}</cachedir>
-                |  <alias><family>serif</family><prefer><family>Noto Serif</family></prefer></alias>
-                |  <alias><family>sans-serif</family><prefer><family>Roboto</family><family>Noto Sans</family></prefer></alias>
-                |  <alias><family>monospace</family><prefer><family>Droid Sans Mono</family></prefer></alias>
-                |  <match target="pattern"><edit name="family" mode="append_last"><string>sans-serif</string></edit></match>
-                |</fontconfig>
-            """.trimMargin()
-            configFile.writeText(config)
-        }
-
         /**
          * Extracts the font family name from a .ttf/.otf file's name table via
          * the truetypeparser lib. Returns null on any parse failure (corrupt
