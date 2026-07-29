@@ -72,19 +72,22 @@ class ExoLiveEngine(
 
     private var currentMethod: LivePlayMethod = LivePlayMethod.DIRECT_STREAM
 
-    /** Sticky latch: once a terminal error surfaces (no fallback available),
-     *  hold ERROR until the next [load] so the follow-up STATE_IDLE ExoPlayer
-     *  emits after a PlaybackException does not mask it as BUFFERING. */
+    /**
+     * Error/fallback substate. Encodes the previously-separate `errorTerminal`
+     * and `fallbackInvoked` booleans as a single explicit state machine:
+     *  - [ErrorPhase.IDLE] — no error this load; the transcode fallback has not fired.
+     *  - [ErrorPhase.FALLING_BACK] — a direct error fired [onTranscodeFallbackNeeded];
+     *    stay BUFFERING while the ViewModel re-resolves so the error overlay does not flash.
+     *  - [ErrorPhase.TERMINAL] — no fallback available (already on transcode, or the
+     *    fallback retry also failed); hold ERROR so the follow-up STATE_IDLE ExoPlayer
+     *    emits after a PlaybackException does not mask it as BUFFERING.
+     */
     @Volatile
-    private var errorTerminal: Boolean = false
+    private var errorPhase: ErrorPhase = ErrorPhase.IDLE
 
     /** Latch: once release() runs, every subsequent method short-circuits. */
     @Volatile
     private var released: Boolean = false
-
-    /** Latch: prevent rebuffer storms from firing fallback repeatedly. */
-    @Volatile
-    private var fallbackInvoked: Boolean = false
 
     private val httpDataSourceFactory = OkHttpDataSource.Factory(streamingClient)
         .setUserAgent("JellyPlay")
@@ -126,8 +129,7 @@ class ExoLiveEngine(
         // Per-load reset: a previous channel's fallback latch must not carry
         // over — otherwise a reused engine could never fire the transcode
         // fallback for a new channel after one fallback fired on the old.
-        fallbackInvoked = false
-        errorTerminal = false
+        errorPhase = ErrorPhase.IDLE
 
         val mediaItem = MediaItem.Builder()
             .setUri(request.url)
@@ -192,7 +194,7 @@ class ExoLiveEngine(
             // After a terminal error ExoPlayer emits STATE_IDLE; ignore it so
             // it doesn't overwrite ERROR (which would re-show the spinner and
             // hide the error dialog). The latch clears on the next load().
-            if (errorTerminal) {
+            if (errorPhase == ErrorPhase.TERMINAL) {
                 refreshLiveWindow()
                 return
             }
@@ -215,25 +217,27 @@ class ExoLiveEngine(
             // so the error overlay can show an expandable details section.
             _errorMessage.value = error.localizedMessage ?: "Playback error"
             _errorDetail.value = error.toString()
-            // Gate on fallbackInvoked — ExoPlayer can fire onPlayerError
-            // repeatedly during a rebuffer storm and we only want one trigger.
-            if (!fallbackInvoked && currentMethod != LivePlayMethod.TRANSCODE) {
+            // Gate on IDLE — ExoPlayer can fire onPlayerError repeatedly during
+            // a rebuffer storm and we only want one fallback trigger.
+            if (errorPhase == ErrorPhase.IDLE && currentMethod != LivePlayMethod.TRANSCODE) {
                 // Stay in BUFFERING while the ViewModel re-resolves to
                 // transcode; flipping to ERROR here flashes the error overlay
                 // for a frame before the fallback clears it. If the fallback
                 // also fails, it surfaces the error itself.
-                fallbackInvoked = true
+                errorPhase = ErrorPhase.FALLING_BACK
                 _state.value = LiveEngineState.BUFFERING
                 onTranscodeFallbackNeeded?.invoke()
             } else {
                 // No fallback available (already on transcode, or already
                 // retried) — surface the error and stop. Latch so the
                 // follow-up STATE_IDLE does not mask it.
-                errorTerminal = true
+                errorPhase = ErrorPhase.TERMINAL
                 _state.value = LiveEngineState.ERROR
             }
         }
     }
+
+    private enum class ErrorPhase { IDLE, FALLING_BACK, TERMINAL }
 
     private companion object {
         private const val LIVE_EDGE_TOLERANCE_MS = 10_000L

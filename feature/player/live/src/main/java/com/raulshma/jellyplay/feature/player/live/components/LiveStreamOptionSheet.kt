@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -152,29 +150,14 @@ fun LiveStreamOptionSheet(
                 ) {
                     LiveStreamOption.entries.forEach { option ->
                         val isSelected = option == currentOption
-                        FilterChip(
+                        LiveOptionChip(
+                            text = option.displayName,
                             selected = isSelected,
                             onClick = {
                                 onSelect(option)
                                 onDismiss()
                             },
-                            label = {
-                                Text(
-                                    option.displayName,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                )
-                            },
-                            shape = ShapeCache.smoothPill,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                selectedLabelColor = MaterialTheme.colorScheme.primary,
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                borderColor = Color.Transparent,
-                                selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                                enabled = true,
-                                selected = isSelected,
-                            ),
+                            style = LiveOptionChipStyle.SURFACE,
                         )
                     }
                 }

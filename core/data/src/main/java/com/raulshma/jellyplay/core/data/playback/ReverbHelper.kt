@@ -22,12 +22,12 @@ class ReverbHelper : AudioFxHelper<PresetReverb>(TAG) {
             return
         }
         // Re-open the underlying effect on the current session so the new
-        // preset takes immediately; the base's release-before-create handles
-        // the hand-off.
+        // preset takes immediately. detach() releases the prior instance and
+        // clears the remembered session id, so the re-attach isn't short-
+        // circuited and create() re-reads the preset.
         val sid = attachedAudioSessionId
         if (sid != androidx.media3.common.C.AUDIO_SESSION_ID_UNSET) {
-            fx?.let { releaseFx(it) }
-            fx = null
+            detach()
             attach(sid)
             if (fx != null) setEnabled(true)
         }

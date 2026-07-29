@@ -77,6 +77,33 @@ sealed interface PickerState<out T> {
 }
 
 /**
+ * Builds a [PickerState.Chip] from a typed option list, centralizing the
+ * `map { label }` + `indexOf(current)` shape that recurs across the settings
+ * screens. [onSelect] receives the selected typed value (not the index), so
+ * call sites need no captured list + re-index.
+ *
+ * When [current] is absent from [values], `indexOf` returns -1 and [defaultIndex]
+ * is substituted (default 0) — pass the desired fallback position for pickers
+ * that want a sensible default rather than "nothing selected".
+ */
+internal inline fun <reified T> pickerChip(
+    title: String,
+    values: kotlin.collections.List<T>,
+    current: T,
+    label: (T) -> String,
+    defaultIndex: Int = 0,
+    crossinline onSelect: (T) -> Unit,
+): PickerState.Chip {
+    val index = values.indexOf(current).let { if (it < 0) defaultIndex else it }
+    return PickerState.Chip(
+        title = title,
+        options = values.map(label),
+        selectedIndex = index,
+        onSelect = { selected -> onSelect(values[selected]) },
+    )
+}
+
+/**
  * Renders whichever [PickerState] is currently active via an exhaustive
  * `when` over the sealed subtype, or nothing for `null`. The single
  * dispatcher that replaces the per-screen `if`-ladders.

@@ -3,6 +3,16 @@ package com.raulshma.jellyplay.core.model
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+/**
+ * Marker for a preference enum (or other value) that carries a human-readable
+ * [displayName]. Used by display helpers to render an enum's label without a
+ * per-type `when` switch — anything implementing this is rendered via
+ * [displayName], so newly added labeled enums are covered automatically.
+ */
+interface HasDisplayName {
+    val displayName: String
+}
+
 @Immutable
 @Serializable
 data class MediaStreamSelection(
@@ -135,7 +145,7 @@ data class SubtitleStyle(
 
 @Immutable
 @Serializable
-enum class DecoderMode(val displayName: String) {
+enum class DecoderMode(override val displayName: String) : HasDisplayName {
     HW_PREFERRED("Hardware (Preferred)"),
     HW_ONLY("Hardware Only"),
     SW_ONLY("Software Only"),
@@ -188,7 +198,7 @@ enum class SubtitleEdgeType {
 
 @Immutable
 @Serializable
-enum class StreamingQuality(val displayName: String) {
+enum class StreamingQuality(override val displayName: String) : HasDisplayName {
     AUTO("Auto"),
     LOW_360P("360p"),
     SD_480P("480p"),
@@ -199,7 +209,7 @@ enum class StreamingQuality(val displayName: String) {
 
 @Immutable
 @Serializable
-enum class PlaybackMode(val displayName: String) {
+enum class PlaybackMode(override val displayName: String) : HasDisplayName {
     AUTO("Auto"),
     FORCE_DIRECT_PLAY("Force Direct Play"),
     FORCE_TRANSCODE("Force Transcode"),
@@ -212,7 +222,7 @@ enum class PlaybackMode(val displayName: String) {
  */
 @Immutable
 @Serializable
-enum class LiveStreamOption(val displayName: String) {
+enum class LiveStreamOption(override val displayName: String) : HasDisplayName {
     AUTO("Auto"),
     DIRECT_STREAM("Direct Stream"),
     TRANSCODE("Transcode"),

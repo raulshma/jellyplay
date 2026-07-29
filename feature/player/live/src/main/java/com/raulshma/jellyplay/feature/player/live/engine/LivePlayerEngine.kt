@@ -33,13 +33,13 @@ interface LivePlayerEngine {
 
     /** Full technical detail (stacktrace-grade) for the last error, for an
      *  expandable details section in the error overlay. */
-    val errorDetail: StateFlow<String?> get() = errorMessage
+    val errorDetail: StateFlow<String?>
 
     /** True when the player is at the live edge (position >= duration - tolerance). */
     val isAtLiveEdge: StateFlow<Boolean>
 
-    /** Underlying Media3 Player for PlayerView attachment, or null for non-Exo engines. */
-    val media3Player: androidx.media3.common.Player? get() = null
+    /** Underlying Media3 Player for PlayerView attachment. */
+    val media3Player: androidx.media3.common.Player?
 
     /**
      * Load and start playback of [request]. Calling again on the same

@@ -250,11 +250,12 @@ fun PlaybackSettingsScreen(
                         index = idx++, count = total,
                         onClick = {
                             val durations = listOf(5_000L, 10_000L, 15_000L, 20_000L, 30_000L, 60_000L)
-                            activePicker = PickerState.Chip(
+                            activePicker = pickerChip(
                                 title = "Double-Tap Seek Duration",
-                                options = durations.map { "${it / 1000}s" },
-                                selectedIndex = durations.indexOf(preferences.videoSeekDurationMs),
-                                onSelect = { index -> viewModel.setVideoSeekDurationMs(durations[index]) },
+                                values = durations,
+                                current = preferences.videoSeekDurationMs,
+                                label = { "${it / 1000}s" },
+                                onSelect = viewModel::setVideoSeekDurationMs,
                             )
                         },
                     )
@@ -312,11 +313,12 @@ fun PlaybackSettingsScreen(
                         index = idx++, count = total,
                         onClick = {
                             val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
-                            activePicker = PickerState.Chip(
+                            activePicker = pickerChip(
                                 title = "Default Video Speed",
-                                options = speeds.map { if (it == 1.0f) "1x" else "${it}x" },
-                                selectedIndex = speeds.indexOf(preferences.videoDefaultSpeed),
-                                onSelect = { index -> viewModel.setVideoDefaultSpeed(speeds[index]) },
+                                values = speeds,
+                                current = preferences.videoDefaultSpeed,
+                                label = { if (it == 1.0f) "1x" else "${it}x" },
+                                onSelect = viewModel::setVideoDefaultSpeed,
                             )
                         },
                     )
@@ -338,11 +340,13 @@ fun PlaybackSettingsScreen(
                         index = idx++, count = total,
                         onClick = {
                             val multipliers = listOf(1.5f, 2.0f, 2.5f, 3.0f, 4.0f)
-                            activePicker = PickerState.Chip(
+                            activePicker = pickerChip(
                                 title = "Hold-to-Seek Speed",
-                                options = multipliers.map { "${it}x" },
-                                selectedIndex = multipliers.indexOf(preferences.videoHoldSpeedMultiplier).let { if (it < 0) 1 else it },
-                                onSelect = { index -> viewModel.setVideoHoldSpeedMultiplier(multipliers[index]) },
+                                values = multipliers,
+                                current = preferences.videoHoldSpeedMultiplier,
+                                label = { "${it}x" },
+                                defaultIndex = 1,
+                                onSelect = viewModel::setVideoHoldSpeedMultiplier,
                             )
                         },
                     )
@@ -403,11 +407,12 @@ fun PlaybackSettingsScreen(
                             index = idx++, count = total,
                             onClick = {
                                 val timeouts = listOf(3_000L, 5_000L, 10_000L, 15_000L, 20_000L, 30_000L)
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = "Controls Auto-Hide Timeout",
-                                    options = timeouts.map { "${it / 1000}s" },
-                                    selectedIndex = timeouts.indexOf(preferences.videoControlsTimeoutMs),
-                                    onSelect = { index -> viewModel.setVideoControlsTimeoutMs(timeouts[index]) },
+                                    values = timeouts,
+                                    current = preferences.videoControlsTimeoutMs,
+                                    label = { "${it / 1000}s" },
+                                    onSelect = viewModel::setVideoControlsTimeoutMs,
                                 )
                             },
                         )
@@ -421,11 +426,12 @@ fun PlaybackSettingsScreen(
                             index = idx++, count = total,
                             onClick = {
                                 val durations = listOf(0L, 3_000L, 5_000L, 10_000L, 15_000L, 30_000L)
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = "Skip Back on Resume",
-                                    options = durations.map { if (it == 0L) "Off" else "${it / 1000}s" },
-                                    selectedIndex = durations.indexOf(preferences.videoSkipBackOnResumeMs),
-                                    onSelect = { index -> viewModel.setVideoSkipBackOnResumeMs(durations[index]) },
+                                    values = durations,
+                                    current = preferences.videoSkipBackOnResumeMs,
+                                    label = { if (it == 0L) "Off" else "${it / 1000}s" },
+                                    onSelect = viewModel::setVideoSkipBackOnResumeMs,
                                 )
                             },
                         )
@@ -439,11 +445,12 @@ fun PlaybackSettingsScreen(
                             index = idx++, count = total,
                             onClick = {
                                 val hours = listOf(0, 1, 2, 3, 4, 6, 8)
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = "Pass-out protection",
-                                    options = hours.map { if (it == 0) "Off" else "${it}h" },
-                                    selectedIndex = hours.indexOf(preferences.videoPassOutProtectionHours),
-                                    onSelect = { index -> viewModel.setVideoPassOutProtectionHours(hours[index]) },
+                                    values = hours,
+                                    current = preferences.videoPassOutProtectionHours,
+                                    label = { if (it == 0) "Off" else "${it}h" },
+                                    onSelect = viewModel::setVideoPassOutProtectionHours,
                                 )
                             },
                         )
@@ -525,11 +532,12 @@ fun PlaybackSettingsScreen(
                             index = idx++, count = total,
                             onClick = {
                                 val ranges = listOf(30_000L, 60_000L, 90_000L, 120_000L, 180_000L, 300_000L)
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = "Swipe Seek Maximum Range",
-                                    options = ranges.map { "${it / 1000}s" },
-                                    selectedIndex = ranges.indexOf(preferences.videoSwipeSeekMaxMs),
-                                    onSelect = { index -> viewModel.setVideoSwipeSeekMaxMs(ranges[index]) },
+                                    values = ranges,
+                                    current = preferences.videoSwipeSeekMaxMs,
+                                    label = { "${it / 1000}s" },
+                                    onSelect = viewModel::setVideoSwipeSeekMaxMs,
                                 )
                             },
                         )
@@ -697,11 +705,12 @@ fun PlaybackSettingsScreen(
                             index = idx++, count = total,
                             onClick = {
                                 val strengths = EffectStrength.entries
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = "Dialogue Boost Strength",
-                                    options = strengths.map { it.displayName },
-                                    selectedIndex = strengths.indexOf(preferences.dialogueBoostStrength),
-                                    onSelect = { index -> viewModel.setDialogueBoostStrength(strengths[index]) },
+                                    values = strengths,
+                                    current = preferences.dialogueBoostStrength,
+                                    label = { it.displayName },
+                                    onSelect = viewModel::setDialogueBoostStrength,
                                 )
                             },
                         )

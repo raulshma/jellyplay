@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.HasDisplayName
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -97,9 +98,7 @@ private fun Enum<*>.pretty(): String =
 
 private fun Any?.enumDisplay(): String = when (this) {
     null -> "System Default"
-    is com.raulshma.jellyplay.core.model.StreamingQuality -> displayName
-    is com.raulshma.jellyplay.core.model.PlaybackMode -> displayName
-    is com.raulshma.jellyplay.core.model.DecoderMode -> displayName
+    is HasDisplayName -> displayName
     is Enum<*> -> pretty()
     else -> toString()
 }

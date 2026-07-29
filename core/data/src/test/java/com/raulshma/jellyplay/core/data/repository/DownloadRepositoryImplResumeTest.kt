@@ -87,7 +87,7 @@ class DownloadRepositoryImplResumeTest {
             context,
             Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build(),
         )
-        // enqueueDownloadWorker reads the wifi-only / schedule preferences when
+        // enqueueDownload reads the wifi-only / schedule preferences when
         // building the work request constraints.
         every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
     }

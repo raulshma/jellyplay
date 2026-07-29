@@ -415,34 +415,41 @@ class UserPreferencesStore @Inject constructor(
 
     private fun migrateBooleans(prefs: MutablePreferences, vararg names: String) {
         for (name in names) {
-            // Guard against a typed value already living under this name (e.g.
-            // after clearAllPreferencesOnly preserved some typed state but reset
-            // the migration flag): reading a Boolean slot as String throws.
-            val legacy = try { prefs[stringPreferencesKey(name)] } catch (_: ClassCastException) { null } ?: continue
+            val legacy = prefs.legacyString(name) ?: continue
             prefs[booleanPreferencesKey(name)] = legacy.toBoolean()
         }
     }
 
     private fun migrateInts(prefs: MutablePreferences, vararg names: String) {
         for (name in names) {
-            val legacy = try { prefs[stringPreferencesKey(name)] } catch (_: ClassCastException) { null } ?: continue
+            val legacy = prefs.legacyString(name) ?: continue
             legacy.toIntOrNull()?.let { prefs[intPreferencesKey(name)] = it }
         }
     }
 
     private fun migrateFloats(prefs: MutablePreferences, vararg names: String) {
         for (name in names) {
-            val legacy = try { prefs[stringPreferencesKey(name)] } catch (_: ClassCastException) { null } ?: continue
+            val legacy = prefs.legacyString(name) ?: continue
             legacy.toFloatOrNull()?.let { prefs[floatPreferencesKey(name)] = it }
         }
     }
 
     private fun migrateLongs(prefs: MutablePreferences, vararg names: String) {
         for (name in names) {
-            val legacy = try { prefs[stringPreferencesKey(name)] } catch (_: ClassCastException) { null } ?: continue
+            val legacy = prefs.legacyString(name) ?: continue
             legacy.toLongOrNull()?.let { prefs[longPreferencesKey(name)] = it }
         }
     }
+
+    /**
+     * Reads a legacy string slot, tolerating a typed value (Boolean/Int/...)
+     * already living under [name] — e.g. after `clearAllPreferences` preserved
+     * some typed state but reset the migration flag. Returns null when the slot
+     * is absent or holds a non-string value, so callers `?: continue`.
+     */
+    private fun MutablePreferences.legacyString(name: String): String? =
+        try { this[stringPreferencesKey(name)] } catch (_: ClassCastException) { null }
+
 
     private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean {
         val typed = try { prefs[key] } catch (_: ClassCastException) { null }
