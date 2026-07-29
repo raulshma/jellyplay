@@ -31,6 +31,10 @@ interface LivePlayerEngine {
     /** Non-null when [state] is ERROR. */
     val errorMessage: StateFlow<String?>
 
+    /** Full technical detail (stacktrace-grade) for the last error, for an
+     *  expandable details section in the error overlay. */
+    val errorDetail: StateFlow<String?> get() = errorMessage
+
     /** True when the player is at the live edge (position >= duration - tolerance). */
     val isAtLiveEdge: StateFlow<Boolean>
 
