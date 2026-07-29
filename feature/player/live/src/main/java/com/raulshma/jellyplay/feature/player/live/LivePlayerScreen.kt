@@ -248,6 +248,7 @@ fun LivePlayerScreen(
                         channel = currentChannel,
                         logoUrl = viewModel.logoUrlFor(currentChannel),
                         isMuted = state.isMuted,
+                        playMethod = state.playMethod,
                         onBack = onBack,
                         onMute = viewModel::toggleMute,
                     )

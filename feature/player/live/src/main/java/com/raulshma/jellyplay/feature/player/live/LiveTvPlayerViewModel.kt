@@ -292,12 +292,14 @@ class LiveTvPlayerViewModel @Inject constructor(
 
         // Auth token flows via LiveEngineConfig.authToken (read by ExoLiveEngine's
         // HTTP data-source factory), not per-request — see ensureEngine.
+        val livePlayMethod = resolved.playMethod.toLivePlayMethod()
+        _state.value = _state.value.copy(playMethod = livePlayMethod)
         ensureEngine(prefs.preferredPlayer)
             .load(
                 LivePlaybackRequest(
                     url = resolved.streamUrl,
                     title = channel.name,
-                    playMethod = resolved.playMethod.toLivePlayMethod(),
+                    playMethod = livePlayMethod,
                     container = resolved.container,
                 )
             )
@@ -535,6 +537,8 @@ class LiveTvPlayerViewModel @Inject constructor(
                 )
                 return@launch
             }
+            // Reflect the method change in the chrome badge before reloading.
+            _state.value = _state.value.copy(playMethod = LivePlayMethod.TRANSCODE)
             engine?.load(
                 LivePlaybackRequest(
                     url = resolved.streamUrl,
@@ -623,6 +627,10 @@ class LiveTvPlayerViewModel @Inject constructor(
      */
     fun setLiveStreamOption(option: LiveStreamOption) {
         val channel = _state.value.currentChannel ?: return
+        // Reflect the choice in UI state immediately (ahead of the async
+        // DataStore -> preferences collector) so the option sheet keeps the
+        // selection visible during the reload instead of briefly reverting.
+        _state.value = _state.value.copy(liveStreamOption = option)
         viewModelScope.launch {
             userPreferencesStore.setLiveStreamOption(option)
             _state.value = _state.value.copy(

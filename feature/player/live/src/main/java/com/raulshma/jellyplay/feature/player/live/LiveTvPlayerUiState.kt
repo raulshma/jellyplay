@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
+import com.raulshma.jellyplay.feature.player.live.engine.LivePlayMethod
 
 @Immutable
 data class LiveTvPlayerUiState(
@@ -25,6 +26,10 @@ data class LiveTvPlayerUiState(
     val favorites: Set<String> = emptySet(),
     val isMuted: Boolean = false,
     val liveStreamOption: LiveStreamOption = LiveStreamOption.AUTO,
+    /** Delivery method in use for the current stream (Direct Stream /
+     *  Transcode), surfaced as a badge in the player chrome. Null until the
+     *  first stream resolves. */
+    val playMethod: LivePlayMethod? = null,
 ) {
     val hasNext: Boolean get() = currentIndex < channels.lastIndex
     val hasPrevious: Boolean get() = currentIndex > 0
