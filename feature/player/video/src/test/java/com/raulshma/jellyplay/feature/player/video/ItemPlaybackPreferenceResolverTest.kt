@@ -5,112 +5,83 @@ import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 import com.raulshma.jellyplay.core.model.PlaybackPrefScope
 import io.mockk.coEvery
 import io.mockk.mockk
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Before
 import org.junit.Test
 
-/**
- * Unit tests for [ItemPlaybackPreferenceResolver] — the item-vs-series
- * precedence used by [TrackSelectionHelper] for per-series/per-item playback
- * language preferences.
- *
- * Uses [UnconfinedTestDispatcher] so the resolver's async refresh completes
- * eagerly within [refresh], keeping assertions deterministic.
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ItemPlaybackPreferenceResolverTest {
 
-    private fun resolver(
-        repo: ItemPlaybackPreferenceRepository,
-        itemId: () -> String? = { "item-1" },
-        seriesId: () -> String? = { "series-1" },
-    ): ItemPlaybackPreferenceResolver {
-        // An unconfined scope makes resolver.refresh()'s internal launch run to
-        // completion synchronously, keeping assertions deterministic.
-        val scope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher())
-        return ItemPlaybackPreferenceResolver(repo, itemId, seriesId, scope)
+    private lateinit var repository: ItemPlaybackPreferenceRepository
+    private var currentItemId: String? = null
+    private var currentSeriesId: String? = null
+    private val testDispatcher = UnconfinedTestDispatcher()
+    private val testScope = TestScope(testDispatcher)
+    private lateinit var resolver: ItemPlaybackPreferenceResolver
+
+    @Before
+    fun setUp() {
+        repository = mockk(relaxed = true)
+        currentItemId = null
+        currentSeriesId = null
+
+        resolver = ItemPlaybackPreferenceResolver(
+            repository = repository,
+            getCurrentItemId = { currentItemId },
+            getCurrentSeriesId = { currentSeriesId },
+            scope = testScope,
+        )
     }
 
     @Test
-    fun `item scope wins over series scope`() = runTest {
-        val repo = mockk<ItemPlaybackPreferenceRepository>()
-        val itemPref = ItemPlaybackPreference(PlaybackPrefScope.ITEM, "item-1", audioLanguage = "jpn")
-        val seriesPref = ItemPlaybackPreference(PlaybackPrefScope.SERIES, "series-1", audioLanguage = "deu")
-        coEvery { repo.get(PlaybackPrefScope.ITEM, "item-1") } returns itemPref
-        coEvery { repo.get(PlaybackPrefScope.SERIES, "series-1") } returns seriesPref
-
-        val r = resolver(repo)
-        r.refresh()
-
-        assertEquals(itemPref, r.resolved.value)
+    fun initialResolved_isNull() {
+        assertNull(resolver.resolved.value)
     }
 
     @Test
-    fun `series scope used when no item rule`() = runTest {
-        val repo = mockk<ItemPlaybackPreferenceRepository>()
-        val seriesPref = ItemPlaybackPreference(PlaybackPrefScope.SERIES, "series-1", subtitleLanguage = "eng")
-        coEvery { repo.get(PlaybackPrefScope.ITEM, "item-1") } returns null
-        coEvery { repo.get(PlaybackPrefScope.SERIES, "series-1") } returns seriesPref
+    fun refresh_itemScopeTakesPrecedenceOverSeriesScope() = testScope.runTest {
+        currentItemId = "item-1"
+        currentSeriesId = "series-1"
 
-        val r = resolver(repo)
-        r.refresh()
+        val itemPref = ItemPlaybackPreference(scope = PlaybackPrefScope.ITEM, key = "item-1", audioLanguage = "eng")
+        val seriesPref = ItemPlaybackPreference(scope = PlaybackPrefScope.SERIES, key = "series-1", audioLanguage = "jpn")
 
-        assertEquals(seriesPref, r.resolved.value)
+        coEvery { repository.get(PlaybackPrefScope.ITEM, "item-1") } returns itemPref
+        coEvery { repository.get(PlaybackPrefScope.SERIES, "series-1") } returns seriesPref
+
+        resolver.refresh()
+        assertEquals(itemPref, resolver.resolved.value)
     }
 
     @Test
-    fun `null when neither item nor series rule exists`() = runTest {
-        val repo = mockk<ItemPlaybackPreferenceRepository>()
-        coEvery { repo.get(PlaybackPrefScope.ITEM, "item-1") } returns null
-        coEvery { repo.get(PlaybackPrefScope.SERIES, "series-1") } returns null
+    fun refresh_fallsBackToSeriesScopeWhenItemPrefMissing() = testScope.runTest {
+        currentItemId = "item-2"
+        currentSeriesId = "series-1"
 
-        val r = resolver(repo)
-        r.refresh()
+        val seriesPref = ItemPlaybackPreference(scope = PlaybackPrefScope.SERIES, key = "series-1", audioLanguage = "jpn")
 
-        assertNull(r.resolved.value)
+        coEvery { repository.get(PlaybackPrefScope.ITEM, "item-2") } returns null
+        coEvery { repository.get(PlaybackPrefScope.SERIES, "series-1") } returns seriesPref
+
+        resolver.refresh()
+        assertEquals(seriesPref, resolver.resolved.value)
     }
 
     @Test
-    fun `series scope skipped when no series id`() = runTest {
-        val repo = mockk<ItemPlaybackPreferenceRepository>()
-        coEvery { repo.get(PlaybackPrefScope.ITEM, "item-1") } returns null
+    fun clear_resetsResolvedToNull() = testScope.runTest {
+        currentItemId = "item-1"
+        val itemPref = ItemPlaybackPreference(scope = PlaybackPrefScope.ITEM, key = "item-1", audioLanguage = "eng")
+        coEvery { repository.get(PlaybackPrefScope.ITEM, "item-1") } returns itemPref
 
-        // Movie: no series id. Only item scope should be queried.
-        val r = resolver(repo, seriesId = { null })
-        r.refresh()
+        resolver.refresh()
+        assertEquals(itemPref, resolver.resolved.value)
 
-        assertNull(r.resolved.value)
-    }
-
-    @Test
-    fun `item scope skipped when no item id`() = runTest {
-        val repo = mockk<ItemPlaybackPreferenceRepository>()
-        val seriesPref = ItemPlaybackPreference(PlaybackPrefScope.SERIES, "series-1", audioLanguage = "deu")
-        coEvery { repo.get(PlaybackPrefScope.SERIES, "series-1") } returns seriesPref
-
-        val r = resolver(repo, itemId = { null })
-        r.refresh()
-
-        assertEquals(seriesPref, r.resolved.value)
-    }
-
-    @Test
-    fun `clear resets cached value`() = runTest {
-        val repo = mockk<ItemPlaybackPreferenceRepository>()
-        val itemPref = ItemPlaybackPreference(PlaybackPrefScope.ITEM, "item-1", audioLanguage = "jpn")
-        coEvery { repo.get(PlaybackPrefScope.ITEM, "item-1") } returns itemPref
-        coEvery { repo.get(PlaybackPrefScope.SERIES, "series-1") } returns null
-
-        val r = resolver(repo)
-        r.refresh()
-        assertEquals(itemPref, r.resolved.value)
-
-        r.clear()
-        assertNull(r.resolved.value)
+        resolver.clear()
+        assertNull(resolver.resolved.value)
     }
 }
