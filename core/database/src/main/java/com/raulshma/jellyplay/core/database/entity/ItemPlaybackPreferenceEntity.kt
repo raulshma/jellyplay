@@ -15,6 +15,11 @@ import androidx.room.PrimaryKey
  *
  * `dialogueBoostStrength` stores the [com.raulshma.jellyplay.core.model.EffectStrength]
  * name (or null) — added in migration 27→28.
+ *
+ * `subtitleForced` / `subtitleHearingImpaired` pin the preferred subtitle's role
+ * alongside `subtitleLanguage` (nullable: null = "don't care"), so a series can
+ * remember e.g. "English SDH" and have it carry across episodes. Added in
+ * migration 38→39.
  */
 @Entity(
     tableName = "item_playback_preferences",
@@ -29,6 +34,8 @@ data class ItemPlaybackPreferenceEntity(
     val key: String,
     val audioLanguage: String?,
     val subtitleLanguage: String?,
+    val subtitleForced: Boolean? = null,
+    val subtitleHearingImpaired: Boolean? = null,
     val dialogueBoostStrength: String? = null,
     val updatedAt: Long,
 )

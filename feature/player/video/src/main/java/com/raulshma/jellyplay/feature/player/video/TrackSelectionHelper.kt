@@ -423,7 +423,12 @@ internal class TrackSelectionHelper(
                             null
                         }
                     } else {
-                        subtitleTracks.firstOrNull { it.index >= 0 && isLanguageMatch(it.language, resolvedSubLang) }
+                        SubtitleTrackMatcher.match(
+                            tracks = subtitleTracks,
+                            lang = resolvedSubLang,
+                            forced = playbackPreferenceResolver.resolved.value?.subtitleForced,
+                            hearingImpaired = playbackPreferenceResolver.resolved.value?.subtitleHearingImpaired,
+                        )
                     }
                     if (match != null) {
                         selectSubtitleTrack(match, isUserOverride = false)
