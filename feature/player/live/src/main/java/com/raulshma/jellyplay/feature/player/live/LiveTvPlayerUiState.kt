@@ -22,6 +22,9 @@ data class LiveTvPlayerUiState(
     val durationMs: Long = -1L,
     val engineState: LiveEngineState = LiveEngineState.IDLE,
     val errorMessage: String? = null,
+    /** Full technical detail for the last error (stacktrace-grade), shown in
+     *  an expandable section of the error overlay. */
+    val errorDetail: String? = null,
     val isSwitchingChannel: Boolean = false,
     val favorites: Set<String> = emptySet(),
     val isMuted: Boolean = false,

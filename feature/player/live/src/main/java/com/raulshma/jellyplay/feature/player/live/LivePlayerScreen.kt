@@ -334,6 +334,7 @@ fun LivePlayerScreen(
                 LiveErrorBanner(
                     isBuffering = state.isBuffering,
                     errorMessage = state.errorMessage,
+                    errorDetail = state.errorDetail,
                     currentOption = state.liveStreamOption,
                     onRetry = { viewModel.retry(audioStreamIndex, subtitleStreamIndex) },
                     onRetryWithOption = { viewModel.setLiveStreamOption(it) },

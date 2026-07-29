@@ -62,6 +62,9 @@ class ExoLiveEngine(
     private val _errorMessage = MutableStateFlow<String?>(null)
     override val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _errorDetail = MutableStateFlow<String?>(null)
+    override val errorDetail: StateFlow<String?> = _errorDetail.asStateFlow()
+
     private val _isAtLiveEdge = MutableStateFlow(true)
     override val isAtLiveEdge: StateFlow<Boolean> = _isAtLiveEdge.asStateFlow()
 
@@ -193,15 +196,24 @@ class ExoLiveEngine(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            // on a direct-stream/direct-play failure,
-            // ask the ViewModel to re-resolve with transcoding forced.
-            _state.value = LiveEngineState.ERROR
+            // Capture both a short message and the full stacktrace-grade text
+            // so the error overlay can show an expandable details section.
             _errorMessage.value = error.localizedMessage ?: "Playback error"
+            _errorDetail.value = error.toString()
             // Gate on fallbackInvoked — ExoPlayer can fire onPlayerError
             // repeatedly during a rebuffer storm and we only want one trigger.
             if (!fallbackInvoked && currentMethod != LivePlayMethod.TRANSCODE) {
+                // Stay in BUFFERING while the ViewModel re-resolves to
+                // transcode; flipping to ERROR here flashes the error overlay
+                // for a frame before the fallback clears it. If the fallback
+                // also fails, it surfaces the error itself.
                 fallbackInvoked = true
+                _state.value = LiveEngineState.BUFFERING
                 onTranscodeFallbackNeeded?.invoke()
+            } else {
+                // No fallback available (already on transcode, or already
+                // retried) — surface the error and stop.
+                _state.value = LiveEngineState.ERROR
             }
         }
     }

@@ -480,6 +480,7 @@ class LiveTvPlayerViewModel @Inject constructor(
                 engineState = s,
                 isBuffering = s == LiveEngineState.BUFFERING || s == LiveEngineState.IDLE,
                 errorMessage = if (s == LiveEngineState.ERROR) eng.errorMessage.value else null,
+                errorDetail = if (s == LiveEngineState.ERROR) eng.errorDetail.value else null,
             )
             // Buffering watchdog: arm a timeout on entering BUFFERING, cancel it
             // on any other state. If the tuner stalls without a PlaybackException,
