@@ -1,0 +1,134 @@
+package com.raulshma.jellyplay.core.data.playback
+
+import com.raulshma.jellyplay.core.model.EqualizerPreset
+import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.ReverbPreset
+import com.raulshma.jellyplay.core.model.UserPreferences
+
+/**
+ * Deep module: the pure preference→effect diff that drives audio-effects
+ * application.
+ *
+ * **Why this lives here.** Pre-extraction [AudioPlaybackManager.init] carried
+ * a ~77-line `preferences.collect { ... }` block that hand-tracked 14 stale
+ * `prev*` locals and diffed each preference field against its predecessor to
+ * decide which effect setter to call. Adding a new effect field meant
+ * remembering to add a new `prev*` local + a new `if (changed)` branch — easy
+ * to forget, and the resulting "effect silently stops responding to its
+ * preference" bug was untestable (the block ran in an `init {}` on a class
+ * with 18 mocked collaborators on `Dispatchers.Main`).
+ *
+ * Lifting the diff into a pure function means:
+ *   - the rule has a direct JVM test (inputs in, command list out)
+ *   - a forgotten field becomes a failing test, not a silent runtime bug
+ *   - the manager shrinks to a thin command-dispatcher
+ *
+ * **Depth.** Interface: one function, two model values in, ordered list out.
+ * Implementation: the field-by-field comparison that was previously inlined.
+ * The ordering is load-bearing — strengths must be applied before their
+ * enabled flag so an effect uses the correct value when it attaches — and the
+ * reducer's output preserves it; see [diff].
+ */
+object AudioPreferencesReducer {
+
+    /**
+     * Computes the ordered list of [EffectCommand]s that transform the
+     * `prev` effect state into the `next` effect state.
+     *
+     * Ordering contract (matches the pre-extraction init-block comment
+     * "Strengths must be applied before their enabled flag so the effect uses
+     * the correct value when it attaches"):
+     *
+     *   1. Standalone settings (visualizer, EQ preset, L/R balance, pitch) —
+     *      order among these is immaterial.
+     *   2. Strengths (bass, virtualizer, dialogue, night-mode) — before their
+     *      corresponding enabled flags.
+     *   3. Enabled flags (EQ, bass, virtualizer, dialogue, night-mode).
+     *   4. Reverb preset (last — it re-attaches the effect when changed).
+     *
+     * Returns an empty list when nothing changed.
+     */
+    fun diff(prev: UserPreferences, next: UserPreferences): List<EffectCommand> {
+        if (prev === next) return emptyList()
+        val commands = mutableListOf<EffectCommand>()
+
+        // 1. Standalone settings.
+        if (next.audioVisualizerEnabled != prev.audioVisualizerEnabled) {
+            commands += EffectCommand.SetVisualizerEnabled(next.audioVisualizerEnabled)
+        }
+        if (next.equalizerPreset != prev.equalizerPreset) {
+            commands += EffectCommand.SetEqualizerPreset(next.equalizerPreset)
+        }
+        if (next.lrBalance != prev.lrBalance) {
+            commands += EffectCommand.SetLrBalance(next.lrBalance)
+        }
+        if (next.pitchSemitones != prev.pitchSemitones) {
+            commands += EffectCommand.SetPitchSemitones(next.pitchSemitones)
+        }
+
+        // 2. Strengths BEFORE their enabled flags so the effect picks up the
+        //    new value when (re-)attaching.
+        if (next.bassBoostStrength != prev.bassBoostStrength) {
+            commands += EffectCommand.SetBassBoostStrength(next.bassBoostStrength)
+        }
+        if (next.virtualizerStrength != prev.virtualizerStrength) {
+            commands += EffectCommand.SetVirtualizerStrength(next.virtualizerStrength)
+        }
+        if (next.dialogueBoostStrength != prev.dialogueBoostStrength) {
+            commands += EffectCommand.SetDialogueBoostStrength(next.dialogueBoostStrength)
+        }
+        if (next.nightModeStrength != prev.nightModeStrength) {
+            commands += EffectCommand.SetNightModeStrength(next.nightModeStrength)
+        }
+
+        // 3. Enabled flags.
+        if (next.equalizerEnabled != prev.equalizerEnabled) {
+            commands += EffectCommand.SetEqualizerEnabled(next.equalizerEnabled)
+        }
+        if (next.bassBoostEnabled != prev.bassBoostEnabled) {
+            commands += EffectCommand.SetBassBoostEnabled(next.bassBoostEnabled)
+        }
+        if (next.virtualizerEnabled != prev.virtualizerEnabled) {
+            commands += EffectCommand.SetVirtualizerEnabled(next.virtualizerEnabled)
+        }
+        if (next.dialogueBoostEnabled != prev.dialogueBoostEnabled) {
+            commands += EffectCommand.SetDialogueBoostEnabled(next.dialogueBoostEnabled)
+        }
+        if (next.nightModeEnabled != prev.nightModeEnabled) {
+            commands += EffectCommand.SetNightModeEnabled(next.nightModeEnabled)
+        }
+
+        // 4. Reverb preset — changing it re-attaches the effect, so it runs
+        //    after the enabled flags settle.
+        if (next.reverbPreset != prev.reverbPreset) {
+            commands += EffectCommand.SetReverbPreset(next.reverbPreset)
+        }
+
+        return commands
+    }
+}
+
+/**
+ * One mutation to apply to the audio-effects processor. Sealed so the
+ * dispatcher's `when` is exhaustive — adding a new effect means adding a new
+ * variant and the compiler flags every dispatcher that forgets it.
+ *
+ * The dispatcher ([AudioPlaybackManager] in production) maps each variant to
+ * the corresponding `effectsProcessor.setX(...)` call.
+ */
+sealed interface EffectCommand {
+    data class SetVisualizerEnabled(val enabled: Boolean) : EffectCommand
+    data class SetEqualizerPreset(val preset: EqualizerPreset) : EffectCommand
+    data class SetLrBalance(val balance: Float) : EffectCommand
+    data class SetPitchSemitones(val semitones: Float) : EffectCommand
+    data class SetBassBoostStrength(val strength: EffectStrength) : EffectCommand
+    data class SetVirtualizerStrength(val strength: Int) : EffectCommand
+    data class SetDialogueBoostStrength(val strength: EffectStrength) : EffectCommand
+    data class SetNightModeStrength(val strength: EffectStrength) : EffectCommand
+    data class SetEqualizerEnabled(val enabled: Boolean) : EffectCommand
+    data class SetBassBoostEnabled(val enabled: Boolean) : EffectCommand
+    data class SetVirtualizerEnabled(val enabled: Boolean) : EffectCommand
+    data class SetDialogueBoostEnabled(val enabled: Boolean) : EffectCommand
+    data class SetNightModeEnabled(val enabled: Boolean) : EffectCommand
+    data class SetReverbPreset(val preset: ReverbPreset) : EffectCommand
+}

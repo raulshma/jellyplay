@@ -108,20 +108,10 @@ class AudioEffectsProcessor @Inject constructor() {
     val channelMixEnabled: StateFlow<Boolean> = _channelMixEnabled.asStateFlow()
 
     val nightModeVolumeForStrength: Float
-        get() = when (_nightModeStrength) {
-            EffectStrength.NONE -> 1.0f
-            EffectStrength.LOW -> 0.7f
-            EffectStrength.MODERATE -> 0.4f
-            EffectStrength.HIGH -> 0.2f
-        }
+        get() = EffectStrengthMapping.nightModeVolumeAttenuation(_nightModeStrength)
 
     val nightModeGainForStrength: Int
-        get() = when (_nightModeStrength) {
-            EffectStrength.NONE -> 0
-            EffectStrength.LOW -> 1500
-            EffectStrength.MODERATE -> 3000
-            EffectStrength.HIGH -> 4500
-        }
+        get() = EffectStrengthMapping.nightModeGainMb(_nightModeStrength)
 
     var nightModeVolume = 0.4f
     var nightModeGain = 1200
@@ -195,16 +185,16 @@ class AudioEffectsProcessor @Inject constructor() {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         // Ensure the shared Equalizer exists; the boost overlay is
         // applied on top of the user's base levels via setBandOffsets.
-        // The Equalizer must stay enabled while EITHER effect is on;
-        // when both are off, drop down to the user-facing EQ toggle so
-        // we don't hold the system effect open needlessly.
-        val eitherOn = _dialogueBoostEnabled.value || _equalizerEnabled.value
+        // The co-enabling rule (on while EITHER effect is on) lives inside
+        // [EqualizerHelper.setEnabled] — callers pass both flags and reuse
+        // the resolved result instead of re-deriving the `||`.
+        equalizerHelper.attach(audioSessionId)
+        val eitherOn = equalizerHelper.setEnabled(
+            equalizerEnabled = _equalizerEnabled.value,
+            dialogueBoostEnabled = _dialogueBoostEnabled.value,
+        )
         if (eitherOn) {
-            equalizerHelper.attach(audioSessionId)
-            equalizerHelper.setEnabled(true)
             equalizerHelper.setSettings(_equalizerSettings.value)
-        } else {
-            equalizerHelper.setEnabled(false)
         }
         dialogueBoost.attach(audioSessionId)
         dialogueBoost.setStrength(_dialogueBoostStrength)
@@ -218,12 +208,13 @@ class AudioEffectsProcessor @Inject constructor() {
         val player = playerProvider?.invoke() ?: return
         val audioSessionId = player.audioSessionId
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        // If DialogueBoost is also on, the Equalizer must stay enabled
-        // even when the user's EQ is off; otherwise re-derive the
-        // enabled flag from the user-facing toggle.
-        val mustStayOnForBoost = _dialogueBoostEnabled.value
+        // The co-enabling rule (on while EITHER effect is on) lives inside
+        // [EqualizerHelper.setEnabled] — callers pass both flags.
         equalizerHelper.attach(audioSessionId)
-        equalizerHelper.setEnabled(_equalizerEnabled.value || mustStayOnForBoost)
+        equalizerHelper.setEnabled(
+            equalizerEnabled = _equalizerEnabled.value,
+            dialogueBoostEnabled = _dialogueBoostEnabled.value,
+        )
         equalizerHelper.setSettings(_equalizerSettings.value)
     }
 
@@ -330,13 +321,17 @@ class AudioEffectsProcessor @Inject constructor() {
         if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
         // The user-facing EQ and DialogueBoost both ride on the single
         // underlying priority-0 `Equalizer` owned by `equalizerHelper`
-        // (see EqualizerHelper/DialogueBoostHelper kdoc). Attach and
-        // enable the helper whenever EITHER is on; DialogueBoostHelper
-        // overlays its vocal-band offsets on top of the user's base
-        // levels via setBandOffsets.
+        // (see EqualizerHelper/DialogueBoostHelper kdoc). The co-enabling
+        // rule (on while EITHER is on) lives inside
+        // [EqualizerHelper.setEnabled]; DialogueBoostHelper overlays its
+        // vocal-band offsets on top of the user's base levels via
+        // setBandOffsets.
         if (_equalizerEnabled.value || _dialogueBoostEnabled.value) {
             equalizerHelper.attach(audioSessionId)
-            equalizerHelper.setEnabled(true)
+            equalizerHelper.setEnabled(
+                equalizerEnabled = _equalizerEnabled.value,
+                dialogueBoostEnabled = _dialogueBoostEnabled.value,
+            )
             equalizerHelper.setSettings(_equalizerSettings.value)
         }
         if (_dialogueBoostEnabled.value) {

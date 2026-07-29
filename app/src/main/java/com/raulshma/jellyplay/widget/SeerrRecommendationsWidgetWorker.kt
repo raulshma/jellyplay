@@ -50,7 +50,7 @@ class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
     }.fold(
         onSuccess = { Result.success() },
         onFailure = { e ->
-            if (isPermanentFailure(e)) {
+            if (isPermanentWidgetFailure(e)) {
                 Log.w(TAG, "Permanent failure, not retrying", e)
                 Result.failure()
             } else {
@@ -58,13 +58,6 @@ class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
             }
         },
     )
-
-    private fun isPermanentFailure(throwable: Throwable): Boolean {
-        val message = throwable.message ?: return false
-        return message.contains("401") || message.contains("403") ||
-               message.contains("404") || message.contains("Unauthorized") ||
-               message.contains("Forbidden") || message.contains("Not Found")
-    }
 
     private suspend fun fetch(source: SeerrWidgetSource, region: String) = when (source) {
         SeerrWidgetSource.TRENDING -> seerrRepository.getTrending(page = 1)

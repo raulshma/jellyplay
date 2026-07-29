@@ -31,7 +31,7 @@ fun EntryProviderScope<NavKey>.homeSection(
                 onItemClick = { itemId, mediaType, parentId, itemName ->
                     navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
                 },
-                onPlayClick = { itemId, mediaSourceId, startPosition, mediaType, parentId ->
+                onPlayClick = { itemId, mediaSourceId, startPosition, mediaType, parentId, itemName ->
                     if (mediaType.isPhotoType) {
                         navigator.navigatePhotoAware(itemId, mediaType, parentId, "")
                     } else if (playOnStrategy?.isConnected?.value == true) {
@@ -42,6 +42,11 @@ fun EntryProviderScope<NavKey>.homeSection(
                             itemId = itemId,
                             startPositionMs = startPosition / 10_000,
                         )
+                    } else if (mediaType == MediaType.CHANNEL || mediaType == MediaType.LIVE_TV) {
+                        // Live channels must go through the live TV player (tuner
+                        // playback), not the generic video player. Mirrors the
+                        // dedicated LiveTvScreen's onChannelClick routing.
+                        navigator.navigate(Route.LiveTvChannelPlayer(itemId, itemName))
                     } else {
                         navigator.navigate(Route.VideoPlayer(itemId, mediaSourceId, startPosition))
                     }

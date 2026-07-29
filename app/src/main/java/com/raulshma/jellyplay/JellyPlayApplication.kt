@@ -16,8 +16,6 @@ import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
-import io.sentry.Sentry
-import io.sentry.android.core.SentryAndroid
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toPath
 import kotlinx.coroutines.CoroutineScope
@@ -69,17 +67,15 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
 
     override fun onCreate() {
         super.onCreate()
-        // Critical path: Sentry must initialise before anything else so all
-        // subsequent work is crash-instrumented. Audio + widget updaters follow
-        // on the same coroutine (they have no dependency on the groups below).
+        // Critical path: audio + widget updaters (no dependency on the groups
+        // below).
         applicationScope.launch(Dispatchers.IO) {
-            initSentry()
             audioPlaybackManagerProvider.get().start()
             nowPlayingWidgetUpdaterProvider.get().start()
         }
         // Background schedulers — independent enqueue calls, all KEEP-safe.
         // Run concurrently with the critical path so cold start isn't gated on
-        // Sentry/audio init.
+        // audio init.
         applicationScope.launch(Dispatchers.IO) {
             widgetWorkScheduler.enqueuePeriodic()
             userDataSyncScheduler.enqueuePeriodic()
@@ -93,57 +89,6 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         applicationScope.launch(Dispatchers.IO) {
             downloadRecoveryInitializer.recover()
         }
-    }
-
-    private fun initSentry() {
-        SentryAndroid.init(this) { options ->
-            // Strip query strings from HTTP breadcrumb URLs that may carry the
-            // Jellyfin access token (e.g. ".../stream?api_key=…"). The previous
-            // implementation was case-sensitive and only inspected the "url"
-            // data key, missing "ApiKey" variants and breadcrumbs whose message
-            // contained a logged request line.
-            options.setBeforeBreadcrumb { breadcrumb, _ ->
-                val data = breadcrumb.data
-                val url = data["url"] as? String
-                if (url != null && url.contains("?")) {
-                    val query = url.substringAfter("?")
-                    // Match token-bearing query params case-insensitively.
-                    val carriesToken = query.split("&").any { kv ->
-                        val key = kv.substringBefore("=").lowercase()
-                        key in TOKEN_PARAM_NAMES
-                    }
-                    if (carriesToken) {
-                        data["url"] = url.substringBefore("?")
-                    }
-                }
-                // Drop breadcrumbs whose message contains a literal token
-                // pattern (e.g. an OkHttp log line of
-                // "GET .../stream?api_key=abc123"). Returning null drops the
-                // breadcrumb entirely rather than redacting in place, which is
-                // safer because we can't know where in the message the token is.
-                val message = breadcrumb.message
-                if (message != null) {
-                    val lower = message.lowercase()
-                    if (TOKEN_PATTERNS.any { lower.contains(it) }) {
-                        return@setBeforeBreadcrumb null
-                    }
-                }
-                breadcrumb
-            }
-            options.dsn?.let { dsn ->
-                if (dsn.isNotBlank()) {
-                    configureSentryUserContext()
-                }
-            }
-        }
-    }
-
-    private fun configureSentryUserContext() {
-        val user = io.sentry.protocol.User().apply {
-            username = "jellyplay-user"
-        }
-        Sentry.setUser(user)
-        Sentry.setTag("player.engine", userPreferencesStore.preferences.value.preferredPlayer.name)
     }
 
     private val imageClient by lazy {
@@ -195,17 +140,4 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     override fun newImageLoader(context: Context): ImageLoader = imageLoader
-
-    companion object {
-        // Query-param names (lowercased) whose presence marks a URL as carrying
-        // a credential. Matched case-insensitively against the param key only.
-        private val TOKEN_PARAM_NAMES = setOf(
-            "api_key", "apikey", "token", "x-emby-token", "accesstoken",
-        )
-        // Lowercased substrings whose presence in a breadcrumb message marks it
-        // as a logged request line that may carry a raw token.
-        private val TOKEN_PATTERNS = listOf(
-            "api_key=", "apikey=", "x-emby-token:", "x-emby-token=", "accesstoken=",
-        )
-    }
 }

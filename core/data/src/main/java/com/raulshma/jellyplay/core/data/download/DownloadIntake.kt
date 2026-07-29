@@ -69,12 +69,13 @@ class DownloadIntakeImpl @Inject constructor(
 ) : DownloadIntake {
 
     override suspend fun start(detail: MediaDetail, maxBitrate: Int?): DownloadResult {
-        val request = delegate.prepareDownloadRequest(detail, maxBitrate)
-            ?: return DownloadResult(
+        // The per-item recipe (prepare + execute) lives in DownloadDelegate.startOne
+        // so single-item intake and the series-batch loop share one code path.
+        return delegate.startOne(detail, maxBitrate)
+            ?: DownloadResult(
                 downloadItem = null,
                 error = "No media source available for download",
             )
-        return delegate.executeDownload(request)
     }
 
     override suspend fun startSeries(

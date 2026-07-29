@@ -49,7 +49,7 @@ import kotlinx.coroutines.cancel
 class MpvPlayerEngine(
     private val context: Context,
     private val fontProvider: FontProvider,
-) : MediaEngine {
+) : BasePlayerEngine() {
 
     companion object {
         private const val TAG = "MpvPlayerEngine"
@@ -74,42 +74,20 @@ class MpvPlayerEngine(
         private const val MPV_ERROR_UNKNOWN_FORMAT = -17
         private const val MPV_ERROR_UNSUPPORTED = -18
         private const val MPV_ERROR_NOT_IMPLEMENTED = -19
+        // Prefix/text filter for which verbose (below WARN) mpv messages are
+        // surfaced in debug builds. Covers the subtitle/font/render pipeline
+        // (sub/ass/libass/vtt/srt) plus the demux/vo/decode paths that feed it,
+        // so a no-render bug can be traced end-to-end without logcat drowning.
         private val MPV_SUBTITLE_LOG_PATTERN =
-            Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream)")
+            Regex("(?i)(sub|subtitle|libass|webvtt|vtt|srt|ssa|ass|ffmpeg|http|stream|vo/|demux|cplayer|vd)")
         private val REDACT_API_KEY = Regex("(?i)(api_key=)[^&\\s]+")
         private val REDACT_API_KEY_ENCODED = Regex("(?i)(api_key%3D)[^&\\s]+")
         private val REDACT_EMBY_TOKEN = Regex("(?i)(X-Emby-Token:\\s*)[^,\\s]+")
     }
 
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
-    // `var` because [release] cancels the SupervisorJob and immediately
-    // recreates a fresh scope, keeping the engine reusable without a `load`.
-    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override val capabilities = EngineCapabilityMatrix.MPV
-
-    private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
-    override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()
-
-    private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
-    override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
-
-    private val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 1)
-    override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
-
-    private val _bufferedPositionMs = MutableStateFlow(0L)
-    override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
-
-    private val _videoStats = MutableStateFlow(EngineVideoStats())
-    override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
-
-    private val _pollingIntervalMs = MutableStateFlow(1000L)
-    override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
-    private val _videoStatsEnabled = MutableStateFlow(false)
-    override val videoStatsEnabled: StateFlow<Boolean> = _videoStatsEnabled.asStateFlow()
 
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
@@ -136,7 +114,6 @@ class MpvPlayerEngine(
 
     @Volatile private var lastUnmuteVolume: Float = 1f
 
-    private var currentConfig = EngineConfig()
     // mpv handles its own internal EQ via af filters; this helper exists
     // solely to host the dialogue-boost overlay (see DialogueBoostHelper
     // kdoc) on the engine's audio session. User EQ settings never flow
@@ -148,7 +125,42 @@ class MpvPlayerEngine(
 
     private var wasPlayingBeforeActivityPause = false
 
-    private val mainHandler = Handler(Looper.getMainLooper())
+    // Set true by [release] before the async native destroy. Observer callbacks
+    // read this at entry and bail, so a callback that races in during the
+    // teardown window (after removeObserver but before mpv_terminate_destroy
+    // finishes on the release thread) cannot touch torn-down state. Matches
+    // mpvkt's `player.isExiting` guard.
+    @Volatile private var released = false
+
+    // Coalesces the burst of immediate refreshTracks() calls that fire when a
+    // track changes: a single subtitle pick triggers `select-${type}` plus the
+    // `sid`/`aid`/`track-list` observers within ~50 ms, each previously posting
+    // its own synchronous getPropertyNode("track-list") JNI read (plus the
+    // debug-only logSubtitleRenderState reads) onto the main looper. That burst
+    // was a primary cause of the MPV playback ANR. See [TrackRefreshCoalescer];
+    // delayed refreshes (late-arriving track enumeration for HLS/transcoded
+    // streams) keep their own mainHandler.postDelayed slot so they are not
+    // cancelled by an intervening immediate refresh.
+    private val trackRefresh = TrackRefreshCoalescer(
+        scopeProvider = { engineScope },
+        onRefresh = { performCoalescedRefresh() },
+    )
+
+    /**
+     * The coalesced refresh body. Runs on engineScope = Dispatchers.Main so
+     * buildTracks() stays main-threaded to serialise against
+     * mpv_terminate_destroy (see refreshTracks). The coalescer already collapsed
+     * the observer burst into this single read.
+     */
+    private fun performCoalescedRefresh() {
+        if (released) return
+        val tracks = try {
+            buildTracks()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to refresh MPV tracks (coalesced)", e); return
+        }
+        publishTracks(tracks, "coalesced")
+    }
 
     /**
      * Dedicated background thread for native mpv teardown. [release] is invoked
@@ -203,6 +215,7 @@ class MpvPlayerEngine(
                 }
             }
             override fun eventProperty(property: String, value: Boolean) {
+                if (released) return
                 if (property == "pause") {
                     _isPlaying.value = !value
                 }
@@ -236,6 +249,7 @@ class MpvPlayerEngine(
                 }
             }
             override fun event(eventId: Int, data: MPVNode) {
+                if (released) return
                 when (eventId) {
                     MPV.mpvEvent.MPV_EVENT_START_FILE -> {
                         Log.d(TAG, "MPV start file; adding ${pendingSubtitles.size} Jellyfin subtitle source(s)")
@@ -289,7 +303,23 @@ class MpvPlayerEngine(
 
             val fontsDir = fontProvider.provideFontsDir()
             mpv.setOptionString("sub-fonts-dir", fontsDir.absolutePath)
+            // Force the libass font provider off. On some devices libass's
+            // fontconfig provider fails to initialize ("can't find selected font
+            // provider" — observed on Adreno 509 / Nokia 6.1 Plus under app
+            // isolation, with OR without a FONTCONFIG_FILE env override), and
+            // EVERY subtitle then rasterizes to an empty bitmap. With "none",
+            // libass resolves fonts solely from sub-fonts-dir (the bundled
+            // subfont.ttf + any user-installed .ttf) plus the ASS `sub-font`
+            // default set below. System fontconfig aliasing is lost, but that is
+            // strictly better than no subtitles at all, and ASS tracks usually
+            // embed their own fonts (mkv attachments), which libass loads via
+            // the demuxer regardless of provider.
             mpv.setOptionString("sub-font-provider", "none")
+            // Default the requested family to the bundled fallback's own family
+            // so libass matches it exactly under the none provider. Overridden
+            // per-style in applySubtitleStyleProperties when the user picks a
+            // font, and ASS tracks ignore sub-font unless sub-ass-override=force.
+            fontProvider.bundledFallbackFamilyName()?.let { mpv.setOptionString("sub-font", it) }
 
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
@@ -302,8 +332,11 @@ class MpvPlayerEngine(
                 mpvCfg.audioFallback?.let { append(",").append(it.key) }
             }
             mpv.setOptionString("ao", aoValue)
-            mpv.setOptionString("gpu-context", "android")
-            mpv.setOptionString("opengl-es", "yes")
+            // gpu-context / opengl-es are NOT set: the is.xyz.mpv BaseMPVView
+            // binding (io.github.abdallahmehiz:mpv-android-lib) creates its own
+            // GLES context internally, so these options are redundant and can
+            // race with the binding's own context setup. mpvkt — the reference
+            // app for this exact binding — sets neither.
             // Size subtitles against the video frame, not the OS window. With
             // "yes" (window-relative), rotating to portrait grows the window
             // height ~2x and blows the captions up, while the video itself is
@@ -314,7 +347,6 @@ class MpvPlayerEngine(
             mpv.setOptionString("sub-scale-with-window", "no")
             mpv.setOptionString("sub-auto", "fuzzy")
             mpv.setOptionString("sub-visibility", "yes")
-            mpv.setOptionString("secondary-sub-visibility", "yes")
             mpv.setOptionString("sub-ass-override", "scale")
             mpv.setOptionString("keep-open", "yes")
             applySubtitleStyleOptions(mpv, currentConfig.subtitleStyle)
@@ -363,7 +395,14 @@ class MpvPlayerEngine(
             mpv.setOptionString("demuxer-max-bytes", demuxerMax.toString())
             mpv.setOptionString("demuxer-max-back-bytes", demuxerMaxBack.toString())
 
-            mpv.setOptionString("msg-level", "all=warn")
+            // Debug builds surface libass/vo/demuxer trace messages so subtitle
+            // render/decode issues (font-provider death, empty bitmaps) are
+            // visible without recompiling; release keeps warn to stay quiet and
+            // cheap. Mirrors mpvkt's per-build msg-level (all=v debug / all=warn
+            // release). A debug-build sub/ass trace is what pinpointed the
+            // "can't find selected font provider" → empty-bitmap subtitle bug.
+            val msgLevel = if (com.raulshma.jellyplay.feature.player.video.BuildConfig.DEBUG) "all=v" else "all=warn"
+            mpv.setOptionString("msg-level", msgLevel)
 
             // `fast` bundles vd-lavc-fast (skips some loop-filter / ref-frame
             // work) and cheap scaler defaults — a steady per-frame decode/render
@@ -379,7 +418,17 @@ class MpvPlayerEngine(
                 mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
             }
 
-            mpv.setOptionString("audio-channels", channelMixModeToAudioChannels(currentConfig.audioEffects.channelMixMode))
+            // Tag the output stream so Android routes it correctly (movie role →
+            // speaker, ignores notifications). findroid sets this unconditionally.
+            mpv.setOptionString("audio-set-media-role", "yes")
+
+            mpv.setOptionString(
+                "audio-channels",
+                channelMixModeToAudioChannels(
+                    currentConfig.audioEffects.channelMixMode,
+                    currentConfig.audioEffects.channelMixEnabled,
+                ),
+            )
 
             val afFilters = mutableListOf<String>()
             // Normalization filters (DYNAMIC compression / TRACK-ALBUM loudnorm).
@@ -415,7 +464,7 @@ class MpvPlayerEngine(
             mpv.observeProperty("aid", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("track-list", MPV.mpvFormat.MPV_FORMAT_NODE)
             mpv.observeProperty("sub-visibility", MPV.mpvFormat.MPV_FORMAT_FLAG)
-            assignAudioSessionId()
+            assignAudioSessionId(mpv)
         }
 
         override fun observeProperties() {}
@@ -433,8 +482,7 @@ class MpvPlayerEngine(
      * Must run after [PlayerMPVView.initialize] has created the mpv handle
      * and before playback starts.
      */
-    private fun assignAudioSessionId() {
-        val mpv = mpvView?.mpv ?: return
+    private fun assignAudioSessionId(mpv: MPV) {
         try {
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             val sid = audioManager?.generateAudioSessionId() ?: AudioManager.ERROR
@@ -450,10 +498,32 @@ class MpvPlayerEngine(
         }
     }
 
+    /** Applies effects implemented through Android's per-session AudioEffect API. */
+    private fun applyAndroidAudioEffects() {
+        val sid = audioSessionId
+        if (sid == 0) return
+        val effects = currentConfig.audioEffects
+
+        // Dialogue Boost and the equalizer share one system Equalizer instance.
+        equalizerHelper.attach(sid)
+        equalizerHelper.setEnabled(
+            equalizerEnabled = effects.equalizerEnabled,
+            dialogueBoostEnabled = effects.dialogueBoostEnabled,
+        )
+        dialogueBoost.attach(sid)
+        dialogueBoost.setStrength(effects.dialogueBoostStrength)
+        dialogueBoost.setEnabled(effects.dialogueBoostEnabled)
+
+        nightMode.attach(sid)
+        nightMode.setStrength(effects.nightModeStrength)
+        nightMode.setEnabled(effects.nightModeEnabled)
+    }
+
     override fun load(request: PlaybackRequest) {
-        if (!engineScope.isActive) {
-            engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        }
+        recreateEngineScopeIfInactive()
+        // Engine may have been release()d and is being reused — clear the
+        // teardown guard so observer callbacks are honoured again.
+        released = false
         pendingRequest = request
         pendingSubtitles = request.externalSubtitles
         // Reset observer-driven caches for the new item. The first time-pos /
@@ -471,6 +541,7 @@ class MpvPlayerEngine(
 
         mpvView?.let { view ->
             try {
+                applyAndroidAudioEffects()
                 configureMpvForRequest(view, request)
                 view.playFile(request.uri)
                 pendingRequest = null
@@ -482,6 +553,11 @@ class MpvPlayerEngine(
     }
 
     override fun release() {
+        // Mark torn-down first so any observer callback that races in during
+        // the async native destroy bails at its `released` guard instead of
+        // mutating state (e.g. a late `pause=false` would otherwise flip
+        // _isPlaying back true on a half-destroyed engine).
+        released = true
         pendingRequest = null
         pendingSubtitles = emptyList()
         // Note: there is no AudioManager.releaseAudioSessionId() —
@@ -490,6 +566,12 @@ class MpvPlayerEngine(
         // Just drop our handle so the next load() allocates a fresh one.
         generatedAudioSessionId = 0
         mainHandler.removeCallbacksAndMessages(null)
+        // Cancel the coalescer's pending debounce before the scope cancel so a
+        // not-yet-fired buildTracks() can never race mpv_terminate_destroy.
+        // Because buildTracks() now runs on the main thread (see refreshTracks),
+        // any read that already started is guaranteed to finish before this
+        // release() runs — the main looper is single-threaded.
+        trackRefresh.cancel()
         dialogueBoost.detach()
         equalizerHelper.detach()
         nightMode.detach()
@@ -521,7 +603,7 @@ class MpvPlayerEngine(
         // Recreate the scope so a re-used engine stays usable without waiting
         // for the next load(). A cancelled scope silently swallows new
         // launches (no-ops), which would otherwise lose the position ticker.
-        engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        recreateEngineScopeIfInactive()
         // Stop the dedicated release thread once the engine is fully
         // torn down. The last scheduled runnable has already captured `view`
         // and will run to completion, but no new work can be enqueued because
@@ -566,29 +648,26 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.setPropertyDouble("speed", speed.toDouble()) } catch (e: Exception) { Log.w(TAG, "setPlaybackSpeed failed", e) }
     }
 
-    override fun updateConfig(config: EngineConfig) {
-        if (currentConfig == config) return
-        val oldConfig = currentConfig
-        currentConfig = config
-        val mpvCfg = (config.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
+    override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
+        val mpvCfg = (newConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
         try {
             val mpv = mpvView?.mpv ?: return
 
-            if (oldConfig.audioDelayMs != config.audioDelayMs) {
-                mpv.setPropertyDouble("audio-delay", config.audioDelayMs / 1000.0)
+            if (oldConfig.audioDelayMs != newConfig.audioDelayMs) {
+                mpv.setPropertyDouble("audio-delay", newConfig.audioDelayMs / 1000.0)
             }
-            if (oldConfig.subtitleDelayMs != config.subtitleDelayMs) {
-                mpv.setPropertyDouble("sub-delay", config.subtitleDelayMs / 1000.0)
+            if (oldConfig.subtitleDelayMs != newConfig.subtitleDelayMs) {
+                mpv.setPropertyDouble("sub-delay", newConfig.subtitleDelayMs / 1000.0)
             }
 
-            if (oldConfig.decoderMode != config.decoderMode || (oldConfig.engineSpecific as? MpvEngineConfig)?.hwdecOverride != mpvCfg.hwdecOverride) {
-                val hwdecValue = mpvCfg.hwdecOverride?.key ?: decoderModeToHwdec(config.decoderMode)
+            if (oldConfig.decoderMode != newConfig.decoderMode || (oldConfig.engineSpecific as? MpvEngineConfig)?.hwdecOverride != mpvCfg.hwdecOverride) {
+                val hwdecValue = mpvCfg.hwdecOverride?.key ?: decoderModeToHwdec(newConfig.decoderMode)
                 mpv.setPropertyString("hwdec", hwdecValue)
             }
 
-            if (oldConfig.audioPassthrough != config.audioPassthrough) {
-                if (config.audioPassthrough) {
+            if (oldConfig.audioPassthrough != newConfig.audioPassthrough) {
+                if (newConfig.audioPassthrough) {
                     mpv.setOptionString("audio-spdif", "ac3,eac3,dts,dtshd,truehd")
                 } else {
                     mpv.setOptionString("audio-spdif", "")
@@ -626,16 +705,24 @@ class MpvPlayerEngine(
                 mpv.setPropertyString("vd-lavc-skiploopfilter", mpvCfg.skipLoopFilter.key)
             }
 
-            if (oldConfig.subtitleStyle != config.subtitleStyle) {
-                applySubtitleStyleInternal(config.subtitleStyle)
+            if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
+                applySubtitleStyleInternal(newConfig.subtitleStyle)
             }
 
-            if (oldConfig.audioEffects.channelMixMode != config.audioEffects.channelMixMode) {
-                mpv.setPropertyString("audio-channels", channelMixModeToAudioChannels(config.audioEffects.channelMixMode))
+            if (oldConfig.audioEffects.channelMixMode != newConfig.audioEffects.channelMixMode ||
+                oldConfig.audioEffects.channelMixEnabled != newConfig.audioEffects.channelMixEnabled
+            ) {
+                mpv.setPropertyString(
+                    "audio-channels",
+                    channelMixModeToAudioChannels(
+                        newConfig.audioEffects.channelMixMode,
+                        newConfig.audioEffects.channelMixEnabled,
+                    ),
+                )
             }
 
             val oldAudioFx = oldConfig.audioEffects
-            val newAudioFx = config.audioEffects
+            val newAudioFx = newConfig.audioEffects
             // Rebuild the af chain when normalization OR dialogue-boost changes,
             // since dialogue boost contributes a highpass stage to the chain.
             if (oldAudioFx.audioNormalizationEnabled != newAudioFx.audioNormalizationEnabled ||
@@ -660,31 +747,17 @@ class MpvPlayerEngine(
                 }
             }
 
-            if (oldConfig.videoEffects != config.videoEffects) {
-                applyVideoFilters(config.videoEffects)
+            if (oldConfig.videoEffects != newConfig.videoEffects) {
+                applyVideoFilters(newConfig.videoEffects)
             }
 
-            val sid = audioSessionId
-            if (sid != 0) {
-                if (oldAudioFx.dialogueBoostStrength != newAudioFx.dialogueBoostStrength ||
-                    oldAudioFx.dialogueBoostEnabled != newAudioFx.dialogueBoostEnabled
-                ) {
-                    // The boost overlay rides on the EqualizerHelper's
-                    // priority-0 Equalizer; attach + enable it whenever
-                    // boost is on so the overlay has somewhere to land.
-                    equalizerHelper.attach(sid)
-                    equalizerHelper.setEnabled(newAudioFx.dialogueBoostEnabled)
-                    dialogueBoost.attach(sid)
-                    dialogueBoost.setStrength(newAudioFx.dialogueBoostStrength)
-                    dialogueBoost.setEnabled(newAudioFx.dialogueBoostEnabled)
-                }
-                if (oldAudioFx.nightModeStrength != newAudioFx.nightModeStrength ||
-                    oldAudioFx.nightModeEnabled != newAudioFx.nightModeEnabled
-                ) {
-                    nightMode.attach(sid)
-                    nightMode.setStrength(newAudioFx.nightModeStrength)
-                    nightMode.setEnabled(newAudioFx.nightModeEnabled)
-                }
+            if (oldAudioFx.dialogueBoostStrength != newAudioFx.dialogueBoostStrength ||
+                oldAudioFx.dialogueBoostEnabled != newAudioFx.dialogueBoostEnabled ||
+                oldAudioFx.nightModeStrength != newAudioFx.nightModeStrength ||
+                oldAudioFx.nightModeEnabled != newAudioFx.nightModeEnabled ||
+                oldAudioFx.equalizerEnabled != newAudioFx.equalizerEnabled
+            ) {
+                applyAndroidAudioEffects()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to reconfigure MPV audio effects", e)
@@ -756,7 +829,6 @@ class MpvPlayerEngine(
                         m.setPropertyString("sid", "$index")
                     }
                     m.setPropertyBoolean("sub-visibility", true)
-                    m.setPropertyBoolean("secondary-sub-visibility", true)
                 }
             }
             refreshTracks("select-${type.name.lowercase()}")
@@ -837,13 +909,14 @@ class MpvPlayerEngine(
             configDir.mkdirs()
         }
 
-        try {
-            android.system.Os.setenv("FONTCONFIG_FILE", java.io.File(fontsDir, "fonts.conf").absolutePath, true)
-            android.system.Os.setenv("FONTCONFIG_PATH", fontsDir.absolutePath, true)
-            Log.d(TAG, "Set FONTCONFIG environment variables successfully")
-        } catch (t: Throwable) {
-            Log.w(TAG, "Failed to set FONTCONFIG environment variables via Os.setenv", t)
-        }
+        // NOTE: do NOT set FONTCONFIG_FILE / FONTCONFIG_PATH. Pointing fontconfig
+        // at a minimal app-written fonts.conf breaks libass's font-provider init
+        // on some devices (e.g. Adreno 509 / Nokia 6.1 Plus: "can't find selected
+        // font provider"), which makes every subtitle rasterize to an empty
+        // bitmap. libass uses the system fontconfig by default, which resolves
+        // the ASS/SRT font families against /system/fonts; the bundled fallback
+        // is still picked up via sub-fonts-dir above. This matches mpvkt, which
+        // sets neither env var.
 
         val view = try {
             PlayerMPVView(context)
@@ -866,6 +939,10 @@ class MpvPlayerEngine(
         // Publish only after initialize() succeeded — otherwise every later
         // op on the engine throws repeatedly against a half-initialized view.
         mpvView = view
+        // postInitOptions has now allocated the audio session on the concrete
+        // MPV handle. Bind the Android effects before the first file starts so
+        // persisted dialogue boost/night mode settings are audible immediately.
+        applyAndroidAudioEffects()
 
         pendingRequest?.let { request ->
             pendingRequest = null
@@ -940,9 +1017,6 @@ class MpvPlayerEngine(
     override val audioSessionId: Int
         get() = generatedAudioSessionId
 
-    override fun setPollingIntervalMs(ms: Long) { _pollingIntervalMs.value = ms }
-    override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
-
     override val positionFlow: Flow<Long> = callbackFlow {
         trySend(currentPositionMs)
         // The polling loop (bounded paused-wait, play↔pause edge detection) is
@@ -968,11 +1042,16 @@ class MpvPlayerEngine(
                     _bufferedPositionMs.value = cachedBufferedPositionMs
                 }
                 if (_videoStatsEnabled.value) {
-                    // Stats require ~12 property reads; run them off the main
-                    // thread (see updateVideoStatsOnly).
-                    engineScope.launch(Dispatchers.IO) {
-                        updateVideoStatsOnly(posMs)
-                    }
+                    // Stats require ~12 property reads. Run them on the MAIN
+                    // thread (the ticker's onActive already runs on engineScope
+                    // = Dispatchers.Main) to serialise against
+                    // mpv_terminate_destroy. Offloading to Dispatchers.IO would
+                    // race the destroy posted to releaseThread during teardown
+                    // (same use-after-free window that hung the player on
+                    // subtitle-reload engine swaps). The reads are quick
+                    // individual property gets and only run while the stats
+                    // overlay is open.
+                    updateVideoStatsOnly(posMs)
                 }
             },
         ).launch()
@@ -1061,8 +1140,13 @@ class MpvPlayerEngine(
             val title = track["title"]?.asString()
             val codec = track["codec"]?.asString()
             val selected = track["selected"]?.asBoolean() ?: false
+            // ff-index is the demuxer/container stream index — present for
+            // container-demuxed tracks (== the server's MediaStream.index), null
+            // for side-loaded (sub-add) tracks. Used as the robust resolution key
+            // in TrackSelectionHelper instead of fragile label matching.
+            val ffIndex = track["ff-index"].asTrackId()
             val label = buildTrackLabel(trackType, id, lang, title, codec)
-            
+
             result.add(
                 MediaTrack(
                     id = "mpv_${t}_${id}",
@@ -1071,6 +1155,7 @@ class MpvPlayerEngine(
                     language = lang,
                     isSelected = selected,
                     type = trackType,
+                    streamIndex = ffIndex,
                 )
             )
         }
@@ -1188,7 +1273,6 @@ class MpvPlayerEngine(
 
         view.mpv.setOptionString("sub-visibility", "yes")
         view.mpv.setPropertyBoolean("sub-visibility", true)
-        view.mpv.setPropertyBoolean("secondary-sub-visibility", true)
         request.preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
             view.mpv.setOptionString("alang", normalizeLanguageList(language))
         }
@@ -1197,9 +1281,26 @@ class MpvPlayerEngine(
         }
 
         if (request.headers.isNotEmpty()) {
-            val headerStr = request.headers.entries.joinToString(",") { "${it.key}: ${it.value}" }
-            try { view.mpv.setOptionString("http-header-fields", headerStr) } catch (_: Exception) {}
-            try { view.mpv.setPropertyString("http-header-fields", headerStr) } catch (_: Exception) {}
+            // mpv handles User-Agent as its own property (it drives the default
+            // UA for all requests, including the one mpv sends for stream
+            // probing). Pull it out so it lands in `user-agent` rather than
+            // being buried in http-header-fields, which some servers parse
+            // inconsistently. Remaining headers stay in http-header-fields,
+            // comma-joined per mpv's documented format.
+            val userAgent = request.headers.entries
+                .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }
+                ?.value
+            if (!userAgent.isNullOrBlank()) {
+                try { view.mpv.setOptionString("user-agent", userAgent) } catch (_: Exception) {}
+                try { view.mpv.setPropertyString("user-agent", userAgent) } catch (_: Exception) {}
+            }
+            val headerStr = request.headers.entries
+                .filter { !it.key.equals("User-Agent", ignoreCase = true) }
+                .joinToString(",") { "${it.key}: ${it.value}" }
+            if (headerStr.isNotBlank()) {
+                try { view.mpv.setOptionString("http-header-fields", headerStr) } catch (_: Exception) {}
+                try { view.mpv.setPropertyString("http-header-fields", headerStr) } catch (_: Exception) {}
+            }
             Log.d(TAG, "Applied MPV HTTP headers: ${request.headers.keys}")
         }
 
@@ -1210,11 +1311,41 @@ class MpvPlayerEngine(
         }
     }
 
+    /**
+     * Labels of every subtitle currently in mpv's track-list (demuxed + sub-add'd).
+     * Used to dedup sub-add calls — matching on label is robust because it is the
+     * exact `title` arg passed to `sub-add`. Best-effort: returns an empty set on
+     * any track-list read failure so the caller proceeds to add.
+     */
+    private fun existingSubLabels(): Set<String> = try {
+        buildTracks()
+            .asSequence()
+            .filter { it.type == TrackType.SUBTITLE }
+            .mapNotNull { it.label }
+            .toSet()
+    } catch (_: Exception) {
+        emptySet()
+    }
+
     private fun addPendingSubtitles(mpv: MPV) {
         val subtitles = pendingSubtitles
         if (subtitles.isEmpty()) return
 
+        // Guard against duplicate sub-add. mpv lists every track (demuxed +
+        // previously sub-add'd) in track-list; if a side-load with the same
+        // label is already present, skip it. findroid hit the same class of bug
+        // (START_FILE re-firing re-flushed its initialCommands) and fixed it by
+        // clearing the buffer; here the equivalent is checking the live
+        // track-list, which also covers a load() called twice without a
+        // release() in between. Matching on label (the title passed to sub-add)
+        // is robust because that's the exact arg we pass below.
+        val existingSubLabels = existingSubLabels()
+
         subtitles.forEach { sub ->
+            if (sub.label in existingSubLabels) {
+                Log.d(TAG, "Skipping duplicate Jellyfin subtitle (already in track-list): id=${sub.id}, label=${sub.label}")
+                return@forEach
+            }
             // "select" forces the track active; "auto" leaves selection to mpv's
             // slang/sub-auto heuristics, which drop a side-loaded track that has
             // no language and no matching slang. A subtitle flagged isDefault is
@@ -1247,6 +1378,13 @@ class MpvPlayerEngine(
 
     override fun addExternalSubtitle(source: SubtitleSource) {
         val mpv = mpvView?.mpv ?: return
+        // Skip if a track with the same label is already present (double-tap in
+        // the picker, or a re-add after a config reload). See addPendingSubtitles
+        // for the rationale on label-keyed dedup.
+        if (source.label in existingSubLabels()) {
+            Log.d(TAG, "Skipping duplicate external subtitle (already in track-list): label=${source.label}")
+            return
+        }
         try {
             if (source.language.isNullOrBlank()) {
                 mpv.command("sub-add", source.url, "select", source.label)
@@ -1271,27 +1409,50 @@ class MpvPlayerEngine(
             .joinToString(",")
 
     private fun refreshTracks(reason: String, delayMs: Long = 0L) {
-        val action = Runnable {
-            try {
-                val tracks = buildTracks()
-                val previous = _availableTracks.value
-                // Only assign when changed — _availableTracks is a StateFlow so
-                // a no-op set still triggers a distinctUntilChanged comparison
-                // downstream plus the assignment itself. mpv emits track-list
-                // node updates frequently during initial load and on internal
-                // re-selection, so skipping identical rebuilds avoids that churn.
-                if (tracks != previous) {
-                    _availableTracks.value = tracks
+        if (released) return
+        if (delayMs > 0) {
+            // Delayed refreshes enumerate late-arriving tracks on HLS/transcoded
+            // streams and must NOT be cancelled by an intervening immediate
+            // refresh, so they keep their own postDelayed slot.
+            //
+            // buildTracks() runs on the MAIN thread (not Dispatchers.IO):
+            // release() also runs on main and posts mpv_terminate_destroy to a
+            // background thread. Reading on main serialises the getPropertyNode
+            // JNI call against destroy — a main-thread read that has already
+            // started always finishes before release() can post destroy, so the
+            // mpv handle is never used concurrently from two threads. Offloading
+            // to Dispatchers.IO previously widened a use-after-free window that
+            // hung the player during subtitle-reload engine swaps (ANR).
+            val action = Runnable {
+                if (released) return@Runnable
+                val tracks = try { buildTracks() } catch (e: Exception) {
+                    Log.w(TAG, "Failed to refresh MPV tracks ($reason)", e); return@Runnable
                 }
-                if (tracks != previous || reason.startsWith("select")) {
-                    Log.d(TAG, "MPV tracks refreshed ($reason): ${describeTracks(tracks)}")
-                    logSubtitleRenderState(reason)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to refresh MPV tracks ($reason)", e)
+                publishTracks(tracks, reason)
             }
+            mainHandler.postDelayed(action, delayMs)
+        } else {
+            // Immediate refresh: route through the coalescer so the select +
+            // sid/aid/track-list observer burst collapses into a single
+            // buildTracks() read (see TrackRefreshCoalescer). The coalescer
+            // launches on engineScope (Dispatchers.Main), so the read stays
+            // main-threaded for the destroy-serialization reason above.
+            trackRefresh.request()
         }
-        if (delayMs > 0) mainHandler.postDelayed(action, delayMs) else mainHandler.post(action)
+    }
+
+    /**
+     * Assigns the freshly-built track list to [_availableTracks] (only when it
+     * actually changed — a no-op StateFlow set still propagates a comparison)
+     * and logs the refresh. Reads the current value inline so coalesced
+     * refreshes compare against the latest published list.
+     */
+    private fun publishTracks(tracks: List<MediaTrack>, reason: String) {
+        val prior = _availableTracks.value
+        if (tracks != prior) {
+            _availableTracks.value = tracks
+        }
+        Log.d(TAG, "MPV tracks refreshed ($reason): ${describeTracks(tracks)}")
     }
 
     private fun describeTracks(tracks: List<MediaTrack>): String {
@@ -1311,7 +1472,7 @@ class MpvPlayerEngine(
             mpv.safeSetOption("sub-ass-override", "no")
         }
 
-        mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: "sans-serif")
+        mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
         mpv.safeSetOption("sub-font-size", "55")
         mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / 24.0).toString())
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
@@ -1323,25 +1484,27 @@ class MpvPlayerEngine(
     private fun applySubtitleStyleProperties(mpv: MPV, style: SubtitleStyle) {
         val values = subtitleStyleValues(style)
         mpv.safeSetPropertyBoolean("sub-visibility", true)
-        mpv.safeSetPropertyBoolean("secondary-sub-visibility", true)
         if (style.applyCustomStyle) {
             customSubtitleStyleEntries(style, values).forEach { (k, v) -> mpv.safeSetPropertyString(k, v) }
             // Numeric properties are typed (Double) for the runtime path.
-            mpv.safeSetPropertyDouble("sub-outline-size", values.outlineSize)
+            // sub-border-* are the canonical mpv/libass names; sub-outline-* are
+            // deprecated aliases that silently no-op on some libass versions.
+            mpv.safeSetPropertyDouble("sub-border-size", values.outlineSize)
             mpv.safeSetPropertyDouble("sub-shadow-offset", values.shadowOffset)
         } else {
             // Reset to defaults
             mpv.safeSetPropertyString("sub-color", "#FFFFFFFF")
             mpv.safeSetPropertyString("sub-back-color", "#00000000")
-            mpv.safeSetPropertyString("sub-outline-color", "#FF000000")
+            mpv.safeSetPropertyString("sub-border-color", "#FF000000")
             mpv.safeSetPropertyString("sub-shadow-color", "#FF000000")
             mpv.safeSetPropertyString("sub-border-style", "outline-and-shadow")
             mpv.safeSetPropertyString("sub-ass-override", "no")
-            mpv.safeSetPropertyDouble("sub-outline-size", 3.0)
+            mpv.safeSetPropertyBoolean("sub-ass-justify", false)
+            mpv.safeSetPropertyDouble("sub-border-size", 3.0)
             mpv.safeSetPropertyDouble("sub-shadow-offset", 0.0)
         }
 
-        mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: "sans-serif")
+        mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
         mpv.safeSetPropertyDouble("sub-font-size", 55.0)
         mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / 24.0)
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
@@ -1392,8 +1555,17 @@ class MpvPlayerEngine(
     private fun MPVNode?.asTrackId(): Int? =
         this?.asInt()?.toInt() ?: this?.asString()?.toIntOrNull()
 
+    /**
+     * Diagnostic-only snapshot of the subtitle render state. Each call performs
+     * ~7 synchronous mpv property reads on the MAIN thread — never call this
+     * from the hot observer/refresh path. Runs on main to serialise against
+     * mpv_terminate_destroy (same reasoning as buildTracks in refreshTracks);
+     * debug-only and restricted to explicit user-action entry points (selectTrack,
+     * subtitle style apply, external sub-add).
+     */
     private fun logSubtitleRenderState(reason: String) {
         if (!com.raulshma.jellyplay.feature.player.video.BuildConfig.DEBUG) return
+        if (released) return
         val m = mpvView?.mpv ?: return
         try {
             val sid = m.getPropertyString("sid")
@@ -1514,7 +1686,12 @@ internal fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
     DecoderMode.SW_ONLY -> "no"
 }
 
-internal fun channelMixModeToAudioChannels(mode: ChannelMixMode): String = when (mode) {
+internal fun channelMixModeToAudioChannels(
+    mode: ChannelMixMode,
+    enabled: Boolean = true,
+): String = if (!enabled) {
+    "auto"
+} else when (mode) {
     ChannelMixMode.STEREO_DOWNMIX -> "stereo"
     ChannelMixMode.MONO -> "mono"
     ChannelMixMode.SURROUND_UPMIX -> "5.1"

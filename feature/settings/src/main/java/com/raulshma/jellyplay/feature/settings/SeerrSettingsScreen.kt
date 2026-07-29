@@ -74,15 +74,14 @@ import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.SettingListItem
+import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel.ConnectionStatus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-sealed class SeerrSettingsDialog {
-    object None : SeerrSettingsDialog()
-    object StreamingRegionPicker : SeerrSettingsDialog()
-    object DiscoverRegionPicker : SeerrSettingsDialog()
-}
+// Region pickers flow through the shared `PickerState` dispatcher; no screen-local
+// sealed dialog enum is needed.
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -101,7 +100,7 @@ fun SeerrSettingsScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
-    var activeDialog by remember { mutableStateOf<SeerrSettingsDialog>(SeerrSettingsDialog.None) }
+    var activeDialog by remember { mutableStateOf<PickerState<*>?>(null) }
     var animateEntrance by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -464,7 +463,15 @@ fun SeerrSettingsScreen(
                                 trailingText = streamingFlagAndName,
                                 index = 0,
                                 count = 2,
-                                onClick = { activeDialog = SeerrSettingsDialog.StreamingRegionPicker },
+                                onClick = {
+                                    activeDialog = PickerState.List(
+                                        title = "Streaming Region",
+                                        items = regionCodes,
+                                        label = { code -> regionNameByCode[code] ?: code },
+                                        isSelected = { it == preferences.streamingRegion },
+                                        onSelect = { viewModel.setStreamingRegion(it) },
+                                    )
+                                },
                             )
                             SettingListItem(
                                 icon = Tabler.Outline.Compass,
@@ -473,7 +480,15 @@ fun SeerrSettingsScreen(
                                 trailingText = discoverFlagAndName,
                                 index = 1,
                                 count = 2,
-                                onClick = { activeDialog = SeerrSettingsDialog.DiscoverRegionPicker },
+                                onClick = {
+                                    activeDialog = PickerState.List(
+                                        title = "Discover Region",
+                                        items = regionCodes,
+                                        label = { code -> regionNameByCode[code] ?: code },
+                                        isSelected = { it == preferences.discoverRegion },
+                                        onSelect = { viewModel.setDiscoverRegion(it) },
+                                    )
+                                },
                             )
                         }
                     }
@@ -482,33 +497,10 @@ fun SeerrSettingsScreen(
         }
     }
 
-    if (activeDialog is SeerrSettingsDialog.StreamingRegionPicker) {
-        SettingsListPickerSheet(
-            title = "Streaming Region",
-            items = regionCodes,
-            label = { code -> regionNameByCode[code] ?: code },
-            isSelected = { it == preferences.streamingRegion },
-            onDismiss = { activeDialog = SeerrSettingsDialog.None },
-            onSelect = {
-                viewModel.setStreamingRegion(it)
-                activeDialog = SeerrSettingsDialog.None
-            },
-        )
-    }
-
-    if (activeDialog is SeerrSettingsDialog.DiscoverRegionPicker) {
-        SettingsListPickerSheet(
-            title = "Discover Region",
-            items = regionCodes,
-            label = { code -> regionNameByCode[code] ?: code },
-            isSelected = { it == preferences.discoverRegion },
-            onDismiss = { activeDialog = SeerrSettingsDialog.None },
-            onSelect = {
-                viewModel.setDiscoverRegion(it)
-                activeDialog = SeerrSettingsDialog.None
-            },
-        )
-    }
+    SettingsPickerDialog(
+        state = activeDialog,
+        onDismiss = { activeDialog = null },
+    )
 }
 
 @Composable

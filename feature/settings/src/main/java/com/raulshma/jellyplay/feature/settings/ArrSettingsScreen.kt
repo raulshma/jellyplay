@@ -56,7 +56,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.arr.ArrDiscoveryError
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
-import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 
 /**
@@ -398,7 +397,3 @@ private fun AddManualServerDialog(
         },
     )
 }
-
-/** Used only to keep `ArrServiceSummary` referenced; suppresses unused-import noise if needed. */
-@Suppress("unused")
-private fun UnusedSummary(): ArrServiceSummary = ArrServiceSummary()

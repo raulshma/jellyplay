@@ -1,16 +1,13 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import android.media.audiofx.LoudnessEnhancer
-import android.util.Log
-import androidx.media3.common.C
 
-class LoudnessEnhancerHelper {
-
-    private var loudnessEnhancer: LoudnessEnhancer? = null
-    private var currentAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
-
-    var isEnabled: Boolean = false
-        private set
+/**
+ * Loudness-enhancer wrapper. Effect-specific state is the integer [gainmB];
+ * the lifecycle skeleton lives in [AudioFxHelper]. Enabling re-pushes the
+ * target gain (the underlying effect can reset it across detach/attach).
+ */
+class LoudnessEnhancerHelper : AudioFxHelper<LoudnessEnhancer>(TAG) {
 
     var gainmB: Int = 0
         private set
@@ -19,49 +16,17 @@ class LoudnessEnhancerHelper {
         this.gainmB = gainmB
         if (isEnabled) {
             try {
-                loudnessEnhancer?.setTargetGain(gainmB)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to set gain on LoudnessEnhancer", e)
-            }
+                fx?.setTargetGain(gainmB)
+            } catch (_: Exception) {}
         }
     }
 
-    fun attach(audioSessionId: Int) {
-        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        if (audioSessionId == currentAudioSessionId && loudnessEnhancer != null) return
+    override fun create(audioSessionId: Int): LoudnessEnhancer? =
+        LoudnessEnhancer(audioSessionId).apply { setTargetGain(gainmB) }
 
-        detach()
-        currentAudioSessionId = audioSessionId
-
-        loudnessEnhancer = try {
-            LoudnessEnhancer(audioSessionId).apply {
-                setTargetGain(gainmB)
-                enabled = isEnabled
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to create LoudnessEnhancer", e)
-            null
-        }
-    }
-
-    fun setEnabled(enabled: Boolean) {
-        isEnabled = enabled
-        try {
-            loudnessEnhancer?.apply {
-                if (enabled) {
-                    setTargetGain(gainmB)
-                }
-                this.enabled = enabled
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to setEnabled on LoudnessEnhancer", e)
-        }
-    }
-
-    fun detach() {
-        loudnessEnhancer?.release()
-        loudnessEnhancer = null
-        currentAudioSessionId = C.AUDIO_SESSION_ID_UNSET
+    override fun applyEnabled(effect: LoudnessEnhancer, enabled: Boolean) {
+        if (enabled) effect.setTargetGain(gainmB)
+        effect.enabled = enabled
     }
 
     companion object {

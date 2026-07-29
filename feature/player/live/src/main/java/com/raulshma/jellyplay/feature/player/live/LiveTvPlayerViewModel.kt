@@ -4,11 +4,13 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.raulshma.jellyplay.core.data.playback.PlayerAudioLifecycle
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -82,13 +84,31 @@ class LiveTvPlayerViewModel @Inject constructor(
     private var engine: LivePlayerEngine? = null
     private var initialized = false
     private var preMuteVolume: Float? = null
-    // Becoming-noisy (headphone unplug) + audio-focus (call/duck) lifecycle.
-    // Ported from the VOD VideoPlayerViewModel — live TV arguably needs these
-    // more (always-on stream, often background). Fields mirror the VOD names.
-    private var becomingNoisyReceiver: android.content.BroadcastReceiver? = null
-    private var transientAudioFocusRequest: android.media.AudioFocusRequest? = null
-    private var preDuckVolume: Float? = null
-    private var wasPlayingBeforeTransientLoss = false
+
+    /**
+     * Owns audio-focus (duck/restore) + becoming-noisy auto-pause. Shared with
+     * the VOD VM to eliminate the prior copy-paste. [control] adapts the live
+     * engine's raw Media3 `Player` surface — live has no `setMuted`, so mute is
+     * re-asserted as `volume = 0f` (the same surface [toggleMute] uses). Live
+     * has no resume-skip, so [onRegain] is null.
+     */
+    private val playerAudioLifecycle = PlayerAudioLifecycle(
+        context = context,
+        control = {
+            engine?.media3Player?.let { player ->
+                PlayerAudioLifecycle.PlaybackControl(
+                    isPlaying = { player.isPlaying },
+                    volume = { player.volume },
+                    pause = { player.pause() },
+                    play = { player.play() },
+                    setVolume = { player.volume = it },
+                    setMuted = { if (it) player.volume = 0f },
+                )
+            }
+        },
+        isMuted = { _state.value.isMuted },
+    )
+
     // Buffering watchdog (see LIVE_BUFFERING_TIMEOUT_MS). A live tuner can stall
     // in BUFFERING without ever raising a PlaybackException; this surfaces an
     // error after the timeout so the rebuffer spinner doesn't spin forever.
@@ -97,7 +117,10 @@ class LiveTvPlayerViewModel @Inject constructor(
     init {
         userPreferencesStore.preferences
             .onEach { prefs ->
-                _state.value = _state.value.copy(favorites = prefs.favoriteChannels)
+                _state.value = _state.value.copy(
+                    favorites = prefs.favoriteChannels,
+                    liveStreamOption = prefs.liveStreamOption,
+                )
             }
             .launchIn(viewModelScope)
     }
@@ -245,12 +268,11 @@ class LiveTvPlayerViewModel @Inject constructor(
         subtitleStreamIndex: Int?,
     ) {
         val prefs = userPreferencesStore.preferences.first()
-        val token = playbackRepository.getAccessToken()
         val resolved = resolveLiveStream(
             channel = channel,
             audioStreamIndex = audioStreamIndex,
             subtitleStreamIndex = subtitleStreamIndex,
-            mode = PlaybackMode.AUTO,
+            option = prefs.liveStreamOption,
             playerType = prefs.preferredPlayer,
         ) ?: run {
             _state.value = _state.value.copy(
@@ -261,18 +283,24 @@ class LiveTvPlayerViewModel @Inject constructor(
             return
         }
 
-        val headers = mutableMapOf<String, String>()
-        token?.let { headers["X-Emby-Token"] = it }
+        Log.i(
+            TAG,
+            "Playing ${channel.name}: option=${prefs.liveStreamOption}, " +
+                "player=${prefs.preferredPlayer}, method=${resolved.playMethod}, " +
+                "url=${resolved.streamUrl}"
+        )
 
-        Log.i(TAG, "Playing ${channel.name}: method=${resolved.playMethod}, url=${resolved.streamUrl}")
-
-        ensureEngine(prefs.preferredPlayer, playbackRepository.getServerUrl())
+        // Auth token flows via LiveEngineConfig.authToken (read by ExoLiveEngine's
+        // HTTP data-source factory), not per-request — see ensureEngine.
+        val livePlayMethod = resolved.playMethod.toLivePlayMethod()
+        _state.value = _state.value.copy(playMethod = livePlayMethod)
+        ensureEngine(prefs.preferredPlayer)
             .load(
                 LivePlaybackRequest(
                     url = resolved.streamUrl,
                     title = channel.name,
-                    headers = headers,
-                    playMethod = resolved.playMethod.toLivePlayMethod(),
+                    playMethod = livePlayMethod,
+                    container = resolved.container,
                 )
             )
 
@@ -281,7 +309,7 @@ class LiveTvPlayerViewModel @Inject constructor(
     }
 
     /**
-     * Resolves a live stream for [channel] under [mode]. Tries the full
+     * Resolves a live stream for [channel] under [option]. Tries the full
      * decision tree (`resolvePlayback`), then falls back to a direct stream
      * URL built from the first server-returned source. Returns null only
      * when both paths fail.
@@ -290,11 +318,12 @@ class LiveTvPlayerViewModel @Inject constructor(
         channel: LiveTvChannel,
         audioStreamIndex: Int?,
         subtitleStreamIndex: Int?,
-        mode: PlaybackMode,
+        option: LiveStreamOption,
         playerType: com.raulshma.jellyplay.core.model.PlayerType,
     ): ResolvedPlayback? {
         // Pass mediaSourceId = "" so the server does not filter on a
-        // channel-id-as-source-id.
+        // channel-id-as-source-id. mode = AUTO is inert here because the
+        // live flag table is driven by `liveStreamOption`.
         val resolved = playbackRepository.resolvePlayback(
             itemId = channel.id,
             mediaSourceId = "",
@@ -302,12 +331,33 @@ class LiveTvPlayerViewModel @Inject constructor(
             audioStreamIndex = audioStreamIndex,
             subtitleStreamIndex = subtitleStreamIndex,
             maxStreamingBitrateBits = null,
-            mode = mode,
+            mode = PlaybackMode.AUTO,
             playerType = playerType,
+            liveStreamOption = option,
         )
-        if (resolved != null) return resolved
-
-        Log.w(TAG, "resolvePlayback returned null for ${channel.name} (mode=$mode); falling back to fetchPlaybackInfo")
+        if (resolved != null) {
+            // When the user asked for Direct Stream but the server still
+            // resolved a transcode, it's because the server's live-source
+            // probe failed (TranscodeReasons=DirectPlayError) even though
+            // the tuner is opened and readable. The tuner session is live,
+            // so ignore the server's verdict and build a direct-stream URL
+            // ourselves from the liveStreamId; if the player genuinely can't
+            // decode it, the existing onPlayerError -> transcode fallback
+            // catches that. AUTO/TRANSCODE accept whatever the server picks.
+            if (option == LiveStreamOption.DIRECT_STREAM &&
+                resolved.playMethod == PlayMethod.TRANSCODE
+            ) {
+                Log.w(
+                    TAG,
+                    "Server resolved transcode for ${channel.name} despite " +
+                        "DIRECT_STREAM request (probe failed); forcing direct stream"
+                )
+            } else {
+                return resolved
+            }
+        } else {
+            Log.w(TAG, "resolvePlayback returned null for ${channel.name} (option=$option); falling back to fetchPlaybackInfo")
+        }
 
         // Fallback: fetch PlaybackInfo directly and build a direct stream URL
         // from the first source's liveStreamId. Mirrors the VOD
@@ -320,8 +370,9 @@ class LiveTvPlayerViewModel @Inject constructor(
                 audioStreamIndex = audioStreamIndex,
                 subtitleStreamIndex = subtitleStreamIndex,
                 maxStreamingBitrateBits = null,
-                mode = mode,
+                mode = PlaybackMode.AUTO,
                 playerType = playerType,
+                liveStreamOption = option,
             )
             .getOrNull() ?: run {
             Log.e(TAG, "fetchPlaybackInfo failed for ${channel.name}")
@@ -384,12 +435,13 @@ class LiveTvPlayerViewModel @Inject constructor(
             return null
         }
 
+        // The URL built above is always a direct `/Videos/{id}/stream` URL
+        // (via getStreamUrl), never a transcoding master.m3u8 — even when the
+        // server's flags say transcoding is the only option. So the play
+        // method reflects the URL we built, not the server's verdict; this
+        // also keeps the onPlayerError -> transcode fallback eligible.
         val playMethod = when {
             source.supportsDirectPlay -> PlayMethod.DIRECT_PLAY
-            source.supportsDirectStream -> PlayMethod.DIRECT_STREAM
-            source.supportsTranscoding && !source.transcodeUrl.isNullOrBlank() -> PlayMethod.TRANSCODE
-            // liveStreamId-only fallback above is effectively a direct stream
-            // against the opened tuner session.
             else -> PlayMethod.DIRECT_STREAM
         }
         return ResolvedPlayback(
@@ -398,17 +450,16 @@ class LiveTvPlayerViewModel @Inject constructor(
             playMethod = playMethod,
             playSessionId = info.playSessionId,
             maxStreamingBitrate = null,
+            container = source.container,
         )
     }
 
     private fun ensureEngine(
         preferred: com.raulshma.jellyplay.core.model.PlayerType,
-        serverUrl: String?,
     ): LivePlayerEngine {
         val existing = engine
         if (existing != null) return existing
         val config = LiveEngineConfig(
-            serverUrl = serverUrl,
             authToken = playbackRepository.getAccessToken(),
         )
         val newEngine = engineFactory.create(preferred, config)
@@ -418,110 +469,9 @@ class LiveTvPlayerViewModel @Inject constructor(
         // Install becoming-noisy + audio-focus only once for the (reused)
         // engine instance, mirroring the VOD player. They persist across
         // channel switches and are torn down in [stop].
-        registerBecomingNoisyReceiver()
-        registerTransientFocusLossListener()
+        playerAudioLifecycle.registerBecomingNoisy()
+        playerAudioLifecycle.registerAudioFocus()
         return newEngine
-    }
-
-    /**
-     * Pause live TV when audio becomes noisy (e.g. headphones unplugged),
-     * mirroring the VOD `VideoPlayerViewModel`. Without this, unplugging
-     * headphones keeps the live stream blasting through the speaker.
-     */
-    private fun registerBecomingNoisyReceiver() {
-        if (becomingNoisyReceiver != null) return
-        val receiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: android.content.Intent?) {
-                if (intent?.action == android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
-                    engine?.pause()
-                }
-            }
-        }
-        becomingNoisyReceiver = receiver
-        val filter = android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY)
-        try {
-            context.registerReceiver(
-                receiver,
-                filter,
-                // Private receiver for a system broadcast — explicit flag required on API 34+.
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    Context.RECEIVER_NOT_EXPORTED
-                } else 0,
-            )
-        } catch (_: Exception) {}
-    }
-
-    /**
-     * Request audio focus and duck/pause on transient loss, then restore on
-     * regain — mirrors the VOD `registerTransientFocusLossListener`. Live TV
-     * has no resume-skip concept, so the GAIN path simply restores volume and
-     * resumes if it was playing. Volume bookkeeping uses the Media3 player's
-     * `volume` directly (same surface [toggleMute] uses).
-     */
-    private fun registerTransientFocusLossListener() {
-        if (transientAudioFocusRequest != null) return
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-            ?: return
-        val listener = android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
-            val player = engine?.media3Player ?: return@OnAudioFocusChangeListener
-            when (focusChange) {
-                android.media.AudioManager.AUDIOFOCUS_LOSS -> {
-                    engine?.pause()
-                    preDuckVolume = null
-                    wasPlayingBeforeTransientLoss = false
-                    unregisterTransientFocusLossListener()
-                }
-                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                    wasPlayingBeforeTransientLoss = engine?.isPlaying?.value == true
-                    if (!_state.value.isMuted) {
-                        // Store the raw player volume so GAIN restores it exactly.
-                        // Skip capture while muted (player.volume is 0f and would
-                        // clobber the real level on restore — mute is re-asserted
-                        // on GAIN instead).
-                        if (preDuckVolume == null) preDuckVolume = player.volume
-                        player.volume = 0.2f
-                    }
-                    // When muted, volume stays at 0f — ducking must not make muted
-                    // audio audible (e.g. during a phone call with the UI muted).
-                }
-                android.media.AudioManager.AUDIOFOCUS_GAIN -> {
-                    // Restore pre-duck volume, or re-assert mute (0f) so a
-                    // duck-while-muted cycle never leaks audio at the duck level
-                    // past the focus regain.
-                    player.volume = if (_state.value.isMuted) 0f else (preDuckVolume ?: player.volume)
-                    if (wasPlayingBeforeTransientLoss) engine?.play()
-                    preDuckVolume = null
-                    wasPlayingBeforeTransientLoss = false
-                }
-            }
-        }
-        val audioAttributes = android.media.AudioAttributes.Builder()
-            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE)
-            .build()
-        val request = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(audioAttributes)
-            .setAcceptsDelayedFocusGain(true)
-            .setOnAudioFocusChangeListener(listener)
-            .build()
-        transientAudioFocusRequest = request
-        try {
-            audioManager.requestAudioFocus(request)
-        } catch (_: Exception) {
-            transientAudioFocusRequest = null
-        }
-    }
-
-    private fun unregisterTransientFocusLossListener() {
-        val request = transientAudioFocusRequest ?: return
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-        try {
-            audioManager?.abandonAudioFocusRequest(request)
-        } catch (_: Exception) {}
-        transientAudioFocusRequest = null
-        preDuckVolume = null
-        wasPlayingBeforeTransientLoss = false
     }
 
     private fun observeEngine(eng: LivePlayerEngine) {
@@ -530,6 +480,7 @@ class LiveTvPlayerViewModel @Inject constructor(
                 engineState = s,
                 isBuffering = s == LiveEngineState.BUFFERING || s == LiveEngineState.IDLE,
                 errorMessage = if (s == LiveEngineState.ERROR) eng.errorMessage.value else null,
+                errorDetail = if (s == LiveEngineState.ERROR) eng.errorDetail.value else null,
             )
             // Buffering watchdog: arm a timeout on entering BUFFERING, cancel it
             // on any other state. If the tuner stalls without a PlaybackException,
@@ -567,8 +518,8 @@ class LiveTvPlayerViewModel @Inject constructor(
 
     /**
      * Invoked by the engine on a direct/direct stream failure. Re-resolves
-     * via `resolveLiveStream` with `FORCE_TRANSCODE` so the server hands
-     * back a transcoding URL `onPlayerError` path.
+     * via `resolveLiveStream` with [LiveStreamOption.TRANSCODE] so the server
+     * hands back a transcoding URL (`onPlayerError` path).
      */
     private fun onTranscodeFallback() {
         val channel = _state.value.currentChannel ?: return
@@ -578,7 +529,7 @@ class LiveTvPlayerViewModel @Inject constructor(
                 channel = channel,
                 audioStreamIndex = null,
                 subtitleStreamIndex = null,
-                mode = PlaybackMode.FORCE_TRANSCODE,
+                option = LiveStreamOption.TRANSCODE,
                 playerType = prefs.preferredPlayer,
             ) ?: run {
                 _state.value = _state.value.copy(
@@ -587,14 +538,14 @@ class LiveTvPlayerViewModel @Inject constructor(
                 )
                 return@launch
             }
-            val headers = mutableMapOf<String, String>()
-            playbackRepository.getAccessToken()?.let { headers["X-Emby-Token"] = it }
+            // Reflect the method change in the chrome badge before reloading.
+            _state.value = _state.value.copy(playMethod = LivePlayMethod.TRANSCODE)
             engine?.load(
                 LivePlaybackRequest(
                     url = resolved.streamUrl,
                     title = channel.name,
-                    headers = headers,
                     playMethod = LivePlayMethod.TRANSCODE,
+                    container = resolved.container,
                 )
             )
         }
@@ -646,9 +597,14 @@ class LiveTvPlayerViewModel @Inject constructor(
     fun toggleMute() {
         val player = engine?.media3Player ?: return
         if (_state.value.isMuted) {
+            // Restore the pre-mute level captured when muting; never slam to a
+            // fixed default. Null (e.g. mute set externally, or player swapped)
+            // means leave the current volume untouched.
             preMuteVolume?.let { player.volume = it }
+            preMuteVolume = null
             _state.value = _state.value.copy(isMuted = false)
         } else {
+            // Capture the raw player volume so unmute restores it exactly.
             preMuteVolume = player.volume
             player.volume = 0f
             _state.value = _state.value.copy(isMuted = true)
@@ -661,6 +617,34 @@ class LiveTvPlayerViewModel @Inject constructor(
     ) {
         val channel = _state.value.currentChannel ?: return
         viewModelScope.launch { playChannel(channel, audioStreamIndex, subtitleStreamIndex) }
+    }
+
+    /**
+     * Sets the live stream delivery [option] (Auto / Direct Stream /
+     * Transcode) as the global default and re-resolves the current channel
+     * under it. Mirrors the VOD `VideoPlayerViewModel.reloadPlaybackForMode`:
+     * the old session is stop-reported, the new option is persisted, and the
+     * engine reloads the re-resolved URL. No-op if no channel is active.
+     */
+    fun setLiveStreamOption(option: LiveStreamOption) {
+        val channel = _state.value.currentChannel ?: return
+        // Reflect the choice in UI state immediately (ahead of the async
+        // DataStore -> preferences collector) so the option sheet keeps the
+        // selection visible during the reload instead of briefly reverting.
+        _state.value = _state.value.copy(liveStreamOption = option)
+        viewModelScope.launch {
+            userPreferencesStore.setLiveStreamOption(option)
+            _state.value = _state.value.copy(
+                isBuffering = true,
+                errorMessage = null,
+                isSwitchingChannel = true,
+            )
+            playChannel(
+                channel = channel,
+                audioStreamIndex = null,
+                subtitleStreamIndex = null,
+            )
+        }
     }
 
     /** Exposes the live engine for PlayerView attachment (null before first load). */
@@ -683,18 +667,18 @@ class LiveTvPlayerViewModel @Inject constructor(
      * returns to the same channel.
      */
     fun stop() {
-        // Unregister becoming-noisy + audio-focus before releasing the engine
-        // so the listeners never dereference a torn-down player.
-        becomingNoisyReceiver?.let {
-            try { context.unregisterReceiver(it) } catch (_: Exception) {}
-        }
-        becomingNoisyReceiver = null
-        unregisterTransientFocusLossListener()
+        // Tear down audio-focus + becoming-noisy before releasing the engine so
+        // the listeners never dereference a torn-down player (idempotent).
+        playerAudioLifecycle.release()
         bufferingWatchdogJob?.cancel()
         bufferingWatchdogJob = null
         engine?.release()
         engine = null
         initialized = false
+        // Clear the captured pre-mute volume so a stale value from the previous
+        // player is never restored on a later unmute (e.g. mute → leave screen →
+        // return to a fresh engine). isMuted is reset via the fresh uiState below.
+        preMuteVolume = null
         _state.value = LiveTvPlayerUiState()
     }
 

@@ -7,8 +7,10 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.playback.DownloadConcurrencyLimiter
-import com.raulshma.jellyplay.core.data.repository.DownloadPauseReason
+import com.raulshma.jellyplay.core.data.repository.DownloadFailurePolicy
 import com.raulshma.jellyplay.core.data.repository.DownloadStates
+import com.raulshma.jellyplay.core.data.repository.applyTo
+import com.raulshma.jellyplay.core.data.repository.toWorkResult
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
@@ -16,11 +18,11 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.firstOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import java.net.SocketTimeoutException
 import javax.inject.Named
 
 @HiltWorker
@@ -147,29 +149,26 @@ class DownloadWorker @AssistedInject constructor(
                     )
                 }
             }
-        } catch (e: SocketTimeoutException) {
-            val currentEntity = dao.getDownloadById(downloadId)
-            if (currentEntity?.status != DownloadStatus.PAUSED.name) {
-                dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)
-                // These failures are re-enqueued by the reconnect auto-resume,
-                // so count them toward the dead-letter budget.
-                dao.incrementRetryCount(downloadId)
-            }
-            Result.retry()
-        } catch (e: java.io.IOException) {
-            val currentEntity = dao.getDownloadById(downloadId)
-            if (currentEntity?.status != DownloadStatus.PAUSED.name) {
-                dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)
-                dao.incrementRetryCount(downloadId)
-            }
-            Result.retry()
-        } catch (e: Exception) {
-            val currentEntity = dao.getDownloadById(downloadId)
-            if (currentEntity?.status != DownloadStatus.PAUSED.name) {
-                dao.updateProgress(downloadId, existingBytes, DownloadStatus.FAILED.name)
-                dao.incrementRetryCount(downloadId)
-            }
-            Result.failure()
+        } catch (e: CancellationException) {
+            // Structured-concurrency control signal, not a download failure —
+            // the parent scope (user navigated away, app dying) was cancelled.
+            // Must propagate; never turn into Result.failure (would break
+            // cancellation and burn a worker slot on dead work).
+            throw e
+        } catch (e: Throwable) {
+            // Single home for the failure-classification rule: DownloadFailurePolicy.
+            // Pre-body failures (HEAD probe, request build) wrote nothing this run,
+            // so madeProgress = false; existingBytes is what the row held at start.
+            val row = dao.getDownloadById(downloadId)
+            val status = row?.status ?: DownloadStatus.PENDING.name
+            val outcome = DownloadFailurePolicy.decide(
+                error = e,
+                madeProgress = false,
+                currentStatus = status,
+                isResumablePartial = true, // single-connection strategy for the outer path
+            )
+            outcome.applyTo(dao, downloadId, existingBytes)
+            outcome.toWorkResult()
         }
         }
     }
@@ -412,15 +411,14 @@ class DownloadWorker @AssistedInject constructor(
             }
         } catch (e: java.io.IOException) {
             response.close()
-            if (downloadedBytes > existingBytes) {
-                dao.updateProgressWithSpeed(downloadId, downloadedBytes, DownloadStatus.PAUSED.name, 0L)
-                // Mark the interruption as network-driven so the reconnect
-                // auto-resume picks it up (user-paused rows are left alone), and
-                // count it toward the auto-retry dead-letter budget.
-                dao.updatePausedReason(downloadId, DownloadPauseReason.NETWORK.persistedValue)
-                dao.incrementRetryCount(downloadId)
-            }
-            return Result.retry()
+            val outcome = DownloadFailurePolicy.decide(
+                error = e,
+                madeProgress = downloadedBytes > existingBytes,
+                currentStatus = dao.getDownloadById(downloadId)?.status ?: DownloadStatus.DOWNLOADING.name,
+                isResumablePartial = true,
+            )
+            outcome.applyTo(dao, downloadId, downloadedBytes)
+            return outcome.toWorkResult()
         }
 
         response.close()

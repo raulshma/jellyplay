@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -126,6 +127,7 @@ class UserPreferencesStore @Inject constructor(
         val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
         val FORCE_DIRECT_PLAY = booleanPreferencesKey("force_direct_play")
         val PLAYBACK_MODE = stringPreferencesKey("playback_mode")
+        val LIVE_STREAM_OPTION = stringPreferencesKey("live_stream_option")
         val PIN_HASH = stringPreferencesKey("pin_hash")
         val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey("dialogue_boost_strength")
         val DECODER_MODE = stringPreferencesKey("decoder_mode")
@@ -413,31 +415,41 @@ class UserPreferencesStore @Inject constructor(
 
     private fun migrateBooleans(prefs: MutablePreferences, vararg names: String) {
         for (name in names) {
-            val legacy = prefs[stringPreferencesKey(name)] ?: continue
+            val legacy = prefs.legacyString(name) ?: continue
             prefs[booleanPreferencesKey(name)] = legacy.toBoolean()
         }
     }
 
     private fun migrateInts(prefs: MutablePreferences, vararg names: String) {
         for (name in names) {
-            val legacy = prefs[stringPreferencesKey(name)] ?: continue
+            val legacy = prefs.legacyString(name) ?: continue
             legacy.toIntOrNull()?.let { prefs[intPreferencesKey(name)] = it }
         }
     }
 
     private fun migrateFloats(prefs: MutablePreferences, vararg names: String) {
         for (name in names) {
-            val legacy = prefs[stringPreferencesKey(name)] ?: continue
+            val legacy = prefs.legacyString(name) ?: continue
             legacy.toFloatOrNull()?.let { prefs[floatPreferencesKey(name)] = it }
         }
     }
 
     private fun migrateLongs(prefs: MutablePreferences, vararg names: String) {
         for (name in names) {
-            val legacy = prefs[stringPreferencesKey(name)] ?: continue
+            val legacy = prefs.legacyString(name) ?: continue
             legacy.toLongOrNull()?.let { prefs[longPreferencesKey(name)] = it }
         }
     }
+
+    /**
+     * Reads a legacy string slot, tolerating a typed value (Boolean/Int/...)
+     * already living under [name] — e.g. after `clearAllPreferences` preserved
+     * some typed state but reset the migration flag. Returns null when the slot
+     * is absent or holds a non-string value, so callers `?: continue`.
+     */
+    private fun MutablePreferences.legacyString(name: String): String? =
+        try { this[stringPreferencesKey(name)] } catch (_: ClassCastException) { null }
+
 
     private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean {
         val typed = try { prefs[key] } catch (_: ClassCastException) { null }
@@ -926,6 +938,9 @@ class UserPreferencesStore @Inject constructor(
                 StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
             } catch (_: Exception) { StreamingQuality.AUTO },
             playbackMode = readPlaybackMode(prefs),
+            liveStreamOption = try {
+                LiveStreamOption.valueOf(prefs[Keys.LIVE_STREAM_OPTION] ?: LiveStreamOption.AUTO.name)
+            } catch (_: Exception) { LiveStreamOption.AUTO },
             maxCacheSizeMb = readInt(prefs, Keys.MAX_CACHE_SIZE_MB, "max_cache_size_mb", 0),
             autoDeleteCache = readBool(prefs, Keys.AUTO_DELETE_CACHE, "auto_delete_cache", true),
             pinLockEnabled = readBool(prefs, Keys.PIN_LOCK_ENABLED, "pin_lock_enabled", false),
@@ -1321,6 +1336,10 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setPreferredPlayer(playerType: PlayerType) {
         dataStore.edit { it[Keys.PREFERRED_PLAYER] = playerType.name }
+    }
+
+    suspend fun setLiveStreamOption(option: LiveStreamOption) {
+        dataStore.edit { it[Keys.LIVE_STREAM_OPTION] = option.name }
     }
 
     suspend fun setPreferredSubtitleLanguage(language: String?) {
@@ -2836,76 +2855,20 @@ class UserPreferencesStore @Inject constructor(
 
     /**
      * Resets all preferences in a specific category to their default values.
+     *
+     * The union of every category's key list (see [allResetCategoryKeys]) covers
+     * every user-tunable preference key — enforced by [uncoveredResetKeys]
+     * (asserts the diff is empty; exercised by
+     * `UserPreferencesStoreResetCoverageTest`).
+     * Runtime / per-item / one-time state (PIN rate-limit counters, DLNA/channel
+     * recall slots, onboarding + migration flags, per-item stream/effect maps,
+     * `newsletter_last_viewed_ms`) is intentionally excluded so a category reset
+     * never wipes runtime data.
+     *
      * @param category The [PreferenceResetCategory] to reset.
      */
     suspend fun resetCategory(category: PreferenceResetCategory) {
-        val keysToReset = when (category) {
-            PreferenceResetCategory.APPEARANCE -> listOf(
-                Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
-                Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.HOME_MODE,
-                Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
-                Keys.NAV_BAR_SHOW_LABELS, Keys.LIBRARY_VIEW_MODE,
-                Keys.HIDE_WATCHED_ITEMS, Keys.SHOW_UNWATCHED_BADGE,
-                Keys.SHOW_WATCHED_CHECKMARK, Keys.SHOW_SHARE_MEDIA_OPTION,
-                Keys.SHOW_EXTERNAL_RATINGS, Keys.PERFORMANCE_MODE,
-                Keys.REDUCE_MOTION_ENABLED, Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
-                Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
-                Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.NAV_ITEM_ORDER,
-                Keys.HIDDEN_NAV_ITEMS, Keys.HIDDEN_CW_ITEM_IDS,
-                Keys.DATE_FORMAT_PREFERENCE,
-                Keys.APP_FONT_SCALE,
-                Keys.SCHEDULED_THEME_START_HOUR,
-                Keys.SCHEDULED_THEME_END_HOUR,
-                Keys.COLOR_BLIND_MODE,
-                Keys.HAND_MODE,
-            )
-            PreferenceResetCategory.PLAYBACK -> listOf(
-                Keys.PREFERRED_PLAYER, Keys.STREAMING_QUALITY, Keys.VIDEO_SEEK_DURATION_MS,
-                Keys.VIDEO_GESTURES_ENABLED, Keys.VIDEO_DEFAULT_ORIENTATION,
-                Keys.VIDEO_DEFAULT_ASPECT_RATIO, Keys.VIDEO_AUTOPLAY_NEXT,
-                Keys.VIDEO_CONTROLS_TIMEOUT_MS,
-                Keys.VIDEO_SKIP_BACK_ON_RESUME_MS, Keys.SHOW_CLOCK_IN_PLAYER,
-                Keys.VIDEO_PASS_OUT_PROTECTION_HOURS,
-                Keys.CINEMA_MODE_ENABLED, Keys.VIDEO_EPISODE_BROWSER_ENABLED,
-                Keys.VIDEO_SHOW_PLAYBACK_METADATA, Keys.VIDEO_SWIPE_SEEK_MAX_MS,
-                Keys.VIDEO_REMEMBER_BRIGHTNESS, Keys.VIDEO_GESTURE_INDICATOR_SIDE,
-                Keys.TRICKPLAY_ENABLED,
-                Keys.TRICKPLAY_ON_SEEK_GESTURE, Keys.VIDEO_PRELOAD_BUFFER_SIZE,
-                Keys.BACKGROUND_VIDEO_AUDIO_ENABLED, Keys.KEEP_SCREEN_ON_DURING_VIDEO,
-                Keys.INCOGNITO_MODE_ENABLED, Keys.FRAME_RATE_MATCHING,
-                Keys.FORCE_DIRECT_PLAY, Keys.PLAYBACK_MODE, Keys.DECODER_MODE,
-                Keys.AUDIO_PASSTHROUGH, Keys.DIALOGUE_BOOST_ENABLED,
-                Keys.DIALOGUE_BOOST_STRENGTH, Keys.NIGHT_MODE_ENABLED,
-                Keys.NIGHT_MODE_STRENGTH, Keys.SEGMENT_BEHAVIORS,
-                Keys.SKIP_INTRO_ENABLED, Keys.SKIP_OUTRO_ENABLED,
-                Keys.AUTO_SKIP_INTRO, Keys.AUTO_SKIP_OUTRO,
-                Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS,
-            )
-            PreferenceResetCategory.AUDIO -> listOf(
-                Keys.AUDIO_DEFAULT_SPEED, Keys.AUDIO_VISUALIZER_ENABLED,
-                Keys.AUDIO_GAPLESS_ENABLED, Keys.AUDIO_CROSSFADE_DURATION_MS,
-                Keys.AUDIO_NORMALIZATION_ENABLED, Keys.AUDIO_NORMALIZATION_MODE,
-                Keys.CHANNEL_MIX_ENABLED, Keys.CHANNEL_MIX_MODE,
-                Keys.EQUALIZER_ENABLED, Keys.EQUALIZER_SETTINGS,
-                Keys.EQUALIZER_PRESET, Keys.BASS_BOOST_STRENGTH,
-                Keys.VIRTUALIZER_ENABLED, Keys.VIRTUALIZER_STRENGTH,
-                Keys.REVERB_PRESET, Keys.VOLUME_BOOST_ENABLED,
-                Keys.VOLUME_BOOST_GAIN, Keys.LR_BALANCE,
-                Keys.AUDIO_AUTOPLAY_NEXT, Keys.AUDIO_PRELOAD_BUFFER_SIZE,
-            )
-            PreferenceResetCategory.SECURITY -> listOf(
-                Keys.PIN_LOCK_ENABLED, Keys.PIN_HASH, Keys.BIOMETRIC_LOCK_ENABLED,
-                Keys.USE_PIN_FOR_PLAYER_LOCK, Keys.AUTO_LOCK_TIMER_MS,
-            )
-            PreferenceResetCategory.NOTIFICATIONS -> listOf(
-                Keys.NOTIFICATIONS_ENABLED, Keys.NOTIFICATIONS_CHECK_FREQUENCY,
-                Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED,
-                Keys.NOTIFICATIONS_QUIET_HOURS_START, Keys.NOTIFICATIONS_QUIET_HOURS_END,
-                Keys.NOTIFICATIONS_SOUND_ENABLED, Keys.NOTIFICATIONS_VIBRATE_ENABLED,
-                Keys.NOTIFICATIONS_LIGHTS_ENABLED, Keys.NOTIFICATIONS_MAX_PER_CHECK,
-                Keys.NOTIFICATIONS_LIBRARY_CONFIGS,
-            )
-        }
+        val keysToReset = resetCategoryKeys(category)
 
         dataStore.edit { prefs ->
             keysToReset.forEach { key ->
@@ -2915,16 +2878,229 @@ class UserPreferencesStore @Inject constructor(
     }
 
     /**
+     * Keys cleared by [resetCategory] for [category]. Extracted as a pure function
+     * so it can be inspected by tooling (and asserted complete via
+     * [assertAllUserKeysCovered]) without touching the DataStore.
+     */
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
+    internal fun resetCategoryKeys(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.APPEARANCE -> listOf(
+            Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
+            Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.PERFORMANCE_MODE,
+            Keys.REDUCE_MOTION_ENABLED, Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
+            Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
+            Keys.BACKDROP_THEME_MUSIC_ENABLED,
+            Keys.BLUE_LIGHT_FILTER_ENABLED, Keys.BLUE_LIGHT_FILTER_STRENGTH,
+            Keys.DATE_FORMAT_PREFERENCE, Keys.APP_FONT_SCALE,
+            Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
+            Keys.COLOR_BLIND_MODE, Keys.HAND_MODE,
+        )
+        PreferenceResetCategory.PLAYBACK -> listOf(
+            Keys.PREFERRED_PLAYER, Keys.STREAMING_QUALITY, Keys.CELLULAR_STREAMING_QUALITY,
+            Keys.FORCE_DIRECT_PLAY, Keys.PLAYBACK_MODE, Keys.DECODER_MODE,
+            Keys.AUDIO_PASSTHROUGH, Keys.FRAME_RATE_MATCHING,
+            Keys.VIDEO_DEFAULT_ORIENTATION, Keys.VIDEO_DEFAULT_ASPECT_RATIO,
+            Keys.VIDEO_PRELOAD_BUFFER_SIZE, Keys.VIDEO_GESTURES_ENABLED,
+            Keys.VIDEO_PASS_OUT_PROTECTION_HOURS, Keys.VIDEO_SKIP_BACK_ON_RESUME_MS,
+            Keys.VIDEO_HOLD_SPEED_ENABLED, Keys.VIDEO_HOLD_SPEED_MULTIPLIER,
+            Keys.VIDEO_DEFAULT_SPEED, Keys.VIDEO_BRIGHTNESS_LEVEL,
+            Keys.VIDEO_AUTOPLAY_NEXT, Keys.TRAILER_AUTOPLAY, Keys.CINEMA_MODE_ENABLED,
+            Keys.VIDEO_REMEMBER_BRIGHTNESS, Keys.VIDEO_REMEMBER_VOLUME,
+            Keys.VIDEO_VOLUME_LEVEL, Keys.VIDEO_AUTO_SKIP_INTRO,
+            Keys.VIDEO_AUTO_SKIP_OUTRO, Keys.VIDEO_REMEMBER_MUTED, Keys.VIDEO_MUTED,
+            Keys.VIDEO_GESTURE_INDICATOR_SIDE, Keys.VIDEO_SEEK_DURATION_MS,
+            Keys.VIDEO_CONTROLS_TIMEOUT_MS, Keys.VIDEO_SWIPE_SEEK_MAX_MS,
+            Keys.AUDIO_DELAY_MS, Keys.TRICKPLAY_ENABLED, Keys.TRICKPLAY_ON_SEEK_GESTURE,
+            Keys.VIDEO_EPISODE_BROWSER_ENABLED, Keys.VIDEO_SHOW_PLAYBACK_METADATA,
+            Keys.BACKGROUND_VIDEO_AUDIO_ENABLED, Keys.AUTO_PLAY_COUNTDOWN_SEC,
+            Keys.KEEP_SCREEN_ON_DURING_VIDEO, Keys.INCOGNITO_MODE_ENABLED,
+            Keys.SHOW_CLOCK_IN_PLAYER, Keys.SHOW_TIME_REMAINING,
+            Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS,
+            Keys.TV_ZOOM_MODE_PERCENT,
+            Keys.SEGMENT_BEHAVIORS, Keys.SKIP_INTRO_ENABLED, Keys.SKIP_OUTRO_ENABLED,
+            Keys.AUTO_SKIP_INTRO, Keys.AUTO_SKIP_OUTRO,
+        )
+        PreferenceResetCategory.AUDIO -> listOf(
+            Keys.AUDIO_DEFAULT_SPEED, Keys.AUDIO_VISUALIZER_ENABLED,
+            Keys.AUDIO_GAPLESS_ENABLED, Keys.AUDIO_CROSSFADE_DURATION_MS,
+            Keys.AUDIO_NORMALIZATION_ENABLED, Keys.AUDIO_NORMALIZATION_MODE,
+            Keys.CHANNEL_MIX_ENABLED, Keys.CHANNEL_MIX_MODE,
+            Keys.EQUALIZER_ENABLED, Keys.EQUALIZER_SETTINGS,
+            Keys.EQUALIZER_PRESET, Keys.BASS_BOOST_ENABLED, Keys.BASS_BOOST_STRENGTH,
+            Keys.VIRTUALIZER_ENABLED, Keys.VIRTUALIZER_STRENGTH,
+            Keys.REVERB_PRESET, Keys.VOLUME_BOOST_ENABLED, Keys.VOLUME_BOOST_GAIN,
+            Keys.LR_BALANCE, Keys.AUTO_EQ_BY_GENRE, Keys.PITCH_SEMITONES,
+            Keys.AUDIO_AUTOPLAY_NEXT, Keys.AUDIO_PRELOAD_BUFFER_SIZE,
+            Keys.AUDIO_NIGHT_MODE_VOLUME, Keys.AUDIO_NIGHT_MODE_GAIN,
+            Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS, Keys.REPLAYGAIN_PRE_AMP_DB,
+            Keys.NIGHT_MODE_ENABLED, Keys.NIGHT_MODE_STRENGTH,
+            Keys.DIALOGUE_BOOST_ENABLED, Keys.DIALOGUE_BOOST_STRENGTH,
+            Keys.SLEEP_TIMER_DURATION_MS, Keys.SLEEP_TIMER_END_OF_EPISODE,
+            Keys.AUDIO_LYRICS_VISIBLE,
+        )
+        PreferenceResetCategory.SUBTITLES_LANGUAGE -> listOf(
+            Keys.PREFERRED_SUBTITLE_LANG, Keys.PREFERRED_AUDIO_LANG,
+            Keys.SUBTITLES_FORCED_ONLY, Keys.SUBTITLE_PREVIEW_IN_SETTINGS,
+            Keys.SUBTITLE_STYLE, Keys.HIGH_CONTRAST_SUBTITLES,
+            Keys.PGS_SUBTITLE_DIRECT_PLAY, Keys.HDR_SUBTITLE_STYLE_ENABLED,
+            Keys.HDR_SUBTITLE_STYLE,
+        )
+        PreferenceResetCategory.DOWNLOADS_NETWORK -> listOf(
+            Keys.WIFI_ONLY_DOWNLOADS, Keys.DOWNLOAD_CONNECTIONS,
+            Keys.MAX_CONCURRENT_DOWNLOADS, Keys.DOWNLOAD_QUALITY,
+            Keys.SMART_DOWNLOADS_ENABLED, Keys.AUTO_DOWNLOAD_NEW_EPISODES,
+            Keys.MAX_DOWNLOAD_STORAGE_GB, Keys.DOWNLOAD_STORAGE_LOCATION,
+            Keys.MAX_CACHE_SIZE_MB, Keys.AUTO_DELETE_CACHE,
+            Keys.MANUAL_OFFLINE_ENABLED, Keys.AUTO_OFFLINE_ENABLED,
+            Keys.MANUAL_BANDWIDTH_CAP, Keys.METERED_NETWORK_BEHAVIOR,
+            Keys.ADAPTIVE_BITRATE_ENABLED, Keys.DATA_SAVER_ENABLED,
+            Keys.VERBOSE_NETWORK_LOGGING, Keys.NETWORK_TIMEOUT_PRESET,
+            Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB,
+            Keys.DOWNLOAD_SCHEDULE_ENABLED, Keys.DOWNLOAD_SCHEDULE_START,
+            Keys.DOWNLOAD_SCHEDULE_END, Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY,
+        )
+        PreferenceResetCategory.HOME_DISCOVERY -> listOf(
+            Keys.HOME_MODE, Keys.HOME_HERO_ENABLED,
+            Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
+            Keys.HOME_LIBRARY_SECTION_OVERRIDES, Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS,
+            Keys.LIBRARY_VIEW_MODE, Keys.NAV_BAR_SHOW_LABELS,
+            Keys.HIDE_BOTTOM_NAV_ON_SCROLL, Keys.NAV_ITEM_ORDER, Keys.HIDDEN_NAV_ITEMS,
+            Keys.SHOW_UNWATCHED_BADGE, Keys.HIDE_WATCHED_ITEMS,
+            Keys.SHOW_WATCHED_CHECKMARK, Keys.SHOW_EXTERNAL_RATINGS,
+            Keys.MERGE_CONTINUE_WATCHING_NEXT_UP, Keys.NEXT_UP_MAX_DAYS,
+            Keys.NEXT_UP_REWATCHING, Keys.NEXT_UP_EXCLUDED_SERIES_IDS,
+            Keys.HIDDEN_CW_ITEM_IDS, Keys.PINNED_HOME_SECTIONS,
+            Keys.HOME_LAYOUT_PRESETS, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR,
+            Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES,
+            Keys.LIBRARY_FILTERS,
+            Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING,
+            Keys.SKIP_SPECIALS, Keys.SHOW_CLOCK_ON_HOME,
+            Keys.SHOW_SETTINGS_IN_HOME_SEARCH,
+        )
+        PreferenceResetCategory.AUDIO_CACHE -> listOf(
+            Keys.AUDIO_CACHING_ENABLED, Keys.AUDIO_CACHE_SIZE_MB,
+            Keys.AUDIO_PREFETCH_LOOKAHEAD, Keys.AUDIO_PREFETCH_BACKFILL,
+            Keys.AUDIO_CACHE_NETWORK_POLICY, Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB,
+        )
+        PreferenceResetCategory.SECURITY -> listOf(
+            Keys.PIN_LOCK_ENABLED, Keys.PIN_HASH, Keys.BIOMETRIC_LOCK_ENABLED,
+            Keys.USE_PIN_FOR_PLAYER_LOCK, Keys.AUTO_LOCK_TIMER_MS,
+            Keys.REMOTE_CONTROL_ENABLED,
+        )
+        PreferenceResetCategory.NOTIFICATIONS -> listOf(
+            Keys.NOTIFICATIONS_ENABLED, Keys.NOTIFICATIONS_CHECK_FREQUENCY,
+            Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED,
+            Keys.NOTIFICATIONS_QUIET_HOURS_START, Keys.NOTIFICATIONS_QUIET_HOURS_END,
+            Keys.NOTIFICATIONS_SOUND_ENABLED, Keys.NOTIFICATIONS_VIBRATE_ENABLED,
+            Keys.NOTIFICATIONS_LIGHTS_ENABLED, Keys.NOTIFICATIONS_MAX_PER_CHECK,
+            Keys.NOTIFICATIONS_LIBRARY_CONFIGS,
+        )
+        PreferenceResetCategory.SCREENSAVER -> listOf(
+            Keys.DREAM_IMAGE_CATEGORIES, Keys.DREAM_TRANSITION_STYLE,
+            Keys.DREAM_KEN_BURNS_ENABLED, Keys.DREAM_SHOW_TITLE,
+            Keys.DREAM_SLIDESHOW_INTERVAL_MS,
+        )
+        PreferenceResetCategory.NEWSLETTER -> listOf(
+            Keys.NEWSLETTER_ENABLED, Keys.NEWSLETTER_DAY_OF_WEEK,
+            Keys.ENABLED_NEWSLETTER_SECTIONS, Keys.NEWSLETTER_SECTION_ORDER,
+        )
+        PreferenceResetCategory.SYNCPLAY_CASTING -> listOf(
+            Keys.SYNC_PLAY_JOIN_BEHAVIOR, Keys.SYNC_PLAY_TOLERANCE_MS,
+            Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, Keys.DEFAULT_CASTING_STRATEGY,
+            Keys.BACKGROUND_CASTING_ENABLED, Keys.PREFERRED_RENDERER,
+            Keys.DVR_PRE_PADDING_MINUTES, Keys.DVR_POST_PADDING_MINUTES,
+            Keys.DVR_RECORDING_QUALITY,
+        )
+        PreferenceResetCategory.PLAYER_ENGINES -> listOf(
+            Keys.MPV_CONFIG, Keys.LIBVLC_CONFIG, Keys.EXO_CONFIG,
+        )
+        PreferenceResetCategory.EXPERIMENTAL -> listOf(
+            Keys.ENABLED_EXPERIMENTAL_FEATURES, Keys.SHOW_ADVANCED_SETTINGS,
+        )
+        PreferenceResetCategory.MISC_APP -> listOf(
+            Keys.HAPTICS_ENABLED, Keys.SELF_UPDATE_CHECK_ENABLED,
+            Keys.APP_LANGUAGE, Keys.USER_DATA_SYNC_ENABLED,
+            Keys.SHOW_SHARE_MEDIA_OPTION, Keys.HIDE_SEARCH_HISTORY,
+            Keys.ANDROID_TV_WATCH_NEXT_ENABLED, Keys.PREFER_AUDIO_DESCRIPTION,
+        )
+    }
+
+    /**
+     * Preference keys deliberately excluded from category reset because they are
+     * runtime / per-item / one-time state rather than user-tunable settings:
+     * per-item stream + video-effect maps, onboarding + typed-migration flags,
+     * PIN rate-limit counters, recall slots (DLNA devices, live-TV channel, last
+     * newsletter view) and live-TV favorite channels.
+     */
+    private val resetExcludedKeys: Set<Preferences.Key<*>> = setOf(
+        Keys.MEDIA_STREAM_SELECTIONS,
+        Keys.VIDEO_EFFECTS_SELECTIONS,
+        Keys.ONBOARDING_COMPLETED,
+        Keys.TYPED_MIGRATION_DONE,
+        Keys.NEWSLETTER_LAST_VIEWED_MS,
+        Keys.RECENT_DLNA_DEVICES,
+        Keys.LIVE_TV_LAST_CHANNEL_ID,
+        Keys.FAVORITE_CHANNELS,
+        Keys.PIN_FAILED_ATTEMPTS,
+        Keys.PIN_LOCKOUT_UNTIL_MS,
+    )
+
+    /**
+     * Union of every key cleared across all categories. Exposed for the coverage
+     * guard; not part of the stable public API.
+     */
+    internal fun allResetCategoryKeys(): Set<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMapTo(mutableSetOf()) { resetCategoryKeys(it) }
+
+    /**
+     * Coverage guard: asserts that the union of every category's key list plus
+     * [resetExcludedKeys] covers every key declared in [Keys]. Call from debug
+     * builds / unit tests so a future key addition can't silently slip out of
+     * the reset surface. Returns the uncovered keys (empty when coverage holds).
+     */
+    internal fun uncoveredResetKeys(): Set<Preferences.Key<*>> {
+        val covered = allResetCategoryKeys() + resetExcludedKeys
+        return declaredKeys().filterNot { it in covered }.toSet()
+    }
+
+    /**
+     * Reflectively enumerates every `Preferences.Key<*>` declared in the private
+     * [Keys] object. Uses Java reflection (no kotlin-reflect dependency) and is
+     * only invoked from the debug/test coverage guard [uncoveredResetKeys], so
+     * the reflection cost is never paid in production paths.
+     */
+    internal fun declaredKeys(): List<Preferences.Key<*>> {
+        val keyType = androidx.datastore.preferences.core.Preferences.Key::class.java
+        return Keys::class.java.declaredFields
+            .filter { keyType.isAssignableFrom(it.type) }
+            .onEach { it.isAccessible = true }
+            .mapNotNull { runCatching { it.get(Keys) as? Preferences.Key<*> }.getOrNull() }
+    }
+
+    /**
      * Clears the preferences DataStore only, resetting every stored preference
      * to its default. This does **not** sign out the user (the active
      * server/user selection is also cleared because it lives in the same
      * DataStore, but `AuthRepository` session state is untouched) and does
      * **not** delete downloaded media, the cache, or the database. Callers that
      * need a true factory reset must additionally sign out and clear those.
+     *
+     * One-time state flags are preserved so a settings reset never forces the
+     * user back through first-run onboarding or re-triggers the legacy
+     * typed-key migration on the next launch (which would crash if any typed
+     * value survived the clear — see [resetExcludedKeys]).
      */
     suspend fun clearAllPreferencesOnly() {
         dataStore.edit { prefs ->
+            val onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED]
+            val typedMigrationDone = prefs[Keys.TYPED_MIGRATION_DONE]
             prefs.clear()
+            if (onboardingCompleted != null) {
+                prefs[Keys.ONBOARDING_COMPLETED] = onboardingCompleted
+            }
+            if (typedMigrationDone == true) {
+                prefs[Keys.TYPED_MIGRATION_DONE] = true
+            }
         }
     }
 }

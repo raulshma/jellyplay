@@ -23,11 +23,15 @@ import okhttp3.OkHttpClient
  * Media3 ExoPlayer-based live TV engine.
  *
  * Key design choices vs the previous VOD live path:
- *  - MIME is **always** [MimeTypes.APPLICATION_M3U8] so the
- *    `HlsMediaSource` is selected. The VOD path pinned `VIDEO_MP2T` for
- *    extension-less URLs, which routed the stream through the wrong source
- *    factory and never played.
- *  - No `seekTo(startPositionMs)` — ExoPlayer joins at the live edge by HLS
+ *  - MIME is chosen by [LivePlayMethod]: transcoded streams are real Jellyfin
+ *    HLS master playlists (`APPLICATION_M3U8`), while a direct live stream is
+ *    the tuner's raw MPEG-TS piped through `/Videos/{id}/stream` (`VIDEO_MP2T`)
+ *    — a plain progressive TS source, not an HLS playlist. (The server reports
+ *    the source `container` as `hls`, but that labels the tuner feed; the
+ *    `/stream` endpoint serves raw TS bytes, so an HLS hint makes ExoPlayer's
+ *    parser fail with "no #EXTM3U header".) The previous code forced
+ *    `APPLICATION_M3U8` for everything, which broke direct streams.
+ *  - No `seekTo(startPositionMs)` — ExoPlayer joins at the live edge by
  *    default.
  *  - [DefaultLoadControl] is tuned for fast live join (10s min buffer, 5s
  *    rebuffer) rather than the VOD defaults.
@@ -58,6 +62,9 @@ class ExoLiveEngine(
     private val _errorMessage = MutableStateFlow<String?>(null)
     override val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    private val _errorDetail = MutableStateFlow<String?>(null)
+    override val errorDetail: StateFlow<String?> = _errorDetail.asStateFlow()
+
     private val _isAtLiveEdge = MutableStateFlow(true)
     override val isAtLiveEdge: StateFlow<Boolean> = _isAtLiveEdge.asStateFlow()
 
@@ -65,13 +72,22 @@ class ExoLiveEngine(
 
     private var currentMethod: LivePlayMethod = LivePlayMethod.DIRECT_STREAM
 
+    /**
+     * Error/fallback substate. Encodes the previously-separate `errorTerminal`
+     * and `fallbackInvoked` booleans as a single explicit state machine:
+     *  - [ErrorPhase.IDLE] — no error this load; the transcode fallback has not fired.
+     *  - [ErrorPhase.FALLING_BACK] — a direct error fired [onTranscodeFallbackNeeded];
+     *    stay BUFFERING while the ViewModel re-resolves so the error overlay does not flash.
+     *  - [ErrorPhase.TERMINAL] — no fallback available (already on transcode, or the
+     *    fallback retry also failed); hold ERROR so the follow-up STATE_IDLE ExoPlayer
+     *    emits after a PlaybackException does not mask it as BUFFERING.
+     */
+    @Volatile
+    private var errorPhase: ErrorPhase = ErrorPhase.IDLE
+
     /** Latch: once release() runs, every subsequent method short-circuits. */
     @Volatile
     private var released: Boolean = false
-
-    /** Latch: prevent rebuffer storms from firing fallback repeatedly. */
-    @Volatile
-    private var fallbackInvoked: Boolean = false
 
     private val httpDataSourceFactory = OkHttpDataSource.Factory(streamingClient)
         .setUserAgent("JellyPlay")
@@ -108,15 +124,16 @@ class ExoLiveEngine(
     override fun load(request: LivePlaybackRequest) {
         if (released) return
         _errorMessage.value = null
+        _errorDetail.value = null
         currentMethod = request.playMethod
         // Per-load reset: a previous channel's fallback latch must not carry
         // over — otherwise a reused engine could never fire the transcode
-        // fallback for the new channel after one fallback fired on the old.
-        fallbackInvoked = false
+        // fallback for a new channel after one fallback fired on the old.
+        errorPhase = ErrorPhase.IDLE
 
         val mediaItem = MediaItem.Builder()
             .setUri(request.url)
-            .setMimeType(MimeTypes.APPLICATION_M3U8)
+            .setMimeType(mimeTypeFor(request.playMethod))
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(request.title)
@@ -174,6 +191,13 @@ class ExoLiveEngine(
 
     private inner class PlayerListener : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
+            // After a terminal error ExoPlayer emits STATE_IDLE; ignore it so
+            // it doesn't overwrite ERROR (which would re-show the spinner and
+            // hide the error dialog). The latch clears on the next load().
+            if (errorPhase == ErrorPhase.TERMINAL) {
+                refreshLiveWindow()
+                return
+            }
             _state.value = when (playbackState) {
                 Player.STATE_BUFFERING -> LiveEngineState.BUFFERING
                 Player.STATE_READY -> LiveEngineState.READY
@@ -189,20 +213,55 @@ class ExoLiveEngine(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            // on a direct-stream/direct-play failure,
-            // ask the ViewModel to re-resolve with transcoding forced.
-            _state.value = LiveEngineState.ERROR
+            // Capture both a short message and the full stacktrace-grade text
+            // so the error overlay can show an expandable details section.
             _errorMessage.value = error.localizedMessage ?: "Playback error"
-            // Gate on fallbackInvoked — ExoPlayer can fire onPlayerError
-            // repeatedly during a rebuffer storm and we only want one trigger.
-            if (!fallbackInvoked && currentMethod != LivePlayMethod.TRANSCODE) {
-                fallbackInvoked = true
+            _errorDetail.value = error.toString()
+            // Gate on IDLE — ExoPlayer can fire onPlayerError repeatedly during
+            // a rebuffer storm and we only want one fallback trigger.
+            if (errorPhase == ErrorPhase.IDLE && currentMethod != LivePlayMethod.TRANSCODE) {
+                // Stay in BUFFERING while the ViewModel re-resolves to
+                // transcode; flipping to ERROR here flashes the error overlay
+                // for a frame before the fallback clears it. If the fallback
+                // also fails, it surfaces the error itself.
+                errorPhase = ErrorPhase.FALLING_BACK
+                _state.value = LiveEngineState.BUFFERING
                 onTranscodeFallbackNeeded?.invoke()
+            } else {
+                // No fallback available (already on transcode, or already
+                // retried) — surface the error and stop. Latch so the
+                // follow-up STATE_IDLE does not mask it.
+                errorPhase = ErrorPhase.TERMINAL
+                _state.value = LiveEngineState.ERROR
             }
         }
     }
 
+    private enum class ErrorPhase { IDLE, FALLING_BACK, TERMINAL }
+
     private companion object {
         private const val LIVE_EDGE_TOLERANCE_MS = 10_000L
+    }
+
+    /**
+     * Picks the MediaItem MIME hint that routes [DefaultMediaSourceFactory] to
+     * the correct source for the resolved play method.
+     *
+     *  - [LivePlayMethod.TRANSCODE] — the server hands back a real Jellyfin HLS
+     *    master playlist, so it needs [MimeTypes.APPLICATION_M3U8].
+     *  - [LivePlayMethod.DIRECT_STREAM] / [LivePlayMethod.DIRECT_PLAY] — a
+     *    direct live stream is the tuner's raw MPEG-TS piped through
+     *    `/Videos/{id}/stream?LiveStreamId=…`, **not** an HLS playlist (the
+     *    server reports the source `container` as `hls`, but that labels the
+     *    tuner feed, not what the `/stream` endpoint serves). `VIDEO_MP2T`
+     *    selects the progressive `TsExtractor`, which streams the growing TS
+     *    without waiting for a `#EXTM3U` header. Forcing HLS here made the
+     *    parser fail (`Input does not start with the #EXTM3U header`) and the
+     *    engine fell back to transcode.
+     */
+    private fun mimeTypeFor(method: LivePlayMethod): String = when (method) {
+        LivePlayMethod.TRANSCODE -> MimeTypes.APPLICATION_M3U8
+        LivePlayMethod.DIRECT_STREAM,
+        LivePlayMethod.DIRECT_PLAY -> MimeTypes.VIDEO_MP2T
     }
 }

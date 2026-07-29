@@ -94,16 +94,6 @@
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="com.raulshma.jellyplay.cast.JellyPlayCastOptionsProvider" />
 
-        <meta-data
-            android:name="io.sentry.dsn"
-            android:value="${sentryDsn}" />
-        <meta-data
-            android:name="io.sentry.traces.sample-rate"
-            android:value="0.2" />
-        <meta-data
-            android:name="io.sentry.release"
-            android:value="${versionName}" />
-
         <service
             android:name="com.raulshma.jellyplay.core.data.playback.JellyPlayPlaybackService"
             android:exported="true"

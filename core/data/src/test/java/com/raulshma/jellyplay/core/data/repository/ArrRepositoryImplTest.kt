@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrSettings
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrSettings
 import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
@@ -570,13 +569,6 @@ class ArrRepositoryImplTest {
     private fun radarrSettings(id: Int, hostname: String, apiKey: String, baseUrl: String? = null) =
         SeerrRadarrSettings(
             id = id, name = "Radarr $id", hostname = hostname, port = 7878, apiKey = apiKey,
-            useSsl = true, baseUrl = baseUrl,
-        )
-
-    @Suppress("unused")
-    private fun sonarrSettings(id: Int, hostname: String, apiKey: String, baseUrl: String? = null) =
-        SeerrSonarrSettings(
-            id = id, name = "Sonarr $id", hostname = hostname, port = 8989, apiKey = apiKey,
             useSsl = true, baseUrl = baseUrl,
         )
 }

@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.MutableIntState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -65,6 +66,40 @@ fun SettingListItem(
     isDestructive: Boolean = false,
     highlighted: Boolean = false,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    // Inside a SettingsItemList, pick up the auto-incrementing index and the
+    // caller-supplied total so call sites stop passing index/count by hand.
+    val listIndex = LocalSettingsItemIndex.current
+    val resolvedIndex = listIndex?.value ?: index
+    val resolvedCount = if (listIndex != null) LocalSettingsItemCount.current else count
+    if (listIndex != null) listIndex.intValue += 1
+    SettingListItemImpl(
+        icon = icon,
+        title = title,
+        subtitle = subtitle,
+        index = resolvedIndex,
+        count = resolvedCount,
+        trailingText = trailingText,
+        isDestructive = isDestructive,
+        highlighted = highlighted,
+        modifier = modifier,
+        onClick = onClick,
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SettingListItemImpl(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    index: Int,
+    count: Int,
+    trailingText: String?,
+    isDestructive: Boolean,
+    highlighted: Boolean,
+    modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
@@ -207,6 +242,40 @@ fun SettingToggleItem(
     modifier: Modifier = Modifier,
     onCheckedChange: (Boolean) -> Unit,
     onClick: (() -> Unit)? = null,
+) {
+    val listIndex = LocalSettingsItemIndex.current
+    val resolvedIndex = listIndex?.value ?: index
+    val resolvedCount = if (listIndex != null) LocalSettingsItemCount.current else count
+    if (listIndex != null) listIndex.intValue += 1
+    SettingToggleItemImpl(
+        icon = icon,
+        title = title,
+        subtitle = subtitle,
+        checked = checked,
+        index = resolvedIndex,
+        count = resolvedCount,
+        highlighted = highlighted,
+        enabled = enabled,
+        modifier = modifier,
+        onCheckedChange = onCheckedChange,
+        onClick = onClick,
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SettingToggleItemImpl(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    index: Int,
+    count: Int,
+    highlighted: Boolean,
+    enabled: Boolean,
+    modifier: Modifier,
+    onCheckedChange: (Boolean) -> Unit,
+    onClick: (() -> Unit)?,
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
     val interactionSource = remember { MutableInteractionSource() }

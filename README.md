@@ -413,7 +413,6 @@ Click any section to expand. The full feature list is preserved — collapsed on
 | Pagination       | Paging 3                                                           |
 | Text Recognition | ML Kit                                                             |
 | Biometrics       | AndroidX Biometric                                                 |
-| Error Tracking   | Sentry                                                             |
 | Testing          | JUnit 4, MockK, Espresso, Compose UI Test, Robolectric, UIAutomator, OkHttp MockWebServer, Room Testing |
 | Code Quality     | Kover (coverage), R8 Full Mode, KSP2                               |
 | Performance      | Baseline Profiles (Macro Benchmark)                                |
@@ -562,7 +561,7 @@ Other open-source projects in the Jellyfin ecosystem:
 | API clients | 18+ |
 | Room DAOs | 13 |
 | Supported languages | 1 (English; i18n infrastructure in place, community translations in progress) |
-| External integrations | Jellyfin, Jellyseerr/Overseerr, Radarr, Sonarr, LRCLIB, TMDB, Google Cast, Sentry |
+| External integrations | Jellyfin, Jellyseerr/Overseerr, Radarr, Sonarr, LRCLIB, TMDB, Google Cast |
 | Min SDK | 28 (Android 9.0) |
 | Target/Compile SDK | 37 |
 

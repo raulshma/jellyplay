@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.isSideLoadableEmbeddedSubtitle
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -620,14 +621,22 @@ class PlayerSessionManager(
      * Builds the side-loaded [SubtitleSource] list for the engine.
      *
      * Subtitles that already carry a server [MediaStream.deliveryUrl] (the
-     * PlaybackInfo response populates this for externally-delivered subs) or
-     * that are flagged [MediaStream.isExternal] are always side-loaded. For
-     * direct play, embedded subtitles are intentionally left out — ExoPlayer
-     * reads them from the container and side-loading would duplicate every
-     * track. When the server transcodes or direct-streams, however, embedded
-     * subtitles are not reliably present in the HLS manifest, so each one is
-     * fetched via the Jellyfin subtitle endpoint and side-loaded; this is
-     * what makes the subtitle picker populate during transcoded playback.
+     * PlaybackInfo response populates this for externally-delivered subs,
+     * including image subs when the PGS-direct-play profile opts in) use that
+     * URL. Otherwise, only **text** subs ([isSideLoadableEmbeddedSubtitle]) are
+     * considered for side-loading — the Jellyfin subtitle endpoint cannot serve
+     * image formats (PGS/VOBSUB/DVB), so those are skipped (left to burn-in on
+     * transcode, or container demux on direct play).
+     *
+     * For the text subs that survive the codec gate, side-loading is
+     * method-dependent: external subs are always side-loaded; embedded text
+     * subs are side-loaded only when NOT direct-playing (transcoded HLS does
+     * not reliably expose them in-manifest). On DIRECT_PLAY every engine
+     * (ExoPlayer, LibVLC, MPV) demuxes embedded text subs from the container
+     * natively — confirmed for MPV via logcat, which lists the demuxed tracks
+     * — so side-loading them too would duplicate each track and could render
+     * the selected sub twice. This matches mpvkt and findroid, which never
+     * side-load embedded subs alongside container demuxing.
      */
     private fun buildExternalSubtitles(
         detail: MediaDetail,
@@ -637,12 +646,20 @@ class PlayerSessionManager(
         val streams = source?.mediaStreams ?: return emptyList()
         return streams.filter { it.type == StreamType.SUBTITLE }.mapNotNull { stream ->
             val subUrl = when {
+                // Server-issued delivery URL (e.g. an external PGS sub the
+                // server can serve verbatim when PGS direct play is opted in).
                 !stream.deliveryUrl.isNullOrBlank() ->
                     playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
-                // External subs are always side-loaded; embedded subs are also
-                // side-loaded when not direct-playing, because transcoded HLS
-                // does not reliably expose them in-manifest.
-                stream.isExternal || playMethod != PlayMethod.DIRECT_PLAY ->
+                // The Jellyfin subtitle endpoint only serves text formats — it
+                // cannot synthesize image subs (PGS/VOBSUB/DVB), so only
+                // side-load text-side-loadable streams. Image subs are left to
+                // the server's burn-in (transcode) or the player's container
+                // demux (direct play on MPV).
+                !isSideLoadableEmbeddedSubtitle(stream.codec) -> return@mapNotNull null
+                // See the KDoc above for the DIRECT_PLAY rationale: embedded
+                // text subs are side-loaded only when not direct-playing.
+                stream.isExternal ||
+                    playMethod != PlayMethod.DIRECT_PLAY ->
                     playbackRepository.buildSubtitleDeliveryUrl(
                         detail.item.id, source.id, stream.index, stream.codec,
                     )
@@ -698,3 +715,4 @@ class PlayerSessionManager(
         _engine.value = null
     }
 }
+

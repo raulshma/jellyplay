@@ -143,6 +143,34 @@ class PlaybackApiClientImplTest {
     }
 
     @Test
+    fun `buildSubtitleDeliveryUrl refuses PGS image codec`() {
+        // The Jellyfin subtitle endpoint cannot serve image formats; refusing
+        // here lets the caller drop the stream cleanly instead of emitting a
+        // URL that 404s at fetch time.
+        val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "pgs")
+        assertEquals("", url)
+    }
+
+    @Test
+    fun `buildSubtitleDeliveryUrl refuses VOBSUB and DVB image codecs`() {
+        assertEquals(
+            "", playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "dvd_subtitle"),
+        )
+        assertEquals(
+            "", playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "dvb_subtitle"),
+        )
+        assertEquals(
+            "", playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "hdmv_pgs_subtitle"),
+        )
+    }
+
+    @Test
+    fun `buildSubtitleDeliveryUrl still serves ASS text codec`() {
+        val url = playbackClient.buildSubtitleDeliveryUrl("item-1", "source-1", 0, "ass")
+        assertTrue(url.contains("/Subtitles/0/Stream.ass"))
+    }
+
+    @Test
     fun `getIntroTimestamps parses response`() = kotlinx.coroutines.test.runTest {
         val json = """{"ItemId":"item-1","IntroStartTicks":0,"IntroEndTicks":0}"""
         mockWebServer.enqueue(MockResponse().setBody(json).setResponseCode(200))

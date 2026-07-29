@@ -6,7 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DeviceProfileProviderTest {
-
     private val provider = DeviceProfileProvider(DeviceCodecCapabilities())
 
     @Test
@@ -50,5 +49,29 @@ class DeviceProfileProviderTest {
         // advertised so the server does not transcode them away.
         assertTrue("forced audio codecs must always be advertised", videoDirectPlay.audioCodec?.contains("dts") == true)
         assertTrue(videoDirectPlay.audioCodec?.contains("truehd") == true)
+    }
+
+    @Test
+    fun `MPV profile omits image subtitle codecs when PGS direct play is off`() {
+        val profile = provider.forPlayer(PlayerType.MPV, pgsDirectPlay = false)
+        val subFormats = profile.subtitleProfiles.map { it.format }
+        // Text subs always advertised
+        assertTrue("srt should be advertised", subFormats.contains("srt"))
+        // Image subs omitted → server burns them in during transcode
+        assertTrue("pgs should be omitted", !subFormats.contains("pgs"))
+        assertTrue("dvd_subtitle should be omitted", !subFormats.contains("dvd_subtitle"))
+    }
+
+    @Test
+    fun `MPV profile advertises full image-subtitle family when PGS direct play is on`() {
+        val profile = provider.forPlayer(PlayerType.MPV, pgsDirectPlay = true)
+        val subFormats = profile.subtitleProfiles.map { it.format }
+        // PGS + the rest of the image family so Blu-ray/DVD rips get a deliveryUrl
+        assertTrue("pgs should be advertised", subFormats.contains("pgs"))
+        assertTrue("pgssub should be advertised", subFormats.contains("pgssub"))
+        assertTrue("hdmv_pgs_subtitle should be advertised", subFormats.contains("hdmv_pgs_subtitle"))
+        assertTrue("dvd_subtitle should be advertised", subFormats.contains("dvd_subtitle"))
+        assertTrue("vobsub should be advertised", subFormats.contains("vobsub"))
+        assertTrue("dvb_subtitle should be advertised", subFormats.contains("dvb_subtitle"))
     }
 }

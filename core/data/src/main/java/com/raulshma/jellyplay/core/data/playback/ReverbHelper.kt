@@ -1,17 +1,16 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import android.media.audiofx.PresetReverb
-import android.util.Log
-import androidx.media3.common.C
 import com.raulshma.jellyplay.core.model.ReverbPreset
 
-class ReverbHelper {
 
-    private var reverb: PresetReverb? = null
-    private var currentAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
-
-    var isEnabled: Boolean = false
-        private set
+/**
+ * Preset-reverb wrapper. Effect-specific state is the [preset]; the lifecycle
+ * skeleton lives in [AudioFxHelper]. Attach is skipped while the preset is
+ * NONE (nothing to apply), and changing the preset mid-session re-opens the
+ * underlying effect so the new preset takes.
+ */
+class ReverbHelper : AudioFxHelper<PresetReverb>(TAG) {
 
     var preset: ReverbPreset = ReverbPreset.NONE
         private set
@@ -22,54 +21,23 @@ class ReverbHelper {
             setEnabled(false)
             return
         }
-        if (currentAudioSessionId != C.AUDIO_SESSION_ID_UNSET) {
-            val oldReverb = reverb
-            reverb = try {
-                val targetPreset = this@ReverbHelper.preset
-                PresetReverb(0, currentAudioSessionId).apply {
-                    setPreset(targetPreset.androidPreset)
-                    enabled = this@ReverbHelper.isEnabled
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to create PresetReverb", e)
-                null
-            }
-            oldReverb?.release()
-            if (reverb != null) {
-                setEnabled(true)
-            }
+        // Re-open the underlying effect on the current session so the new
+        // preset takes immediately. detach() releases the prior instance and
+        // clears the remembered session id, so the re-attach isn't short-
+        // circuited and create() re-reads the preset.
+        val sid = attachedAudioSessionId
+        if (sid != androidx.media3.common.C.AUDIO_SESSION_ID_UNSET) {
+            detach()
+            attach(sid)
+            if (fx != null) setEnabled(true)
         }
     }
 
-    fun attach(audioSessionId: Int) {
-        if (audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        if (audioSessionId == currentAudioSessionId && reverb != null) return
-        if (preset == ReverbPreset.NONE) return
+    override fun shouldAttach(): Boolean = preset != ReverbPreset.NONE
 
-        detach()
-        currentAudioSessionId = audioSessionId
-
-        reverb = try {
-            val targetPreset = this@ReverbHelper.preset
-            PresetReverb(0, audioSessionId).apply {
-                setPreset(targetPreset.androidPreset)
-                enabled = this@ReverbHelper.isEnabled
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to create PresetReverb", e)
-            null
-        }
-    }
-
-    fun setEnabled(enabled: Boolean) {
-        isEnabled = enabled
-        reverb?.enabled = enabled
-    }
-
-    fun detach() {
-        reverb?.release()
-        reverb = null
-        currentAudioSessionId = C.AUDIO_SESSION_ID_UNSET
+    override fun create(audioSessionId: Int): PresetReverb? {
+        val target = this.preset
+        return PresetReverb(0, audioSessionId).apply { setPreset(target.androidPreset) }
     }
 
     companion object {
