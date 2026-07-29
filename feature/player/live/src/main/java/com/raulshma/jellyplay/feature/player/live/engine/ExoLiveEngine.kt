@@ -23,11 +23,15 @@ import okhttp3.OkHttpClient
  * Media3 ExoPlayer-based live TV engine.
  *
  * Key design choices vs the previous VOD live path:
- *  - MIME is **always** [MimeTypes.APPLICATION_M3U8] so the
- *    `HlsMediaSource` is selected. The VOD path pinned `VIDEO_MP2T` for
- *    extension-less URLs, which routed the stream through the wrong source
- *    factory and never played.
- *  - No `seekTo(startPositionMs)` — ExoPlayer joins at the live edge by HLS
+ *  - MIME is chosen by [LivePlayMethod]: transcoded streams are real Jellyfin
+ *    HLS master playlists (`APPLICATION_M3U8`), while a direct live stream is
+ *    the tuner's raw MPEG-TS piped through `/Videos/{id}/stream` (`VIDEO_MP2T`)
+ *    — a plain progressive TS source, not an HLS playlist. (The server reports
+ *    the source `container` as `hls`, but that labels the tuner feed; the
+ *    `/stream` endpoint serves raw TS bytes, so an HLS hint makes ExoPlayer's
+ *    parser fail with "no #EXTM3U header".) The previous code forced
+ *    `APPLICATION_M3U8` for everything, which broke direct streams.
+ *  - No `seekTo(startPositionMs)` — ExoPlayer joins at the live edge by
  *    default.
  *  - [DefaultLoadControl] is tuned for fast live join (10s min buffer, 5s
  *    rebuffer) rather than the VOD defaults.
@@ -116,7 +120,7 @@ class ExoLiveEngine(
 
         val mediaItem = MediaItem.Builder()
             .setUri(request.url)
-            .setMimeType(MimeTypes.APPLICATION_M3U8)
+            .setMimeType(mimeTypeFor(request.playMethod))
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(request.title)
@@ -204,5 +208,27 @@ class ExoLiveEngine(
 
     private companion object {
         private const val LIVE_EDGE_TOLERANCE_MS = 10_000L
+    }
+
+    /**
+     * Picks the MediaItem MIME hint that routes [DefaultMediaSourceFactory] to
+     * the correct source for the resolved play method.
+     *
+     *  - [LivePlayMethod.TRANSCODE] — the server hands back a real Jellyfin HLS
+     *    master playlist, so it needs [MimeTypes.APPLICATION_M3U8].
+     *  - [LivePlayMethod.DIRECT_STREAM] / [LivePlayMethod.DIRECT_PLAY] — a
+     *    direct live stream is the tuner's raw MPEG-TS piped through
+     *    `/Videos/{id}/stream?LiveStreamId=…`, **not** an HLS playlist (the
+     *    server reports the source `container` as `hls`, but that labels the
+     *    tuner feed, not what the `/stream` endpoint serves). `VIDEO_MP2T`
+     *    selects the progressive `TsExtractor`, which streams the growing TS
+     *    without waiting for a `#EXTM3U` header. Forcing HLS here made the
+     *    parser fail (`Input does not start with the #EXTM3U header`) and the
+     *    engine fell back to transcode.
+     */
+    private fun mimeTypeFor(method: LivePlayMethod): String = when (method) {
+        LivePlayMethod.TRANSCODE -> MimeTypes.APPLICATION_M3U8
+        LivePlayMethod.DIRECT_STREAM,
+        LivePlayMethod.DIRECT_PLAY -> MimeTypes.VIDEO_MP2T
     }
 }

@@ -283,7 +283,12 @@ class LiveTvPlayerViewModel @Inject constructor(
             return
         }
 
-        Log.i(TAG, "Playing ${channel.name}: method=${resolved.playMethod}, url=${resolved.streamUrl}")
+        Log.i(
+            TAG,
+            "Playing ${channel.name}: option=${prefs.liveStreamOption}, " +
+                "player=${prefs.preferredPlayer}, method=${resolved.playMethod}, " +
+                "url=${resolved.streamUrl}"
+        )
 
         // Auth token flows via LiveEngineConfig.authToken (read by ExoLiveEngine's
         // HTTP data-source factory), not per-request — see ensureEngine.
@@ -293,6 +298,7 @@ class LiveTvPlayerViewModel @Inject constructor(
                     url = resolved.streamUrl,
                     title = channel.name,
                     playMethod = resolved.playMethod.toLivePlayMethod(),
+                    container = resolved.container,
                 )
             )
 
@@ -327,9 +333,29 @@ class LiveTvPlayerViewModel @Inject constructor(
             playerType = playerType,
             liveStreamOption = option,
         )
-        if (resolved != null) return resolved
-
-        Log.w(TAG, "resolvePlayback returned null for ${channel.name} (option=$option); falling back to fetchPlaybackInfo")
+        if (resolved != null) {
+            // When the user asked for Direct Stream but the server still
+            // resolved a transcode, it's because the server's live-source
+            // probe failed (TranscodeReasons=DirectPlayError) even though
+            // the tuner is opened and readable. The tuner session is live,
+            // so ignore the server's verdict and build a direct-stream URL
+            // ourselves from the liveStreamId; if the player genuinely can't
+            // decode it, the existing onPlayerError -> transcode fallback
+            // catches that. AUTO/TRANSCODE accept whatever the server picks.
+            if (option == LiveStreamOption.DIRECT_STREAM &&
+                resolved.playMethod == PlayMethod.TRANSCODE
+            ) {
+                Log.w(
+                    TAG,
+                    "Server resolved transcode for ${channel.name} despite " +
+                        "DIRECT_STREAM request (probe failed); forcing direct stream"
+                )
+            } else {
+                return resolved
+            }
+        } else {
+            Log.w(TAG, "resolvePlayback returned null for ${channel.name} (option=$option); falling back to fetchPlaybackInfo")
+        }
 
         // Fallback: fetch PlaybackInfo directly and build a direct stream URL
         // from the first source's liveStreamId. Mirrors the VOD
@@ -407,12 +433,13 @@ class LiveTvPlayerViewModel @Inject constructor(
             return null
         }
 
+        // The URL built above is always a direct `/Videos/{id}/stream` URL
+        // (via getStreamUrl), never a transcoding master.m3u8 — even when the
+        // server's flags say transcoding is the only option. So the play
+        // method reflects the URL we built, not the server's verdict; this
+        // also keeps the onPlayerError -> transcode fallback eligible.
         val playMethod = when {
             source.supportsDirectPlay -> PlayMethod.DIRECT_PLAY
-            source.supportsDirectStream -> PlayMethod.DIRECT_STREAM
-            source.supportsTranscoding && !source.transcodeUrl.isNullOrBlank() -> PlayMethod.TRANSCODE
-            // liveStreamId-only fallback above is effectively a direct stream
-            // against the opened tuner session.
             else -> PlayMethod.DIRECT_STREAM
         }
         return ResolvedPlayback(
@@ -421,6 +448,7 @@ class LiveTvPlayerViewModel @Inject constructor(
             playMethod = playMethod,
             playSessionId = info.playSessionId,
             maxStreamingBitrate = null,
+            container = source.container,
         )
     }
 
@@ -512,6 +540,7 @@ class LiveTvPlayerViewModel @Inject constructor(
                     url = resolved.streamUrl,
                     title = channel.name,
                     playMethod = LivePlayMethod.TRANSCODE,
+                    container = resolved.container,
                 )
             )
         }

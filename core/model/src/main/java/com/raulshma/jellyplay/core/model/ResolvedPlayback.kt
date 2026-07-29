@@ -19,4 +19,13 @@ data class ResolvedPlayback(
     val playMethod: PlayMethod,
     val playSessionId: String?,
     val maxStreamingBitrate: Long?,
+    /**
+     * The media-source container as reported by the server (e.g. `"ts"`,
+     * `"hls"`, `"mkv"`). The live engine uses it to pick the right ExoPlayer
+     * MIME hint: an `hls`-container live source is a real HLS playlist
+     * (needs `APPLICATION_M3U8`), while a `ts` source is raw MPEG-TS over
+     * HTTP (needs `VIDEO_MP2T`). `null` for VOD (the VOD engine infers MIME
+     * from the URL).
+     */
+    val container: String? = null,
 )
