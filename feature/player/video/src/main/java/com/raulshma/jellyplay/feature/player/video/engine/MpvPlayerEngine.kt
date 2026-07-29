@@ -1145,17 +1145,28 @@ class MpvPlayerEngine(
             // for side-loaded (sub-add) tracks. Used as the robust resolution key
             // in TrackSelectionHelper instead of fragile label matching.
             val ffIndex = track["ff-index"].asTrackId()
-            val label = buildTrackLabel(trackType, id, lang, title, codec)
+            // mpv exposes forced/default flags per track; "forced" subs are
+            // marked and default-track mirrors the container's default flag.
+            val isForced = track["forced"]?.asBoolean() ?: false
+            val isDefault = track["default"]?.asBoolean() ?: false
+            val info = TrackLabelInfo(
+                title = title,
+                language = lang,
+                codec = codec,
+                isForced = isForced,
+                isDefault = isDefault,
+            )
 
             result.add(
                 MediaTrack(
                     id = "mpv_${t}_${id}",
                     index = id,
-                    label = label,
+                    label = TrackLabelFormatter.primary(info),
                     language = lang,
                     isSelected = selected,
                     type = trackType,
                     streamIndex = ffIndex,
+                    badges = TrackLabelFormatter.badges(info),
                 )
             )
         }
@@ -1528,29 +1539,6 @@ class MpvPlayerEngine(
 
     private fun subtitleStyleValues(style: SubtitleStyle): MpvStyleMapping.MpvStyleValues =
         MpvStyleMapping.computeValues(style)
-
-    private fun buildTrackLabel(
-        trackType: TrackType,
-        id: Int,
-        language: String?,
-        title: String?,
-        codec: String?,
-    ): String {
-        val cleanTitle = title?.takeIf { it.isNotBlank() }
-        if (trackType == TrackType.SUBTITLE && cleanTitle != null) return cleanTitle
-
-        val languageLabel = language?.takeIf { it.isNotBlank() }?.let { lang ->
-            try {
-                java.util.Locale.forLanguageTag(lang.replace('_', '-')).displayLanguage.takeIf { it.isNotBlank() }
-            } catch (_: Exception) {
-                lang
-            }
-        }
-        val parts = listOfNotNull(languageLabel, cleanTitle, codec?.takeIf { it.isNotBlank() })
-            .distinctBy { it.lowercase() }
-        val fallbackPrefix = if (trackType == TrackType.SUBTITLE) "Subtitle" else "Audio"
-        return parts.joinToString(" · ").ifBlank { "$fallbackPrefix $id" }
-    }
 
     private fun MPVNode?.asTrackId(): Int? =
         this?.asInt()?.toInt() ?: this?.asString()?.toIntOrNull()

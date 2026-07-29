@@ -76,6 +76,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -1860,7 +1861,7 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.Audio -> {
             TrackPickerSheet(
-                title = "Audio",
+                title = stringResource(R.string.player_audio),
                 tracks = uiState.audioTracks,
                 onSelect = { viewModel.selectAudioTrack(it) },
                 onReset = if (uiState.hasAudioOverride) { { viewModel.resetAudioTrack() } } else null,
@@ -1888,7 +1889,7 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.Subtitle -> {
             TrackPickerSheet(
-                title = "Subtitles",
+                title = stringResource(R.string.player_subtitles),
                 tracks = uiState.subtitleTracks,
                 onSelect = { viewModel.selectSubtitleTrack(it) },
                 onReset = if (uiState.hasSubtitleOverride) { { viewModel.resetSubtitleTrack() } } else null,

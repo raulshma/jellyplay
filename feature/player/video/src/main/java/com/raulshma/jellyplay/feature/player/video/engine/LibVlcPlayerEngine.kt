@@ -842,14 +842,16 @@ class LibVlcPlayerEngine(
             if (audioTracks != null) {
                 val currentId = try { mp.audioTrack } catch (_: Exception) { -1 }
                 audioTracks.forEachIndexed { index, desc ->
+                    val info = TrackLabelInfo(title = desc.name)
                     result.add(
                         MediaTrack(
                             id = "vlc_audio_${desc.id}",
                             index = index,
-                            label = desc.name ?: "Audio ${index + 1}",
+                            label = TrackLabelFormatter.primary(info).ifBlank { "Audio ${index + 1}" },
                             language = parseLanguageFromLabel(desc.name),
                             isSelected = desc.id == currentId,
                             type = TrackType.AUDIO,
+                            badges = TrackLabelFormatter.badges(info),
                         )
                     )
                 }
@@ -859,14 +861,16 @@ class LibVlcPlayerEngine(
             if (spuTracks != null) {
                 val currentId = try { mp.spuTrack } catch (_: Exception) { -1 }
                 spuTracks.forEachIndexed { index, desc ->
+                    val info = TrackLabelInfo(title = desc.name)
                     result.add(
                         MediaTrack(
                             id = "vlc_sub_${desc.id}",
                             index = index,
-                            label = desc.name ?: "Subtitle ${index + 1}",
+                            label = TrackLabelFormatter.primary(info).ifBlank { "Subtitle ${index + 1}" },
                             language = parseLanguageFromLabel(desc.name),
                             isSelected = desc.id == currentId,
                             type = TrackType.SUBTITLE,
+                            badges = TrackLabelFormatter.badges(info),
                         )
                     )
                 }
