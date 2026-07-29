@@ -77,12 +77,22 @@ internal object TrackEnrichmentResolver {
         )
     }
 
-    private fun MediaStream.toLabelInfo(): TrackLabelInfo = TrackLabelInfo(
-        title = title,
-        language = language,
-        codec = codec,
-        channels = channels,
-        isForced = isForced,
-        isDefault = isDefault,
-    )
+    private fun MediaStream.toLabelInfo(): TrackLabelInfo {
+        // The server's explicit `title` is often blank for subtitle streams while
+        // `displayTitle` (e.g. "English (SDH)", "Forced") carries the role markers.
+        // Fall back to displayTitle so TrackLabelFormatter.badges() can detect the
+        // SDH/forced role from the title text — otherwise a track whose only role
+        // signal is in displayTitle ends up with no badges and can't be pinned by
+        // the "remember subtitle for series" matcher.
+        val titleForBadges = title?.takeIf { it.isNotBlank() }
+            ?: displayTitle?.takeIf { it.isNotBlank() }
+        return TrackLabelInfo(
+            title = titleForBadges,
+            language = language,
+            codec = codec,
+            channels = channels,
+            isForced = isForced,
+            isDefault = isDefault,
+        )
+    }
 }

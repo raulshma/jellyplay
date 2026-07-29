@@ -55,6 +55,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadState
+import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusState
@@ -99,6 +101,11 @@ fun SubtitleManagerSheet(
     defaultLanguage: String,
     onSearch: (String) -> Unit,
     onDownloadSearched: (RemoteSubtitleInfo) -> Unit,
+    // Shared: per-subtitle-id download status (spinner / ✓-Downloaded / delayed /
+    // failed) for both Download + Search rows, and the "Use" affordance that opens
+    // the subtitle track picker once a download has surfaced.
+    downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
+    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
     // Upload tab
     isUploading: Boolean,
     onUpload: (Uri, String, String?, Boolean, Boolean) -> Unit,
@@ -170,6 +177,8 @@ fun SubtitleManagerSheet(
                     isLoading = isDownloading,
                     onDownload = onDownload,
                     onLoadLocalFile = onLoadLocalFile,
+                    downloadingSubtitles = downloadingSubtitles,
+                    onUseSubtitle = onUseSubtitle,
                     isTv = isTv,
                     focusRequester = downloadFocus,
                     loadBtnFocus = loadBtnFocus,
@@ -183,6 +192,8 @@ fun SubtitleManagerSheet(
                     searchError = searchError,
                     onSearch = onSearch,
                     onDownload = onDownloadSearched,
+                    downloadingSubtitles = downloadingSubtitles,
+                    onUseSubtitle = onUseSubtitle,
                     isTv = isTv,
                     focusRequester = searchFocus,
                 )
@@ -207,6 +218,8 @@ private fun DownloadTab(
     isLoading: Boolean,
     onDownload: (RemoteSubtitleInfo) -> Unit,
     onLoadLocalFile: () -> Unit,
+    downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
+    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
     isTv: Boolean,
     focusRequester: FocusRequester,
     loadBtnFocus: TvFocusState,
@@ -261,7 +274,9 @@ private fun DownloadTab(
                         subtitle = sub,
                         isLast = index == subtitles.lastIndex,
                         itemCount = subtitles.size,
+                        status = downloadingSubtitles[sub.id],
                         onDownload = { onDownload(sub) },
+                        onUse = { onUseSubtitle(sub) },
                     )
                 }
             }
@@ -274,7 +289,9 @@ private fun SubtitleDownloadItem(
     subtitle: RemoteSubtitleInfo,
     isLast: Boolean,
     itemCount: Int,
+    status: SubtitleDownloadStatus?,
     onDownload: () -> Unit,
+    onUse: () -> Unit,
 ) {
     val shape = when {
         itemCount == 1 -> ShapeCache.smooth16
@@ -282,6 +299,11 @@ private fun SubtitleDownloadItem(
         else -> ShapeCache.smooth8
     }
     val focusState = rememberTvFocusState(focusedScale = 1.02f)
+    // While a download is in flight or already done, the row itself no longer
+    // re-triggers a download — the right-side slot drives the next action
+    // (spinner while working, "Use" once done). DELAYED/FAILED let a tap retry.
+    val isDownloadActive = status?.state == SubtitleDownloadState.DOWNLOADING ||
+        status?.state == SubtitleDownloadState.DOWNLOADED
 
     Row(
         modifier = Modifier
@@ -291,7 +313,7 @@ private fun SubtitleDownloadItem(
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, shape)
-            .clickable { onDownload() }
+            .clickable(enabled = !isDownloadActive) { onDownload() }
             .padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -347,16 +369,94 @@ private fun SubtitleDownloadItem(
                 }
             }
         }
-        subtitle.downloadCount.let { count ->
-            if (count > 0) {
-                Text(
-                    "$count",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        SubtitleDownloadStatusSlot(
+            status = status,
+            downloadCount = subtitle.downloadCount,
+            onUse = onUse,
+        )
+    }
+}
+
+/**
+ * Right-side slot of a subtitle row. Renders the download count when idle, or a
+ * status-driven affordance otherwise:
+ * - [SubtitleDownloadState.DOWNLOADING] → spinner.
+ * - [SubtitleDownloadState.DELAYED] → clock + "Taking a while…" (tap the row retries).
+ * - [SubtitleDownloadState.DOWNLOADED] → check + "Use" button (opens the track picker).
+ * - [SubtitleDownloadState.FAILED] → alert + short message (tap the row retries).
+ */
+@Composable
+private fun SubtitleDownloadStatusSlot(
+    status: SubtitleDownloadStatus?,
+    downloadCount: Int,
+    onUse: () -> Unit,
+) {
+    when (status?.state) {
+        SubtitleDownloadState.DOWNLOADING -> JellyPlayLoadingIndicator(
+            modifier = Modifier.size(18.dp),
+        )
+        SubtitleDownloadState.DELAYED -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Clock,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "Taking a while…",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        SubtitleDownloadState.DOWNLOADED -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Check,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            FilledTonalButton(
+                onClick = onUse,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 12.dp,
+                    vertical = 0.dp,
+                ),
+            ) {
+                Text("Use", style = MaterialTheme.typography.labelLarge)
             }
+        }
+        SubtitleDownloadState.FAILED -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.AlertCircle,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                "Failed — tap to retry",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        // null (idle): show the remote download count, if any — unchanged from
+        // the pre-status-slot row.
+        null -> if (downloadCount > 0) {
+            Text(
+                "$downloadCount",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -376,6 +476,8 @@ private fun SearchTab(
     searchError: String?,
     onSearch: (String) -> Unit,
     onDownload: (RemoteSubtitleInfo) -> Unit,
+    downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
+    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
     isTv: Boolean,
     focusRequester: FocusRequester,
 ) {
@@ -466,7 +568,9 @@ private fun SearchTab(
                         subtitle = sub,
                         isLast = index == results.lastIndex,
                         itemCount = results.size,
+                        status = downloadingSubtitles[sub.id],
                         onDownload = { onDownload(sub) },
+                        onUse = { onUseSubtitle(sub) },
                     )
                 }
             }
