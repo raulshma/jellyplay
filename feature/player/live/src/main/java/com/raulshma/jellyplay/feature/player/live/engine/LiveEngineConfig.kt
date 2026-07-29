@@ -29,6 +29,12 @@ data class LivePlaybackRequest(
     val url: String,
     val title: String,
     val playMethod: LivePlayMethod = LivePlayMethod.DIRECT_STREAM,
+    /**
+     * The media-source container reported by the server (e.g. `"ts"`, `"hls"`),
+     * used to pick the ExoPlayer MIME hint for a direct stream. `null` for a
+     * transcode (the URL is always a Jellyfin HLS master playlist).
+     */
+    val container: String? = null,
 )
 
 enum class LivePlayMethod { DIRECT_PLAY, DIRECT_STREAM, TRANSCODE }

@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import android.util.Log
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
@@ -176,6 +177,17 @@ class PlaybackRepositoryImpl @Inject constructor(
             ?: result.mediaSources.firstOrNull()
             ?: return null
 
+        Log.i(
+            TAG,
+            "resolvePlayback: mode=$mode, liveOption=$liveStreamOption, " +
+                "source=${source.id}, container=${source.container}, " +
+                "directPlay=${source.supportsDirectPlay}, " +
+                "directStream=${source.supportsDirectStream}, " +
+                "transcode=${source.supportsTranscoding}, " +
+                "transcodeUrl=${source.transcodeUrl != null}, " +
+                "liveStreamId=${source.liveStreamId != null}"
+        )
+
         // Live TV channels carry a server-issued liveStreamId; the stream URL
         // must echo it back as `LiveStreamId` so the tuner opens a live
         // session. Static direct-play (`/Videos/{id}/stream?static=true`) does
@@ -215,6 +227,7 @@ class PlaybackRepositoryImpl @Inject constructor(
             playMethod = method,
             playSessionId = result.playSessionId,
             maxStreamingBitrate = maxStreamingBitrateBits,
+            container = source.container,
         )
     }
 
@@ -354,6 +367,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         apiClient.getTrickplayTileImage(itemId, width, index)
 
     companion object {
+        private const val TAG = "PlaybackRepository"
         private const val MAX_CACHE_ENTRIES = 50
         private const val SEGMENTS_CACHE_TTL_MS = 5 * 60 * 1000L
     }
