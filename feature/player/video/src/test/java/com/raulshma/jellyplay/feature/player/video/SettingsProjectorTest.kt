@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.UserPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -69,7 +70,12 @@ class SettingsProjectorTest {
 
     @Test
     fun project_noOpsWhenPreferencesAreUnchanged() {
-        val prefs = UserPreferences()
+        // UiState seeds subtitleStyle with SubtitleStyle.DEFAULT (applyCustomStyle=true),
+        // so build prefs whose stored style resolves to the same value. Under the
+        // Override-respecting resolver a default UserPreferences() has the toggle off,
+        // which would (correctly) read as a change on first project — not the no-op
+        // this test pins.
+        val prefs = UserPreferences(subtitleStyle = SubtitleStyle.DEFAULT)
         val changed1 = projector.project(prefs)
         assertFalse(changed1)
 
