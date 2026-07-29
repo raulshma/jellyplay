@@ -712,6 +712,9 @@ class ExoPlayerEngine(
 
         if (oldConfig.audioEffects != newConfig.audioEffects) {
             applyAudioEffects()
+            if (requiresAudioPipelineReconfiguration(oldConfig.audioEffects, newConfig.audioEffects)) {
+                reconfigureAudioPipeline()
+            }
         }
 
         if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
@@ -1148,6 +1151,24 @@ class ExoPlayerEngine(
 
     private fun releaseAudioEffects() {
         audioEffectChain.release()
+    }
+
+    /**
+     * Recreates the active media period without releasing the player so
+     * [DefaultAudioSink] re-runs AudioProcessor.configure(). This is required
+     * when an effect changes processor activation or channel count (for
+     * example, enabling 5.1 -> stereo downmix); merely mutating the processor
+     * instance cannot alter Media3's already-configured pipeline.
+     */
+    private fun reconfigureAudioPipeline() {
+        val exo = player ?: return
+        val mediaItem = currentMediaItem ?: return
+        val positionMs = exo.currentPosition
+        val wasPlaying = exo.isPlaying
+
+        exo.setMediaItem(mediaItem, positionMs)
+        exo.prepare()
+        if (wasPlaying) exo.play()
     }
 
     private fun buildTracks(): List<MediaTrack> {
