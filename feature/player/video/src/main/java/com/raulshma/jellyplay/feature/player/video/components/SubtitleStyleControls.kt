@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
+import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -194,35 +195,21 @@ fun SubtitleStyleControls(
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (isTv) {
-            DpadSlider(
-                value = currentStyle.fontSize.toFloat(),
-                enabled = applyCustomStyle,
-                onValueChange = { onStyleChange(currentStyle.copy(fontSize = it.toInt())) },
-                valueRange = 16f..48f,
-                steps = 32,
-                dpadStep = 1f,
-                colors = SliderDefaults.colors(
-                    thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
-                    activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else {
-            Slider(
-                value = fontSize.toFloat(),
-                enabled = applyCustomStyle,
-                onValueChange = { fontSize = it.toInt() },
-                onValueChangeFinished = { onStyleChange(currentStyle.copy(fontSize = fontSize)) },
-                valueRange = 16f..48f,
-                steps = 32,
-                colors = SliderDefaults.colors(
-                    thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
-                    activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        TvOrTouchSlider(
+            value = fontSize.toFloat(),
+            onValueChange = { fontSize = it.toInt() },
+            onValueChangeFinished = { onStyleChange(currentStyle.copy(fontSize = fontSize)) },
+            valueRange = 16f..48f,
+            modifier = Modifier.fillMaxWidth(),
+            isTv = isTv,
+            enabled = applyCustomStyle,
+            steps = 32,
+            dpadStep = 1f,
+            colors = SliderDefaults.colors(
+                thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
+                activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
+            ),
+        )
 
         // --- Typography: font family + bold/italic ---
         if (applyCustomStyle) {
@@ -396,35 +383,21 @@ fun SubtitleStyleControls(
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (isTv) {
-            DpadSlider(
-                value = currentStyle.backgroundOpacity,
-                enabled = applyCustomStyle,
-                onValueChange = { onStyleChange(currentStyle.copy(backgroundOpacity = it)) },
-                valueRange = 0f..1f,
-                steps = 10,
-                dpadStep = 0.1f,
-                colors = SliderDefaults.colors(
-                    thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
-                    activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else {
-            Slider(
-                value = backgroundOpacity,
-                enabled = applyCustomStyle,
-                onValueChange = { backgroundOpacity = it },
-                onValueChangeFinished = { onStyleChange(currentStyle.copy(backgroundOpacity = backgroundOpacity)) },
-                valueRange = 0f..1f,
-                steps = 10,
-                colors = SliderDefaults.colors(
-                    thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
-                    activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        TvOrTouchSlider(
+            value = backgroundOpacity,
+            onValueChange = { backgroundOpacity = it },
+            onValueChangeFinished = { onStyleChange(currentStyle.copy(backgroundOpacity = backgroundOpacity)) },
+            valueRange = 0f..1f,
+            modifier = Modifier.fillMaxWidth(),
+            isTv = isTv,
+            enabled = applyCustomStyle,
+            steps = 10,
+            dpadStep = 0.1f,
+            colors = SliderDefaults.colors(
+                thumbColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray,
+                activeTrackColor = if (applyCustomStyle) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
+            ),
+        )
 
         // --- Edge Type ---
         Spacer(Modifier.height(12.dp))
@@ -440,38 +413,17 @@ fun SubtitleStyleControls(
         ) {
             SubtitleEdgeType.entries.forEach { type ->
                 val isSelected = currentStyle.edgeType == type
-                val chipFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                FilterChip(
+                SubtitleStyleChip(
+                    label = when (type) {
+                        SubtitleEdgeType.NONE -> "None"
+                        SubtitleEdgeType.OUTLINE -> "Outline"
+                        SubtitleEdgeType.DROP_SHADOW -> "Shadow"
+                        SubtitleEdgeType.RAISED -> "Raised"
+                        SubtitleEdgeType.DEPRESSED -> "Depressed"
+                    },
                     selected = isSelected,
                     enabled = applyCustomStyle,
                     onClick = { onStyleChange(currentStyle.copy(edgeType = type)) },
-                    label = {
-                        Text(
-                            when (type) {
-                                SubtitleEdgeType.NONE -> "None"
-                                SubtitleEdgeType.OUTLINE -> "Outline"
-                                SubtitleEdgeType.DROP_SHADOW -> "Shadow"
-                                SubtitleEdgeType.RAISED -> "Raised"
-                                SubtitleEdgeType.DEPRESSED -> "Depressed"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        )
-                    },
-                    shape = ShapeCache.smoothPill,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                        selectedLabelColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        borderColor = Color.Transparent,
-                        selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                        enabled = applyCustomStyle,
-                        selected = isSelected,
-                    ),
-                    modifier = Modifier
-                        .then(chipFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smoothPill)),
                 )
             }
         }
@@ -530,31 +482,10 @@ fun SubtitleStyleControls(
                         SubtitleBorderStyle.BACKGROUND_BOX -> "Background Box"
                     }
                     val isSelected = currentStyle.borderStyle == bs
-                    val chipFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                    FilterChip(
+                    SubtitleStyleChip(
+                        label = label,
                         selected = isSelected,
                         onClick = { onStyleChange(currentStyle.copy(borderStyle = bs)) },
-                        label = {
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            )
-                        },
-                        shape = ShapeCache.smoothPill,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                            selectedLabelColor = MaterialTheme.colorScheme.primary,
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = Color.Transparent,
-                            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                            enabled = true,
-                            selected = isSelected,
-                        ),
-                        modifier = Modifier
-                            .then(chipFocusState.focusModifier)
-                            .then(Modifier.tvFocusIndicator(chipFocusState, ShapeCache.smoothPill)),
                     )
                 }
             }
@@ -566,33 +497,16 @@ fun SubtitleStyleControls(
                     "Border Width: ${"%.1f".format(borderWidth)}",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 )
-                if (isTv) {
-                    DpadSlider(
-                        value = currentStyle.borderWidth,
-                        onValueChange = { onStyleChange(currentStyle.copy(borderWidth = it)) },
-                        valueRange = 0f..6f,
-                        steps = 59,
-                        dpadStep = 0.2f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else {
-                    Slider(
-                        value = borderWidth,
-                        onValueChange = { borderWidth = it },
-                        onValueChangeFinished = { onStyleChange(currentStyle.copy(borderWidth = borderWidth)) },
-                        valueRange = 0f..6f,
-                        steps = 59,
-                        colors = SliderDefaults.colors(
-                            thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                TvOrTouchSlider(
+                    value = borderWidth,
+                    onValueChange = { borderWidth = it },
+                    onValueChangeFinished = { onStyleChange(currentStyle.copy(borderWidth = borderWidth)) },
+                    valueRange = 0f..6f,
+                    modifier = Modifier.fillMaxWidth(),
+                    isTv = isTv,
+                    steps = 59,
+                    dpadStep = 0.2f,
+                )
 
                 // Shadow offset slider (only relevant for outline+shadow).
                 if (currentStyle.borderStyle == SubtitleBorderStyle.OUTLINE_AND_SHADOW) {
@@ -601,33 +515,16 @@ fun SubtitleStyleControls(
                         "Shadow Offset: ${"%.1f".format(shadowOffset)}",
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                     )
-                    if (isTv) {
-                        DpadSlider(
-                            value = currentStyle.shadowOffset,
-                            onValueChange = { onStyleChange(currentStyle.copy(shadowOffset = it)) },
-                            valueRange = 0f..4f,
-                            steps = 39,
-                            dpadStep = 0.2f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        Slider(
-                            value = shadowOffset,
-                            onValueChange = { shadowOffset = it },
-                            onValueChangeFinished = { onStyleChange(currentStyle.copy(shadowOffset = shadowOffset)) },
-                            valueRange = 0f..4f,
-                            steps = 39,
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
+                    TvOrTouchSlider(
+                        value = shadowOffset,
+                        onValueChange = { shadowOffset = it },
+                        onValueChangeFinished = { onStyleChange(currentStyle.copy(shadowOffset = shadowOffset)) },
+                        valueRange = 0f..4f,
+                        modifier = Modifier.fillMaxWidth(),
+                        isTv = isTv,
+                        steps = 39,
+                        dpadStep = 0.2f,
+                    )
                 }
             }
         }
@@ -645,32 +542,16 @@ fun SubtitleStyleControls(
                 "Subtitle Offset: $offsetLabel",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             )
-            if (isTv) {
-                DpadSlider(
-                    value = currentStyle.offsetMs.toFloat(),
-                    onValueChange = {
-                        val snapped = (it / 100f).roundToLong() * 100
-                        onStyleChange(currentStyle.copy(offsetMs = snapped))
-                    },
-                    valueRange = -10000f..10000f,
-                    steps = 199,
-                    dpadStep = 500f,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
-                Slider(
-                    value = offsetMs.toFloat(),
-                    onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
-                    onValueChangeFinished = { onStyleChange(currentStyle.copy(offsetMs = offsetMs)) },
-                    valueRange = -10000f..10000f,
-                    steps = 199,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            TvOrTouchSlider(
+                value = offsetMs.toFloat(),
+                onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
+                onValueChangeFinished = { onStyleChange(currentStyle.copy(offsetMs = offsetMs)) },
+                valueRange = -10000f..10000f,
+                modifier = Modifier.fillMaxWidth(),
+                isTv = isTv,
+                steps = 199,
+                dpadStep = 500f,
+            )
         }
 
         // --- Vertical Position ---
@@ -680,27 +561,15 @@ fun SubtitleStyleControls(
                 "Vertical Position: ${(verticalPosition * 100).toInt()}%",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             )
-            if (isTv) {
-                DpadSlider(
-                    value = currentStyle.verticalPosition,
-                    onValueChange = { onStyleChange(currentStyle.copy(verticalPosition = it)) },
-                    valueRange = 0f..0.4f,
-                    dpadStep = 0.02f,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
-                Slider(
-                    value = verticalPosition,
-                    onValueChange = { verticalPosition = it },
-                    onValueChangeFinished = { onStyleChange(currentStyle.copy(verticalPosition = verticalPosition)) },
-                    valueRange = 0f..0.4f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            TvOrTouchSlider(
+                value = verticalPosition,
+                onValueChange = { verticalPosition = it },
+                onValueChangeFinished = { onStyleChange(currentStyle.copy(verticalPosition = verticalPosition)) },
+                valueRange = 0f..0.4f,
+                modifier = Modifier.fillMaxWidth(),
+                isTv = isTv,
+                dpadStep = 0.02f,
+            )
         }
 
         // --- Reset chip (host-opt-in) ---
@@ -792,11 +661,37 @@ private fun TextStyleToggle(
     label: String,
     selected: Boolean,
     onChange: (Boolean) -> Unit,
+) = SubtitleStyleChip(label = label, selected = selected, onClick = { onChange(!selected) })
+
+/**
+ * ASS Override mode chip (Respect = SCALE, Force = FORCE). Mirrors [TextStyleToggle] focus handling.
+ */
+@Composable
+private fun AssOverrideChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) = SubtitleStyleChip(label = label, selected = isSelected, onClick = onClick)
+
+/**
+ * Shared FilterChip styling for the subtitle-style picker chips (text-style
+ * toggles, ASS-override mode, edge type, border style). Collapses the
+ * byte-identical focusState + FilterChip config (pill shape, primary-tinted
+ * selected container/label, transparent border with primary selected border,
+ * TV focus indicator) that was previously copy-pasted across four call sites.
+ */
+@Composable
+private fun SubtitleStyleChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
 ) {
     val focusState = rememberTvFocusState(focusedScale = 1.05f)
     FilterChip(
         selected = selected,
-        onClick = { onChange(!selected) },
+        enabled = enabled,
+        onClick = onClick,
         label = {
             Text(
                 label,
@@ -812,45 +707,8 @@ private fun TextStyleToggle(
         border = FilterChipDefaults.filterChipBorder(
             borderColor = Color.Transparent,
             selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-            enabled = true,
+            enabled = enabled,
             selected = selected,
-        ),
-        modifier = Modifier
-            .then(focusState.focusModifier)
-            .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smoothPill)),
-    )
-}
-
-/**
- * ASS Override mode chip (Respect = SCALE, Force = FORCE). Mirrors [ColorChip] focus handling.
- */
-@Composable
-private fun AssOverrideChip(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
-    val focusState = rememberTvFocusState(focusedScale = 1.05f)
-    FilterChip(
-        selected = isSelected,
-        onClick = onClick,
-        label = {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            )
-        },
-        shape = ShapeCache.smoothPill,
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-            selectedLabelColor = MaterialTheme.colorScheme.primary,
-        ),
-        border = FilterChipDefaults.filterChipBorder(
-            borderColor = Color.Transparent,
-            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-            enabled = true,
-            selected = isSelected,
         ),
         modifier = Modifier
             .then(focusState.focusModifier)

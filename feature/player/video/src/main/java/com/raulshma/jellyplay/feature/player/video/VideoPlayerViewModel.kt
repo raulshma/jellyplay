@@ -12,6 +12,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
+import com.raulshma.jellyplay.core.data.playback.PlayerAudioLifecycle
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
@@ -27,6 +28,7 @@ import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
@@ -52,7 +54,6 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isMusicTrack
@@ -189,6 +190,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
+    private val offlinePlaybackFacade: OfflinePlaybackFacade,
     private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
     private val preferencesStore: UserPreferencesStore,
     private val sessionManager: PlaybackSessionManager,
@@ -348,16 +350,67 @@ class VideoPlayerViewModel @Inject constructor(
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         onMediaDetailRefreshed = { detail -> applyMediaDetailAndSourceState(detail) },
     )
-    private var videoMediaSession: MediaSession? = null
-    private var becomingNoisyReceiver: android.content.BroadcastReceiver? = null
-    private var transientAudioFocusRequest: android.media.AudioFocusRequest? = null
-    private var preDuckVolume: Float? = null
-    private var wasPlayingBeforeTransientLoss = false
-    // Volume captured when a sleep timer starts fading, so cancelSleepTimer can
-    // restore the user's level instead of slamming to 1f. Mirrors preDuckVolume
-    // in the audio-focus listener. Null when the user is muted (mute wins) or
-    // when no timer has captured the pre-fade level.
-    private var preSleepVolume: Float? = null
+    private val sleepTimerController = SleepTimerController(
+        sleepTimerManager = sleepTimerManager,
+        preferencesStore = preferencesStore,
+        scope = scope,
+        getEngine = { playerSessionManager.engine },
+        isMuted = { _uiState.value.isMuted },
+        updateUiState = { transform -> _uiState.update(transform) },
+    )
+    private val playerCastController = PlayerCastController(
+        castManager = castManager,
+        playbackRepository = playbackRepository,
+        adaptiveBitrateManager = adaptiveBitrateManager,
+        preferencesStore = preferencesStore,
+        getEngine = { playerSessionManager.engine },
+        getCurrentPlaybackMode = { _uiState.value.playbackMode },
+        getSessionState = { playerSessionManager.sessionState.value },
+    )
+    private val settingsProjector = SettingsProjector(
+        getUiState = { _uiState.value },
+        updateUiState = { transform -> _uiState.update(transform) },
+        getItemId = { playerSessionManager.sessionState.value.currentItemId },
+        getMediaStreams = { _uiState.value.mediaStreams },
+    )
+    private val mediaSessionController = MediaSessionController(
+        context = context,
+        sessionManager = sessionManager,
+        getPlayer = { playerSessionManager.engine?.underlyingPlayer },
+        getImageUrl = { itemId, maxWidth -> playbackRepository.getImageUrl(itemId = itemId, maxWidth = maxWidth) },
+    )
+
+    /**
+     * Owns audio-focus (duck/restore) + becoming-noisy auto-pause. Shared with
+     * the live TV VM to eliminate the prior copy-paste. [control] reads the
+     * current engine on every callback so engine swaps (retry/fallback) and
+     * teardown stay correct. [onRegain] applies the `videoSkipBackOnResumeMs`
+     * resume-skip the VOD path needs (live has no equivalent).
+     */
+    private val playerAudioLifecycle = PlayerAudioLifecycle(
+        context = context,
+        control = {
+            playerSessionManager.engine?.let { engine ->
+                PlayerAudioLifecycle.PlaybackControl(
+                    isPlaying = { engine.isPlaying.value },
+                    volume = { engine.volume },
+                    pause = { engine.pause() },
+                    play = { engine.play() },
+                    setVolume = { engine.setVolume(it) },
+                    setMuted = { engine.setMuted(it) },
+                )
+            }
+        },
+        isMuted = { _uiState.value.isMuted },
+        onRegain = {
+            val skipMs = preferencesStore.preferences.value.videoSkipBackOnResumeMs
+            if (skipMs > 0L) {
+                val target = ((playerSessionManager.engine?.currentPositionMs ?: 0L) - skipMs)
+                    .coerceAtLeast(0L)
+                seekTo(target)
+            }
+        },
+    )
 
     private val _passOutEvents = Channel<String>(Channel.BUFFERED)
     val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
@@ -429,80 +482,6 @@ class VideoPlayerViewModel @Inject constructor(
         engine.play()
     }
 
-    private fun registerTransientFocusLossListener() {
-        if (transientAudioFocusRequest != null) return
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-            ?: return
-        val listener = android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
-            val engine = playerSessionManager.engine ?: return@OnAudioFocusChangeListener
-            when (focusChange) {
-                android.media.AudioManager.AUDIOFOCUS_LOSS -> {
-                    // Permanent loss — abandon; system will not hand focus back automatically.
-                    engine.pause()
-                    preDuckVolume = null
-                    wasPlayingBeforeTransientLoss = false
-                    unregisterTransientFocusLossListener()
-                }
-                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-                android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                    // Store the raw engine volume without clamping: VLC's
-                    // range is 0..2 (to support >100% boost) while ExoPlayer/MPV
-                    // use 0..1. A previous coerceIn(0f, 1f) here permanently
-                    // halved VLC volumes above 100% on the first duck cycle.
-                    // Each engine's setVolume accepts its own native range, so
-                    // round-tripping the unclamped value is correct.
-                    if (preDuckVolume == null) preDuckVolume = engine.volume
-                    wasPlayingBeforeTransientLoss = engine.isPlaying.value
-                    engine.setVolume(0.2f)
-                }
-                android.media.AudioManager.AUDIOFOCUS_GAIN -> {
-                    // Restore pre-duck volume only if user hasn't muted in the meantime.
-                    if (_uiState.value.isMuted) {
-                        engine.setMuted(true)
-                    } else {
-                        preDuckVolume?.let { engine.setVolume(it) }
-                    }
-                    val skipMs = preferencesStore.preferences.value.videoSkipBackOnResumeMs
-                    if (skipMs > 0L && wasPlayingBeforeTransientLoss) {
-                        val target = (engine.currentPositionMs - skipMs).coerceAtLeast(0L)
-                        seekTo(target)
-                    }
-                    if (wasPlayingBeforeTransientLoss) {
-                        engine.play()
-                    }
-                    preDuckVolume = null
-                    wasPlayingBeforeTransientLoss = false
-                }
-            }
-        }
-        val audioAttributes = android.media.AudioAttributes.Builder()
-            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE)
-            .build()
-        val request = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(audioAttributes)
-            .setAcceptsDelayedFocusGain(true)
-            .setOnAudioFocusChangeListener(listener)
-            .build()
-        this.transientAudioFocusRequest = request
-        try {
-            audioManager.requestAudioFocus(request)
-        } catch (_: Exception) {
-            this.transientAudioFocusRequest = null
-        }
-    }
-
-    private fun unregisterTransientFocusLossListener() {
-        val request = transientAudioFocusRequest ?: return
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-        try {
-            audioManager?.abandonAudioFocusRequest(request)
-        } catch (_: Exception) {}
-        transientAudioFocusRequest = null
-        preDuckVolume = null
-        wasPlayingBeforeTransientLoss = false
-    }
-
     private fun getReportPositionMs(): Long {
         val enginePos = playerSessionManager.engine?.currentPositionMs ?: 0L
         val seekPos = lastSeekPositionMs
@@ -538,7 +517,7 @@ class VideoPlayerViewModel @Inject constructor(
             // Mark the offline copy as fully watched so its row shows the
             // watched state. No-op for non-downloaded items.
             launch {
-                offlineRepository.updatePlaybackProgress(itemId, positionTicks = null, percentage = 100.0, isPlayed = true)
+                offlinePlaybackFacade.recordPlayed(itemId)
             }
         },
         onPositionPersisted = { positionMs -> persistPlaybackPosition(positionMs, force = false) },
@@ -589,8 +568,7 @@ class VideoPlayerViewModel @Inject constructor(
         if (!cachedPreferences.smartDownloadsEnabled) return
         if (_uiState.value.duration < MIN_DURATION_FOR_SMART_DELETE_MS) return
         launch {
-            val download = downloadRepository.getDownloadByMediaItemId(itemId) ?: return@launch
-            downloadRepository.deleteDownload(download.id)
+            if (!offlinePlaybackFacade.deleteDownload(itemId)) return@launch
             userMessageBus.info(
                 com.raulshma.jellyplay.core.ui.feedback.uiTextOf(
                     com.raulshma.jellyplay.core.ui.R.string.msg_smart_download_deleted,
@@ -669,74 +647,17 @@ class VideoPlayerViewModel @Inject constructor(
             preferencesStore.preferences.collect { prefs ->
                 val oldPrefs = cachedPreferences
                 cachedPreferences = prefs
-                val itemId = playerSessionManager.sessionState.value.currentItemId
-                val stored = itemId?.let { prefs.mediaStreamSelections[it] }
-                // Skip the (≈95-field) state copy + collector re-emit when the
-                // two flags haven't changed. Every UserPreferences emission
-                // (dozens of unrelated pref writes trigger this) used to
-                // allocate a fresh copy and re-emit to every uiState collector
-                // even though hasAudioOverride/hasSubtitleOverride rarely
-                // change. The surrounding blocks already guard every other
-                // field with `if (_uiState.value.X != prefs.X)`; this is the
-                // exception.
-                val newAudio = stored?.audioStreamIndex != null
-                val newSub = stored?.subtitleStreamIndex != null
-                if (_uiState.value.hasAudioOverride != newAudio ||
-                    _uiState.value.hasSubtitleOverride != newSub
-                ) {
-                    _uiState.update {
-                        it.copy(hasAudioOverride = newAudio, hasSubtitleOverride = newSub)
-                    }
+                // Pure prefs → uiState projection (each field guarded so an
+                // unrelated pref emission does not re-emit to every collector).
+                val subtitleStyleChanged = settingsProjector.project(prefs)
+                // Subtitle-style change needs an engine-config rebuild.
+                if (subtitleStyleChanged) {
+                    playerSessionManager.engine?.let { updateConfigWithUiState() }
                 }
-                val resolvedSubtitleStyle = prefs.resolvedSubtitleStyle(
-                    isHdr = prefs.isHdrFromStreams(_uiState.value.mediaStreams),
-                )
-                if (_uiState.value.subtitleStyle != resolvedSubtitleStyle) {
-                    _uiState.update { it.copy(subtitleStyle = resolvedSubtitleStyle) }
-                    playerSessionManager.engine?.let {
-                        updateConfigWithUiState()
-                    }
-                }
-                if (_uiState.value.sleepTimerLastUsedDurationMs != prefs.sleepTimerDurationMs) {
-                    _uiState.update { it.copy(sleepTimerLastUsedDurationMs = prefs.sleepTimerDurationMs) }
-                }
-                if (_uiState.value.showPlaybackMetadata != prefs.videoShowPlaybackMetadata) {
-                    _uiState.update { it.copy(showPlaybackMetadata = prefs.videoShowPlaybackMetadata) }
-                }
-                if (_uiState.value.showClock != prefs.showClockInPlayer) {
-                    _uiState.update { it.copy(showClock = prefs.showClockInPlayer) }
-                }
-                if (_uiState.value.showTimeRemaining != prefs.showTimeRemaining) {
-                    _uiState.update { it.copy(showTimeRemaining = prefs.showTimeRemaining) }
-                }
-                if (_uiState.value.tvZoomModePercent != prefs.tvZoomModePercent) {
-                    _uiState.update { it.copy(tvZoomModePercent = prefs.tvZoomModePercent) }
-                }
-                 if (_uiState.value.keepScreenOnDuringVideo != prefs.keepScreenOnDuringVideo) {
-                    _uiState.update { it.copy(keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo) }
-                }
-                if (_uiState.value.usePinForPlayerLock != prefs.usePinForPlayerLock ||
-                    _uiState.value.hasPin != (prefs.pinHash != null)) {
-                    _uiState.update { it.copy(
-                        usePinForPlayerLock = prefs.usePinForPlayerLock,
-                        hasPin = prefs.pinHash != null,
-                    ) }
-                }
-                if (_uiState.value.passOutProtectionHours != prefs.videoPassOutProtectionHours) {
-                    _uiState.update { it.copy(passOutProtectionHours = prefs.videoPassOutProtectionHours) }
-                }
+                // Autoplay-next flip also toggles the autoplay controller.
                 if (_uiState.value.videoAutoplayNext != prefs.videoAutoplayNext) {
                     _uiState.update { it.copy(videoAutoplayNext = prefs.videoAutoplayNext) }
                     autoplayController.setEnabled(prefs.videoAutoplayNext)
-                }
-                if (_uiState.value.autoPlayCountdownSec != prefs.autoPlayCountdownSec) {
-                    _uiState.update { it.copy(autoPlayCountdownSec = prefs.autoPlayCountdownSec) }
-                }
-                // Default the Subtitle Manager's Search-tab language to the
-                // user's preferred subtitle language (ISO 639-2/3, e.g. "eng").
-                val searchLang = prefs.preferredSubtitleLanguage ?: "eng"
-                if (_uiState.value.defaultSearchLanguage != searchLang) {
-                    _uiState.update { it.copy(defaultSearchLanguage = searchLang) }
                 }
                 if (oldPrefs.volumeBoostEnabled != prefs.volumeBoostEnabled ||
                     oldPrefs.volumeBoostGain != prefs.volumeBoostGain ||
@@ -749,10 +670,10 @@ class VideoPlayerViewModel @Inject constructor(
                 // Duck on transient audio focus loss (phone calls). Folded into
                 // this single preferences collector (was a duplicate collector)
                 // so a pref write rebuilds the snapshot once, not twice.
-                if (prefs.duckOnTransientFocusLoss && transientAudioFocusRequest == null) {
-                    registerTransientFocusLossListener()
-                } else if (!prefs.duckOnTransientFocusLoss && transientAudioFocusRequest != null) {
-                    unregisterTransientFocusLossListener()
+                if (prefs.duckOnTransientFocusLoss && !playerAudioLifecycle.isAudioFocusActive()) {
+                    playerAudioLifecycle.registerAudioFocus()
+                } else if (!prefs.duckOnTransientFocusLoss && playerAudioLifecycle.isAudioFocusActive()) {
+                    playerAudioLifecycle.unregisterAudioFocus()
                 }
             }
         }
@@ -808,26 +729,8 @@ class VideoPlayerViewModel @Inject constructor(
         }
         syncPlayBridge.start()
 
-        // Headphone unplug auto-pause
-        val becomingNoisyReceiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: android.content.Intent?) {
-                if (intent?.action == android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
-                    playerSessionManager.engine?.pause()
-                }
-            }
-        }
-        this.becomingNoisyReceiver = becomingNoisyReceiver
-        val filter = android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY)
-        try {
-            context.registerReceiver(
-                becomingNoisyReceiver,
-                filter,
-                // Private receiver for a system broadcast — explicit flag required on API 34+.
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    Context.RECEIVER_NOT_EXPORTED
-                } else 0,
-            )
-        } catch (_: Exception) {}
+        // Headphone unplug auto-pause (delegated to the shared audio-lifecycle owner).
+        playerAudioLifecycle.registerBecomingNoisy()
 
         launch {
             var lastItemId: String? = null
@@ -910,7 +813,7 @@ class VideoPlayerViewModel @Inject constructor(
                         channelMixEnabled = prefs.channelMixEnabled,
                         keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
                     )}
-                    updateCastStrategyForEngine(engine)
+                    playerCastController.updateCastStrategyForEngine(engine)
                     notifyUnsupportedAudioDelayIfNeeded(engine, prefs.audioDelayMs)
                     engineCollectionJob = launch {
                         kotlinx.coroutines.coroutineScope {
@@ -1120,10 +1023,7 @@ class VideoPlayerViewModel @Inject constructor(
      */
     internal suspend fun resolveOfflineResumeTicks(itemId: String, startPositionTicks: Long): Long {
         if (startPositionTicks != 0L) return startPositionTicks
-        val download = downloadRepository.getDownloadByMediaItemId(itemId)
-        if (download?.status != com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) return 0L
-        return offlineRepository.getOfflineItem(itemId)?.playbackPositionTicks
-            ?.takeIf { it > 0L } ?: 0L
+        return offlinePlaybackFacade.getResumePositionTicks(itemId)
     }
 
     /**
@@ -1147,7 +1047,7 @@ class VideoPlayerViewModel @Inject constructor(
             (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
         } else 0.0
         launch {
-            offlineRepository.updatePlaybackProgress(itemId, positionTicks, percentage, isPlayed = false)
+            offlinePlaybackFacade.recordProgress(itemId, positionTicks, percentage, isPlayed = false)
         }
     }
 
@@ -1402,8 +1302,7 @@ class VideoPlayerViewModel @Inject constructor(
             }
 
             source?.trickplayInfo?.let { info ->
-                val download = downloadRepository.getDownloadByMediaItemId(itemId)
-                val downloadPath = download?.downloadPath
+                val downloadPath = offlinePlaybackFacade.getDownloadPath(itemId)
                 if (downloadPath != null) {
                     val cacheDir = java.io.File(java.io.File(downloadPath).parentFile, "trickplay")
                     trickplayManager.initializeWithCache(itemId, info, cacheDir)
@@ -1414,8 +1313,7 @@ class VideoPlayerViewModel @Inject constructor(
             }
 
             if (source?.trickplayInfo == null) {
-                val download = downloadRepository.getDownloadByMediaItemId(itemId)
-                val downloadPath = download?.downloadPath
+                val downloadPath = offlinePlaybackFacade.getDownloadPath(itemId)
                 if (downloadPath != null) {
                     val localInfo = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
                         .loadLocalTrickplayInfo(downloadPath)
@@ -1503,7 +1401,7 @@ class VideoPlayerViewModel @Inject constructor(
      */
     private suspend fun resolveSeasons(seriesId: String): List<JellyfinMediaItem> =
         if (playerSessionManager.sessionState.value.isOffline) {
-            offlineRepository.getSeasonsForSeries(seriesId).first().map { it.toMediaItem() }
+            offlinePlaybackFacade.resolveSeasons(seriesId)
         } else {
             mediaRepository.getSeasons(seriesId).getOrDefault(emptyList())
         }
@@ -1516,7 +1414,7 @@ class VideoPlayerViewModel @Inject constructor(
      */
     private suspend fun resolveEpisodes(seriesId: String, seasonId: String): List<JellyfinMediaItem> =
         if (playerSessionManager.sessionState.value.isOffline) {
-            offlineRepository.getEpisodesForSeason(seasonId).first().map { it.toMediaItem() }
+            offlinePlaybackFacade.resolveEpisodes(seasonId)
         } else {
             mediaRepository.getEpisodes(seriesId, seasonId).getOrDefault(emptyList())
         }
@@ -2233,7 +2131,7 @@ class VideoPlayerViewModel @Inject constructor(
         launch {
             // Offline-first: prefer segments bundled with the download so skip
             // controls (intro/outro/recap) work without a server round-trip.
-            val local = downloadRepository.loadLocalSegments(itemId)
+            val local = offlinePlaybackFacade.loadSegments(itemId)
             if (local != null) {
                 _uiState.update { it.copy(segments = local) }
                 return@launch
@@ -2414,161 +2312,30 @@ class VideoPlayerViewModel @Inject constructor(
     val syncPlayIgnoreWait: StateFlow<Boolean>
         get() = syncPlayBridge.ignoreWait
 
-    val isCastAvailable: Boolean
-        get() = castManager.isCastAvailable
-
-    val isCastConnected: Boolean
-        get() = castManager.isConnected
-
-    val castPositionMs: StateFlow<Long>
-        get() = castManager.castPositionMs
-
-    val castDurationMs: StateFlow<Long>
-        get() = castManager.castDurationMs
-
-    val castIsPlaying: StateFlow<Boolean>
-        get() = castManager.castIsPlaying
-
-    val castVolumeFlow: StateFlow<Float>
-        get() = castManager.castVolume
-
-    val isConnectedFlow: StateFlow<Boolean>
-        get() = castManager.isConnectedFlow
-
-    val isConnectingFlow: StateFlow<Boolean>
-        get() = castManager.isConnectingFlow
-
-    val castSessionEvents: SharedFlow<CastSessionEvent>
-        get() = castManager.sessionEvents
+    val isCastAvailable: Boolean get() = playerCastController.isCastAvailable
+    val isCastConnected: Boolean get() = playerCastController.isCastConnected
+    val castPositionMs: StateFlow<Long> get() = playerCastController.castPositionMs
+    val castDurationMs: StateFlow<Long> get() = playerCastController.castDurationMs
+    val castIsPlaying: StateFlow<Boolean> get() = playerCastController.castIsPlaying
+    val castVolumeFlow: StateFlow<Float> get() = playerCastController.castVolumeFlow
+    val isConnectedFlow: StateFlow<Boolean> get() = playerCastController.isConnectedFlow
+    val isConnectingFlow: StateFlow<Boolean> get() = playerCastController.isConnectingFlow
+    val castSessionEvents: SharedFlow<CastSessionEvent> get() = playerCastController.castSessionEvents
 
     val isInSyncPlaySession: Boolean
         get() = syncPlayBridge.isInSession
 
-    fun castToDevice() {
-        val engine = playerSessionManager.engine ?: return
+    fun castToDevice() = playerCastController.castToDevice()
 
-        val sessionState = playerSessionManager.sessionState.value
-        val currentItemId = sessionState.currentItemId ?: return
+    fun setCastVolume(volume: Float) = playerCastController.setCastVolume(volume)
 
-        val positionMs = engine.currentPositionMs
-        val startTimeTicks = positionMs * 10_000
-        val sourceId = sessionState.currentMediaSource?.id ?: ""
-        val url = playbackRepository.getStreamUrl(currentItemId, sourceId, startTimeTicks)
-        if (url.isBlank()) return
+    fun onCastDisconnected() = playerCastController.onCastDisconnected()
 
-        val artworkUri = try {
-            Uri.parse(playbackRepository.getImageUrl(currentItemId, maxWidth = 300))
-        } catch (_: Exception) { null }
+    fun castPlay() = playerCastController.castPlay()
 
-        val subtitleConfigs = buildCastSubtitleConfigurations(
-            itemId = currentItemId,
-            mediaSourceId = sourceId,
-            mediaStreams = sessionState.mediaStreams,
-        )
+    fun castPause() = playerCastController.castPause()
 
-        val mediaItem = MediaItem.Builder()
-            .setMediaId(currentItemId)
-            .setUri(url)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(sessionState.title)
-                    .setSubtitle(sessionState.subtitle)
-                    .setArtworkUri(artworkUri)
-                    .build()
-            )
-            .setSubtitleConfigurations(subtitleConfigs)
-            .build()
-        // Carry the active track + quality selections into the cast session so
-        // the handoff does not silently drop audio/subtitle/quality.
-        castManager.loadMedia(mediaItem, positionMs, object : Player.Listener {}, buildCastOptions(sourceId))
-        engine.pause()
-    }
-
-    /**
-     * Builds the cast playback intent from the engine's currently-selected
-     * tracks and the active streaming-quality preference. Track indices come
-     * straight from the engine's `availableTracks` (`isSelected`); the bitrate
-     * ceiling mirrors the local `setMaxVideoBitrate` computation so the cast
-     * session respects the same cap (no cap when forcing direct play or when
-     * the quality is `AUTO`).
-     */
-    private fun buildCastOptions(mediaSourceId: String): CastMediaOptions {
-        val tracks = playerSessionManager.engine?.availableTracks?.value.orEmpty()
-        val audioIndex = tracks.firstOrNull { it.isSelected && it.type == TrackType.AUDIO }?.index
-        val subtitleIndex = tracks.firstOrNull { it.isSelected && it.type == TrackType.SUBTITLE }?.index
-        val maxBitrate = if (_uiState.value.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY) {
-            null
-        } else {
-            adaptiveBitrateManager.resolveEffectiveMaxBitrate()?.toInt()
-        }
-        return CastMediaOptions(
-            mediaSourceId = mediaSourceId.takeIf { it.isNotBlank() },
-            audioStreamIndex = audioIndex,
-            subtitleStreamIndex = subtitleIndex,
-            maxVideoBitrate = maxBitrate,
-        )
-    }
-
-    private fun buildCastSubtitleConfigurations(
-        itemId: String,
-        mediaSourceId: String,
-        mediaStreams: List<MediaStream>,
-    ): List<MediaItem.SubtitleConfiguration> {
-        return mediaStreams
-            .filter { it.type == StreamType.SUBTITLE }
-            .mapNotNull { stream ->
-                val subUrl = when {
-                    !stream.deliveryUrl.isNullOrBlank() ->
-                        playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
-                    stream.isExternal ->
-                        playbackRepository.buildSubtitleDeliveryUrl(
-                            itemId, mediaSourceId, stream.index, "vtt",
-                        )
-                    else -> null
-                }
-                if (subUrl.isNullOrBlank()) return@mapNotNull null
-
-                // Reuse the shared SubtitleMimeMapper (one codec→mime table instead
-                // of the inline copy that previously lived here and had drifted).
-                // Cast defaults unknown codecs to VTT — the most broadly supported.
-                val mimeType = SubtitleMimeMapper.mapCodecToMime(stream.codec) ?: MimeTypes.TEXT_VTT
-
-                MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
-                    .setMimeType(mimeType)
-                    .setLabel(stream.displayTitle ?: stream.title ?: stream.language)
-                    .setLanguage(stream.language)
-                    .build()
-            }
-    }
-
-    fun setCastVolume(volume: Float) {
-        castManager.setVolume(volume)
-    }
-
-    fun onCastDisconnected() {
-        val engine = playerSessionManager.engine ?: return
-        if (!engine.isPlaying.value) {
-            engine.play()
-        }
-    }
-
-    fun castPlay() {
-        castManager.play()
-    }
-
-    fun castPause() {
-        castManager.pause()
-    }
-
-    fun castSeekTo(positionMs: Long) {
-        castManager.seekTo(positionMs)
-    }
-
-    private fun updateCastStrategyForEngine(engine: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine) {
-        if (castManager.currentStrategyName != CastManager.STRATEGY_DLNA) {
-            castManager.setActiveStrategy(CastManager.STRATEGY_GOOGLE)
-        }
-    }
+    fun castSeekTo(positionMs: Long) = playerCastController.castSeekTo(positionMs)
 
     @OptIn(UnstableApi::class)
     fun detachForBackgroundCast() {
@@ -2577,12 +2344,7 @@ class VideoPlayerViewModel @Inject constructor(
 
         val castPlayer = castManager.castPlayerForSession
         if (castPlayer != null) {
-            releaseVideoMediaSession()
-            val session = MediaSession.Builder(context, castPlayer)
-                .setId("jellyplay_cast_bg")
-                .build()
-            videoMediaSession = session
-            sessionManager.setActiveSession(session)
+            mediaSessionController.createForPlayer(castPlayer, "jellyplay_cast_bg")
         }
     }
 
@@ -2595,21 +2357,14 @@ class VideoPlayerViewModel @Inject constructor(
         if (engine != null) {
             val sessionState = playerSessionManager.sessionState.value
             val itemId = sessionState.currentItemId ?: return
-            releaseVideoMediaSession()
             val player = engine.underlyingPlayer ?: return
-            val session = MediaSession.Builder(context, player)
-                .setId("jellyplay_video_$itemId")
-                .build()
-            videoMediaSession = session
-            sessionManager.setActiveSession(session)
+            mediaSessionController.createForPlayer(player, "jellyplay_video_$itemId")
         }
     }
 
-    val isBackgroundCasting: Boolean
-        get() = castManager.isBackgroundCasting
+    val isBackgroundCasting: Boolean get() = playerCastController.isBackgroundCasting
 
-    val backgroundCastingEnabled: Boolean
-        get() = preferencesStore.preferences.value.backgroundCastingEnabled
+    val backgroundCastingEnabled: Boolean get() = playerCastController.backgroundCastingEnabled
 
     fun toggleVideoStats() {
         val newValue = !_uiState.value.showVideoStats
@@ -2665,51 +2420,9 @@ class VideoPlayerViewModel @Inject constructor(
         itemId: String,
         title: String,
         subtitle: String,
-    ) {
-        releaseVideoMediaSession()
+    ) = mediaSessionController.createForItem(itemId, title, subtitle)
 
-        val engine = playerSessionManager.engine ?: return
-        val player = engine.underlyingPlayer ?: return
-
-        // Pin the caller-supplied title/artwork at the MediaSession layer via a
-        // ForwardingPlayer. ExoPlayer's HLS playlist parser resolves an empty
-        // MediaMetadata for Jellyfin transcode manifests (which carry no
-        // metadata), which would blank the system now-playing / lock-screen
-        // notification. We previously re-applied the title by calling
-        // player.replaceMediaItem() from ExoPlayerEngine's onMediaMetadataChanged
-        // — but mutating the currently-playing MediaItem mid-playback disrupts
-        // ExoPlayer's HLS timeline/seek state and was the root cause of seeks
-        // restarting from 0 on transcoded media. Overriding getMediaMetadata()
-        // here is non-destructive: the underlying player's timeline and position
-        // are untouched, so HLS seeking stays intact while the notification
-        // continues to show the pinned title/artwork.
-        val artworkUri = playbackRepository.getImageUrl(itemId, maxWidth = 300)
-            .takeIf { it.isNotBlank() }
-            ?.let { runCatching { Uri.parse(it) }.getOrNull() }
-        val pinnedMetadata = MediaMetadata.Builder()
-            .setTitle(title)
-            .setSubtitle(subtitle)
-            .apply { artworkUri?.let { setArtworkUri(it) } }
-            .build()
-        val sessionPlayer = object : androidx.media3.common.ForwardingPlayer(player) {
-            override fun getMediaMetadata(): MediaMetadata = pinnedMetadata
-        }
-
-        val session = MediaSession.Builder(context, sessionPlayer)
-            .setId("jellyplay_video_${itemId}")
-            .build()
-        videoMediaSession = session
-        sessionManager.setActiveSession(session)
-    }
-
-    private fun releaseVideoMediaSession() {
-        val session = videoMediaSession ?: return
-        if (sessionManager.currentSession === session) {
-            sessionManager.clearSession(session)
-        }
-        try { session.release() } catch (_: Exception) { }
-        videoMediaSession = null
-    }
+    private fun releaseVideoMediaSession() = mediaSessionController.release()
 
     private fun releaseInternals() {
         loadJob?.cancel()
@@ -2779,79 +2492,13 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    fun startSleepTimer(durationMs: Long) {
-        launch {
-            preferencesStore.setSleepTimerDurationMs(durationMs)
-            preferencesStore.setSleepTimerEndOfEpisode(false)
-        }
-        // Capture the pre-fade volume before the fade ramp lowers it, so a
-        // later cancel restores the user's level rather than full volume.
-        // Skip capture while muted (the fade also skips writes when muted, so
-        // there is nothing to restore). Mirrors preDuckVolume bookkeeping.
-        val engineForCapture = playerSessionManager.engine
-        preSleepVolume = if (engineForCapture != null && !_uiState.value.isMuted) {
-            engineForCapture.volume
-        } else {
-            null
-        }
-        sleepTimerManager.setOnTimerExpired {
-            playerSessionManager.engine?.pause()
-        }
-        sleepTimerManager.setOnFadeProgress { progress ->
-            // Skip volume writes while user-muted; let mute state win.
-            if (!_uiState.value.isMuted) {
-                playerSessionManager.engine?.setVolume(progress)
-            }
-        }
-        sleepTimerManager.start(durationMs)
-        _uiState.update { it.copy(
-            sleepTimerActive = true,
-            sleepTimerEndOfEpisode = false,
-            sleepTimerLastUsedDurationMs = durationMs,
-        ) }
-    }
+    fun startSleepTimer(durationMs: Long) = sleepTimerController.startSleepTimer(durationMs)
 
-    fun startSleepTimerEndOfEpisode() {
-        launch {
-            preferencesStore.setSleepTimerEndOfEpisode(true)
-        }
-        // End-of-episode timer has no fade, so there is no pre-fade level to
-        // restore on cancel. Clear any value captured by a prior timed timer
-        // so cancelSleepTimer leaves the current volume untouched instead of
-        // restoring a stale captured level.
-        preSleepVolume = null
-        sleepTimerManager.setOnTimerExpired {
-            playerSessionManager.engine?.pause()
-        }
-        sleepTimerManager.setOnFadeProgress(null)
-        sleepTimerManager.startEndOfEpisode()
-        _uiState.update { it.copy(
-            sleepTimerActive = true,
-            sleepTimerEndOfEpisode = true,
-        ) }
-    }
+    fun startSleepTimerEndOfEpisode() = sleepTimerController.startSleepTimerEndOfEpisode()
 
-    fun cancelSleepTimer() {
-        sleepTimerManager.cancel()
-        // Restore the pre-fade volume captured at startSleepTimer — never slam
-        // to 1f (jarring, and may be far louder than what the user had set).
-        // Never override an active user mute. If we never captured a level
-        // (timer started while muted, or end-of-episode timer with no fade),
-        // leave the current volume untouched.
-        val engine = playerSessionManager.engine
-        if (engine != null && !_uiState.value.isMuted) {
-            preSleepVolume?.let { engine.setVolume(it) }
-        }
-        preSleepVolume = null
-        _uiState.update { it.copy(
-            sleepTimerActive = false,
-            sleepTimerEndOfEpisode = false,
-        ) }
-    }
+    fun cancelSleepTimer() = sleepTimerController.cancelSleepTimer()
 
-    fun triggerSleepTimerEndOfEpisode() {
-        sleepTimerManager.triggerEndOfEpisode()
-    }
+    fun triggerSleepTimerEndOfEpisode() = sleepTimerController.triggerSleepTimerEndOfEpisode()
 
     fun prepareForMiniMode(
         title: String,
@@ -2898,13 +2545,9 @@ class VideoPlayerViewModel @Inject constructor(
         val sessionId = currentPlaySessionId
         val positionTicks = getReportPositionMs() * 10_000
         pipController.requestAutoEnterPip(false)
-        // Unregister headphone unplug receiver
-        becomingNoisyReceiver?.let {
-            try { context.unregisterReceiver(it) } catch (_: Exception) {}
-        }
-        becomingNoisyReceiver = null
-        unregisterTransientFocusLossListener()
-        sleepTimerManager.setOnFadeProgress(null)
+        // Tear down audio-focus + becoming-noisy (idempotent; safe if never registered).
+        playerAudioLifecycle.release()
+        sleepTimerController.onRelease()
         releaseInternals()
         // Full teardown: clear the transport too (releaseInternals keeps it so
         // PiP stays usable across per-item reloads while the VM is alive).

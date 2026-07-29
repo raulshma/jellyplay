@@ -97,11 +97,7 @@ class ExoPlayerEngine(
     private val streamingOkHttpClient: OkHttpClient,
     bandwidthMeter: DefaultBandwidthMeter? = null,
     private val fontProvider: FontProvider,
-) : MediaEngine {
-
-    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-
-    private val mainHandler = Handler(Looper.getMainLooper())
+) : BasePlayerEngine() {
 
     @Volatile
     private var cachedVolume: Float = 1f
@@ -133,24 +129,6 @@ class ExoPlayerEngine(
     }
 
     override val capabilities = EngineCapabilityMatrix.EXO_PLAYER
-
-    private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
-    override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()
-
-    private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
-    override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
-
-    private val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 1)
-    override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
-
-    private val _bufferedPositionMs = MutableStateFlow(0L)
-    override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
-
-    private val _videoStats = MutableStateFlow(EngineVideoStats())
-    override val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
 
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
@@ -196,8 +174,6 @@ class ExoPlayerEngine(
         java.util.concurrent.CopyOnWriteArrayList<MediaItem.SubtitleConfiguration>()
 
     override val underlyingPlayer: androidx.media3.common.Player? get() = player
-    
-    private var currentConfig = EngineConfig()
 
     /**
      * Per-track ReplayGain (dB) from the current [PlaybackRequest], used
@@ -224,13 +200,10 @@ class ExoPlayerEngine(
     private val replayGainProcessor = ReplayGainAudioProcessor()
 
     /**
-     * Collapses the prior 9-helper + 3-processor sprawl behind a single
+     * Collapses the prior 7-helper + 3-processor sprawl behind a single
      * attach/apply/release surface. Owns the bookkeeping
      * (`audioEffectsAttached`, `lastAudioEffectsConfig`,
-     * `lastAppliedReverbPreset`) that used to live on the engine. The two
-     * legacy dead helpers (`AudioNormalizationHelper`, `ChannelMixHelper`)
-     * that existed only to be configured-then-disabled every tick are gone
-     * — their load-bearing work is done by the in-sink processors.
+     * `lastAppliedReverbPreset`) that used to live on the engine.
      */
     private val audioEffectChain = AudioEffectChain(
         dialogueBoost = dialogueBoost,
@@ -260,11 +233,6 @@ class ExoPlayerEngine(
     private var videoDecoderCounters: DecoderCounters? = null
     // audioEffectsAttached / lastAudioEffectsConfig / lastAppliedReverbPreset
     // moved into AudioEffectChain.
-
-    private val _pollingIntervalMs = MutableStateFlow(1000L)
-    override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
-    private val _videoStatsEnabled = MutableStateFlow(false)
-    override val videoStatsEnabled: StateFlow<Boolean> = _videoStatsEnabled.asStateFlow()
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -337,7 +305,7 @@ class ExoPlayerEngine(
     override fun load(request: PlaybackRequest) {
         ensurePlayerThread("load")
         release()
-        engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        recreateEngineScopeIfInactive()
 
         currentNormalizationGain = request.normalizationGain
 
@@ -732,11 +700,7 @@ class ExoPlayerEngine(
         }
     }
 
-    override fun updateConfig(config: EngineConfig) {
-        if (currentConfig == config) return
-        val oldConfig = currentConfig
-        currentConfig = config
-
+    override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
         // decoderMode change: decoding changes require a reload, which is
         // handled by the upper layer recreating the player — nothing to do here.
         //
@@ -746,20 +710,23 @@ class ExoPlayerEngine(
         // reload. (Previously the offset was snapshotted at prepare() time and
         // the delay slider appeared broken for side-loaded subtitles.)
 
-        if (oldConfig.audioEffects != config.audioEffects) {
+        if (oldConfig.audioEffects != newConfig.audioEffects) {
             applyAudioEffects()
+            if (requiresAudioPipelineReconfiguration(oldConfig.audioEffects, newConfig.audioEffects)) {
+                reconfigureAudioPipeline()
+            }
         }
 
-        if (oldConfig.subtitleStyle != config.subtitleStyle) {
-            playerView?.let { pv -> applySubtitleStyleToView(pv, config.subtitleStyle) }
+        if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
+            playerView?.let { pv -> applySubtitleStyleToView(pv, newConfig.subtitleStyle) }
         }
 
-        if (oldConfig.pauseOnAudioFocusLoss != config.pauseOnAudioFocusLoss) {
+        if (oldConfig.pauseOnAudioFocusLoss != newConfig.pauseOnAudioFocusLoss) {
             val audioAttrs = AudioAttributes.Builder()
                 .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
                 .setUsage(C.USAGE_MEDIA)
                 .build()
-            player?.setAudioAttributes(audioAttrs, config.pauseOnAudioFocusLoss)
+            player?.setAudioAttributes(audioAttrs, newConfig.pauseOnAudioFocusLoss)
         }
     }
 
@@ -1047,9 +1014,6 @@ class ExoPlayerEngine(
     override val playbackSpeed: Float get() = player?.playbackParameters?.speed ?: 1f
     override val audioSessionId: Int get() = player?.audioSessionId ?: C.AUDIO_SESSION_ID_UNSET
 
-    override fun setPollingIntervalMs(ms: Long) { _pollingIntervalMs.value = ms }
-    override fun setVideoStatsEnabled(enabled: Boolean) { _videoStatsEnabled.value = enabled }
-
     override val positionFlow: Flow<Long> = callbackFlow {
         val p = player ?: run { close(); return@callbackFlow }
         val posListener = object : Player.Listener {
@@ -1187,6 +1151,24 @@ class ExoPlayerEngine(
 
     private fun releaseAudioEffects() {
         audioEffectChain.release()
+    }
+
+    /**
+     * Recreates the active media period without releasing the player so
+     * [DefaultAudioSink] re-runs AudioProcessor.configure(). This is required
+     * when an effect changes processor activation or channel count (for
+     * example, enabling 5.1 -> stereo downmix); merely mutating the processor
+     * instance cannot alter Media3's already-configured pipeline.
+     */
+    private fun reconfigureAudioPipeline() {
+        val exo = player ?: return
+        val mediaItem = currentMediaItem ?: return
+        val positionMs = exo.currentPosition
+        val wasPlaying = exo.isPlaying
+
+        exo.setMediaItem(mediaItem, positionMs)
+        exo.prepare()
+        if (wasPlaying) exo.play()
     }
 
     private fun buildTracks(): List<MediaTrack> {

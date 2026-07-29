@@ -358,71 +358,16 @@ class AudioPlaybackManager @Inject constructor(
     init {
         scope.launch {
             preferencesStore.preferences.collect { prefs ->
-                val prevVisualizer = currentPreferences.audioVisualizerEnabled
-                val prevPreset = currentPreferences.equalizerPreset
-                val prevBalance = currentPreferences.lrBalance
-                val prevPitch = currentPreferences.pitchSemitones
-                val prevEqEnabled = currentPreferences.equalizerEnabled
-                val prevBassEnabled = currentPreferences.bassBoostEnabled
-                val prevBassStrength = currentPreferences.bassBoostStrength
-                val prevVirtEnabled = currentPreferences.virtualizerEnabled
-                val prevVirtStrength = currentPreferences.virtualizerStrength
-                val prevDialogueEnabled = currentPreferences.dialogueBoostEnabled
-                val prevDialogueStrength = currentPreferences.dialogueBoostStrength
-                val prevNightEnabled = currentPreferences.nightModeEnabled
-                val prevNightStrength = currentPreferences.nightModeStrength
-                val prevReverb = currentPreferences.reverbPreset
-
+                // The preference→effect diff lives in AudioPreferencesReducer
+                // (pure, JVM-tested). This block was previously a ~77-line
+                // hand-rolled field-by-field diff tracking 14 stale `prev*`
+                // locals — easy to forget a field when adding an effect, and
+                // untestable without 18 mocked collaborators. Now the manager
+                // is a thin command-dispatcher: the reducer emits the ordered
+                // command list, this `when` maps each to its effect setter.
+                val commands = AudioPreferencesReducer.diff(currentPreferences, prefs)
                 currentPreferences = prefs
-
-                if (prefs.audioVisualizerEnabled != prevVisualizer) {
-                    enableVisualizer(prefs.audioVisualizerEnabled)
-                }
-                if (prefs.equalizerPreset != prevPreset) {
-                    setEqualizerPreset(prefs.equalizerPreset)
-                }
-                if (prefs.lrBalance != prevBalance) {
-                    setLrBalance(prefs.lrBalance)
-                }
-                if (prefs.pitchSemitones != prevPitch) {
-                    setPitchSemitones(prefs.pitchSemitones)
-                }
-                // Strengths must be applied before their enabled flag so the
-                // effect uses the correct value when it attaches.
-                if (prefs.bassBoostStrength != prevBassStrength) {
-                    effectsProcessor.setBassBoostStrength(prefs.bassBoostStrength)
-                }
-                if (prefs.virtualizerStrength != prevVirtStrength) {
-                    effectsProcessor.setVirtualizerStrength(prefs.virtualizerStrength)
-                }
-                if (prefs.dialogueBoostStrength != prevDialogueStrength) {
-                    effectsProcessor.setDialogueBoostStrength(prefs.dialogueBoostStrength)
-                }
-                if (prefs.nightModeStrength != prevNightStrength) {
-                    effectsProcessor.setNightModeStrength(prefs.nightModeStrength)
-                }
-                // Restore effect-enabled state from persisted preferences so
-                // effects survive process restart. Each setter updates the flag
-                // and re-applies (a no-op when no player exists yet; the flags
-                // are honored when onAudioSessionIdChanged attaches effects).
-                if (prefs.equalizerEnabled != prevEqEnabled) {
-                    effectsProcessor.setEqualizerEnabled(prefs.equalizerEnabled)
-                }
-                if (prefs.bassBoostEnabled != prevBassEnabled) {
-                    effectsProcessor.setBassBoostEnabled(prefs.bassBoostEnabled)
-                }
-                if (prefs.virtualizerEnabled != prevVirtEnabled) {
-                    effectsProcessor.setVirtualizerEnabled(prefs.virtualizerEnabled)
-                }
-                if (prefs.dialogueBoostEnabled != prevDialogueEnabled) {
-                    effectsProcessor.setDialogueBoostEnabled(prefs.dialogueBoostEnabled)
-                }
-                if (prefs.nightModeEnabled != prevNightEnabled) {
-                    effectsProcessor.setNightModeEnabled(prefs.nightModeEnabled)
-                }
-                if (prefs.reverbPreset != prevReverb) {
-                    effectsProcessor.setReverbPreset(prefs.reverbPreset)
-                }
+                commands.forEach { command -> applyEffectCommand(command) }
             }
         }
         // Note: there is intentionally no `_repeatMode.collect { exoPlayer?.repeatMode = ... }`
@@ -432,6 +377,30 @@ class AudioPlaybackManager @Inject constructor(
         // restores `player.repeatMode` from `_repeatMode.value` on creation.
         // A collector would just re-apply the same value (redundant JNI call)
         // and live for the singleton's lifetime.
+    }
+
+    /**
+     * Dispatches one [EffectCommand] to its effect setter. Exhaustive `when`
+     * on the sealed hierarchy so adding a new effect forces every dispatcher
+     * to handle it.
+     */
+    private fun applyEffectCommand(command: EffectCommand) {
+        when (command) {
+            is EffectCommand.SetVisualizerEnabled -> enableVisualizer(command.enabled)
+            is EffectCommand.SetEqualizerPreset -> setEqualizerPreset(command.preset)
+            is EffectCommand.SetLrBalance -> setLrBalance(command.balance)
+            is EffectCommand.SetPitchSemitones -> setPitchSemitones(command.semitones)
+            is EffectCommand.SetBassBoostStrength -> effectsProcessor.setBassBoostStrength(command.strength)
+            is EffectCommand.SetVirtualizerStrength -> effectsProcessor.setVirtualizerStrength(command.strength)
+            is EffectCommand.SetDialogueBoostStrength -> effectsProcessor.setDialogueBoostStrength(command.strength)
+            is EffectCommand.SetNightModeStrength -> effectsProcessor.setNightModeStrength(command.strength)
+            is EffectCommand.SetEqualizerEnabled -> effectsProcessor.setEqualizerEnabled(command.enabled)
+            is EffectCommand.SetBassBoostEnabled -> effectsProcessor.setBassBoostEnabled(command.enabled)
+            is EffectCommand.SetVirtualizerEnabled -> effectsProcessor.setVirtualizerEnabled(command.enabled)
+            is EffectCommand.SetDialogueBoostEnabled -> effectsProcessor.setDialogueBoostEnabled(command.enabled)
+            is EffectCommand.SetNightModeEnabled -> effectsProcessor.setNightModeEnabled(command.enabled)
+            is EffectCommand.SetReverbPreset -> effectsProcessor.setReverbPreset(command.preset)
+        }
     }
 
     fun setGaplessEnabled(enabled: Boolean) {

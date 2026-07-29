@@ -54,6 +54,7 @@ class VideoPlayerViewModelTest {
     private lateinit var viewModel: VideoPlayerViewModel
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var offlineRepository: OfflineRepository
+    private lateinit var offlinePlaybackFacade: com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 
     @Before
     fun setUp() {
@@ -65,6 +66,7 @@ class VideoPlayerViewModelTest {
         val imageUrlProvider = mockk<ImageUrlProvider>(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
+        offlinePlaybackFacade = mockk(relaxed = true)
         val itemPlaybackPreferenceRepository = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
         val preferencesStore = mockk<UserPreferencesStore>(relaxed = true)
         val sessionManager = mockk<PlaybackSessionManager>(relaxed = true)
@@ -94,6 +96,7 @@ class VideoPlayerViewModelTest {
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
+            offlinePlaybackFacade = offlinePlaybackFacade,
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
             preferencesStore = preferencesStore,
             sessionManager = sessionManager,
@@ -274,8 +277,10 @@ class VideoPlayerViewModelTest {
     fun resolveOfflineResumeTicks_completedDownloadWithProgress_returnsStoredPosition() = runBlocking {
         val itemId = "item-movie"
         val savedTicks = 5 * 60 * 1_000L * 10_000L // 5 min, in ticks
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns downloadItem(itemId)
-        coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId, savedTicks)
+        // The VM delegates resume-tick resolution to OfflinePlaybackFacade
+        // (extracted in the PipController refactor). Stub the facade directly;
+        // the repository wiring is covered by OfflinePlaybackFacade's own tests.
+        coEvery { offlinePlaybackFacade.getResumePositionTicks(itemId) } returns savedTicks
 
         val resolved = callResolveOfflineResumeTicks(itemId, startPositionTicks = 0L)
 

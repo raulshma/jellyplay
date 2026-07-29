@@ -65,6 +65,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.settings.R
@@ -499,7 +500,7 @@ private fun AddAddressSheet(
         }.getOrDefault(false)
     }
 
-    AdaptiveSheet(onDismissRequest = onDismiss) {
+    TvSafeSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

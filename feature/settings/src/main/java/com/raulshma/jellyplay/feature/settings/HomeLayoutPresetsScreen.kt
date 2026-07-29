@@ -64,6 +64,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
 import com.raulshma.jellyplay.core.ui.components.formatDate
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -428,7 +429,7 @@ private fun SavePresetSheet(
     val isDuplicate = name.trim() in existingNames
     val canSave = name.isNotBlank() && !isDuplicate
 
-    AdaptiveSheet(onDismissRequest = onDismiss) {
+    TvSafeSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -478,7 +479,7 @@ private fun ImportPresetSheet(
 ) {
     var raw by remember { mutableStateOf("") }
 
-    AdaptiveSheet(onDismissRequest = onDismiss) {
+    TvSafeSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -541,7 +542,7 @@ private fun PresetActionSheet(
             Triple(Tabler.Outline.Trash, "Delete", "Remove this preset"),
         )
     }
-    AdaptiveSheet(onDismissRequest = onDismiss) {
+    TvSafeSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

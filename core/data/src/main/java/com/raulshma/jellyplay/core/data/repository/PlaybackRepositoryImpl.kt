@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
@@ -16,6 +17,7 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import android.util.Log
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
@@ -135,6 +137,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         maxStreamingBitrateBits: Long?,
         mode: PlaybackMode,
         playerType: PlayerType,
+        liveStreamOption: LiveStreamOption?,
     ): Result<PlaybackInfoResult> = apiClient.fetchPlaybackInfo(
         itemId = itemId,
         mediaSourceId = mediaSourceId,
@@ -144,6 +147,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         maxStreamingBitrateBits = maxStreamingBitrateBits,
         mode = mode,
         playerType = playerType,
+        liveStreamOption = liveStreamOption,
     )
 
     override suspend fun resolvePlayback(
@@ -155,6 +159,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         maxStreamingBitrateBits: Long?,
         mode: PlaybackMode,
         playerType: PlayerType,
+        liveStreamOption: LiveStreamOption?,
     ): ResolvedPlayback? {
         val result = fetchPlaybackInfo(
             itemId = itemId,
@@ -165,11 +170,23 @@ class PlaybackRepositoryImpl @Inject constructor(
             maxStreamingBitrateBits = maxStreamingBitrateBits,
             mode = mode,
             playerType = playerType,
+            liveStreamOption = liveStreamOption,
         ).getOrNull() ?: return null
 
         val source = result.mediaSources.firstOrNull { it.id == mediaSourceId }
             ?: result.mediaSources.firstOrNull()
             ?: return null
+
+        Log.i(
+            TAG,
+            "resolvePlayback: mode=$mode, liveOption=$liveStreamOption, " +
+                "source=${source.id}, container=${source.container}, " +
+                "directPlay=${source.supportsDirectPlay}, " +
+                "directStream=${source.supportsDirectStream}, " +
+                "transcode=${source.supportsTranscoding}, " +
+                "transcodeUrl=${source.transcodeUrl != null}, " +
+                "liveStreamId=${source.liveStreamId != null}"
+        )
 
         // Live TV channels carry a server-issued liveStreamId; the stream URL
         // must echo it back as `LiveStreamId` so the tuner opens a live
@@ -210,6 +227,7 @@ class PlaybackRepositoryImpl @Inject constructor(
             playMethod = method,
             playSessionId = result.playSessionId,
             maxStreamingBitrate = maxStreamingBitrateBits,
+            container = source.container,
         )
     }
 
@@ -349,6 +367,7 @@ class PlaybackRepositoryImpl @Inject constructor(
         apiClient.getTrickplayTileImage(itemId, width, index)
 
     companion object {
+        private const val TAG = "PlaybackRepository"
         private const val MAX_CACHE_ENTRIES = 50
         private const val SEGMENTS_CACHE_TTL_MS = 5 * 60 * 1000L
     }

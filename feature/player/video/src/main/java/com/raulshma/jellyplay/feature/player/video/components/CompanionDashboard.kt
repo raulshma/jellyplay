@@ -144,85 +144,7 @@ fun CompanionDashboard(
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 // Header Bar
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Tabler.Outline.Cast,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Column {
-                                Text(
-                                    text = if (isConnecting) "Connecting to device..." else "Connected / Streaming",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "JellyPlay Companion",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-
-                        val rotateFocusStateA = rememberTvFocusState(focusedScale = 1.1f)
-                        val disconnectFocusStateA = rememberTvFocusState(focusedScale = 1.05f)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(
-                                onClick = onToggleOrientation,
-                                colors = IconButtonDefaults.iconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                modifier = Modifier.size(36.dp)
-                                    .then(rotateFocusStateA.focusModifier)
-                                    .tvFocusIndicator(rotateFocusStateA, CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = Tabler.Outline.Rotate,
-                                    contentDescription = "Rotate Screen",
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            Button(
-                                onClick = onDisconnect,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                ),
-                                shape = ShapeCache.smoothPill,
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-                                modifier = Modifier
-                                    .then(disconnectFocusStateA.focusModifier)
-                                    .tvFocusIndicator(disconnectFocusStateA, ShapeCache.smoothPill)
-                            ) {
-                                Icon(
-                                    imageVector = Tabler.Outline.X,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text("Disconnect", style = MaterialTheme.typography.labelLarge)
-                            }
-                        }
-                    }
-                }
+                item { CompanionHeaderRow(isConnecting = isConnecting, onToggleOrientation = onToggleOrientation, onDisconnect = onDisconnect) }
 
                 // Poster & Metadata Stack
                 item {
@@ -346,83 +268,7 @@ fun CompanionDashboard(
                     .navigationBarsPadding()
             ) {
                 // Header Bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Tabler.Outline.Cast,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Column {
-                            Text(
-                                text = if (isConnecting) "Connecting to device..." else "Connected / Streaming",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "JellyPlay Companion",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-
-                    val rotateFocusStateB = rememberTvFocusState(focusedScale = 1.1f)
-                    val disconnectFocusStateB = rememberTvFocusState(focusedScale = 1.05f)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = onToggleOrientation,
-                            colors = IconButtonDefaults.iconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = Modifier.size(36.dp)
-                                .then(rotateFocusStateB.focusModifier)
-                                .tvFocusIndicator(rotateFocusStateB, CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Tabler.Outline.Rotate,
-                                contentDescription = "Rotate Screen",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        Button(
-                            onClick = onDisconnect,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            ),
-                            shape = ShapeCache.smoothPill,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-                            modifier = Modifier
-                                .then(disconnectFocusStateB.focusModifier)
-                                .tvFocusIndicator(disconnectFocusStateB, ShapeCache.smoothPill)
-                        ) {
-                            Icon(
-                                imageVector = Tabler.Outline.X,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text("Disconnect", style = MaterialTheme.typography.labelLarge)
-                        }
-                    }
-                }
+                CompanionHeaderRow(isConnecting = isConnecting, onToggleOrientation = onToggleOrientation, onDisconnect = onDisconnect)
 
                 // Main Details and Metadata View
                 Row(
@@ -1004,3 +850,95 @@ fun CompanionControlBar(
 
 private fun formatDuration(durationMs: Long): String =
     com.raulshma.jellyplay.core.ui.components.formatDurationMs(durationMs)
+
+/**
+ * Top header bar of the Companion (cast) dashboard: cast icon + connection
+ * status on the left, rotate-screen + disconnect buttons on the right. Shared
+ * by the portrait (LazyColumn item) and landscape (Column) layouts, which
+ * previously duplicated this block byte-for-byte apart from focus-state var
+ * naming.
+ */
+@Composable
+private fun CompanionHeaderRow(
+    isConnecting: Boolean,
+    onToggleOrientation: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Cast,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            Column {
+                Text(
+                    text = if (isConnecting) "Connecting to device..." else "Connected / Streaming",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "JellyPlay Companion",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        val rotateFocusState = rememberTvFocusState(focusedScale = 1.1f)
+        val disconnectFocusState = rememberTvFocusState(focusedScale = 1.05f)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onToggleOrientation,
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier.size(36.dp)
+                    .then(rotateFocusState.focusModifier)
+                    .tvFocusIndicator(rotateFocusState, CircleShape)
+            ) {
+                Icon(
+                    imageVector = Tabler.Outline.Rotate,
+                    contentDescription = "Rotate Screen",
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Button(
+                onClick = onDisconnect,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ),
+                shape = ShapeCache.smoothPill,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                modifier = Modifier
+                    .then(disconnectFocusState.focusModifier)
+                    .tvFocusIndicator(disconnectFocusState, ShapeCache.smoothPill)
+            ) {
+                Icon(
+                    imageVector = Tabler.Outline.X,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Disconnect", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}

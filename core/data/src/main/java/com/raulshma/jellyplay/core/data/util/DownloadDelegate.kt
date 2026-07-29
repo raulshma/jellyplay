@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.util
 
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -38,7 +38,12 @@ data class DownloadResult(
 @Singleton
 class DownloadDelegate @Inject constructor(
     @ApplicationContext private val context: android.content.Context,
-    private val downloadRepository: DownloadRepository,
+    // Narrowed to the write surface only — pause/resume/cancel, series-batch
+    // orchestration, and status queries live on DownloadRepository but the
+    // per-item recipe never touches them. Depending on OfflineDownloadWriter
+    // (not the 25-method DownloadRepository) keeps this module's seam honest
+    // and lets the recipe be tested with a fake writer.
+    private val writer: OfflineDownloadWriter,
     private val playbackRepository: PlaybackRepository,
 ) {
 
@@ -79,14 +84,47 @@ class DownloadDelegate @Inject constructor(
         )
     }
 
-    suspend fun executeDownload(request: DownloadRequest): DownloadResult {
+    /**
+     * The single per-item download recipe — prepare + execute in one call.
+     *
+     * **Why this exists.** Single-item intake (`DownloadIntake.start`) and the
+     * per-episode loop inside `DownloadRepositoryImpl.downloadSeries` both need
+     * the same "build a request, run it" sequence. Previously each inlined
+     * `prepareDownloadRequest` + `executeDownload`, kept in sync only by
+     * comments — a future change to one (a new pre-step, a retry) would silently
+     * miss the other. Folding the recipe here means both paths call the same
+     * code; the only thing they disagree on (the budget hint) is a parameter.
+     *
+     * Returns null when [prepareDownloadRequest] yields no request (no media
+     * source / blank URL) so callers can decide whether that's an error
+     * (single-item intake reports it) or a skip (series loop filters it out).
+     */
+    suspend fun startOne(
+        detail: MediaDetail,
+        maxBitrate: Int? = null,
+        precomputedCurrentBytes: Long? = null,
+    ): DownloadResult? {
+        val request = prepareDownloadRequest(detail, maxBitrate) ?: return null
+        return executeDownload(request, precomputedCurrentBytes)
+    }
+
+    suspend fun executeDownload(
+        request: DownloadRequest,
+        /**
+         * Pre-fetched `SUM(downloadedBytes)` to skip the per-call budget query.
+         * Series batches pass the value computed once up-front (see
+         * `DownloadRepositoryImpl.downloadSeries`); single-item callers leave
+         * this null and let `startDownload` query the DAO normally.
+         */
+        precomputedCurrentBytes: Long? = null,
+    ): DownloadResult {
         // For episodes, propagate the parent series/season ids so the downloads
         // row is linked to its series. Without these, deleteOfflineSeries
         // (WHERE seriesId = :seriesId) finds no rows and leaves episode files +
         // download rows orphaned behind a deleted series.
         val detailItem = request.detail?.item
         val isEpisode = detailItem?.mediaType == MediaType.EPISODE
-        val result = downloadRepository.startDownload(
+        val result = writer.startDownload(
             mediaItemId = request.mediaItemId,
             name = request.name,
             mediaType = request.mediaType,
@@ -102,11 +140,12 @@ class DownloadDelegate @Inject constructor(
             seasonName = if (isEpisode && detailItem != null) detailItem.seasonName else null,
             episodeNumber = if (isEpisode && detailItem != null) detailItem.episodeNumber else null,
             seasonNumber = if (isEpisode && detailItem != null) detailItem.seasonNumber else null,
+            precomputedCurrentBytes = precomputedCurrentBytes,
         )
         return result.fold(
             onSuccess = { downloadItem ->
                 if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
-                    downloadRepository.enqueueDownload(downloadItem.id)
+                    writer.enqueueDownload(downloadItem.id)
                     try {
                         val backdropUrl = playbackRepository.getBackdropUrl(request.mediaItemId, maxWidth = 1280)
                         // Download poster + backdrop to local files so they render
@@ -115,7 +154,7 @@ class DownloadDelegate @Inject constructor(
                         // flat downloads dir don't overwrite each other.
                         val parentDir = java.io.File(downloadItem.downloadPath).parentFile
                         val localPoster = if (parentDir != null) {
-                            downloadRepository.downloadOfflineImage(
+                            writer.downloadOfflineImage(
                                 request.mediaItemId, "Primary", 300, parentDir,
                                 com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.posterFile(request.mediaItemId),
                             ) ?: request.imageUrl
@@ -123,7 +162,7 @@ class DownloadDelegate @Inject constructor(
                             request.imageUrl
                         }
                         val localBackdrop = if (parentDir != null) {
-                            downloadRepository.downloadOfflineImage(
+                            writer.downloadOfflineImage(
                                 request.mediaItemId, "Backdrop", 1280, parentDir,
                                 com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.backdropFile(request.mediaItemId),
                             ) ?: backdropUrl
@@ -136,7 +175,7 @@ class DownloadDelegate @Inject constructor(
                         // never leave the download without an offline row.
                         val detail = request.detail
                         if (detail != null) {
-                            downloadRepository.saveOfflineMediaDetail(
+                            writer.saveOfflineMediaDetail(
                                 detail,
                                 localPoster,
                                 localBackdrop,
@@ -147,7 +186,7 @@ class DownloadDelegate @Inject constructor(
                                 name = request.name,
                                 mediaType = com.raulshma.jellyplay.core.model.MediaType.MOVIE,
                             )
-                            downloadRepository.saveOfflineMediaItem(
+                            writer.saveOfflineMediaItem(
                                 minimalItem,
                                 localPoster,
                                 localBackdrop,
@@ -158,13 +197,13 @@ class DownloadDelegate @Inject constructor(
                     }
                     request.trickplayInfo?.let { info ->
                         try {
-                            downloadRepository.downloadTrickplayData(request.mediaItemId, info, downloadItem.downloadPath)
+                            writer.downloadTrickplayData(request.mediaItemId, info, downloadItem.downloadPath)
                         } catch (_: Exception) {}
                     }
                     // Bundle external subtitles + intro/outro segments for offline use.
                     if (request.mediaStreams.isNotEmpty()) {
                         try {
-                            downloadRepository.downloadExternalSubtitles(
+                            writer.downloadExternalSubtitles(
                                 request.mediaItemId,
                                 request.mediaSourceId,
                                 request.mediaStreams,
@@ -173,7 +212,7 @@ class DownloadDelegate @Inject constructor(
                         } catch (_: Exception) {}
                     }
                     try {
-                        downloadRepository.downloadMediaSegments(request.mediaItemId, downloadItem.downloadPath)
+                        writer.downloadMediaSegments(request.mediaItemId, downloadItem.downloadPath)
                     } catch (_: Exception) {}
                 }
                 DownloadResult(downloadItem = downloadItem, error = null)

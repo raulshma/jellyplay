@@ -106,20 +106,10 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             var hideText = false
 
             if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                val appWidgetManager = AppWidgetManager.getInstance(context)
-                val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
-                if (options != null) {
-                    val config = context.resources.configuration
-                    val isLandscape = config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                    val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
-                    val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
-                    val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
-                    val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
-                    var width = if (isLandscape) maxWidth else minWidth
-                    var height = if (isLandscape) minHeight else maxHeight
-
-                    if (width <= 0) width = 280
-                    if (height <= 0) height = 250
+                val dims = computeWidgetDimensions(context, appWidgetId, 250)
+                if (dims != null) {
+                    val width = dims.width
+                    val height = dims.height
 
                     if (height < 200 || width < 180) {
                         hideText = true
@@ -167,20 +157,10 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
 
             var hideText = false
             if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                val appWidgetManager = AppWidgetManager.getInstance(context)
-                val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
-                if (options != null) {
-                    val config = context.resources.configuration
-                    val isLandscape = config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                    val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
-                    val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
-                    val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
-                    val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
-                    var width = if (isLandscape) maxWidth else minWidth
-                    var height = if (isLandscape) minHeight else maxHeight
-
-                    if (width <= 0) width = 280
-                    if (height <= 0) height = 250
+                val dims = computeWidgetDimensions(context, appWidgetId, 250)
+                if (dims != null) {
+                    val width = dims.width
+                    val height = dims.height
 
                     if (height < 200 || width < 180) {
                         hideText = true

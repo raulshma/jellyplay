@@ -157,7 +157,11 @@ class EngineCapabilityMatrixTest {
         assertFalse(c.supportsAssOverride)
         assertFalse(c.supportsAssStyleOverride)
         assertTrue(c.supportsFontFamily)          // freetype font path still works
-        assertFalse(c.supportsFreeFormColors)
-        assertFalse(c.supportsBorderStyles)
+        // LibVLC now routes color resolution through SubtitleColorResolver (via
+        // LibVlcSubtitleStyleMapping.colorOptions) and honors borderStyle via the
+        // background-opacity mapping — so free-form colors and border styles are
+        // applied consistently with ExoPlayer/MPV.
+        assertTrue(c.supportsFreeFormColors)
+        assertTrue(c.supportsBorderStyles)
     }
 }

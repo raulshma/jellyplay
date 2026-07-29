@@ -4,6 +4,7 @@ import android.content.Context
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.ReconciliationRow
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
+import com.raulshma.jellyplay.core.data.repository.DownloadEnqueuer
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -34,8 +35,9 @@ class DownloadRecoveryInitializerTest {
 
     private val context: Context = mockk()
     private val downloadDao: DownloadDao = mockk(relaxed = true)
+    private val downloadEnqueuer: DownloadEnqueuer = mockk(relaxed = true)
 
-    private fun initializer() = DownloadRecoveryInitializer(context, downloadDao)
+    private fun initializer() = DownloadRecoveryInitializer(context, downloadDao, downloadEnqueuer)
 
     private fun stubRecoveryQueriesEmpty() {
         // Neutralise recoverPendingDownloads() and cleanupStuckDownloads() so

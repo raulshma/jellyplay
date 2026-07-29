@@ -868,6 +868,16 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "live_stream_option",
+            title = "Live TV Stream",
+            subtitle = "Direct Stream or Transcode live TV channels (HTSP / tuner delivery)",
+            category = "Playback",
+            keywords = listOf("live tv", "direct stream", "transcode", "tuner", "htsp", "tvheadend", "channel", "mpeg-ts", "mpeg ts", "broadcast"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.DeviceTv,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "hold_speed",
             title = "Hold-to-Seek",
             subtitle = "Long-press to fast-forward or rewind",

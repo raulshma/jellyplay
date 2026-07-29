@@ -17,16 +17,10 @@ import com.raulshma.jellyplay.core.model.ReverbPreset
 /**
  * Orchestrates the audio-effect stack for [ExoPlayerEngine].
  *
- * Previously the engine owned 9 audiofx helpers + 3 in-sink AudioProcessors
+ * Previously the engine owned 7 audiofx helpers + 3 in-sink AudioProcessors
  * as flat fields and applied them via a ~100-line `applyAudioEffects()`
- * block plus a mirror `releaseAudioEffects()`. Two of those helpers
- * (`AudioNormalizationHelper`, `ChannelMixHelper`) existed only to be
- * configured-then-disabled every tick — dead branches left over from the
- * migration to the in-sink DSP chain. This class:
+ * block plus a mirror `releaseAudioEffects()`. This class:
  *
- *  - Drops those two dead helpers (their load-bearing work is done by
- *    [DynamicsCompressorAudioProcessor] / [ReplayGainAudioProcessor] /
- *    [ChannelMixAudioProcessor] respectively).
  *  - Owns the attach/apply/release lifecycle + the `attached`,
  *    `lastAppliedConfig`, `lastAppliedReverbPreset` bookkeeping so the
  *    engine stops knowing those details.
@@ -89,9 +83,13 @@ internal class AudioEffectChain(
 
         // equalizerHelper owns the single priority-0 Equalizer for this
         // session and DialogueBoostHelper overlays its vocal-band gains on
-        // top. The underlying effect must stay enabled while EITHER is on.
+        // top. The co-enabling rule (on while EITHER is on) lives inside
+        // [EqualizerHelper.setEnabled] — callers pass both flags.
         equalizerHelper.setSettings(config.equalizerSettings)
-        equalizerHelper.setEnabled(config.equalizerEnabled || config.dialogueBoostEnabled)
+        equalizerHelper.setEnabled(
+            equalizerEnabled = config.equalizerEnabled,
+            dialogueBoostEnabled = config.dialogueBoostEnabled,
+        )
 
         // Normalization modes — handled by the in-sink AudioProcessor chain
         // (consistent with the audio/music + MPV paths):
@@ -154,3 +152,20 @@ internal class AudioEffectChain(
         lastAppliedReverbPreset = null
     }
 }
+
+/**
+ * Returns whether Media3 must rebuild its audio-processing pipeline for this
+ * effect change. [DefaultAudioSink] decides which processors are active, and
+ * the channel count they produce, when it configures the pipeline. Updating a
+ * processor's fields alone therefore cannot activate an initially-inactive
+ * processor or change an already-configured output layout.
+ */
+internal fun requiresAudioPipelineReconfiguration(
+    old: AudioEffectsConfig,
+    new: AudioEffectsConfig,
+): Boolean =
+    old.channelMixMode != new.channelMixMode ||
+        old.channelMixEnabled != new.channelMixEnabled ||
+        old.audioNormalizationMode != new.audioNormalizationMode ||
+        old.audioNormalizationEnabled != new.audioNormalizationEnabled ||
+        old.dialogueBoostEnabled != new.dialogueBoostEnabled

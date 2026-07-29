@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -47,6 +48,7 @@ interface PlaybackRepository {
         maxStreamingBitrateBits: Long?,
         mode: PlaybackMode,
         playerType: PlayerType,
+        liveStreamOption: LiveStreamOption? = null,
     ): Result<PlaybackInfoResult>
 
     /**
@@ -55,6 +57,9 @@ interface PlaybackRepository {
      * under [mode] and then choosing Direct Play / Direct Stream / Transcode
      * per the server's playability decision. Returns `null` when the server
      * offers no playable method for the source.
+     *
+     * When [liveStreamOption] is non-null it overrides [mode] for live TV
+     * items (see [LiveStreamOption]).
      */
     suspend fun resolvePlayback(
         itemId: String,
@@ -65,6 +70,7 @@ interface PlaybackRepository {
         maxStreamingBitrateBits: Long?,
         mode: PlaybackMode,
         playerType: PlayerType,
+        liveStreamOption: LiveStreamOption? = null,
     ): ResolvedPlayback?
 
     fun getStreamUrl(

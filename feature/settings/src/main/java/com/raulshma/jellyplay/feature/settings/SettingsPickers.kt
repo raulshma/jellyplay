@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,10 +22,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,7 +38,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -60,7 +59,7 @@ internal fun SettingsChipPickerSheet(
     val useVertical = options.size > MAX_HORIZONTAL_CHIPS ||
         options.any { it.length > MAX_HORIZONTAL_CHIP_LABEL_CHARS }
 
-    AdaptiveSheet(onDismissRequest = onDismiss) {
+    TvSafeSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -216,7 +215,7 @@ internal fun <T> SettingsListPickerSheet(
     onDismiss: () -> Unit,
     onSelect: (T) -> Unit,
 ) {
-    AdaptiveSheet(onDismissRequest = onDismiss) {
+    TvSafeSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -315,7 +314,7 @@ internal fun SettingsSliderSheet(
 ) {
     var sliderValue by remember(value) { mutableStateOf(value) }
 
-    AdaptiveSheet(onDismissRequest = onDismiss) {
+    TvSafeSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -368,28 +367,7 @@ internal fun SettingsSliderSheet(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun AdaptiveSheet(
-    onDismissRequest: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    val isTv = LocalTvMode.current
-    val sheetState = rememberModalBottomSheetState()
-
-    if (isTv) {
-        com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
-            onDismissRequest = onDismissRequest,
-        ) {
-            content()
-        }
-    } else {
-        ModalBottomSheet(
-            onDismissRequest = onDismissRequest,
-            sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
-            content()
-        }
-    }
-}
+// Note: the TV-vs-Mobile sheet branch lives canonically in
+// `core/ui/.../components/TvSafeSheet.kt`. The local `AdaptiveSheet` wrapper that used to forward
+// to it (and to a divergent Material3 `ModalBottomSheet` on mobile) was collapsed — callers now
+// invoke `TvSafeSheet` directly.

@@ -38,4 +38,16 @@ class MpvSubtitleStyleMappingTest {
         assertEquals("yes", entries["sub-bold"])
         assertEquals("yes", entries["sub-italic"])
     }
+
+    @Test
+    fun computeValues_marginYIsZeroBecauseSubPosOwnsVerticalPosition() {
+        // Vertical position is owned by mpv's `sub-pos` (a 0–100 frame
+        // percentage set by the engine). A non-zero margin-y would double-offset
+        // captions and diverge from ExoPlayer's view-fraction basis; the old
+        // `* 720` scale assumed a 720p frame and drifted on other resolutions.
+        listOf(0.0f, 0.05f, 0.2f, 0.4f).forEach { pos ->
+            val values = MpvStyleMapping.computeValues(SubtitleStyle(verticalPosition = pos))
+            assertEquals("marginY must be 0 for verticalPosition=$pos", 0, values.marginY)
+        }
+    }
 }

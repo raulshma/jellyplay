@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import android.content.Context
-import android.os.Environment
 import android.util.Log
 import androidx.room.withTransaction
 import androidx.work.Constraints
@@ -64,6 +63,26 @@ class DownloadRepositoryImpl @Inject constructor(
     private val httpClient: OkHttpClient,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
     private val json: Json,
+    /**
+     * Lazy to break the Hilt construction cycle: [downloadSeries] (below)
+     * delegates the per-episode artifact bundle to [DownloadDelegate], and
+     * [DownloadDelegate] now depends on [OfflineDownloadWriter] — which this
+     * class implements. That's still a cycle at graph-construction time
+     * (`DownloadRepositoryImpl → DownloadDelegate → OfflineDownloadWriter →
+     * DownloadRepositoryImpl`), so `dagger.Lazy` defers resolution until first
+     * use.
+     *
+     * What changed vs the old NOTE: the delegate no longer depends on the full
+     * 25-method [DownloadRepository] interface — it was narrowed to the
+     * 8-method [OfflineDownloadWriter] write surface. The *coupling* disease
+     * the old comment named is fixed; `Lazy` here is purely the structural
+     * construction-cycle breaker it should always have been, not a paper-over
+     * for a god-interface dependency.
+     */
+    private val downloadDelegate: dagger.Lazy<com.raulshma.jellyplay.core.data.util.DownloadDelegate>,
+    private val storagePolicy: StoragePolicy,
+    private val downloadEnqueuer: DownloadEnqueuer,
+    private val storageLayout: DownloadStorageLayout,
 ) : DownloadRepository {
 
     // Caps the number of episodes processed concurrently when queueing a series
@@ -99,10 +118,11 @@ class DownloadRepositoryImpl @Inject constructor(
         episodeNumber: Int?,
         seasonNumber: Int?,
         container: String?,
+        precomputedCurrentBytes: Long?,
     ): Result<DownloadItem> = startDownloadInternal(
         mediaItemId, name, mediaType, mediaSourceId, downloadUrl,
         imageUrl, imageBlurHash, seriesId, seasonId, seriesName, seasonName,
-        episodeNumber, seasonNumber, container, precomputedCurrentBytes = null,
+        episodeNumber, seasonNumber, container, precomputedCurrentBytes,
     )
 
     private suspend fun startDownloadInternal(
@@ -140,58 +160,23 @@ class DownloadRepositoryImpl @Inject constructor(
         }
 
         val prefs = preferencesStore.preferences.first()
-        val maxBytes = prefs.maxCacheSizeMb.toLong() * 1024 * 1024
-        // Enforce the user-facing download storage cap (in GB). 0 = unlimited.
-        val maxBytesFromGb = prefs.maxDownloadStorageGb.toLong() * 1024L * 1024L * 1024L
-        // Compute the current downloaded bytes once and compare against both
-        // caps (was two identical SUM queries back-to-back when both caps set).
-        if (maxBytes > 0 || maxBytesFromGb > 0) {
-            val currentBytes = precomputedCurrentBytes ?: downloadDao.getTotalDownloadedBytes()
-            if (maxBytes > 0 && currentBytes >= maxBytes) {
-                throw IllegalStateException("Download limit reached (${prefs.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.")
-            }
-            if (maxBytesFromGb > 0 && currentBytes >= maxBytesFromGb) {
-                throw IllegalStateException("Download storage limit reached (${prefs.maxDownloadStorageGb} GB). Free up space in Settings › Storage or increase the limit.")
-            }
-        }
+        // Storage cap (MB + GB): single owner is StoragePolicy. Previously
+        // duplicated here and in downloadSeries; the two could drift.
+        storagePolicy.enforce(precomputedCurrentBytes = precomputedCurrentBytes)
 
-        val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
-        val dirType = if (isAudioType) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
-        // downloadStorageLocation: "EXTERNAL" prefers the primary external storage
-        // mount (still app-private externalFilesDir, scoped to MEDIA_ROOT).
-        // "INTERNAL" falls back to filesDir which is never visible to other apps
-        // and survives media scan indexing. Both remain app-private post-uninstall.
-        val useInternalStorage = prefs.downloadStorageLocation.equals("INTERNAL", ignoreCase = true) &&
-            prefs.downloadStorageLocation != "EXTERNAL"
-        val baseDir = when {
-            useInternalStorage && !isAudioType -> File(context.filesDir, "downloads")
-            useInternalStorage && isAudioType -> File(context.filesDir, "downloads/music")
-            else -> context.getExternalFilesDir(dirType)
-                ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
-        }
-        val downloadDir = baseDir
-        if (!downloadDir.exists()) {
-            downloadDir.mkdirs()
-        }
-        val statFs = android.os.StatFs(downloadDir.absolutePath)
-        val availableBytes = statFs.availableBlocksLong * statFs.blockSizeLong
-        if (availableBytes < 100L * 1024 * 1024) {
-            throw IllegalStateException("Insufficient storage space. Less than 100 MB available on device.")
-        }
-
+        // Path-layout policy (internal vs external dir, filename sanitize,
+        // container extension, free-space floor) lives in DownloadStorageLayout
+        // — previously inlined ~40 LOC in this method, unreachable from any
+        // other call site and untestable without a full repo construction.
         val id = UUID.randomUUID().toString()
-        val dir = baseDir
-        val safeName = name.replace(FILENAME_SANITIZE_REGEX, "_")
-        // Prefer the original container reported by the Jellyfin MediaSource so
-        // the on-disk extension reflects the real bytes — ExoPlayer selects its
-        // extractor from the URI extension and hangs silently when the extension
-        // lies (e.g. an MKV stream saved as `.mp4`). Sanitize and fall back to
-        // the legacy hardcoded extension for audio/video when the container is
-        // missing or unsafe (path-traversal / weird chars).
-        val extension = container
-            ?.takeIf { it.isNotBlank() && FILENAME_CONTAINER_REGEX.matches(it) }
-            ?: if (isAudioType) "mp3" else "mp4"
-        val filePath = File(dir, "${safeName}_${id.take(8)}.$extension").absolutePath
+        val resolved = storageLayout.resolve(
+            mediaType = mediaType,
+            storageLocationPref = prefs.downloadStorageLocation,
+            name = name,
+            idHint = id.take(8),
+            container = container,
+        )
+        val filePath = resolved.filePath
 
         val entity = DownloadEntity(
             id = id,
@@ -298,8 +283,11 @@ class DownloadRepositoryImpl @Inject constructor(
                 // A FAILED partial was deleted by cleanupStuckDownloads (multi-
                 // connection scattered writes can't be appended to), so resume
                 // FAILED rows from 0. A NETWORK-paused single-connection row has
-                // a contiguous prefix, so preserve its byte offset.
-                val startBytes = if (row.status == DownloadStatus.PAUSED.name) row.downloadedBytes else 0L
+                // a contiguous prefix, so preserve its byte offset. The rule
+                // lives in [DownloadStates.resumeByteOffset] — the single home
+                // shared with the recovery initializer and the multi-connection
+                // strategy.
+                val startBytes = DownloadStates.resumeByteOffset(row.status, row.downloadedBytes)
                 downloadDao.updateProgress(row.id, startBytes, DownloadStatus.PENDING.name)
                 downloadDao.updatePausedReason(row.id, null)
                 enqueueDownload(row.id)
@@ -402,24 +390,14 @@ class DownloadRepositoryImpl @Inject constructor(
             // The storage cap only needs to be evaluated once for the whole
             // enqueue batch: no bytes are actually downloaded here (the
             // DownloadWorker runs later), so every per-episode SUM(downloadedBytes)
-            // would return an identical value. Computing it up-front turns N
-            // redundant aggregate queries into one and fails fast when over cap.
-            val maxBytesBatch = prefs.maxCacheSizeMb.toLong() * 1024 * 1024
-            val maxBytesFromGbBatch = prefs.maxDownloadStorageGb.toLong() * 1024L * 1024L * 1024L
-            val batchCurrentBytes = if (maxBytesBatch > 0 || maxBytesFromGbBatch > 0) {
-                downloadDao.getTotalDownloadedBytes()
-            } else -1L
-            if (batchCurrentBytes >= 0) {
-                if (maxBytesBatch > 0 && batchCurrentBytes >= maxBytesBatch) {
-                    throw IllegalStateException("Download limit reached (${prefs.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.")
-                }
-                if (maxBytesFromGbBatch > 0 && batchCurrentBytes >= maxBytesFromGbBatch) {
-                    throw IllegalStateException("Download storage limit reached (${prefs.maxDownloadStorageGb} GB). Free up space in Settings › Storage or increase the limit.")
-                }
-            }
+            // would return an identical value. StoragePolicy.enforce reads the
+            // current bytes once (via its injected provider) and compares
+            // against both ceilings. The returned currentBytes is handed to
+            // each per-episode start as a precomputed hint so the cap check
+            // inside startDownload skips its own aggregate query.
+            val batchCurrentBytes = storagePolicy.enforce()
 
             val detail = mediaRepository.getMediaDetail(seriesId).getOrThrow()
-            val seriesItem = detail.item
             val imageUrl = playbackRepository.getImageUrl(seriesId, maxWidth = 300)
             val backdropUrl = playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
 
@@ -434,6 +412,17 @@ class DownloadRepositoryImpl @Inject constructor(
                 seasons
             }
 
+            // Per-episode artifact bundle (local poster/backdrop, trickplay,
+            // external subtitles, intro/outro segments, rich offline metadata)
+            // is delegated to DownloadDelegate — the same code path the single-
+            // item intake uses (DownloadIntakeImpl.start). This is deliberate:
+            // the series path must not re-implement the bundle recipe and risk
+            // silently dropping an artifact (see DownloadIntake kdoc). Only the
+            // series/season metadata + budget guard + concurrency permit live
+            // here; everything else is DownloadDelegate.executeDownload.
+            val delegate = downloadDelegate.get()
+            val qualityMaxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
+            val budgetHint = if (batchCurrentBytes >= 0) batchCurrentBytes else null
             val downloadIds = mutableListOf<String>()
 
             for (season in targetSeasons) {
@@ -446,142 +435,40 @@ class DownloadRepositoryImpl @Inject constructor(
                 } else {
                     allEpisodes
                 }
-                val offlineEntities = mutableListOf<OfflineMediaEntity>()
 
                 val episodeResults = coroutineScope {
                     episodes.map { episode ->
                         async {
                             downloadPermits.withPermit {
-                            try {
-                                val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
-                                val source = episodeDetail?.mediaSources?.firstOrNull()
-                                // Apply the user's download quality preference by passing the
-                                // corresponding max bitrate to the stream URL builder. ORIGINAL
-                                // leaves the stream unbounded so the server picks the best
-                                // direct-playable source.
-                                val qualityMaxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
-                                val streamUrl = if (source != null) {
-                                    playbackRepository.getStreamUrl(
-                                        itemId = episode.id,
-                                        mediaSourceId = source.id,
-                                        maxBitrate = qualityMaxBitrate,
-                                    )
-                                } else {
-                                    playbackRepository.getStreamUrl(
-                                        itemId = episode.id,
-                                        mediaSourceId = episode.id,
-                                        maxBitrate = qualityMaxBitrate,
-                                    )
-                                }
-
-                                if (streamUrl.isNotBlank()) {
-                                    val epImageUrl = playbackRepository.getImageUrl(episode.id, maxWidth = 300)
-                                    // Use the rich MediaDetail mapper when available so
-                                    // episodes persist cast/studios/criticRating/tagline;
-                                    // otherwise fall back to the item-level mapper.
-                                    val offlineEntity = if (episodeDetail != null) {
-                                        episodeDetail.toOfflineMediaEntity(epImageUrl, null)
-                                    } else {
-                                        episode.toOfflineMediaEntity(epImageUrl, null)
+                                try {
+                                    val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
+                                    // Single per-episode recipe shared with DownloadIntake.start
+                                    // via DownloadDelegate.startOne — no inline prepare/execute to
+                                    // drift out of sync.
+                                    val result = episodeDetail?.let {
+                                        delegate.startOne(it, qualityMaxBitrate, budgetHint)
                                     }
-
-                                    val download = startDownloadInternal(
-                                        mediaItemId = episode.id,
-                                        name = episode.name,
-                                        mediaType = MediaType.EPISODE.name,
-                                        mediaSourceId = source?.id ?: episode.id,
-                                        downloadUrl = streamUrl,
-                                        imageUrl = epImageUrl,
-                                        imageBlurHash = episode.blurHashes.primary,
-                                        seriesId = seriesId,
-                                        seasonId = season.id,
-                                        seriesName = seriesItem.name,
-                                        seasonName = season.name,
-                                        episodeNumber = episode.episodeNumber,
-                                        seasonNumber = episode.seasonNumber,
-                                        container = source?.container,
-                                        precomputedCurrentBytes = if (batchCurrentBytes >= 0) batchCurrentBytes else null,
-                                    ).getOrNull()
-
-                                    if (download != null) {
-                                        preloadImageToCache(epImageUrl)
-                                        // Download the episode poster + backdrop locally so the
-                                        // offline series-episode cards render them (otherwise only
-                                        // blurHash shows). Fall back to the remote URL on failure.
-                                        // Filenames are keyed by episode.id so sibling episodes in the
-                                        // shared downloads dir don't overwrite each other.
-                                        var localEpPoster = epImageUrl
-                                        var localEpBackdrop: String? = null
-                                        try {
-                                            val epParentDir = File(download.downloadPath).parentFile
-                                            if (epParentDir != null) {
-                                                downloadImageToDisk(
-                                                    episode.id, "Primary", 300,
-                                                    epParentDir, DownloadArtifacts.posterFile(episode.id),
-                                                )?.let { localEpPoster = it }
-                                                localEpBackdrop = downloadImageToDisk(
-                                                    episode.id, "Backdrop", 1280,
-                                                    epParentDir, DownloadArtifacts.backdropFile(episode.id),
-                                                )
-                                            }
-                                        } catch (e: Exception) {
-                                            Log.d(TAG, "Failed to download offline images for episode ${episode.id}", e)
-                                        }
-                                        val finalEntity = offlineEntity.copy(
-                                            posterPath = localEpPoster,
-                                            backdropPath = localEpBackdrop,
-                                        )
-                                        enqueueDownloadWorker(download.id)
-                                        source?.trickplayInfo?.let { info ->
-                                            try {
-                                                downloadTrickplayData(episode.id, info, download.downloadPath)
-                                            } catch (e: Exception) { Log.d(TAG, "Failed to download trickplay data", e) }
-                                        }
-                                        // Bundle external subtitles + intro/outro segments for offline use.
-                                        if (source != null) {
-                                            try {
-                                                downloadExternalSubtitles(episode.id, source.id, source.mediaStreams, download.downloadPath)
-                                            } catch (e: Exception) { Log.d(TAG, "Failed to download external subtitles", e) }
-                                        }
-                                        try {
-                                            downloadMediaSegments(episode.id, download.downloadPath)
-                                        } catch (e: Exception) { Log.d(TAG, "Failed to download media segments", e) }
-                                        Pair(finalEntity, download.id)
-                                    } else {
-                                        Pair(offlineEntity, null)
-                                    }
-                                } else {
+                                    result?.downloadItem?.id
+                                } catch (ce: CancellationException) {
+                                    // Preserve structured concurrency: if the parent
+                                    // scope (e.g. user navigated away) is cancelled,
+                                    // the cancellation must propagate instead of
+                                    // being silently turned into a null result.
+                                    throw ce
+                                } catch (e: Exception) {
+                                    // Surface the per-episode failure so the user
+                                    // has a clue why an episode is missing from the
+                                    // queue. Future: aggregate a failure count and
+                                    // expose it through the Result/uiState.
+                                    Log.w(TAG, "Failed to queue episode ${episode.id} (${episode.name})", e)
                                     null
                                 }
-                            } catch (ce: CancellationException) {
-                                // Preserve structured concurrency: if the parent
-                                // scope (e.g. user navigated away) is cancelled,
-                                // the cancellation must propagate instead of
-                                // being silently turned into a null result.
-                                throw ce
-                            } catch (e: Exception) {
-                                // Surface the per-episode failure so the user
-                                // has a clue why an episode is missing from the
-                                // queue. Future: aggregate a failure count and
-                                // expose it through the Result/uiState.
-                                Log.w(TAG, "Failed to queue episode ${episode.id} (${episode.name})", e)
-                                null
-                            }
                             }
                         }
                     }.awaitAll()
                 }
 
-                for (result in episodeResults) {
-                    if (result != null) {
-                        offlineEntities.add(result.first)
-                        result.second?.let { downloadIds.add(it) }
-                    }
-                }
-
-                if (offlineEntities.isNotEmpty()) {
-                    offlineMediaDao.upsertAll(offlineEntities)
-                }
+                episodeResults.filterNotNull().forEach { downloadIds.add(it) }
             }
 
             downloadIds
@@ -813,71 +700,14 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     override fun enqueueDownload(downloadId: String) {
-        enqueueDownloadWorker(downloadId)
+        // Runtime enqueue honours the user's wifi-only + schedule-window
+        // preferences (cold-start recovery in DownloadRecoveryInitializer calls
+        // DownloadEnqueuer directly with honorScheduleAndNetwork = false).
+        downloadEnqueuer.enqueue(downloadId)
     }
 
     override suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit> = runCatching {
         downloadDao.updatePriority(id, priority)
-    }
-
-    private fun enqueueDownloadWorker(downloadId: String) {
-        val prefs = preferencesStore.preferences.value
-        val wifiOnly = prefs.wifiOnlyDownloads
-        val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
-        val constraintsBuilder = Constraints.Builder()
-            .setRequiredNetworkType(networkType)
-
-        var initialDelayMs = 0L
-        if (prefs.downloadScheduleEnabled) {
-            val now = java.util.Calendar.getInstance()
-            val currentHour = now.get(java.util.Calendar.HOUR_OF_DAY)
-            val window = prefs.downloadScheduleWindow
-            val start = window.startHour
-            val end = window.endHour
-            val inWindow = if (start <= end) {
-                currentHour in start until end
-            } else {
-                currentHour >= start || currentHour < end
-            }
-            if (!inWindow) {
-                val target = now.clone() as java.util.Calendar
-                target.set(java.util.Calendar.HOUR_OF_DAY, start)
-                target.set(java.util.Calendar.MINUTE, 0)
-                target.set(java.util.Calendar.SECOND, 0)
-                target.set(java.util.Calendar.MILLISECOND, 0)
-                if (target.before(now)) target.add(java.util.Calendar.DAY_OF_MONTH, 1)
-                initialDelayMs = target.timeInMillis - now.timeInMillis
-            }
-            if (window.wifiOnly) {
-                constraintsBuilder.setRequiredNetworkType(NetworkType.UNMETERED)
-            }
-        }
-
-        val workRequestBuilder = OneTimeWorkRequestBuilder<DownloadWorker>()
-            .setConstraints(constraintsBuilder.build())
-            // Explicit exponential backoff so a flaky server returning 503/429
-            // is not hammered by all concurrent downloads retrying as fast as
-            // WorkManager allows. 30s base multiplies load far less than the
-            // implicit default while still recovering promptly.
-            .setBackoffCriteria(
-                androidx.work.BackoffPolicy.EXPONENTIAL,
-                DOWNLOAD_BACKOFF_DELAY_MS,
-                java.util.concurrent.TimeUnit.MILLISECONDS,
-            )
-            .setInputData(
-                Data.Builder()
-                    .putString(DownloadWorker.KEY_DOWNLOAD_ID, downloadId)
-                    .build()
-            )
-            .addTag(DownloadWorker.WORK_TAG)
-        if (initialDelayMs > 0) {
-            workRequestBuilder.setInitialDelay(initialDelayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-        }
-            WorkManager.getInstance(context).enqueueUniqueWork(
-            DownloadWorker.workName(downloadId),
-            ExistingWorkPolicy.KEEP,
-            workRequestBuilder.build(),
-        )
     }
 
     private fun preloadImageToCache(url: String?) {
@@ -1015,18 +845,11 @@ class DownloadRepositoryImpl @Inject constructor(
 
     companion object {
         private const val TAG = "DownloadRepository"
-        private val FILENAME_SANITIZE_REGEX = Regex("[^a-zA-Z0-9.\\-]")
 
         // Exponential backoff base delay applied to every DownloadWorker
         // request so a flaky server is not hammered by concurrent retries.
         // Mirrored by DownloadRecoveryInitializer so cold-start re-enqueues
         // back off identically. WorkManager caps each retry delay at 5h.
         const val DOWNLOAD_BACKOFF_DELAY_MS = 30_000L
-
-        // Container strings from Jellyfin (mkv, mp4, ts, webm, flv, mov, ...).
-        // Constrained to 2-8 alphanumerics so a malformed/missing value can
-        // never leak into the on-disk filename; the caller falls back to the
-        // legacy mp4/mp3 default otherwise.
-        private val FILENAME_CONTAINER_REGEX = Regex("[A-Za-z0-9]{2,8}")
     }
 }

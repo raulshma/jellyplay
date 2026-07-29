@@ -1,12 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.FloatBuffer
-import java.nio.ShortBuffer
 import kotlin.math.abs
 import kotlin.math.ln
 
@@ -28,15 +23,15 @@ import kotlin.math.ln
  * ## Threading
  *
  * [configure] and [setEnabled]/[setParams] are `@Synchronized`; the
- * envelope state read/written in [queueInput] is `@Volatile` where it
- * overlaps those calls. In practice [queueInput] runs single-threaded on
- * the ExoPlayer audio thread, matching the rest of the playback package.
+ * envelope state read/written in [processFloatSample] is `@Volatile` where it
+ * overlaps those calls. In practice the audio thread runs single-threaded,
+ * matching the rest of the playback package.
  *
- * This is a passthrough processor: the output [AudioProcessor.AudioFormat]
- * is identical to the input (channel count and encoding preserved).
+ * Buffer scaffolding lives in [BasePcmAudioProcessor]; this class is just the
+ * compressor DSP. Output format is identical to input (passthrough processor).
  */
 @UnstableApi
-class DynamicsCompressorAudioProcessor : AudioProcessor {
+class DynamicsCompressorAudioProcessor : BasePcmAudioProcessor() {
 
     /** Compressor parameters. All in DSP-friendly units. */
     data class Params(
@@ -57,22 +52,15 @@ class DynamicsCompressorAudioProcessor : AudioProcessor {
     private var params: Params = Params()
     @Volatile private var enabled: Boolean = false
 
-    private var inputAudioFormat: AudioProcessor.AudioFormat = AudioProcessor.AudioFormat.NOT_SET
-    private var outputAudioFormat: AudioProcessor.AudioFormat = AudioProcessor.AudioFormat.NOT_SET
-    private var buffer: ByteBuffer = EMPTY_BUFFER
-    private var outputBuffer: ByteBuffer = EMPTY_BUFFER
-    private var isInputEnded = false
-
     // Derived per-sample coefficients.
     private var attackCoeff: Float = 0f
     private var releaseCoeff: Float = 0f
     private var sampleRate: Int = 0
+    // Cached dB threshold so the per-sample hook doesn't recompute it.
+    private var thresholdDb: Float = linearToDb(params.thresholdLinear)
 
     // Envelope state.
     @Volatile private var envelopeDb: Float = -1000f
-
-    private var cachedShortBuffer: ShortBuffer? = null
-    private var cachedFloatBuffer: FloatBuffer? = null
 
     @Synchronized
     fun setEnabled(enabled: Boolean) {
@@ -82,25 +70,30 @@ class DynamicsCompressorAudioProcessor : AudioProcessor {
     @Synchronized
     fun setParams(params: Params) {
         this.params = params
+        thresholdDb = linearToDb(params.thresholdLinear)
         recomputeCoefficients()
     }
 
-    override fun configure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
-        if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT &&
-            inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT
-        ) {
-            throw AudioProcessor.UnhandledAudioFormatException(
-                "DynamicsCompressorAudioProcessor only supports PCM 16-bit and PCM float",
-                inputAudioFormat,
-            )
-        }
-        this.inputAudioFormat = inputAudioFormat
-        outputAudioFormat = inputAudioFormat
-        sampleRate = inputAudioFormat.sampleRate
+    override fun computeIsActive(): Boolean = enabled
+
+    override fun onConfigure(format: AudioProcessor.AudioFormat) {
+        sampleRate = format.sampleRate
         recomputeCoefficients()
-        cachedShortBuffer = null
-        cachedFloatBuffer = null
-        return inputAudioFormat
+    }
+
+    override fun processFloatSample(sample: Float, channelIndex: Int): Float =
+        processSample(sample, params, thresholdDb, attackCoeff, releaseCoeff)
+
+    override fun onFlush() {
+        // Reset envelope so a seek doesn't smear a transient with stale gain.
+        envelopeDb = -1000f
+    }
+
+    override fun reset() {
+        super.reset()
+        sampleRate = 0
+        attackCoeff = 0f
+        releaseCoeff = 0f
     }
 
     private fun recomputeCoefficients() {
@@ -116,64 +109,6 @@ class DynamicsCompressorAudioProcessor : AudioProcessor {
     internal fun timeConstantToCoeff(tMs: Float, sampleRate: Int): Float {
         val tSamples = tMs * 0.001f * sampleRate
         return kotlin.math.exp(-1f / tSamples)
-    }
-
-    override fun isActive(): Boolean = enabled && inputAudioFormat != AudioProcessor.AudioFormat.NOT_SET
-
-    override fun queueInput(inputBuffer: ByteBuffer) {
-        if (!isActive()) {
-            outputBuffer = inputBuffer
-            return
-        }
-
-        val position = inputBuffer.position()
-        val limit = inputBuffer.limit()
-        val remaining = limit - position
-        if (remaining == 0) return
-
-        if (buffer.capacity() < remaining) {
-            buffer = ByteBuffer.allocateDirect(remaining).order(ByteOrder.nativeOrder())
-            cachedShortBuffer = null
-            cachedFloatBuffer = null
-        } else {
-            buffer.clear()
-        }
-
-        val p = params
-        val thresholdDb = linearToDb(p.thresholdLinear)
-        val aCoeff = attackCoeff
-        val rCoeff = releaseCoeff
-
-        if (inputAudioFormat.encoding == C.ENCODING_PCM_16BIT) {
-            val shortBuffer = cachedShortBuffer?.apply { clear() }
-                ?: buffer.asShortBuffer().also { cachedShortBuffer = it }
-            val inputShorts = inputBuffer.duplicate().order(ByteOrder.nativeOrder()).asShortBuffer()
-            inputShorts.position(position / 2)
-            inputShorts.limit(limit / 2)
-            while (inputShorts.hasRemaining()) {
-                val sample = inputShorts.get() / 32768f
-                val out = processSample(sample, p, thresholdDb, aCoeff, rCoeff)
-                val scaled = out * 32767f
-                shortBuffer.put(scaled.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort())
-            }
-            buffer.position(0)
-            buffer.limit(shortBuffer.position() * 2)
-        } else {
-            val floatBuffer = cachedFloatBuffer?.apply { clear() }
-                ?: buffer.asFloatBuffer().also { cachedFloatBuffer = it }
-            val inputFloats = inputBuffer.duplicate().order(ByteOrder.nativeOrder()).asFloatBuffer()
-            inputFloats.position(position / 4)
-            inputFloats.limit(limit / 4)
-            while (inputFloats.hasRemaining()) {
-                val sample = inputFloats.get()
-                floatBuffer.put(processSample(sample, p, thresholdDb, aCoeff, rCoeff))
-            }
-            buffer.position(0)
-            buffer.limit(floatBuffer.position() * 4)
-        }
-
-        inputBuffer.position(limit)
-        outputBuffer = buffer
     }
 
     /**
@@ -244,38 +179,7 @@ class DynamicsCompressorAudioProcessor : AudioProcessor {
     private fun dbToLinear(db: Float): Float =
         kotlin.math.exp(db * LN10 / 20f)
 
-    override fun queueEndOfStream() {
-        isInputEnded = true
-    }
-
-    override fun getOutput(): ByteBuffer {
-        val output = outputBuffer
-        outputBuffer = EMPTY_BUFFER
-        return output
-    }
-
-    override fun isEnded(): Boolean = isInputEnded && outputBuffer === EMPTY_BUFFER
-
-    override fun flush() {
-        isInputEnded = false
-        outputBuffer = EMPTY_BUFFER
-        envelopeDb = -1000f
-    }
-
-    override fun reset() {
-        flush()
-        buffer = EMPTY_BUFFER
-        cachedShortBuffer = null
-        cachedFloatBuffer = null
-        inputAudioFormat = AudioProcessor.AudioFormat.NOT_SET
-        outputAudioFormat = AudioProcessor.AudioFormat.NOT_SET
-        sampleRate = 0
-        attackCoeff = 0f
-        releaseCoeff = 0f
-    }
-
-    companion object {
-        private val EMPTY_BUFFER: ByteBuffer = ByteBuffer.allocateDirect(0)
+    private companion object {
         private const val LN10 = 2.302585f
     }
 }

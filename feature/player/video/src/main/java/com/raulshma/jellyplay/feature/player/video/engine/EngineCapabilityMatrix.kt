@@ -100,13 +100,14 @@ object EngineCapabilityMatrix {
         // the slider for VLC (parity with ExoPlayer/MPV) instead of hiding it.
         supportsSubtitleVerticalPosition = true,
         // The four flags below are Android-AudioEffect-based (DialogueBoostHelper /
-        // NightModeHelper / AudioNormalizationHelper / ChannelMixHelper). They bind to
-        // the engine's audio session id, but LibVLC 3.7.x exposes no audio-session API
-        // (`audioSessionId` returns the 0/UNSET sentinel), so the helpers short-circuit
-        // and these effects cannot be applied at runtime. They can be configured only as
-        // LibVLC `--audio-filter` startup options, so advertising them as supported here
-        // (and letting the UI expose live toggles) misled users into thinking a mid-
-        // playback toggle takes effect. Per the matrix behaviour contract, `false`
+        // NightModeHelper, with normalization/channel-mix driven by the in-sink
+        // DSP processors). They bind to the engine's audio session id, but LibVLC
+        // 3.7.x exposes no audio-session API (`audioSessionId` returns the 0/UNSET
+        // sentinel), so the helpers short-circuit and these effects cannot be
+        // applied at runtime. They can be configured only as LibVLC `--audio-filter`
+        // startup options, so advertising them as supported here (and letting the UI
+        // expose live toggles) misled users into thinking a mid-playback toggle
+        // takes effect. Per the matrix behaviour contract, `false`
         // ⇒ the engine silently no-ops the related `updateConfig` call — which is exactly
         // what already happens. (Contrast ExoPlayer/MPV, which expose a real session id.)
         supportsDialogueBoost = false,

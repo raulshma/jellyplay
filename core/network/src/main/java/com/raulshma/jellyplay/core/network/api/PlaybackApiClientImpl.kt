@@ -2,10 +2,12 @@ package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
+import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
@@ -157,19 +159,12 @@ class PlaybackApiClientImpl @Inject constructor(
         maxStreamingBitrateBits: Long?,
         mode: PlaybackMode,
         playerType: PlayerType,
+        liveStreamOption: LiveStreamOption?,
     ): Result<PlaybackInfoResult> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val uuid = itemId.toUUID()
 
-        val enableDirectPlay = mode != PlaybackMode.FORCE_TRANSCODE
-        val enableDirectStream = mode == PlaybackMode.AUTO
-        val enableTranscoding = mode != PlaybackMode.FORCE_DIRECT_PLAY
-        // Stream copy is only relevant when direct stream is allowed.
-        val allowStreamCopy = enableDirectStream
-        // Bitrate ceiling is sent for AUTO and FORCE_TRANSCODE (so a forced
-        // transcode still targets the chosen resolution) but omitted for
-        // FORCE_DIRECT_PLAY (no cap — the file is served verbatim).
-        val sendBitrate = if (mode == PlaybackMode.FORCE_DIRECT_PLAY) null else maxStreamingBitrateBits
+        val flags = resolvePlaybackFlags(mode, liveStreamOption, maxStreamingBitrateBits)
 
         // FORCE_DIRECT_PLAY sends "Direct play all" profile so
         // the server unconditionally marks sources as directly playable and
@@ -177,7 +172,7 @@ class PlaybackApiClientImpl @Inject constructor(
         // serve the file verbatim AUTO and
         // FORCE_TRANSCODE use the codec-aware profile so the server picks the
         // right play method and transcode target.
-        val deviceProfile = if (mode == PlaybackMode.FORCE_DIRECT_PLAY) {
+        val deviceProfile = if (flags.useDirectPlayAllProfile) {
             deviceProfileProvider.directPlayAll
         } else {
             deviceProfileProvider.forPlayer(
@@ -189,16 +184,16 @@ class PlaybackApiClientImpl @Inject constructor(
         val dto = PlaybackInfoDto(
             userId = engine.currentUser.value?.id?.toUUID(),
             startTimeTicks = startTimeTicks.takeIf { it > 0 },
-            maxStreamingBitrate = sendBitrate?.toInt(),
+            maxStreamingBitrate = flags.sendBitrate?.toInt(),
             audioStreamIndex = audioStreamIndex,
             subtitleStreamIndex = subtitleStreamIndex,
             mediaSourceId = mediaSourceId.takeIf { it.isNotBlank() },
             deviceProfile = deviceProfile,
-            enableDirectPlay = enableDirectPlay,
-            enableDirectStream = enableDirectStream,
-            enableTranscoding = enableTranscoding,
-            allowVideoStreamCopy = allowStreamCopy,
-            allowAudioStreamCopy = allowStreamCopy,
+            enableDirectPlay = flags.enableDirectPlay,
+            enableDirectStream = flags.enableDirectStream,
+            enableTranscoding = flags.enableTranscoding,
+            allowVideoStreamCopy = flags.allowStreamCopy,
+            allowAudioStreamCopy = flags.allowStreamCopy,
             autoOpenLiveStream = true,
         )
 
@@ -225,6 +220,11 @@ class PlaybackApiClientImpl @Inject constructor(
     ): String {
         val server = engine.currentServer.value ?: return ""
         val user = engine.currentUser.value ?: return ""
+        // The Jellyfin subtitle endpoint only serves text formats. Refusing
+        // image codecs (PGS/VOBSUB/DVB) here — instead of emitting a URL the
+        // endpoint will reject — lets the caller drop the stream cleanly and
+        // fall back to burn-in / container demux.
+        if (isImageSubtitleCodec(codec)) return ""
         val format = when ((codec ?: "srt").lowercase()) {
             "subrip" -> "srt"
             "ass", "ssa" -> codec!!.lowercase()

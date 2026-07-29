@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
@@ -90,6 +91,7 @@ class PlaybackSettingsViewModel @Inject constructor(
     fun setFrameRateMatching(enabled: Boolean) =
         editor.edit { setFrameRateMatching(enabled) }
     fun setStreamingQuality(quality: StreamingQuality) = editor.setStreamingQuality(quality)
+    fun setLiveStreamOption(option: LiveStreamOption) = editor.setLiveStreamOption(option)
     fun setMpvConfig(config: MpvEngineConfig) =
         editor.edit { setMpvConfig(config) }
     fun setLibVlcConfig(config: LibVlcEngineConfig) =

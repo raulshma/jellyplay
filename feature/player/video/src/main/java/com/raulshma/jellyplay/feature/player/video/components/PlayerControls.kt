@@ -236,12 +236,13 @@ internal fun PlayerControls(
     onControlRowScrolled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    // Collect the high-frequency streams here: the recomposition they
-    // drive is scoped to PlayerControls (the seek bar / time labels), not the
-    // whole screen. PlayerControls is itself gated by an AnimatedVisibility in
-    // the screen, so collection only runs while the controls are shown.
-    val currentPosition by currentPositionFlow.collectAsStateWithLifecycle()
-    val bufferedPosition by bufferedPositionFlow.collectAsStateWithLifecycle()
+    // High-frequency position/buffered streams are collected in the leaf
+    // composables that actually need them (TvControllableSeekBar and
+    // EndsAtLabel), NOT here. Collecting at the root invalidated this entire
+    // ~670-line body on every 4 Hz position tick and was a primary driver of
+    // the MPV playback ANR. videoStats is projected through a derivedStateOf
+    // below so only the low-churn codec/HDR slice reaches PlaybackMetadataRow;
+    // sleepTimerRemainingMs changes at most once per second.
     val videoStats by videoStatsFlow.collectAsStateWithLifecycle()
     val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
     // Project only the static codec/HDR/audio-channel slice that
@@ -397,13 +398,11 @@ internal fun PlayerControls(
                                 )
                             }
                             if (showEndsAt) {
-                                val remainingMs = (duration - currentPosition).coerceAtLeast(0)
-                                val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
-                                val endsAt = rememberEndsAtTime(realRemainingMs, isVisible)
-                                Text(
-                                    text = "Ends at $endsAt",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                EndsAtLabel(
+                                    currentPositionFlow = currentPositionFlow,
+                                    duration = duration,
+                                    playbackSpeed = playbackSpeed,
+                                    controlsVisible = isVisible,
                                 )
                             }
                         }
@@ -536,11 +535,11 @@ internal fun PlayerControls(
                 }
 
                 TvControllableSeekBar(
-                    currentPosition = currentPosition,
+                    currentPositionFlow = currentPositionFlow,
                     duration = duration,
                     chapters = chapters,
                     segments = segments,
-                    bufferedPosition = bufferedPosition,
+                    bufferedPositionFlow = bufferedPositionFlow,
                     trickplayBitmap = tvTrickplayBitmap,
                     playbackSpeed = playbackSpeed,
                     showTimeRemaining = showTimeRemaining,
@@ -571,6 +570,32 @@ internal fun PlayerControls(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // The primary control cluster (quality / speed / audio / subtitle
+                    // / chapters / episodes / syncplay / aspect / info) is identical
+                    // in both layouts — hoist it once so the 12-arg call lives in a
+                    // single place. The portrait vs landscape branches differ only
+                    // in which Row wraps it and which right-cluster buttons pin.
+                    val primaryControls: @Composable () -> Unit = {
+                        PrimaryMediaControls(
+                            supportsLiveQualitySwitch = supportsLiveQualitySwitch,
+                            streamingQuality = streamingQuality,
+                            onQualityClick = onQualityClick,
+                            playbackSpeed = playbackSpeed,
+                            onSpeedClick = onSpeedClick,
+                            onAudioClick = onAudioClick,
+                            onSubtitleClick = onSubtitleClick,
+                            chapters = chapters,
+                            onChapterClick = onChapterClick,
+                            hasEpisodes = hasEpisodes,
+                            episodeBrowserEnabled = episodeBrowserEnabled,
+                            onEpisodesClick = onEpisodesClick,
+                            isInSyncPlaySession = isInSyncPlaySession,
+                            onSyncPlayClick = onSyncPlayClick,
+                            currentAspectRatio = currentAspectRatio,
+                            onAspectRatioClick = onAspectRatioClick,
+                            onInfoClick = onInfoClick,
+                        )
+                    }
                     if (splitBottomControlsEvenly) {
                         // PORTRAIT: one horizontally scrollable row holds every
                         // control; PiP, Rotate and the More (⋮) menu stay pinned at
@@ -584,25 +609,7 @@ internal fun PlayerControls(
                             horizontalArrangement = Arrangement.spacedBy(0.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            PrimaryMediaControls(
-                                supportsLiveQualitySwitch = supportsLiveQualitySwitch,
-                                streamingQuality = streamingQuality,
-                                onQualityClick = onQualityClick,
-                                playbackSpeed = playbackSpeed,
-                                onSpeedClick = onSpeedClick,
-                                onAudioClick = onAudioClick,
-                                onSubtitleClick = onSubtitleClick,
-                                chapters = chapters,
-                                onChapterClick = onChapterClick,
-                                hasEpisodes = hasEpisodes,
-                                episodeBrowserEnabled = episodeBrowserEnabled,
-                                onEpisodesClick = onEpisodesClick,
-                                isInSyncPlaySession = isInSyncPlaySession,
-                                onSyncPlayClick = onSyncPlayClick,
-                                currentAspectRatio = currentAspectRatio,
-                                onAspectRatioClick = onAspectRatioClick,
-                                onInfoClick = onInfoClick,
-                            )
+                            primaryControls()
                             PlayerIconButton(
                                 icon = Tabler.Outline.Lock,
                                 contentDescription = "Lock screen",
@@ -641,25 +648,7 @@ internal fun PlayerControls(
                             horizontalArrangement = if (isTv) Arrangement.spacedBy(2.dp) else Arrangement.Start,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            PrimaryMediaControls(
-                                supportsLiveQualitySwitch = supportsLiveQualitySwitch,
-                                streamingQuality = streamingQuality,
-                                onQualityClick = onQualityClick,
-                                playbackSpeed = playbackSpeed,
-                                onSpeedClick = onSpeedClick,
-                                onAudioClick = onAudioClick,
-                                onSubtitleClick = onSubtitleClick,
-                                chapters = chapters,
-                                onChapterClick = onChapterClick,
-                                hasEpisodes = hasEpisodes,
-                                episodeBrowserEnabled = episodeBrowserEnabled,
-                                onEpisodesClick = onEpisodesClick,
-                                isInSyncPlaySession = isInSyncPlaySession,
-                                onSyncPlayClick = onSyncPlayClick,
-                                currentAspectRatio = currentAspectRatio,
-                                onAspectRatioClick = onAspectRatioClick,
-                                onInfoClick = onInfoClick,
-                            )
+                            primaryControls()
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -938,11 +927,17 @@ private fun SyncPlayHeaderIndicator(
 
 @Composable
 private fun TvControllableSeekBar(
-    currentPosition: Long,
+    // High-frequency streams collected at this leaf so only the seek bar
+    // recomposes at 4 Hz, not the whole PlayerControls body. Mirrors the
+    // VideoStatsOverlay pattern. The previous design collected these in
+    // PlayerControls' root, which invalidated a ~670-line, 110-parameter
+    // composable on every position tick and was a primary driver of the
+    // MPV playback ANR (Davey! / skipped frames / input-dispatch timeout).
+    currentPositionFlow: StateFlow<Long>,
     duration: Long,
     chapters: List<ChapterInfo>,
     segments: List<MediaSegment> = emptyList(),
-    bufferedPosition: Long = 0L,
+    bufferedPositionFlow: StateFlow<Long> = MutableStateFlow(0L),
     trickplayBitmap: Bitmap? = null,
     playbackSpeed: Float = 1.0f,
     showTimeRemaining: Boolean = false,
@@ -953,6 +948,8 @@ private fun TvControllableSeekBar(
     tvUpFocusRequester: FocusRequester? = null,
     tvDownFocusRequester: FocusRequester? = null,
 ) {
+    val currentPosition by currentPositionFlow.collectAsStateWithLifecycle()
+    val bufferedPosition by bufferedPositionFlow.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1276,6 +1273,30 @@ private fun TvControllableSeekBar(
             }
         }
     }
+}
+
+/**
+ * Renders the "Ends at HH:mm" header label. Collects [currentPositionFlow]
+ * here at the leaf so the 4 Hz position tick recomposes only this tiny
+ * composable, not the entire PlayerControls body. `duration` and
+ * `playbackSpeed` are stable/low-churn scalars, safe to pass by value.
+ */
+@Composable
+private fun EndsAtLabel(
+    currentPositionFlow: StateFlow<Long>,
+    duration: Long,
+    playbackSpeed: Float,
+    controlsVisible: Boolean,
+) {
+    val currentPosition by currentPositionFlow.collectAsStateWithLifecycle()
+    val remainingMs = (duration - currentPosition).coerceAtLeast(0)
+    val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
+    val endsAt = rememberEndsAtTime(realRemainingMs, controlsVisible)
+    Text(
+        text = "Ends at $endsAt",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+    )
 }
 
 @Composable

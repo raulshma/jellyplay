@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
 import android.content.Context
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -23,6 +24,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
+
+/**
+ * Filesystem-derived storage breakdown surfaced by [StorageSettingsViewModel].
+ * Previously lived on the shared [SettingsViewModel]; moved here when the
+ * storage accounting concern was given its own home.
+ */
+@Immutable
+data class StorageBreakdown(
+    val cacheMb: Long = 0,
+    val downloadsMb: Long = 0,
+    val imagesMb: Long = 0,
+    val totalMb: Long = 0,
+)
 
 /**
  * Storage / download / cache / offline-network preferences plus the filesystem-derived cache size
@@ -66,12 +80,12 @@ class StorageSettingsViewModel @Inject constructor(
      */
     fun refreshCacheSize() {
         launch {
-            // Five independent recursive FS walks — collapse into a single IO
+            // Four independent recursive FS walks — collapse into a single IO
             // context-switch and run the walks concurrently rather than one
             // after another. Each walk can take seconds on large directories.
             val (cacheSize, externalCacheSize, downloadsSize, imagesSize) = withContext(Dispatchers.IO) {
-                val cacheAsync = async { getDirSize(context.cacheDir) }
-                val extAsync = async { context.externalCacheDir?.let { getDirSize(it) } ?: 0L }
+                val cacheAsync = async { directorySizeBytes(context.cacheDir) }
+                val extAsync = async { context.externalCacheDir?.let { directorySizeBytes(it) } ?: 0L }
                 val dlAsync = async {
                     val prefs = store.preferences.value
                     val location = prefs.downloadStorageLocation
@@ -80,11 +94,11 @@ class StorageSettingsViewModel @Inject constructor(
                     } else {
                         context.filesDir
                     }
-                    getDirSize(downloadsDir)
+                    directorySizeBytes(downloadsDir)
                 }
                 val imgAsync = async {
                     val imageDir = File(context.cacheDir, ImageCache.DIR)
-                    if (imageDir.exists()) getDirSize(imageDir) else 0L
+                    if (imageDir.exists()) directorySizeBytes(imageDir) else 0L
                 }
                 QuadLongs(cacheAsync.await(), extAsync.await(), dlAsync.await(), imgAsync.await())
             }
@@ -166,36 +180,6 @@ class StorageSettingsViewModel @Inject constructor(
         operator fun component2(): Long = second
         operator fun component3(): Long = third
         operator fun component4(): Long = fourth
-    }
-
-    /**
-     * Sums file lengths under [dir] using an explicit stack (no recursion, so a
-     * deep tree cannot overflow the call stack). Symlinks inside the tree are
-     * skipped to avoid following circular links, and traversal is capped at
-     * [maxDepth] levels as a guard against pathological trees. The root [dir]
-     * itself is never skipped, even if it is a symlink, so a cache/downloads
-     * location that the OS symlinks onto external storage still reports its size.
-     */
-    private fun getDirSize(dir: File): Long {
-        var size = 0L
-        // (file, depth, isRoot) — isRoot lets us skip the symlink guard for the
-        // seed entry so a legitimately-symlinked root is still measured.
-        val stack = ArrayDeque<Triple<File, Int, Boolean>>()
-        stack.addLast(Triple(dir, 0, true))
-        val maxDepth = 10
-        while (stack.isNotEmpty()) {
-            val (current, depth, isRoot) = stack.removeLast()
-            if (!isRoot && java.nio.file.Files.isSymbolicLink(current.toPath())) continue
-            if (current.isDirectory) {
-                if (depth >= maxDepth) continue
-                current.listFiles()?.forEach { file ->
-                    stack.addLast(Triple(file, depth + 1, false))
-                }
-            } else if (current.isFile) {
-                size += current.length()
-            }
-        }
-        return size
     }
 
     fun setWifiOnlyDownloads(enabled: Boolean) =

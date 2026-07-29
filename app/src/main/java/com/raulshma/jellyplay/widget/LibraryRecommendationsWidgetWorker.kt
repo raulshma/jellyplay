@@ -66,20 +66,13 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
         onSuccess = { Result.success() },
         onFailure = { e ->
             Log.e(TAG, "Worker execution failed", e)
-            if (isPermanentFailure(e)) {
+            if (isPermanentWidgetFailure(e)) {
                 Result.failure()
             } else {
                 Result.retry()
             }
         },
     )
-
-    private fun isPermanentFailure(throwable: Throwable): Boolean {
-        val message = throwable.message ?: return false
-        return message.contains("401") || message.contains("403") ||
-               message.contains("404") || message.contains("Unauthorized") ||
-               message.contains("Forbidden") || message.contains("Not Found")
-    }
 
     private suspend fun fetchSimilarToRecent(): List<MediaItem>? {
         val seed = userPreferencesStore.continueWatching.first().firstOrNull() ?: return null

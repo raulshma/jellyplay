@@ -70,4 +70,18 @@ class DownloadStatesTest {
         assertEquals(DownloadStatus.PAUSED, DownloadStates.parse(DownloadStatus.PAUSED.name))
         assertNull(DownloadStates.parse("BOGUS"))
     }
+
+    @Test
+    fun `resumeByteOffset preserves bytes for PAUSED and resets everything else`() {
+        // PAUSED keeps the contiguous prefix (single-connection Range resume).
+        assertEquals(1_048_576L, DownloadStates.resumeByteOffset(DownloadStatus.PAUSED.name, 1_048_576L))
+        // FAILED, PENDING, COMPLETED, CANCELLED all restart from 0 — the
+        // partial body may be gapped (multi-connection) or deleted, so a
+        // mid-file Range: would corrupt the output.
+        assertEquals(0L, DownloadStates.resumeByteOffset(DownloadStatus.FAILED.name, 1_048_576L))
+        assertEquals(0L, DownloadStates.resumeByteOffset(DownloadStatus.PENDING.name, 999L))
+        assertEquals(0L, DownloadStates.resumeByteOffset(DownloadStatus.COMPLETED.name, 999L))
+        assertEquals(0L, DownloadStates.resumeByteOffset(DownloadStatus.CANCELLED.name, 999L))
+        assertEquals(0L, DownloadStates.resumeByteOffset(DownloadStatus.PAUSED.name, 0L))
+    }
 }

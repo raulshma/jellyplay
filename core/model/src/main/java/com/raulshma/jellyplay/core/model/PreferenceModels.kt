@@ -3,6 +3,16 @@ package com.raulshma.jellyplay.core.model
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
+/**
+ * Marker for a preference enum (or other value) that carries a human-readable
+ * [displayName]. Used by display helpers to render an enum's label without a
+ * per-type `when` switch — anything implementing this is rendered via
+ * [displayName], so newly added labeled enums are covered automatically.
+ */
+interface HasDisplayName {
+    val displayName: String
+}
+
 @Immutable
 @Serializable
 data class MediaStreamSelection(
@@ -121,11 +131,21 @@ data class SubtitleStyle(
 
     val bold: Boolean = false,
     val italic: Boolean = false,
-)
+) {
+    companion object {
+        /**
+         * Canonical default for the no-edit user. Identical to the zero-arg
+         * constructor except [applyCustomStyle] is forced true so every engine
+         * reads the stored style as authoritative rather than falling back to
+         * its own hardcoded defaults.
+         */
+        val DEFAULT: SubtitleStyle = SubtitleStyle(applyCustomStyle = true)
+    }
+}
 
 @Immutable
 @Serializable
-enum class DecoderMode(val displayName: String) {
+enum class DecoderMode(override val displayName: String) : HasDisplayName {
     HW_PREFERRED("Hardware (Preferred)"),
     HW_ONLY("Hardware Only"),
     SW_ONLY("Software Only"),
@@ -178,7 +198,7 @@ enum class SubtitleEdgeType {
 
 @Immutable
 @Serializable
-enum class StreamingQuality(val displayName: String) {
+enum class StreamingQuality(override val displayName: String) : HasDisplayName {
     AUTO("Auto"),
     LOW_360P("360p"),
     SD_480P("480p"),
@@ -189,10 +209,23 @@ enum class StreamingQuality(val displayName: String) {
 
 @Immutable
 @Serializable
-enum class PlaybackMode(val displayName: String) {
+enum class PlaybackMode(override val displayName: String) : HasDisplayName {
     AUTO("Auto"),
     FORCE_DIRECT_PLAY("Force Direct Play"),
     FORCE_TRANSCODE("Force Transcode"),
+}
+
+/**
+ * Live TV stream delivery option. Unlike VOD [PlaybackMode], live tuners
+ * cannot be served verbatim (their output is non-seekable), so Force Direct
+ * Play is not offered — the real choice is whether the server re-encodes.
+ */
+@Immutable
+@Serializable
+enum class LiveStreamOption(override val displayName: String) : HasDisplayName {
+    AUTO("Auto"),
+    DIRECT_STREAM("Direct Stream"),
+    TRANSCODE("Transcode"),
 }
 
 @Immutable
