@@ -748,6 +748,15 @@ class VideoPlayerViewModel @Inject constructor(
                             mediaStreams = session.mediaStreams,
                             playMethod = session.playMethodString,
                             isDirectPlayForced = session.isDirectPlayForced,
+                            // Mirror the session's series id so the per-series
+                            // "remember subtitle/audio" toggle row renders for
+                            // episode playback (footer is gated on seriesId !=
+                            // null). applyMediaDetail also sets this on the
+                            // initial load, but the session collector fires on
+                            // every transition (e.g. next-episode autoplay) and
+                            // must keep it in sync even when the detail refresh
+                            // lags or is skipped.
+                            seriesId = seriesId,
                             hasAudioOverride = stored?.audioStreamIndex != null,
                             hasSubtitleOverride = stored?.subtitleStreamIndex != null,
                         )
@@ -2289,6 +2298,13 @@ class VideoPlayerViewModel @Inject constructor(
             mediaStreams = streams,
             detectedAspectRatio = detectAspectRatio(streams),
         ) }
+        // Rebuild the audio/subtitle track options from the refreshed server
+        // streams. A subtitle download/upload attaches a new MediaStream server-
+        // side, but the engine's availableTracks flow only re-emits on an engine-
+        // level change — so without this call the newly attached subtitle never
+        // surfaces in `uiState.subtitleTracks` (the track picker source) and the
+        // user couldn't apply it. `mergeServerStreams` picks it up here.
+        trackSelectionHelper.updateTracksFromEngine()
     }
 
     // endregion

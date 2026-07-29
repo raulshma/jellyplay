@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
 
 /**
  * Subtitle styling + the SubtitleManager sheet's download/search state. The
@@ -22,4 +23,6 @@ data class SubtitleState(
     val isUploadingSubtitle: Boolean = false,
     val isLoadingRemoteSubtitles: Boolean = false,
     val defaultSearchLanguage: String = "eng",
+    /** Per-subtitle-id download status, projected from [VideoPlayerUiState.downloadingSubtitles]. */
+    val downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),
 )

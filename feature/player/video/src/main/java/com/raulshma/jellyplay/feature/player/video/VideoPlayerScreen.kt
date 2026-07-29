@@ -2006,8 +2006,10 @@ private fun PlayerSheetRouter(
                 downloadSubtitles = uiState.remoteSubtitles,
                 isDownloading = uiState.isLoadingRemoteSubtitles,
                 onDownload = {
+                    // Keep the sheet open so the row can show a per-subtitle
+                    // spinner / ✓-Downloaded / "Use" affordance instead of closing
+                    // immediately and leaving the user with no download feedback.
                     viewModel.downloadSubtitle(it)
-                    onSheetChange(PlayerSheet.None)
                 },
                 onLoadLocalFile = onLoadLocalSubtitle,
                 // Search tab
@@ -2020,8 +2022,11 @@ private fun PlayerSheetRouter(
                 onSearch = { viewModel.searchRemoteSubtitles(it) },
                 onDownloadSearched = {
                     viewModel.downloadSubtitle(it)
-                    onSheetChange(PlayerSheet.None)
                 },
+                // Shared per-subtitle download status + the "Use" affordance that
+                // opens the subtitle track picker once a download has surfaced.
+                downloadingSubtitles = uiState.downloadingSubtitles,
+                onUseSubtitle = { onSheetChange(PlayerSheet.Subtitle) },
                 // Upload tab
                 isUploading = uiState.isUploadingSubtitle,
                 onUpload = { uri, fileName, language, isForced, isHearingImpaired ->

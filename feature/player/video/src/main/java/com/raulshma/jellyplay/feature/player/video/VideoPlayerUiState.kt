@@ -124,11 +124,12 @@ data class VideoPlayerUiState(
     /** Non-null when the last subtitle search failed (network/server). Lets the
      *  Search tab distinguish a failure from a genuine empty result. */
     val subtitleSearchError: String? = null,
-    /** Download-from-server in-flight flag + failure surface. Mirrors the
-     *  upload path so the UI can show a spinner and retry on network failure
-     *  (previously the failure was silent — see SubtitleManager.downloadSubtitle). */
-    val isDownloadingSubtitle: Boolean = false,
-    val subtitleDownloadError: String? = null,
+    /** Per-subtitle-id download status for the "Get Subtitles" sheet (Download +
+     *  Search tabs). The sheet stays open after a pick and renders a per-row
+     *  spinner / ✓-Downloaded / "taking a while" / failed state keyed by this map,
+     *  instead of the former single global boolean that closed the panel on pick.
+     *  See [SubtitleManager.downloadSubtitle] and [SubtitleDownloadStatus]. */
+    val downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),
     val isUploadingSubtitle: Boolean = false,
     val defaultSearchLanguage: String = "eng",
     val syncPlayGroupName: String? = null,
@@ -269,6 +270,7 @@ data class VideoPlayerUiState(
             isUploadingSubtitle = isUploadingSubtitle,
             isLoadingRemoteSubtitles = isLoadingRemoteSubtitles,
             defaultSearchLanguage = defaultSearchLanguage,
+            downloadingSubtitles = downloadingSubtitles,
         )
 
     val effects: AudioEffectsState
