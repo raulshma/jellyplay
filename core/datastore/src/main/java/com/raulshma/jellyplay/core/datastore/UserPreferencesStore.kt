@@ -210,6 +210,7 @@ class UserPreferencesStore @Inject constructor(
         val VIRTUALIZER_ENABLED = booleanPreferencesKey("virtualizer_enabled")
         val AUTO_EQ_BY_GENRE = booleanPreferencesKey("auto_eq_by_genre")
         val HOME_HERO_ENABLED = booleanPreferencesKey("home_hero_enabled")
+        val HOME_BACKDROP_ENABLED = booleanPreferencesKey("home_backdrop_enabled")
         val NAV_BAR_SHOW_LABELS = booleanPreferencesKey("nav_bar_show_labels")
         val HIDE_BOTTOM_NAV_ON_SCROLL = booleanPreferencesKey("hide_bottom_nav_on_scroll")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
@@ -385,7 +386,7 @@ class UserPreferencesStore @Inject constructor(
                 "video_show_playback_metadata", "audio_normalization_enabled",
                 "channel_mix_enabled", "audio_gapless_enabled", "sleep_timer_end_of_episode",
                 "dream_ken_burns_enabled", "dream_show_title", "bass_boost_enabled",
-                "virtualizer_enabled", "auto_eq_by_genre", "home_hero_enabled",
+                "virtualizer_enabled", "auto_eq_by_genre", "home_hero_enabled", "home_backdrop_enabled",
                 "nav_bar_show_labels", "onboarding_completed", "performance_mode",
                 "newsletter_enabled", "wifi_only_downloads", "monochrome_mode",
             )
@@ -1071,6 +1072,7 @@ class UserPreferencesStore @Inject constructor(
             navBarShowLabels = readBool(prefs, Keys.NAV_BAR_SHOW_LABELS, "nav_bar_show_labels", true),
             hideBottomNavOnScroll = readBool(prefs, Keys.HIDE_BOTTOM_NAV_ON_SCROLL, "hide_bottom_nav_on_scroll", true),
             homeHeroEnabled = readBool(prefs, Keys.HOME_HERO_ENABLED, "home_hero_enabled", true),
+            homeBackdropEnabled = readBool(prefs, Keys.HOME_BACKDROP_ENABLED, "home_backdrop_enabled", true),
             onboardingCompleted = readBool(prefs, Keys.ONBOARDING_COMPLETED, "onboarding_completed", false),
             mpvConfig = mpvConfig,
             libVlcConfig = libVlcConfig,
@@ -2324,6 +2326,10 @@ class UserPreferencesStore @Inject constructor(
         dataStore.edit { it[Keys.HOME_HERO_ENABLED] = enabled }
     }
 
+    suspend fun setHomeBackdropEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.HOME_BACKDROP_ENABLED] = enabled }
+    }
+
     suspend fun setOnboardingCompleted(completed: Boolean) {
         dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
     }
@@ -2564,6 +2570,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.NAV_BAR_SHOW_LABELS] = prefs.navBarShowLabels
             settings[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = prefs.hideBottomNavOnScroll
             settings[Keys.HOME_HERO_ENABLED] = prefs.homeHeroEnabled
+            settings[Keys.HOME_BACKDROP_ENABLED] = prefs.homeBackdropEnabled
             settings[Keys.ONBOARDING_COMPLETED] = prefs.onboardingCompleted
             settings[Keys.MPV_CONFIG] = json.encodeToString(
                 kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.MpvEngineConfig>(),
@@ -2960,7 +2967,7 @@ class UserPreferencesStore @Inject constructor(
             Keys.DOWNLOAD_SCHEDULE_END, Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY,
         )
         PreferenceResetCategory.HOME_DISCOVERY -> listOf(
-            Keys.HOME_MODE, Keys.HOME_HERO_ENABLED,
+            Keys.HOME_MODE, Keys.HOME_HERO_ENABLED, Keys.HOME_BACKDROP_ENABLED,
             Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
             Keys.HOME_LIBRARY_SECTION_OVERRIDES, Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS,
             Keys.LIBRARY_VIEW_MODE, Keys.NAV_BAR_SHOW_LABELS,

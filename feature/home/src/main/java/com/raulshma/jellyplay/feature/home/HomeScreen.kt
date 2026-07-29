@@ -299,6 +299,20 @@ private fun MainHomeContent(
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize().drawBehind { drawRect(backgroundColor) }) {
+            // Ambient backdrop: the hero artwork's BlurHash, or a palette-derived
+            // gradient when no hero/blurhash is available. Sits behind all content
+            // and above the flat background fill. Suppressed in performance mode.
+            HomeBackdrop(
+                state = HomeBackdropState(
+                    enabled = state.homeBackdropEnabled,
+                    performanceMode = state.performanceMode,
+                    oledMode = state.oledMode,
+                    isLightTheme = isLightTheme,
+                    blurHash = heroController.featuredItem?.blurHashes?.backdrop,
+                    backdropUrl = heroController.backdropUrl,
+                    backgroundColor = backgroundColor,
+                ),
+            )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -368,6 +382,7 @@ private fun MainHomeContent(
                             state = HomeContentState(
                                 isLoading = state.isLoading,
                                 homeHeroEnabled = state.homeHeroEnabled,
+                                homeBackdropEnabled = state.homeBackdropEnabled,
                                 newsletterBannerVisible = state.newsletterBannerVisible,
                                 discoverEnabled = state.discoverEnabled,
                                 experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,

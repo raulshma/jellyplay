@@ -442,6 +442,9 @@
     <string name="settings_show_hero_section">Show Hero Section</string>
     <string name="settings_show_hero_on">Featured content banner on home</string>
     <string name="settings_show_hero_off">Compact home layout</string>
+    <string name="settings_home_backdrop">Home Backdrop</string>
+    <string name="settings_home_backdrop_on">Blur the hero artwork as an ambient background</string>
+    <string name="settings_home_backdrop_off">Solid background colour</string>
     <string name="settings_show_clock_home">Show Clock on Home</string>
     <string name="settings_show_clock_on">Display current time in top bar</string>
     <string name="settings_show_clock_off">No clock on home</string>
