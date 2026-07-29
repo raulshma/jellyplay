@@ -436,6 +436,21 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun homeBackdropEnabled_mapsFromPreferences_toUiState() = runTest {
+        prefsFlow.value = UserPreferences(homeBackdropEnabled = false)
+        viewModel = buildViewModel()
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.homeBackdropEnabled)
+
+        prefsFlow.value = UserPreferences(homeBackdropEnabled = true)
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.homeBackdropEnabled)
+        stopPeriodicRefresh()
+    }
+
+    @Test
     fun setSectionVisible_removesTypeFromEnabledSet() = runTest {
         // Start with all configurable types enabled.
         prefsFlow.value = UserPreferences(

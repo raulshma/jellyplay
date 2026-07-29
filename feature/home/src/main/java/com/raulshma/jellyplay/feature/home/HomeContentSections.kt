@@ -68,6 +68,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberInt
 internal data class HomeContentState(
     val isLoading: Boolean,
     val homeHeroEnabled: Boolean,
+    val homeBackdropEnabled: Boolean,
     val newsletterBannerVisible: Boolean,
     val discoverEnabled: Boolean,
     val experimentalCardClippingEnabled: Boolean,
@@ -217,6 +218,7 @@ internal fun HomeContentList(
                         height = state.headerHeight,
                         backgroundColor = state.backgroundColor,
                         contentPadding = state.contentPad,
+                        homeBackdropEnabled = state.homeBackdropEnabled,
                         listState = listState,
                         onItemClick = callbacks.onItemClick,
                         onDetailsClick = callbacks.onItemClick,
@@ -299,9 +301,14 @@ internal fun HomeContentList(
                     .animateItem(placementSpec = placementSpec)
                     .fillMaxWidth()
                     .then(
-                        if (isFirstAfterHero) {
-                            Modifier.background(heroTransitionBrush)
-                        } else Modifier.background(state.backgroundColor)
+                        when {
+                            // With the ambient backdrop on, sections stay transparent so the
+                            // backdrop shows through between cards; the hero itself fades to
+                            // transparent so no merge gradient is needed here.
+                            state.homeBackdropEnabled -> Modifier
+                            isFirstAfterHero -> Modifier.background(heroTransitionBrush)
+                            else -> Modifier.background(state.backgroundColor)
+                        }
                     )
                     .padding(top = if (isFirstAfterHero) 0.dp else 16.dp)
                     .graphicsLayer {
@@ -383,6 +390,7 @@ internal fun HomeContentList(
                         text = "Discover",
                         backgroundColor = state.backgroundColor,
                         contentPad = state.contentPad,
+                        homeBackdropEnabled = state.homeBackdropEnabled,
                     )
                 }
 
@@ -421,6 +429,7 @@ internal fun HomeContentList(
                         text = "Coming Soon",
                         backgroundColor = state.backgroundColor,
                         contentPad = state.contentPad,
+                        homeBackdropEnabled = state.homeBackdropEnabled,
                     )
                 }
                 item(key = "arr_recently_grabbed_row") {
@@ -487,6 +496,7 @@ private fun SectionHeader(
     text: String,
     backgroundColor: Color,
     contentPad: Dp,
+    homeBackdropEnabled: Boolean = false,
 ) {
     Text(
         text = text,
@@ -494,7 +504,9 @@ private fun SectionHeader(
         color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier
             .fillMaxWidth()
-            .background(backgroundColor)
+            // Transparent over the ambient backdrop so it shows through headers;
+            // opaque flat fill otherwise.
+            .then(if (homeBackdropEnabled) Modifier else Modifier.background(backgroundColor))
             .padding(start = contentPad, top = 24.dp, bottom = 8.dp),
     )
 }

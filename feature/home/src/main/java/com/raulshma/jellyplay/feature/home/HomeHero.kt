@@ -47,12 +47,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -96,6 +99,7 @@ fun AnimatedHeroHeader(
     height: Dp,
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
+    homeBackdropEnabled: Boolean = false,
     listState: LazyListState,
     onItemClick: (String) -> Unit,
     onDetailsClick: ((String) -> Unit)? = null,
@@ -163,6 +167,7 @@ fun AnimatedHeroHeader(
             height = height,
             backgroundColor = backgroundColor,
             contentPadding = contentPadding,
+            homeBackdropEnabled = homeBackdropEnabled,
             parallaxOffset = parallaxOffset,
             onClick = { onItemClick(currentFeatured.id) },
             onDetailsClick = onDetailsClick?.let { { it(currentFeatured.id) } },
@@ -182,6 +187,7 @@ fun HeroHeader(
     height: Dp,
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
+    homeBackdropEnabled: Boolean = false,
     parallaxOffset: Float = 0f,
     onClick: () -> Unit,
     onDetailsClick: (() -> Unit)? = null,
@@ -316,11 +322,14 @@ fun HeroHeader(
 
     val heroShape = remember(isTv, adaptiveInfo.windowSizeClass) {
         if (!isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
+            // Bottom corners are squared: the hero artwork fades to transparent
+            // at the bottom edge, so a flat bottom merges seamlessly into the
+            // screen backdrop instead of showing a rounded image edge.
             smoothCornerShape(
                 cornerRadiusTL = 0.dp,
                 cornerRadiusTR = 0.dp,
-                cornerRadiusBL = 36.dp,
-                cornerRadiusBR = 14.dp,
+                cornerRadiusBL = 0.dp,
+                cornerRadiusBR = 0.dp,
             )
         } else {
             RectangleShape
@@ -356,6 +365,31 @@ fun HeroHeader(
                     translationY = parallaxOffset
                     scaleX = breathScale
                     scaleY = breathScale
+                    // DstIn mask below erases pixels directly; an offscreen layer
+                    // scopes the erase to this node's content instead of blending
+                    // against whatever happens to sit behind it.
+                    compositingStrategy = CompositingStrategy.Offscreen
+                }
+                // Dissolve the bottom edge into transparency so the hero melts
+                // into the ambient backdrop (a blurred tint of the same artwork)
+                // instead of hard-cutting at a rectangular edge. DstIn keeps the
+                // image where the mask alpha is opaque and erases it to transparent
+                // where it isn't, letting whatever sits behind (HomeBackdrop, or
+                // the flat fill when the backdrop is off) show through. The mask
+                // is fixed to the hero Box, so it doesn't ride the parallax scroll.
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to Color.Black,
+                                0.55f to Color.Black,
+                                0.85f to Color.Transparent,
+                                1.0f to Color.Transparent,
+                            ),
+                        ),
+                        blendMode = BlendMode.DstIn,
+                    )
                 },
             contentScale = ContentScale.Crop,
             // Full-bleed hero: decode large enough to stay sharp on a 4K TV.
@@ -368,29 +402,42 @@ fun HeroHeader(
             size = CoilSize(1920, 1080),
         )
 
-        // The scrim gradient is remember-ed on backgroundColor, which is an
-        // animated color (the dynamic-theming lerp). Each animation frame
-        // invalidates the remember and allocates a new 5-stop Brush. This is a
-        // draw-phase cost on a single hero instance (not a per-card grid), so
-        // it is an accepted trade-off — the constant Black stops and the
-        // variable background stops can't be split cheaply without a custom
-        // drawBehind that still allocates a Brush internally.
+        // Legibility scrim: darkens only the top third (title/overline sits at
+        // the bottom, which is protected by the dissolve into the backdrop, and
+        // the ambient backdrop itself is already dark). The bottom is left
+        // transparent so that the image, which erodes to transparent via the
+        // DstIn mask above, blends straight into the HomeBackdrop behind it —
+        // no flat fill seam. When the backdrop is off we still keep the top
+        // darkening; the bottom transparent strip just merges into the flat
+        // background fill that sits behind the whole screen.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    remember(backgroundColor) {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.45f),
-                                Color.Transparent,
-                                backgroundColor.copy(alpha = 0.3f),
-                                backgroundColor.copy(alpha = 0.85f),
-                                backgroundColor,
-                            ),
-                            startY = 0f,
-                            endY = Float.POSITIVE_INFINITY,
-                        )
+                    remember(backgroundColor, homeBackdropEnabled) {
+                        if (homeBackdropEnabled) {
+                            // Top legibility only; bottom transparent so the dissolved
+                            // artwork hands off to the ambient backdrop seamlessly.
+                            Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0.0f to Color.Black.copy(alpha = 0.45f),
+                                    0.3f to Color.Transparent,
+                                    0.6f to Color.Transparent,
+                                    1.0f to Color.Transparent,
+                                ),
+                            )
+                        } else {
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.45f),
+                                    Color.Transparent,
+                                    backgroundColor.copy(alpha = 0.3f),
+                                    backgroundColor,
+                                ),
+                                startY = 0f,
+                                endY = Float.POSITIVE_INFINITY,
+                            )
+                        }
                     }
                 )
         )

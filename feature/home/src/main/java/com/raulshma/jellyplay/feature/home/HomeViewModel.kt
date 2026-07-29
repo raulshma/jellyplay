@@ -344,6 +344,8 @@ class HomeViewModel @Inject constructor(
                     colorStyle = prefs.colorStyle,
                     accentColorSwatch = prefs.accentColorSwatch,
                     homeHeroEnabled = prefs.homeHeroEnabled,
+                    homeBackdropEnabled = prefs.homeBackdropEnabled,
+                    performanceMode = prefs.performanceMode,
                     showClock = prefs.showClockOnHome,
                     showSettingsInHomeSearch = prefs.showSettingsInHomeSearch,
                     continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,

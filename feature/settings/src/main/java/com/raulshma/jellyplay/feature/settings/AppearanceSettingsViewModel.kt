@@ -83,6 +83,7 @@ class AppearanceSettingsViewModel @Inject constructor(
     fun setHomeSectionOrder(order: List<HomeSectionType>) =
         editor.edit { setHomeSectionOrder(order) }
     fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)
+    fun setHomeBackdropEnabled(enabled: Boolean) = editor.setHomeBackdropEnabled(enabled)
     fun setNavBarShowLabels(show: Boolean) = editor.setNavBarShowLabels(show)
     fun setHideSearchHistory(enabled: Boolean) =
         editor.edit { setHideSearchHistory(enabled) }

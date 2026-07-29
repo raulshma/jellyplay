@@ -93,7 +93,7 @@ fun AppearanceSettingsScreen(
     val scrollIndex = remember(highlightSettingId, showAdvanced) {
         val themeGroup = listOf(
             "theme_mode", "theme_scheduler", "synthwave_mode", "soothing_mode", "monochrome_mode",
-            "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section",
+            "dynamic_theming", "oled_mode", "contrast", "library_view_mode", "home_mode", "hero_section", "home_backdrop",
             "clock_home", "settings_in_home_search", "continue_watching_click", "unhide_cw", "merge_continue_next_up", "next_up_max_days",
             "next_up_rewatching", "theme_music", "nav_labels", "date_format", "font_scale", "color_blind_mode",
             "hand_mode", "scheduled_start", "scheduled_end",
@@ -245,6 +245,7 @@ fun AppearanceSettingsScreen(
                                 add("library_view_mode")
                                 add("home_mode")
                                 add("hero_section")
+                                add("home_backdrop")
                                 add("clock_home")
                                 add("settings_in_home_search")
                                 add("continue_watching_click")
@@ -466,6 +467,17 @@ fun AppearanceSettingsScreen(
                                     highlighted = highlightSettingId == "hero_section",
                                     index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setHomeHeroEnabled(it) },
+                                )
+                            }
+                            "home_backdrop" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Background,
+                                    title = stringResource(R.string.settings_home_backdrop),
+                                    subtitle = if (preferences.homeBackdropEnabled) stringResource(R.string.settings_home_backdrop_on) else stringResource(R.string.settings_home_backdrop_off),
+                                    checked = preferences.homeBackdropEnabled,
+                                    highlighted = highlightSettingId == "home_backdrop",
+                                    index = currentIdx++, count = totalCount,
+                                    onCheckedChange = { viewModel.setHomeBackdropEnabled(it) },
                                 )
                             }
                             "clock_home" -> {

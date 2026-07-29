@@ -124,6 +124,13 @@ data class UserPreferences(
      */
     val hideBottomNavOnScroll: Boolean = true,
     val homeHeroEnabled: Boolean = true,
+    /**
+     * Whether the home screen renders an ambient backdrop behind its content:
+     * the hero artwork's BlurHash when available, otherwise an animated
+     * palette-derived ambient gradient. Falls back to the flat background
+     * colour when disabled or in performance mode.
+     */
+    val homeBackdropEnabled: Boolean = true,
     val onboardingCompleted: Boolean = false,
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
     val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),
