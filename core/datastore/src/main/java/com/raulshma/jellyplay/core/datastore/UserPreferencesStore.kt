@@ -3009,7 +3009,7 @@ class UserPreferencesStore @Inject constructor(
             Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, Keys.DEFAULT_CASTING_STRATEGY,
             Keys.BACKGROUND_CASTING_ENABLED, Keys.PREFERRED_RENDERER,
             Keys.DVR_PRE_PADDING_MINUTES, Keys.DVR_POST_PADDING_MINUTES,
-            Keys.DVR_RECORDING_QUALITY,
+            Keys.DVR_RECORDING_QUALITY, Keys.LIVE_STREAM_OPTION,
         )
         PreferenceResetCategory.PLAYER_ENGINES -> listOf(
             Keys.MPV_CONFIG, Keys.LIBVLC_CONFIG, Keys.EXO_CONFIG,
