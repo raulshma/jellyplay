@@ -132,19 +132,9 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
             views.setTextViewText(R.id.sr_widget_subtitle, readSourceLabel(context, appWidgetId))
 
             // Apply responsive rules
-            val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
-            if (options != null) {
-                val config = context.resources.configuration
-                val isLandscape = config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
-                val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
-                val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
-                val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
-                var width = if (isLandscape) maxWidth else minWidth
-                var height = if (isLandscape) minHeight else maxHeight
-
-                if (width <= 0) width = 280
-                if (height <= 0) height = 250
+            val dims = widgetDimensionsFromOptions(context, appWidgetManager.getAppWidgetOptions(appWidgetId), 250)
+            if (dims != null) {
+                val height = dims.height
 
                 if (height < 130) {
                     views.setViewVisibility(R.id.sr_widget_header, android.view.View.GONE)
