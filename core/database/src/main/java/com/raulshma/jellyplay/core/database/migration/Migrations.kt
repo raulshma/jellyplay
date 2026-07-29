@@ -641,8 +641,20 @@ val MIGRATION_37_38 = object : Migration(37, 38) {
     }
 }
 
+// Per-series subtitle role preference: lets a series pin "English Forced" or
+// "English SDH" alongside the language so the restore matcher (TrackSelectionHelper)
+// carries the right same-language track episode to episode. Both columns nullable:
+// NULL means "don't care" (preserves today's language-only behaviour for existing
+// rows), so this migration is non-destructive.
+val MIGRATION_38_39 = object : Migration(38, 39) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN subtitleForced INTEGER")
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN subtitleHearingImpaired INTEGER")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v38 migration chain, with the
+ * The complete, correctly-ordered v1→v39 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -688,4 +700,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_35_36,
         MIGRATION_36_37,
         MIGRATION_37_38,
+        MIGRATION_38_39,
     )

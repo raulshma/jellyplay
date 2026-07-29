@@ -28,19 +28,29 @@ interface ItemPlaybackPreferenceRepository {
      * [clearDialogueBoostStrength] to *explicitly* clear a single field
      * (passing `null` here does NOT clear — it means "not provided").
      * If all fields end up null the row is removed to keep the table tidy.
+     *
+     * The subtitle role fields ([subtitleForced], [subtitleHearingImpaired]) pin
+     * the preferred subtitle's role alongside [subtitleLanguage]. They are cleared
+     * together with the language by [clearSubtitleLanguage].
      */
     suspend fun save(
         scope: PlaybackPrefScope,
         key: String,
         audioLanguage: String? = null,
         subtitleLanguage: String? = null,
+        subtitleForced: Boolean? = null,
+        subtitleHearingImpaired: Boolean? = null,
         dialogueBoostStrength: com.raulshma.jellyplay.core.model.EffectStrength? = null,
     )
 
     /** Clears the audio-language field for [scope]/[key] (other fields are preserved). */
     suspend fun clearAudioLanguage(scope: PlaybackPrefScope, key: String)
 
-    /** Clears the subtitle-language field for [scope]/[key] (the audio field is preserved). */
+    /**
+     * Clears the subtitle-language field for [scope]/[key], together with its
+     * pinned role ([subtitleForced] / [subtitleHearingImpaired]); the audio and
+     * dialogue-boost fields are preserved.
+     */
     suspend fun clearSubtitleLanguage(scope: PlaybackPrefScope, key: String)
 
     /** Clears the dialogue-boost field for [scope]/[key] (other fields are preserved). */

@@ -117,6 +117,7 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
+import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
@@ -1896,16 +1897,24 @@ private fun PlayerSheetRouter(
                 onDismiss = dismissSheet,
                 footer = if (uiState.seriesId != null) {
                     {
+                        // Per-series subtitle preference toggle. Saves the
+                        // currently-selected track's language AND its role
+                        // (forced / SDH) so every episode restores the right
+                        // same-language track; toggling off forgets it.
                         RememberPreferenceToggle(
                             label = "Remember subtitle language for this series",
                             checked = uiState.hasSeriesSubtitlePref,
                             onToggle = { remember ->
-                                val lang = if (remember) {
-                                    uiState.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }?.language
+                                val sel = if (remember) {
+                                    uiState.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }
                                 } else {
                                     null
                                 }
-                                viewModel.setSeriesSubtitleLanguagePreference(lang)
+                                viewModel.setSeriesSubtitlePreference(
+                                    language = sel?.language,
+                                    forced = sel?.badges?.contains(TrackBadge.FORCED),
+                                    hearingImpaired = sel?.badges?.contains(TrackBadge.SDH),
+                                )
                             },
                         )
                     }

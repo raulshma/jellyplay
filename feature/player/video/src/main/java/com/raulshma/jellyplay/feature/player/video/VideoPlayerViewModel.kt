@@ -1517,13 +1517,22 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     /**
-     * Saves/clears a per-series preferred subtitle language. Pass the language
-     * of the currently-selected subtitle track to remember it, or null to
-     * forget. No-op when the current item has no series.
+     * Saves/clears a per-series preferred subtitle descriptor (language + role).
+     * Pass the language/role of the currently-selected subtitle track to remember
+     * it, or a null language to forget. The role fields ([forced] /
+     * [hearingImpaired]) are optional: null means "don't care about that role",
+     * a value pins it so the restore matcher prefers e.g. "English SDH" episode
+     * to episode. No-op when the current item has no series.
      */
-    fun setSeriesSubtitleLanguagePreference(language: String?) {
+    fun setSeriesSubtitlePreference(
+        language: String?,
+        forced: Boolean? = null,
+        hearingImpaired: Boolean? = null,
+    ) {
         val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
         launch {
+            // null = "forget": use the explicit clear so save()'s "null ⇒ preserve"
+            // semantics don't silently keep the old language forever.
             if (language == null) {
                 itemPlaybackPreferenceRepository.clearSubtitleLanguage(PlaybackPrefScope.SERIES, seriesId)
             } else {
@@ -1531,6 +1540,8 @@ class VideoPlayerViewModel @Inject constructor(
                     scope = PlaybackPrefScope.SERIES,
                     key = seriesId,
                     subtitleLanguage = language,
+                    subtitleForced = forced,
+                    subtitleHearingImpaired = hearingImpaired,
                 )
             }
             trackSelectionHelper.refreshPlaybackPreferences()

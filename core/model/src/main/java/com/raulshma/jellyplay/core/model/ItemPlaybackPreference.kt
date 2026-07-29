@@ -39,6 +39,13 @@ enum class PlaybackPrefScope {
  *   (when [PlaybackPrefScope.SERIES]).
  * @param audioLanguage preferred audio language code (ISO-639), or null to inherit.
  * @param subtitleLanguage preferred subtitle language code (ISO-639), or null to inherit.
+ * @param subtitleForced whether the preferred subtitle should be a forced-narrative
+ *   track, or null to not care. Lets a series pin "English Forced" so the
+ *   restore matcher (in `TrackSelectionHelper`) prefers forced over plain for
+ *   every episode, relaxing only when absent.
+ * @param subtitleHearingImpaired whether the preferred subtitle should be an SDH /
+ *   hearing-impaired track, or null to not care. Pairs with [subtitleLanguage]
+ *   so a series can pin "English SDH" and have it carried episode to episode.
  * @param dialogueBoostStrength per-item dialogue-boost strength, or null to use the
  *   effective default ([EffectStrength.NONE]).
  * @param updatedAt epoch millis of the last write.
@@ -50,6 +57,8 @@ data class ItemPlaybackPreference(
     val key: String,
     val audioLanguage: String? = null,
     val subtitleLanguage: String? = null,
+    val subtitleForced: Boolean? = null,
+    val subtitleHearingImpaired: Boolean? = null,
     val dialogueBoostStrength: EffectStrength? = null,
     val updatedAt: Long = System.currentTimeMillis(),
 )

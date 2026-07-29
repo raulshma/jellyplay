@@ -99,4 +99,36 @@ class ItemPlaybackPreferenceDaoTest {
         assertNotNull(dao.getByKey("SERIES", "series-2"))
         assertEquals(1, dao.countByScope("SERIES"))
     }
+
+    @Test
+    fun `subtitle role fields round-trip`() = runTest {
+        // Proves the v38→v39 columns (subtitleForced / subtitleHearingImpaired)
+        // exist and are read/written by the Room-generated mapping.
+        dao.upsert(
+            ItemPlaybackPreferenceEntity(
+                scope = "SERIES",
+                key = "series-1",
+                audioLanguage = null,
+                subtitleLanguage = "eng",
+                subtitleForced = true,
+                subtitleHearingImpaired = true,
+                updatedAt = 1_000L,
+            )
+        )
+        val saved = dao.getByKey("SERIES", "series-1")
+        assertNotNull(saved)
+        assertEquals(true, saved!!.subtitleForced)
+        assertEquals(true, saved.subtitleHearingImpaired)
+    }
+
+    @Test
+    fun `subtitle role fields default to null when omitted`() = runTest {
+        // Legacy/default behaviour: a row written without the role fields reads
+        // both as null (preserves today's language-only semantics).
+        dao.upsert(pref(subtitleLanguage = "eng"))
+        val saved = dao.getByKey("SERIES", "series-1")
+        assertNotNull(saved)
+        assertNull(saved!!.subtitleForced)
+        assertNull(saved.subtitleHearingImpaired)
+    }
 }

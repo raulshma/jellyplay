@@ -445,14 +445,14 @@ internal fun PlayerControls(
                         } else Modifier
                     ),
             ) {
-                val tvRewindFocusState = rememberTvFocusState(focusedScale = 1.08f)
+                val tvPreviousEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
                     onClick = onPreviousEpisode,
                     enabled = hasPreviousEpisode,
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
-                        .then(tvRewindFocusState.focusModifier)
-                        .tvFocusIndicator(tvRewindFocusState, IconButtonDefaults.largeRoundShape),
+                        .then(tvPreviousEpisodeFocusState.focusModifier)
+                        .tvFocusIndicator(tvPreviousEpisodeFocusState, IconButtonDefaults.largeRoundShape),
                     shape = IconButtonDefaults.largeRoundShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -460,7 +460,7 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        Tabler.Outline.PlayerTrackPrev, "Previous episode",
+                        Tabler.Outline.PlayerSkipBack, "Previous episode",
                         modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }
@@ -486,14 +486,14 @@ internal fun PlayerControls(
                     )
                 }
 
-                val tvForwardFocusState = rememberTvFocusState(focusedScale = 1.08f)
+                val tvNextEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
                     onClick = onNextEpisode,
                     enabled = hasNextEpisode,
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
-                        .then(tvForwardFocusState.focusModifier)
-                        .tvFocusIndicator(tvForwardFocusState, IconButtonDefaults.largeRoundShape),
+                        .then(tvNextEpisodeFocusState.focusModifier)
+                        .tvFocusIndicator(tvNextEpisodeFocusState, IconButtonDefaults.largeRoundShape),
                     shape = IconButtonDefaults.largeRoundShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -501,7 +501,7 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        Tabler.Outline.PlayerTrackNext, "Next episode",
+                        Tabler.Outline.PlayerSkipForward, "Next episode",
                         modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }

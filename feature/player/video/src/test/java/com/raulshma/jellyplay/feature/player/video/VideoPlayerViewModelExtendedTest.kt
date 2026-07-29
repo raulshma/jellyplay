@@ -178,8 +178,8 @@ class VideoPlayerViewModelExtendedTest {
     }
 
     @Test
-    fun setSeriesSubtitleLanguagePreference_triggersRepositoryUpdateWhenSeriesIdPresent() {
-        viewModel.setSeriesSubtitleLanguagePreference("spa")
+    fun setSeriesSubtitlePreference_triggersRepositoryUpdateWhenSeriesIdPresent() {
+        viewModel.setSeriesSubtitlePreference("spa")
         assertEquals(viewModel.uiState.value.title, "")
     }
 }

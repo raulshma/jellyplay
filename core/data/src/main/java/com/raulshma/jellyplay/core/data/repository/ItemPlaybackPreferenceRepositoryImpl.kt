@@ -23,6 +23,8 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
         key: String,
         audioLanguage: String?,
         subtitleLanguage: String?,
+        subtitleForced: Boolean?,
+        subtitleHearingImpaired: Boolean?,
         dialogueBoostStrength: com.raulshma.jellyplay.core.model.EffectStrength?,
     ) {
         // Wrap the read-merge-write in a transaction so two concurrent `save`
@@ -35,11 +37,15 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
             // remain distinguishable.
             val mergedAudio = audioLanguage ?: existing?.audioLanguage
             val mergedSub = subtitleLanguage ?: existing?.subtitleLanguage
+            val mergedForced = subtitleForced ?: existing?.subtitleForced
+            val mergedSdh = subtitleHearingImpaired ?: existing?.subtitleHearingImpaired
             val mergedBoost = dialogueBoostStrength ?: existing?.dialogueBoostStrength?.let {
                 runCatching { com.raulshma.jellyplay.core.model.EffectStrength.valueOf(it) }.getOrNull()
             }
             // A row with nothing set carries no preference — drop it so the table
-            // stays tidy and `get` returns null (i.e. "inherit global").
+            // stays tidy and `get` returns null (i.e. "inherit global"). Subtitle
+            // role fields only persist alongside a language, so they are never the
+            // sole occupants of a row.
             if (mergedAudio == null && mergedSub == null && mergedBoost == null) {
                 dao.deleteByKey(scope.name, key)
                 return@withTransaction
@@ -51,6 +57,8 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
                     key = key,
                     audioLanguage = mergedAudio,
                     subtitleLanguage = mergedSub,
+                    subtitleForced = mergedForced,
+                    subtitleHearingImpaired = mergedSdh,
                     dialogueBoostStrength = mergedBoost?.name,
                     updatedAt = System.currentTimeMillis(),
                 )
@@ -71,9 +79,19 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
     override suspend fun clearSubtitleLanguage(scope: PlaybackPrefScope, key: String) {
         val existing = dao.getByKey(scope.name, key) ?: return
         if (existing.audioLanguage == null && existing.dialogueBoostStrength == null) {
+            // Nothing left to remember — remove the row entirely.
             dao.deleteByKey(scope.name, key)
         } else {
-            dao.upsert(existing.copy(subtitleLanguage = null, updatedAt = System.currentTimeMillis()))
+            // Clear the subtitle language AND its pinned role together: the role
+            // is meaningless without a language to apply it to.
+            dao.upsert(
+                existing.copy(
+                    subtitleLanguage = null,
+                    subtitleForced = null,
+                    subtitleHearingImpaired = null,
+                    updatedAt = System.currentTimeMillis(),
+                )
+            )
         }
     }
 
@@ -96,6 +114,8 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
             key = key,
             audioLanguage = audioLanguage,
             subtitleLanguage = subtitleLanguage,
+            subtitleForced = subtitleForced,
+            subtitleHearingImpaired = subtitleHearingImpaired,
             dialogueBoostStrength = dialogueBoostStrength?.let {
                 runCatching { com.raulshma.jellyplay.core.model.EffectStrength.valueOf(it) }.getOrNull()
             },
