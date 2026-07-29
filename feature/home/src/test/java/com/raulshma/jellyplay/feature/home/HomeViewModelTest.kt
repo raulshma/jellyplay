@@ -631,6 +631,129 @@ class HomeViewModelTest {
         stopPeriodicRefresh()
     }
 
+    @Test
+    fun refresh_resetsScrollAndFetchesSections() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        viewModel = buildViewModel()
+        viewModel.saveHomeScrollPosition(5, 100)
+
+        viewModel.onEvent(HomeUiEvent.Refresh)
+        runCurrent()
+
+        val pos = viewModel.getHomeScrollPosition()
+        assertEquals(0, pos.firstVisibleItemIndex)
+        assertEquals(0, pos.firstVisibleItemScrollOffset)
+        coVerify { mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun pullToRefresh_invalidatesDiscoverCache_andRefetches() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        viewModel = buildViewModel()
+
+        viewModel.onEvent(HomeUiEvent.PullToRefresh)
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.isRefreshing)
+        coVerify { mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun dismissNewsletterBanner_updatesUiState() = runTest {
+        viewModel = buildViewModel()
+
+        viewModel.onEvent(HomeUiEvent.DismissNewsletterBanner)
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.newsletterBannerVisible)
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun saveHomeScrollPosition_storesPositiveValues_andClampsNegatives() = runTest {
+        viewModel = buildViewModel()
+
+        viewModel.saveHomeScrollPosition(3, 150)
+        var pos = viewModel.getHomeScrollPosition()
+        assertEquals(3, pos.firstVisibleItemIndex)
+        assertEquals(150, pos.firstVisibleItemScrollOffset)
+
+        viewModel.saveHomeScrollPosition(-10, -50)
+        pos = viewModel.getHomeScrollPosition()
+        assertEquals(0, pos.firstVisibleItemIndex)
+        assertEquals(0, pos.firstVisibleItemScrollOffset)
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun prefetchPhotoFolderChildUrls_callsPrefetcher_andUpdatesState() = runTest {
+        val items = listOf(item("p1"))
+        coEvery { photoFolderPrefetcher.prefetch(items, any()) } returns mapOf("p1" to listOf("url1", "url2"))
+        viewModel = buildViewModel()
+
+        viewModel.prefetchPhotoFolderChildUrls(items)
+        runCurrent()
+
+        assertEquals(mapOf("p1" to listOf("url1", "url2")), viewModel.photoFolderChildUrls.value)
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun fetchAndUpdateSections_onFailure_setsErrorState() = runTest {
+        coEvery {
+            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.failure(RuntimeException("Connection timeout"))
+        viewModel = buildViewModel()
+
+        userFlow.value = userInfo("u1")
+        runCurrent()
+
+        assertEquals("Connection timeout", viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isLoading)
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun selectSeerrRequestItem_and_clearRequestResult() = runTest {
+        viewModel = buildViewModel()
+
+        val seerrItem = com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem(
+            id = 10,
+            mediaType = "movie",
+            title = "Test Seerr Movie",
+        )
+        viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(seerrItem))
+        runCurrent()
+
+        assertEquals(seerrItem, viewModel.uiState.value.seerrRequestState.requestItem)
+
+        viewModel.onEvent(HomeUiEvent.ClearRequestResult)
+        runCurrent()
+
+        org.junit.Assert.assertNull(viewModel.uiState.value.seerrRequestState.result)
+        stopPeriodicRefresh()
+    }
+
+    @Test
+    fun getImageUrl_and_getBackdropUrl_delegateToProvider() = runTest {
+        every { imageUrlProvider.getImageUrl("item-99") } returns "http://server/item-99/poster"
+        every { imageUrlProvider.getBackdropUrl("item-99") } returns "http://server/item-99/backdrop"
+        viewModel = buildViewModel()
+
+        val posterUrl = viewModel.getImageUrl("item-99")
+        val backdropUrl = viewModel.getBackdropUrl("item-99")
+
+        assertEquals("http://server/item-99/poster", posterUrl)
+        assertEquals("http://server/item-99/backdrop", backdropUrl)
+        stopPeriodicRefresh()
+    }
+
     private fun userInfo(id: String) = UserInfo(
         id = id,
         name = "Tester",
