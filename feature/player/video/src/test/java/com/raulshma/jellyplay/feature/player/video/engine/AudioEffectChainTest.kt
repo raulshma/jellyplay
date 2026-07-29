@@ -371,6 +371,54 @@ class AudioEffectChainTest {
         verify(exactly = 1) { loudness.detach() }
     }
 
+    // ── Media3 audio-pipeline reconfiguration ────────────────────────────────
+
+    @Test
+    fun pipelineReconfiguration_channelMixChange_required() {
+        assertEquals(
+            true,
+            requiresAudioPipelineReconfiguration(
+                baseConfig,
+                baseConfig.copy(
+                    channelMixMode = ChannelMixMode.STEREO_DOWNMIX,
+                    channelMixEnabled = true,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun pipelineReconfiguration_normalizationOrDialogueHighPassChange_required() {
+        assertEquals(
+            true,
+            requiresAudioPipelineReconfiguration(
+                baseConfig,
+                baseConfig.copy(
+                    audioNormalizationMode = AudioNormalizationMode.DYNAMIC,
+                    audioNormalizationEnabled = true,
+                ),
+            ),
+        )
+        assertEquals(
+            true,
+            requiresAudioPipelineReconfiguration(
+                baseConfig,
+                baseConfig.copy(dialogueBoostEnabled = true),
+            ),
+        )
+    }
+
+    @Test
+    fun pipelineReconfiguration_androidAudioEffectOnlyChange_notRequired() {
+        assertEquals(
+            false,
+            requiresAudioPipelineReconfiguration(
+                baseConfig,
+                baseConfig.copy(dialogueBoostStrength = EffectStrength.HIGH),
+            ),
+        )
+    }
+
     // Note: DecoderMode belongs to EngineConfig, not AudioEffectsConfig. There is
     // no runtime assertion to make here — the separation is enforced structurally
     // by the type definitions (adding a DecoderMode field to AudioEffectsConfig

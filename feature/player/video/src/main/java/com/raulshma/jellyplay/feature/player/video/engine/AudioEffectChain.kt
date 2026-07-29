@@ -152,3 +152,20 @@ internal class AudioEffectChain(
         lastAppliedReverbPreset = null
     }
 }
+
+/**
+ * Returns whether Media3 must rebuild its audio-processing pipeline for this
+ * effect change. [DefaultAudioSink] decides which processors are active, and
+ * the channel count they produce, when it configures the pipeline. Updating a
+ * processor's fields alone therefore cannot activate an initially-inactive
+ * processor or change an already-configured output layout.
+ */
+internal fun requiresAudioPipelineReconfiguration(
+    old: AudioEffectsConfig,
+    new: AudioEffectsConfig,
+): Boolean =
+    old.channelMixMode != new.channelMixMode ||
+        old.channelMixEnabled != new.channelMixEnabled ||
+        old.audioNormalizationMode != new.audioNormalizationMode ||
+        old.audioNormalizationEnabled != new.audioNormalizationEnabled ||
+        old.dialogueBoostEnabled != new.dialogueBoostEnabled

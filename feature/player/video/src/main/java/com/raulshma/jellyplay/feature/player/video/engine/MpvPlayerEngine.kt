@@ -422,7 +422,13 @@ class MpvPlayerEngine(
             // speaker, ignores notifications). findroid sets this unconditionally.
             mpv.setOptionString("audio-set-media-role", "yes")
 
-            mpv.setOptionString("audio-channels", channelMixModeToAudioChannels(currentConfig.audioEffects.channelMixMode))
+            mpv.setOptionString(
+                "audio-channels",
+                channelMixModeToAudioChannels(
+                    currentConfig.audioEffects.channelMixMode,
+                    currentConfig.audioEffects.channelMixEnabled,
+                ),
+            )
 
             val afFilters = mutableListOf<String>()
             // Normalization filters (DYNAMIC compression / TRACK-ALBUM loudnorm).
@@ -458,7 +464,7 @@ class MpvPlayerEngine(
             mpv.observeProperty("aid", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("track-list", MPV.mpvFormat.MPV_FORMAT_NODE)
             mpv.observeProperty("sub-visibility", MPV.mpvFormat.MPV_FORMAT_FLAG)
-            assignAudioSessionId()
+            assignAudioSessionId(mpv)
         }
 
         override fun observeProperties() {}
@@ -476,8 +482,7 @@ class MpvPlayerEngine(
      * Must run after [PlayerMPVView.initialize] has created the mpv handle
      * and before playback starts.
      */
-    private fun assignAudioSessionId() {
-        val mpv = mpvView?.mpv ?: return
+    private fun assignAudioSessionId(mpv: MPV) {
         try {
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             val sid = audioManager?.generateAudioSessionId() ?: AudioManager.ERROR
@@ -491,6 +496,27 @@ class MpvPlayerEngine(
         } catch (e: Exception) {
             Log.w(TAG, "Failed to assign MPV audio session id", e)
         }
+    }
+
+    /** Applies effects implemented through Android's per-session AudioEffect API. */
+    private fun applyAndroidAudioEffects() {
+        val sid = audioSessionId
+        if (sid == 0) return
+        val effects = currentConfig.audioEffects
+
+        // Dialogue Boost and the equalizer share one system Equalizer instance.
+        equalizerHelper.attach(sid)
+        equalizerHelper.setEnabled(
+            equalizerEnabled = effects.equalizerEnabled,
+            dialogueBoostEnabled = effects.dialogueBoostEnabled,
+        )
+        dialogueBoost.attach(sid)
+        dialogueBoost.setStrength(effects.dialogueBoostStrength)
+        dialogueBoost.setEnabled(effects.dialogueBoostEnabled)
+
+        nightMode.attach(sid)
+        nightMode.setStrength(effects.nightModeStrength)
+        nightMode.setEnabled(effects.nightModeEnabled)
     }
 
     override fun load(request: PlaybackRequest) {
@@ -515,6 +541,7 @@ class MpvPlayerEngine(
 
         mpvView?.let { view ->
             try {
+                applyAndroidAudioEffects()
                 configureMpvForRequest(view, request)
                 view.playFile(request.uri)
                 pendingRequest = null
@@ -682,8 +709,16 @@ class MpvPlayerEngine(
                 applySubtitleStyleInternal(newConfig.subtitleStyle)
             }
 
-            if (oldConfig.audioEffects.channelMixMode != newConfig.audioEffects.channelMixMode) {
-                mpv.setPropertyString("audio-channels", channelMixModeToAudioChannels(newConfig.audioEffects.channelMixMode))
+            if (oldConfig.audioEffects.channelMixMode != newConfig.audioEffects.channelMixMode ||
+                oldConfig.audioEffects.channelMixEnabled != newConfig.audioEffects.channelMixEnabled
+            ) {
+                mpv.setPropertyString(
+                    "audio-channels",
+                    channelMixModeToAudioChannels(
+                        newConfig.audioEffects.channelMixMode,
+                        newConfig.audioEffects.channelMixEnabled,
+                    ),
+                )
             }
 
             val oldAudioFx = oldConfig.audioEffects
@@ -716,31 +751,13 @@ class MpvPlayerEngine(
                 applyVideoFilters(newConfig.videoEffects)
             }
 
-            val sid = audioSessionId
-            if (sid != 0) {
-                if (oldAudioFx.dialogueBoostStrength != newAudioFx.dialogueBoostStrength ||
-                    oldAudioFx.dialogueBoostEnabled != newAudioFx.dialogueBoostEnabled
-                ) {
-                    // The boost overlay rides on the EqualizerHelper's
-                    // priority-0 Equalizer; attach + enable it whenever
-                    // boost is on so the overlay has somewhere to land.
-                    // The co-enabling rule lives inside setEnabled.
-                    equalizerHelper.attach(sid)
-                    equalizerHelper.setEnabled(
-                        equalizerEnabled = newAudioFx.equalizerEnabled,
-                        dialogueBoostEnabled = newAudioFx.dialogueBoostEnabled,
-                    )
-                    dialogueBoost.attach(sid)
-                    dialogueBoost.setStrength(newAudioFx.dialogueBoostStrength)
-                    dialogueBoost.setEnabled(newAudioFx.dialogueBoostEnabled)
-                }
-                if (oldAudioFx.nightModeStrength != newAudioFx.nightModeStrength ||
-                    oldAudioFx.nightModeEnabled != newAudioFx.nightModeEnabled
-                ) {
-                    nightMode.attach(sid)
-                    nightMode.setStrength(newAudioFx.nightModeStrength)
-                    nightMode.setEnabled(newAudioFx.nightModeEnabled)
-                }
+            if (oldAudioFx.dialogueBoostStrength != newAudioFx.dialogueBoostStrength ||
+                oldAudioFx.dialogueBoostEnabled != newAudioFx.dialogueBoostEnabled ||
+                oldAudioFx.nightModeStrength != newAudioFx.nightModeStrength ||
+                oldAudioFx.nightModeEnabled != newAudioFx.nightModeEnabled ||
+                oldAudioFx.equalizerEnabled != newAudioFx.equalizerEnabled
+            ) {
+                applyAndroidAudioEffects()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to reconfigure MPV audio effects", e)
@@ -922,6 +939,10 @@ class MpvPlayerEngine(
         // Publish only after initialize() succeeded — otherwise every later
         // op on the engine throws repeatedly against a half-initialized view.
         mpvView = view
+        // postInitOptions has now allocated the audio session on the concrete
+        // MPV handle. Bind the Android effects before the first file starts so
+        // persisted dialogue boost/night mode settings are audible immediately.
+        applyAndroidAudioEffects()
 
         pendingRequest?.let { request ->
             pendingRequest = null
@@ -1665,7 +1686,12 @@ internal fun decoderModeToHwdec(mode: DecoderMode): String = when (mode) {
     DecoderMode.SW_ONLY -> "no"
 }
 
-internal fun channelMixModeToAudioChannels(mode: ChannelMixMode): String = when (mode) {
+internal fun channelMixModeToAudioChannels(
+    mode: ChannelMixMode,
+    enabled: Boolean = true,
+): String = if (!enabled) {
+    "auto"
+} else when (mode) {
     ChannelMixMode.STEREO_DOWNMIX -> "stereo"
     ChannelMixMode.MONO -> "mono"
     ChannelMixMode.SURROUND_UPMIX -> "5.1"
