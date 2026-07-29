@@ -133,19 +133,10 @@ class DeviceProfileProvider @Inject constructor(
         }
 
         // Live TV (HTSP / M3U / TVMosaic tuners) reports the source container
-        // as "hls". Without an hls DirectPlayProfile the server marks such
-        // sources `supportsDirectStream=false` (TranscodeReasons=
-        // ContainerNotSupported) and forces a transcode, so the user's
-        // "Direct Stream" preference is silently ignored. MPV demuxes HLS
-        // transport streams natively via libav, so advertise the common live
-        // codec set. Mirrors the official web client's `Container: 'hls'`
-        // DirectPlayProfile.
-        directPlayProfile {
-            type = DlnaProfileType.VIDEO
-            container("hls")
-            videoCodec("h264", "hevc")
-            audioCodec("aac", "ac3", "eac3", "mp3")
-        }
+        // as "hls"; without an hls DirectPlayProfile the server forces a
+        // transcode (ContainerNotSupported) and the user's "Direct Stream"
+        // preference is silently ignored. MPV demuxes HLS natively via libav.
+        liveHlsDirectPlayProfile()
 
         subtitleFormats.forEach { (format, method) -> subtitleProfile(format, method) }
         // Image-based subtitles can only be rendered locally by the MPV engine
@@ -217,20 +208,30 @@ class DeviceProfileProvider @Inject constructor(
             }
 
             // Live TV (HTSP / M3U / TVMosaic tuners) reports the source
-            // container as "hls". Without an hls DirectPlayProfile the server
-            // marks such sources `supportsDirectStream=false`
-            // (TranscodeReasons=ContainerNotSupported) and forces a transcode,
-            // so the user's "Direct Stream" preference is silently ignored.
-            // ExoPlayer decodes HLS via HlsMediaSource. Mirrors the official
-            // web client's `Container: 'hls'` DirectPlayProfile.
-            directPlayProfile {
-                type = DlnaProfileType.VIDEO
-                container("hls")
-                videoCodec("h264", "hevc")
-                audioCodec("aac", "ac3", "eac3", "mp3")
-            }
+            // container as "hls"; without an hls DirectPlayProfile the server
+            // forces a transcode (ContainerNotSupported) and the user's
+            // "Direct Stream" preference is silently ignored. ExoPlayer
+            // decodes HLS via HlsMediaSource.
+            liveHlsDirectPlayProfile()
 
             subtitleFormats.forEach { (format, method) -> subtitleProfile(format, method) }
+        }
+    }
+
+    /**
+     * DirectPlayProfile for the `hls` container reported by live-TV tuners
+     * (HTSP / M3U / TVMosaic). Advertising the common live codec set here stops
+     * the server from forcing a transcode (ContainerNotSupported) so the user's
+     * "Direct Stream" preference is honoured. Both MPV (libav demux) and
+     * ExoPlayer (HlsMediaSource) handle this container. Mirrors the official
+     * web client's `Container: 'hls'` DirectPlayProfile.
+     */
+    private fun org.jellyfin.sdk.model.deviceprofile.DeviceProfileBuilder.liveHlsDirectPlayProfile() {
+        directPlayProfile {
+            type = DlnaProfileType.VIDEO
+            container("hls")
+            videoCodec("h264", "hevc")
+            audioCodec("aac", "ac3", "eac3", "mp3")
         }
     }
 

@@ -21,7 +21,7 @@ class VirtualizerHelper : AudioFxHelper<Virtualizer>(TAG) {
     }
 
     override fun create(audioSessionId: Int): Virtualizer? =
-        Virtualizer(0, audioSessionId)
+        Virtualizer(0, audioSessionId).apply { setStrength(strength.coerceIn(0, 1000).toShort()) }
 
     companion object {
         private const val TAG = "VirtualizerHelper"

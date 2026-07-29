@@ -143,10 +143,11 @@ fun LiveErrorBanner(
                 ) {
                     LiveStreamOption.entries.forEach { option ->
                         val selected = option == currentOption
-                        DeliveryChip(
+                        LiveOptionChip(
                             text = option.displayName,
                             selected = selected,
                             onClick = { onRetryWithOption(option) },
+                            style = LiveOptionChipStyle.OVERLAY,
                         )
                     }
                 }
@@ -154,33 +155,5 @@ fun LiveErrorBanner(
                 OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
             }
         }
-    }
-}
-
-@Composable
-private fun DeliveryChip(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(
-                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
-                else Color.White.copy(alpha = 0.15f)
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text,
-            color = Color.White,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            style = MaterialTheme.typography.bodyMedium,
-        )
     }
 }

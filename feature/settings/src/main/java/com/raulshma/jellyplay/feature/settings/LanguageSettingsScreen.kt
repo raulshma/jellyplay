@@ -265,12 +265,13 @@ fun LanguageSettingsScreen(
                         index = subIdx++, count = subTotal,
                         onClick = {
                             val sizes = listOf(14, 18, 22, 24, 28, 32, 36, 40)
-                            activePicker = PickerState.Chip(
+                            activePicker = pickerChip(
                                 title = "Subtitle Font Size",
-                                options = sizes.map { "${it}sp" },
-                                selectedIndex = sizes.indexOf(preferences.subtitleStyle.fontSize),
-                                onSelect = { index ->
-                                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontSize = sizes[index]))
+                                values = sizes,
+                                current = preferences.subtitleStyle.fontSize,
+                                label = { "${it}sp" },
+                                onSelect = { size ->
+                                    viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(fontSize = size))
                                 },
                             )
                         },

@@ -700,18 +700,14 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     override fun enqueueDownload(downloadId: String) {
-        enqueueDownloadWorker(downloadId)
-    }
-
-    override suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit> = runCatching {
-        downloadDao.updatePriority(id, priority)
-    }
-
-    private fun enqueueDownloadWorker(downloadId: String) {
         // Runtime enqueue honours the user's wifi-only + schedule-window
         // preferences (cold-start recovery in DownloadRecoveryInitializer calls
         // DownloadEnqueuer directly with honorScheduleAndNetwork = false).
         downloadEnqueuer.enqueue(downloadId)
+    }
+
+    override suspend fun setDownloadPriority(id: String, priority: Int): Result<Unit> = runCatching {
+        downloadDao.updatePriority(id, priority)
     }
 
     private fun preloadImageToCache(url: String?) {

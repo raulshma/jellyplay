@@ -153,11 +153,12 @@ fun AudioSettingsScreen(
                         highlighted = highlightSettingId == "audio_default_speed",
                         onClick = {
                 val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
-                activePicker = PickerState.Chip(
+                activePicker = pickerChip(
                     title = "Default Audio Speed",
-                    options = speeds.map { if (it == 1.0f) "1x" else "${it}x" },
-                    selectedIndex = speeds.indexOf(preferences.audioDefaultSpeed),
-                    onSelect = { index -> viewModel.setAudioDefaultSpeed(speeds[index]) },
+                    values = speeds,
+                    current = preferences.audioDefaultSpeed,
+                    label = { if (it == 1.0f) "1x" else "${it}x" },
+                    onSelect = viewModel::setAudioDefaultSpeed,
                 )
             },
                     )
@@ -250,11 +251,12 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "audio_skip_prev_threshold",
                             onClick = {
                                 val thresholds = listOf(1_000L, 2_000L, 3_000L, 5_000L, 7_000L, 10_000L)
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = "Skip Previous Threshold",
-                                    options = thresholds.map { "${it / 1000}s" },
-                                    selectedIndex = thresholds.indexOf(preferences.audioSkipPreviousThresholdMs),
-                                    onSelect = { index -> viewModel.setAudioSkipPreviousThresholdMs(thresholds[index]) },
+                                    values = thresholds,
+                                    current = preferences.audioSkipPreviousThresholdMs,
+                                    label = { "${it / 1000}s" },
+                                    onSelect = viewModel::setAudioSkipPreviousThresholdMs,
                                 )
                             },
                         )
@@ -274,11 +276,12 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "crossfade",
                             onClick = {
                                 val durations = listOf(0L, 2000L, 3000L, 5000L, 8000L, 12000L)
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = "Crossfade Duration",
-                                    options = durations.map { if (it == 0L) "Off" else "${it / 1000}s" },
-                                    selectedIndex = durations.indexOf(preferences.audioCrossfadeDurationMs),
-                                    onSelect = { index -> viewModel.setCrossfadeDurationMs(durations[index]) },
+                                    values = durations,
+                                    current = preferences.audioCrossfadeDurationMs,
+                                    label = { if (it == 0L) "Off" else "${it / 1000}s" },
+                                    onSelect = viewModel::setCrossfadeDurationMs,
                                 )
                             },
                         )
@@ -317,11 +320,12 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "volume_normalization",
                             onClick = {
                                 val modes = AudioNormalizationMode.entries
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = "Volume Normalization",
-                                    options = modes.map { it.displayName },
-                                    selectedIndex = modes.indexOf(preferences.audioNormalizationMode),
-                                    onSelect = { index -> viewModel.setAudioNormalizationMode(modes[index]) },
+                                    values = modes,
+                                    current = preferences.audioNormalizationMode,
+                                    label = { it.displayName },
+                                    onSelect = viewModel::setAudioNormalizationMode,
                                 )
                             },
                         )
@@ -391,11 +395,12 @@ fun AudioSettingsScreen(
                                 trailingText = preferences.dialogueBoostStrength.displayName,
                                 onClick = {
                                     val strengths = EffectStrength.entries
-                                    activePicker = PickerState.Chip(
+                                    activePicker = pickerChip(
                                         title = "Dialogue Boost Strength",
-                                        options = strengths.map { it.displayName },
-                                        selectedIndex = strengths.indexOf(preferences.dialogueBoostStrength),
-                                        onSelect = { index -> viewModel.setDialogueBoostStrength(strengths[index]) },
+                                        values = strengths,
+                                        current = preferences.dialogueBoostStrength,
+                                        label = { it.displayName },
+                                        onSelect = viewModel::setDialogueBoostStrength,
                                     )
                                 },
                             )
@@ -417,11 +422,12 @@ fun AudioSettingsScreen(
                                 highlighted = highlightSettingId == "night_mode_strength",
                                 onClick = {
                                     val strengths = EffectStrength.entries
-                                    activePicker = PickerState.Chip(
+                                    activePicker = pickerChip(
                                         title = "Night Mode Strength",
-                                        options = strengths.map { it.displayName },
-                                        selectedIndex = strengths.indexOf(preferences.nightModeStrength),
-                                        onSelect = { index -> viewModel.setNightModeStrength(strengths[index]) },
+                                        values = strengths,
+                                        current = preferences.nightModeStrength,
+                                        label = { it.displayName },
+                                        onSelect = viewModel::setNightModeStrength,
                                     )
                                 },
                             )
@@ -443,11 +449,12 @@ fun AudioSettingsScreen(
                                 highlighted = highlightSettingId == "bass_boost_strength",
                                 onClick = {
                                     val strengths = EffectStrength.entries
-                                    activePicker = PickerState.Chip(
+                                    activePicker = pickerChip(
                                         title = "Bass Boost Strength",
-                                        options = strengths.map { it.displayName },
-                                        selectedIndex = strengths.indexOf(preferences.bassBoostStrength),
-                                        onSelect = { index -> viewModel.setBassBoostStrength(strengths[index]) },
+                                        values = strengths,
+                                        current = preferences.bassBoostStrength,
+                                        label = { it.displayName },
+                                        onSelect = viewModel::setBassBoostStrength,
                                     )
                                 },
                             )
@@ -640,11 +647,12 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "audio_cache_size",
                             onClick = {
                                 val sizes = listOf(128, 256, 512, 1024, 2048, 4096)
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = cacheSizeTitle,
-                                    options = sizes.map { "$it MB" },
-                                    selectedIndex = sizes.indexOf(preferences.audioCacheSizeMb),
-                                    onSelect = { index -> viewModel.setAudioCacheSizeMb(sizes[index]) },
+                                    values = sizes,
+                                    current = preferences.audioCacheSizeMb,
+                                    label = { "$it MB" },
+                                    onSelect = viewModel::setAudioCacheSizeMb,
                                 )
                             },
                         )
@@ -657,11 +665,12 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "audio_prefetch_lookahead",
                             onClick = {
                                 val lookahead = listOf(0, 1, 2, 3, 5, 8)
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = lookaheadTitle,
-                                    options = lookahead.map { if (it == 0) "Off" else "$it" },
-                                    selectedIndex = lookahead.indexOf(preferences.audioPrefetchLookahead),
-                                    onSelect = { index -> viewModel.setAudioPrefetchLookahead(lookahead[index]) },
+                                    values = lookahead,
+                                    current = preferences.audioPrefetchLookahead,
+                                    label = { if (it == 0) "Off" else "$it" },
+                                    onSelect = viewModel::setAudioPrefetchLookahead,
                                 )
                             },
                         )
@@ -674,11 +683,12 @@ fun AudioSettingsScreen(
                             highlighted = highlightSettingId == "audio_prefetch_backfill",
                             onClick = {
                                 val backfill = listOf(0, 1, 2, 5, 10, 20)
-                                activePicker = PickerState.Chip(
+                                activePicker = pickerChip(
                                     title = backfillTitle,
-                                    options = backfill.map { if (it == 0) "Off" else "$it" },
-                                    selectedIndex = backfill.indexOf(preferences.audioPrefetchBackfill),
-                                    onSelect = { index -> viewModel.setAudioPrefetchBackfill(backfill[index]) },
+                                    values = backfill,
+                                    current = preferences.audioPrefetchBackfill,
+                                    label = { if (it == 0) "Off" else "$it" },
+                                    onSelect = viewModel::setAudioPrefetchBackfill,
                                 )
                             },
                         )
