@@ -159,6 +159,12 @@ data class MediaTrack(
      * have no container index and are matched by label/url instead.
      */
     val streamIndex: Int? = null,
+    /**
+     * Ordered role badges (Forced/Default/SDH) to render beside the label. Built
+     * by [TrackLabelFormatter.badges] from the engine's role flags or, for
+     * server-origin tracks, the Jellyfin `isForced`/`isDefault` fields.
+     */
+    val badges: List<TrackBadge> = emptyList(),
 )
 
 @Immutable
