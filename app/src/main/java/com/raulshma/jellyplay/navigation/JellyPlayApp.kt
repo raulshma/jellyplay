@@ -177,6 +177,7 @@ import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
 import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
 import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterSection
+import com.raulshma.jellyplay.update.AppUpdateSheet
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -229,6 +230,39 @@ fun JellyPlayApp(
                 onAuthenticated = {},
             )
         }
+    }
+
+    // In-app self-update sheet. Rendered at the root so it overlays every
+    // screen (auth, onboarding, main). Stays hidden while Idle; the launch-time
+    // check in MainViewModel flips it to UpdateAvailable when a newer build
+    // exists. Keep this after the `when` so the sheet sits above all content.
+    UpdateSheetOverlay(viewModel)
+}
+
+/**
+ * Collects [MainViewModel.updateState] and shows the [AppUpdateSheet] when an
+ * update flow is active. Centralized here so the launch-time auto-check and
+ * any manual check (Settings) drive the same single sheet.
+ */
+@Composable
+private fun UpdateSheetOverlay(viewModel: MainViewModel) {
+    val state by viewModel.updateState.collectAsStateWithLifecycle()
+    if (state !is com.raulshma.jellyplay.update.UpdateState.Idle) {
+        val context = LocalContext.current
+        AppUpdateSheet(
+            state = state,
+            onDownload = { info -> viewModel.startUpdateDownload(info) },
+            onInstall = { intent ->
+                runCatching { context.startActivity(intent) }
+            },
+            onCancel = { viewModel.dismissUpdate() },
+            onDismiss = { viewModel.dismissUpdate() },
+            buildInstallIntent = {
+                // Only valid in the Downloaded state, where the file is held.
+                val downloaded = state as? com.raulshma.jellyplay.update.UpdateState.Downloaded
+                viewModel.buildInstallIntent(downloaded?.file ?: java.io.File(""))
+            },
+        )
     }
 }
 
@@ -1560,7 +1594,12 @@ private fun MainNavDisplay(
             audioPlayerSection(navigator)
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }
-            settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
+            settingsSection(
+                navigator = navigator,
+                onLogout = onLogout,
+                onSetupWizard = { navigator.navigate(Route.Onboarding) },
+                onCheckForUpdates = { mainViewModel.manualCheckForUpdate() },
+            )
             adminSection(
                 navigator = navigator,
                 isAdmin = { isAdminState.value },

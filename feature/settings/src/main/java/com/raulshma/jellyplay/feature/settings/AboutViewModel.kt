@@ -51,12 +51,6 @@ class AboutViewModel @Inject constructor(
     var isCollectingLogs by composeState(false)
         private set
 
-    var isCheckingUpdate by composeState(false)
-        private set
-
-    var updateInfo by composeState<UpdateInfo?>(null)
-        private set
-
     var selfUpdateCheckEnabled by composeState(true)
         private set
 
@@ -97,58 +91,8 @@ class AboutViewModel @Inject constructor(
         }
     }
 
-    fun checkForUpdate() {
-        if (!selfUpdateCheckEnabled) return
-        launch {
-            isCheckingUpdate = true
-            try {
-                val info = withContext(Dispatchers.IO) { fetchLatestRelease() }
-                updateInfo = info
-            } catch (_: Exception) {
-                updateInfo = null
-            } finally {
-                isCheckingUpdate = false
-            }
-        }
-    }
-
     fun updateSelfUpdateCheckPref(enabled: Boolean) {
         launch { preferencesStore.setSelfUpdateCheckEnabled(enabled) }
-    }
-
-    private fun fetchLatestRelease(): UpdateInfo {
-        val url = java.net.URL("https://api.github.com/repos/raulshma/jellyplay/releases/latest")
-        val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
-            requestMethod = "GET"
-            setRequestProperty("Accept", "application/vnd.github.v3+json")
-            connectTimeout = 10_000
-            readTimeout = 10_000
-        }
-        conn.inputStream.bufferedReader().use { reader ->
-            val text = reader.readText()
-            val json = org.json.JSONObject(text)
-            val tagName = json.optString("tag_name", "").removePrefix("v")
-            val htmlUrl = json.optString("html_url", "")
-            val body = json.optString("body", "")
-            val isUpdateAvailable = compareVersions(tagName, appVersion) > 0
-            return UpdateInfo(
-                latestVersion = tagName,
-                downloadUrl = htmlUrl,
-                releaseNotes = body,
-                isUpdateAvailable = isUpdateAvailable,
-            )
-        }
-    }
-
-    private fun compareVersions(v1: String, v2: String): Int {
-        val parts1 = v1.split(".").map { it.toIntOrNull() ?: 0 }
-        val parts2 = v2.split(".").map { it.toIntOrNull() ?: 0 }
-        for (i in 0 until maxOf(parts1.size, parts2.size)) {
-            val p1 = parts1.getOrElse(i) { 0 }
-            val p2 = parts2.getOrElse(i) { 0 }
-            if (p1 != p2) return p1 - p2
-        }
-        return 0
     }
 
     private fun collectLogs(): Uri? {
@@ -168,10 +112,3 @@ class AboutViewModel @Inject constructor(
         return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", logFile)
     }
 }
-
-data class UpdateInfo(
-    val latestVersion: String,
-    val downloadUrl: String,
-    val releaseNotes: String,
-    val isUpdateAvailable: Boolean,
-)

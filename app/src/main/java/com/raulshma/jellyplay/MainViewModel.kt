@@ -25,6 +25,8 @@ import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
+import com.raulshma.jellyplay.update.UpdateState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,6 +63,7 @@ class MainViewModel @Inject constructor(
     val cacheManager: com.raulshma.jellyplay.core.data.cache.CacheManager,
     private val widgetWorkScheduler: com.raulshma.jellyplay.widget.WidgetWorkScheduler,
     private val cacheMaintenanceInitializer: com.raulshma.jellyplay.startup.CacheMaintenanceInitializer,
+    private val appUpdateRepository: AppUpdateRepository,
 ) : JellyPlayViewModel() {
 
     val serverHealth = serverHealthMonitor.serverHealth
@@ -117,6 +120,15 @@ class MainViewModel @Inject constructor(
     private val _globalMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val globalMessage = _globalMessage.asSharedFlow()
 
+    /**
+     * In-app self-update state. Observed by the update sheet so the same
+     * activity-scoped instance drives both the launch-time auto-check and any
+     * manual check. Stays [UpdateState.Idle] (sheet hidden) until an update is
+     * actually found or the user explicitly opens the flow.
+     */
+    private val _updateState = stateFlow<UpdateState>(UpdateState.Idle)
+    val updateState = _updateState.flow
+
     init {
         launch {
             coroutineScope {
@@ -133,6 +145,10 @@ class MainViewModel @Inject constructor(
                 }
             }
             _isRestoring.set(false)
+            // Best-effort app-update check once the UI is up. Gated by the
+            // user's "check for updates automatically" preference so the
+            // toggle on the About screen remains the single off-switch.
+            checkForAppUpdate()
         }
 
         launch {
@@ -203,6 +219,73 @@ class MainViewModel @Inject constructor(
             mediaRepository.getLibraryFolders()
                 .onSuccess { _libraryFolders.set(it) }
         }
+    }
+
+    /**
+     * Checks GitHub Releases for a newer build, called once on launch after
+     * session restore. Gated by `selfUpdateCheckEnabled`. Stays silent unless
+     * an update is actually available — it never surfaces a sheet for an
+     * up-to-date result. Use [manualCheckForUpdate] when the user wants
+     * feedback regardless of outcome.
+     */
+    fun checkForAppUpdate() {
+        launch {
+            val enabled = preferencesStore.preferences.first().selfUpdateCheckEnabled
+            if (!enabled) return@launch
+            val result = appUpdateRepository.checkForUpdate(
+                supportedAbis = android.os.Build.SUPPORTED_ABIS,
+            )
+            result.onSuccess { info ->
+                if (info.isUpdateAvailable) _updateState.set(UpdateState.UpdateAvailable(info))
+                // else: stay Idle — no sheet for an up-to-date launch check.
+            }
+        }
+    }
+
+    /**
+     * Manual, user-initiated check (from Settings). Always surfaces the result:
+     * a sheet for an available update, or a "you're up to date" sheet (with a
+     * link to view the current version's release notes) when none is. Bypasses
+     * the auto-check preference.
+     */
+    fun manualCheckForUpdate() {
+        launch {
+            _updateState.set(UpdateState.Checking)
+            val result = appUpdateRepository.checkForUpdate(
+                supportedAbis = android.os.Build.SUPPORTED_ABIS,
+            )
+            result
+                .onSuccess { info ->
+                    _updateState.set(
+                        if (info.isUpdateAvailable) UpdateState.UpdateAvailable(info)
+                        else UpdateState.NoUpdate(info),
+                    )
+                }
+                .onFailure { _updateState.set(UpdateState.Error(it.message ?: "Update check failed")) }
+        }
+    }
+
+    /** Begins streaming the APK for the given update, reporting progress. */
+    fun startUpdateDownload(info: com.raulshma.jellyplay.core.model.AppUpdateInfo) {
+        val url = info.downloadAssetUrl ?: return
+        launch {
+            _updateState.set(UpdateState.Downloading(info, 0f, 0L, info.releaseSize))
+            val result = appUpdateRepository.downloadApk(url) { fraction, read, total ->
+                _updateState.set(UpdateState.Downloading(info, fraction, read, total))
+            }
+            result
+                .onSuccess { file -> _updateState.set(UpdateState.Downloaded(info, file)) }
+                .onFailure { _updateState.set(UpdateState.Error(it.message ?: "Download failed")) }
+        }
+    }
+
+    /** Builds and emits the system package-installer intent for the APK. */
+    fun buildInstallIntent(file: java.io.File): android.content.Intent =
+        appUpdateRepository.buildInstallIntent(file)
+
+    /** Hides the update sheet without changing download state. */
+    fun dismissUpdate() {
+        _updateState.set(UpdateState.Idle)
     }
 
     /**

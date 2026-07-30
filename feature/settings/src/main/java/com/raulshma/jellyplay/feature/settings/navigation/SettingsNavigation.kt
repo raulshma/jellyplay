@@ -32,6 +32,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
     navigator: Navigator,
     onLogout: (Boolean) -> Unit,
     onSetupWizard: () -> Unit = {},
+    onCheckForUpdates: () -> Unit = {},
 ) {
     entry<Route.Settings> {
         // Build the callbacks once per (navigator, onLogout, onSetupWizard) lifetime so
@@ -215,6 +216,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
         AboutScreen(
             onBack = { navigator.goBack() },
             onLicensesClick = { navigator.navigate(Route.Licenses) },
+            onCheckForUpdates = onCheckForUpdates,
         )
     }
 
