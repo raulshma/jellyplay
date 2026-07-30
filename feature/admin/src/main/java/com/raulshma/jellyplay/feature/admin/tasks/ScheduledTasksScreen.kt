@@ -111,6 +111,17 @@ fun ScheduledTasksScreen(
                 )
             }
             else -> {
+                // Group by Category, mirroring jellyfin-web's
+                // getCategories()/getTasksByCategory(): tasks with a
+                // blank category are dropped, categories and tasks are
+                // sorted alphabetically (locale-aware).
+                // Memoized at the composable scope (not inside LazyColumn's
+                // LazyListScope, where @Composable calls aren't allowed) so the
+                // filter/groupBy/sort chain runs only when the task list changes,
+                // not on every recomposition.
+                val groupedTasks = remember(state.tasks) {
+                    groupScheduledTasksByCategory(state.tasks)
+                }
                 PullToRefreshBox(
                     isRefreshing = state.isRefreshing,
                     onRefresh = { viewModel.refresh() },
@@ -128,17 +139,6 @@ fun ScheduledTasksScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        // Group by Category, mirroring jellyfin-web's
-                        // getCategories()/getTasksByCategory(): tasks with a
-                        // blank category are dropped, categories and tasks are
-                        // sorted alphabetically (locale-aware).
-                        val groupedTasks = state.tasks
-                            .filter { !it.category.isNullOrBlank() }
-                            .groupBy { it.category!! }
-                            .toSortedMap(compareBy(String.CASE_INSENSITIVE_ORDER) { it })
-                            .mapValues { (_, tasks) ->
-                                tasks.sortedBy { it.name.lowercase() }
-                            }
                         groupedTasks.forEach { (category, tasks) ->
                             item(key = "header_$category") {
                                 Text(

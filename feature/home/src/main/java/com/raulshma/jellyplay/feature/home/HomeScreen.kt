@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -160,17 +161,7 @@ private fun MainHomeContent(
 
     val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
-    val pendingSyncEntries by viewModel.pendingSyncEntries.collectAsStateWithLifecycle()
-    val pendingItemDetails by viewModel.pendingItemDetails.collectAsStateWithLifecycle()
     var showSyncDetails by remember { mutableStateOf(false) }
-    // Resolve media metadata (offline-first) for the sync details sheet only
-    // while it's open — keeps the map pruned to the currently-queued ids and
-    // avoids any lookup cost when the sheet is closed.
-    LaunchedEffect(showSyncDetails, pendingSyncEntries) {
-        if (showSyncDetails) {
-            viewModel.ensurePendingItemDetails(pendingSyncEntries.map { it.itemId })
-        }
-    }
     val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
 
     val seerrCardLoadingState = rememberSeerrCardLoadingState()
@@ -256,7 +247,7 @@ private fun MainHomeContent(
 
     var isFabExpanded by remember { mutableStateOf(false) }
     var isSearchExpanded by remember { mutableStateOf(false) }
-    val isSearchFocused by remember { derivedStateOf { state.searchState.query.isNotBlank() || isSearchExpanded } }
+    val isSearchFocused by remember { derivedStateOf { state.isSearchActive || isSearchExpanded } }
 
     // Inline section-config sheet target — set by long-pressing a configurable
     // section title. Hoisted here (not in the LazyColumn item) so opening the
@@ -470,11 +461,12 @@ private fun MainHomeContent(
                     }
                 }
 
-                // Lift the HomeTopDock lambdas too. MainHomeContent recomposes
-                // on every keystroke (state.searchState.query is read above),
-                // so without hoisting HomeTopDock receives fresh lambdas each
-                // time, defeating skippability. `isSearchExpanded` is a
-                // MutableState delegate and stable across recompositions.
+                // Lift the HomeTopDock lambdas. The per-keystroke query string
+                // no longer flows through MainHomeContent (it's collected in the
+                // HomeTopDockScrim leaf via viewModel.searchQuery), but the
+                // lambdas are still hoisted so HomeTopDock stays skippable on
+                // the recompositions that DO reach it (scroll, search focus).
+                // `isSearchExpanded` is a MutableState delegate and stable.
                 val dockOnSearchExpanded = remember { { v: Boolean -> isSearchExpanded = v } }
                 val dockOnSearchQueryChange = remember(viewModel) {
                     { q: String -> viewModel.onEvent(HomeUiEvent.UpdateSearchQuery(q)) }
@@ -496,7 +488,7 @@ private fun MainHomeContent(
                     homeScrollState = homeScrollState,
                     isLightTheme = isLightTheme,
                     isSearchFocused = isSearchFocused,
-                    searchQuery = state.searchState.query,
+                    searchQuery = viewModel.searchQuery,
                     offlineMode = state.offlineMode,
                     homeMode = state.homeMode,
                     headerStatus = headerStatus,
@@ -517,7 +509,7 @@ private fun MainHomeContent(
                         { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }
                     },
                     searchResultsContent = {
-                        if (state.searchState.query.isNotBlank() || searchHistory.isNotEmpty()) {
+                        if (state.isSearchActive || searchHistory.isNotEmpty()) {
                             HomeSearchResultsOverlay(
                                 jellyfinResults = state.searchState.jellyfinResults,
                                 seerrResults = state.searchState.seerrResults,
@@ -595,9 +587,23 @@ private fun MainHomeContent(
     // enqueues the drain worker and dismisses (only enabled while online, since
     // the worker carries a NetworkType.CONNECTED constraint).
     if (showSyncDetails) {
+        // Collect pendingSyncEntries / pendingItemDetails ONLY while the sheet
+        // is open. Hoisting these collections out of MainHomeContent (and
+        // gating them on showSyncDetails) means each outbox write no longer
+        // re-subscribes / invalidates the ~510-line orchestrator body — the
+        // VM's own StateFlow(WhileSubscribed(5_000)) even pauses the upstream
+        // flow while the sheet is closed.
+        val entries by viewModel.pendingSyncEntries.collectAsStateWithLifecycle()
+        val itemDetails by viewModel.pendingItemDetails.collectAsStateWithLifecycle()
+        // Resolve media metadata (offline-first) for the sheet's rows while it's
+        // open — keeps the map pruned to the currently-queued ids and avoids any
+        // lookup cost when the sheet is closed.
+        LaunchedEffect(entries) {
+            viewModel.ensurePendingItemDetails(entries.map { it.itemId })
+        }
         SyncDetailsSheet(
-            entries = pendingSyncEntries,
-            itemDetails = pendingItemDetails,
+            entries = entries,
+            itemDetails = itemDetails,
             offlineMode = state.offlineMode,
             onSyncNow = { viewModel.onEvent(HomeUiEvent.SyncNow) },
             onDismiss = { showSyncDetails = false },
@@ -677,7 +683,7 @@ private fun HomeTopDockScrim(
     homeScrollState: HomeScrollState,
     isLightTheme: Boolean,
     isSearchFocused: Boolean,
-    searchQuery: String,
+    searchQuery: StateFlow<String>,
     offlineMode: com.raulshma.jellyplay.core.model.OfflineMode,
     homeMode: HomeMode,
     headerStatus: HeaderStatus,
@@ -702,13 +708,18 @@ private fun HomeTopDockScrim(
     val fraction = homeScrollState.scrollFraction
     val appBarIconColor = lerp(baseIconColor, onSurface, fraction)
     val appBarIconColorFaded = appBarIconColor.copy(alpha = 0.9f)
+    // Collect the per-keystroke query string here (a leaf), not in
+    // MainHomeContent. Only this composable + HomeTopDock + the TextField
+    // recompose on each keystroke; the orchestrator stays untouched. Mirrors
+    // the scrollFraction deferral documented at the top of this KDoc.
+    val query by searchQuery.collectAsStateWithLifecycle()
 
     Box(modifier = Modifier.fillMaxSize()) {
         HomeTopDock(
         appBarIconColor = appBarIconColor,
         appBarIconColorFaded = appBarIconColorFaded,
         isSearchFocused = isSearchFocused,
-        searchQuery = searchQuery,
+        searchQuery = query,
         offlineMode = offlineMode,
         homeMode = homeMode,
         headerStatus = headerStatus,

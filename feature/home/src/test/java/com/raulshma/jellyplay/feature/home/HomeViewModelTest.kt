@@ -390,8 +390,10 @@ class HomeViewModelTest {
         runCurrent()
 
         // Query is the latest value; the intermediate "bat" was superseded by
-        // the debounce + distinctUntilChanged chain.
-        assertEquals("batman", viewModel.uiState.value.searchState.query)
+        // the debounce + distinctUntilChanged chain. The live query now lives
+        // on the VM's searchQuery flow (read by the leaf), not searchState.
+        assertEquals("batman", viewModel.searchQuery.value)
+        assertTrue(viewModel.uiState.value.isSearchActive)
     }
 
     @Test
@@ -405,7 +407,8 @@ class HomeViewModelTest {
         runCurrent()
 
         val search = viewModel.uiState.value.searchState
-        assertEquals("", search.query)
+        assertEquals("", viewModel.searchQuery.value)
+        assertFalse(viewModel.uiState.value.isSearchActive)
         assertTrue(search.jellyfinResults.isEmpty())
         assertTrue(search.seerrResults.isEmpty())
     }

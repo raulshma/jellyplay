@@ -70,6 +70,7 @@ import com.composables.icons.tabler.outline.Shield
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItemStub
+import com.raulshma.jellyplay.feature.admin.filterSelectedForDeletion
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -380,9 +381,15 @@ private fun WatchedScanResultsTab(
         }
     }
 
+    // Memoize the selected-for-deletion list so we don't re-filter — and re-run
+    // the `scanResults` computed-sort getter — on every recomposition while the
+    // sheet is open. Recomputes only when the underlying data/sort/selection moves.
+    val itemsToDelete = remember(state.rawScanResults, state.sortOption, state.selectedItems) {
+        state.scanResults.filterSelectedForDeletion(state.selectedItems)
+    }
     if (state.showDeleteConfirmation) {
         WatchedDeleteConfirmationSheet(
-            items = state.scanResults.filter { state.selectedItems.contains(it.itemId) },
+            items = itemsToDelete,
             onConfirm = onConfirmDelete,
             onDismiss = onDismissDelete,
             isDeleting = state.isDeleting,

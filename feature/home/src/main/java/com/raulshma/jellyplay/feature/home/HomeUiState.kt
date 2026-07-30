@@ -44,6 +44,13 @@ data class HomeUiState(
     val continueWatchingClickBehavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.DETAILS,
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     val searchState: HomeSearchState = HomeSearchState(),
+    /** True while the search field holds a non-blank query. This is the only
+     *  search-derived signal read at the [MainHomeContent] orchestrator level:
+     *  it flips at most twice per search session (blank↔nonblank) instead of
+     *  once per keystroke, so the ~510-line body recomposes far less. The live
+     *  query string is read separately in a leaf via the VM's `searchQuery`
+     *  StateFlow. */
+    val isSearchActive: Boolean = false,
     /** Whether to include settings results in the home search bar. Driven by Appearance prefs. */
     val showSettingsInHomeSearch: Boolean = true,
     val seerrRequestState: SeerrRequestState = SeerrRequestState(),
@@ -78,12 +85,18 @@ data class HomeUiState(
 
 @Immutable
 data class HomeSearchState(
-    val query: String = "",
     val jellyfinResults: List<MediaItem> = emptyList(),
     val seerrResults: List<SeerrSearchItem> = emptyList(),
     val settingsResults: List<SettingsSearchItem> = emptyList(),
     val isSearching: Boolean = false,
-)
+) {
+    // NOTE: the live query string no longer lives here. It is the per-keystroke
+    // value of the search field, and holding it inside this @Immutable state
+    // object meant _uiState changed equality on every keystroke, recomposing
+    // the ~510-line MainHomeContent body. The source of truth is now the VM's
+    // `searchQuery` StateFlow (read in a leaf), with `isSearchActive` carrying
+    // only the rarely-changing blank/nonblank signal to the orchestrator.
+}
 
 @Immutable
 data class SeerrRequestState(

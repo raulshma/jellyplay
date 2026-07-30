@@ -89,24 +89,29 @@ class HomeUiStateTest {
     }
 
     @Test
-    fun defaultSearchState_hasEmptyQuery() {
+    fun defaultSearchState_isEmpty() {
         val state = HomeSearchState()
-        assertEquals("", state.query)
         assertTrue(state.jellyfinResults.isEmpty())
         assertTrue(state.seerrResults.isEmpty())
         assertFalse(state.isSearching)
     }
 
     @Test
-    fun searchState_copy_updatesQuery() {
-        val state = HomeSearchState().copy(query = "batman")
-        assertEquals("batman", state.query)
-    }
-
-    @Test
     fun searchState_copy_updatesIsSearching() {
         val state = HomeSearchState().copy(isSearching = true)
         assertTrue(state.isSearching)
+    }
+
+    @Test
+    fun defaultUiState_isSearchActiveIsFalse() {
+        val state = HomeUiState()
+        assertFalse(state.isSearchActive)
+    }
+
+    @Test
+    fun uiState_copy_updatesIsSearchActive() {
+        val state = HomeUiState().copy(isSearchActive = true)
+        assertTrue(state.isSearchActive)
     }
 
     @Test
