@@ -6,6 +6,8 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -80,6 +82,11 @@ class ServerHealthMonitorTest {
 
     @Test
     fun `startMonitoring calls checkHealth with server address`() = runTest {
+        // Share a single scheduler between runTest and the monitor's loop so the
+        // loop advances on the virtual clock. The default Dispatchers.IO would
+        // race runTest's scheduler and make this assertion flaky.
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        monitor.useDispatcherForTest(dispatcher)
         coEvery { apiClient.getServerInfo(any()) } returns Result.success(
             mockk {
                 every { id } returns "server-1"
@@ -89,9 +96,19 @@ class ServerHealthMonitorTest {
         )
 
         monitor.startMonitoring("http://test-server:8096")
-        kotlinx.coroutines.delay(100)
+        try {
+            // Execute only the loop's currently-scheduled first iteration
+            // (checkHealth runs before the first delay). runCurrent — NOT
+            // advanceUntilIdle, which would loop forever against the monitor's
+            // while(true) health-check cadence and exhaust memory.
+            runCurrent()
 
-        coVerify { apiClient.getServerInfo("http://test-server:8096") }
+            coVerify { apiClient.getServerInfo("http://test-server:8096") }
+        } finally {
+            // Cancel the infinite monitor loop before runTest tears down, or its
+            // pending delay would keep the shared scheduler busy forever.
+            monitor.stopMonitoring()
+        }
     }
 
     @Test

@@ -19,4 +19,5 @@ data class GesturePrefsState(
     val brightnessLevel: Float = 0.5f,
     val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     val frameRateMatching: Boolean = false,
+    val refreshRateMode: com.raulshma.jellyplay.core.model.RefreshRateMode = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF,
 )

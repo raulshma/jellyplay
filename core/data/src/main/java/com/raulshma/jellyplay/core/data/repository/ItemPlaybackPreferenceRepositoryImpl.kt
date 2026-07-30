@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.database.dao.ItemPlaybackPreferenceDao
 import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
 import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 import com.raulshma.jellyplay.core.model.PlaybackPrefScope
+import com.raulshma.jellyplay.core.model.RememberedTrack
+import com.raulshma.jellyplay.core.model.TrackType
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -104,6 +106,63 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun saveRememberedTrack(
+        scope: PlaybackPrefScope,
+        key: String,
+        type: TrackType,
+        track: RememberedTrack?,
+    ) {
+        val existing = dao.getByKey(scope.name, key)
+        // If clearing and the row has nothing else to remember, drop it entirely.
+        // Otherwise upsert the remembered fields onto the existing (or a fresh) row.
+        if (track == null) {
+            val row = existing ?: return
+            val cleared = when (type) {
+                TrackType.AUDIO -> row.copy(
+                    rememberedAudioLabel = null,
+                    rememberedAudioLanguage = null,
+                    rememberedAudioIndex = null,
+                )
+                TrackType.SUBTITLE -> row.copy(
+                    rememberedSubtitleLabel = null,
+                    rememberedSubtitleLanguage = null,
+                    rememberedSubtitleIndex = null,
+                )
+            }
+            val hasNothingElse = cleared.audioLanguage == null &&
+                cleared.subtitleLanguage == null &&
+                cleared.dialogueBoostStrength == null &&
+                cleared.rememberedAudioLabel == null &&
+                cleared.rememberedSubtitleLabel == null
+            if (hasNothingElse) {
+                dao.deleteByKey(scope.name, key)
+            } else {
+                dao.upsert(cleared.copy(updatedAt = System.currentTimeMillis()))
+            }
+            return
+        }
+        val base = existing ?: ItemPlaybackPreferenceEntity(
+            scope = scope.name,
+            key = key,
+            audioLanguage = null,
+            subtitleLanguage = null,
+            updatedAt = System.currentTimeMillis(),
+        )
+        val updated = when (type) {
+            TrackType.AUDIO -> base.copy(
+                rememberedAudioLabel = track.label,
+                rememberedAudioLanguage = track.language,
+                rememberedAudioIndex = track.indexWithinLanguage,
+            )
+            TrackType.SUBTITLE -> base.copy(
+                rememberedSubtitleLabel = track.label,
+                rememberedSubtitleLanguage = track.language,
+                rememberedSubtitleIndex = track.indexWithinLanguage,
+            )
+        }
+        dao.upsert(updated.copy(updatedAt = System.currentTimeMillis()))
+    }
+
     override suspend fun delete(scope: PlaybackPrefScope, key: String) {
         dao.deleteByKey(scope.name, key)
     }
@@ -118,6 +177,20 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
             subtitleHearingImpaired = subtitleHearingImpaired,
             dialogueBoostStrength = dialogueBoostStrength?.let {
                 runCatching { com.raulshma.jellyplay.core.model.EffectStrength.valueOf(it) }.getOrNull()
+            },
+            rememberedAudioTrack = rememberedAudioLabel?.let {
+                RememberedTrack(
+                    label = it,
+                    language = rememberedAudioLanguage,
+                    indexWithinLanguage = rememberedAudioIndex ?: -1,
+                )
+            },
+            rememberedSubtitleTrack = rememberedSubtitleLabel?.let {
+                RememberedTrack(
+                    label = it,
+                    language = rememberedSubtitleLanguage,
+                    indexWithinLanguage = rememberedSubtitleIndex ?: -1,
+                )
             },
             updatedAt = updatedAt,
         )

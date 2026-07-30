@@ -10,6 +10,12 @@ data class VideoPlayerPreferences(
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
     val frameRateMatching: Boolean = false,
+    /**
+     * Granular refresh-rate / resolution switching mode. Supersedes
+     * [frameRateMatching] (which stays as a legacy boolean alias: `true` ≈
+     * [RefreshRateMode.FRAME_RATE_ONLY]). When both are set, this mode wins.
+     */
+    val refreshRateMode: RefreshRateMode = RefreshRateMode.OFF,
     val videoSeekDurationMs: Long = 10_000L,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoControlsTimeoutMs: Long = 5_000L,
@@ -151,6 +157,7 @@ val UserPreferences.videoPlayer: VideoPlayerPreferences
         decoderMode = decoderMode,
         audioPassthrough = audioPassthrough,
         frameRateMatching = frameRateMatching,
+        refreshRateMode = refreshRateMode,
         videoSeekDurationMs = videoSeekDurationMs,
         videoDefaultOrientation = videoDefaultOrientation,
         videoControlsTimeoutMs = videoControlsTimeoutMs,
@@ -306,6 +313,12 @@ data class PlaybackPreferences(
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
     val frameRateMatching: Boolean = false,
+    /**
+     * Granular refresh-rate / resolution switching mode. Supersedes
+     * [frameRateMatching] (which stays as a legacy boolean alias: `true` ≈
+     * [RefreshRateMode.FRAME_RATE_ONLY]). When both are set, this mode wins.
+     */
+    val refreshRateMode: RefreshRateMode = RefreshRateMode.OFF,
     val videoSeekDurationMs: Long = 10_000L,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoControlsTimeoutMs: Long = 5_000L,
@@ -364,6 +377,7 @@ val UserPreferences.playback: PlaybackPreferences
         decoderMode = decoderMode,
         audioPassthrough = audioPassthrough,
         frameRateMatching = frameRateMatching,
+        refreshRateMode = refreshRateMode,
         videoSeekDurationMs = videoSeekDurationMs,
         videoDefaultOrientation = videoDefaultOrientation,
         videoControlsTimeoutMs = videoControlsTimeoutMs,

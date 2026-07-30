@@ -20,6 +20,14 @@ import androidx.room.PrimaryKey
  * alongside `subtitleLanguage` (nullable: null = "don't care"), so a series can
  * remember e.g. "English SDH" and have it carry across episodes. Added in
  * migration 38→39.
+ *
+ * The six `rememberedAudio*` / `rememberedSubtitle*` columns persist the
+ * *last-selected* audio/subtitle track's label, language, and position within
+ * its language group per series — the cross-episode track-scoring memory (G5),
+ * so a specific "English · 5.1" pick survives an app restart instead of being
+ * remembered only in-process. All nullable: NULL means "no track remembered"
+ * (preserves today's language-only behaviour for existing rows). Added in
+ * migration 39→40.
  */
 @Entity(
     tableName = "item_playback_preferences",
@@ -37,5 +45,11 @@ data class ItemPlaybackPreferenceEntity(
     val subtitleForced: Boolean? = null,
     val subtitleHearingImpaired: Boolean? = null,
     val dialogueBoostStrength: String? = null,
+    val rememberedAudioLabel: String? = null,
+    val rememberedAudioLanguage: String? = null,
+    val rememberedAudioIndex: Int? = null,
+    val rememberedSubtitleLabel: String? = null,
+    val rememberedSubtitleLanguage: String? = null,
+    val rememberedSubtitleIndex: Int? = null,
     val updatedAt: Long,
 )

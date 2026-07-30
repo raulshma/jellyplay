@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -99,6 +102,18 @@ fun AVSyncSheet(
                 isTv = isTv,
                 helperText = "Negative: subtitles earlier. Positive: subtitles later.",
                 onValueChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
+            )
+
+            // G6: press-and-hold sync measurer. Hold "Voice heard" the instant a
+            // line is spoken, then "Text seen" when its subtitle appears; the gap
+            // auto-computes the delay delta (modelled on mpvKt's SubtitleDelayPanel).
+            SubtitleSyncMeasurer(
+                onDelayComputed = { delta ->
+                    val applied = com.raulshma.jellyplay.feature.player.video.SubtitleSyncCalculator
+                        .applyDelta(subtitleDelayMs, delta)
+                    subtitleDelayMs = applied
+                    onSubtitleDelayChange(applied)
+                },
             )
 
             Spacer(Modifier.height(20.dp))
@@ -237,5 +252,112 @@ private fun DelayStepper(
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = description, tint = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/**
+ * Press-and-hold subtitle-sync measurer (G6). Two buttons:
+ *  - "🔊 Voice heard": press-and-hold the instant a spoken line is heard; the
+ *    release time is recorded.
+ *  - "💬 Text seen": press-and-hold the instant the matching subtitle appears;
+ *    the release time is recorded.
+ *
+ * Releasing "Text seen" after "Voice heard" was released fires [onDelayComputed]
+ * with the delta (voice release − text release). The caller applies it via
+ * [SubtitleSyncCalculator.applyDelta]. Releasing voice after text is treated as
+ * a re-measure start (no computation), matching the natural two-step flow.
+ */
+@Composable
+private fun SubtitleSyncMeasurer(
+    onDelayComputed: (Long) -> Unit,
+) {
+    var voiceReleaseMs by remember { mutableStateOf<Long?>(null) }
+    val voiceSource = remember { MutableInteractionSource() }
+    val textSource = remember { MutableInteractionSource() }
+    val voicePressed by voiceSource.collectIsPressedAsState()
+    val textPressed by textSource.collectIsPressedAsState()
+
+    LaunchedEffect(voicePressed) {
+        if (!voicePressed) {
+            // Released — stamp the voice time.
+            voiceReleaseMs = android.os.SystemClock.elapsedRealtime()
+        }
+    }
+    LaunchedEffect(textPressed) {
+        if (!textPressed) {
+            // Released — if voice was stamped first, compute and fire.
+            val voice = voiceReleaseMs
+            if (voice != null) {
+                val textRelease = android.os.SystemClock.elapsedRealtime()
+                onDelayComputed(
+                    com.raulshma.jellyplay.feature.player.video.SubtitleSyncCalculator
+                        .computeDelayDelta(voice, textRelease)
+                )
+                voiceReleaseMs = null // one-shot; re-arm requires a fresh voice press
+            }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            "Sync helper",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Hold “Voice heard” when a line is spoken, then “Text seen” when its subtitle appears.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            SyncMeasurerButton(
+                label = if (voicePressed) "Listening…" else "🔊 Voice heard",
+                pressed = voicePressed,
+                interactionSource = voiceSource,
+                modifier = Modifier.weight(1f),
+            )
+            SyncMeasurerButton(
+                label = if (textPressed) "Watching…" else "💬 Text seen",
+                pressed = textPressed,
+                interactionSource = textSource,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.SyncMeasurerButton(
+    label: String,
+    pressed: Boolean,
+    interactionSource: MutableInteractionSource,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .height(46.dp)
+            .clip(CircleShape)
+            .background(
+                if (pressed) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = {},
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (pressed) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.primary,
+        )
     }
 }

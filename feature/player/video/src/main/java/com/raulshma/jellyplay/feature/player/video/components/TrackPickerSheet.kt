@@ -123,7 +123,7 @@ internal fun TrackPickerSheet(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            LazyColumn(modifier = Modifier.verticalWrapAround()) {
+            LazyColumn(modifier = Modifier.verticalWrapAround().weight(1f, fill = false)) {
                 itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->
                     val isSelected = track.isSelected
                     val isFirst = index == 0

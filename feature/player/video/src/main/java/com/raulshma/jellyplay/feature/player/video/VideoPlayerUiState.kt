@@ -160,6 +160,7 @@ data class VideoPlayerUiState(
     val volumeLevel: Float = 1.0f,
     val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     val frameRateMatching: Boolean = false,
+    val refreshRateMode: com.raulshma.jellyplay.core.model.RefreshRateMode = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF,
     val audioDelayMs: Long = 0L,
     val segments: List<MediaSegment> = emptyList(),
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
@@ -203,6 +204,8 @@ data class VideoPlayerUiState(
     val sleepTimerActive: Boolean = false,
     val sleepTimerEndOfEpisode: Boolean = false,
     val sleepTimerLastUsedDurationMs: Long = 0L,
+    /** A/B repeat window (G2). Inert unless [AbRepeatState.isActive]. */
+    val abRepeat: AbRepeatState = AbRepeatState(),
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,
     val usePinForPlayerLock: Boolean = false,
@@ -341,6 +344,7 @@ data class VideoPlayerUiState(
             seekDurationMs = seekDurationMs, rememberBrightness = rememberBrightness,
             brightnessLevel = brightnessLevel, gestureIndicatorSide = gestureIndicatorSide,
             frameRateMatching = frameRateMatching,
+            refreshRateMode = refreshRateMode,
         )
 
     val uiPrefs: PlayerUiPrefsState
