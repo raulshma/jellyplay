@@ -194,7 +194,7 @@
     <string name="detail_manage_no_episodes">このシリーズのエピソードはSonarrに見つかりませんでした。</string>
     <string name="detail_manage_not_tracked">このシリーズを追跡しているSonarrサーバーはありません。</string>
     <!-- Content descriptions (TalkBack / TV) -->
-    <string name="detail_manage_cd_search_season">シーズンの監視中を検索</string>
+    <string name="detail_manage_cd_search_season">このシーズンの監視対象を検索</string>
     <string name="detail_manage_cd_toggle_monitor_season">シーズン内の全エピソードの監視を切り替え</string>
     <string name="detail_manage_cd_toggle_monitor_episode">エピソードの監視を切り替え</string>
     <string name="detail_manage_cd_episode_menu">エピソードのオプション</string>

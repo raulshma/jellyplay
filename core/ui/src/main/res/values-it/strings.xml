@@ -45,5 +45,5 @@
     <string name="core_media_photo_plural">Foto</string>
     <string name="core_media_live_tv_plural">TV in diretta</string>
     <string name="core_media_channel_plural">Canali</string>
-    <string name="core_media_unknown_plural">Sconosciuto</string>
+    <string name="core_media_unknown_plural">Sconosciuti</string>
 </resources>

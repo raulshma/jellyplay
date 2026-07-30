@@ -191,7 +191,7 @@
     <string name="detail_manage_delete_file">Datei löschen</string>
     <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
     <string name="detail_manage_delete_title">Episodendatei löschen</string>
-    <string name="detail_manage_delete_message">Die Datei für „%1$s\" (%2$s) löschen? Sonarr entfernt sie und du kannst nach einer Ersatz suchen.</string>
+    <string name="detail_manage_delete_message">Die Datei für „%1$s\" (%2$s) löschen? Sonarr entfernt sie und du kannst nach einem Ersatz suchen.</string>
     <string name="detail_manage_delete_confirm">Löschen</string>
     <!-- Empty / error states -->
     <string name="detail_manage_no_episodes">Für diese Serie wurden in Sonarr keine Episoden gefunden.</string>

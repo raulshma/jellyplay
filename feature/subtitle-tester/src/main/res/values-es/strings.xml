@@ -11,7 +11,7 @@
     <string name="subtitle_tester_engine">Motor</string>
     <string name="subtitle_tester_preset">Ejemplo</string>
     <string name="subtitle_tester_reloading">Recargando…</string>
-    <string name="subtitle_tester_hint_hot">Nota destacada · la vista previa se actualiza al instante</string>
+    <string name="subtitle_tester_hint_hot">Recarga en caliente · la vista previa se actualiza al instante</string>
     <string name="subtitle_tester_hint_libvlc">Los cambios de estilo recargan brevemente este motor</string>
 
     <string name="subtitle_tester_preset_dialogue">Diálogo</string>

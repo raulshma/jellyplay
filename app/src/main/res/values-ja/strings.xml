@@ -6,7 +6,7 @@
     <string name="tile_paused_cd">一時停止中</string>
 
     <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
-    <string name="press_back_again_to_exit">もう一度戻るで終了します</string>
+    <string name="press_back_again_to_exit">もう一度「戻る」を押すと終了します</string>
 
     <string name="shortcut_continue_watching_short">続ける</string>
     <string name="shortcut_continue_watching_long">視聴を続ける</string>

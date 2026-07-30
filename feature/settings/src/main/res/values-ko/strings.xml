@@ -176,7 +176,7 @@
     <string name="settings_vibrate_subtitle">알림 시 진동</string>
     <string name="settings_notification_lights">알림 표시등</string>
     <string name="settings_notification_lights_subtitle">지원하는 기기에서 알림 표시등 점멸</string>
-    <string name="settings_max_per_check">홠택별 최대</string>
+    <string name="settings_max_per_check">확인별 최대</string>
     <string name="settings_max_per_check_subtitle">알림 묶음당 최대 항목 수</string>
     <string name="settings_libraries">라이브러리</string>
     <string name="settings_libraries_subtitle">라이브러리 %2$d개 중 %1$d개 모니터링 중</string>
