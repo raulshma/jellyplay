@@ -1953,8 +1953,13 @@ private fun PlayerSheetRouter(
                                 }
                                 viewModel.setSeriesSubtitlePreference(
                                     language = sel?.language,
-                                    forced = sel?.badges?.contains(TrackBadge.FORCED),
-                                    hearingImpaired = sel?.badges?.contains(TrackBadge.SDH),
+                                    // A role is only pinned when present: selecting a
+                                    // plain track passes null ("don't care") so the
+                                    // restore matcher relaxes to any same-language
+                                    // track instead of strictly excluding forced/SDH
+                                    // tracks whose badges vary episode-to-episode.
+                                    forced = sel?.badges?.contains(TrackBadge.FORCED)?.takeIf { it },
+                                    hearingImpaired = sel?.badges?.contains(TrackBadge.SDH)?.takeIf { it },
                                 )
                             },
                         )

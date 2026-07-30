@@ -82,6 +82,36 @@ class SubtitleTrackMatcherTest {
         assertEquals(0, match?.index)
     }
 
+    // --- "Don't care" role intent (the remember-subtitle save contract) ----
+
+    @Test
+    fun `null role intent does not exclude sdh track`() {
+        // Regression: the save path pins a role only when the badge is present
+        // (null ⇒ "don't care"). A plain track saved with null/null must still
+        // match an SDH track when that is the only same-language option — the
+        // matcher must NOT treat null as "must not be SDH".
+        val tracks = listOf(off, sub(0, badges = listOf(TrackBadge.SDH)))
+        val match = SubtitleTrackMatcher.match(tracks, "eng", forced = null, hearingImpaired = null)
+        assertEquals(0, match?.index)
+    }
+
+    @Test
+    fun `null role intent does not exclude forced track`() {
+        val tracks = listOf(off, sub(0, badges = listOf(TrackBadge.FORCED)))
+        val match = SubtitleTrackMatcher.match(tracks, "eng", forced = null, hearingImpaired = null)
+        assertEquals(0, match?.index)
+    }
+
+    @Test
+    fun `null sdh intent still matches sdh track when both available`() {
+        // Picking between a plain and an SDH track with null/ null intent: the
+        // exact tier is satisfied by every candidate (null never excludes), so
+        // the tiebreak picks the plain (non-badged, lower-indexed) track.
+        val tracks = listOf(off, sub(0), sub(1, badges = listOf(TrackBadge.SDH)))
+        val match = SubtitleTrackMatcher.match(tracks, "eng", forced = null, hearingImpaired = null)
+        assertEquals(0, match?.index)
+    }
+
     // --- No match ----------------------------------------------------------
 
     @Test

@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -25,14 +26,23 @@ data class GitHubReleaseAsset(
 @Singleton
 class GitHubReleasesApiImpl @Inject constructor(
     private val okHttpClient: OkHttpClient,
+    // Overridable only so unit tests can point at a MockWebServer; production
+    // wiring leaves it as the GitHub Releases latest endpoint.
+    private val latestReleaseUrl: String = LATEST_RELEASE_URL,
 ) : GitHubReleasesApi {
 
     private val json = SeerrApiClientImpl.lenientJson
 
+    // GitHub's REST API serializes fields in snake_case (tag_name, html_url,
+    // browser_download_url). kotlinx.serialization is case-sensitive and does
+    // not map snake_case to camelCase automatically, so every mismatched field
+    // needs an explicit @SerialName — otherwise it silently deserializes to
+    // null under ignoreUnknownKeys=true, which made tagName come back empty and
+    // the update check report "already latest" for every build.
     @Serializable
     private data class GitHubRelease(
-        val tagName: String? = null,
-        val htmlUrl: String? = null,
+        @SerialName("tag_name") val tagName: String? = null,
+        @SerialName("html_url") val htmlUrl: String? = null,
         val body: String? = null,
         val assets: List<GitHubAsset> = emptyList(),
     )
@@ -40,7 +50,7 @@ class GitHubReleasesApiImpl @Inject constructor(
     @Serializable
     private data class GitHubAsset(
         val name: String? = null,
-        val browserDownloadUrl: String? = null,
+        @SerialName("browser_download_url") val browserDownloadUrl: String? = null,
         val size: Long = 0,
     ) {
         fun toPublic(): GitHubReleaseAsset = GitHubReleaseAsset(
@@ -56,7 +66,7 @@ class GitHubReleasesApiImpl @Inject constructor(
         supportedAbis: Array<String>,
     ): Result<AppUpdateInfo> {
         val request = Request.Builder()
-            .url(LATEST_RELEASE_URL)
+            .url(latestReleaseUrl)
             .header("Accept", "application/vnd.github.v3+json")
             .get()
             .build()
