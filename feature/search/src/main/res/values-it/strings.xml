@@ -2,7 +2,7 @@
 <resources>
     <!-- Search feature user-facing strings (enhancements §2.2) -->
     <string name="search_no_results_found">Nessun risultato trovato</string>
-    <string name="search_try_adjusting_filters">Prova ad ajustare i filtri</string>
+    <string name="search_try_adjusting_filters">Prova ad aggiustare i filtri</string>
     <string name="search_did_you_mean">Intendevi?</string>
     <string name="search_failed">Ricerca non riuscita</string>
     <string name="search_failed_to_load_more">Caricamento di altri elementi non riuscito</string>

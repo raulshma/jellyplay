@@ -26,10 +26,10 @@
 
     <!-- ── Smart-play templates (verb + S#:E#) ────────────────────────────
          Positional args: %1$d = season number, %2$d = episode number. -->
-    <string name="detail_resume_episode">Reanudar T%1$d:E%2$d</string>
-    <string name="detail_next_up_episode">A continuación T%1$d:E%2$d</string>
-    <string name="detail_play_episode">Reproducir T%1$d:E%2$d</string>
-    <string name="detail_replay_episode">Volver a reproducir T%1$d:E%2$d</string>
+    <string name="detail_resume_episode">Reanudar S%1$d:E%2$d</string>
+    <string name="detail_next_up_episode">A continuación S%1$d:E%2$d</string>
+    <string name="detail_play_episode">Reproducir S%1$d:E%2$d</string>
+    <string name="detail_replay_episode">Volver a reproducir S%1$d:E%2$d</string>
 
     <!-- ── Action icon content descriptions (TalkBack) ──────────────────── -->
     <string name="detail_cd_mark_as_watched">Marcar como visto</string>

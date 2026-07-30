@@ -6,7 +6,7 @@
       then seed translations to re-enable the language picker (analysis F-19).
     -->
     <string name="onboarding_welcome_title">Bienvenue sur\nJellyPlay</string>
-    <string name="onboarding_welcome_subtitle">Votre client Jellyfin personnel. Configurons quelques éléments pour démarrer.</string>
+    <string name="onboarding_welcome_subtitle">Votre client Jellyfin personnel. Configurez quelques éléments pour démarrer.</string>
     <string name="onboarding_feature_stream">Films en streaming &amp; séries TV</string>
     <string name="onboarding_feature_music">Lecteur de musique avec effets audio avancés</string>
     <string name="onboarding_feature_download">Télécharger pour la lecture hors ligne</string>

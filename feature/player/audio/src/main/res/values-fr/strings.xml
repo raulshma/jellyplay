@@ -89,7 +89,7 @@
     <string name="audio_effects_balance_center">Centre</string>
     <string name="audio_effects_pitch">Hauteur tonale</string>
     <string name="audio_effects_pitch_original">Original</string>
-    <string name="audio_effects_pitch_value">%1$s demi-tons</string>
+    <string name="audio_effects_pitch_value">%1$s demi-ton(s)</string>
     <string name="audio_effects_auto_eq">Auto-EQ par genre</string>
     <string name="audio_effects_auto_eq_description">Applique un préréglage d\'égaliseur selon le genre du morceau</string>
 

@@ -166,7 +166,7 @@
     <string name="settings_quiet_start_subtitle">Ruhezeiten beginnen</string>
     <string name="settings_quiet_end">Ruheende</string>
     <string name="settings_quiet_end_subtitle">Ruhezeiten enden</string>
-    <string name="settings_respect_system_dnd">System-Nicht-stören beachten</string>
+    <string name="settings_respect_system_dnd">Systemeinstellung „Bitte nicht stören" beachten</string>
     <string name="settings_respect_system_dnd_subtitle">Keine Benachrichtigungen zeigen, wenn „Nicht stören\" aktiv ist</string>
     <string name="settings_system_notification_settings">System-Benachrichtigungseinstellungen</string>
     <string name="settings_system_notification_settings_subtitle">Pro-Mediathek-Kanal in den Systemeinstellungen anpassen</string>

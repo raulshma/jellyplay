@@ -191,7 +191,7 @@
     <string name="detail_manage_delete_message">删除“%1$s”(%2$s) 的文件？Sonarr 将会移除该文件，你可以搜索替代资源。</string>
     <string name="detail_manage_delete_confirm">删除</string>
     <!-- Empty / error states -->
-    <string name="detail_manage_no_episodes">在 Sonarr 中未找到此剧集的剧集。</string>
+    <string name="detail_manage_no_episodes">未在 Sonarr 中找到此剧集的任何集。</string>
     <string name="detail_manage_not_tracked">没有 Sonarr 服务器跟踪此剧集。</string>
     <!-- Content descriptions (TalkBack / TV) -->
     <string name="detail_manage_cd_search_season">搜索本季中已监控的内容</string>
