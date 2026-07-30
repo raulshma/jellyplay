@@ -68,7 +68,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import com.raulshma.jellyplay.feature.admin.plugins.components.MarkdownText
+import com.raulshma.jellyplay.core.ui.components.MarkdownText
 import com.raulshma.jellyplay.feature.admin.plugins.components.PluginStatusBadge
 
 @Composable

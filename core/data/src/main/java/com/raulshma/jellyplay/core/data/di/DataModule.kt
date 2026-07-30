@@ -165,4 +165,8 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindTimeSource(impl: SystemTimeSource): TimeSource
+
+    @Binds
+    @Singleton
+    abstract fun bindAppUpdateRepository(impl: com.raulshma.jellyplay.core.data.update.AppUpdateRepositoryImpl): com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 }

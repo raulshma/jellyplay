@@ -83,4 +83,23 @@
     <string name="widget_config_source_upcoming_movies_description">Movies releasing soon</string>
     <string name="widget_config_source_upcoming_tv">Upcoming TV</string>
     <string name="widget_config_source_upcoming_tv_description">Shows premiering soon</string>
+
+    <!-- In-app self-update sheet -->
+    <string name="update_checking">Checking for updates\u2026</string>
+    <string name="update_up_to_date_title">You\'re up to date</string>
+    <string name="update_up_to_date_body">JellyPlay is already the latest version.</string>
+    <string name="update_view_notes">View release notes</string>
+    <string name="update_hide_notes">Hide release notes</string>
+    <string name="update_available_title">Update available — v%1$s</string>
+    <string name="update_no_notes">No release notes provided.</string>
+    <string name="update_no_matching_apk">No matching APK</string>
+    <string name="update_download">Download</string>
+    <string name="update_later">Later</string>
+    <string name="update_downloading">Downloading update\u2026</string>
+    <string name="update_cancel">Cancel</string>
+    <string name="update_ready_title">Ready to install — v%1$s</string>
+    <string name="update_ready_body">The update has been downloaded. Tap Install to continue.</string>
+    <string name="update_install">Install</string>
+    <string name="update_failed_title">Update failed</string>
+    <string name="update_close">Close</string>
 </resources>

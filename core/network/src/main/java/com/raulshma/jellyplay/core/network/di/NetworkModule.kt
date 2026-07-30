@@ -33,6 +33,8 @@ import com.raulshma.jellyplay.core.network.arr.ResilientRadarrApiClient
 import com.raulshma.jellyplay.core.network.arr.ResilientSonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClientImpl
+import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
+import com.raulshma.jellyplay.core.network.github.GitHubReleasesApiImpl
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
 import com.raulshma.jellyplay.core.network.api.ResilientTmdbApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
@@ -134,6 +136,12 @@ abstract class NetworkModule {
     abstract fun bindSonarrApiClient(
         impl: ResilientSonarrApiClient,
     ): SonarrApiClient
+
+    @Binds
+    @Singleton
+    abstract fun bindGitHubReleasesApi(
+        impl: GitHubReleasesApiImpl,
+    ): GitHubReleasesApi
 
     companion object {
         // Hoisted so the pattern compiles once at class load rather than on each

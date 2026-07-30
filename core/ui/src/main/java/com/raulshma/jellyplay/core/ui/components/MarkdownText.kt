@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.admin.plugins.components
+package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +22,13 @@ import androidx.compose.ui.unit.sp
 
 private val ORDERED_LIST_CAPTURE = Regex("^(\\d+)\\.\\s(.*)")
 
+/**
+ * A minimal, dependency-free Markdown renderer for the subset of
+ * GitHub-flavoured Markdown used in release notes and plugin changelogs:
+ * `#`/`##`/`###` headings, `-`/`*` and `1.` lists, inline `**bold**`,
+ * `*italic*`, `` `code` ``, `~~strike~~` and `[link](url)` (links styled,
+ * not clickable).
+ */
 @Composable
 fun MarkdownText(
     text: String,
