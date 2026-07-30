@@ -15,8 +15,8 @@
     <string name="detail_section_more_like_this">More Like This</string>
     <string name="detail_section_videos">Videos</string>
     <string name="detail_section_seasons">Seasons</string>
-    <string name="detail_section_seerr_recommendations">Seerr Recommendations</string>
-    <string name="detail_section_seerr_similar">Seerr Similar</string>
+    <string name="detail_section_seerr_recommendations" translatable="false">Seerr Recommendations</string>
+    <string name="detail_section_seerr_similar" translatable="false">Seerr Similar</string>
 
     <!-- ── Primary action button labels ─────────────────────────────────── -->
     <string name="detail_play_play">Play</string>

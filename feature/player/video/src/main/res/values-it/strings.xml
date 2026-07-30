@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_audio">Audio</string>
+    <string name="player_subtitles">Sottotitoli</string>
+    <string name="player_reset_to_auto">Reimposta su automatico</string>
+    <string name="player_track_default">Predefinito</string>
+    <string name="player_track_off">Off</string>
+    <string name="player_track_none">Nessuno</string>
+
+    <string name="track_badge_forced">Forzati</string>
+    <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_default">Predefinito</string>
+</resources>

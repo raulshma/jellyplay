@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">JellyPlay</string>
+    <string name="app_name" translatable="false">JellyPlay</string>
     <string name="open_app_description">Open %1$s</string>
     <string name="tile_paused_label">Paused: %1$s</string>
     <string name="tile_playing_cd">Playing</string>
@@ -22,13 +22,13 @@
     <string name="widget_continue_watching_label">Continue Watching</string>
     <string name="widget_continue_watching_description">Jump back into the shows and movies you started but haven\'t finished.</string>
     <string name="widget_nothing_playing">Nothing playing</string>
-    <string name="widget_open_to_play">Tap to open JellyPlay</string>
+    <string name="widget_open_to_play" translatable="false">Tap to open JellyPlay</string>
     <string name="widget_continue_watching_empty">Nothing to continue yet</string>
     <string name="widget_continue_watching_empty_subtitle">Start watching a show and it will appear here</string>
     <string name="widget_placeholder_title">Track title</string>
     <string name="widget_placeholder_subtitle">Artist name</string>
     <string name="widget_album_art">Album art</string>
-    <string name="widget_app_icon">JellyPlay</string>
+    <string name="widget_app_icon" translatable="false">JellyPlay</string>
     <string name="widget_play_pause">Play or pause</string>
     <string name="widget_next">Next track</string>
     <string name="widget_previous">Previous track</string>
@@ -45,17 +45,17 @@
     <string name="widget_library_recommendations_label">Library Picks</string>
     <string name="widget_library_recommendations_title">Library Picks</string>
     <string name="widget_library_recommendations_subtitle">Because you watched</string>
-    <string name="widget_library_recommendations_description">Personalized picks from your Jellyfin library — based on what you have been watching.</string>
+    <string name="widget_library_recommendations_description" translatable="false">Personalized picks from your Jellyfin library — based on what you have been watching.</string>
     <string name="widget_library_recommendations_empty">No recommendations yet</string>
-    <string name="widget_library_recommendations_empty_subtitle">Open JellyPlay to start exploring your library</string>
+    <string name="widget_library_recommendations_empty_subtitle" translatable="false">Open JellyPlay to start exploring your library</string>
 
     <!-- Seerr Recommendations widget -->
-    <string name="widget_seerr_recommendations_label">Seerr Picks</string>
-    <string name="widget_seerr_recommendations_title">Seerr Picks</string>
+    <string name="widget_seerr_recommendations_label" translatable="false">Seerr Picks</string>
+    <string name="widget_seerr_recommendations_title" translatable="false">Seerr Picks</string>
     <string name="widget_seerr_recommendations_subtitle">Trending this week</string>
-    <string name="widget_seerr_recommendations_description">Trending and upcoming movies and TV from your Seerr (Jellyseerr / Overseerr) server.</string>
-    <string name="widget_seerr_recommendations_empty">Seerr is not connected</string>
-    <string name="widget_seerr_recommendations_empty_subtitle">Configure Seerr in JellyPlay settings to see picks</string>
+    <string name="widget_seerr_recommendations_description" translatable="false">Trending and upcoming movies and TV from your Seerr (Jellyseerr / Overseerr) server.</string>
+    <string name="widget_seerr_recommendations_empty" translatable="false">Seerr is not connected</string>
+    <string name="widget_seerr_recommendations_empty_subtitle" translatable="false">Configure Seerr in JellyPlay settings to see picks</string>
     <string name="widget_seerr_no_recommendations">No recommendations yet</string>
     <string name="widget_seerr_no_recommendations_subtitle">Tap refresh or check back later</string>
 
@@ -87,7 +87,7 @@
     <!-- In-app self-update sheet -->
     <string name="update_checking">Checking for updates\u2026</string>
     <string name="update_up_to_date_title">You\'re up to date</string>
-    <string name="update_up_to_date_body">JellyPlay is already the latest version.</string>
+    <string name="update_up_to_date_body" translatable="false">JellyPlay is already the latest version.</string>
     <string name="update_view_notes">View release notes</string>
     <string name="update_hide_notes">Hide release notes</string>
     <string name="update_available_title">Update available — v%1$s</string>

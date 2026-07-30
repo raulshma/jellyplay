@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pending playback-progress sync indicator shown on the home dock. -->
+    <string name="sync_icon_content_description">播放进度同步：%1$d 个项目待处理。打开同步详情。</string>
+
+    <!-- Sync details sheet. -->
+    <string name="sync_details_title">待同步的观看进度</string>
+    <string name="sync_items_queued">已加入队列 %1$d 个项目</string>
+    <string name="sync_up_to_date">已是最新</string>
+    <string name="sync_will_sync_when_online">将在重新联网后自动同步</string>
+    <string name="syncing">正在同步…</string>
+    <string name="sync_now">立即同步</string>
+    <string name="sync_now_disabled_offline">重新连接以同步</string>
+    <string name="sync_close">关闭</string>
+
+    <!-- Event types shown per pending row. -->
+    <string name="sync_event_start">已开始</string>
+    <string name="sync_event_progress">进度</string>
+    <string name="sync_event_stop">已停止</string>
+    <string name="sync_event_played">已标记为已播放</string>
+    <string name="sync_event_unplayed">已标记为未播放</string>
+
+    <!-- Title shown for a pending row whose media could not be resolved. -->
+    <string name="sync_unknown_title">未知项目</string>
+</resources>

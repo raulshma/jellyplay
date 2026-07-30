@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      TODO(i18n): these strings are the first ones extracted from hardcoded UI
+      text (analysis F-37). Continue extracting the rest of onboarding/auth,
+      then seed translations to re-enable the language picker (analysis F-19).
+    -->
+    <string name="onboarding_welcome_title">JellyPlay에 오신 것을\n환영합니다</string>
+    <string name="onboarding_welcome_subtitle">개인용 Jellyfin 클라이언트입니다. 시작하기 위해 몇 가지를 설정하세요.</string>
+    <string name="onboarding_feature_stream">영화 및 TV 프로그램 스트리밍</string>
+    <string name="onboarding_feature_music">고급 오디오 효과가 포함된 음악 재생기</string>
+    <string name="onboarding_feature_download">오프라인 재생을 위한 다운로드</string>
+
+    <!-- SubtitlesStep (shared preview also consumes these) -->
+    <string name="onboarding_subtitles_title">자막</string>
+    <string name="onboarding_subtitles_subtitle">자막 모양과 기본값을 사용자 지정하세요</string>
+    <string name="onboarding_subtitles_preview">자막 미리보기</string>
+    <string name="onboarding_subtitles_font_size">글꼴 크기</string>
+    <string name="onboarding_subtitles_font_color">글꼴 색상</string>
+    <string name="onboarding_subtitles_edge_type">테두리 유형</string>
+</resources>

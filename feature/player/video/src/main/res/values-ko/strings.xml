@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_audio">오디오</string>
+    <string name="player_subtitles">자막</string>
+    <string name="player_reset_to_auto">자동으로 재설정</string>
+    <string name="player_track_default">기본</string>
+    <string name="player_track_off">끄기</string>
+    <string name="player_track_none">없음</string>
+
+    <string name="track_badge_forced">강제</string>
+    <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_default">기본</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Newsletter feature user-facing strings (enhancements §2.2) -->
+    <string name="newsletter_could_not_load">뉴스레터를 불러올 수 없습니다</string>
+    <string name="newsletter_preparing_digest">다이제스트 준비 중\u2026</string>
+</resources>

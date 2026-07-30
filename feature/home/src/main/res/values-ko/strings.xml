@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pending playback-progress sync indicator shown on the home dock. -->
+    <string name="sync_icon_content_description">재생 동기화: %1$d개 항목 대기 중. 동기화 상세를 엽니다.</string>
+
+    <!-- Sync details sheet. -->
+    <string name="sync_details_title">대기 중인 시청 진행률 동기화</string>
+    <string name="sync_items_queued">%1$d개 항목 대기 중</string>
+    <string name="sync_up_to_date">최신 상태</string>
+    <string name="sync_will_sync_when_online">온라인에 연결되면 자동으로 동기화됩니다</string>
+    <string name="syncing">동기화 중…</string>
+    <string name="sync_now">지금 동기화</string>
+    <string name="sync_now_disabled_offline">동기화하려면 다시 연결하세요</string>
+    <string name="sync_close">닫기</string>
+
+    <!-- Event types shown per pending row. -->
+    <string name="sync_event_start">시작됨</string>
+    <string name="sync_event_progress">진행 중</string>
+    <string name="sync_event_stop">중지됨</string>
+    <string name="sync_event_played">재생됨으로 표시됨</string>
+    <string name="sync_event_unplayed">재생 안 됨으로 표시됨</string>
+
+    <!-- Title shown for a pending row whose media could not be resolved. -->
+    <string name="sync_unknown_title">알 수 없는 항목</string>
+</resources>

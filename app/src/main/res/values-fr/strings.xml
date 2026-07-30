@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_app_description">Ouvrir %1$s</string>
+    <string name="tile_paused_label">En pause : %1$s</string>
+    <string name="tile_playing_cd">Lecture en cours</string>
+    <string name="tile_paused_cd">En pause</string>
+
+    <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
+    <string name="press_back_again_to_exit">Appuyez de nouveau sur retour pour quitter</string>
+
+    <string name="shortcut_continue_watching_short">Continuer</string>
+    <string name="shortcut_continue_watching_long">Continuer à regarder</string>
+    <string name="shortcut_search_short">Rechercher</string>
+    <string name="shortcut_search_long">Rechercher dans la bibliothèque</string>
+    <string name="shortcut_play_music_short">Musique</string>
+    <string name="shortcut_play_music_long">Lire la musique</string>
+    <string name="shortcut_downloads_short">Téléchargements</string>
+    <string name="shortcut_downloads_long">Ouvrir les téléchargements</string>
+
+    <string name="widget_now_playing_label">Lecture en cours</string>
+    <string name="widget_now_playing_description">Voir et contrôler la musique que vous écoutez directement depuis votre écran d\'accueil.</string>
+    <string name="widget_continue_watching_label">Continuer à regarder</string>
+    <string name="widget_continue_watching_description">Reprenez les séries et films commencés mais non terminés.</string>
+    <string name="widget_nothing_playing">Aucune lecture en cours</string>
+    <string name="widget_continue_watching_empty">Rien à reprendre pour le moment</string>
+    <string name="widget_continue_watching_empty_subtitle">Commencez à regarder une série et elle apparaîtra ici</string>
+    <string name="widget_placeholder_title">Titre du morceau</string>
+    <string name="widget_placeholder_subtitle">Nom de l\'artiste</string>
+    <string name="widget_album_art">Pochette d\'album</string>
+    <string name="widget_play_pause">Lire ou mettre en pause</string>
+    <string name="widget_next">Morceau suivant</string>
+    <string name="widget_previous">Morceau précédent</string>
+    <string name="widget_rewind">Reculer de 10 secondes</string>
+    <string name="widget_forward">Avancer de 10 secondes</string>
+    <string name="widget_seek_to">Aller à la position</string>
+    <string name="widget_continue_watching_title">Continuer à regarder</string>
+    <string name="widget_continue_watching_see_all">Tout voir</string>
+    <string name="widget_minutes_left">%1$d min restantes</string>
+    <string name="widget_progress_percent">%1$d%%</string>
+    <string name="widget_placeholder_position">—</string>
+
+    <!-- Library Recommendations widget -->
+    <string name="widget_library_recommendations_label">Sélection de la bibliothèque</string>
+    <string name="widget_library_recommendations_title">Sélection de la bibliothèque</string>
+    <string name="widget_library_recommendations_subtitle">Parce que vous avez regardé</string>
+    <string name="widget_library_recommendations_empty">Aucune recommandation pour le moment</string>
+
+    <!-- Seerr Recommendations widget -->
+    <string name="widget_seerr_recommendations_subtitle">Tendances cette semaine</string>
+    <string name="widget_seerr_no_recommendations">Aucune recommandation pour le moment</string>
+    <string name="widget_seerr_no_recommendations_subtitle">Appuyez sur Actualiser ou réessayez plus tard</string>
+
+    <!-- Shared -->
+    <string name="widget_refresh">Actualiser</string>
+
+    <!-- Configuration activity -->
+    <string name="widget_config_title">Choisir les recommandations</string>
+    <string name="widget_config_save">Enregistrer</string>
+    <string name="widget_config_source_similar">Parce que vous avez regardé</string>
+    <string name="widget_config_source_similar_description">Recommandations personnalisées basées sur votre dernier élément regardé</string>
+    <string name="widget_config_source_latest">Derniers ajouts dans votre bibliothèque</string>
+    <string name="widget_config_source_latest_description">Médias récemment ajoutés dans toutes vos bibliothèques</string>
+    <string name="widget_config_source_favorites">Vos favoris</string>
+    <string name="widget_config_source_favorites_description">Éléments que vous avez marqués comme favoris</string>
+    <string name="widget_config_source_surprise_me">Surprenez-moi</string>
+    <string name="widget_config_source_surprise_me_description">Une sélection aléatoire de votre bibliothèque</string>
+    <string name="widget_config_source_trending">Tendances cette semaine</string>
+    <string name="widget_config_source_trending_description">Ce dont tout le monde parle</string>
+    <string name="widget_config_source_popular_movies">Films populaires</string>
+    <string name="widget_config_source_popular_movies_description">Films les mieux notés en ce moment</string>
+    <string name="widget_config_source_popular_tv">Séries populaires</string>
+    <string name="widget_config_source_popular_tv_description">Séries les mieux notées en ce moment</string>
+    <string name="widget_config_source_upcoming_movies">Films à venir</string>
+    <string name="widget_config_source_upcoming_movies_description">Films qui sortent bientôt</string>
+    <string name="widget_config_source_upcoming_tv">Séries à venir</string>
+    <string name="widget_config_source_upcoming_tv_description">Séries qui débutent bientôt</string>
+
+    <!-- In-app self-update sheet -->
+    <string name="update_checking">Recherche de mises à jour\u2026</string>
+    <string name="update_up_to_date_title">Vous êtes à jour</string>
+    <string name="update_view_notes">Voir les notes de version</string>
+    <string name="update_hide_notes">Masquer les notes de version</string>
+    <string name="update_available_title">Mise à jour disponible — v%1$s</string>
+    <string name="update_no_notes">Aucune note de version fournie.</string>
+    <string name="update_no_matching_apk">Aucun APK correspondant</string>
+    <string name="update_download">Télécharger</string>
+    <string name="update_later">Plus tard</string>
+    <string name="update_downloading">Téléchargement de la mise à jour\u2026</string>
+    <string name="update_cancel">Annuler</string>
+    <string name="update_ready_title">Prêt à installer — v%1$s</string>
+    <string name="update_ready_body">La mise à jour a été téléchargée. Appuyez sur Installer pour continuer.</string>
+    <string name="update_install">Installer</string>
+    <string name="update_failed_title">Échec de la mise à jour</string>
+    <string name="update_close">Fermer</string>
+</resources>

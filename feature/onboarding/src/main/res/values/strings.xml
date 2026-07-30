@@ -10,7 +10,7 @@
     <string name="onboarding_feature_stream">Stream movies &amp; TV shows</string>
     <string name="onboarding_feature_music">Music player with advanced audio effects</string>
     <string name="onboarding_feature_download">Download for offline playback</string>
-    <string name="onboarding_feature_syncplay">SyncPlay — watch together</string>
+    <string name="onboarding_feature_syncplay" translatable="false">SyncPlay — watch together</string>
 
     <!-- SubtitlesStep (shared preview also consumes these) -->
     <string name="onboarding_subtitles_title">Subtitles</string>

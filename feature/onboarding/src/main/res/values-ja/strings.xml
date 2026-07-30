@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      TODO(i18n): these strings are the first ones extracted from hardcoded UI
+      text (analysis F-37). Continue extracting the rest of onboarding/auth,
+      then seed translations to re-enable the language picker (analysis F-19).
+    -->
+    <string name="onboarding_welcome_title">JellyPlay\nへようこそ</string>
+    <string name="onboarding_welcome_subtitle">あなた専用のJellyfinクライアント。初期設定を済ませて使い始めましょう。</string>
+    <string name="onboarding_feature_stream">映画やテレビ番組をストリーミング</string>
+    <string name="onboarding_feature_music">高度な音声エフェクトを備えた音楽プレーヤー</string>
+    <string name="onboarding_feature_download">オフライン再生用にダウンロード</string>
+
+    <!-- SubtitlesStep (shared preview also consumes these) -->
+    <string name="onboarding_subtitles_title">字幕</string>
+    <string name="onboarding_subtitles_subtitle">字幕の見た目とデフォルトをカスタマイズ</string>
+    <string name="onboarding_subtitles_preview">字幕プレビュー</string>
+    <string name="onboarding_subtitles_font_size">フォントサイズ</string>
+    <string name="onboarding_subtitles_font_color">フォントの色</string>
+    <string name="onboarding_subtitles_edge_type">縁取りの種類</string>
+</resources>

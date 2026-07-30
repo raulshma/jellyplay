@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      TODO(i18n): these strings are the first ones extracted from hardcoded UI
+      text (analysis F-37). Continue extracting the rest of onboarding/auth,
+      then seed translations to re-enable the language picker (analysis F-19).
+    -->
+    <string name="onboarding_welcome_title">Bienvenido a\nJellyPlay</string>
+    <string name="onboarding_welcome_subtitle">Tu cliente personal de Jellyfin. Vamos a configurar unas cuantas cosas para empezar.</string>
+    <string name="onboarding_feature_stream">Reproduce películas y series</string>
+    <string name="onboarding_feature_music">Reproductor de música con efectos de audio avanzados</string>
+    <string name="onboarding_feature_download">Descarga para reproducir sin conexión</string>
+
+    <!-- SubtitlesStep (shared preview also consumes these) -->
+    <string name="onboarding_subtitles_title">Subtítulos</string>
+    <string name="onboarding_subtitles_subtitle">Personaliza el aspecto y los valores predeterminados de los subtítulos</string>
+    <string name="onboarding_subtitles_preview">Vista previa de subtítulos</string>
+    <string name="onboarding_subtitles_font_size">Tamaño de fuente</string>
+    <string name="onboarding_subtitles_font_color">Color de fuente</string>
+    <string name="onboarding_subtitles_edge_type">Tipo de borde</string>
+</resources>

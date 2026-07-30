@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Live TV feature user-facing strings (enhancements §2.2) -->
+    <string name="livetv_no_channels_available">Keine Sender verfügbar</string>
+
+    <!-- Live TV tabbed screen (matches jellyfin-web Live TV collection) -->
+    <string name="livetv_tab_programs">Sendungen</string>
+    <string name="livetv_tab_guide">Programm</string>
+    <string name="livetv_tab_channels">Sender</string>
+    <string name="livetv_tab_recordings">Aufnahmen</string>
+    <string name="livetv_tab_schedule">Zeitplan</string>
+    <string name="livetv_tab_series">Serien</string>
+
+    <string name="livetv_row_on_now">Aktuell</string>
+    <string name="livetv_row_shows">Serien</string>
+    <string name="livetv_row_movies">Filme</string>
+    <string name="livetv_row_sports">Sport</string>
+    <string name="livetv_row_kids">Kinder</string>
+    <string name="livetv_row_news">Nachrichten</string>
+
+    <string name="livetv_no_programs_available">Keine Sendungen verfügbar</string>
+    <string name="livetv_no_recordings_available">Keine Aufnahmen verfügbar</string>
+    <string name="livetv_no_scheduled_recordings">Keine geplanten Aufnahmen</string>
+    <string name="livetv_no_series_recordings">Keine Serienaufnahmen</string>
+
+    <string name="livetv_section_latest_recordings">Neueste Aufnahmen</string>
+    <string name="livetv_section_active_recordings">Aktive Aufnahmen</string>
+    <string name="livetv_section_upcoming_recordings">Anstehende Aufnahmen</string>
+
+    <string name="livetv_record_once">Aufnehmen</string>
+    <string name="livetv_record_series">Serie aufnehmen</string>
+    <string name="livetv_cancel_recording">Aufnahme abbrechen</string>
+    <string name="livetv_cancel_series">Serie abbrechen</string>
+    <string name="livetv_record_success">Aufnahme geplant</string>
+    <string name="livetv_record_failed">Aufnahme konnte nicht festgelegt werden</string>
+    <string name="livetv_record_canceled">Aufnahme abgebrochen</string>
+
+    <!-- Channel detail screen -->
+    <string name="livetv_channel_watch_live">Live ansehen</string>
+    <string name="livetv_channel_on_today">Heute</string>
+    <string name="livetv_channel_live">LIVE</string>
+    <string name="livetv_channel_no_program_info">Keine Sendungsinformationen</string>
+    <string name="livetv_channel_load_failed">Programmübersicht konnte nicht geladen werden</string>
+</resources>
