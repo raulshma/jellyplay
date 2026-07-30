@@ -70,6 +70,13 @@ class ShortcutsViewModel @Inject constructor(
             category = ShortcutCategory.LIBRARY,
         ),
         ShortcutItem(
+            title = "Playlists",
+            description = "Your curated and saved playlists, including Watch Later.",
+            icon = Tabler.Outline.Playlist,
+            route = Route.Playlists,
+            category = ShortcutCategory.LIBRARY,
+        ),
+        ShortcutItem(
             title = "SyncPlay",
             description = "Watch together with synchronized playback.",
             icon = Tabler.Outline.Users,

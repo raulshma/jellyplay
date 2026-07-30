@@ -140,6 +140,7 @@ internal fun DetailContent(
         onShowFromContinueWatching = callbacks.onShowFromContinueWatching,
         onManageSeries = callbacks.onManageSeries,
         onTechnicalInfo = { callbacks.onNavigate(Route.MediaInfo(state.itemId)) },
+        onAddToPlaylist = callbacks.onAddToPlaylist,
     )
 
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current

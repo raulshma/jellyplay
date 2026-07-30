@@ -17,6 +17,8 @@ import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.model.isVideoType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.isExperimentalEnabled
@@ -1233,6 +1235,237 @@ class DetailViewModel @Inject constructor(
         DownloadQuality.MEDIUM_720P -> 3_000_000
         DownloadQuality.LOW_480P -> 1_500_000
     }
+
+    // ── Add to Playlist ────────────────────────────────────────────────
+    // The playlist repository path is fully wired (PlaylistRepository mixin on
+    // MediaRepository); these functions load the picker list and resolve the
+    // current item's ids into a playlist. Series expand to their episode ids
+    // (a Jellyfin playlist only holds playable items, not a series itself).
+
+    /**
+     * Opens the Add-to-Playlist picker and loads the user's playlists on demand.
+     * The list is fetched fresh each open (server playlists are not cached
+     * locally, matching the music playlists flow).
+     */
+    fun openPlaylistPicker() {
+        val detail = _uiState.value.detail ?: return
+        // Only playable video items and series are eligible (audio already has
+        // its own playlist flow in feature/music).
+        val type = detail.item.mediaType
+        if (!type.isVideoType && type != MediaType.SERIES) return
+        _uiState.update { it.copy(showPlaylistPicker = true) }
+        loadPlaylists()
+    }
+
+    fun dismissPlaylistPicker() {
+        _uiState.update { it.copy(showPlaylistPicker = false) }
+    }
+
+    fun openCreatePlaylistDialog() {
+        _uiState.update {
+            it.copy(
+                showPlaylistPicker = false,
+                showCreatePlaylistDialog = true,
+            )
+        }
+    }
+
+    fun dismissCreatePlaylistDialog() {
+        _uiState.update { it.copy(showCreatePlaylistDialog = false) }
+    }
+
+    private fun loadPlaylists() {
+        _uiState.update { it.copy(isLoadingPlaylists = true) }
+        launch {
+            mediaRepository.getPlaylists(limit = 100)
+                .onSuccess { playlists ->
+                    if (currentItemId != _uiState.value.detail?.item?.id) return@onSuccess
+                    _uiState.update {
+                        it.copy(
+                            playlists = playlists.filter { p -> p.canEdit },
+                            isLoadingPlaylists = false,
+                        )
+                    }
+                }
+                .onFailure {
+                    if (currentItemId != _uiState.value.detail?.item?.id) return@onFailure
+                    _uiState.update { it.copy(isLoadingPlaylists = false) }
+                }
+        }
+    }
+
+    /**
+     * Adds the current item to an existing playlist. For a series, all fetched
+     * episodes are added (Jellyfin rejects a bare series id in a playlist).
+     */
+    fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) {
+        val detail = _uiState.value.detail ?: return
+        launch {
+            _uiState.update { it.copy(isAddingToPlaylist = true) }
+            resolvePlaylistItemIds(detail)
+                .onSuccess { ids ->
+                    if (ids.isEmpty()) {
+                        _messages.emit(
+                            DetailMessage.Text(context.getString(R.string.detail_msg_no_episodes_queued))
+                        )
+                        return@onSuccess
+                    }
+                    mediaRepository.addItemsToPlaylist(playlist.id, ids)
+                        .onSuccess {
+                            _messages.emit(
+                                DetailMessage.Text(
+                                    context.getString(R.string.detail_msg_added_to_playlist, playlist.name)
+                                )
+                            )
+                        }
+                        .onFailure {
+                            _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
+                        }
+                }
+                .onFailure {
+                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
+                }
+            _uiState.update {
+                it.copy(
+                    isAddingToPlaylist = false,
+                    showPlaylistPicker = false,
+                )
+            }
+        }
+    }
+
+    /**
+     * Adds to the reserved "Watch Later" playlist, creating it on first use and
+     * caching its id in preferences so subsequent adds reuse it.
+     */
+    fun addToWatchLater() {
+        val detail = _uiState.value.detail ?: return
+        val cachedId = preferencesStore.preferences.value.watchLaterPlaylistId
+        launch {
+            _uiState.update { it.copy(isAddingToPlaylist = true) }
+            val ids = resolvePlaylistItemIds(detail).getOrElse {
+                _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
+                _uiState.update {
+                    it.copy(
+                        isAddingToPlaylist = false,
+                        showPlaylistPicker = false,
+                    )
+                }
+                return@launch
+            }
+            if (ids.isEmpty()) {
+                _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_no_episodes_queued)))
+                _uiState.update {
+                    it.copy(
+                        isAddingToPlaylist = false,
+                        showPlaylistPicker = false,
+                    )
+                }
+                return@launch
+            }
+            if (cachedId != null) {
+                mediaRepository.addItemsToPlaylist(cachedId, ids)
+                    .onSuccess {
+                        _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_added_to_watch_later)))
+                    }
+                    .onFailure {
+                        _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
+                    }
+            } else {
+                mediaRepository.createPlaylist(
+                    name = context.getString(R.string.detail_playlist_watch_later),
+                    overview = null,
+                    itemIds = ids,
+                    mediaType = playlistMediaType(detail.item.mediaType),
+                ).onSuccess { newId ->
+                    preferencesStore.setWatchLaterPlaylistId(newId)
+                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_added_to_watch_later)))
+                }.onFailure {
+                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
+                }
+            }
+            _uiState.update {
+                it.copy(
+                    isAddingToPlaylist = false,
+                    showPlaylistPicker = false,
+                )
+            }
+        }
+    }
+
+    /**
+     * Creates a new playlist seeded with the current item and closes the
+     * create-playlist dialog.
+     */
+    fun createAndAddPlaylist(name: String, overview: String) {
+        val detail = _uiState.value.detail ?: return
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        launch {
+            _uiState.update { it.copy(isAddingToPlaylist = true) }
+            val ids = resolvePlaylistItemIds(detail).getOrElse {
+                _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
+                _uiState.update {
+                    it.copy(
+                        isAddingToPlaylist = false,
+                        showCreatePlaylistDialog = false,
+                    )
+                }
+                return@launch
+            }
+            mediaRepository.createPlaylist(
+                name = trimmed,
+                overview = overview.ifBlank { null },
+                itemIds = ids,
+                mediaType = playlistMediaType(detail.item.mediaType),
+            ).onSuccess {
+                _messages.emit(
+                    DetailMessage.Text(context.getString(R.string.detail_msg_playlist_created, trimmed))
+                )
+            }.onFailure {
+                _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
+            }
+            _uiState.update {
+                it.copy(
+                    isAddingToPlaylist = false,
+                    showCreatePlaylistDialog = false,
+                )
+            }
+        }
+    }
+
+    /**
+     * Resolves the current item into the Jellyfin item ids to add to a playlist.
+     * Movies/episodes/music-videos resolve to themselves; a series expands to
+     * its fetched episodes (fetching them first if the seasons haven't loaded
+     * yet — e.g. the user opened the picker before episodes resolved).
+     */
+    private suspend fun resolvePlaylistItemIds(
+        detail: MediaDetail,
+    ): Result<List<String>> = runCatching {
+        val item = detail.item
+        if (item.mediaType != MediaType.SERIES) return@runCatching listOf(item.id)
+        val cached = episodesMap.values.flatten().map { it.id }
+        if (cached.isNotEmpty()) return@runCatching cached
+        // No episodes loaded yet — fetch the full set. A series is playable as
+        // a playlist only via its episodes, so an empty result is surfaced as
+        // a no-op message rather than adding the (invalid) series id.
+        mediaRepository.getAllEpisodesGrouped(item.id)
+            .getOrDefault(emptyMap())
+            .values
+            .flatten()
+            .map { it.id }
+    }
+
+    /**
+     * Maps the item's media type to the value passed to `createPlaylist`. The
+     * network layer only cares whether the playlist is audio- or video-typed
+     * (it branches to `SdkMediaType.AUDIO` vs `SdkMediaType.VIDEO`), so any
+     * non-audio [MediaType] is equivalent here — [MediaType.MOVIE] is used as a
+     * representative video type rather than adding a synthetic VIDEO constant.
+     */
+    private fun playlistMediaType(type: MediaType): MediaType =
+        if (type.isAudioType) MediaType.AUDIO else MediaType.MOVIE
 
     override fun onCleared() {
         super.onCleared()

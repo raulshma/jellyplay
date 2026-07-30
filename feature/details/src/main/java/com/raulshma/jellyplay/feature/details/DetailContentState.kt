@@ -92,4 +92,5 @@ internal data class DetailContentCallbacks(
     val onHideFromContinueWatching: () -> Unit,
     val onShowFromContinueWatching: () -> Unit,
     val onManageSeries: () -> Unit,
+    val onAddToPlaylist: () -> Unit,
 )

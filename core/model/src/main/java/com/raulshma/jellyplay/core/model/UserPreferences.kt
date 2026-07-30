@@ -255,6 +255,13 @@ data class UserPreferences(
      */
     val dismissedUpdateVersion: String? = null,
     val dismissedUpdateAtMs: Long = 0L,
+    /**
+     * Cached Jellyfin playlist id backing the pinned "Watch Later" row in the
+     * Add-to-Playlist picker. `null` until the first time the user adds to
+     * Watch Later, at which point the playlist is created and its id stored
+     * here so subsequent adds reuse it instead of creating duplicates.
+     */
+    val watchLaterPlaylistId: String? = null,
     val hideEpisodeThumbnails: Boolean = false,
     val episodesDescending: Boolean = true,
     val skipSpecials: Boolean = false,

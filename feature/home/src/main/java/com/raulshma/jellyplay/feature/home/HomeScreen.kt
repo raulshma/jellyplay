@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.focusGroup
@@ -262,8 +262,6 @@ private fun MainHomeContent(
     val onConfigureHomeLayout = remember(callbacks) { { callbacks.onConfigureHomeLayout() } }
     val onConfigureLibraries = remember(callbacks) { { callbacks.onConfigureLibraries() } }
     val dismissSectionConfig = remember { { sectionConfigTarget = null } }
-
-    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
     BackHandler(enabled = isFabExpanded || isSearchFocused) {
         if (isFabExpanded) {
@@ -543,12 +541,7 @@ private fun MainHomeContent(
                         onSettingsClick = callbacks.onSettingsClick,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-                            .offset {
-                                val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                                val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                                androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
-                            },
+                            .clearFloatingNav(extraBottom = 0.dp),
                     )
                 }
         }
