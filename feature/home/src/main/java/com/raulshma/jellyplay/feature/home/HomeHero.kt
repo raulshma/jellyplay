@@ -367,9 +367,19 @@ fun HeroHeader(
                 // through) instead of blending against whatever sits behind the
                 // hero. Because this layer never moves, the dissolve mask drawn
                 // inside it stays anchored to the hero box.
-                .graphicsLayer {
-                    compositingStrategy = CompositingStrategy.Offscreen
-                }
+                //
+                // In reduced-motion/performance mode the offscreen buffer +
+                // DstIn erase is skipped: it forces a per-frame GPU allocation
+                // and the parallax/breath animations that justified the dissolve
+                // are already collapsed. The bottom edge instead gets a cheap
+                // static alpha gradient drawn over it (below).
+                .then(
+                    if (!reducedMotion) {
+                        Modifier.graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                    } else Modifier
+                )
                 // Dissolve the bottom edge into transparency so the hero melts
                 // into the ambient backdrop (a blurred tint of the same artwork)
                 // instead of hard-cutting at a rectangular edge. DstIn keeps the
@@ -385,23 +395,48 @@ fun HeroHeader(
                 // leaving a hard rectangular cut against the content. Keeping the
                 // melt anchored to the box means the bottom always dissolves, so
                 // the hero stays seamless with the content at every scroll offset.
-                .drawWithContent {
-                    drawContent()
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.0f to Color.Black,
-                                0.55f to Color.Black,
-                                0.85f to Color.Transparent,
-                                1.0f to Color.Transparent,
-                            ),
-                        ),
-                        blendMode = BlendMode.DstIn,
-                    )
-                }
+                .then(
+                    if (!reducedMotion) {
+                        Modifier.drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.0f to Color.Black,
+                                        0.55f to Color.Black,
+                                        0.85f to Color.Transparent,
+                                        1.0f to Color.Transparent,
+                                    ),
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        }
+                    } else {
+                        // Cheap static bottom fade drawn over the artwork so the
+                        // hero's bottom edge still melts instead of hard-cutting,
+                        // without the offscreen buffer. Only the bottom needs it
+                        // here (the legibility scrim Box below covers the top).
+                        Modifier.drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.0f to Color.Transparent,
+                                        0.6f to Color.Transparent,
+                                        0.85f to backgroundColor.copy(alpha = 0.6f),
+                                        1.0f to backgroundColor,
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                )
                 // INNER layer — the image itself parallaxes (scrolls slower than
                 // the list) and breathes. It moves underneath the fixed dissolve
                 // mask above, so the artwork shifts while the melt stays put.
+                // In reduced-motion mode breathScale is 1f and parallaxOffset is
+                // still applied (scroll-coupled, not an animation), so this layer
+                // stays cheap.
                 .graphicsLayer {
                     translationY = parallaxOffset
                     scaleX = breathScale
