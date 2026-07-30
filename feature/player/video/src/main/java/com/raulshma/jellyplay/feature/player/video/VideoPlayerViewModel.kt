@@ -814,6 +814,17 @@ class VideoPlayerViewModel @Inject constructor(
                     )
                 }
                 updateConfigWithUiState()
+                // Re-apply the language preference once it resolves. The DAO
+                // read in ItemPlaybackPreferenceResolver is async; on next-episode
+                // autoplay the engine often publishes its track list (triggering
+                // updateTracksFromEngine) before the preference lands. Without
+                // re-running here, the preference never gets applied for that
+                // load. Only re-run when a language preference actually exists so
+                // we don't churn on null resolutions (no engine yet ⇒ no-op).
+                val hasLangPref = pref?.audioLanguage != null || pref?.subtitleLanguage != null
+                if (hasLangPref) {
+                    trackSelectionHelper.updateTracksFromEngine()
+                }
             }
         }
 

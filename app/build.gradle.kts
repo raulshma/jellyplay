@@ -17,12 +17,12 @@ android {
         minSdk = 28
         targetSdk = 37
         versionCode = (project.findProperty("versionCode") as? String)?.toInt() ?: 1
-        versionName = project.findProperty("versionName") as? String ?: "1.0"
+        versionName = project.findProperty("versionName") as? String ?: "0.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += listOf("en", "de", "es", "fr", "it", "pt", "ja", "ko", "zh")
 
-        manifestPlaceholders["versionName"] = versionName ?: "1.0"
+        manifestPlaceholders["versionName"] = versionName ?: "0.0.1"
     }
 
     flavorDimensions += "platform"

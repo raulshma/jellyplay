@@ -54,6 +54,29 @@ class TrackEnrichmentResolverTest {
     }
 
     @Test
+    fun `stream index match sets sdh badge from server isHearingImpaired flag`() {
+        // The SDH badge must come from the server's explicit flag (not only from
+        // the title text) so a track whose displayTitle lacks an "SDH" marker is
+        // still recognised across episodes — fixing the "remember subtitle for
+        // series" mismatch when conventions vary.
+        val options = listOf(
+            TrackOption(0, "English · application/x-media3-cues", "en", false, streamIndex = 3)
+        )
+        val streams = listOf(
+            MediaStream(
+                index = 3,
+                type = StreamType.SUBTITLE,
+                title = "English",
+                language = "en",
+                codec = "subrip",
+                isHearingImpaired = true,
+            )
+        )
+        val result = TrackEnrichmentResolver.enrich(options, streams, StreamType.SUBTITLE)
+        assertEquals(listOf(TrackBadge.SDH), result[0].badges)
+    }
+
+    @Test
     fun `duplicate language tracks resolve to distinct server streams positionally`() {
         // The original screenshot defect: three identical "English" engine rows.
         val options = listOf(
