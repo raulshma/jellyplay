@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isLanguageMatch
@@ -44,10 +45,28 @@ internal class TrackSelectionHelper(
     private val getPlayMethod: () -> PlayMethod,
     private val onReloadForStreamChange: (audioStreamIndex: Int?, subtitleStreamIndex: Int?) -> Unit,
     private val playbackPreferenceResolver: ItemPlaybackPreferenceResolver,
+    // Persists the remembered track to the series-scope preference row (G5).
+    // Default no-op so unit tests that don't exercise persistence compile unchanged.
+    private val persistRememberedTrack: (TrackType, RememberedTrack?) -> Unit = { _, _ -> },
     private val scope: CoroutineScope,
 ) {
     private var selectedSubtitleTrackIndex: Int? = null
     private var selectedAudioTrackIndex: Int? = null
+
+    // Last track of each type the user (or auto-resolution) selected, remembered
+    // so the NEXT episode can score its tracks against it (cross-episode track
+    // scoring). Cleared when the
+    // series changes so a different show's layout doesn't bleed in. Used only as
+    // a pre-pass before the language-rule fallback; the language rule remains the
+    // safety net when scoring finds no confident (≥3) match.
+    //
+    // [com.raulshma.jellyplay.core.model.RememberedTrack] per type. The index is
+    // the track's position within its language group at selection time, so the
+    // scorer's layout-stability signal (+1) can actually fire (it was being fed
+    // -1 before, which dead-coded it). Persisted to the series-scope preference
+    // row via [persistRememberedTrack] so it survives an app restart.
+    private var rememberedAudioTrack: RememberedTrack? = null
+    private var rememberedSubtitleTrack: RememberedTrack? = null
 
     // A selection (auto or manual) is "held" once applied via selectAudioTrack /
     // selectSubtitleTrack. While held, updateTracksFromEngine does NOT re-run the
@@ -69,7 +88,19 @@ internal class TrackSelectionHelper(
         // New item: a selection has not yet been applied for it.
         audioSelectionHeld = false
         subtitleSelectionHeld = false
+        // G5: forget the cross-episode track memory when the series changes, so
+        // a different show's track layout doesn't bleed into the new one. Same
+        // series (next episode) keeps the memory — that is the whole point.
+        val series = getCurrentSeriesId()
+        if (series != trackedSeriesId) {
+            trackedSeriesId = series
+            rememberedAudioTrack = null
+            rememberedSubtitleTrack = null
+        }
     }
+
+    /** Series id the remembered track selections belong to. */
+    private var trackedSeriesId: String? = null
 
     /**
      * Re-resolves the per-item / per-series language preference for the current
@@ -117,6 +148,20 @@ internal class TrackSelectionHelper(
                 track.copy(isSelected = if (isDefault) isDefaultTrack else matches)
             })
         }
+        // Remember a real (>= 0) audio selection so the next episode can score
+        // against it (G5). "Off"/Default selections don't carry forward intent.
+        if (option.index >= 0 && option.index < SERVER_TRACK_INDEX_BASE) {
+            val tracks = getUiState().audioTracks
+            val remembered = RememberedTrack(
+                label = option.label,
+                language = option.language,
+                indexWithinLanguage = engineIndexWithinLanguage(tracks, option.index),
+            )
+            rememberedAudioTrack = remembered
+            if (isUserOverride) {
+                persistRememberedTrack(TrackType.AUDIO, remembered)
+            }
+        }
         if (isUserOverride) {
             persistStreamSelectionFromPlayer(
                 audioTrackOption = option,
@@ -162,6 +207,19 @@ internal class TrackSelectionHelper(
                 val isOffTrack = track.index < 0
                 track.copy(isSelected = if (isOff) isOffTrack else matches)
             })
+        }
+        // Remember a real subtitle selection for cross-episode scoring (G5).
+        if (option.index >= 0 && option.index < SERVER_TRACK_INDEX_BASE) {
+            val tracks = getUiState().subtitleTracks
+            val remembered = RememberedTrack(
+                label = option.label,
+                language = option.language,
+                indexWithinLanguage = engineIndexWithinLanguage(tracks, option.index),
+            )
+            rememberedSubtitleTrack = remembered
+            if (isUserOverride) {
+                persistRememberedTrack(TrackType.SUBTITLE, remembered)
+            }
         }
         if (isUserOverride) {
             persistStreamSelectionFromPlayer(
@@ -337,7 +395,16 @@ internal class TrackSelectionHelper(
                     // global preferred audio language when set.
                     val resolvedAudioLang = playbackPreferenceResolver.resolved.value?.audioLanguage
                         ?: prefAudioLang
-                    val match = pickPreferredAudioTrack(
+                    // G5: cross-episode scoring pre-pass. If the previous episode's
+                    // selected audio track is remembered, try to find a confident
+                    // (≥3) match among this episode's tracks first — so a specific
+                    // "English · 5.1" pick carries forward instead of dropping to
+                    // the first English track. Falls through to the language rule.
+                    hydrateRememberedAudioTrack()
+                    val scored = rememberedAudioTrack?.let { remembered ->
+                        pickByScoring(audioTracks, remembered)
+                    }
+                    val match = scored ?: pickPreferredAudioTrack(
                         audioTracks = audioTracks,
                         streams = streams,
                         prefAudioLang = resolvedAudioLang,
@@ -412,7 +479,17 @@ internal class TrackSelectionHelper(
                     val resolvedSubLang = playbackPreferenceResolver.resolved.value?.subtitleLanguage
                         ?: prefSubLang
                     val forcedOnly = currentPrefs.subtitlesForcedOnly
-                    val match = if (forcedOnly) {
+                    // G5: cross-episode scoring pre-pass (non-forced only — forced/
+                    // hearing-impaired rules must take precedence for accessibility).
+                    val scored = if (!forcedOnly) {
+                        hydrateRememberedSubtitleTrack()
+                        rememberedSubtitleTrack?.let { remembered ->
+                            pickByScoring(subtitleTracks, remembered)
+                        }
+                    } else {
+                        null
+                    }
+                    val match = scored ?: if (forcedOnly) {
                         val forcedStream = streams
                             .firstOrNull { it.type == StreamType.SUBTITLE && it.isForced && isLanguageMatch(it.language, resolvedSubLang) }
                             ?: streams.firstOrNull { it.type == StreamType.SUBTITLE && it.isForced }
@@ -478,6 +555,12 @@ internal class TrackSelectionHelper(
         pendingSubtitleStreamIndex = null
         pendingAudioStreamIndex = null
         playbackPreferenceResolver.clear()
+        // Forget cross-episode track memory too — reset is a teardown/explicit
+        // reset, not a series continuation, so the remembered selection no longer
+        // reflects the user's intent for the next resolution.
+        rememberedAudioTrack = null
+        rememberedSubtitleTrack = null
+        trackedSeriesId = null
     }
 
     /**
@@ -680,6 +763,80 @@ internal class TrackSelectionHelper(
             }
         }
         return selectable.firstOrNull { isLanguageMatch(it.language, prefAudioLang) }
+    }
+
+    /**
+     * Seeds in-process remembered-audio memory from the persisted series-scope
+     * preference (G5). The resolver reads the DAO asynchronously; this runs on
+     * the hot path so once the resolver has published a value the memory is
+     * hydrated (once) and the scoring pre-pass can use it without a restart.
+     */
+    private fun hydrateRememberedAudioTrack() {
+        if (rememberedAudioTrack != null) return
+        rememberedAudioTrack = playbackPreferenceResolver.resolved.value?.rememberedAudioTrack
+    }
+
+    /** [hydrateRememberedAudioTrack] for subtitles. */
+    private fun hydrateRememberedSubtitleTrack() {
+        if (rememberedSubtitleTrack != null) return
+        rememberedSubtitleTrack = playbackPreferenceResolver.resolved.value?.rememberedSubtitleTrack
+    }
+
+    /**
+     * Cross-episode scoring pre-pass (G5). Given the candidate [tracks] for a new
+     * episode and the previously-selected [remembered] track, returns the best-
+     * scoring candidate if one clears the confidence threshold, else null (the
+     * caller falls back to the language rule). Used for both audio and subtitle
+     * resolution — the two former near-identical helpers (`pickAudioByScoring` /
+     * `pickSubtitleByScoring`) differed only in the list variable name. See
+     * [TrackScorer].
+     */
+    private fun pickByScoring(
+        tracks: List<TrackOption>,
+        remembered: RememberedTrack,
+    ): TrackOption? {
+        if (remembered.label.isBlank()) return null
+        val selectable = tracks.filter { it.index >= 0 }
+        if (selectable.isEmpty()) return null
+        val candidates = selectable.mapIndexed { i, opt ->
+            TrackScorer.Candidate(
+                language = opt.language.orEmpty(),
+                label = opt.label,
+                indexWithinLanguage = remembered.indexWithinLanguage,
+                candidateIndexWithinLanguage = positionalIndexWithinLanguage(selectable, i),
+                optionId = i,
+            )
+        }
+        val winner = TrackScorer.bestMatch(remembered.language, remembered.label, candidates = candidates) ?: return null
+        return selectable.getOrNull(winner.optionId)
+    }
+
+    /**
+     * Position of the track at array position [i] within [tracks] among the
+     * tracks sharing its language, or -1 if unknown. Used by the scoring
+     * candidate builder, which passes the positional offset into the filtered
+     * [tracks] list. (Splits the old `positionWithinLanguage` that conflated a
+     * positional offset with an engine index — a latent bug.)
+     */
+    private fun positionalIndexWithinLanguage(tracks: List<TrackOption>, i: Int): Int {
+        val target = tracks.getOrNull(i) ?: return -1
+        val lang = target.language?.lowercase()?.trim().orEmpty()
+        if (lang.isEmpty()) return -1
+        val sameLang = tracks.filter { it.language?.lowercase()?.trim() == lang }
+        return sameLang.indexOf(target)
+    }
+
+    /**
+     * Position among same-language tracks of the track whose engine [index]
+     * matches, or -1 if unknown. Used when remembering a selection — the caller
+     * knows the real engine track index, not its array position.
+     */
+    private fun engineIndexWithinLanguage(tracks: List<TrackOption>, index: Int): Int {
+        val target = tracks.firstOrNull { it.index == index } ?: return -1
+        val lang = target.language?.lowercase()?.trim().orEmpty()
+        if (lang.isEmpty()) return -1
+        val sameLang = tracks.filter { it.language?.lowercase()?.trim() == lang }
+        return sameLang.indexOf(target)
     }
 
     /** Heuristics for detecting audio-description tracks from titles/labels. */

@@ -12,6 +12,13 @@ data class UserPreferences(
     val preferredAudioLanguage: String? = null,
     val mediaStreamSelections: Map<String, MediaStreamSelection> = emptyMap(),
     val videoEffectsByItem: Map<String, VideoEffectsConfig> = emptyMap(),
+    /**
+     * Per-item subtitle-sync delay (ms), keyed by itemId. Lets a user's sync
+     * correction for a badly-timed subtitle track survive a re-watch / resume,
+     * instead of resetting to the global default each time (G9). A missing key
+     * falls back to the global `subtitleStyle.offsetMs`.
+     */
+    val subtitleDelayByItem: Map<String, Long> = emptyMap(),
     val dynamicTheming: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
@@ -37,6 +44,7 @@ data class UserPreferences(
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
     val frameRateMatching: Boolean = false,
+    val refreshRateMode: RefreshRateMode = RefreshRateMode.OFF,
     val nightModeEnabled: Boolean = false,
     val nightModeStrength: EffectStrength = EffectStrength.MODERATE,
     val homeMode: HomeMode = HomeMode.VIDEO,

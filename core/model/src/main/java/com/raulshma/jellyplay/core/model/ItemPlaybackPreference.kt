@@ -18,6 +18,22 @@ enum class PlaybackPrefScope {
 }
 
 /**
+ * The cross-episode track-scoring memory for one track type (G5): the display
+ * [label] (codec folded in), its [language], and its positional
+ * [indexWithinLanguage] for layout stability. Persisted per series so a specific
+ * pick (e.g. "English · 5.1") survives an app restart and carries to the next
+ * episode instead of being remembered only in-process. `null` index means
+ * "unknown / not comparable".
+ */
+@Immutable
+@Serializable
+data class RememberedTrack(
+    val label: String,
+    val language: String?,
+    val indexWithinLanguage: Int = -1,
+)
+
+/**
  * A per-item / per-series playback-language preference.
  *
  * Each language field is nullable: a `null` value means "not set / inherit",
@@ -48,6 +64,10 @@ enum class PlaybackPrefScope {
  *   so a series can pin "English SDH" and have it carried episode to episode.
  * @param dialogueBoostStrength per-item dialogue-boost strength, or null to use the
  *   effective default ([EffectStrength.NONE]).
+ * @param rememberedAudioTrack the last-selected audio track to carry to the next
+ *   episode via track scoring, or null to not remember one.
+ * @param rememberedSubtitleTrack the last-selected subtitle track to carry to the
+ *   next episode via track scoring, or null to not remember one.
  * @param updatedAt epoch millis of the last write.
  */
 @Immutable
@@ -60,5 +80,7 @@ data class ItemPlaybackPreference(
     val subtitleForced: Boolean? = null,
     val subtitleHearingImpaired: Boolean? = null,
     val dialogueBoostStrength: EffectStrength? = null,
+    val rememberedAudioTrack: RememberedTrack? = null,
+    val rememberedSubtitleTrack: RememberedTrack? = null,
     val updatedAt: Long = System.currentTimeMillis(),
 )

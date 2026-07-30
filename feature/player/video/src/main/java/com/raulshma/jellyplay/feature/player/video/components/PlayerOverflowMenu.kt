@@ -104,6 +104,13 @@ internal fun BoxScope.PlayerOverflowMenu(
     supportsVideoFilters: Boolean = false,
     videoFiltersActive: Boolean = false,
     onVideoFilterClick: () -> Unit = {},
+    supportsScreenshot: Boolean = false,
+    onScreenshotClick: () -> Unit = {},
+    abRepeatActive: Boolean = false,
+    onAbRepeatToggle: () -> Unit = {},
+    onAbRepeatSetA: () -> Unit = {},
+    onAbRepeatSetB: () -> Unit = {},
+    onAbRepeatClear: () -> Unit = {},
 ) {
     if (!expanded) return
     var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
@@ -433,6 +440,36 @@ internal fun BoxScope.PlayerOverflowMenu(
                     label = if (videoFiltersActive) "Video Filters \u00B7 On" else "Video Filters",
                     onClick = onVideoFilterClick,
                     tint = if (videoFiltersActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            if (supportsScreenshot) {
+                OverflowMenuItem(
+                    icon = Tabler.Outline.Photo,
+                    label = "Capture Frame",
+                    onClick = onScreenshotClick,
+                )
+            }
+            OverflowMenuItem(
+                icon = Tabler.Outline.Repeat,
+                label = if (abRepeatActive) "A/B Repeat \u00B7 On" else "A/B Repeat",
+                onClick = onAbRepeatToggle,
+                tint = if (abRepeatActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+            if (abRepeatActive) {
+                OverflowMenuItem(
+                    icon = Tabler.Outline.ArrowLeft,
+                    label = "Set A Point",
+                    onClick = onAbRepeatSetA,
+                )
+                OverflowMenuItem(
+                    icon = Tabler.Outline.ArrowRight,
+                    label = "Set B Point",
+                    onClick = onAbRepeatSetB,
+                )
+                OverflowMenuItem(
+                    icon = Tabler.Outline.X,
+                    label = "Clear A/B Repeat",
+                    onClick = onAbRepeatClear,
                 )
             }
         }

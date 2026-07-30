@@ -74,6 +74,20 @@ sealed interface PickerState<out T> {
         val rangeEndLabel: String,
         val onConfirm: (Float) -> Unit,
     ) : PickerState<Float>
+
+    /**
+     * Free-form multiline text editor sheet — the mpv.conf escape hatch. The
+     * user edits [initialText] in a monospace field and submits via [onSave].
+     * Used by the raw mpv options editor; intentionally generic so other
+     * free-form config (e.g. a future input.conf) can reuse it.
+     */
+    @Immutable
+    data class Text(
+        override val title: String,
+        val initialText: String,
+        val helperText: String = "",
+        val onSave: (String) -> Unit,
+    ) : PickerState<String>
 }
 
 /**
@@ -159,6 +173,16 @@ internal fun SettingsPickerDialog(
             onDismiss = onDismiss,
             onConfirm = { value ->
                 state.onConfirm(value)
+                onDismiss()
+            },
+        )
+        is PickerState.Text -> SettingsTextPickerSheet(
+            title = state.title,
+            initialText = state.initialText,
+            helperText = state.helperText,
+            onDismiss = onDismiss,
+            onSave = { text ->
+                state.onSave(text)
                 onDismiss()
             },
         )

@@ -38,6 +38,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -455,8 +456,8 @@ fun VideoPlayerScreen(
 
 
 
-    LaunchedEffect(uiState.frameRateMatching, uiState.videoFrameRate) {
-        if (uiState.frameRateMatching && uiState.videoFrameRate != null) {
+    LaunchedEffect(uiState.frameRateMatching, uiState.refreshRateMode, uiState.videoFrameRate) {
+        if (uiState.frameRateMatching && uiState.refreshRateMode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF && uiState.videoFrameRate != null) {
             val videoStream = uiState.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
             activity?.let {
                 if (!it.isDestroyed && !it.isFinishing) {
@@ -465,6 +466,7 @@ fun VideoPlayerScreen(
                         frameRate = uiState.videoFrameRate,
                         targetWidth = videoStream?.width,
                         targetHeight = videoStream?.height,
+                        mode = uiState.refreshRateMode,
                     )
                 }
             }
@@ -1448,6 +1450,38 @@ fun VideoPlayerScreen(
             val onChannelMixModeChange by remember { mutableStateOf({ mode: ChannelMixMode -> viewModel.setChannelMixMode(mode) }) }
             val onSleepTimerClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SleepTimer }) }
             val onVideoFilterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.VideoFilter }) }
+            // Capture the current video frame via PixelCopy on the engine's
+            // surface view. Backend-agnostic: all three engines render to a
+            // SurfaceView, which only PixelCopy (not View.drawToBitmap) can read.
+            // The titleHint seeds the MediaStore filename. Result surfaces as a
+            // snackbar with the saved path, or a share intent is offered.
+            val onScreenshotClick: () -> Unit = remember {
+                {
+                    val view = playerViewRef
+                    if (view != null) {
+                        scope.launch { snackbarHostState.showSnackbar("Capturing frame…", duration = SnackbarDuration.Short) }
+                        com.raulshma.jellyplay.feature.player.video.ScreenshotSaver.capture(
+                            surfaceView = view,
+                            titleHint = uiState.title,
+                        ) { result ->
+                            scope.launch {
+                                val msg = when (result) {
+                                    is com.raulshma.jellyplay.feature.player.video.ScreenshotSaver.Result.Saved ->
+                                        "Frame saved to Pictures/JellyPlay (${result.width}×${result.height})"
+                                    is com.raulshma.jellyplay.feature.player.video.ScreenshotSaver.Result.Failed ->
+                                        "Capture failed: ${result.reason}"
+                                }
+                                snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Long)
+                            }
+                        }
+                    } else {
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Player not ready", duration = SnackbarDuration.Short)
+                        }
+                    }
+                    Unit
+                }
+            }
             val onLockClick by remember { mutableStateOf({
                 viewModel.setScreenLocked(true)
                 showControls = false
@@ -1561,6 +1595,13 @@ fun VideoPlayerScreen(
                 supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
                 videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.core.model.VideoEffectsConfig(),
                 onVideoFilterClick = onVideoFilterClick,
+                supportsScreenshot = uiState.engineCapabilities.supportsScreenshot,
+                onScreenshotClick = onScreenshotClick,
+                abRepeatActive = uiState.abRepeat.isActive,
+                onAbRepeatToggle = { viewModel.setAbRepeatEnabled(!uiState.abRepeat.enabled) },
+                onAbRepeatSetA = { viewModel.setAbRepeatPointA() },
+                onAbRepeatSetB = { viewModel.setAbRepeatPointB() },
+                onAbRepeatClear = { viewModel.clearAbRepeat() },
                 onLockClick = onLockClick,
                 onControlsFocusChange = onControlsFocusChange,
                 onOverflowMenuChange = onOverflowMenuChange,

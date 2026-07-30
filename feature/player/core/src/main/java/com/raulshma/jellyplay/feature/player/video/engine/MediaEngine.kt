@@ -137,6 +137,21 @@ data class EngineCapabilities(
     val supportsFontFamily: Boolean = false,
     val supportsFreeFormColors: Boolean = false,
     val supportsBorderStyles: Boolean = false,
+    /**
+     * Renders a *secondary* subtitle track alongside the primary (e.g. English +
+     * romaji, or a translation above the original). mpv exposes this natively
+     * via `secondary-sid`; ExoPlayer would need a second stacked SubtitleView
+     * (not yet implemented); LibVLC's freetype can't cleanly stack. When `false`,
+     * the engine no-ops `setSecondarySubtitleTrack`.
+     */
+    val supportsSecondarySubtitles: Boolean = false,
+    /**
+     * Capture the current video frame to an image. `true` for every real engine
+     * (all three render to a `SurfaceView` readable via `PixelCopy`); `false` for
+     * [NoOpEngine]/EXTERNAL. The overflow menu's "Capture Frame" item is gated on
+     * this so it is hidden for engines that cannot capture.
+     */
+    val supportsScreenshot: Boolean = false,
 )
 
 enum class EnginePlaybackState {
@@ -186,6 +201,28 @@ data class EngineVideoStats(
     val totalVideoFrames: Long = 0,
     val bufferedPositionMs: Long = 0,
     val bufferSizeBytes: Long = 0,
+    /**
+     * Audio/video sync deviation in ms — mpv's `total-avsync`. Negative = audio
+     * leads video. Null on engines that don't expose it (ExoPlayer, LibVLC). The
+     * key diagnostic for frame-pace / drift issues.
+     */
+    val avsyncMs: Float? = null,
+    /**
+     * The display (output) refresh rate in Hz — mpv's `display-fps`, or the
+     * platform `Display.mode.refreshRate` for ExoPlayer. Helps confirm a refresh-
+     * rate switch actually took effect.
+     */
+    val displayFps: Float? = null,
+    /**
+     * Time the video frame was scheduled to display but was delayed, in ms —
+     * mpv's `vo-delayed`. Non-null only for mpv. Indicates vsync/display backlog.
+     */
+    val voDelayedMs: Float? = null,
+    /**
+     * Cumulative frame drops reported by the vo (display-side), distinct from
+     * [droppedFrames] (decoder-side). mpv's `frame-drop-count`.
+     */
+    val voFrameDropCount: Long? = null,
 )
 
 /**
@@ -281,6 +318,13 @@ interface MediaEngine :
     // ── Track enumeration and runtime subtitle-track addition. ──
     val availableTracks: StateFlow<List<MediaTrack>>
     fun addExternalSubtitle(source: SubtitleSource) {}
+
+    /**
+     * Selects a *secondary* subtitle track (rendered alongside the primary).
+     * Engines with [EngineCapabilities.supportsSecondarySubtitles] = false no-op
+     * this call. An [index] < 0 clears the secondary track.
+     */
+    fun setSecondarySubtitleTrack(index: Int) {}
 
     // ── Per-engine subtitle styling applied to the engine's native subtitle
     //    surface (Media3 `SubtitleView` / libass / VLC freetype). Subtitles are

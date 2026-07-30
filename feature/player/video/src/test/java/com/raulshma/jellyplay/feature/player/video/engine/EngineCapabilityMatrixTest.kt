@@ -49,6 +49,7 @@ class EngineCapabilityMatrixTest {
             caps.supportsLiveQualitySwitch, caps.supportsBandwidthEstimate,
             caps.supportsAssOverride, caps.supportsAssStyleOverride, caps.supportsFontFamily,
             caps.supportsFreeFormColors, caps.supportsBorderStyles,
+            caps.supportsSecondarySubtitles, caps.supportsScreenshot,
         ).forEach { assertFalse("EXTERNAL must advertise no capabilities", it) }
     }
 
@@ -74,6 +75,7 @@ class EngineCapabilityMatrixTest {
         assertFalse(c.supportsVideoFilters)    // ExoPlayer has no video-filter chain
         assertTrue(c.supportsLiveQualitySwitch)
         assertTrue(c.supportsBandwidthEstimate)
+        assertTrue(c.supportsScreenshot)
     }
 
     @Test
@@ -94,6 +96,7 @@ class EngineCapabilityMatrixTest {
         assertTrue(c.supportsVideoFilters)
         assertFalse(c.supportsLiveQualitySwitch)
         assertFalse(c.supportsBandwidthEstimate)
+        assertTrue(c.supportsScreenshot)
     }
 
     @Test
@@ -117,6 +120,7 @@ class EngineCapabilityMatrixTest {
         assertTrue(c.supportsVideoFilters)
         assertFalse(c.supportsLiveQualitySwitch)
         assertFalse(c.supportsBandwidthEstimate)
+        assertTrue(c.supportsScreenshot)
     }
 
     @Test

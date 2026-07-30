@@ -653,8 +653,26 @@ val MIGRATION_38_39 = object : Migration(38, 39) {
     }
 }
 
+// Cross-episode track-scoring memory (G5). Persists the last-selected audio and
+// subtitle track per series: its display label (codec folded in), language, and
+// positional index within its language group. Lets a specific "English · 5.1"
+// pick survive an app restart and carry to the next episode, instead of being
+// remembered only in-process. All six columns nullable — NULL means "no track
+// remembered", preserving today's language-only behaviour for existing rows, so
+// this migration is non-destructive.
+val MIGRATION_39_40 = object : Migration(39, 40) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN rememberedAudioLabel TEXT")
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN rememberedAudioLanguage TEXT")
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN rememberedAudioIndex INTEGER")
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN rememberedSubtitleLabel TEXT")
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN rememberedSubtitleLanguage TEXT")
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN rememberedSubtitleIndex INTEGER")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v39 migration chain, with the
+ * The complete, correctly-ordered v1→v40 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -701,4 +719,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_36_37,
         MIGRATION_37_38,
         MIGRATION_38_39,
+        MIGRATION_39_40,
     )

@@ -121,6 +121,7 @@ class UserPreferencesStore @Inject constructor(
         val PREFERRED_AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
         val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
         val VIDEO_EFFECTS_SELECTIONS = stringPreferencesKey("video_effects_selections")
+        val SUBTITLE_DELAY_BY_ITEM = stringPreferencesKey("subtitle_delay_by_item")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val CONTRAST_LEVEL = stringPreferencesKey("contrast_level")
         val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
@@ -178,6 +179,7 @@ class UserPreferencesStore @Inject constructor(
         val EQUALIZER_ENABLED = booleanPreferencesKey("equalizer_enabled")
         val AUDIO_PASSTHROUGH = booleanPreferencesKey("audio_passthrough")
         val FRAME_RATE_MATCHING = booleanPreferencesKey("frame_rate_matching")
+        val REFRESH_RATE_MODE = stringPreferencesKey("refresh_rate_mode")
         val NIGHT_MODE_ENABLED = booleanPreferencesKey("night_mode_enabled")
         val VIDEO_GESTURES_ENABLED = booleanPreferencesKey("video_gestures_enabled")
         val VIDEO_PASS_OUT_PROTECTION_HOURS = intPreferencesKey("video_pass_out_protection_hours")
@@ -637,6 +639,7 @@ class UserPreferencesStore @Inject constructor(
     private var cachedLibraryHomeSectionOverrides: ParsedCache<Map<String, Set<HomeSectionType>>> = ParsedCache(null, emptyMap())
     private var cachedMediaStreamSelections: ParsedCache<Map<String, MediaStreamSelection>> = ParsedCache(null, emptyMap())
     private var cachedVideoEffectsByItem: ParsedCache<Map<String, VideoEffectsConfig>> = ParsedCache(null, emptyMap())
+    private var cachedSubtitleDelayByItem: ParsedCache<Map<String, Long>> = ParsedCache(null, emptyMap())
     private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> = ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
     private var cachedNotificationLibraryConfigs: ParsedCache<Map<String, LibraryNotificationConfig>> = ParsedCache(null, emptyMap())
     private var cachedEnabledExperimentalFeatures: ParsedCache<Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>> = ParsedCache(null, emptySet())
@@ -784,6 +787,14 @@ class UserPreferencesStore @Inject constructor(
                 .also { cachedVideoEffectsByItem = ParsedCache(videoEffectsByItemRaw, it) }
         } else cachedVideoEffectsByItem.value
 
+        val subtitleDelayByItemRaw = prefs[Keys.SUBTITLE_DELAY_BY_ITEM]
+        val subtitleDelayByItem = if (subtitleDelayByItemRaw != cachedSubtitleDelayByItem.raw) {
+            try {
+                subtitleDelayByItemRaw?.let { json.decodeFromString<Map<String, Long>>(it) } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+                .also { cachedSubtitleDelayByItem = ParsedCache(subtitleDelayByItemRaw, it) }
+        } else cachedSubtitleDelayByItem.value
+
         val segmentBehaviorsRaw = prefs[Keys.SEGMENT_BEHAVIORS]
         val segmentBehaviors = if (segmentBehaviorsRaw != cachedSegmentBehaviors.raw) {
             readSegmentBehaviors(prefs).also { cachedSegmentBehaviors = ParsedCache(segmentBehaviorsRaw, it) }
@@ -920,6 +931,7 @@ class UserPreferencesStore @Inject constructor(
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
             mediaStreamSelections = mediaStreamSelections,
             videoEffectsByItem = videoEffectsByItem,
+            subtitleDelayByItem = subtitleDelayByItem,
             dynamicTheming = readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
             themeMode = try {
                 ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
@@ -963,6 +975,19 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { DecoderMode.HW_PREFERRED },
             audioPassthrough = readBool(prefs, Keys.AUDIO_PASSTHROUGH, "audio_passthrough", false),
             frameRateMatching = readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false),
+            refreshRateMode = try {
+                com.raulshma.jellyplay.core.model.RefreshRateMode.valueOf(
+                    prefs[Keys.REFRESH_RATE_MODE] ?: com.raulshma.jellyplay.core.model.RefreshRateMode.OFF.name
+                )
+            } catch (_: Exception) {
+                // Legacy migration: a user with the old boolean on but no mode
+                // stored is mapped to FRAME_RATE_ONLY (the old behaviour).
+                if (readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false)) {
+                    com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_ONLY
+                } else {
+                    com.raulshma.jellyplay.core.model.RefreshRateMode.OFF
+                }
+            },
             nightModeEnabled = readBool(prefs, Keys.NIGHT_MODE_ENABLED, "night_mode_enabled", false),
             nightModeStrength = try {
                 EffectStrength.valueOf(prefs[Keys.NIGHT_MODE_STRENGTH] ?: EffectStrength.MODERATE.name)
@@ -1485,6 +1510,23 @@ class UserPreferencesStore @Inject constructor(
         dataStore.edit { it[Keys.SUBTITLE_STYLE] = json.encodeToString(style) }
     }
 
+    /**
+     * Persists a per-item subtitle-sync delay (G9). A `delayMs` of 0 removes the
+     * entry so the map doesn't grow unbounded with neutral values.
+     */
+    suspend fun setSubtitleDelayForItem(itemId: String, delayMs: Long) {
+        dataStore.edit { prefs ->
+            val current = try {
+                prefs[Keys.SUBTITLE_DELAY_BY_ITEM]
+                    ?.let { json.decodeFromString<Map<String, Long>>(it) } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+            val updated = if (delayMs == 0L) current - itemId else current + (itemId to delayMs)
+            prefs[Keys.SUBTITLE_DELAY_BY_ITEM] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, Long>>(), updated,
+            )
+        }
+    }
+
     suspend fun setHdrSubtitleStyleEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.HDR_SUBTITLE_STYLE_ENABLED] = enabled }
     }
@@ -1996,7 +2038,25 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setFrameRateMatching(enabled: Boolean) {
-        dataStore.edit { it[Keys.FRAME_RATE_MATCHING] = enabled }
+        // Keep the legacy boolean in sync with the new mode so both the old
+        // toggle and the new picker reflect the same state. `true` maps to the
+        // least-surprising frame-rate-only mode (the old single-resolution
+        // behaviour); the picker can then upgrade it to include resolution.
+        dataStore.edit {
+            it[Keys.FRAME_RATE_MATCHING] = enabled
+            if (enabled && it[Keys.REFRESH_RATE_MODE] == null) {
+                it[Keys.REFRESH_RATE_MODE] = com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_ONLY.name
+            } else if (!enabled) {
+                it[Keys.REFRESH_RATE_MODE] = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF.name
+            }
+        }
+    }
+
+    suspend fun setRefreshRateMode(mode: com.raulshma.jellyplay.core.model.RefreshRateMode) {
+        dataStore.edit {
+            it[Keys.REFRESH_RATE_MODE] = mode.name
+            it[Keys.FRAME_RATE_MATCHING] = mode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF
+        }
     }
 
     suspend fun setNightModeEnabled(enabled: Boolean) {
@@ -2444,6 +2504,10 @@ class UserPreferencesStore @Inject constructor(
                 kotlinx.serialization.serializer<Map<String, VideoEffectsConfig>>(),
                 prefs.videoEffectsByItem,
             )
+            settings[Keys.SUBTITLE_DELAY_BY_ITEM] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, Long>>(),
+                prefs.subtitleDelayByItem,
+            )
             settings[Keys.DYNAMIC_THEMING] = prefs.dynamicTheming
             settings[Keys.THEME_MODE] = prefs.themeMode.name
             settings[Keys.CONTRAST_LEVEL] = prefs.contrastLevel.name
@@ -2478,6 +2542,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.DECODER_MODE] = prefs.decoderMode.name
             settings[Keys.AUDIO_PASSTHROUGH] = prefs.audioPassthrough
             settings[Keys.FRAME_RATE_MATCHING] = prefs.frameRateMatching
+            settings[Keys.REFRESH_RATE_MODE] = prefs.refreshRateMode.name
             settings[Keys.NIGHT_MODE_ENABLED] = prefs.nightModeEnabled
             settings[Keys.NIGHT_MODE_STRENGTH] = prefs.nightModeStrength.name
             settings[Keys.HOME_MODE] = prefs.homeMode.name
@@ -2905,7 +2970,7 @@ class UserPreferencesStore @Inject constructor(
         PreferenceResetCategory.PLAYBACK -> listOf(
             Keys.PREFERRED_PLAYER, Keys.STREAMING_QUALITY, Keys.CELLULAR_STREAMING_QUALITY,
             Keys.FORCE_DIRECT_PLAY, Keys.PLAYBACK_MODE, Keys.DECODER_MODE,
-            Keys.AUDIO_PASSTHROUGH, Keys.FRAME_RATE_MATCHING,
+            Keys.AUDIO_PASSTHROUGH, Keys.FRAME_RATE_MATCHING, Keys.REFRESH_RATE_MODE,
             Keys.VIDEO_DEFAULT_ORIENTATION, Keys.VIDEO_DEFAULT_ASPECT_RATIO,
             Keys.VIDEO_PRELOAD_BUFFER_SIZE, Keys.VIDEO_GESTURES_ENABLED,
             Keys.VIDEO_PASS_OUT_PROTECTION_HOURS, Keys.VIDEO_SKIP_BACK_ON_RESUME_MS,
@@ -2950,7 +3015,7 @@ class UserPreferencesStore @Inject constructor(
             Keys.SUBTITLES_FORCED_ONLY, Keys.SUBTITLE_PREVIEW_IN_SETTINGS,
             Keys.SUBTITLE_STYLE, Keys.HIGH_CONTRAST_SUBTITLES,
             Keys.PGS_SUBTITLE_DIRECT_PLAY, Keys.HDR_SUBTITLE_STYLE_ENABLED,
-            Keys.HDR_SUBTITLE_STYLE,
+            Keys.HDR_SUBTITLE_STYLE, Keys.SUBTITLE_DELAY_BY_ITEM,
         )
         PreferenceResetCategory.DOWNLOADS_NETWORK -> listOf(
             Keys.WIFI_ONLY_DOWNLOADS, Keys.DOWNLOAD_CONNECTIONS,

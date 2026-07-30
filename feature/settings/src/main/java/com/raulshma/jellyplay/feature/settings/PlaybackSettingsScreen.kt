@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
@@ -741,14 +742,35 @@ fun PlaybackSettingsScreen(
                         index = idx++, count = total,
                         onCheckedChange = { viewModel.setAudioPassthrough(it) },
                     )
-                    SettingToggleItem(
+                    SettingListItem(
                         icon = Tabler.Outline.Maximize,
-                        title = "Frame Rate Match",
-                        subtitle = if (preferences.frameRateMatching) "Display refresh matches content" else "Fixed display refresh rate",
-                        checked = preferences.frameRateMatching,
+                        title = "Refresh Rate Match",
+                        subtitle = preferences.refreshRateMode.displayName +
+                            if (preferences.refreshRateMode == com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_AND_RESOLUTION)
+                                " (resolution switching)" else "",
+                        trailingText = when (preferences.refreshRateMode) {
+                            com.raulshma.jellyplay.core.model.RefreshRateMode.OFF -> "Off"
+                            com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_ONLY -> "Rate"
+                            com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_AND_RESOLUTION -> "Rate+Res"
+                        },
                         highlighted = highlightSettingId == "frame_rate_matching",
                         index = idx++, count = total,
-                        onCheckedChange = { viewModel.setFrameRateMatching(it) },
+                        onClick = {
+                            activePicker = PickerState.List(
+                                title = "Refresh Rate Matching",
+                                items = com.raulshma.jellyplay.core.model.RefreshRateMode.entries,
+                                label = { it.displayName },
+                                subtitle = {
+                                    when (it) {
+                                        com.raulshma.jellyplay.core.model.RefreshRateMode.OFF -> "No display mode switch"
+                                        com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_ONLY -> "Match frame rate at current resolution"
+                                        com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_AND_RESOLUTION -> "Match frame rate and switch resolution"
+                                    }
+                                },
+                                isSelected = { it == preferences.refreshRateMode },
+                                onSelect = { viewModel.setRefreshRateMode(it) },
+                            )
+                        },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.BadgeHd,
@@ -819,7 +841,7 @@ fun PlaybackSettingsScreen(
                         PlayerType.MPV -> {
                             val mpvCfg = preferences.mpvConfig
                             val mpvDefault = MpvEngineConfig()
-                            val mpvTotal = 11
+                            val mpvTotal = 12
                             var mpvIdx = 0
 
                             SettingListItem(
@@ -983,6 +1005,29 @@ fun PlaybackSettingsScreen(
                                         subtitle = { it.key },
                                         isSelected = { it == mpvCfg.frameDrop },
                                         onSelect = { viewModel.setMpvConfig(mpvCfg.copy(frameDrop = it)) },
+                                    )
+                                },
+                            )
+                            SettingListItem(
+                                icon = Tabler.Outline.Code,
+                                title = "Advanced Configuration",
+                                subtitle = if (mpvCfg.mpvExtraConfig.isBlank()) {
+                                    "Raw mpv options (mpv.conf style)"
+                                } else {
+                                    "${parseMpvConfigOptions(mpvCfg.mpvExtraConfig).size} custom option(s)"
+                                },
+                                trailingText = "mpv.conf",
+                                highlighted = highlightSettingId == "mpv_extra_config",
+                                index = mpvIdx++, count = mpvTotal,
+                                onClick = {
+                                    activePicker = PickerState.Text(
+                                        title = "Advanced MPV Configuration",
+                                        initialText = mpvCfg.mpvExtraConfig,
+                                        helperText = "One option per line (key=value). Applied after the settings above, " +
+                                            "so a value here overrides its structured counterpart. Blank lines and # " +
+                                            "comments are ignored. Examples:\n" +
+                                            "scale=ewa_lanczossharp\ntscale=mitchell\ntone-mapping=bt.2390",
+                                        onSave = { viewModel.setMpvConfig(mpvCfg.copy(mpvExtraConfig = it)) },
                                     )
                                 },
                             )

@@ -215,6 +215,13 @@ internal fun PlayerControls(
     videoFiltersActive: Boolean = false,
     onSleepTimerClick: () -> Unit = {},
     onVideoFilterClick: () -> Unit = {},
+    supportsScreenshot: Boolean = false,
+    onScreenshotClick: () -> Unit = {},
+    abRepeatActive: Boolean = false,
+    onAbRepeatToggle: () -> Unit = {},
+    onAbRepeatSetA: () -> Unit = {},
+    onAbRepeatSetB: () -> Unit = {},
+    onAbRepeatClear: () -> Unit = {},
     onLockClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     onOverflowMenuChange: (Boolean) -> Unit = {},
@@ -785,6 +792,28 @@ internal fun PlayerControls(
             onVideoFilterClick = {
                 showOverflow = false
                 onVideoFilterClick()
+            },
+            supportsScreenshot = supportsScreenshot,
+            onScreenshotClick = {
+                showOverflow = false
+                onScreenshotClick()
+            },
+            abRepeatActive = abRepeatActive,
+            onAbRepeatToggle = {
+                showOverflow = false
+                onAbRepeatToggle()
+            },
+            onAbRepeatSetA = {
+                showOverflow = false
+                onAbRepeatSetA()
+            },
+            onAbRepeatSetB = {
+                showOverflow = false
+                onAbRepeatSetB()
+            },
+            onAbRepeatClear = {
+                showOverflow = false
+                onAbRepeatClear()
             },
         )
     }

@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 import com.raulshma.jellyplay.core.model.PlaybackPrefScope
+import com.raulshma.jellyplay.core.model.RememberedTrack
+import com.raulshma.jellyplay.core.model.TrackType
 
 /**
  * Per-item / per-series playback-language preferences.
@@ -55,6 +57,19 @@ interface ItemPlaybackPreferenceRepository {
 
     /** Clears the dialogue-boost field for [scope]/[key] (other fields are preserved). */
     suspend fun clearDialogueBoostStrength(scope: PlaybackPrefScope, key: String)
+
+    /**
+     * Persists the last-selected track ([RememberedTrack]) of [type] for
+     * [scope]/[key], so the next episode can score its candidates against it
+     * (cross-episode track scoring, G5). Other fields on the row are preserved.
+     * Pass `track = null` to clear the remembered selection of [type] only.
+     */
+    suspend fun saveRememberedTrack(
+        scope: PlaybackPrefScope,
+        key: String,
+        type: TrackType,
+        track: RememberedTrack?,
+    )
 
     /** Removes the preference row for [scope]/[key], if any. */
     suspend fun delete(scope: PlaybackPrefScope, key: String)
