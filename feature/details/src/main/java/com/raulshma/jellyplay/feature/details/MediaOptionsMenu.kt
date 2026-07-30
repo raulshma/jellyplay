@@ -12,6 +12,7 @@ import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.ListDetails
 import com.composables.icons.tabler.outline.Pencil
+import com.composables.icons.tabler.outline.Playlist
 import com.composables.icons.tabler.outline.Share
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -19,6 +20,7 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.model.isVideoType
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.feature.details.R
 
@@ -66,6 +68,7 @@ internal fun rememberMediaOptions(
     onShowFromContinueWatching: () -> Unit,
     onManageSeries: () -> Unit,
     onTechnicalInfo: () -> Unit,
+    onAddToPlaylist: () -> Unit,
 ): List<MediaOption> {
     // Download status / progress, resolved once for both the label and the
     // enabled flag so the two menus stay in lock-step.
@@ -97,11 +100,12 @@ internal fun rememberMediaOptions(
     val labelShowInContinueWatching = stringResource(R.string.detail_option_show_in_continue_watching)
     val labelTechnicalInfo = stringResource(R.string.detail_option_technical_info)
     val labelManageSeries = stringResource(R.string.detail_option_manage_series)
+    val labelAddToPlaylist = stringResource(R.string.detail_option_add_to_playlist)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
-        downloadStatus, downloadProgress, canManageSeries, labelManageSeries) {
+        downloadStatus, downloadProgress, canManageSeries, labelManageSeries, labelAddToPlaylist) {
         buildList {
             add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
                 onClose(); onEditClick()
@@ -142,6 +146,15 @@ internal fun rememberMediaOptions(
                         onClose(); onDownloadSeries()
                     }
                 )
+            }
+            // Add to Playlist: only for playable video items and series (a
+            // series expands to its episodes in the VM). Audio/album detail
+            // already has its own playlist flow in feature/music, so it is
+            // excluded here to avoid a duplicate entry path.
+            if (item != null && (item.mediaType.isVideoType || item.mediaType == MediaType.SERIES)) {
+                add(MediaOption(labelAddToPlaylist, Tabler.Outline.Playlist) {
+                    onClose(); onAddToPlaylist()
+                })
             }
             if (isSeries || item?.seriesId != null) {
                 // Next Up exclusion is keyed by series id; an episode resolves

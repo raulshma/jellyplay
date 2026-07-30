@@ -26,7 +26,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.offset
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -213,7 +213,6 @@ fun LibraryScreen(
     // grid needs a larger min cell width than the poster (2:3) grid to avoid
     // rendering tiny cards. Scaled from the same adaptive baseline.
     val thumbCellSize = adaptiveInfo.gridCellSize(isTv) * (16f / 9f) * (3f / 4f)
-    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
     Box(
         modifier = Modifier
@@ -706,12 +705,7 @@ fun LibraryScreen(
                             visible = toolbarExpanded,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-                                .offset {
-                                    val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                                    val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                                    androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
-                                },
+                                .clearFloatingNav(extraBottom = 0.dp),
                             enter = fadeIn(
                                 MaterialTheme.motionScheme.defaultEffectsSpec()
                             ) + slideInVertically(

@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -155,7 +156,8 @@ fun PlaylistsScreen(
                     .align(Alignment.BottomEnd)
                     .then(newPlaylistFocusState.focusModifier)
                     .tvFocusIndicator(newPlaylistFocusState, ShapeCache.smooth16)
-                    .padding(end = 16.dp, bottom = 16.dp + innerPadding.calculateBottomPadding()),
+                    .padding(end = 16.dp)
+                    .clearFloatingNav(),
             )
         }
     }

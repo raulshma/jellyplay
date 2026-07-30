@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.offset
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
@@ -116,7 +116,6 @@ fun SyncPlayScreen(
         hasError = error != null,
         networkStatus = networkStatus,
     )
-    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
     // TV focus-on-launch: focus the first group card or the create-group FAB once data arrives so
     // D-pad input lands on content, not the navigation drawer.
@@ -268,12 +267,8 @@ fun SyncPlayScreen(
                 exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + slideOutVertically(targetOffsetY = { it }),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(), end = 16.dp)
-                    .offset {
-                        val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                        val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                        androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
-                    },
+                    .padding(end = 16.dp)
+                    .clearFloatingNav(),
             ) {
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.updateShowCreateDialog(true) },

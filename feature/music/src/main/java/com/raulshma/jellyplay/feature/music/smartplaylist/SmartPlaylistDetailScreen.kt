@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -50,7 +50,6 @@ fun SmartPlaylistDetailScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
-    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
     val playlist = viewModel.playlists.find { it.id == playlistId }
 
@@ -138,12 +137,8 @@ fun SmartPlaylistDetailScreen(
                         .align(Alignment.BottomEnd)
                         .then(playAllFocusState.focusModifier)
                         .tvFocusIndicator(playAllFocusState, ShapeCache.smooth16)
-                        .padding(end = 16.dp, bottom = 64.dp + innerPadding.calculateBottomPadding())
-                        .offset {
-                            val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                            val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
-                        },
+                        .padding(end = 16.dp)
+                        .clearFloatingNav(),
                 )
             }
         }

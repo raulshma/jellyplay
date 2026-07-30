@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -79,6 +80,14 @@ data class DetailUiState(
     // stays a pure derivation over snapshot state instead of issuing network I/O
     // on every identity tick.
     val sonarrServersResolved: Boolean = false,
+    // Add-to-playlist picker (movie/episode/series/music-video detail). The
+    // playlist list + flags are fetched on-demand when the picker opens, not
+    // on every detail load.
+    val playlists: List<Playlist> = emptyList(),
+    val isLoadingPlaylists: Boolean = false,
+    val isAddingToPlaylist: Boolean = false,
+    val showPlaylistPicker: Boolean = false,
+    val showCreatePlaylistDialog: Boolean = false,
 ) {
     @Immutable
     data class SmartPlayTarget(

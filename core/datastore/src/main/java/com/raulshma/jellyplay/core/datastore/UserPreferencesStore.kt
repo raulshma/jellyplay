@@ -272,6 +272,7 @@ class UserPreferencesStore @Inject constructor(
         val DEFAULT_CASTING_STRATEGY = stringPreferencesKey("default_casting_strategy")
         val BACKGROUND_CASTING_ENABLED = booleanPreferencesKey("background_casting_enabled")
         val PREFERRED_RENDERER = stringPreferencesKey("preferred_renderer")
+        val WATCH_LATER_PLAYLIST_ID = stringPreferencesKey("watch_later_playlist_id")
         val DVR_PRE_PADDING_MINUTES = intPreferencesKey("dvr_pre_padding_minutes")
         val DVR_POST_PADDING_MINUTES = intPreferencesKey("dvr_post_padding_minutes")
         val DVR_RECORDING_QUALITY = stringPreferencesKey("dvr_recording_quality")
@@ -1223,6 +1224,7 @@ class UserPreferencesStore @Inject constructor(
             selfUpdateCheckEnabled = readBool(prefs, Keys.SELF_UPDATE_CHECK_ENABLED, "self_update_check_enabled", true),
             dismissedUpdateVersion = prefs[Keys.DISMISSED_UPDATE_VERSION],
             dismissedUpdateAtMs = readLong(prefs, Keys.DISMISSED_UPDATE_AT_MS, "dismissed_update_at_ms", 0L),
+            watchLaterPlaylistId = prefs[Keys.WATCH_LATER_PLAYLIST_ID],
             hideEpisodeThumbnails = readBool(prefs, Keys.HIDE_EPISODE_THUMBNAILS, "hide_episode_thumbnails", false),
             episodesDescending = readBool(prefs, Keys.EPISODES_DESCENDING, "episodes_descending", true),
             skipSpecials = readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
@@ -1714,6 +1716,13 @@ class UserPreferencesStore @Inject constructor(
     suspend fun setPreferredRenderer(renderer: String?) {
         dataStore.edit {
             if (renderer != null) it[Keys.PREFERRED_RENDERER] = renderer else it.remove(Keys.PREFERRED_RENDERER)
+        }
+    }
+
+    suspend fun setWatchLaterPlaylistId(playlistId: String?) {
+        dataStore.edit {
+            if (playlistId != null) it[Keys.WATCH_LATER_PLAYLIST_ID] = playlistId
+            else it.remove(Keys.WATCH_LATER_PLAYLIST_ID)
         }
     }
 
@@ -2705,6 +2714,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.DEFAULT_CASTING_STRATEGY] = prefs.defaultCastingStrategy.name
             settings[Keys.BACKGROUND_CASTING_ENABLED] = prefs.backgroundCastingEnabled
             prefs.preferredRenderer?.let { settings[Keys.PREFERRED_RENDERER] = it }
+            prefs.watchLaterPlaylistId?.let { settings[Keys.WATCH_LATER_PLAYLIST_ID] = it }
             settings[Keys.DVR_PRE_PADDING_MINUTES] = prefs.dvrPrePaddingMinutes
             settings[Keys.DVR_POST_PADDING_MINUTES] = prefs.dvrPostPaddingMinutes
             settings[Keys.DVR_RECORDING_QUALITY] = prefs.dvrRecordingQuality
