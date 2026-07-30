@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pending playback-progress sync indicator shown on the home dock. -->
+    <string name="sync_icon_content_description">Sincronizzazione riproduzione: %1$d elementi in attesa. Apri i dettagli di sincronizzazione.</string>
+
+    <!-- Sync details sheet. -->
+    <string name="sync_details_title">Sincronizzazione avanzamento visione in attesa</string>
+    <string name="sync_items_queued">%1$d elementi in coda</string>
+    <string name="sync_up_to_date">Aggiornato</string>
+    <string name="sync_will_sync_when_online">Sincronizzerà automaticamente quando torni online</string>
+    <string name="syncing">Sincronizzazione…</string>
+    <string name="sync_now">Sincronizza ora</string>
+    <string name="sync_now_disabled_offline">Riconnettiti per sincronizzare</string>
+    <string name="sync_close">Chiudi</string>
+
+    <!-- Event types shown per pending row. -->
+    <string name="sync_event_start">Iniziato</string>
+    <string name="sync_event_progress">Avanzamento</string>
+    <string name="sync_event_stop">Fermato</string>
+    <string name="sync_event_played">Segnato come riprodotto</string>
+    <string name="sync_event_unplayed">Segnato come non riprodotto</string>
+
+    <!-- Title shown for a pending row whose media could not be resolved. -->
+    <string name="sync_unknown_title">Elemento sconosciuto</string>
+</resources>

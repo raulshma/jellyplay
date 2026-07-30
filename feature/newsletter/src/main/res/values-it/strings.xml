@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Newsletter feature user-facing strings (enhancements §2.2) -->
+    <string name="newsletter_could_not_load">Impossibile caricare la newsletter</string>
+    <string name="newsletter_preparing_digest">Preparazione del riepilogo\u2026</string>
+</resources>

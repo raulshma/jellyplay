@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Live TV feature user-facing strings (enhancements §2.2) -->
+    <string name="livetv_no_channels_available">사용 가능한 채널이 없습니다</string>
+
+    <!-- Live TV tabbed screen (matches jellyfin-web Live TV collection) -->
+    <string name="livetv_tab_programs">프로그램</string>
+    <string name="livetv_tab_guide">가이드</string>
+    <string name="livetv_tab_channels">채널</string>
+    <string name="livetv_tab_recordings">녹화</string>
+    <string name="livetv_tab_schedule">일정</string>
+    <string name="livetv_tab_series">시리즈</string>
+
+    <string name="livetv_row_on_now">지금 방송 중</string>
+    <string name="livetv_row_shows">프로그램</string>
+    <string name="livetv_row_movies">영화</string>
+    <string name="livetv_row_sports">스포츠</string>
+    <string name="livetv_row_kids">어린이</string>
+    <string name="livetv_row_news">뉴스</string>
+
+    <string name="livetv_no_programs_available">사용 가능한 프로그램이 없습니다</string>
+    <string name="livetv_no_recordings_available">사용 가능한 녹화가 없습니다</string>
+    <string name="livetv_no_scheduled_recordings">예정된 녹화가 없습니다</string>
+    <string name="livetv_no_series_recordings">시리즈 녹화가 없습니다</string>
+
+    <string name="livetv_section_latest_recordings">최근 녹화</string>
+    <string name="livetv_section_active_recordings">진행 중인 녹화</string>
+    <string name="livetv_section_upcoming_recordings">예정된 녹화</string>
+
+    <string name="livetv_record_once">녹화</string>
+    <string name="livetv_record_series">시리즈 녹화</string>
+    <string name="livetv_cancel_recording">녹화 취소</string>
+    <string name="livetv_cancel_series">시리즈 취소</string>
+    <string name="livetv_record_success">녹화가 예약되었습니다</string>
+    <string name="livetv_record_failed">녹화를 설정하지 못했습니다</string>
+    <string name="livetv_record_canceled">녹화가 취소되었습니다</string>
+
+    <!-- Channel detail screen -->
+    <string name="livetv_channel_watch_live">실시간 시청</string>
+    <string name="livetv_channel_on_today">오늘 방송</string>
+    <string name="livetv_channel_live">실시간</string>
+    <string name="livetv_channel_no_program_info">프로그램 정보 없음</string>
+    <string name="livetv_channel_load_failed">프로그램 가이드를 불러오지 못했습니다</string>
+</resources>

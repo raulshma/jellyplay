@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pending playback-progress sync indicator shown on the home dock. -->
+    <string name="sync_icon_content_description">再生同期: %1$d 件保留中。同期の詳細を開く。</string>
+
+    <!-- Sync details sheet. -->
+    <string name="sync_details_title">保留中の視聴進捗の同期</string>
+    <string name="sync_items_queued">%1$d 件がキューに追加されています</string>
+    <string name="sync_up_to_date">最新です</string>
+    <string name="sync_will_sync_when_online">オンラインに戻ると自動的に同期します</string>
+    <string name="syncing">同期中…</string>
+    <string name="sync_now">今すぐ同期</string>
+    <string name="sync_now_disabled_offline">再接続して同期</string>
+    <string name="sync_close">閉じる</string>
+
+    <!-- Event types shown per pending row. -->
+    <string name="sync_event_start">開始</string>
+    <string name="sync_event_progress">進捗</string>
+    <string name="sync_event_stop">停止</string>
+    <string name="sync_event_played">再生済みに設定</string>
+    <string name="sync_event_unplayed">未再生に設定</string>
+
+    <!-- Title shown for a pending row whose media could not be resolved. -->
+    <string name="sync_unknown_title">不明なアイテム</string>
+</resources>

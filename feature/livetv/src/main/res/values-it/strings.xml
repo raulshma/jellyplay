@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Live TV feature user-facing strings (enhancements §2.2) -->
+    <string name="livetv_no_channels_available">Nessun canale disponibile</string>
+
+    <!-- Live TV tabbed screen (matches jellyfin-web Live TV collection) -->
+    <string name="livetv_tab_programs">Programmi</string>
+    <string name="livetv_tab_guide">Guida</string>
+    <string name="livetv_tab_channels">Canali</string>
+    <string name="livetv_tab_recordings">Registrazioni</string>
+    <string name="livetv_tab_schedule">Programmazione</string>
+    <string name="livetv_tab_series">Serie</string>
+
+    <string name="livetv_row_on_now">In onda ora</string>
+    <string name="livetv_row_shows">Serie TV</string>
+    <string name="livetv_row_movies">Film</string>
+    <string name="livetv_row_sports">Sport</string>
+    <string name="livetv_row_kids">Bambini</string>
+    <string name="livetv_row_news">Notizie</string>
+
+    <string name="livetv_no_programs_available">Nessun programma disponibile</string>
+    <string name="livetv_no_recordings_available">Nessuna registrazione disponibile</string>
+    <string name="livetv_no_scheduled_recordings">Nessuna registrazione programmata</string>
+    <string name="livetv_no_series_recordings">Nessuna registrazione di serie</string>
+
+    <string name="livetv_section_latest_recordings">Registrazioni recenti</string>
+    <string name="livetv_section_active_recordings">Registrazioni attive</string>
+    <string name="livetv_section_upcoming_recordings">Prossime registrazioni</string>
+
+    <string name="livetv_record_once">Registra</string>
+    <string name="livetv_record_series">Registra serie</string>
+    <string name="livetv_cancel_recording">Annulla registrazione</string>
+    <string name="livetv_cancel_series">Annulla serie</string>
+    <string name="livetv_record_success">Registrazione programmata</string>
+    <string name="livetv_record_failed">Impostazione registrazione non riuscita</string>
+    <string name="livetv_record_canceled">Registrazione annullata</string>
+
+    <!-- Channel detail screen -->
+    <string name="livetv_channel_watch_live">Guarda in diretta</string>
+    <string name="livetv_channel_on_today">In onda oggi</string>
+    <string name="livetv_channel_live">IN DIRETTA</string>
+    <string name="livetv_channel_no_program_info">Nessuna informazione sul programma</string>
+    <string name="livetv_channel_load_failed">Caricamento guida TV non riuscito</string>
+</resources>

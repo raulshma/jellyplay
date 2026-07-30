@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_app_description">Abrir %1$s</string>
+    <string name="tile_paused_label">Em pausa: %1$s</string>
+    <string name="tile_playing_cd">A reproduzir</string>
+    <string name="tile_paused_cd">Em pausa</string>
+
+    <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
+    <string name="press_back_again_to_exit">Prima novamente para sair</string>
+
+    <string name="shortcut_continue_watching_short">Continuar</string>
+    <string name="shortcut_continue_watching_long">Continuar a ver</string>
+    <string name="shortcut_search_short">Pesquisar</string>
+    <string name="shortcut_search_long">Pesquisar na biblioteca</string>
+    <string name="shortcut_play_music_short">Música</string>
+    <string name="shortcut_play_music_long">Reproduzir música</string>
+    <string name="shortcut_downloads_short">Downloads</string>
+    <string name="shortcut_downloads_long">Abrir downloads</string>
+
+    <string name="widget_now_playing_label">A reproduzir</string>
+    <string name="widget_now_playing_description">Veja e controle a música que está a ouvir diretamente no ecrã principal.</string>
+    <string name="widget_continue_watching_label">Continuar a ver</string>
+    <string name="widget_continue_watching_description">Regresse às séries e filmes que começou mas ainda não terminou.</string>
+    <string name="widget_nothing_playing">Nada a reproduzir</string>
+    <string name="widget_continue_watching_empty">Ainda não há nada para continuar</string>
+    <string name="widget_continue_watching_empty_subtitle">Comece a ver uma série e ela aparecerá aqui</string>
+    <string name="widget_placeholder_title">Título da faixa</string>
+    <string name="widget_placeholder_subtitle">Nome do artista</string>
+    <string name="widget_album_art">Capa do álbum</string>
+    <string name="widget_play_pause">Reproduzir ou pausar</string>
+    <string name="widget_next">Faixa seguinte</string>
+    <string name="widget_previous">Faixa anterior</string>
+    <string name="widget_rewind">Recuar 10 segundos</string>
+    <string name="widget_forward">Avançar 10 segundos</string>
+    <string name="widget_seek_to">Ir para a posição</string>
+    <string name="widget_continue_watching_title">Continuar a ver</string>
+    <string name="widget_continue_watching_see_all">Ver tudo</string>
+    <string name="widget_minutes_left">%1$d min restantes</string>
+    <string name="widget_progress_percent">%1$d%%</string>
+    <string name="widget_placeholder_position">—</string>
+
+    <!-- Library Recommendations widget -->
+    <string name="widget_library_recommendations_label">Sugestões da biblioteca</string>
+    <string name="widget_library_recommendations_title">Sugestões da biblioteca</string>
+    <string name="widget_library_recommendations_subtitle">Porque viu</string>
+    <string name="widget_library_recommendations_empty">Ainda não há sugestões</string>
+
+    <!-- Seerr Recommendations widget -->
+    <string name="widget_seerr_recommendations_subtitle">Em destaque esta semana</string>
+    <string name="widget_seerr_no_recommendations">Ainda não há sugestões</string>
+    <string name="widget_seerr_no_recommendations_subtitle">Toque em atualizar ou volte mais tarde</string>
+
+    <!-- Shared -->
+    <string name="widget_refresh">Atualizar</string>
+
+    <!-- Configuration activity -->
+    <string name="widget_config_title">Escolher sugestões</string>
+    <string name="widget_config_save">Guardar</string>
+    <string name="widget_config_source_similar">Porque viu</string>
+    <string name="widget_config_source_similar_description">Sugestões personalizadas com base no item mais recente que viu</string>
+    <string name="widget_config_source_latest">Mais recente na biblioteca</string>
+    <string name="widget_config_source_latest_description">Multimédia adicionada recentemente em todas as bibliotecas</string>
+    <string name="widget_config_source_favorites">Os seus favoritos</string>
+    <string name="widget_config_source_favorites_description">Itens que marcou como favoritos</string>
+    <string name="widget_config_source_surprise_me">Surpreenda-me</string>
+    <string name="widget_config_source_surprise_me_description">Uma seleção aleatória da sua biblioteca</string>
+    <string name="widget_config_source_trending">Em destaque esta semana</string>
+    <string name="widget_config_source_trending_description">O que toda a gente está a comentar</string>
+    <string name="widget_config_source_popular_movies">Filmes populares</string>
+    <string name="widget_config_source_popular_movies_description">Os filmes mais bem avaliados neste momento</string>
+    <string name="widget_config_source_popular_tv">TV popular</string>
+    <string name="widget_config_source_popular_tv_description">As séries mais bem avaliadas neste momento</string>
+    <string name="widget_config_source_upcoming_movies">Próximos filmes</string>
+    <string name="widget_config_source_upcoming_movies_description">Filmes que estreiam em breve</string>
+    <string name="widget_config_source_upcoming_tv">Próxima TV</string>
+    <string name="widget_config_source_upcoming_tv_description">Séries que estreiam em breve</string>
+
+    <!-- In-app self-update sheet -->
+    <string name="update_checking">A verificar atualizações\u2026</string>
+    <string name="update_up_to_date_title">Está atualizado</string>
+    <string name="update_view_notes">Ver notas de lançamento</string>
+    <string name="update_hide_notes">Ocultar notas de lançamento</string>
+    <string name="update_available_title">Atualização disponível — v%1$s</string>
+    <string name="update_no_notes">Sem notas de lançamento.</string>
+    <string name="update_no_matching_apk">Nenhum APK correspondente</string>
+    <string name="update_download">Transferir</string>
+    <string name="update_later">Mais tarde</string>
+    <string name="update_downloading">A transferir atualização\u2026</string>
+    <string name="update_cancel">Cancelar</string>
+    <string name="update_ready_title">Pronto para instalar — v%1$s</string>
+    <string name="update_ready_body">A atualização foi transferida. Toque em Instalar para continuar.</string>
+    <string name="update_install">Instalar</string>
+    <string name="update_failed_title">Falha na atualização</string>
+    <string name="update_close">Fechar</string>
+</resources>

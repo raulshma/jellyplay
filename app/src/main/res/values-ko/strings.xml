@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_app_description">%1$s 열기</string>
+    <string name="tile_paused_label">일시정지됨: %1$s</string>
+    <string name="tile_playing_cd">재생 중</string>
+    <string name="tile_paused_cd">일시정지됨</string>
+
+    <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
+    <string name="press_back_again_to_exit">종료하려면 뒤로 가기를 다시 누르세요</string>
+
+    <string name="shortcut_continue_watching_short">이어보기</string>
+    <string name="shortcut_continue_watching_long">이어보기</string>
+    <string name="shortcut_search_short">검색</string>
+    <string name="shortcut_search_long">라이브러리 검색</string>
+    <string name="shortcut_play_music_short">음악</string>
+    <string name="shortcut_play_music_long">음악 재생</string>
+    <string name="shortcut_downloads_short">다운로드</string>
+    <string name="shortcut_downloads_long">다운로드 열기</string>
+
+    <string name="widget_now_playing_label">지금 재생 중</string>
+    <string name="widget_now_playing_description">홈 화면에서 바로 듣고 있는 음악을 보고 조작하세요.</string>
+    <string name="widget_continue_watching_label">이어보기</string>
+    <string name="widget_continue_watching_description">시작했지만 끝내지 못한 프로그램과 영화를 다시 이어 보세요.</string>
+    <string name="widget_nothing_playing">재생 중인 항목 없음</string>
+    <string name="widget_continue_watching_empty">아직 이어볼 항목이 없습니다</string>
+    <string name="widget_continue_watching_empty_subtitle">프로그램 시청을 시작하면 여기에 표시됩니다</string>
+    <string name="widget_placeholder_title">트랙 제목</string>
+    <string name="widget_placeholder_subtitle">아티스트 이름</string>
+    <string name="widget_album_art">앨범 아트</string>
+    <string name="widget_play_pause">재생 또는 일시정지</string>
+    <string name="widget_next">다음 트랙</string>
+    <string name="widget_previous">이전 트랙</string>
+    <string name="widget_rewind">10초 뒤로</string>
+    <string name="widget_forward">10초 앞으로</string>
+    <string name="widget_seek_to">위치로 이동</string>
+    <string name="widget_continue_watching_title">이어보기</string>
+    <string name="widget_continue_watching_see_all">전체 보기</string>
+    <string name="widget_minutes_left">%1$d분 남음</string>
+    <string name="widget_progress_percent">%1$d%%</string>
+    <string name="widget_placeholder_position">—</string>
+
+    <!-- Library Recommendations widget -->
+    <string name="widget_library_recommendations_label">라이브러리 추천</string>
+    <string name="widget_library_recommendations_title">라이브러리 추천</string>
+    <string name="widget_library_recommendations_subtitle">시청한 프로그램 기반</string>
+    <string name="widget_library_recommendations_empty">아직 추천이 없습니다</string>
+
+    <!-- Seerr Recommendations widget -->
+    <string name="widget_seerr_recommendations_subtitle">이번 주 인기</string>
+    <string name="widget_seerr_no_recommendations">아직 추천이 없습니다</string>
+    <string name="widget_seerr_no_recommendations_subtitle">새로고침을 누르거나 나중에 다시 확인하세요</string>
+
+    <!-- Shared -->
+    <string name="widget_refresh">새로고침</string>
+
+    <!-- Configuration activity -->
+    <string name="widget_config_title">추천 선택</string>
+    <string name="widget_config_save">저장</string>
+    <string name="widget_config_source_similar">시청한 프로그램 기반</string>
+    <string name="widget_config_source_similar_description">가장 최근에 시청한 항목을 기반으로 한 맞춤 추천</string>
+    <string name="widget_config_source_latest">라이브러리 최신 항목</string>
+    <string name="widget_config_source_latest_description">전체 라이브러리에 새로 추가된 미디어</string>
+    <string name="widget_config_source_favorites">나의 즐겨찾기</string>
+    <string name="widget_config_source_favorites_description">즐겨찾기로 표시한 항목</string>
+    <string name="widget_config_source_surprise_me">랜덤 추천</string>
+    <string name="widget_config_source_surprise_me_description">라이브러리에서 무작위로 섞은 항목</string>
+    <string name="widget_config_source_trending">이번 주 인기</string>
+    <string name="widget_config_source_trending_description">지금 모두가 이야기하는 항목</string>
+    <string name="widget_config_source_popular_movies">인기 영화</string>
+    <string name="widget_config_source_popular_movies_description">현재 평점이 가장 높은 영화</string>
+    <string name="widget_config_source_popular_tv">인기 TV</string>
+    <string name="widget_config_source_popular_tv_description">현재 평점이 가장 높은 프로그램</string>
+    <string name="widget_config_source_upcoming_movies">출시 예정 영화</string>
+    <string name="widget_config_source_upcoming_movies_description">곧 출시되는 영화</string>
+    <string name="widget_config_source_upcoming_tv">방영 예정 TV</string>
+    <string name="widget_config_source_upcoming_tv_description">곧 첫 방영되는 프로그램</string>
+
+    <!-- In-app self-update sheet -->
+    <string name="update_checking">업데이트 확인 중\u2026</string>
+    <string name="update_up_to_date_title">최신 버전입니다</string>
+    <string name="update_view_notes">릴리스 노트 보기</string>
+    <string name="update_hide_notes">릴리스 노트 숨기기</string>
+    <string name="update_available_title">업데이트 가능 — v%1$s</string>
+    <string name="update_no_notes">릴리스 노트가 제공되지 않았습니다.</string>
+    <string name="update_no_matching_apk">일치하는 APK 없음</string>
+    <string name="update_download">다운로드</string>
+    <string name="update_later">나중에</string>
+    <string name="update_downloading">업데이트 다운로드 중\u2026</string>
+    <string name="update_cancel">취소</string>
+    <string name="update_ready_title">설치 준비 완료 — v%1$s</string>
+    <string name="update_ready_body">업데이트가 다운로드되었습니다. 계속하려면 설치를 누르세요.</string>
+    <string name="update_install">설치</string>
+    <string name="update_failed_title">업데이트 실패</string>
+    <string name="update_close">닫기</string>
+</resources>

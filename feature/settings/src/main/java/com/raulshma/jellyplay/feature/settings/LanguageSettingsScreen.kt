@@ -69,13 +69,22 @@ sealed class LanguageSettingsDialog {
     object SubtitleBgColorPicker : LanguageSettingsDialog()
 }
 
-// TODO(i18n): ship values-*/strings.xml for these locales before re-enabling them.
-// The picker previously advertised 20 languages with zero translated resources, so every
-// selection silently rendered English — a trust-eroding silent failure (analysis F-19).
-// Restore entries here only once at least the top-5 translations exist.
+// App display languages. MUST stay in lockstep with `resourceConfigurations` in
+// app/build.gradle.kts — that list is the source of truth for which locales have
+// shipped values-<locale>/strings.xml. Advertising a locale here without translations
+// causes a silent fallback to English (analysis F-19), so never add an entry whose
+// tag isn't also in resourceConfigurations.
 internal val appLanguages = listOf(
     null to "System Default",
     "en" to "English",
+    "de" to "Deutsch",
+    "es" to "Español",
+    "fr" to "Français",
+    "it" to "Italiano",
+    "pt" to "Português",
+    "ja" to "日本語",
+    "ko" to "한국어",
+    "zh" to "中文",
 )
 
 private val appLanguageNameByCode: Map<String?, String> = appLanguages.associate { it.first to it.second }

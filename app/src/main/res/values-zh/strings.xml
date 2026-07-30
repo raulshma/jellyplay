@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_app_description">打开 %1$s</string>
+    <string name="tile_paused_label">已暂停：%1$s</string>
+    <string name="tile_playing_cd">正在播放</string>
+    <string name="tile_paused_cd">已暂停</string>
+
+    <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
+    <string name="press_back_again_to_exit">再按一次返回键退出</string>
+
+    <string name="shortcut_continue_watching_short">继续</string>
+    <string name="shortcut_continue_watching_long">继续观看</string>
+    <string name="shortcut_search_short">搜索</string>
+    <string name="shortcut_search_long">搜索媒体库</string>
+    <string name="shortcut_play_music_short">音乐</string>
+    <string name="shortcut_play_music_long">播放音乐</string>
+    <string name="shortcut_downloads_short">下载</string>
+    <string name="shortcut_downloads_long">打开下载</string>
+
+    <string name="widget_now_playing_label">正在播放</string>
+    <string name="widget_now_playing_description">直接从主屏幕查看和控制你正在收听的音乐。</string>
+    <string name="widget_continue_watching_label">继续观看</string>
+    <string name="widget_continue_watching_description">继续观看你已开始但尚未完成的剧集和电影。</string>
+    <string name="widget_nothing_playing">没有正在播放的内容</string>
+    <string name="widget_continue_watching_empty">暂无可继续的内容</string>
+    <string name="widget_continue_watching_empty_subtitle">开始观看剧集后，内容会显示在这里</string>
+    <string name="widget_placeholder_title">曲目名称</string>
+    <string name="widget_placeholder_subtitle">艺术家名称</string>
+    <string name="widget_album_art">专辑封面</string>
+    <string name="widget_play_pause">播放或暂停</string>
+    <string name="widget_next">下一曲</string>
+    <string name="widget_previous">上一曲</string>
+    <string name="widget_rewind">后退 10 秒</string>
+    <string name="widget_forward">前进 10 秒</string>
+    <string name="widget_seek_to">跳转到位置</string>
+    <string name="widget_continue_watching_title">继续观看</string>
+    <string name="widget_continue_watching_see_all">查看全部</string>
+    <string name="widget_minutes_left">剩余 %1$d 分钟</string>
+    <string name="widget_progress_percent">%1$d%%</string>
+    <string name="widget_placeholder_position">—</string>
+
+    <!-- Library Recommendations widget -->
+    <string name="widget_library_recommendations_label">媒体库精选</string>
+    <string name="widget_library_recommendations_title">媒体库精选</string>
+    <string name="widget_library_recommendations_subtitle">因为你看过</string>
+    <string name="widget_library_recommendations_empty">暂无推荐</string>
+
+    <!-- Seerr Recommendations widget -->
+    <string name="widget_seerr_recommendations_subtitle">本周热门</string>
+    <string name="widget_seerr_no_recommendations">暂无推荐</string>
+    <string name="widget_seerr_no_recommendations_subtitle">点击刷新或稍后再来查看</string>
+
+    <!-- Shared -->
+    <string name="widget_refresh">刷新</string>
+
+    <!-- Configuration activity -->
+    <string name="widget_config_title">选择推荐</string>
+    <string name="widget_config_save">保存</string>
+    <string name="widget_config_source_similar">因为你看过</string>
+    <string name="widget_config_source_similar_description">基于你最近观看的内容生成的个性化推荐</string>
+    <string name="widget_config_source_latest">媒体库最新内容</string>
+    <string name="widget_config_source_latest_description">各个媒体库中新添加的内容</string>
+    <string name="widget_config_source_favorites">你的收藏</string>
+    <string name="widget_config_source_favorites_description">你标记为收藏的内容</string>
+    <string name="widget_config_source_surprise_me">给我惊喜</string>
+    <string name="widget_config_source_surprise_me_description">从你的媒体库中随机推荐</string>
+    <string name="widget_config_source_trending">本周热门</string>
+    <string name="widget_config_source_trending_description">大家都在讨论的内容</string>
+    <string name="widget_config_source_popular_movies">热门电影</string>
+    <string name="widget_config_source_popular_movies_description">当前评分最高的电影</string>
+    <string name="widget_config_source_popular_tv">热门剧集</string>
+    <string name="widget_config_source_popular_tv_description">当前评分最高的剧集</string>
+    <string name="widget_config_source_upcoming_movies">即将上映的电影</string>
+    <string name="widget_config_source_upcoming_movies_description">即将上映的电影</string>
+    <string name="widget_config_source_upcoming_tv">即将播出的剧集</string>
+    <string name="widget_config_source_upcoming_tv_description">即将首播的剧集</string>
+
+    <!-- In-app self-update sheet -->
+    <string name="update_checking">正在检查更新\u2026</string>
+    <string name="update_up_to_date_title">已是最新版本</string>
+    <string name="update_view_notes">查看更新说明</string>
+    <string name="update_hide_notes">隐藏更新说明</string>
+    <string name="update_available_title">有可用更新 — v%1$s</string>
+    <string name="update_no_notes">未提供更新说明。</string>
+    <string name="update_no_matching_apk">未找到匹配的 APK</string>
+    <string name="update_download">下载</string>
+    <string name="update_later">以后再说</string>
+    <string name="update_downloading">正在下载更新\u2026</string>
+    <string name="update_cancel">取消</string>
+    <string name="update_ready_title">已准备好安装 — v%1$s</string>
+    <string name="update_ready_body">更新已下载完成。点击安装以继续。</string>
+    <string name="update_install">安装</string>
+    <string name="update_failed_title">更新失败</string>
+    <string name="update_close">关闭</string>
+</resources>

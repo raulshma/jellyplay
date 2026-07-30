@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared action / component literals (enhancements §2.2).
+         Prefixed `core_` so they never collide with module-local strings
+         once resources are merged at the app level. -->
+    <string name="core_retry">重试</string>
+    <string name="core_cancel">取消</string>
+    <string name="core_reset">重置</string>
+    <string name="core_close">关闭</string>
+    <string name="core_done">完成</string>
+
+    <!-- Truly cross-module feedback (posted from the app/navigation layer
+         and referenced by multiple feature modules). -->
+    <string name="msg_no_video_player_found">未找到视频播放器</string>
+    <string name="msg_smart_download_deleted">已删除看过的下载以释放空间</string>
+
+    <!-- Localizable labels for [com.raulshma.jellyplay.core.model.MediaType], shared
+         by every feature screen that renders a media-type badge or filter chip.
+         Kept here (not in core/model) because the model layer has no resource
+         access; resolve them via [mediaTypeDisplayName] / [mediaTypeDisplayNamePlural]. -->
+    <string name="core_media_movie">电影</string>
+    <string name="core_media_series">剧集</string>
+    <string name="core_media_season">季</string>
+    <string name="core_media_episode">集</string>
+    <string name="core_media_track">曲目</string>
+    <string name="core_media_album">专辑</string>
+    <string name="core_media_artist">艺术家</string>
+    <string name="core_media_music_video">音乐视频</string>
+    <string name="core_media_collection">合集</string>
+    <string name="core_media_photo">照片</string>
+    <string name="core_media_live_tv">直播电视</string>
+    <string name="core_media_channel">频道</string>
+    <string name="core_media_unknown">项目</string>
+
+    <!-- Plural forms (e.g. filter chips, library headers). -->
+    <string name="core_media_movie_plural">电影</string>
+    <string name="core_media_series_plural">剧集</string>
+    <string name="core_media_season_plural">季</string>
+    <string name="core_media_episode_plural">集</string>
+    <string name="core_media_music_plural">音乐</string>
+    <string name="core_media_album_plural">专辑</string>
+    <string name="core_media_artist_plural">艺术家</string>
+    <string name="core_media_music_video_plural">音乐视频</string>
+    <string name="core_media_collection_plural">合集</string>
+    <string name="core_media_photo_plural">照片</string>
+    <string name="core_media_live_tv_plural">直播电视</string>
+    <string name="core_media_channel_plural">频道</string>
+    <string name="core_media_unknown_plural">未知</string>
+</resources>

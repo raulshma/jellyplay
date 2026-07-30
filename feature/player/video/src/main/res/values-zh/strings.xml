@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_audio">音频</string>
+    <string name="player_subtitles">字幕</string>
+    <string name="player_reset_to_auto">重置为自动</string>
+    <string name="player_track_default">默认</string>
+    <string name="player_track_off">关闭</string>
+    <string name="player_track_none">无</string>
+
+    <string name="track_badge_forced">强制</string>
+    <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_default">默认</string>
+</resources>

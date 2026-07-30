@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared action / component literals (enhancements §2.2).
+         Prefixed `core_` so they never collide with module-local strings
+         once resources are merged at the app level. -->
+    <string name="core_retry">Reintentar</string>
+    <string name="core_cancel">Cancelar</string>
+    <string name="core_reset">Restablecer</string>
+    <string name="core_close">Cerrar</string>
+    <string name="core_done">Hecho</string>
+
+    <!-- Truly cross-module feedback (posted from the app/navigation layer
+         and referenced by multiple feature modules). -->
+    <string name="msg_no_video_player_found">No se encontró ningún reproductor de vídeo</string>
+    <string name="msg_smart_download_deleted">Se eliminó la descarga vista para liberar espacio</string>
+
+    <!-- Localizable labels for [com.raulshma.jellyplay.core.model.MediaType], shared
+         by every feature screen that renders a media-type badge or filter chip.
+         Kept here (not in core/model) because the model layer has no resource
+         access; resolve them via [mediaTypeDisplayName] / [mediaTypeDisplayNamePlural]. -->
+    <string name="core_media_movie">Película</string>
+    <string name="core_media_series">Serie</string>
+    <string name="core_media_season">Temporada</string>
+    <string name="core_media_episode">Episodio</string>
+    <string name="core_media_track">Pista</string>
+    <string name="core_media_album">Álbum</string>
+    <string name="core_media_artist">Artista</string>
+    <string name="core_media_music_video">Videoclip</string>
+    <string name="core_media_collection">Colección</string>
+    <string name="core_media_photo">Foto</string>
+    <string name="core_media_live_tv">TV en directo</string>
+    <string name="core_media_channel">Canal</string>
+    <string name="core_media_unknown">Elemento</string>
+
+    <!-- Plural forms (e.g. filter chips, library headers). -->
+    <string name="core_media_movie_plural">Películas</string>
+    <string name="core_media_series_plural">Series</string>
+    <string name="core_media_season_plural">Temporadas</string>
+    <string name="core_media_episode_plural">Episodios</string>
+    <string name="core_media_music_plural">Música</string>
+    <string name="core_media_album_plural">Álbumes</string>
+    <string name="core_media_artist_plural">Artistas</string>
+    <string name="core_media_music_video_plural">Videoclips</string>
+    <string name="core_media_collection_plural">Colecciones</string>
+    <string name="core_media_photo_plural">Fotos</string>
+    <string name="core_media_live_tv_plural">TV en directo</string>
+    <string name="core_media_channel_plural">Canales</string>
+    <string name="core_media_unknown_plural">Desconocido</string>
+</resources>

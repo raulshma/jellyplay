@@ -361,7 +361,7 @@ Click any section to expand. The full feature list is preserved — collapsed on
   - **Static**: Continue Watching, Search, Play Music, Downloads
   - **Dynamic**: Continue Listening — auto-updates with the currently playing track and album art
 - BlurHash image placeholders for smooth loading
-- Localization ready (English; additional translations in progress)
+- Localized in 9 languages (English, Deutsch, Español, Français, Italiano, Português, 日本語, 한국어, 中文)
 - Deep link support via `jellyplay://` and `https://raulshma.github.io/jellyplay/` URI schemes
   - `jellyplay://media/{id}`, `jellyplay://newsletter/{section}`, `jellyplay://seerr/{tmdbId}/{type}`
   - HTTPS equivalents under `https://raulshma.github.io/jellyplay/...`
@@ -580,7 +580,7 @@ Other open-source projects in the Jellyfin ecosystem:
 | Data models | 60+ |
 | API clients | 18+ |
 | Room DAOs | 13 |
-| Supported languages | 1 (English; i18n infrastructure in place, community translations in progress) |
+| Supported languages | 9 (English, Deutsch, Español, Français, Italiano, Português, 日本語, 한국어, 中文) |
 | External integrations | Jellyfin, Jellyseerr/Overseerr, Radarr, Sonarr, LRCLIB, TMDB, GitHub Releases (self-update), Google Cast |
 | Min SDK | 28 (Android 9.0) |
 | Target/Compile SDK | 37 |

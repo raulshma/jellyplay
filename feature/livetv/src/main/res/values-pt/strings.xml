@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Live TV feature user-facing strings (enhancements §2.2) -->
+    <string name="livetv_no_channels_available">Sem canais disponíveis</string>
+
+    <!-- Live TV tabbed screen (matches jellyfin-web Live TV collection) -->
+    <string name="livetv_tab_programs">Programas</string>
+    <string name="livetv_tab_guide">Guia</string>
+    <string name="livetv_tab_channels">Canais</string>
+    <string name="livetv_tab_recordings">Gravações</string>
+    <string name="livetv_tab_schedule">Agenda</string>
+    <string name="livetv_tab_series">Séries</string>
+
+    <string name="livetv_row_on_now">A passar agora</string>
+    <string name="livetv_row_shows">Séries</string>
+    <string name="livetv_row_movies">Filmes</string>
+    <string name="livetv_row_sports">Desporto</string>
+    <string name="livetv_row_kids">Infantil</string>
+    <string name="livetv_row_news">Notícias</string>
+
+    <string name="livetv_no_programs_available">Sem programas disponíveis</string>
+    <string name="livetv_no_recordings_available">Sem gravações disponíveis</string>
+    <string name="livetv_no_scheduled_recordings">Sem gravações agendadas</string>
+    <string name="livetv_no_series_recordings">Sem gravações de séries</string>
+
+    <string name="livetv_section_latest_recordings">Gravações recentes</string>
+    <string name="livetv_section_active_recordings">Gravações ativas</string>
+    <string name="livetv_section_upcoming_recordings">Próximas gravações</string>
+
+    <string name="livetv_record_once">Gravar</string>
+    <string name="livetv_record_series">Gravar série</string>
+    <string name="livetv_cancel_recording">Cancelar gravação</string>
+    <string name="livetv_cancel_series">Cancelar série</string>
+    <string name="livetv_record_success">Gravação agendada</string>
+    <string name="livetv_record_failed">Falha ao agendar gravação</string>
+    <string name="livetv_record_canceled">Gravação cancelada</string>
+
+    <!-- Channel detail screen -->
+    <string name="livetv_channel_watch_live">Ver em direto</string>
+    <string name="livetv_channel_on_today">Hoje</string>
+    <string name="livetv_channel_live">DIRETO</string>
+    <string name="livetv_channel_no_program_info">Sem informação do programa</string>
+    <string name="livetv_channel_load_failed">Falha ao carregar o guia de programas</string>
+</resources>

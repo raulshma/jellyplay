@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      TODO(i18n): these strings are the first ones extracted from hardcoded UI
+      text (analysis F-37). Continue extracting the rest of onboarding/auth,
+      then seed translations to re-enable the language picker (analysis F-19).
+    -->
+    <string name="onboarding_welcome_title">欢迎使用\nJellyPlay</string>
+    <string name="onboarding_welcome_subtitle">你的专属 Jellyfin 客户端。让我们做一些简单的设置来帮你开始使用。</string>
+    <string name="onboarding_feature_stream">在线播放电影 &amp; 剧集</string>
+    <string name="onboarding_feature_music">带高级音效的音乐播放器</string>
+    <string name="onboarding_feature_download">下载以便离线播放</string>
+
+    <!-- SubtitlesStep (shared preview also consumes these) -->
+    <string name="onboarding_subtitles_title">字幕</string>
+    <string name="onboarding_subtitles_subtitle">自定义字幕外观和默认设置</string>
+    <string name="onboarding_subtitles_preview">字幕预览</string>
+    <string name="onboarding_subtitles_font_size">字号</string>
+    <string name="onboarding_subtitles_font_color">字体颜色</string>
+    <string name="onboarding_subtitles_edge_type">边缘样式</string>
+</resources>
