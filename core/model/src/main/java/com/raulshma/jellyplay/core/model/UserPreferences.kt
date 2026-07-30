@@ -247,6 +247,14 @@ data class UserPreferences(
     val hiddenNavItems: Set<String> = emptySet(),
     val navItemOrder: List<String> = emptyList(),
     val selfUpdateCheckEnabled: Boolean = true,
+    /**
+     * Version of the last update the user dismissed via "Later"/"Close", plus
+     * the wall-clock millis at which it was dismissed. Used to suppress the
+     * launch-time auto-prompt for the same version for 24 hours. Manual checks
+     * (Settings → Check for updates) ignore this and always surface the result.
+     */
+    val dismissedUpdateVersion: String? = null,
+    val dismissedUpdateAtMs: Long = 0L,
     val hideEpisodeThumbnails: Boolean = false,
     val episodesDescending: Boolean = true,
     val skipSpecials: Boolean = false,

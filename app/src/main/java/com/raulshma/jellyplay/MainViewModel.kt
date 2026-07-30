@@ -105,6 +105,13 @@ class MainViewModel @Inject constructor(
     private var lastAdminRefreshAt = 0L
     private val adminRefreshIntervalMs = 30_000L
 
+    /**
+     * After the user dismisses an update prompt, the launch-time auto-check
+     * suppresses the *same* version for this long. Manual checks (Settings)
+     * are unaffected. 24 hours.
+     */
+    private val dismissedUpdateSuppressMs = 24L * 60 * 60 * 1000
+
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
@@ -230,16 +237,33 @@ class MainViewModel @Inject constructor(
      */
     fun checkForAppUpdate() {
         launch {
-            val enabled = preferencesStore.preferences.first().selfUpdateCheckEnabled
-            if (!enabled) return@launch
+            val prefs = preferencesStore.preferences.first()
+            if (!prefs.selfUpdateCheckEnabled) return@launch
             val result = appUpdateRepository.checkForUpdate(
                 supportedAbis = android.os.Build.SUPPORTED_ABIS,
             )
             result.onSuccess { info ->
-                if (info.isUpdateAvailable) _updateState.set(UpdateState.UpdateAvailable(info))
-                // else: stay Idle — no sheet for an up-to-date launch check.
+                if (!info.isUpdateAvailable) return@onSuccess // stay Idle.
+                // Honor a prior dismissal: if the user dismissed this exact
+                // version less than 24h ago, stay quiet on the launch auto-check.
+                if (isUpdateRecentlyDismissed(info.latestVersion, prefs)) return@onSuccess
+                _updateState.set(UpdateState.UpdateAvailable(info))
             }
         }
+    }
+
+    /**
+     * True when [version] matches the last dismissed update and that dismissal
+     * happened within [dismissedUpdateSuppressMs]. Manual checks ignore this.
+     */
+    private fun isUpdateRecentlyDismissed(
+        version: String,
+        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+    ): Boolean {
+        val dismissedVersion = prefs.dismissedUpdateVersion ?: return false
+        if (dismissedVersion != version) return false
+        val elapsed = System.currentTimeMillis() - prefs.dismissedUpdateAtMs
+        return elapsed in 0..dismissedUpdateSuppressMs
     }
 
     /**
@@ -283,8 +307,19 @@ class MainViewModel @Inject constructor(
     fun buildInstallIntent(file: java.io.File): android.content.Intent =
         appUpdateRepository.buildInstallIntent(file)
 
-    /** Hides the update sheet without changing download state. */
+    /**
+     * Hides the update sheet without changing download state. When dismissed
+     * from an [UpdateState.UpdateAvailable] prompt, stamps the version + time
+     * so the launch-time auto-check stays quiet for the same version for 24h.
+     * Manual checks still surface the result regardless of dismissal.
+     */
     fun dismissUpdate() {
+        val state = _updateState.value
+        if (state is UpdateState.UpdateAvailable) {
+            launch {
+                preferencesStore.setDismissedUpdate(state.info.latestVersion)
+            }
+        }
         _updateState.set(UpdateState.Idle)
     }
 

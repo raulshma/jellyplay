@@ -345,6 +345,8 @@ class UserPreferencesStore @Inject constructor(
         val HIDDEN_NAV_ITEMS = stringPreferencesKey("hidden_nav_items")
         val NAV_ITEM_ORDER = stringPreferencesKey("nav_item_order")
         val SELF_UPDATE_CHECK_ENABLED = booleanPreferencesKey("self_update_check_enabled")
+        val DISMISSED_UPDATE_VERSION = stringPreferencesKey("dismissed_update_version")
+        val DISMISSED_UPDATE_AT_MS = longPreferencesKey("dismissed_update_at_ms")
         val PIN_FAILED_ATTEMPTS = intPreferencesKey("pin_failed_attempts")
         val PIN_LOCKOUT_UNTIL_MS = longPreferencesKey("pin_lockout_until_ms")
         val HIDE_EPISODE_THUMBNAILS = booleanPreferencesKey("hide_episode_thumbnails")
@@ -1219,6 +1221,8 @@ class UserPreferencesStore @Inject constructor(
             hiddenNavItems = hiddenNavItems,
             navItemOrder = navItemOrder,
             selfUpdateCheckEnabled = readBool(prefs, Keys.SELF_UPDATE_CHECK_ENABLED, "self_update_check_enabled", true),
+            dismissedUpdateVersion = prefs[Keys.DISMISSED_UPDATE_VERSION],
+            dismissedUpdateAtMs = readLong(prefs, Keys.DISMISSED_UPDATE_AT_MS, "dismissed_update_at_ms", 0L),
             hideEpisodeThumbnails = readBool(prefs, Keys.HIDE_EPISODE_THUMBNAILS, "hide_episode_thumbnails", false),
             episodesDescending = readBool(prefs, Keys.EPISODES_DESCENDING, "episodes_descending", true),
             skipSpecials = readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
@@ -1401,6 +1405,24 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setSelfUpdateCheckEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.SELF_UPDATE_CHECK_ENABLED] = enabled }
+    }
+
+    /**
+     * Records that the user dismissed the prompt for [version], stamping the
+     * current wall-clock time so the auto-check can suppress the same version
+     * for 24 hours. Pass `null` to clear a prior dismissal (e.g. on a fresh
+     * update check or after installing).
+     */
+    suspend fun setDismissedUpdate(version: String?, atMs: Long = System.currentTimeMillis()) {
+        dataStore.edit {
+            if (version == null) {
+                it.remove(Keys.DISMISSED_UPDATE_VERSION)
+                it.remove(Keys.DISMISSED_UPDATE_AT_MS)
+            } else {
+                it[Keys.DISMISSED_UPDATE_VERSION] = version
+                it[Keys.DISMISSED_UPDATE_AT_MS] = atMs
+            }
+        }
     }
 
     suspend fun setHideEpisodeThumbnails(enabled: Boolean) {
