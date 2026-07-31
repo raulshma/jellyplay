@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="insights_title_watch_progress">視聴の進捗</string>
+    <string name="insights_cd_share">共有</string>
+    <string name="insights_cd_configure_heatmap">ヒートマップを設定</string>
+    <string name="insights_filter_type">フィルタータイプ</string>
+    <string name="insights_select_year">年を選択</string>
+    <string name="insights_loading">読み込み中…</string>
+    <string name="insights_plugin_missing_message">詳細なヒートマップデータのために、Jellyfin サーバーに Playback Reporting プラグインをインストールしてください。視聴履歴からの基本アクティビティを表示しています。</string>
+    <string name="insights_no_activity_for_year">%1$d の視聴アクティビティは記録されていません。何か再生して、今年の記録を始めましょう。</string>
+    <string name="insights_activity_grid">アクティビティグリッド</string>
+    <string name="insights_cd_previous_year">前の年</string>
+    <string name="insights_cd_next_year">次の年</string>
+    <string name="insights_stat_current_streak">現在の連続日数</string>
+    <string name="insights_stat_longest_streak">最長の連続日数</string>
+    <string name="insights_stat_active_days">アクティブ日数</string>
+    <string name="insights_days_format">%1$d 日</string>
+    <string name="insights_day_sun">日</string>
+    <string name="insights_day_tue">火</string>
+    <string name="insights_day_thu">木</string>
+    <string name="insights_day_sat">土</string>
+    <string name="insights_legend_less">少ない</string>
+    <string name="insights_legend_more">多い</string>
+    <string name="insights_duration_hm">%1$d時間 %2$d分</string>
+    <string name="insights_duration_m">%1$d分</string>
+    <string name="insights_duration_under_minute">1分未満</string>
+    <string name="insights_no_activity">アクティビティなし</string>
+    <string name="insights_minutes_watched">%1$d分視聴</string>
+    <string name="insights_played">再生済み</string>
+    <string name="insights_share_chooser_title">視聴の進捗を共有</string>
+
+    <plurals name="insights_heatmap_summary">
+        <item quantity="other">%1$d の視聴アクティビティヒートマップ。%2$d アクティブ日。</item>
+    </plurals>
+
+    <plurals name="insights_sessions_watched">
+        <item quantity="other">%1$d セッション &#183; %2$s 視聴</item>
+    </plurals>
+</resources>

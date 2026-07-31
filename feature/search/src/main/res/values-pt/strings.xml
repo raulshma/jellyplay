@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Search feature user-facing strings (enhancements §2.2) -->
+    <string name="search_no_results_found">Nenhum resultado encontrado</string>
+    <string name="search_try_adjusting_filters">Tente ajustar os filtros</string>
+    <string name="search_did_you_mean">Queria dizer?</string>
+    <string name="search_failed">Falha na pesquisa</string>
+    <string name="search_failed_to_load_more">Falha ao carregar mais</string>
+
+    <!-- Header / search field -->
+    <string name="search_title">Pesquisar</string>
+    <string name="search_placeholder">Pesquisar filmes, séries, música…</string>
+    <string name="search_voice_prompt">Pesquisar filmes, séries, música…</string>
+    <string name="search_voice_search">Pesquisa por voz</string>
+    <string name="search_clear_search">Limpar pesquisa</string>
+    <string name="search_action_filters">Filtros</string>
+    <string name="search_clear_all">Limpar tudo</string>
+    <plurals name="search_result_count">
+        <item quantity="one">%1$d resultado</item>
+        <item quantity="other">%1$d resultados</item>
+    </plurals>
+
+    <!-- Sections -->
+    <string name="search_suggestions">Sugestões</string>
+    <string name="search_on_device">No dispositivo</string>
+    <string name="search_recent_searches">Pesquisas recentes</string>
+    <string name="search_remove">Remover</string>
+
+    <!-- Empty state -->
+    <string name="search_search_your_library">Pesquisar na sua biblioteca</string>
+    <string name="search_search_your_library_desc">Filmes, séries, música e muito mais</string>
+
+    <!-- Seerr -->
+    <string name="search_retry">Tentar novamente</string>
+
+    <!-- Clear history dialog -->
+    <string name="search_clear_search_history">Limpar histórico de pesquisa</string>
+    <string name="search_clear_history_confirm">Remover todas as pesquisas recentes? Esta ação não pode ser desfeita.</string>
+    <string name="search_action_clear">Limpar</string>
+    <string name="search_action_cancel">Cancelar</string>
+
+    <!-- Filter sheet -->
+    <string name="search_filters_title">Filtros</string>
+    <string name="search_filter_media_type">Tipo de multimédia</string>
+    <string name="search_filter_genres">Géneros</string>
+    <string name="search_filter_year_range">Intervalo de anos</string>
+    <string name="search_filter_tags">Etiquetas</string>
+    <string name="search_filter_minimum_rating">Avaliação mínima</string>
+    <string name="search_filter_any">Qualquer</string>
+    <string name="search_filter_rating_plus">%1$.1f+</string>
+    <string name="search_apply_filters">Aplicar filtros</string>
+</resources>

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Downloads feature user-facing strings -->
+
+    <!-- Screen titles / scaffolds -->
+    <string name="downloads_screen_title">다운로드</string>
+    <string name="downloads_library_title">다운로드됨</string>
+    <string name="downloads_loading">로드 중…</string>
+    <string name="downloads_not_found">찾을 수 없음</string>
+    <string name="downloads_download_unavailable">이 다운로드는 더 이상 사용할 수 없습니다</string>
+
+    <!-- Empty states -->
+    <string name="downloads_empty_title">아직 다운로드가 없습니다</string>
+    <string name="downloads_empty_description">다운로드한 콘텐츠가 여기에 표시됩니다</string>
+    <string name="downloads_no_downloaded_content">아직 다운로드한 콘텐츠가 없습니다</string>
+    <string name="downloads_no_matches">일치 항목 없음</string>
+    <string name="downloads_no_items_in_category">이 카테고리에 다운로드한 항목이 없습니다</string>
+    <string name="downloads_no_episodes_season">이 시즌에 다운로드된 에피소드가 없습니다</string>
+
+    <!-- Storage / counts -->
+    <string name="downloads_storage_used">사용 중인 공간: %1$s</string>
+    <string name="downloads_on_device">· 기기에 %1$s</string>
+    <plurals name="downloads_item_count">
+        <item quantity="other">항목 %1$d개</item>
+    </plurals>
+    <plurals name="downloads_episodes_count">
+        <item quantity="other">에피소드 %1$d개</item>
+    </plurals>
+    <string name="downloads_episodes_count_with_size">에피소드 %1$d개 · %2$s</string>
+    <string name="downloads_selected_count">%1$d개 선택됨</string>
+
+    <!-- Common actions / buttons -->
+    <string name="downloads_delete">삭제</string>
+    <string name="downloads_cancel">취소</string>
+    <string name="downloads_close">닫기</string>
+    <string name="downloads_action_play">재생</string>
+    <string name="downloads_action_pause">일시정지</string>
+    <string name="downloads_action_resume">다시 시작</string>
+    <string name="downloads_action_retry">다시 시도</string>
+    <string name="downloads_action_cancel">취소</string>
+    <string name="downloads_action_delete">삭제</string>
+    <string name="downloads_action_lower_priority">우선순위 낮추기</string>
+    <string name="downloads_action_move_to_front">맨 앞으로 이동</string>
+    <string name="downloads_action_select_all">모두 선택</string>
+    <string name="downloads_action_clear_selection">선택 해제</string>
+    <string name="downloads_select_all">모두 선택</string>
+    <string name="downloads_deselect_all">모두 선택 해제</string>
+    <string name="downloads_clear_cd">지우기</string>
+    <string name="downloads_search_cd">검색</string>
+    <string name="downloads_sort_cd">정렬</string>
+    <string name="downloads_search_downloads_placeholder">다운로드 검색…</string>
+    <string name="downloads_selection_hint">다운로드를 길게 눌러 선택하고 일괄 작업을 적용하세요</string>
+
+    <!-- Delete dialogs -->
+    <string name="downloads_delete_download_title">다운로드 삭제</string>
+    <string name="downloads_delete_download_cd">다운로드 삭제</string>
+    <string name="downloads_delete_download_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
+    <string name="downloads_delete_downloads_title">다운로드 삭제</string>
+    <plurals name="downloads_delete_downloads_message">
+        <item quantity="other">선택한 다운로드 %1$d개를 기기에서 제거하시겠습니까?</item>
+    </plurals>
+    <string name="downloads_frees_up_sentence"> %1$s이(가) 확보됩니다.</string>
+    <string name="downloads_delete_episode_title">에피소드 삭제</string>
+    <string name="downloads_delete_episode_cd">에피소드 삭제</string>
+    <string name="downloads_delete_episode_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까?</string>
+    <string name="downloads_select_episodes_to_remove">기기에서 제거할 에피소드를 선택하세요.</string>
+    <string name="downloads_episodes_selected">에피소드 %2$d개 중 %1$d개 선택됨</string>
+    <string name="downloads_episodes_selected_with_freed">에피소드 %2$d개 중 %1$d개 선택됨 · %3$s</string>
+    <string name="downloads_delete_count">%1$d개 삭제</string>
+    <string name="downloads_delete_count_with_freed">%1$d개 삭제 · %2$s</string>
+
+    <!-- Download statuses -->
+    <string name="downloads_status_queued">대기 중</string>
+    <string name="downloads_status_waiting">대기 중…</string>
+    <string name="downloads_status_failed">실패</string>
+    <string name="downloads_status_paused">일시정지됨</string>
+    <string name="downloads_status_cancelled">취소됨</string>
+
+    <!-- Offline detail -->
+    <string name="downloads_series_default">시리즈</string>
+    <string name="downloads_season_default">시즌 %1$d</string>
+    <string name="downloads_play_resume">이어보기</string>
+    <string name="downloads_play_again">다시 재생</string>
+    <string name="downloads_show_less">간단히 보기</string>
+    <string name="downloads_show_more">더 보기</string>
+    <string name="downloads_tracks">트랙</string>
+    <string name="downloads_cast_crew">출연진 &amp; 제작진</string>
+    <string name="downloads_download_info">다운로드 정보</string>
+    <string name="downloads_file_size">파일 크기</string>
+    <string name="downloads_downloaded">다운로드됨</string>
+    <string name="downloads_status">상태</string>
+    <string name="downloads_progress">진행률</string>
+    <string name="downloads_watch_status">시청 상태</string>
+    <string name="downloads_watched">시청함</string>
+    <string name="downloads_watched_label">시청함</string>
+    <string name="downloads_in_progress">진행 중</string>
+    <string name="downloads_started">시작됨</string>
+    <string name="downloads_position">위치</string>
+    <string name="downloads_position_of">%2$s 중 %1$s</string>
+    <string name="downloads_last_watched">마지막 시청</string>
+    <string name="downloads_time_left">%1$s 남음</string>
+
+    <!-- Seasons / episodes -->
+    <string name="downloads_seasons">시즌</string>
+    <string name="downloads_collapse">접기</string>
+    <string name="downloads_expand">펼치기</string>
+    <string name="downloads_mark_season_cd">시즌 시청함/시청 안 함으로 표시</string>
+    <string name="downloads_mark_season_watched">시즌을 시청함으로 표시</string>
+    <string name="downloads_mark_season_unwatched">시즌을 시청 안 함으로 표시</string>
+
+    <!-- Library sort / filter -->
+    <string name="downloads_sort_recent">최근순</string>
+    <string name="downloads_sort_name">이름(가나다)</string>
+    <string name="downloads_sort_rating">평점</string>
+    <string name="downloads_sort_size">크기</string>
+    <string name="downloads_filter_all">전체</string>
+    <string name="downloads_filter_videos">동영상</string>
+    <string name="downloads_filter_music">음악</string>
+</resources>

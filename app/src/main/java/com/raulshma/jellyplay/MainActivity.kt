@@ -28,6 +28,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -46,6 +48,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import android.util.Rational
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
@@ -316,14 +319,15 @@ class MainActivity : FragmentActivity() {
                         ) {
                             if (showLockScreen) {
                                 // Surface the rate-limit lockout to the user when present.
+                                val context = LocalContext.current
                                 val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
                                     viewModel.preferencesStore.getPinLockoutState()
                                 }
                                 val now = remember { System.currentTimeMillis() }
                                 val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
                                 AuthChallengeScreen(
-                                    title = if (preferences.biometricLockEnabled && preferences.pinHash == null) "Authenticate" else "Enter PIN",
-                                    subtitle = "Unlock JellyPlay",
+                                    title = if (preferences.biometricLockEnabled && preferences.pinHash == null) stringResource(R.string.auth_title_biometric) else stringResource(R.string.auth_title_pin),
+                                    subtitle = stringResource(R.string.auth_subtitle),
                                     pinHash = preferences.pinHash,
                                     biometricEnabled = preferences.biometricLockEnabled,
                                     enabled = !lockoutActive && !pinVerifying,
@@ -342,7 +346,7 @@ class MainActivity : FragmentActivity() {
                                             val currentNow = System.currentTimeMillis()
                                             if (currentLockout.isLockedOut && currentLockout.lockoutUntilEpochMs > currentNow) {
                                                 val remainingMs = currentLockout.lockoutUntilEpochMs - currentNow
-                                                pinError = formatLockoutMessage(remainingMs)
+                                                pinError = formatLockoutMessage(context, remainingMs)
                                                 return@AuthChallengeScreen
                                             }
                                             // PBKDF2 verification is deliberately slow, so run
@@ -358,9 +362,9 @@ class MainActivity : FragmentActivity() {
                                                 } else {
                                                     val newState = viewModel.preferencesStore.recordFailedPinAttempt()
                                                     pinError = if (newState.isLockedOut) {
-                                                        formatLockoutMessage(newState.lockoutUntilEpochMs - System.currentTimeMillis())
+                                                        formatLockoutMessage(context, newState.lockoutUntilEpochMs - System.currentTimeMillis())
                                                     } else {
-                                                        "Incorrect PIN"
+                                                        context.getString(R.string.pin_incorrect)
                                                     }
                                                 }
                                                 pinVerifying = false
@@ -369,7 +373,7 @@ class MainActivity : FragmentActivity() {
                                     },
                                     onErrorClear = { pinError = null },
                                     errorMessage = if (lockoutActive) {
-                                        formatLockoutMessage(lockoutState.lockoutUntilEpochMs - now)
+                                        formatLockoutMessage(context, lockoutState.lockoutUntilEpochMs - now)
                                     } else {
                                         pinError
                                     },
@@ -552,23 +556,23 @@ class MainActivity : FragmentActivity() {
         actions += pipRemoteAction(
             id = PIP_ACTION_SKIP_BACK,
             icon = android.R.drawable.ic_media_rew,
-            title = "Rewind",
+            title = getString(R.string.pip_rewind),
         )
         actions += pipRemoteAction(
             id = if (isPlaying) PIP_ACTION_PAUSE else PIP_ACTION_PLAY,
             icon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-            title = if (isPlaying) "Pause" else "Play",
+            title = if (isPlaying) getString(R.string.media_pause) else getString(R.string.media_play),
         )
         actions += pipRemoteAction(
             id = PIP_ACTION_SKIP_FORWARD,
             icon = android.R.drawable.ic_media_ff,
-            title = "Forward",
+            title = getString(R.string.pip_forward),
         )
         if (hasNext) {
             actions += pipRemoteAction(
                 id = PIP_ACTION_NEXT,
                 icon = android.R.drawable.ic_media_next,
-                title = "Next",
+                title = getString(R.string.pip_next),
             )
         }
         return actions
@@ -661,18 +665,18 @@ class MainActivity : FragmentActivity() {
  * Formats a PIN-rate-limit lockout duration as a human-readable message.
  * Shows seconds when under a minute, otherwise minutes/hours.
  */
-private fun formatLockoutMessage(remainingMs: Long): String {
-    if (remainingMs <= 0L) return "Too many attempts. Try again."
+private fun formatLockoutMessage(context: Context, remainingMs: Long): String {
+    if (remainingMs <= 0L) return context.getString(R.string.pin_lockout_now)
     val seconds = (remainingMs + 999L) / 1000L // round up so we never show 0s
     return when {
-        seconds < 60 -> "Too many attempts. Try again in ${seconds}s."
-        seconds < 3600 -> "Too many attempts. Try again in ${seconds / 60}m."
+        seconds < 60 -> context.getString(R.string.pin_lockout_seconds, seconds)
+        seconds < 3600 -> context.getString(R.string.pin_lockout_minutes, seconds / 60)
         seconds < 86400 -> {
             val h = seconds / 3600
             val m = (seconds % 3600) / 60
-            if (m == 0L) "Too many attempts. Try again in ${h}h."
-            else "Too many attempts. Try again in ${h}h ${m}m."
+            if (m == 0L) context.getString(R.string.pin_lockout_hours, h)
+            else context.getString(R.string.pin_lockout_hours_minutes, h, m)
         }
-        else -> "Too many attempts. Try again in ${seconds / 3600}h."
+        else -> context.getString(R.string.pin_lockout_hours, seconds / 3600)
     }
 }

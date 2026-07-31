@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -44,6 +45,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.feature.player.video.TrackOption
+import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
+import com.raulshma.jellyplay.feature.player.video.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -105,12 +108,12 @@ internal fun TrackPickerSheet(
                     ) {
                         Icon(
                             Tabler.Outline.Rotate,
-                            contentDescription = "Reset to Auto",
+                            contentDescription = stringResource(R.string.player_reset_to_auto),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp),
                         )
                         Text(
-                            text = "Reset to Auto",
+                            text = stringResource(R.string.player_reset_to_auto),
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.SemiBold,
                             ),
@@ -120,7 +123,7 @@ internal fun TrackPickerSheet(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            LazyColumn(modifier = Modifier.verticalWrapAround()) {
+            LazyColumn(modifier = Modifier.verticalWrapAround().weight(1f, fill = false)) {
                 itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->
                     val isSelected = track.isSelected
                     val isFirst = index == 0
@@ -176,14 +179,27 @@ private fun TrackItem(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            track.label,
-            style = MaterialTheme.typography.bodyLarge.copy(
-                fontWeight = if (track.isSelected) FontWeight.SemiBold else FontWeight.Normal,
-            ),
-            color = if (track.isSelected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurface,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                track.label,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = if (track.isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                ),
+                color = if (track.isSelected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
+            )
+            if (track.badges.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    track.badges.forEach { badge ->
+                        TrackBadgeChip(badge = badge, isSelected = track.isSelected)
+                    }
+                }
+            }
+        }
         if (track.isSelected) {
             Box(
                 modifier = Modifier
@@ -201,4 +217,32 @@ private fun TrackItem(
             }
         }
     }
+}
+
+@Composable
+private fun TrackBadgeChip(badge: TrackBadge, isSelected: Boolean) {
+    val text = when (badge) {
+        TrackBadge.FORCED -> stringResource(R.string.track_badge_forced)
+        TrackBadge.SDH -> stringResource(R.string.track_badge_sdh)
+        TrackBadge.DEFAULT -> stringResource(R.string.track_badge_default)
+    }
+    val container = if (isSelected) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    }
+    val contentColor = if (isSelected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+        color = contentColor,
+        modifier = Modifier
+            .clip(ShapeCache.smooth4)
+            .background(container)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }

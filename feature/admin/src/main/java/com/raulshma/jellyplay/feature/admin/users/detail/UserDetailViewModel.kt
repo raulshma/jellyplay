@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.users.detail
 
+import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.DeviceInfo
@@ -10,7 +11,9 @@ import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.admin.R
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
 @Immutable
@@ -42,6 +45,7 @@ data class UserDetailState(
 @HiltViewModel
 class UserDetailViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
+    @ApplicationContext private val context: Context,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(UserDetailState())
@@ -172,9 +176,9 @@ class UserDetailViewModel @Inject constructor(
             }
             // 3. reload
             apiClient.getManagedUser(id).onSuccess { fresh ->
-                _uiState.update { it.copy(isSaving = false, user = fresh, message = "Changes saved") }
+                _uiState.update { it.copy(isSaving = false, user = fresh, message = context.getString(R.string.admin_changes_saved)) }
             }.onFailure {
-                _uiState.update { it.copy(isSaving = false, message = "Saved — could not reload; tap refresh to verify", saveError = "Could not reload updated user") }
+                _uiState.update { it.copy(isSaving = false, message = context.getString(R.string.admin_saved_reload_failed), saveError = context.getString(R.string.admin_could_not_reload)) }
             }
         }
     }

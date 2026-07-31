@@ -982,7 +982,7 @@ fun SettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.Language,
                             title = stringResource(R.string.settings_language_subtitles),
-                            subtitle = stringResource(R.string.settings_language_subtitle, preferences.preferredAudioLanguage ?: "Default"),
+                            subtitle = stringResource(R.string.settings_language_subtitle, preferences.preferredAudioLanguage ?: stringResource(R.string.settings_lang_default)),
                             index = 0, count = 1,
                             highlighted = lastClickedSettingId == "language",
                             onClick = {
@@ -1079,6 +1079,9 @@ fun SettingsScreen(
                                 val dreamTotal = 5
                                 val slideshowIntervalTitle = stringResource(R.string.settings_slideshow_interval)
                                 val transitionStyleTitle = stringResource(R.string.settings_transition_style)
+                                val transitionCrossfadeLabel = stringResource(R.string.settings_transition_crossfade)
+                                val transitionSlideLabel = stringResource(R.string.settings_transition_slide)
+                                val transitionNoneLabel = stringResource(R.string.settings_transition_none)
                                 SettingToggleItem(
                                     icon = Tabler.Outline.Typography,
                                     title = stringResource(R.string.settings_show_title),
@@ -1149,9 +1152,9 @@ fun SettingsScreen(
                                     index = 4, count = dreamTotal,
                                     onClick = {
                                         val labels = mapOf(
-                                            DreamTransitionStyle.CROSSFADE to "Crossfade",
-                                            DreamTransitionStyle.SLIDE to "Slide",
-                                            DreamTransitionStyle.NONE to "None",
+                                            DreamTransitionStyle.CROSSFADE to transitionCrossfadeLabel,
+                                            DreamTransitionStyle.SLIDE to transitionSlideLabel,
+                                            DreamTransitionStyle.NONE to transitionNoneLabel,
                                         )
                                         activeDialog = PickerState.List(
                                             title = transitionStyleTitle,

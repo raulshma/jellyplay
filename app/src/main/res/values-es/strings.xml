@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_app_description">Abrir %1$s</string>
+    <string name="tile_paused_label">En pausa: %1$s</string>
+    <string name="tile_playing_cd">Reproduciendo</string>
+    <string name="tile_paused_cd">En pausa</string>
+
+    <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
+    <string name="press_back_again_to_exit">Pulsa atrás de nuevo para salir</string>
+
+    <string name="shortcut_continue_watching_short">Continuar</string>
+    <string name="shortcut_continue_watching_long">Seguir viendo</string>
+    <string name="shortcut_search_short">Buscar</string>
+    <string name="shortcut_search_long">Buscar en la biblioteca</string>
+    <string name="shortcut_play_music_short">Música</string>
+    <string name="shortcut_play_music_long">Reproducir música</string>
+    <string name="shortcut_downloads_short">Descargas</string>
+    <string name="shortcut_downloads_long">Abrir descargas</string>
+
+    <string name="widget_now_playing_label">Reproduciendo ahora</string>
+    <string name="widget_now_playing_description">Controla la música que estás escuchando directamente desde tu pantalla de inicio.</string>
+    <string name="widget_continue_watching_label">Seguir viendo</string>
+    <string name="widget_continue_watching_description">Vuelve a las series y películas que empezaste pero no terminaste.</string>
+    <string name="widget_nothing_playing">No hay nada reproduciéndose</string>
+    <string name="widget_continue_watching_empty">Nada que continuar todavía</string>
+    <string name="widget_continue_watching_empty_subtitle">Empieza a ver una serie y aparecerá aquí</string>
+    <string name="widget_placeholder_title">Título de la pista</string>
+    <string name="widget_placeholder_subtitle">Nombre del artista</string>
+    <string name="widget_album_art">Portada del álbum</string>
+    <string name="widget_play_pause">Reproducir o pausar</string>
+    <string name="widget_next">Pista siguiente</string>
+    <string name="widget_previous">Pista anterior</string>
+    <string name="widget_rewind">Retroceder 10 segundos</string>
+    <string name="widget_forward">Avanzar 10 segundos</string>
+    <string name="widget_seek_to">Ir a la posición</string>
+    <string name="widget_continue_watching_title">Seguir viendo</string>
+    <string name="widget_continue_watching_see_all">Ver todo</string>
+    <string name="widget_minutes_left">%1$d min restantes</string>
+    <string name="widget_progress_percent">%1$d%%</string>
+    <string name="widget_placeholder_position">—</string>
+
+    <!-- Library Recommendations widget -->
+    <string name="widget_library_recommendations_label">Recomendaciones de la biblioteca</string>
+    <string name="widget_library_recommendations_title">Recomendaciones de la biblioteca</string>
+    <string name="widget_library_recommendations_subtitle">Porque viste</string>
+    <string name="widget_library_recommendations_empty">Aún no hay recomendaciones</string>
+
+    <!-- Seerr Recommendations widget -->
+    <string name="widget_seerr_recommendations_subtitle">Tendencias esta semana</string>
+    <string name="widget_seerr_no_recommendations">Aún no hay recomendaciones</string>
+    <string name="widget_seerr_no_recommendations_subtitle">Toca actualizar o vuelve más tarde</string>
+
+    <!-- Shared -->
+    <string name="widget_refresh">Actualizar</string>
+
+    <!-- Configuration activity -->
+    <string name="widget_config_title">Elegir recomendaciones</string>
+    <string name="widget_config_save">Guardar</string>
+    <string name="widget_config_source_similar">Porque viste</string>
+    <string name="widget_config_source_similar_description">Recomendaciones personalizadas basadas en lo que viste más recientemente</string>
+    <string name="widget_config_source_latest">Lo más reciente de tu biblioteca</string>
+    <string name="widget_config_source_latest_description">Contenido recién añadido en todas tus bibliotecas</string>
+    <string name="widget_config_source_favorites">Tus favoritos</string>
+    <string name="widget_config_source_favorites_description">Elementos que has marcado como favoritos</string>
+    <string name="widget_config_source_surprise_me">Sorpréndeme</string>
+    <string name="widget_config_source_surprise_me_description">Una selección aleatoria de tu biblioteca</string>
+    <string name="widget_config_source_trending">Tendencias esta semana</string>
+    <string name="widget_config_source_trending_description">De lo que todos hablan</string>
+    <string name="widget_config_source_popular_movies">Películas populares</string>
+    <string name="widget_config_source_popular_movies_description">Las películas mejor valoradas ahora mismo</string>
+    <string name="widget_config_source_popular_tv">Series populares</string>
+    <string name="widget_config_source_popular_tv_description">Las series mejor valoradas ahora mismo</string>
+    <string name="widget_config_source_upcoming_movies">Próximos estrenos de cine</string>
+    <string name="widget_config_source_upcoming_movies_description">Películas que se estrenan pronto</string>
+    <string name="widget_config_source_upcoming_tv">Próximos estrenos de series</string>
+    <string name="widget_config_source_upcoming_tv_description">Series que se estrenan pronto</string>
+
+    <!-- In-app self-update sheet -->
+    <string name="update_checking">Buscando actualizaciones\u2026</string>
+    <string name="update_up_to_date_title">Estás actualizado</string>
+    <string name="update_view_notes">Ver notas de la versión</string>
+    <string name="update_hide_notes">Ocultar notas de la versión</string>
+    <string name="update_available_title">Actualización disponible — v%1$s</string>
+    <string name="update_no_notes">No se proporcionaron notas de la versión.</string>
+    <string name="update_no_matching_apk">No hay ningún APK compatible</string>
+    <string name="update_download">Descargar</string>
+    <string name="update_later">Más tarde</string>
+    <string name="update_downloading">Descargando actualización\u2026</string>
+    <string name="update_cancel">Cancelar</string>
+    <string name="update_ready_title">Listo para instalar — v%1$s</string>
+    <string name="update_ready_body">La actualización se ha descargado. Toca Instalar para continuar.</string>
+    <string name="update_install">Instalar</string>
+    <string name="update_failed_title">Error en la actualización</string>
+    <string name="update_close">Cerrar</string>
+
+    <!-- Shared media transport (content descriptions & labels) -->
+    <string name="media_play">Reproducir</string>
+    <string name="media_pause">Pausar</string>
+    <string name="media_next">Siguiente</string>
+    <string name="media_previous">Anterior</string>
+    <string name="media_stop">Detener</string>
+    <string name="media_close">Cerrar</string>
+    <string name="media_disconnect">Desconectar</string>
+    <string name="media_rewind_seconds">Rebobinar 10 segundos</string>
+    <string name="media_forward_seconds">Avanzar 10 segundos</string>
+
+    <!-- Play On companion screen -->
+    <string name="cast_title">Transmitiendo</string>
+    <string name="cast_title_to">Transmitiendo a %1$s</string>
+    <string name="cast_open_companion">Abrir panel</string>
+    <string name="cast_back_seconds">Retroceder 10 segundos</string>
+    <string name="cast_forward_seconds">Avanzar 30 segundos</string>
+
+    <!-- Floating player overlay -->
+    <string name="floating_player_close">Cerrar reproductor flotante</string>
+
+    <!-- Floating player foreground notification -->
+    <string name="floating_player_channel_name">Reproductor flotante</string>
+    <string name="floating_player_channel_desc">Superposición de reproductor multimedia flotante</string>
+    <string name="floating_player_notification_text">Los controles multimedia flotan en la pantalla</string>
+
+    <!-- Lock screen authentication -->
+    <string name="auth_title_biometric">Autenticar</string>
+    <string name="auth_title_pin">Introducir PIN</string>
+    <string name="auth_subtitle">Desbloquear JellyPlay</string>
+    <string name="pin_incorrect">PIN incorrecto</string>
+    <string name="pin_lockout_now">Demasiados intentos. Inténtalo de nuevo.</string>
+    <string name="pin_lockout_seconds">Demasiados intentos. Inténtalo de nuevo en %1$ds.</string>
+    <string name="pin_lockout_minutes">Demasiados intentos. Inténtalo de nuevo en %1$dm.</string>
+    <string name="pin_lockout_hours">Demasiados intentos. Inténtalo de nuevo en %1$dh.</string>
+    <string name="pin_lockout_hours_minutes">Demasiados intentos. Inténtalo de nuevo en %1$dh %2$dm.</string>
+
+    <!-- Picture-in-picture actions -->
+    <string name="pip_rewind">Rebobinar</string>
+    <string name="pip_forward">Avanzar</string>
+    <string name="pip_next">Siguiente</string>
+
+    <!-- TV navigation drawer -->
+    <string name="nav_now_playing">Reproduciendo ahora</string>
+    <string name="nav_settings">Ajustes</string>
+
+    <!-- Play On device sheet -->
+    <string name="play_on_title">Reproducir en</string>
+    <string name="play_on_no_clients">No se encontraron clientes Jellyfin. Abre JellyPlay o Jellyfin en otro dispositivo y aparecerá aquí.</string>
+    <string name="play_on_jellyfin_session">Sesión de Jellyfin</string>
+</resources>

@@ -121,6 +121,7 @@ class UserPreferencesStore @Inject constructor(
         val PREFERRED_AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
         val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
         val VIDEO_EFFECTS_SELECTIONS = stringPreferencesKey("video_effects_selections")
+        val SUBTITLE_DELAY_BY_ITEM = stringPreferencesKey("subtitle_delay_by_item")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val CONTRAST_LEVEL = stringPreferencesKey("contrast_level")
         val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
@@ -178,6 +179,7 @@ class UserPreferencesStore @Inject constructor(
         val EQUALIZER_ENABLED = booleanPreferencesKey("equalizer_enabled")
         val AUDIO_PASSTHROUGH = booleanPreferencesKey("audio_passthrough")
         val FRAME_RATE_MATCHING = booleanPreferencesKey("frame_rate_matching")
+        val REFRESH_RATE_MODE = stringPreferencesKey("refresh_rate_mode")
         val NIGHT_MODE_ENABLED = booleanPreferencesKey("night_mode_enabled")
         val VIDEO_GESTURES_ENABLED = booleanPreferencesKey("video_gestures_enabled")
         val VIDEO_PASS_OUT_PROTECTION_HOURS = intPreferencesKey("video_pass_out_protection_hours")
@@ -210,6 +212,7 @@ class UserPreferencesStore @Inject constructor(
         val VIRTUALIZER_ENABLED = booleanPreferencesKey("virtualizer_enabled")
         val AUTO_EQ_BY_GENRE = booleanPreferencesKey("auto_eq_by_genre")
         val HOME_HERO_ENABLED = booleanPreferencesKey("home_hero_enabled")
+        val HOME_BACKDROP_ENABLED = booleanPreferencesKey("home_backdrop_enabled")
         val NAV_BAR_SHOW_LABELS = booleanPreferencesKey("nav_bar_show_labels")
         val HIDE_BOTTOM_NAV_ON_SCROLL = booleanPreferencesKey("hide_bottom_nav_on_scroll")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
@@ -269,6 +272,7 @@ class UserPreferencesStore @Inject constructor(
         val DEFAULT_CASTING_STRATEGY = stringPreferencesKey("default_casting_strategy")
         val BACKGROUND_CASTING_ENABLED = booleanPreferencesKey("background_casting_enabled")
         val PREFERRED_RENDERER = stringPreferencesKey("preferred_renderer")
+        val WATCH_LATER_PLAYLIST_ID = stringPreferencesKey("watch_later_playlist_id")
         val DVR_PRE_PADDING_MINUTES = intPreferencesKey("dvr_pre_padding_minutes")
         val DVR_POST_PADDING_MINUTES = intPreferencesKey("dvr_post_padding_minutes")
         val DVR_RECORDING_QUALITY = stringPreferencesKey("dvr_recording_quality")
@@ -342,6 +346,8 @@ class UserPreferencesStore @Inject constructor(
         val HIDDEN_NAV_ITEMS = stringPreferencesKey("hidden_nav_items")
         val NAV_ITEM_ORDER = stringPreferencesKey("nav_item_order")
         val SELF_UPDATE_CHECK_ENABLED = booleanPreferencesKey("self_update_check_enabled")
+        val DISMISSED_UPDATE_VERSION = stringPreferencesKey("dismissed_update_version")
+        val DISMISSED_UPDATE_AT_MS = longPreferencesKey("dismissed_update_at_ms")
         val PIN_FAILED_ATTEMPTS = intPreferencesKey("pin_failed_attempts")
         val PIN_LOCKOUT_UNTIL_MS = longPreferencesKey("pin_lockout_until_ms")
         val HIDE_EPISODE_THUMBNAILS = booleanPreferencesKey("hide_episode_thumbnails")
@@ -385,7 +391,7 @@ class UserPreferencesStore @Inject constructor(
                 "video_show_playback_metadata", "audio_normalization_enabled",
                 "channel_mix_enabled", "audio_gapless_enabled", "sleep_timer_end_of_episode",
                 "dream_ken_burns_enabled", "dream_show_title", "bass_boost_enabled",
-                "virtualizer_enabled", "auto_eq_by_genre", "home_hero_enabled",
+                "virtualizer_enabled", "auto_eq_by_genre", "home_hero_enabled", "home_backdrop_enabled",
                 "nav_bar_show_labels", "onboarding_completed", "performance_mode",
                 "newsletter_enabled", "wifi_only_downloads", "monochrome_mode",
             )
@@ -636,6 +642,7 @@ class UserPreferencesStore @Inject constructor(
     private var cachedLibraryHomeSectionOverrides: ParsedCache<Map<String, Set<HomeSectionType>>> = ParsedCache(null, emptyMap())
     private var cachedMediaStreamSelections: ParsedCache<Map<String, MediaStreamSelection>> = ParsedCache(null, emptyMap())
     private var cachedVideoEffectsByItem: ParsedCache<Map<String, VideoEffectsConfig>> = ParsedCache(null, emptyMap())
+    private var cachedSubtitleDelayByItem: ParsedCache<Map<String, Long>> = ParsedCache(null, emptyMap())
     private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> = ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
     private var cachedNotificationLibraryConfigs: ParsedCache<Map<String, LibraryNotificationConfig>> = ParsedCache(null, emptyMap())
     private var cachedEnabledExperimentalFeatures: ParsedCache<Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>> = ParsedCache(null, emptySet())
@@ -783,6 +790,14 @@ class UserPreferencesStore @Inject constructor(
                 .also { cachedVideoEffectsByItem = ParsedCache(videoEffectsByItemRaw, it) }
         } else cachedVideoEffectsByItem.value
 
+        val subtitleDelayByItemRaw = prefs[Keys.SUBTITLE_DELAY_BY_ITEM]
+        val subtitleDelayByItem = if (subtitleDelayByItemRaw != cachedSubtitleDelayByItem.raw) {
+            try {
+                subtitleDelayByItemRaw?.let { json.decodeFromString<Map<String, Long>>(it) } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+                .also { cachedSubtitleDelayByItem = ParsedCache(subtitleDelayByItemRaw, it) }
+        } else cachedSubtitleDelayByItem.value
+
         val segmentBehaviorsRaw = prefs[Keys.SEGMENT_BEHAVIORS]
         val segmentBehaviors = if (segmentBehaviorsRaw != cachedSegmentBehaviors.raw) {
             readSegmentBehaviors(prefs).also { cachedSegmentBehaviors = ParsedCache(segmentBehaviorsRaw, it) }
@@ -919,6 +934,7 @@ class UserPreferencesStore @Inject constructor(
             preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
             mediaStreamSelections = mediaStreamSelections,
             videoEffectsByItem = videoEffectsByItem,
+            subtitleDelayByItem = subtitleDelayByItem,
             dynamicTheming = readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
             themeMode = try {
                 ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
@@ -962,6 +978,19 @@ class UserPreferencesStore @Inject constructor(
             } catch (_: Exception) { DecoderMode.HW_PREFERRED },
             audioPassthrough = readBool(prefs, Keys.AUDIO_PASSTHROUGH, "audio_passthrough", false),
             frameRateMatching = readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false),
+            refreshRateMode = try {
+                com.raulshma.jellyplay.core.model.RefreshRateMode.valueOf(
+                    prefs[Keys.REFRESH_RATE_MODE] ?: com.raulshma.jellyplay.core.model.RefreshRateMode.OFF.name
+                )
+            } catch (_: Exception) {
+                // Legacy migration: a user with the old boolean on but no mode
+                // stored is mapped to FRAME_RATE_ONLY (the old behaviour).
+                if (readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false)) {
+                    com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_ONLY
+                } else {
+                    com.raulshma.jellyplay.core.model.RefreshRateMode.OFF
+                }
+            },
             nightModeEnabled = readBool(prefs, Keys.NIGHT_MODE_ENABLED, "night_mode_enabled", false),
             nightModeStrength = try {
                 EffectStrength.valueOf(prefs[Keys.NIGHT_MODE_STRENGTH] ?: EffectStrength.MODERATE.name)
@@ -1071,6 +1100,7 @@ class UserPreferencesStore @Inject constructor(
             navBarShowLabels = readBool(prefs, Keys.NAV_BAR_SHOW_LABELS, "nav_bar_show_labels", true),
             hideBottomNavOnScroll = readBool(prefs, Keys.HIDE_BOTTOM_NAV_ON_SCROLL, "hide_bottom_nav_on_scroll", true),
             homeHeroEnabled = readBool(prefs, Keys.HOME_HERO_ENABLED, "home_hero_enabled", true),
+            homeBackdropEnabled = readBool(prefs, Keys.HOME_BACKDROP_ENABLED, "home_backdrop_enabled", true),
             onboardingCompleted = readBool(prefs, Keys.ONBOARDING_COMPLETED, "onboarding_completed", false),
             mpvConfig = mpvConfig,
             libVlcConfig = libVlcConfig,
@@ -1192,6 +1222,9 @@ class UserPreferencesStore @Inject constructor(
             hiddenNavItems = hiddenNavItems,
             navItemOrder = navItemOrder,
             selfUpdateCheckEnabled = readBool(prefs, Keys.SELF_UPDATE_CHECK_ENABLED, "self_update_check_enabled", true),
+            dismissedUpdateVersion = prefs[Keys.DISMISSED_UPDATE_VERSION],
+            dismissedUpdateAtMs = readLong(prefs, Keys.DISMISSED_UPDATE_AT_MS, "dismissed_update_at_ms", 0L),
+            watchLaterPlaylistId = prefs[Keys.WATCH_LATER_PLAYLIST_ID],
             hideEpisodeThumbnails = readBool(prefs, Keys.HIDE_EPISODE_THUMBNAILS, "hide_episode_thumbnails", false),
             episodesDescending = readBool(prefs, Keys.EPISODES_DESCENDING, "episodes_descending", true),
             skipSpecials = readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
@@ -1376,6 +1409,24 @@ class UserPreferencesStore @Inject constructor(
         dataStore.edit { it[Keys.SELF_UPDATE_CHECK_ENABLED] = enabled }
     }
 
+    /**
+     * Records that the user dismissed the prompt for [version], stamping the
+     * current wall-clock time so the auto-check can suppress the same version
+     * for 24 hours. Pass `null` to clear a prior dismissal (e.g. on a fresh
+     * update check or after installing).
+     */
+    suspend fun setDismissedUpdate(version: String?, atMs: Long = System.currentTimeMillis()) {
+        dataStore.edit {
+            if (version == null) {
+                it.remove(Keys.DISMISSED_UPDATE_VERSION)
+                it.remove(Keys.DISMISSED_UPDATE_AT_MS)
+            } else {
+                it[Keys.DISMISSED_UPDATE_VERSION] = version
+                it[Keys.DISMISSED_UPDATE_AT_MS] = atMs
+            }
+        }
+    }
+
     suspend fun setHideEpisodeThumbnails(enabled: Boolean) {
         dataStore.edit { it[Keys.HIDE_EPISODE_THUMBNAILS] = enabled }
     }
@@ -1481,6 +1532,23 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setSubtitleStyle(style: SubtitleStyle) {
         dataStore.edit { it[Keys.SUBTITLE_STYLE] = json.encodeToString(style) }
+    }
+
+    /**
+     * Persists a per-item subtitle-sync delay (G9). A `delayMs` of 0 removes the
+     * entry so the map doesn't grow unbounded with neutral values.
+     */
+    suspend fun setSubtitleDelayForItem(itemId: String, delayMs: Long) {
+        dataStore.edit { prefs ->
+            val current = try {
+                prefs[Keys.SUBTITLE_DELAY_BY_ITEM]
+                    ?.let { json.decodeFromString<Map<String, Long>>(it) } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+            val updated = if (delayMs == 0L) current - itemId else current + (itemId to delayMs)
+            prefs[Keys.SUBTITLE_DELAY_BY_ITEM] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, Long>>(), updated,
+            )
+        }
     }
 
     suspend fun setHdrSubtitleStyleEnabled(enabled: Boolean) {
@@ -1648,6 +1716,13 @@ class UserPreferencesStore @Inject constructor(
     suspend fun setPreferredRenderer(renderer: String?) {
         dataStore.edit {
             if (renderer != null) it[Keys.PREFERRED_RENDERER] = renderer else it.remove(Keys.PREFERRED_RENDERER)
+        }
+    }
+
+    suspend fun setWatchLaterPlaylistId(playlistId: String?) {
+        dataStore.edit {
+            if (playlistId != null) it[Keys.WATCH_LATER_PLAYLIST_ID] = playlistId
+            else it.remove(Keys.WATCH_LATER_PLAYLIST_ID)
         }
     }
 
@@ -1994,7 +2069,25 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setFrameRateMatching(enabled: Boolean) {
-        dataStore.edit { it[Keys.FRAME_RATE_MATCHING] = enabled }
+        // Keep the legacy boolean in sync with the new mode so both the old
+        // toggle and the new picker reflect the same state. `true` maps to the
+        // least-surprising frame-rate-only mode (the old single-resolution
+        // behaviour); the picker can then upgrade it to include resolution.
+        dataStore.edit {
+            it[Keys.FRAME_RATE_MATCHING] = enabled
+            if (enabled && it[Keys.REFRESH_RATE_MODE] == null) {
+                it[Keys.REFRESH_RATE_MODE] = com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_ONLY.name
+            } else if (!enabled) {
+                it[Keys.REFRESH_RATE_MODE] = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF.name
+            }
+        }
+    }
+
+    suspend fun setRefreshRateMode(mode: com.raulshma.jellyplay.core.model.RefreshRateMode) {
+        dataStore.edit {
+            it[Keys.REFRESH_RATE_MODE] = mode.name
+            it[Keys.FRAME_RATE_MATCHING] = mode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF
+        }
     }
 
     suspend fun setNightModeEnabled(enabled: Boolean) {
@@ -2324,6 +2417,10 @@ class UserPreferencesStore @Inject constructor(
         dataStore.edit { it[Keys.HOME_HERO_ENABLED] = enabled }
     }
 
+    suspend fun setHomeBackdropEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.HOME_BACKDROP_ENABLED] = enabled }
+    }
+
     suspend fun setOnboardingCompleted(completed: Boolean) {
         dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
     }
@@ -2438,6 +2535,10 @@ class UserPreferencesStore @Inject constructor(
                 kotlinx.serialization.serializer<Map<String, VideoEffectsConfig>>(),
                 prefs.videoEffectsByItem,
             )
+            settings[Keys.SUBTITLE_DELAY_BY_ITEM] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, Long>>(),
+                prefs.subtitleDelayByItem,
+            )
             settings[Keys.DYNAMIC_THEMING] = prefs.dynamicTheming
             settings[Keys.THEME_MODE] = prefs.themeMode.name
             settings[Keys.CONTRAST_LEVEL] = prefs.contrastLevel.name
@@ -2472,6 +2573,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.DECODER_MODE] = prefs.decoderMode.name
             settings[Keys.AUDIO_PASSTHROUGH] = prefs.audioPassthrough
             settings[Keys.FRAME_RATE_MATCHING] = prefs.frameRateMatching
+            settings[Keys.REFRESH_RATE_MODE] = prefs.refreshRateMode.name
             settings[Keys.NIGHT_MODE_ENABLED] = prefs.nightModeEnabled
             settings[Keys.NIGHT_MODE_STRENGTH] = prefs.nightModeStrength.name
             settings[Keys.HOME_MODE] = prefs.homeMode.name
@@ -2564,6 +2666,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.NAV_BAR_SHOW_LABELS] = prefs.navBarShowLabels
             settings[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = prefs.hideBottomNavOnScroll
             settings[Keys.HOME_HERO_ENABLED] = prefs.homeHeroEnabled
+            settings[Keys.HOME_BACKDROP_ENABLED] = prefs.homeBackdropEnabled
             settings[Keys.ONBOARDING_COMPLETED] = prefs.onboardingCompleted
             settings[Keys.MPV_CONFIG] = json.encodeToString(
                 kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.MpvEngineConfig>(),
@@ -2611,6 +2714,7 @@ class UserPreferencesStore @Inject constructor(
             settings[Keys.DEFAULT_CASTING_STRATEGY] = prefs.defaultCastingStrategy.name
             settings[Keys.BACKGROUND_CASTING_ENABLED] = prefs.backgroundCastingEnabled
             prefs.preferredRenderer?.let { settings[Keys.PREFERRED_RENDERER] = it }
+            prefs.watchLaterPlaylistId?.let { settings[Keys.WATCH_LATER_PLAYLIST_ID] = it }
             settings[Keys.DVR_PRE_PADDING_MINUTES] = prefs.dvrPrePaddingMinutes
             settings[Keys.DVR_POST_PADDING_MINUTES] = prefs.dvrPostPaddingMinutes
             settings[Keys.DVR_RECORDING_QUALITY] = prefs.dvrRecordingQuality
@@ -2898,7 +3002,7 @@ class UserPreferencesStore @Inject constructor(
         PreferenceResetCategory.PLAYBACK -> listOf(
             Keys.PREFERRED_PLAYER, Keys.STREAMING_QUALITY, Keys.CELLULAR_STREAMING_QUALITY,
             Keys.FORCE_DIRECT_PLAY, Keys.PLAYBACK_MODE, Keys.DECODER_MODE,
-            Keys.AUDIO_PASSTHROUGH, Keys.FRAME_RATE_MATCHING,
+            Keys.AUDIO_PASSTHROUGH, Keys.FRAME_RATE_MATCHING, Keys.REFRESH_RATE_MODE,
             Keys.VIDEO_DEFAULT_ORIENTATION, Keys.VIDEO_DEFAULT_ASPECT_RATIO,
             Keys.VIDEO_PRELOAD_BUFFER_SIZE, Keys.VIDEO_GESTURES_ENABLED,
             Keys.VIDEO_PASS_OUT_PROTECTION_HOURS, Keys.VIDEO_SKIP_BACK_ON_RESUME_MS,
@@ -2943,7 +3047,7 @@ class UserPreferencesStore @Inject constructor(
             Keys.SUBTITLES_FORCED_ONLY, Keys.SUBTITLE_PREVIEW_IN_SETTINGS,
             Keys.SUBTITLE_STYLE, Keys.HIGH_CONTRAST_SUBTITLES,
             Keys.PGS_SUBTITLE_DIRECT_PLAY, Keys.HDR_SUBTITLE_STYLE_ENABLED,
-            Keys.HDR_SUBTITLE_STYLE,
+            Keys.HDR_SUBTITLE_STYLE, Keys.SUBTITLE_DELAY_BY_ITEM,
         )
         PreferenceResetCategory.DOWNLOADS_NETWORK -> listOf(
             Keys.WIFI_ONLY_DOWNLOADS, Keys.DOWNLOAD_CONNECTIONS,
@@ -2960,7 +3064,7 @@ class UserPreferencesStore @Inject constructor(
             Keys.DOWNLOAD_SCHEDULE_END, Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY,
         )
         PreferenceResetCategory.HOME_DISCOVERY -> listOf(
-            Keys.HOME_MODE, Keys.HOME_HERO_ENABLED,
+            Keys.HOME_MODE, Keys.HOME_HERO_ENABLED, Keys.HOME_BACKDROP_ENABLED,
             Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
             Keys.HOME_LIBRARY_SECTION_OVERRIDES, Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS,
             Keys.LIBRARY_VIEW_MODE, Keys.NAV_BAR_SHOW_LABELS,
@@ -3009,7 +3113,7 @@ class UserPreferencesStore @Inject constructor(
             Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, Keys.DEFAULT_CASTING_STRATEGY,
             Keys.BACKGROUND_CASTING_ENABLED, Keys.PREFERRED_RENDERER,
             Keys.DVR_PRE_PADDING_MINUTES, Keys.DVR_POST_PADDING_MINUTES,
-            Keys.DVR_RECORDING_QUALITY,
+            Keys.DVR_RECORDING_QUALITY, Keys.LIVE_STREAM_OPTION,
         )
         PreferenceResetCategory.PLAYER_ENGINES -> listOf(
             Keys.MPV_CONFIG, Keys.LIBVLC_CONFIG, Keys.EXO_CONFIG,

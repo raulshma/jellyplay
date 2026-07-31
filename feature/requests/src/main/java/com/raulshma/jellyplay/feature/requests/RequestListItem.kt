@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.feature.requests.R
 import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.OffsetDateTime
@@ -69,21 +71,22 @@ fun RequestListItem(
 
     val effectiveMediaStatus = if (request.is4k) request.media.status4k else request.media.status
     val mediaStatus = remember(effectiveMediaStatus) { SeerrMediaStatus.fromValue(effectiveMediaStatus) }
-    val displayTitle = mediaInfo?.title ?: "TMDB ${request.media.tmdbId}"
+    val displayTitle = mediaInfo?.title ?: stringResource(R.string.requests_fallback_title, request.media.tmdbId)
 
-    val (statusLabel, statusColor) = when {
-        requestStatus == SeerrRequestStatus.DECLINED -> "Declined" to StatusColors.error
-        requestStatus == SeerrRequestStatus.FAILED -> "Failed" to StatusColors.error
-        requestStatus == SeerrRequestStatus.PENDING && mediaStatus == SeerrMediaStatus.DELETED -> "Pending" to StatusColors.pending
+    val (statusLabelRes, statusColor) = when {
+        requestStatus == SeerrRequestStatus.DECLINED -> R.string.requests_status_declined to StatusColors.error
+        requestStatus == SeerrRequestStatus.FAILED -> R.string.requests_status_failed to StatusColors.error
+        requestStatus == SeerrRequestStatus.PENDING && mediaStatus == SeerrMediaStatus.DELETED -> R.string.requests_status_pending to StatusColors.pending
         else -> when (mediaStatus) {
-            SeerrMediaStatus.AVAILABLE -> "Available" to StatusColors.available
-            SeerrMediaStatus.PROCESSING -> "Processing" to StatusColors.info
-            SeerrMediaStatus.PARTIALLY_AVAILABLE -> "Partially Available" to StatusColors.pendingLight
-            SeerrMediaStatus.PENDING -> "Pending" to StatusColors.pending
-            SeerrMediaStatus.DELETED -> "Deleted" to StatusColors.error
-            SeerrMediaStatus.UNKNOWN -> "Unknown" to colorScheme.onSurfaceVariant
+            SeerrMediaStatus.AVAILABLE -> R.string.requests_status_available to StatusColors.available
+            SeerrMediaStatus.PROCESSING -> R.string.requests_status_processing to StatusColors.info
+            SeerrMediaStatus.PARTIALLY_AVAILABLE -> R.string.requests_status_partially_available to StatusColors.pendingLight
+            SeerrMediaStatus.PENDING -> R.string.requests_status_pending to StatusColors.pending
+            SeerrMediaStatus.DELETED -> R.string.requests_status_deleted to StatusColors.error
+            SeerrMediaStatus.UNKNOWN -> R.string.requests_status_unknown to colorScheme.onSurfaceVariant
         }
     }
+    val statusLabel = stringResource(statusLabelRes)
 
     Surface(
         modifier = Modifier
@@ -180,24 +183,27 @@ fun RequestListItem(
                     )
                 }
 
-                val metadataText = remember(request) {
+                val metadataSeparator = " · "
+                val modifiedPrefix = stringResource(R.string.requests_metadata_modified, "").trim()
+                val relativeTimeFormats = rememberRelativeTimeFormats()
+                val metadataText = remember(request, modifiedPrefix, relativeTimeFormats) {
                     buildString {
                         append(request.requestedBy.username ?: request.requestedBy.email)
-                        val requestedAgo = formatRelativeTime(request.createdAt)
+                        val requestedAgo = formatRelativeTime(request.createdAt, relativeTimeFormats)
                         if (requestedAgo != null) {
-                            append(" · ")
+                            append(metadataSeparator)
                             append(requestedAgo)
                         }
                         if (request.modifiedBy != null && request.updatedAt != request.createdAt) {
-                            val modifiedAgo = formatRelativeTime(request.updatedAt)
+                            val modifiedAgo = formatRelativeTime(request.updatedAt, relativeTimeFormats)
                             if (modifiedAgo != null) {
-                                append(" · modified ")
-                                append(modifiedAgo)
+                                append(metadataSeparator)
+                                append(if (modifiedPrefix.isEmpty()) modifiedAgo else "$modifiedPrefix $modifiedAgo")
                             }
                         }
                         val profileName = request.profileName
                         if (profileName != null) {
-                            append(" · ")
+                            append(metadataSeparator)
                             append(profileName)
                         }
                     }
@@ -226,7 +232,7 @@ fun RequestListItem(
                                     .height(28.dp)
                                     .focusIndicator(),
                             ) {
-                                Text("Retry", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.requests_action_retry), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         requestStatus == SeerrRequestStatus.PENDING -> {
@@ -238,7 +244,7 @@ fun RequestListItem(
                                     .height(28.dp)
                                     .focusIndicator(),
                             ) {
-                                Text("Approve", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.requests_action_approve), style = MaterialTheme.typography.labelSmall)
                             }
                             FilledTonalButton(
                                 onClick = { pendingApproval = SeerrRequestStatus.DECLINED },
@@ -252,7 +258,7 @@ fun RequestListItem(
                                     contentColor = colorScheme.onErrorContainer,
                                 ),
                             ) {
-                                Text("Decline", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.requests_action_decline), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         else -> {
@@ -275,7 +281,10 @@ fun RequestListItem(
                                     contentColor = colorScheme.onErrorContainer,
                                 ),
                             ) {
-                                Text(if (isConfirmingDelete) "Sure?" else "Delete", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    stringResource(if (isConfirmingDelete) R.string.requests_action_delete_confirm else R.string.requests_action_delete),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
                             }
                         }
                     }
@@ -287,14 +296,10 @@ fun RequestListItem(
     pendingApproval?.let { approval ->
         val isApprove = approval == SeerrRequestStatus.APPROVED
         com.raulshma.jellyplay.core.ui.components.ConfirmDialog(
-            title = if (isApprove) "Approve request?" else "Decline request?",
-            message = if (isApprove) {
-                "Approve this request? This can't be undone."
-            } else {
-                "Decline this request? The requester will be notified and this can't be undone."
-            },
-            confirmText = if (isApprove) "Approve" else "Decline",
-            dismissText = "Cancel",
+            title = stringResource(if (isApprove) R.string.requests_dialog_approve_title else R.string.requests_dialog_decline_title),
+            message = stringResource(if (isApprove) R.string.requests_dialog_approve_message else R.string.requests_dialog_decline_message),
+            confirmText = stringResource(if (isApprove) R.string.requests_action_approve else R.string.requests_action_decline),
+            dismissText = stringResource(R.string.requests_action_cancel),
             isDestructive = !isApprove,
             onConfirm = {
                 if (isApprove) onApprove() else onDecline()
@@ -304,18 +309,43 @@ fun RequestListItem(
     }
 }
 
-private fun formatRelativeTime(dateStr: String): String? {
+/**
+ * Locale-aware relative-time formats, resolved once per recomposition via
+ * [androidx.compose.ui.res.stringResource] and threaded into [formatRelativeTime].
+ */
+private class RelativeTimeFormats(
+    val justNow: String,
+    val minutesAgo: String,
+    val hoursAgo: String,
+    val daysAgo: String,
+    val monthsAgo: String,
+    val yearsAgo: String,
+)
+
+@Composable
+private fun rememberRelativeTimeFormats(): RelativeTimeFormats {
+    return RelativeTimeFormats(
+        justNow = stringResource(R.string.requests_time_just_now),
+        minutesAgo = stringResource(R.string.requests_time_minutes_ago),
+        hoursAgo = stringResource(R.string.requests_time_hours_ago),
+        daysAgo = stringResource(R.string.requests_time_days_ago),
+        monthsAgo = stringResource(R.string.requests_time_months_ago),
+        yearsAgo = stringResource(R.string.requests_time_years_ago),
+    )
+}
+
+private fun formatRelativeTime(dateStr: String, formats: RelativeTimeFormats): String? {
     return try {
         val date = OffsetDateTime.parse(dateStr)
         val now = OffsetDateTime.now()
         val duration = Duration.between(date, now)
         when {
-            duration.toMinutes() < 1 -> "just now"
-            duration.toMinutes() < 60 -> "${duration.toMinutes()}m ago"
-            duration.toHours() < 24 -> "${duration.toHours()}h ago"
-            duration.toDays() < 30 -> "${duration.toDays()}d ago"
-            duration.toDays() < 365 -> "${duration.toDays() / 30}mo ago"
-            else -> "${duration.toDays() / 365}y ago"
+            duration.toMinutes() < 1 -> formats.justNow
+            duration.toMinutes() < 60 -> formats.minutesAgo.format(duration.toMinutes())
+            duration.toHours() < 24 -> formats.hoursAgo.format(duration.toHours())
+            duration.toDays() < 30 -> formats.daysAgo.format(duration.toDays())
+            duration.toDays() < 365 -> formats.monthsAgo.format(duration.toDays() / 30)
+            else -> formats.yearsAgo.format(duration.toDays() / 365)
         }
     } catch (_: Exception) {
         null

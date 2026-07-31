@@ -41,11 +41,11 @@ class PlaybackRequestFactory(private val context: Context) {
 
         return PlaybackRequest(
             uri = hostUri,
-            title = "Subtitle Tester",
+            title = context.getString(com.raulshma.jellyplay.feature.subtitle.tester.R.string.subtitle_tester_preview_title),
             externalSubtitles = listOf(
                 SubtitleSource(
                     url = trackFile.toUri(),
-                    label = "sample",
+                    label = context.getString(com.raulshma.jellyplay.feature.subtitle.tester.R.string.subtitle_tester_track_sample),
                     language = null,
                     mimeType = mimeType,
                     id = "sample-subtitle",

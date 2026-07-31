@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.arrqueue
 
+import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
@@ -11,6 +12,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -51,6 +53,7 @@ data class ArrQueueUiState(
 @HiltViewModel
 class ArrQueueViewModel @Inject constructor(
     private val arrRepository: ArrRepository,
+    @ApplicationContext private val context: Context,
     userPreferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
@@ -196,7 +199,7 @@ class ArrQueueViewModel @Inject constructor(
             _state.value = _state.value.copy(actionInProgress = true, actionError = null, actionSuccess = null, pendingAction = null)
             arrRepository.grabQueueItem(item)
                 .onSuccess {
-                    _state.value = _state.value.copy(actionSuccess = "Grab sent for \"${item.title}\"")
+                    _state.value = _state.value.copy(actionSuccess = context.getString(R.string.arrqueue_grab_sent, item.title))
                     refresh()
                 }
                 .onFailure { _state.value = _state.value.copy(actionError = it.message) }
@@ -209,7 +212,7 @@ class ArrQueueViewModel @Inject constructor(
             _state.value = _state.value.copy(actionInProgress = true, actionError = null, actionSuccess = null, pendingAction = null)
             arrRepository.importQueueItem(item)
                 .onSuccess {
-                    _state.value = _state.value.copy(actionSuccess = "Import sent for \"${item.title}\"")
+                    _state.value = _state.value.copy(actionSuccess = context.getString(R.string.arrqueue_import_sent, item.title))
                     refresh()
                 }
                 .onFailure { _state.value = _state.value.copy(actionError = it.message) }

@@ -30,11 +30,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Refresh
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
@@ -80,7 +82,7 @@ fun PluginConfigScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "$pluginName Settings",
+        title = stringResource(R.string.admin_plugin_settings_title, pluginName),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -90,7 +92,7 @@ fun PluginConfigScreen(
                 enabled = !state.isLoading,
                 modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
             ) {
-                Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.admin_refresh))
             }
         },
     ) {
@@ -109,7 +111,7 @@ fun PluginConfigScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        state.error ?: "Failed to load configuration",
+                        state.error ?: stringResource(R.string.admin_failed_load_config),
                         color = colors.error,
                     )
                 }

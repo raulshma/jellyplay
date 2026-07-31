@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -97,7 +98,7 @@ fun NewsletterBanner(
             ) {
                 Icon(
                     imageVector = Tabler.Outline.X,
-                    contentDescription = "Dismiss",
+                    contentDescription = stringResource(R.string.home_dismiss),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(16.dp),
                 )

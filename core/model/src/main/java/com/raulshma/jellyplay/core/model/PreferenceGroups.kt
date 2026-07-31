@@ -10,6 +10,12 @@ data class VideoPlayerPreferences(
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
     val frameRateMatching: Boolean = false,
+    /**
+     * Granular refresh-rate / resolution switching mode. Supersedes
+     * [frameRateMatching] (which stays as a legacy boolean alias: `true` ≈
+     * [RefreshRateMode.FRAME_RATE_ONLY]). When both are set, this mode wins.
+     */
+    val refreshRateMode: RefreshRateMode = RefreshRateMode.OFF,
     val videoSeekDurationMs: Long = 10_000L,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoControlsTimeoutMs: Long = 5_000L,
@@ -135,6 +141,7 @@ data class AppearancePreferences(
     val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
     val navBarShowLabels: Boolean = true,
     val homeHeroEnabled: Boolean = true,
+    val homeBackdropEnabled: Boolean = true,
     val performanceMode: Boolean = false,
     val synthwaveMode: Boolean = false,
     val synthwaveAccent: String = "magenta",
@@ -150,6 +157,7 @@ val UserPreferences.videoPlayer: VideoPlayerPreferences
         decoderMode = decoderMode,
         audioPassthrough = audioPassthrough,
         frameRateMatching = frameRateMatching,
+        refreshRateMode = refreshRateMode,
         videoSeekDurationMs = videoSeekDurationMs,
         videoDefaultOrientation = videoDefaultOrientation,
         videoControlsTimeoutMs = videoControlsTimeoutMs,
@@ -269,6 +277,7 @@ val UserPreferences.appearance: AppearancePreferences
         colorStyle = colorStyle,
         navBarShowLabels = navBarShowLabels,
         homeHeroEnabled = homeHeroEnabled,
+        homeBackdropEnabled = homeBackdropEnabled,
         performanceMode = performanceMode,
         synthwaveMode = synthwaveMode,
         synthwaveAccent = synthwaveAccent,
@@ -304,6 +313,12 @@ data class PlaybackPreferences(
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
     val frameRateMatching: Boolean = false,
+    /**
+     * Granular refresh-rate / resolution switching mode. Supersedes
+     * [frameRateMatching] (which stays as a legacy boolean alias: `true` ≈
+     * [RefreshRateMode.FRAME_RATE_ONLY]). When both are set, this mode wins.
+     */
+    val refreshRateMode: RefreshRateMode = RefreshRateMode.OFF,
     val videoSeekDurationMs: Long = 10_000L,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoControlsTimeoutMs: Long = 5_000L,
@@ -362,6 +377,7 @@ val UserPreferences.playback: PlaybackPreferences
         decoderMode = decoderMode,
         audioPassthrough = audioPassthrough,
         frameRateMatching = frameRateMatching,
+        refreshRateMode = refreshRateMode,
         videoSeekDurationMs = videoSeekDurationMs,
         videoDefaultOrientation = videoDefaultOrientation,
         videoControlsTimeoutMs = videoControlsTimeoutMs,
@@ -635,6 +651,7 @@ data class AppearanceScreenPreferences(
     val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
     val navBarShowLabels: Boolean = true,
     val homeHeroEnabled: Boolean = true,
+    val homeBackdropEnabled: Boolean = true,
     val performanceMode: Boolean = false,
     val synthwaveMode: Boolean = false,
     val synthwaveAccent: String = "magenta",
@@ -698,6 +715,7 @@ val UserPreferences.appearanceScreen: AppearanceScreenPreferences
         colorStyle = colorStyle,
         navBarShowLabels = navBarShowLabels,
         homeHeroEnabled = homeHeroEnabled,
+        homeBackdropEnabled = homeBackdropEnabled,
         performanceMode = performanceMode,
         synthwaveMode = synthwaveMode,
         synthwaveAccent = synthwaveAccent,

@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.work.ForegroundInfo
+import com.raulshma.jellyplay.core.data.R
 
 /**
  * Builds and manages the playback-sync notification shown while
@@ -87,8 +88,12 @@ internal object PlaybackSyncNotificationHelper {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val title = "Syncing watch progress"
-        val text = if (pendingCount > 0) "$pendingCount item${if (pendingCount == 1) "" else "s"} queued" else "Finishing…"
+        val title = context.getString(R.string.data_sync_title)
+        val text = if (pendingCount > 0) context.resources.getQuantityString(
+            R.plurals.data_sync_items_queued,
+            pendingCount,
+            pendingCount,
+        ) else context.getString(R.string.data_sync_finishing)
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
@@ -106,10 +111,10 @@ internal object PlaybackSyncNotificationHelper {
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Watch progress sync",
+                context.getString(R.string.data_sync_channel_name),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Syncing offline watch progress to the server"
+                description = context.getString(R.string.data_sync_channel_desc)
                 setShowBadge(false)
             }
             manager.createNotificationChannel(channel)

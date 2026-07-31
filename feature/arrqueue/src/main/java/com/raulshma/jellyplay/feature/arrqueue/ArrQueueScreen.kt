@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,6 +67,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.feature.arrqueue.R
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -78,7 +80,7 @@ fun ArrQueueScreen(
     val featureEnabled by viewModel.featureEnabled.collectAsStateWithLifecycle()
 
     JellyPlayScreenScaffold(
-        title = "Activity Queue",
+        title = stringResource(R.string.arrqueue_title),
         onBack = onBack,
         actions = {
             val focusState = rememberTvFocusState()
@@ -89,7 +91,7 @@ fun ArrQueueScreen(
                     .then(focusState.focusModifier)
                     .tvFocusIndicator(focusState, CircleShape),
             ) {
-                Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.arrqueue_refresh))
             }
         },
     ) { paddingValues ->
@@ -110,7 +112,7 @@ fun ArrQueueScreen(
                 }
 
                 state.error != null && state.queue.isEmpty() -> ErrorState(
-                    message = state.error ?: "Unknown error",
+                    message = state.error ?: stringResource(R.string.arrqueue_unknown_error),
                     onRetry = { viewModel.refresh() },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -192,7 +194,7 @@ fun ArrQueueScreen(
                             modifier = Modifier.weight(1f),
                         )
                         TextButton(onClick = { viewModel.clearActionError() }) {
-                            Text("Dismiss")
+                            Text(stringResource(R.string.arrqueue_dismiss))
                         }
                     }
                 }
@@ -218,7 +220,7 @@ fun ArrQueueScreen(
                             modifier = Modifier.weight(1f),
                         )
                         TextButton(onClick = { viewModel.clearActionSuccess() }) {
-                            Text("OK")
+                            Text(stringResource(R.string.arrqueue_ok))
                         }
                     }
                 }
@@ -246,16 +248,16 @@ fun ArrQueueScreen(
                 },
             )
             is ArrQueueAction.Grab -> ConfirmActionDialog(
-                title = "Force-grab release",
-                message = "Send \"${action.item.title}\" to its download client now?",
-                confirmLabel = "Grab",
+                title = stringResource(R.string.arrqueue_grab_title),
+                message = stringResource(R.string.arrqueue_grab_message, action.item.title),
+                confirmLabel = stringResource(R.string.arrqueue_grab),
                 onDismiss = { viewModel.dismissAction() },
                 onConfirm = { viewModel.grabItem(action.item) },
             )
             is ArrQueueAction.Import -> ConfirmActionDialog(
-                title = "Force import",
-                message = "Import \"${action.item.title}\" into ${serviceName(action.item.serverKind)} now?",
-                confirmLabel = "Import",
+                title = stringResource(R.string.arrqueue_import_title),
+                message = stringResource(R.string.arrqueue_import_message, action.item.title, serviceName(action.item.serverKind)),
+                confirmLabel = stringResource(R.string.arrqueue_import),
                 onDismiss = { viewModel.dismissAction() },
                 onConfirm = { viewModel.importItem(action.item) },
             )
@@ -381,7 +383,7 @@ private fun QueueRow(
                     ) {
                         Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Delete")
+                        Text(stringResource(R.string.arrqueue_delete))
                     }
                     OutlinedButton(
                         onClick = onGrab,
@@ -391,7 +393,7 @@ private fun QueueRow(
                     ) {
                         Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Grab")
+                        Text(stringResource(R.string.arrqueue_grab))
                     }
                     OutlinedButton(
                         onClick = onImport,
@@ -401,7 +403,7 @@ private fun QueueRow(
                     ) {
                         Icon(Tabler.Outline.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Import")
+                        Text(stringResource(R.string.arrqueue_import))
                     }
                 }
             }
@@ -412,8 +414,8 @@ private fun QueueRow(
 @Composable
 private fun ServiceBadge(kind: ArrServiceKind) {
     val (label, color) = when (kind) {
-        ArrServiceKind.RADARR -> "Radarr" to StatusColors.requested
-        ArrServiceKind.SONARR -> "Sonarr" to StatusColors.pending
+        ArrServiceKind.RADARR -> stringResource(R.string.arrqueue_brand_radarr) to StatusColors.requested
+        ArrServiceKind.SONARR -> stringResource(R.string.arrqueue_brand_sonarr) to StatusColors.pending
     }
     Surface(
         shape = RoundedCornerShape(6.dp),
@@ -432,14 +434,14 @@ private fun ServiceBadge(kind: ArrServiceKind) {
 @Composable
 private fun StatusChip(status: ArrDownloadStatus) {
     val (label, color) = when (status) {
-        ArrDownloadStatus.DOWNLOADING -> "Downloading" to StatusColors.available
-        ArrDownloadStatus.QUEUED -> "Queued" to StatusColors.info
-        ArrDownloadStatus.PAUSED -> "Paused" to StatusColors.pending
-        ArrDownloadStatus.COMPLETED -> "Completed" to StatusColors.available
-        ArrDownloadStatus.IMPORTED -> "Imported" to StatusColors.success
-        ArrDownloadStatus.FAILED -> "Failed" to StatusColors.error
-        ArrDownloadStatus.WARNING -> "Warning" to StatusColors.warning
-        ArrDownloadStatus.UNKNOWN -> "Unknown" to StatusColors.debug
+        ArrDownloadStatus.DOWNLOADING -> stringResource(R.string.arrqueue_status_downloading) to StatusColors.available
+        ArrDownloadStatus.QUEUED -> stringResource(R.string.arrqueue_status_queued) to StatusColors.info
+        ArrDownloadStatus.PAUSED -> stringResource(R.string.arrqueue_status_paused) to StatusColors.pending
+        ArrDownloadStatus.COMPLETED -> stringResource(R.string.arrqueue_status_completed) to StatusColors.available
+        ArrDownloadStatus.IMPORTED -> stringResource(R.string.arrqueue_status_imported) to StatusColors.success
+        ArrDownloadStatus.FAILED -> stringResource(R.string.arrqueue_status_failed) to StatusColors.error
+        ArrDownloadStatus.WARNING -> stringResource(R.string.arrqueue_status_warning) to StatusColors.warning
+        ArrDownloadStatus.UNKNOWN -> stringResource(R.string.arrqueue_status_unknown) to StatusColors.debug
     }
     Surface(
         shape = RoundedCornerShape(6.dp),
@@ -478,13 +480,13 @@ private fun FeatureDisabledState(onOpenSettings: () -> Unit, modifier: Modifier 
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                "Direct *arr Integration is off",
+                stringResource(R.string.arrqueue_disabled_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Enable it in Settings → Integrations to view the combined download queue.",
+                stringResource(R.string.arrqueue_disabled_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -492,7 +494,7 @@ private fun FeatureDisabledState(onOpenSettings: () -> Unit, modifier: Modifier 
             Button(onClick = onOpenSettings, shape = ShapeCache.smooth12) {
                 Icon(Tabler.Outline.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Open *arr Settings")
+                Text(stringResource(R.string.arrqueue_open_settings))
             }
         }
     }
@@ -510,13 +512,13 @@ private fun EmptyQueueState(modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                "Queue is empty",
+                stringResource(R.string.arrqueue_empty_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Nothing downloading across Radarr / Sonarr.",
+                stringResource(R.string.arrqueue_empty_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -534,7 +536,7 @@ private fun ErrorState(message: String, onRetry: () -> Unit, modifier: Modifier 
                 color = MaterialTheme.colorScheme.error,
             )
             Spacer(Modifier.height(12.dp))
-            TextButton(onClick = onRetry) { Text("Retry") }
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.arrqueue_retry)) }
         }
     }
 }
@@ -559,15 +561,15 @@ private fun SelectionActionBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "$selectedCount selected",
+                stringResource(R.string.arrqueue_selected_count, selectedCount),
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onSelectAll, enabled = !actionInProgress) {
-                Icon(Tabler.Outline.Check, contentDescription = "Select all")
+                Icon(Tabler.Outline.Check, contentDescription = stringResource(R.string.arrqueue_select_all))
             }
             IconButton(onClick = onClear, enabled = !actionInProgress) {
-                Icon(Tabler.Outline.X, contentDescription = "Clear selection")
+                Icon(Tabler.Outline.X, contentDescription = stringResource(R.string.arrqueue_clear_selection))
             }
             FilledTonalButton(
                 onClick = onBulkDelete,
@@ -579,7 +581,7 @@ private fun SelectionActionBar(
             ) {
                 Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Delete")
+                Text(stringResource(R.string.arrqueue_delete))
             }
         }
     }
@@ -594,14 +596,14 @@ private fun DeleteActionDialog(
     onDismiss: () -> Unit,
     onConfirm: (blocklist: Boolean, searchAgain: Boolean) -> Unit,
 ) {
-    val title = if (bulk) "Remove selected?" else "Remove \"${item?.title}\"?"
+    val title = if (bulk) stringResource(R.string.arrqueue_remove_selected_title) else stringResource(R.string.arrqueue_remove_item_title, item?.title ?: "")
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column {
                 Text(
-                    "Choose how ${if (bulk) "these items" else "this item"} should be removed from the queue.",
+                    if (bulk) stringResource(R.string.arrqueue_remove_body_bulk) else stringResource(R.string.arrqueue_remove_body_single),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -609,21 +611,21 @@ private fun DeleteActionDialog(
         confirmButton = {
             Column(horizontalAlignment = Alignment.End) {
                 TextButton(onClick = { onConfirm(false, false) }) {
-                    Text("Remove only")
+                    Text(stringResource(R.string.arrqueue_remove_only))
                 }
                 TextButton(onClick = { onConfirm(false, true) }) {
                     Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Remove & search again")
+                    Text(stringResource(R.string.arrqueue_remove_search))
                 }
                 TextButton(onClick = { onConfirm(true, true) }) {
                     Icon(Tabler.Outline.Ban, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Blocklist & search")
+                    Text(stringResource(R.string.arrqueue_blocklist_search))
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.arrqueue_cancel)) } },
     )
 }
 
@@ -642,15 +644,16 @@ private fun ConfirmActionDialog(
         confirmButton = {
             TextButton(onClick = onConfirm) { Text(confirmLabel) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.arrqueue_cancel)) } },
     )
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+@Composable
 private fun serviceName(kind: ArrServiceKind): String = when (kind) {
-    ArrServiceKind.RADARR -> "Radarr"
-    ArrServiceKind.SONARR -> "Sonarr"
+    ArrServiceKind.RADARR -> stringResource(R.string.arrqueue_brand_radarr)
+    ArrServiceKind.SONARR -> stringResource(R.string.arrqueue_brand_sonarr)
 }
 
 private fun Long.toReadableBytes(): String = when {

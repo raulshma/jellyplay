@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
@@ -169,7 +170,7 @@ internal fun OfflineEpisodeCard(
             val epPlayFocusState = rememberTvFocusState(focusedScale = 1.15f)
             Icon(
                 Tabler.Outline.PlayerPlay,
-                contentDescription = "Play",
+                contentDescription = stringResource(R.string.downloads_action_play),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .size(48.dp)
@@ -205,7 +206,7 @@ internal fun OfflineEpisodeCard(
             ) {
                 Icon(
                     Tabler.Outline.Trash,
-                    contentDescription = "Delete episode",
+                    contentDescription = stringResource(R.string.downloads_delete_episode_cd),
                     tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.size(16.dp),
                 )
@@ -239,7 +240,7 @@ internal fun OfflineEpisodeCard(
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     Text(
-                        text = "Watched",
+                        text = stringResource(R.string.downloads_watched),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.9f),
                     )
@@ -274,7 +275,7 @@ internal fun OfflineEpisodeCard(
                     modifier = Modifier.padding(top = 4.dp),
                 ) {
                     Text(
-                        text = "$remainingTime left",
+                        text = stringResource(R.string.downloads_time_left, remainingTime),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )

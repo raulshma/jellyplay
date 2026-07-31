@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,6 +65,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.admin.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,9 +90,9 @@ fun DevicesScreen(
     if (state.showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissDeleteDialog() },
-            title = { Text("Delete Device") },
+            title = { Text(stringResource(R.string.admin_delete_device_title)) },
             text = {
-                Text("Delete \"${state.selectedDevice?.displayName()}\"? This will log out all associated sessions.")
+                Text(stringResource(R.string.admin_delete_device_body, state.selectedDevice?.displayName() ?: ""))
             },
             confirmButton = {
                 TextButton(
@@ -98,10 +100,10 @@ fun DevicesScreen(
                     colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.admin_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissDeleteDialog() }) { Text("Cancel") }
+                TextButton(onClick = { viewModel.dismissDeleteDialog() }) { Text(stringResource(R.string.admin_cancel)) }
             },
         )
     }
@@ -109,27 +111,27 @@ fun DevicesScreen(
     if (state.showEditNameDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissEditNameDialog() },
-            title = { Text("Edit Device Name") },
+            title = { Text(stringResource(R.string.admin_edit_device_name_title)) },
             text = {
                 OutlinedTextField(
                     value = state.editCustomName,
                     onValueChange = { viewModel.updateEditCustomName(it) },
-                    label = { Text("Custom Name") },
+                    label = { Text(stringResource(R.string.admin_custom_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.saveDeviceName() }) { Text("Save") }
+                TextButton(onClick = { viewModel.saveDeviceName() }) { Text(stringResource(R.string.admin_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissEditNameDialog() }) { Text("Cancel") }
+                TextButton(onClick = { viewModel.dismissEditNameDialog() }) { Text(stringResource(R.string.admin_cancel)) }
             },
         )
     }
 
     JellyPlayScreenScaffold(
-        title = "Devices",
+        title = stringResource(R.string.admin_devices_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -138,7 +140,7 @@ fun DevicesScreen(
                 onClick = { viewModel.refresh() },
                 modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
             ) {
-                Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.admin_refresh))
             }
         },
     ) {
@@ -152,13 +154,13 @@ fun DevicesScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(state.error ?: "Unknown error", color = MaterialTheme.colorScheme.error)
+                        Text(state.error ?: stringResource(R.string.admin_unknown_error), color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(16.dp))
                         val retryFocusState = rememberTvFocusState()
                         FilledTonalButton(
                             onClick = { viewModel.loadDevices() },
                             modifier = Modifier.then(retryFocusState.focusModifier).tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
-                        ) { Text("Retry") }
+                        ) { Text(stringResource(R.string.admin_retry)) }
                     }
                 }
             }
@@ -170,7 +172,7 @@ fun DevicesScreen(
                     if (state.devices.isEmpty()) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.DeviceDesktop,
-                            title = "No devices found",
+                            title = stringResource(R.string.admin_no_devices),
                         )
                     } else {
                         LazyColumn(
@@ -266,8 +268,16 @@ private fun DeviceItem(
                         Spacer(Modifier.width(6.dp))
                     }
                     if (device.dateLastActivity.isNotBlank()) {
+                        val relative = formatRelativeTime(device.dateLastActivity)
                         Text(
-                            formatRelativeTime(device.dateLastActivity),
+                            when (relative) {
+                                is RelativeTime.Formatted -> relative.value
+                                is RelativeTime.Res -> if (relative.arg != null) {
+                                    stringResource(relative.resId, relative.arg)
+                                } else {
+                                    stringResource(relative.resId)
+                                }
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -284,7 +294,7 @@ private fun DeviceItem(
             ) {
                 Icon(
                     Tabler.Outline.Edit,
-                    contentDescription = "Edit",
+                    contentDescription = stringResource(R.string.admin_edit_cd),
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -298,7 +308,7 @@ private fun DeviceItem(
             ) {
                 Icon(
                     Tabler.Outline.Trash,
-                    contentDescription = "Delete",
+                    contentDescription = stringResource(R.string.admin_delete_cd),
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.error,
                 )
@@ -309,19 +319,24 @@ private fun DeviceItem(
 
 private fun DeviceInfo.displayName(): String = customName?.ifBlank { null } ?: name
 
-private fun formatRelativeTime(dateStr: String): String {
+private sealed interface RelativeTime {
+    data class Formatted(val value: String) : RelativeTime
+    data class Res(@androidx.annotation.StringRes val resId: Int, val arg: Long? = null) : RelativeTime
+}
+
+private fun formatRelativeTime(dateStr: String): RelativeTime {
     return try {
         val date = java.time.OffsetDateTime.parse(dateStr)
         val now = java.time.OffsetDateTime.now()
         val duration = java.time.Duration.between(date, now)
         when {
-            duration.toMinutes() < 1 -> "Just now"
-            duration.toMinutes() < 60 -> "${duration.toMinutes()}m ago"
-            duration.toHours() < 24 -> "${duration.toHours()}h ago"
-            duration.toDays() < 7 -> "${duration.toDays()}d ago"
-            else -> dateStr.take(10)
+            duration.toMinutes() < 1 -> RelativeTime.Res(R.string.admin_just_now)
+            duration.toMinutes() < 60 -> RelativeTime.Res(R.string.admin_min_ago, duration.toMinutes())
+            duration.toHours() < 24 -> RelativeTime.Res(R.string.admin_hours_ago, duration.toHours())
+            duration.toDays() < 7 -> RelativeTime.Res(R.string.admin_days_ago, duration.toDays())
+            else -> RelativeTime.Formatted(dateStr.take(10))
         }
     } catch (_: Exception) {
-        dateStr.take(19)
+        RelativeTime.Formatted(dateStr.take(19))
     }
 }

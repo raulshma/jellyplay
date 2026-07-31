@@ -33,6 +33,8 @@ import com.raulshma.jellyplay.core.network.arr.ResilientRadarrApiClient
 import com.raulshma.jellyplay.core.network.arr.ResilientSonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClientImpl
+import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
+import com.raulshma.jellyplay.core.network.github.GitHubReleasesApiImpl
 import com.raulshma.jellyplay.core.network.seerr.ResilientSeerrApiClient
 import com.raulshma.jellyplay.core.network.api.ResilientTmdbApiClient
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
@@ -151,6 +153,25 @@ abstract class NetworkModule {
         private const val DOWNLOAD_CONNECT_TIMEOUT_SEC = 30L
         private const val DOWNLOAD_READ_TIMEOUT_SEC = 60L
         private const val DOWNLOAD_WRITE_TIMEOUT_SEC = 30L
+
+        /**
+         * Binds the GitHub Releases client as a [GitHubReleasesApi]. Built here
+         * rather than via `@Binds` + `@Inject constructor` because the impl
+         * takes the latest-release URL as a constructor param (overridable by
+         * unit tests via MockWebServer). Dagger does not honor Kotlin default
+         * argument values, so leaving it to `@Binds` would require a bare
+         * `String` binding in the graph — instead we supply the production
+         * constant directly here.
+         */
+        @Provides
+        @Singleton
+        fun provideGitHubReleasesApi(
+            okHttpClient: OkHttpClient,
+        ): GitHubReleasesApi =
+            GitHubReleasesApiImpl(
+                okHttpClient,
+                GitHubReleasesApiImpl.LATEST_RELEASE_URL,
+            )
 
         @Provides
         @Singleton

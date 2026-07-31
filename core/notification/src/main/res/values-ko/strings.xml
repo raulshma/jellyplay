@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Per-library new-media notification -->
+    <string name="notification_new_in_library_count">%2$s에 새 항목 %1$d개</string>
+    <string name="notification_more_count">+%1$d개 더</string>
+
+    <!-- Global new-media summary notification -->
+    <string name="notification_new_items_added">새 항목 %1$d개 추가됨</string>
+    <string name="notification_across_libraries">%1$d개 라이브러리에 걸쳐</string>
+
+    <!-- Per-item notification action buttons -->
+    <string name="notification_action_mark_seen">시청한 것으로 표시</string>
+    <string name="notification_action_open">열기</string>
+
+    <!-- Per-library notification channel -->
+    <string name="notification_channel_new_in_library">%1$s 새 항목</string>
+    <string name="notification_channel_new_in_library_desc">%1$s의 새 미디어 알림</string>
+
+    <!-- Summary notification channel -->
+    <string name="notification_channel_summary">새 미디어</string>
+    <string name="notification_channel_summary_desc">새 미디어 알림 요약</string>
+</resources>

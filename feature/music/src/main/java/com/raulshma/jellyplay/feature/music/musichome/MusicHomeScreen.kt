@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,6 +29,7 @@ import com.raulshma.jellyplay.feature.music.components.RecentlyPlayedSection
 import com.raulshma.jellyplay.feature.music.components.ArtistsSection
 import com.raulshma.jellyplay.feature.music.components.AudioPlayerScreensSection
 import com.raulshma.jellyplay.feature.music.components.NewReleasesSection
+import com.raulshma.jellyplay.feature.music.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import kotlinx.coroutines.launch
@@ -99,12 +101,12 @@ fun MusicHomeScreen(
             }
             else -> {
                 if (isLoading && sections.isEmpty()) {
-                    ScreenLoadingState(message = "Loading your music...")
+                    ScreenLoadingState(message = stringResource(R.string.music_loading_music))
                 } else if (sections.isEmpty()) {
                     ScreenEmptyState(
                         icon = Tabler.Outline.Music,
-                        title = "No music available",
-                        description = "Check your Jellyfin libraries.",
+                        title = stringResource(R.string.music_no_music_available),
+                        description = stringResource(R.string.music_check_jellyfin_libraries),
                     )
                 } else {
                     // Look up each section by typed identity (exhaustive over MusicHomeSectionType),
@@ -263,8 +265,8 @@ fun MusicHomeScreen(
                                         viewModel.shuffleAlbums(section.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
-                                    title = section.type.displayName,
-                                    subtitle = section.type.subtitle,
+                                    title = stringResource(section.type.displayNameRes),
+                                    subtitle = stringResource(section.type.subtitleRes),
                                     headerFocusRequester = topRatedAlbumsHeader,
                                     rowFocusRequester = topRatedAlbumsRow,
                                     upFocusRequester = headerUp,
@@ -321,8 +323,8 @@ fun MusicHomeScreen(
                                         viewModel.shufflePlay(section.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
-                                    title = section.type.displayName,
-                                    subtitle = section.type.subtitle,
+                                    title = stringResource(section.type.displayNameRes),
+                                    subtitle = stringResource(section.type.subtitleRes),
                                     headerFocusRequester = favoriteTracksHeader,
                                     rowFocusRequester = favoriteTracksRow,
                                     upFocusRequester = headerUp,

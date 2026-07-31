@@ -319,7 +319,7 @@ internal fun NextTrackBar(
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Up next",
+                text = stringResource(R.string.audio_up_next),
                 style = MaterialTheme.typography.labelSmall,
                 color = accentColor.copy(alpha = 0.8f),
                 maxLines = 1,

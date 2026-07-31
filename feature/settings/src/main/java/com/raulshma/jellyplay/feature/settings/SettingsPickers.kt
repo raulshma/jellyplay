@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -361,7 +363,7 @@ internal fun SettingsSliderSheet(
                 modifier = Modifier.fillMaxWidth(),
                 shape = ShapeCache.smoothPill,
             ) {
-                Text("Confirm")
+                Text(stringResource(R.string.settings_confirm))
             }
         }
     }
@@ -371,3 +373,60 @@ internal fun SettingsSliderSheet(
 // `core/ui/.../components/TvSafeSheet.kt`. The local `AdaptiveSheet` wrapper that used to forward
 // to it (and to a divergent Material3 `ModalBottomSheet` on mobile) was collapsed — callers now
 // invoke `TvSafeSheet` directly.
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SettingsTextPickerSheet(
+    title: String,
+    initialText: String,
+    helperText: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    var text by remember(initialText) { mutableStateOf(initialText) }
+
+    TvSafeSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            )
+            Spacer(Modifier.height(8.dp))
+            if (helperText.isNotEmpty()) {
+                Text(
+                    helperText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+            androidx.compose.material3.OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 200.dp),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                ),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    autoCorrectEnabled = false,
+                    capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None,
+                ),
+            )
+            Spacer(Modifier.height(20.dp))
+            androidx.compose.material3.Button(
+                onClick = { onSave(text) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = ShapeCache.smoothPill,
+            ) {
+                Text(stringResource(R.string.settings_save))
+            }
+        }
+    }
+}

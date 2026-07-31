@@ -25,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -254,7 +256,7 @@ fun SeerrRequestDialog(
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(
-                                text = "Request submitted successfully!",
+                                text = stringResource(R.string.core_ui_seerr_request_success),
                                 style = typography.bodyMedium,
                                 color = StatusColors.success,
                             )
@@ -318,7 +320,7 @@ fun SeerrRequestDialog(
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Text(
-                                    text = "Loading options…",
+                                    text = stringResource(R.string.core_ui_seerr_loading_options),
                                     style = typography.bodyMedium,
                                     color = colorScheme.onSurface.copy(alpha = 0.6f),
                                 )
@@ -335,7 +337,7 @@ fun SeerrRequestDialog(
                     if (serverNames.isNotEmpty()) {
                         item {
                             LabeledDropdown(
-                                label = if (isTv) "Destination Server (Sonarr)" else "Destination Server (Radarr)",
+                                label = if (isTv) stringResource(R.string.core_ui_seerr_destination_server_sonarr) else stringResource(R.string.core_ui_seerr_destination_server_radarr),
                                 options = serverNames,
                                 selectedIndex = selectedServerIndex,
                                 onSelected = {
@@ -350,7 +352,7 @@ fun SeerrRequestDialog(
                     if (!currentProfiles.isNullOrEmpty()) {
                         item {
                             LabeledDropdown(
-                                label = "Quality Profile",
+                                label = stringResource(R.string.core_ui_seerr_quality_profile),
                                 options = currentProfiles.map { it.name },
                                 selectedIndex = selectedProfileIndex.coerceAtMost(currentProfiles.size - 1),
                                 onSelected = { selectedProfileIndex = it },
@@ -362,7 +364,7 @@ fun SeerrRequestDialog(
                     if (!currentRootFolders.isNullOrEmpty()) {
                         item {
                             LabeledDropdown(
-                                label = "Root Folder",
+                                label = stringResource(R.string.core_ui_seerr_root_folder),
                                 options = currentRootFolders.map { it.path },
                                 selectedIndex = selectedRootFolderIndex.coerceAtMost(currentRootFolders.size - 1),
                                 onSelected = { selectedRootFolderIndex = it },
@@ -375,7 +377,7 @@ fun SeerrRequestDialog(
                         item {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(
-                                    text = "Tags",
+                                    text = stringResource(R.string.core_ui_seerr_tags),
                                     style = typography.labelLarge,
                                     color = colorScheme.onSurfaceVariant,
                                 )
@@ -445,7 +447,7 @@ fun SeerrRequestDialog(
                                     )
                                     Spacer(Modifier.width(12.dp))
                                     Text(
-                                        text = "All Seasons",
+                                        text = stringResource(R.string.core_ui_seerr_all_seasons),
                                         style = typography.labelLarge,
                                         color = colorScheme.onSurface,
                                         fontWeight = FontWeight.Medium,
@@ -490,12 +492,12 @@ fun SeerrRequestDialog(
                                     Spacer(Modifier.width(8.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = season.name.ifBlank { "Season ${season.seasonNumber}" },
+                                            text = season.name.ifBlank { stringResource(R.string.core_ui_seerr_season, season.seasonNumber) },
                                             style = typography.bodyMedium,
                                             color = colorScheme.onSurface,
                                         )
                                         Text(
-                                            text = "${season.episodeCount} episodes",
+                                            text = stringResource(R.string.core_ui_seerr_episodes, season.episodeCount),
                                             style = typography.bodySmall,
                                             color = colorScheme.onSurfaceVariant,
                                         )
@@ -511,7 +513,7 @@ fun SeerrRequestDialog(
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    text = "Loading seasons…",
+                                    text = stringResource(R.string.core_ui_seerr_loading_seasons),
                                     style = typography.bodySmall,
                                     color = colorScheme.onSurfaceVariant,
                                 )
@@ -531,7 +533,7 @@ fun SeerrRequestDialog(
                         if (requestSuccess == true || requestError != null) {
                             TextButton(onClick = onDismiss) {
                                 Text(
-                                    if (requestSuccess == true) "Done" else "Close",
+                                    if (requestSuccess == true) stringResource(R.string.core_done) else stringResource(R.string.core_close),
                                     color = colorScheme.onSurface,
                                 )
                             }
@@ -541,7 +543,7 @@ fun SeerrRequestDialog(
                                 enabled = !isRequesting,
                                 shape = ShapeCache.smooth12,
                             ) {
-                                Text("Cancel", color = colorScheme.onSurfaceVariant)
+                                Text(stringResource(R.string.core_cancel), color = colorScheme.onSurfaceVariant)
                             }
                             Spacer(Modifier.width(12.dp))
                             Button(
@@ -576,7 +578,7 @@ fun SeerrRequestDialog(
                                     Spacer(Modifier.width(8.dp))
                                 }
                                 Text(
-                                    "Request",
+                                    stringResource(R.string.core_ui_seerr_request),
                                     fontWeight = FontWeight.Bold,
                                 )
                             }
@@ -629,7 +631,7 @@ private fun LabeledDropdown(
                 onClick = { expanded = true },
                 label = {
                     Text(
-                        text = options.getOrNull(selectedIndex) ?: "Select…",
+                        text = options.getOrNull(selectedIndex) ?: stringResource(R.string.core_ui_select),
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

@@ -8,7 +8,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun DangerSection(
@@ -24,6 +26,6 @@ fun DangerSection(
         ),
         modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp),
     ) {
-        Text(if (isSelf) "Cannot delete your own account" else "Delete user")
+        Text(if (isSelf) "Cannot delete your own account" else stringResource(R.string.admin_delete))
     }
 }

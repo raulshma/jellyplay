@@ -6,14 +6,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pins the canonical default subtitle style and the resolution pivot that
- * guarantees the stored style is always authoritative across every engine.
+ * Pins the canonical default subtitle style and the resolution semantics that
+ * govern when a stored style is applied verbatim across every engine.
  *
  * Background: before this, each engine (ExoPlayer / MPV / LibVLC) hardcoded its
  * own "default" for the applyCustomStyle=false state, and those defaults
  * diverged. [SubtitleStyle.DEFAULT] is now the single value every engine reads
- * for a no-edit user, and [UserPreferences.resolvedSubtitleStyle] stamps
- * applyCustomStyle=true so no read path can land in the engine-ignored state.
+ * for a no-edit user. [UserPreferences.resolvedSubtitleStyle] honours the
+ * stored applyCustomStyle flag (the "Override Subtitle Styles" toggle) for the
+ * base style so toggling Override off survives a player reopen; the HDR and
+ * high-contrast branches force the flag on so a legacy/defaulted entry still
+ * resolves to its tuned colours rather than the engine default.
  */
 class SubtitleStyleDefaultsTest {
 
@@ -49,19 +52,29 @@ class SubtitleStyleDefaultsTest {
     }
 
     @Test
-    fun resolvedSubtitleStyle_forcesApplyCustomStyleForBaseStyle() {
-        // A preference whose stored style has applyCustomStyle=false (e.g. an old
-        // DataStore entry never re-written) still resolves authoritative.
+    fun resolvedSubtitleStyle_respectsOverrideToggleForBaseStyle() {
+        // The "Override Subtitle Styles" toggle is the stored applyCustomStyle
+        // flag. Resolution must NOT force it on — otherwise a user who toggled
+        // Override off sees it silently re-enable when the player reopens.
         val prefs = UserPreferences(
             subtitleStyle = SubtitleStyle(applyCustomStyle = false, fontSize = 30),
         )
         val resolved = prefs.resolvedSubtitleStyle()
-        assertTrue("base style must resolve with applyCustomStyle=true", resolved.applyCustomStyle)
+        assertFalse("base style must honour stored toggle (off)", resolved.applyCustomStyle)
         assertEquals(30, resolved.fontSize)
+
+        // And when the user leaves it on, it stays on.
+        val onPrefs = UserPreferences(
+            subtitleStyle = SubtitleStyle(applyCustomStyle = true, fontSize = 30),
+        )
+        assertTrue(onPrefs.resolvedSubtitleStyle().applyCustomStyle)
     }
 
     @Test
-    fun resolvedSubtitleStyle_forcesApplyCustomStyleForHdrStyle() {
+    fun resolvedSubtitleStyle_hdrBranchForcesApplyCustomStyle() {
+        // Unlike the base branch, the HDR branch always forces the flag on so a
+        // legacy DataStore HDR entry (applyCustomStyle=false by construction)
+        // still applies its tuned colours rather than the engine default.
         val prefs = UserPreferences(
             hdrSubtitleStyleEnabled = true,
             hdrSubtitleStyle = SubtitleStyle(applyCustomStyle = false, fontSize = 28),

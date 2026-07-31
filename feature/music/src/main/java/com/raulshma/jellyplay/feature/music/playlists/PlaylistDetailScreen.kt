@@ -14,10 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
@@ -41,11 +37,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.isVideoType
+import com.raulshma.jellyplay.feature.music.R
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -70,7 +69,13 @@ fun PlaylistDetailScreen(
     playlistId: String,
     playlistName: String = "",
     onBack: () -> Unit,
-    onPlayItem: (String) -> Unit,
+    /**
+     * Launched for a single (typically video) item — the caller branches on the
+     * item's [com.raulshma.jellyplay.core.model.PlaylistItem.mediaType] to route
+     * to the right player. Audio items instead go through [PlaylistDetailViewModel.playAll],
+     * which enqueues the remaining tracks into the audio queue.
+     */
+    onPlayItem: (com.raulshma.jellyplay.core.model.PlaylistItem) -> Unit,
     viewModel: PlaylistDetailViewModel = hiltViewModel(),
 ) {
     val initialPlaylistName = playlistName
@@ -88,8 +93,9 @@ fun PlaylistDetailScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
-
-    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
+    // A video playlist can't be "played all" through the audio queue, so the
+    // Play All FAB is only meaningful when the list has audio items.
+    val hasAudioItems = viewModel.items.any { !it.mediaType.isVideoType }
 
     // TV focus-on-launch: focus the first track once data arrives so D-pad input lands on content,
     // not the navigation drawer.
@@ -142,10 +148,16 @@ fun PlaylistDetailScreen(
                     ) {
                         items(viewModel.items.size, key = { viewModel.items[it].id }, contentType = { "playlistItem" }) { index ->
                             val item = viewModel.items[index]
+                            // Video items launch the video player directly (they
+                            // can't be queued by the audio playback manager);
+                            // audio items play-and-queue the rest of the list.
+                            val isVideo = item.mediaType.isVideoType
                             PlaylistTrackRow(
                                 item = item,
-                                onClick = { viewModel.playAll(index) },
-                                onAddToQueue = { viewModel.addToQueue(item) },
+                                onClick = {
+                                    if (isVideo) onPlayItem(item) else viewModel.playAll(index)
+                                },
+                                onAddToQueue = if (isVideo) null else { { viewModel.addToQueue(item) } },
                                 onRemoveFromPlaylist = { viewModel.removeFromPlaylist(item) },
                             )
                         }
@@ -153,22 +165,18 @@ fun PlaylistDetailScreen(
                 }
             }
 
-            if (viewModel.items.isNotEmpty()) {
+            if (hasAudioItems) {
                 val playAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.playAll() },
                     icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
-                    text = { Text("Play All") },
+                    text = { Text(stringResource(R.string.music_play_all)) },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .then(playAllFocusState.focusModifier)
                         .tvFocusIndicator(playAllFocusState, ShapeCache.smooth16)
-                        .padding(end = 16.dp, bottom = 64.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-                        .offset {
-                            val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                            val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                            IntOffset(x = 0, y = yOffset.toInt())
-                        },
+                        .padding(end = 16.dp)
+                        .clearFloatingNav(),
                 )
             }
         }
@@ -237,7 +245,7 @@ private fun PlaylistTrackRow(
             ) {
                 Icon(
                     Tabler.Outline.DotsVertical,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.music_more_options),
                     tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
                 )
             }
@@ -247,7 +255,7 @@ private fun PlaylistTrackRow(
                 onDismissRequest = { showMenu = false },
             ) {
                 DropdownMenuItem(
-                    text = { Text("Add to Queue") },
+                    text = { Text(stringResource(R.string.music_add_to_queue)) },
                     onClick = {
                         onAddToQueue()
                         showMenu = false
@@ -261,7 +269,7 @@ private fun PlaylistTrackRow(
                 )
                 if (onRemoveFromPlaylist != null) {
                     DropdownMenuItem(
-                        text = { Text("Remove from Playlist", color = MaterialTheme.colorScheme.error) },
+                        text = { Text(stringResource(R.string.music_remove_from_playlist), color = MaterialTheme.colorScheme.error) },
                         onClick = {
                             onRemoveFromPlaylist()
                             showMenu = false
@@ -283,7 +291,7 @@ private fun PlaylistTrackRow(
         ) {
             Icon(
                 Tabler.Outline.PlayerPlay,
-                contentDescription = "Play",
+                contentDescription = stringResource(R.string.music_play),
                 tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             )
         }

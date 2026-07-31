@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NotificationPreferences
+import com.raulshma.jellyplay.core.notification.R
 import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManager
 import com.raulshma.jellyplay.core.notification.receiver.NotificationActionReceiver
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -82,7 +83,7 @@ class NotificationDispatcher @Inject constructor(
         val summaryId = notificationIdFor(library.id, -1)
         val summary = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small)
-            .setContentTitle("${items.size} new in ${library.name}")
+            .setContentTitle(context.getString(R.string.notification_new_in_library_count, items.size, library.name))
             .setContentText(items.joinToString(", ") { it.name })
             .setStyle(
                 NotificationCompat.InboxStyle()
@@ -92,7 +93,7 @@ class NotificationDispatcher @Inject constructor(
                             builder.addLine(item.name)
                         }
                         if (items.size > 5) {
-                            builder.addLine("+${items.size - 5} more")
+                            builder.addLine(context.getString(R.string.notification_more_count, items.size - 5))
                         }
                     }
             )
@@ -109,13 +110,13 @@ class NotificationDispatcher @Inject constructor(
     ) {
         val summary = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_SUMMARY)
             .setSmallIcon(com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small)
-            .setContentTitle("$totalItems new items added")
-            .setContentText("Across ${newItemsByLibrary.size} libraries")
+            .setContentTitle(context.getString(R.string.notification_new_items_added, totalItems))
+            .setContentText(context.getString(R.string.notification_across_libraries, newItemsByLibrary.size))
             .setStyle(
                 NotificationCompat.InboxStyle()
                     .also { builder ->
                         newItemsByLibrary.forEach { (library, items) ->
-                            builder.addLine("${items.size} new in ${library.name}")
+                            builder.addLine(context.getString(R.string.notification_new_in_library_count, items.size, library.name))
                         }
                     }
             )
@@ -188,12 +189,12 @@ class NotificationDispatcher @Inject constructor(
             .setContentIntent(contentIntent)
             .addAction(
                 com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small,
-                ACTION_LABEL_MARK_SEEN,
+                context.getString(R.string.notification_action_mark_seen),
                 markSeenPendingIntent,
             )
             .addAction(
                 com.raulshma.jellyplay.core.notification.R.drawable.ic_notification_small,
-                ACTION_LABEL_OPEN,
+                context.getString(R.string.notification_action_open),
                 openPendingIntent,
             )
             .setAutoCancel(true)
@@ -206,12 +207,6 @@ class NotificationDispatcher @Inject constructor(
         private const val GROUP_GLOBAL = "new_media_global"
         private const val NOTIFICATION_ID_GLOBAL = 5000
         private const val NOTIFICATION_ID_BASE = 5001
-
-        // User-facing labels for the per-item notification action buttons. Kept as
-        // literals (matching the rest of this dispatcher, which builds all visible
-        // strings inline) rather than introducing a strings.xml in core:notification.
-        private const val ACTION_LABEL_MARK_SEEN = "Mark as seen"
-        private const val ACTION_LABEL_OPEN = "Open"
 
         // Offset applied to a notification id to derive a distinct PendingIntent
         // request code for the Open action, so it never collides with the

@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowDown
@@ -37,6 +38,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.ui.animation.horizontalFadingEdges
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.feature.requests.R
 
 @Composable
 fun RequestsFilterBar(
@@ -78,7 +80,17 @@ fun RequestsFilterBar(
                     modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
                     label = {
                         Text(
-                            filter.value.replaceFirstChar { it.uppercase() },
+                            stringResource(
+                                when (filter) {
+                                    SeerrRequestFilter.ALL -> R.string.requests_filter_all
+                                    SeerrRequestFilter.PENDING -> R.string.requests_filter_pending
+                                    SeerrRequestFilter.APPROVED -> R.string.requests_filter_approved
+                                    SeerrRequestFilter.PROCESSING -> R.string.requests_filter_processing
+                                    SeerrRequestFilter.AVAILABLE -> R.string.requests_filter_available
+                                    SeerrRequestFilter.UNAVAILABLE -> R.string.requests_filter_unavailable
+                                    SeerrRequestFilter.FAILED -> R.string.requests_filter_failed
+                                }
+                            ),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     },
@@ -103,9 +115,9 @@ fun RequestsFilterBar(
         ) {
             listOf(null, "movie", "tv").forEach { type ->
                 val label = when (type) {
-                    null -> "All"
-                    "movie" -> "Movies"
-                    else -> "TV"
+                    null -> stringResource(R.string.requests_media_all)
+                    "movie" -> stringResource(R.string.requests_media_movies)
+                    else -> stringResource(R.string.requests_media_tv)
                 }
                 val isSelected = currentMediaType == type
                 FilterChip(
@@ -135,7 +147,10 @@ fun RequestsFilterBar(
                     .background(colorScheme.outlineVariant.copy(alpha = 0.5f))
             )
 
-            listOf(SeerrRequestSort.ADDED to "Recent", SeerrRequestSort.MODIFIED to "Modified").forEach { (sort, label) ->
+            listOf(
+                SeerrRequestSort.ADDED to stringResource(R.string.requests_sort_recent),
+                SeerrRequestSort.MODIFIED to stringResource(R.string.requests_sort_modified),
+            ).forEach { (sort, label) ->
                 val isSelected = currentSort == sort
                 FilterChip(
                     selected = isSelected,
@@ -162,7 +177,7 @@ fun RequestsFilterBar(
             ) {
                 Icon(
                     if (currentSortDirection == "desc") Tabler.Outline.ArrowDown else Tabler.Outline.ArrowUp,
-                    contentDescription = "Sort direction",
+                    contentDescription = stringResource(R.string.requests_cd_sort_direction),
                     modifier = Modifier.size(16.dp),
                     tint = colorScheme.onSurfaceVariant,
                 )
@@ -185,7 +200,7 @@ fun RequestsFilterBar(
                         .padding(horizontal = 4.dp),
                 ) {
                     Text(
-                        "Mine",
+                        stringResource(R.string.requests_filter_mine),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (showMyRequestsOnly) colorScheme.primary else colorScheme.onSurfaceVariant,
                     )

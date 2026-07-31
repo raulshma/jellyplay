@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.feature.settings.R
 fun AboutScreen(
     onBack: () -> Unit,
     onLicensesClick: () -> Unit,
+    onCheckForUpdates: () -> Unit,
     viewModel: AboutViewModel = hiltViewModel(),
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -268,27 +269,15 @@ fun AboutScreen(
                 if (viewModel.selfUpdateCheckEnabled) {
                     SettingListItem(
                         icon = Tabler.Outline.Refresh,
-                        title = when {
-                            viewModel.isCheckingUpdate -> stringResource(R.string.settings_checking_for_updates)
-                            viewModel.updateInfo?.isUpdateAvailable == true ->
-                                stringResource(R.string.settings_update_available, viewModel.updateInfo!!.latestVersion)
-                            viewModel.updateInfo != null -> stringResource(R.string.settings_up_to_date, viewModel.updateInfo!!.latestVersion)
-                            else -> stringResource(R.string.settings_check_for_updates)
-                        },
+                        title = stringResource(R.string.settings_check_for_updates),
                         subtitle = "",
                         onClick = {
-                            val info = viewModel.updateInfo
-                            if (info?.isUpdateAvailable == true && info.downloadUrl.isNotBlank()) {
-                                try {
-                                    val intent = android.content.Intent(
-                                        android.content.Intent.ACTION_VIEW,
-                                        android.net.Uri.parse(info.downloadUrl),
-                                    )
-                                    context.startActivity(intent)
-                                } catch (_: Exception) {}
-                            } else if (!viewModel.isCheckingUpdate) {
-                                viewModel.checkForUpdate()
-                            }
+                            // Result (update available or "up to date" with
+                            // release notes) is shown in the app-wide update
+                            // sheet driven by MainViewModel, not inline here —
+                            // avoids the stale "(v)" status that drifted from a
+                            // local copy of the version string.
+                            onCheckForUpdates()
                         },
                     )
                 }

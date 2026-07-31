@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="insights_title_watch_progress">Avanzamento riproduzione</string>
+    <string name="insights_cd_share">Condividi</string>
+    <string name="insights_cd_configure_heatmap">Configura mappa di calore</string>
+    <string name="insights_filter_type">Tipo di filtro</string>
+    <string name="insights_select_year">Seleziona anno</string>
+    <string name="insights_loading">Caricamento…</string>
+    <string name="insights_plugin_missing_message">Installa il plugin Playback Reporting sul tuo server Jellyfin per dati dettagliati della mappa di calore. Vengono mostrate le attività di base dalla cronologia di riproduzione.</string>
+    <string name="insights_no_activity_for_year">Nessuna attività di riproduzione registrata per %1$d. Riproduci qualcosa per iniziare a riempire il tuo anno.</string>
+    <string name="insights_activity_grid">Griglia attività</string>
+    <string name="insights_cd_previous_year">Anno precedente</string>
+    <string name="insights_cd_next_year">Anno successivo</string>
+    <string name="insights_stat_current_streak">Serie attuale</string>
+    <string name="insights_stat_longest_streak">Serie più lunga</string>
+    <string name="insights_stat_active_days">Giorni attivi</string>
+    <string name="insights_days_format">%1$d giorni</string>
+    <string name="insights_day_sun">Dom</string>
+    <string name="insights_day_tue">Mar</string>
+    <string name="insights_day_thu">Gio</string>
+    <string name="insights_day_sat">Sab</string>
+    <string name="insights_legend_less">Meno</string>
+    <string name="insights_legend_more">Più</string>
+    <string name="insights_duration_hm">%1$dh %2$dm</string>
+    <string name="insights_duration_m">%1$dm</string>
+    <string name="insights_duration_under_minute">&lt; 1 min</string>
+    <string name="insights_no_activity">Nessuna attività</string>
+    <string name="insights_minutes_watched">%1$d min visti</string>
+    <string name="insights_played">Riprodotto</string>
+    <string name="insights_share_chooser_title">Condividi avanzamento riproduzione</string>
+
+    <plurals name="insights_heatmap_summary">
+        <item quantity="one">Mappa di calore dell\'attività di riproduzione per %1$d. %2$d giorno attivo.</item>
+        <item quantity="other">Mappa di calore dell\'attività di riproduzione per %1$d. %2$d giorni attivi.</item>
+    </plurals>
+
+    <plurals name="insights_sessions_watched">
+        <item quantity="one">%1$d sessione &#183; %2$s visti</item>
+        <item quantity="other">%1$d sessioni &#183; %2$s visti</item>
+    </plurals>
+</resources>

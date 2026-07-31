@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,6 +68,7 @@ import com.composables.icons.tabler.outline.Power
 import com.composables.icons.tabler.outline.Volume
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.PlayOnViewModel
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
@@ -197,7 +199,7 @@ fun PlayOnCompanionScreen(
             }
 
             Text(
-                text = uiState.title.ifBlank { "Casting" },
+                text = uiState.title.ifBlank { stringResource(R.string.cast_title) },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -274,7 +276,7 @@ private fun CompanionHeader(
         ) {
             Icon(
                 imageVector = Tabler.Outline.ArrowLeft,
-                contentDescription = "Close",
+                contentDescription = stringResource(R.string.media_close),
                 tint = MaterialTheme.colorScheme.onSurface,
             )
         }
@@ -287,7 +289,7 @@ private fun CompanionHeader(
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                text = targetName?.let { "Casting to $it" } ?: "Casting",
+                text = targetName?.let { stringResource(R.string.cast_title_to, it) } ?: stringResource(R.string.cast_title),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -364,7 +366,7 @@ private fun CompanionTransportRow(
         ) {
             Icon(
                 imageVector = Tabler.Outline.PlayerTrackPrev,
-                contentDescription = "Previous",
+                contentDescription = stringResource(R.string.media_previous),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(28.dp),
             )
@@ -375,7 +377,7 @@ private fun CompanionTransportRow(
         ) {
             Icon(
                 imageVector = Tabler.Outline.PlayerSkipBack,
-                contentDescription = "Back 10 seconds",
+                contentDescription = stringResource(R.string.cast_back_seconds),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(26.dp),
             )
@@ -391,7 +393,7 @@ private fun CompanionTransportRow(
         ) {
             Icon(
                 imageVector = if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                contentDescription = if (isPlaying) "Pause" else "Play",
+                contentDescription = if (isPlaying) stringResource(R.string.media_pause) else stringResource(R.string.media_play),
                 modifier = Modifier.size(32.dp),
             )
         }
@@ -401,7 +403,7 @@ private fun CompanionTransportRow(
         ) {
             Icon(
                 imageVector = Tabler.Outline.PlayerSkipForward,
-                contentDescription = "Forward 30 seconds",
+                contentDescription = stringResource(R.string.cast_forward_seconds),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(26.dp),
             )
@@ -412,7 +414,7 @@ private fun CompanionTransportRow(
         ) {
             Icon(
                 imageVector = Tabler.Outline.PlayerTrackNext,
-                contentDescription = "Next",
+                contentDescription = stringResource(R.string.media_next),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(28.dp),
             )
@@ -479,7 +481,7 @@ private fun CompanionFooter(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Stop", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.media_stop), style = MaterialTheme.typography.labelLarge)
             }
         }
         Surface(
@@ -499,7 +501,7 @@ private fun CompanionFooter(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Disconnect", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.media_disconnect), style = MaterialTheme.typography.labelLarge)
             }
         }
     }

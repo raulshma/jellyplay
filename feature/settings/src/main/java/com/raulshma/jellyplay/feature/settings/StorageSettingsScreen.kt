@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -50,13 +51,14 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
-private fun streamingQualityLabel(quality: StreamingQuality): String = when (quality) {
-    StreamingQuality.AUTO -> "Auto (adaptive)"
-    StreamingQuality.LOW_360P -> "360p (Low)"
-    StreamingQuality.SD_480P -> "480p (SD)"
-    StreamingQuality.HD_720P -> "720p (HD)"
-    StreamingQuality.FHD_1080P -> "1080p (Full HD)"
-    StreamingQuality.UHD_4K -> "4K (Ultra HD)"
+@StringRes
+private fun streamingQualityLabelRes(quality: StreamingQuality): Int = when (quality) {
+    StreamingQuality.AUTO -> R.string.settings_streaming_quality_auto_adaptive
+    StreamingQuality.LOW_360P -> R.string.settings_quality_360p_low
+    StreamingQuality.SD_480P -> R.string.settings_quality_480p_sd
+    StreamingQuality.HD_720P -> R.string.settings_quality_720p_hd
+    StreamingQuality.FHD_1080P -> R.string.settings_quality_1080p_full_hd
+    StreamingQuality.UHD_4K -> R.string.settings_quality_4k_ultra_hd
 }
 
 private val STORAGE_CACHE_GROUP_IDS = setOf("clear_cache", "clear_image_cache", "wifi_only_downloads", "download_connections", "max_concurrent_downloads", "auto_delete_cache", "max_cache_size")
@@ -397,18 +399,19 @@ fun StorageSettingsScreen(
                     )
 
                     val cellularQualityTitle = stringResource(R.string.settings_cellular_streaming_quality)
+                    val qualityLabels = StreamingQuality.entries.associateWith { stringResource(streamingQualityLabelRes(it)) }
                     SettingListItem(
                         icon = Tabler.Outline.DeviceMobile,
                         title = cellularQualityTitle,
                         subtitle = stringResource(R.string.settings_cellular_streaming_quality_subtitle),
-                        trailingText = streamingQualityLabel(preferences.cellularStreamingQuality),
+                        trailingText = qualityLabels[preferences.cellularStreamingQuality] ?: preferences.cellularStreamingQuality.name,
                         highlighted = highlightSettingId == "cellular_streaming_quality",
                         index = networkIdx++, count = networkTotal,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = cellularQualityTitle,
                                 items = StreamingQuality.entries,
-                                label = { streamingQualityLabel(it) },
+                                label = { qualityLabels[it] ?: it.name },
                                 isSelected = { it == preferences.cellularStreamingQuality },
                                 onSelect = { viewModel.setCellularStreamingQuality(it) },
                             )
@@ -416,11 +419,12 @@ fun StorageSettingsScreen(
                     )
 
                     val downloadWarningTitle = stringResource(R.string.settings_cellular_download_size_warning)
-                    val downloadWarningLabel = if (preferences.cellularDownloadSizeWarningMb == 0) "Disabled" else "${preferences.cellularDownloadSizeWarningMb} MB"
+                    val disabledLabel = stringResource(R.string.settings_disabled)
+                    val downloadWarningLabel = if (preferences.cellularDownloadSizeWarningMb == 0) disabledLabel else "${preferences.cellularDownloadSizeWarningMb} MB"
                     SettingListItem(
                         icon = Tabler.Outline.AlertTriangle,
                         title = downloadWarningTitle,
-                        subtitle = "Warn before downloading large files on cellular",
+                        subtitle = stringResource(R.string.settings_cellular_download_warning_subtitle),
                         trailingText = downloadWarningLabel,
                         highlighted = highlightSettingId == "cellular_download_warning",
                         index = networkIdx++, count = networkTotal,
@@ -428,7 +432,7 @@ fun StorageSettingsScreen(
                             activePicker = PickerState.List(
                                 title = downloadWarningTitle,
                                 items = listOf(0, 100, 250, 500, 1000, 2000),
-                                label = { if (it == 0) "Disabled" else "$it MB" },
+                                label = { if (it == 0) disabledLabel else "$it MB" },
                                 isSelected = { it == preferences.cellularDownloadSizeWarningMb },
                                 onSelect = { viewModel.setCellularDownloadSizeWarningMb(it) },
                             )
@@ -437,23 +441,24 @@ fun StorageSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Gauge,
-                        title = "Data Saver Mode",
-                        subtitle = "Lower image resolutions, cellular cap, disable auto-downloads",
+                        title = stringResource(R.string.settings_data_saver_mode),
+                        subtitle = stringResource(R.string.settings_data_saver_mode_subtitle),
                         checked = preferences.dataSaverEnabled,
                         highlighted = highlightSettingId == "data_saver",
                         index = networkIdx++, count = networkTotal,
                         onCheckedChange = { viewModel.setDataSaverEnabled(it) },
                     )
+                    val networkTimeoutsTitle = stringResource(R.string.settings_network_timeouts)
                     SettingListItem(
                         icon = Tabler.Outline.Clock,
-                        title = "Network Timeouts",
-                        subtitle = "Connect/read/write timeout preset (restart to apply)",
+                        title = networkTimeoutsTitle,
+                        subtitle = stringResource(R.string.settings_network_timeouts_subtitle),
                         trailingText = preferences.networkTimeoutPreset.displayName.substringBefore(" ("),
                         highlighted = highlightSettingId == "network_timeout",
                         index = networkIdx++, count = networkTotal,
                         onClick = {
                             activePicker = PickerState.List(
-                                title = "Network Timeouts",
+                                title = networkTimeoutsTitle,
                                 items = com.raulshma.jellyplay.core.model.NetworkTimeoutPreset.entries,
                                 label = { it.displayName },
                                 isSelected = { it == preferences.networkTimeoutPreset },
@@ -463,8 +468,8 @@ fun StorageSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Code,
-                        title = "Verbose Network Logging",
-                        subtitle = if (preferences.verboseNetworkLogging) "Logs request headers (restart to apply)" else "Standard logging",
+                        title = stringResource(R.string.settings_verbose_logging),
+                        subtitle = if (preferences.verboseNetworkLogging) stringResource(R.string.settings_verbose_logging_on) else stringResource(R.string.settings_verbose_logging_off),
                         checked = preferences.verboseNetworkLogging,
                         highlighted = highlightSettingId == "verbose_logging",
                         index = networkIdx++, count = networkTotal,
@@ -472,8 +477,8 @@ fun StorageSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Refresh,
-                        title = "Background Sync",
-                        subtitle = if (preferences.userDataSyncEnabled) "Periodically refresh favourites / played / progress from server" else "No background user-data refresh",
+                        title = stringResource(R.string.settings_background_sync),
+                        subtitle = if (preferences.userDataSyncEnabled) stringResource(R.string.settings_background_sync_on) else stringResource(R.string.settings_background_sync_off),
                         checked = preferences.userDataSyncEnabled,
                         highlighted = highlightSettingId == "user_data_sync",
                         index = networkIdx++, count = networkTotal,
@@ -485,24 +490,25 @@ fun StorageSettingsScreen(
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Download,
-                    title = "Downloads",
-                    summary = { "Quality: ${preferences.downloadQuality.displayName}" },
+                    title = stringResource(R.string.settings_downloads),
+                    summary = { stringResource(R.string.settings_downloads_summary, preferences.downloadQuality.displayName) },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
                     val downloadTotal = 7
                     var downloadIdx = 0
 
+                    val downloadQualityTitle = stringResource(R.string.settings_download_quality)
                     SettingListItem(
                         icon = Tabler.Outline.Video,
-                        title = "Download Quality",
-                        subtitle = "Preferred video quality for downloads",
+                        title = downloadQualityTitle,
+                        subtitle = stringResource(R.string.settings_download_quality_subtitle),
                         trailingText = preferences.downloadQuality.displayName,
                         highlighted = highlightSettingId == "download_quality",
                         index = downloadIdx++, count = downloadTotal,
                         onClick = {
                             activePicker = PickerState.List(
-                                title = "Download Quality",
+                                title = downloadQualityTitle,
                                 items = com.raulshma.jellyplay.core.model.DownloadQuality.entries,
                                 label = { it.displayName },
                                 isSelected = { it == preferences.downloadQuality },
@@ -513,8 +519,8 @@ fun StorageSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Trash,
-                        title = "Smart Downloads",
-                        subtitle = "Auto-delete watched episodes (>= 95%)",
+                        title = stringResource(R.string.settings_smart_downloads),
+                        subtitle = stringResource(R.string.settings_smart_downloads_subtitle),
                         checked = preferences.smartDownloadsEnabled,
                         highlighted = highlightSettingId == "smart_downloads",
                         index = downloadIdx++, count = downloadTotal,
@@ -523,8 +529,8 @@ fun StorageSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Download,
-                        title = "Auto-Download New Episodes",
-                        subtitle = "Automatically download next episode of active series",
+                        title = stringResource(R.string.settings_auto_download_new),
+                        subtitle = stringResource(R.string.settings_auto_download_new_subtitle),
                         checked = preferences.autoDownloadNewEpisodes,
                         highlighted = highlightSettingId == "auto_download_new_episodes",
                         index = downloadIdx++, count = downloadTotal,
@@ -533,8 +539,8 @@ fun StorageSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Clock,
-                        title = "Download Schedule",
-                        subtitle = "Only download during specific hours (e.g., overnight)",
+                        title = stringResource(R.string.settings_download_schedule),
+                        subtitle = stringResource(R.string.settings_download_schedule_subtitle),
                         checked = preferences.downloadScheduleEnabled,
                         highlighted = highlightSettingId == "download_schedule",
                         index = downloadIdx++, count = downloadTotal,
@@ -542,17 +548,18 @@ fun StorageSettingsScreen(
                     )
 
                     if (preferences.downloadScheduleEnabled) {
+                        val scheduleStartTitle = stringResource(R.string.settings_schedule_start)
                         SettingListItem(
                             icon = Tabler.Outline.Sun,
-                            title = "Schedule Start",
-                            subtitle = "Hour when downloads are allowed (24h format)",
+                            title = scheduleStartTitle,
+                            subtitle = stringResource(R.string.settings_schedule_start_subtitle),
                             trailingText = "${preferences.downloadScheduleWindow.startHour}:00",
                             highlighted = highlightSettingId == "download_schedule_start",
                             index = downloadIdx++, count = downloadTotal,
                             onClick = {
                                 val current = preferences.downloadScheduleWindow
                                 activePicker = PickerState.List(
-                                    title = "Schedule Start",
+                                    title = scheduleStartTitle,
                                     items = (0..23).toList(),
                                     label = { "$it:00" },
                                     isSelected = { it == current.startHour },
@@ -561,17 +568,18 @@ fun StorageSettingsScreen(
                             }
                         )
 
+                        val scheduleEndTitle = stringResource(R.string.settings_schedule_end)
                         SettingListItem(
                             icon = Tabler.Outline.Moon,
-                            title = "Schedule End",
-                            subtitle = "Hour when downloads stop (24h format)",
+                            title = scheduleEndTitle,
+                            subtitle = stringResource(R.string.settings_schedule_end_subtitle),
                             trailingText = "${preferences.downloadScheduleWindow.endHour}:00",
                             highlighted = highlightSettingId == "download_schedule_end",
                             index = downloadIdx++, count = downloadTotal,
                             onClick = {
                                 val current = preferences.downloadScheduleWindow
                                 activePicker = PickerState.List(
-                                    title = "Schedule End",
+                                    title = scheduleEndTitle,
                                     items = (0..23).toList(),
                                     label = { "$it:00" },
                                     isSelected = { it == current.endHour },
@@ -582,8 +590,8 @@ fun StorageSettingsScreen(
 
                         SettingToggleItem(
                             icon = Tabler.Outline.Wifi,
-                            title = "Wi-Fi Only During Schedule",
-                            subtitle = "Require unmetered (Wi-Fi) network during the schedule window",
+                            title = stringResource(R.string.settings_download_schedule_wifi_only),
+                            subtitle = stringResource(R.string.settings_download_schedule_wifi_only_subtitle),
                             checked = preferences.downloadScheduleWindow.wifiOnly,
                             highlighted = highlightSettingId == "download_schedule_wifi_only",
                             index = downloadIdx++, count = downloadTotal,
@@ -594,36 +602,41 @@ fun StorageSettingsScreen(
                         )
                     }
 
+                    val unlimitedLabel = stringResource(R.string.settings_unlimited)
+                    val maxDownloadStorageTitle = stringResource(R.string.settings_max_download_storage)
                     SettingListItem(
                         icon = Tabler.Outline.Database,
-                        title = "Max Download Storage Limit",
-                        subtitle = "Restrict size of downloads directory",
-                        trailingText = if (preferences.maxDownloadStorageGb == 0) "Unlimited" else "${preferences.maxDownloadStorageGb} GB",
+                        title = maxDownloadStorageTitle,
+                        subtitle = stringResource(R.string.settings_max_download_storage_subtitle),
+                        trailingText = if (preferences.maxDownloadStorageGb == 0) unlimitedLabel else "${preferences.maxDownloadStorageGb} GB",
                         highlighted = highlightSettingId == "max_download_storage_limit",
                         index = downloadIdx++, count = downloadTotal,
                         onClick = {
                             activePicker = PickerState.List(
-                                title = "Max Download Storage Limit",
+                                title = maxDownloadStorageTitle,
                                 items = listOf(0, 5, 10, 20, 50),
-                                label = { if (it == 0) "Unlimited" else "$it GB" },
+                                label = { if (it == 0) unlimitedLabel else "$it GB" },
                                 isSelected = { it == preferences.maxDownloadStorageGb },
                                 onSelect = { viewModel.setMaxDownloadStorageGb(it) },
                             )
                         }
                     )
 
+                    val internalLabel = stringResource(R.string.settings_storage_internal)
+                    val externalLabel = stringResource(R.string.settings_storage_external)
+                    val storageLocationTitle = stringResource(R.string.settings_download_storage_location)
                     SettingListItem(
                         icon = Tabler.Outline.Folder,
-                        title = "Download Storage Location",
-                        subtitle = "Folder path for storing downloaded media",
-                        trailingText = if (preferences.downloadStorageLocation == "INTERNAL") "Internal Storage" else "External SD Card",
+                        title = storageLocationTitle,
+                        subtitle = stringResource(R.string.settings_download_storage_location_subtitle),
+                        trailingText = if (preferences.downloadStorageLocation == "INTERNAL") internalLabel else externalLabel,
                         highlighted = highlightSettingId == "download_storage_location",
                         index = downloadIdx, count = downloadTotal,
                         onClick = {
                             activePicker = PickerState.List(
-                                title = "Download Storage Location",
+                                title = storageLocationTitle,
                                 items = listOf("INTERNAL", "EXTERNAL"),
-                                label = { if (it == "INTERNAL") "Internal Storage" else "External SD Card" },
+                                label = { if (it == "INTERNAL") internalLabel else externalLabel },
                                 isSelected = { it == preferences.downloadStorageLocation },
                                 onSelect = { viewModel.setDownloadStorageLocation(it) },
                             )

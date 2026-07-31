@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="requests_title">请求</string>
+
+    <string name="requests_error_unknown">未知错误</string>
+    <string name="requests_action_retry">重试</string>
+    <string name="requests_empty_title">未找到请求</string>
+    <string name="requests_empty_subtitle">请尝试调整筛选条件</string>
+    <string name="requests_pagination_label">%1$d / %2$d</string>
+    <string name="requests_pagination_prev">上一页</string>
+    <string name="requests_pagination_next">下一页</string>
+
+    <string name="requests_filter_all">全部</string>
+    <string name="requests_filter_pending">待处理</string>
+    <string name="requests_filter_approved">已批准</string>
+    <string name="requests_filter_processing">处理中</string>
+    <string name="requests_filter_available">可用</string>
+    <string name="requests_filter_unavailable">不可用</string>
+    <string name="requests_filter_failed">失败</string>
+    <string name="requests_media_all">全部</string>
+    <string name="requests_media_movies">电影</string>
+    <string name="requests_media_tv">电视剧</string>
+    <string name="requests_sort_recent">最新</string>
+    <string name="requests_sort_modified">已修改</string>
+    <string name="requests_filter_mine">我的</string>
+    <string name="requests_cd_sort_direction">排序方向</string>
+
+    <string name="requests_status_declined">已拒绝</string>
+    <string name="requests_status_failed">失败</string>
+    <string name="requests_status_pending">待处理</string>
+    <string name="requests_status_available">可用</string>
+    <string name="requests_status_processing">处理中</string>
+    <string name="requests_status_partially_available">部分可用</string>
+    <string name="requests_status_deleted">已删除</string>
+    <string name="requests_status_unknown">未知</string>
+    <string name="requests_fallback_title">TMDB %1$d</string>
+    <string name="requests_metadata_modified">于 %1$s 修改</string>
+
+    <string name="requests_action_approve">批准</string>
+    <string name="requests_action_decline">拒绝</string>
+    <string name="requests_action_delete">删除</string>
+    <string name="requests_action_delete_confirm">确定吗？</string>
+
+    <string name="requests_dialog_approve_title">批准请求？</string>
+    <string name="requests_dialog_decline_title">拒绝请求？</string>
+    <string name="requests_dialog_approve_message">批准此请求？此操作无法撤销。</string>
+    <string name="requests_dialog_decline_message">拒绝此请求？将通知请求者，且此操作无法撤销。</string>
+    <string name="requests_action_cancel">取消</string>
+
+    <string name="requests_time_just_now">刚刚</string>
+    <string name="requests_time_minutes_ago">%1$d 分钟前</string>
+    <string name="requests_time_hours_ago">%1$d 小时前</string>
+    <string name="requests_time_days_ago">%1$d 天前</string>
+    <string name="requests_time_months_ago">%1$d 个月前</string>
+    <string name="requests_time_years_ago">%1$d 年前</string>
+
+    <string name="requests_detail_year_type">%1$d · %2$s</string>
+    <string name="requests_detail_row_request_id">请求 ID</string>
+    <string name="requests_detail_row_type">类型</string>
+    <string name="requests_detail_row_tmdb_id">TMDB ID</string>
+    <string name="requests_detail_row_requested_by">请求人</string>
+    <string name="requests_detail_row_requested">请求时间</string>
+    <string name="requests_detail_row_quality_profile">质量配置</string>
+    <string name="requests_detail_row_root_folder">根文件夹</string>
+    <string name="requests_detail_row_seasons">季</string>
+    <string name="requests_detail_row_download">下载</string>
+    <string name="requests_download_time_left">剩余 %1$s</string>
+    <string name="requests_download_in_queue">队列中</string>
+    <string name="requests_action_remove_search">移除并搜索</string>
+    <string name="requests_action_blocklist_search">加入黑名单并搜索</string>
+    <string name="requests_action_view_media_details">查看媒体详情</string>
+    <string name="requests_action_retry_request">重试请求</string>
+    <string name="requests_action_delete_request">删除请求</string>
+    <string name="requests_action_remove_from_service">从 %1$s 移除</string>
+
+    <string name="requests_arr_status_queued">队列中</string>
+    <string name="requests_arr_status_downloading">下载中</string>
+    <string name="requests_arr_status_paused">已暂停</string>
+    <string name="requests_arr_status_completed">已下载</string>
+    <string name="requests_arr_status_failed">失败</string>
+    <string name="requests_arr_status_warning">警告</string>
+    <string name="requests_arr_status_imported">已导入</string>
+    <string name="requests_arr_status_unknown">未知</string>
+
+</resources>

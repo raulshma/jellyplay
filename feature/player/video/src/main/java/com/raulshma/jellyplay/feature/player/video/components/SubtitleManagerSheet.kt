@@ -46,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,6 +56,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.feature.player.video.R
+import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadState
+import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusState
@@ -99,6 +103,11 @@ fun SubtitleManagerSheet(
     defaultLanguage: String,
     onSearch: (String) -> Unit,
     onDownloadSearched: (RemoteSubtitleInfo) -> Unit,
+    // Shared: per-subtitle-id download status (spinner / ✓-Downloaded / delayed /
+    // failed) for both Download + Search rows, and the "Use" affordance that opens
+    // the subtitle track picker once a download has surfaced.
+    downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
+    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
     // Upload tab
     isUploading: Boolean,
     onUpload: (Uri, String, String?, Boolean, Boolean) -> Unit,
@@ -138,7 +147,7 @@ fun SubtitleManagerSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                "Get Subtitles",
+                stringResource(R.string.player_video_get_subtitles),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
@@ -155,7 +164,11 @@ fun SubtitleManagerSheet(
                         onClick = { selectedTab = index },
                         text = {
                             Text(
-                                tab.label,
+                                when (tab) {
+                                    SubtitleManagerTab.DOWNLOAD -> stringResource(R.string.player_video_download)
+                                    SubtitleManagerTab.SEARCH -> stringResource(R.string.player_video_search)
+                                    SubtitleManagerTab.UPLOAD -> stringResource(R.string.player_video_upload)
+                                },
                                 fontWeight = if (selectedTab == index) FontWeight.SemiBold else FontWeight.Normal,
                             )
                         },
@@ -170,6 +183,8 @@ fun SubtitleManagerSheet(
                     isLoading = isDownloading,
                     onDownload = onDownload,
                     onLoadLocalFile = onLoadLocalFile,
+                    downloadingSubtitles = downloadingSubtitles,
+                    onUseSubtitle = onUseSubtitle,
                     isTv = isTv,
                     focusRequester = downloadFocus,
                     loadBtnFocus = loadBtnFocus,
@@ -183,6 +198,8 @@ fun SubtitleManagerSheet(
                     searchError = searchError,
                     onSearch = onSearch,
                     onDownload = onDownloadSearched,
+                    downloadingSubtitles = downloadingSubtitles,
+                    onUseSubtitle = onUseSubtitle,
                     isTv = isTv,
                     focusRequester = searchFocus,
                 )
@@ -207,6 +224,8 @@ private fun DownloadTab(
     isLoading: Boolean,
     onDownload: (RemoteSubtitleInfo) -> Unit,
     onLoadLocalFile: () -> Unit,
+    downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
+    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
     isTv: Boolean,
     focusRequester: FocusRequester,
     loadBtnFocus: TvFocusState,
@@ -227,7 +246,7 @@ private fun DownloadTab(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.size(8.dp))
-            Text("Load from device")
+            Text(stringResource(R.string.player_video_load_from_device))
         }
         Spacer(Modifier.height(8.dp))
 
@@ -239,7 +258,7 @@ private fun DownloadTab(
             )
         } else if (subtitles.isEmpty()) {
             Text(
-                "No remote subtitles available.",
+                stringResource(R.string.player_video_no_remote_subtitles),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
@@ -261,7 +280,9 @@ private fun DownloadTab(
                         subtitle = sub,
                         isLast = index == subtitles.lastIndex,
                         itemCount = subtitles.size,
+                        status = downloadingSubtitles[sub.id],
                         onDownload = { onDownload(sub) },
+                        onUse = { onUseSubtitle(sub) },
                     )
                 }
             }
@@ -274,7 +295,9 @@ private fun SubtitleDownloadItem(
     subtitle: RemoteSubtitleInfo,
     isLast: Boolean,
     itemCount: Int,
+    status: SubtitleDownloadStatus?,
     onDownload: () -> Unit,
+    onUse: () -> Unit,
 ) {
     val shape = when {
         itemCount == 1 -> ShapeCache.smooth16
@@ -282,6 +305,11 @@ private fun SubtitleDownloadItem(
         else -> ShapeCache.smooth8
     }
     val focusState = rememberTvFocusState(focusedScale = 1.02f)
+    // While a download is in flight or already done, the row itself no longer
+    // re-triggers a download — the right-side slot drives the next action
+    // (spinner while working, "Use" once done). DELAYED/FAILED let a tap retry.
+    val isDownloadActive = status?.state == SubtitleDownloadState.DOWNLOADING ||
+        status?.state == SubtitleDownloadState.DOWNLOADED
 
     Row(
         modifier = Modifier
@@ -291,14 +319,14 @@ private fun SubtitleDownloadItem(
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, shape)
-            .clickable { onDownload() }
+            .clickable(enabled = !isDownloadActive) { onDownload() }
             .padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                subtitle.name ?: subtitle.language ?: "Unknown",
+                subtitle.name ?: subtitle.language ?: stringResource(R.string.player_video_unknown),
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = FontWeight.Medium,
                 ),
@@ -308,7 +336,7 @@ private fun SubtitleDownloadItem(
             ) {
                 if (subtitle.isHashMatch) {
                     Text(
-                        "Perfect Match",
+                        stringResource(R.string.player_video_perfect_match),
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontWeight = FontWeight.SemiBold,
                         ),
@@ -347,16 +375,94 @@ private fun SubtitleDownloadItem(
                 }
             }
         }
-        subtitle.downloadCount.let { count ->
-            if (count > 0) {
-                Text(
-                    "$count",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        SubtitleDownloadStatusSlot(
+            status = status,
+            downloadCount = subtitle.downloadCount,
+            onUse = onUse,
+        )
+    }
+}
+
+/**
+ * Right-side slot of a subtitle row. Renders the download count when idle, or a
+ * status-driven affordance otherwise:
+ * - [SubtitleDownloadState.DOWNLOADING] → spinner.
+ * - [SubtitleDownloadState.DELAYED] → clock + "Taking a while…" (tap the row retries).
+ * - [SubtitleDownloadState.DOWNLOADED] → check + "Use" button (opens the track picker).
+ * - [SubtitleDownloadState.FAILED] → alert + short message (tap the row retries).
+ */
+@Composable
+private fun SubtitleDownloadStatusSlot(
+    status: SubtitleDownloadStatus?,
+    downloadCount: Int,
+    onUse: () -> Unit,
+) {
+    when (status?.state) {
+        SubtitleDownloadState.DOWNLOADING -> JellyPlayLoadingIndicator(
+            modifier = Modifier.size(18.dp),
+        )
+        SubtitleDownloadState.DELAYED -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Clock,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(R.string.player_video_taking_a_while),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        SubtitleDownloadState.DOWNLOADED -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Check,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            FilledTonalButton(
+                onClick = onUse,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 12.dp,
+                    vertical = 0.dp,
+                ),
+            ) {
+                Text(stringResource(R.string.player_video_use), style = MaterialTheme.typography.labelLarge)
             }
+        }
+        SubtitleDownloadState.FAILED -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.AlertCircle,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                stringResource(R.string.player_video_failed_tap_to_retry),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        // null (idle): show the remote download count, if any — unchanged from
+        // the pre-status-slot row.
+        null -> if (downloadCount > 0) {
+            Text(
+                "$downloadCount",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -376,6 +482,8 @@ private fun SearchTab(
     searchError: String?,
     onSearch: (String) -> Unit,
     onDownload: (RemoteSubtitleInfo) -> Unit,
+    downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
+    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
     isTv: Boolean,
     focusRequester: FocusRequester,
 ) {
@@ -403,7 +511,7 @@ private fun SearchTab(
             ) {
                 Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Search")
+                Text(stringResource(R.string.player_video_search))
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -422,7 +530,7 @@ private fun SearchTab(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "Search failed",
+                        stringResource(R.string.player_video_search_failed),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -439,7 +547,7 @@ private fun SearchTab(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "No results found",
+                    stringResource(R.string.player_video_no_results_found),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -448,7 +556,7 @@ private fun SearchTab(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "Pick a language and search to find subtitles.",
+                    stringResource(R.string.player_video_pick_language_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -466,7 +574,9 @@ private fun SearchTab(
                         subtitle = sub,
                         isLast = index == results.lastIndex,
                         itemCount = results.size,
+                        status = downloadingSubtitles[sub.id],
                         onDownload = { onDownload(sub) },
+                        onUse = { onUseSubtitle(sub) },
                     )
                 }
             }
@@ -519,7 +629,7 @@ private fun UploadTab(
         ) {
             Icon(Tabler.Outline.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text(if (selectedFile != null) "Change: $selectedFileName" else "Select File (.srt, .ass, .ssa, .vtt)")
+            Text(if (selectedFile != null) stringResource(R.string.player_video_change_file, selectedFileName) else stringResource(R.string.player_video_select_file))
         }
 
         LanguageDropdown(
@@ -527,16 +637,16 @@ private fun UploadTab(
             onLanguageChange = { selectedLanguage = it },
             cultures = cultures,
             modifier = Modifier.fillMaxWidth(),
-            label = "Language",
+            label = stringResource(R.string.player_video_language),
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = isForced, onCheckedChange = { isForced = it }, enabled = !isUploading)
-            Text("Forced subtitle")
+            Text(stringResource(R.string.player_video_forced_subtitle))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = isHearingImpaired, onCheckedChange = { isHearingImpaired = it }, enabled = !isUploading)
-            Text("Hearing impaired")
+            Text(stringResource(R.string.player_video_hearing_impaired))
         }
 
         androidx.compose.material3.Button(
@@ -549,9 +659,9 @@ private fun UploadTab(
             enabled = !isUploading && selectedFile != null && selectedLanguage.isNotBlank(),
         ) {
             if (isUploading) {
-                Text("Uploading…")
+                Text(stringResource(R.string.player_video_uploading))
             } else {
-                Text("Upload")
+                Text(stringResource(R.string.player_video_upload))
             }
         }
     }
@@ -573,7 +683,7 @@ private fun LanguageDropdown(
     onLanguageChange: (String) -> Unit,
     cultures: List<CultureInfo>,
     modifier: Modifier = Modifier,
-    label: String = "Language",
+    label: String = stringResource(R.string.player_video_language),
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(

@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +56,7 @@ import com.raulshma.jellyplay.feature.admin.dashboard.components.QuickActionsSec
 import com.raulshma.jellyplay.feature.admin.dashboard.components.RecentActivityTimeline
 import com.raulshma.jellyplay.feature.admin.dashboard.components.RunningTasksCard
 import com.raulshma.jellyplay.feature.admin.dashboard.components.ServerHeroHeader
+import com.raulshma.jellyplay.feature.admin.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,16 +92,16 @@ fun AdminDashboardScreen(
     if (showRestartDialog) {
         AlertDialog(
             onDismissRequest = { showRestartDialog = false },
-            title = { Text("Restart Server") },
-            text = { Text("Are you sure you want to restart the Jellyfin server? All active sessions will be disconnected.") },
+            title = { Text(stringResource(R.string.admin_restart_server_title)) },
+            text = { Text(stringResource(R.string.admin_restart_server_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     showRestartDialog = false
                     viewModel.restartServer()
-                }) { Text("Restart") }
+                }) { Text(stringResource(R.string.admin_restart)) }
             },
             dismissButton = {
-                TextButton(onClick = { showRestartDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showRestartDialog = false }) { Text(stringResource(R.string.admin_cancel)) }
             },
         )
     }
@@ -107,22 +109,22 @@ fun AdminDashboardScreen(
     if (showShutdownDialog) {
         AlertDialog(
             onDismissRequest = { showShutdownDialog = false },
-            title = { Text("Shutdown Server") },
-            text = { Text("Are you sure you want to shut down the Jellyfin server? It will need to be restarted manually.") },
+            title = { Text(stringResource(R.string.admin_shutdown_server_title)) },
+            text = { Text(stringResource(R.string.admin_shutdown_server_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     showShutdownDialog = false
                     viewModel.shutdownServer()
-                }) { Text("Shutdown") }
+                }) { Text(stringResource(R.string.admin_shutdown)) }
             },
             dismissButton = {
-                TextButton(onClick = { showShutdownDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showShutdownDialog = false }) { Text(stringResource(R.string.admin_cancel)) }
             },
         )
     }
 
     JellyPlayScreenScaffold(
-        title = "Dashboard",
+        title = stringResource(R.string.admin_dashboard_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -135,7 +137,7 @@ fun AdminDashboardScreen(
             ) {
                 Icon(
                     Tabler.Outline.Refresh,
-                    contentDescription = "Refresh",
+                    contentDescription = stringResource(R.string.admin_refresh),
                     modifier = Modifier.padding(12.dp).size(20.dp),
                 )
             }
@@ -147,7 +149,7 @@ fun AdminDashboardScreen(
             }
             state.error != null -> {
                 ErrorScreen(
-                    message = state.error ?: "Unknown error",
+                    message = state.error ?: stringResource(R.string.admin_unknown_error),
                     onRetry = { viewModel.loadDashboard() },
                     modifier = Modifier.fillMaxSize(),
                 )

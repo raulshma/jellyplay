@@ -64,6 +64,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -235,7 +236,7 @@ fun PhotoViewerScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = error ?: "Failed to load photo",
+                        text = error ?: stringResource(R.string.library_photo_failed_to_load),
                         color = Color.White,
                         style = MaterialTheme.typography.bodyLarge,
                     )
@@ -325,7 +326,7 @@ fun PhotoViewerScreen(
                                 OverlayIconButton(
                                     onClick = onBack,
                                 ) {
-                                    Icon(Tabler.Outline.X, contentDescription = "Close", tint = Color.White)
+                                    Icon(Tabler.Outline.X, contentDescription = stringResource(R.string.library_cd_close), tint = Color.White)
                                 }
                                 Spacer(modifier = Modifier.size(8.dp))
                                 Text(
@@ -350,7 +351,7 @@ fun PhotoViewerScreen(
                                             }
                                         },
                                     ) {
-                                        Icon(Tabler.Outline.Share, contentDescription = "Share", tint = Color.White, modifier = Modifier.size(20.dp))
+                                        Icon(Tabler.Outline.Share, contentDescription = stringResource(R.string.library_cd_share), tint = Color.White, modifier = Modifier.size(20.dp))
                                     }
 
                                     OverlayActionButton(
@@ -359,7 +360,7 @@ fun PhotoViewerScreen(
                                         if (isSaving) {
                                             com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
                                         } else {
-                                            Icon(Tabler.Outline.Download, contentDescription = "Save", tint = Color.White, modifier = Modifier.size(20.dp))
+                                            Icon(Tabler.Outline.Download, contentDescription = stringResource(R.string.library_cd_save), tint = Color.White, modifier = Modifier.size(20.dp))
                                         }
                                     }
 
@@ -368,7 +369,7 @@ fun PhotoViewerScreen(
                                     ) {
                                         Icon(
                                             if (isSlideshowActive) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                                            contentDescription = if (isSlideshowActive) "Stop slideshow" else "Start slideshow",
+                                            contentDescription = if (isSlideshowActive) stringResource(R.string.library_photo_stop_slideshow) else stringResource(R.string.library_photo_start_slideshow),
                                             tint = Color.White,
                                             modifier = Modifier.size(20.dp),
                                         )
@@ -382,7 +383,7 @@ fun PhotoViewerScreen(
                                             }
                                         },
                                     ) {
-                                        Icon(Tabler.Outline.InfoCircle, contentDescription = "Info", tint = Color.White, modifier = Modifier.size(20.dp))
+                                        Icon(Tabler.Outline.InfoCircle, contentDescription = stringResource(R.string.library_cd_info), tint = Color.White, modifier = Modifier.size(20.dp))
                                     }
 
                                     OverlayActionButton(
@@ -393,7 +394,7 @@ fun PhotoViewerScreen(
                                             }
                                         },
                                     ) {
-                                        Icon(Tabler.Outline.Adjustments, contentDescription = "Adjust", tint = Color.White, modifier = Modifier.size(20.dp))
+                                        Icon(Tabler.Outline.Adjustments, contentDescription = stringResource(R.string.library_cd_adjust), tint = Color.White, modifier = Modifier.size(20.dp))
                                     }
                                 }
                             }
@@ -412,7 +413,7 @@ fun PhotoViewerScreen(
                                     OverlayIconButton(
                                         onClick = { viewModel.navigateTo(currentIndex - 1) },
                                     ) {
-                                        Icon(Tabler.Outline.ChevronLeft, contentDescription = "Previous", tint = Color.White.copy(alpha = 0.7f))
+                                        Icon(Tabler.Outline.ChevronLeft, contentDescription = stringResource(R.string.library_cd_previous), tint = Color.White.copy(alpha = 0.7f))
                                     }
                                     Spacer(modifier = Modifier.size(12.dp))
                                 }
@@ -428,7 +429,7 @@ fun PhotoViewerScreen(
                                     OverlayIconButton(
                                         onClick = { viewModel.navigateTo(currentIndex + 1) },
                                     ) {
-                                        Icon(Tabler.Outline.ChevronRight, contentDescription = "Next", tint = Color.White.copy(alpha = 0.7f))
+                                        Icon(Tabler.Outline.ChevronRight, contentDescription = stringResource(R.string.library_cd_next), tint = Color.White.copy(alpha = 0.7f))
                                     }
                                 }
 
@@ -439,7 +440,7 @@ fun PhotoViewerScreen(
                                         shape = ShapeCache.smooth4,
                                     ) {
                                         Text(
-                                            text = "Slideshow",
+                                            text = stringResource(R.string.library_photo_slideshow),
                                             color = Color.White,
                                             style = MaterialTheme.typography.labelSmall,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -494,7 +495,7 @@ fun PhotoViewerScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    text = "Adjustments",
+                                    text = stringResource(R.string.library_photo_adjustments),
                                     color = Color.White,
                                     style = MaterialTheme.typography.titleSmall,
                                 )
@@ -505,29 +506,29 @@ fun PhotoViewerScreen(
                                     androidx.compose.material3.TextButton(
                                         onClick = { viewModel.resetAdjustments() },
                                     ) {
-                                        Text("Reset", color = MaterialTheme.colorScheme.primary)
+                                        Text(stringResource(R.string.library_reset), color = MaterialTheme.colorScheme.primary)
                                     }
                                     OverlayIconButton(
                                         onClick = { viewModel.hideAdjustments() }
                                     ) {
-                                        Icon(Tabler.Outline.X, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(18.dp))
+                                        Icon(Tabler.Outline.X, contentDescription = stringResource(R.string.library_cd_close), tint = Color.White, modifier = Modifier.size(18.dp))
                                     }
                                 }
                             }
                             Spacer(Modifier.height(12.dp))
-                            Text("Brightness ${(brightness * 100).toInt()}%", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.library_photo_brightness, (brightness * 100).toInt()), color = Color.White, style = MaterialTheme.typography.bodySmall)
                             androidx.compose.material3.Slider(
                                 value = brightness,
                                 onValueChange = { viewModel.setBrightness(it) },
                                 valueRange = 0f..2f,
                             )
-                            Text("Contrast ${(contrast * 100).toInt()}%", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.library_photo_contrast, (contrast * 100).toInt()), color = Color.White, style = MaterialTheme.typography.bodySmall)
                             androidx.compose.material3.Slider(
                                 value = contrast,
                                 onValueChange = { viewModel.setContrast(it) },
                                 valueRange = 0f..2f,
                             )
-                            Text("Saturation ${(saturation * 100).toInt()}%", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.library_photo_saturation, (saturation * 100).toInt()), color = Color.White, style = MaterialTheme.typography.bodySmall)
                             androidx.compose.material3.Slider(
                                 value = saturation,
                                 onValueChange = { viewModel.setSaturation(it) },
@@ -752,7 +753,7 @@ private fun PhotoInfoOverlay(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 OverlayIconButton(onClick = onDismiss) {
-                    Icon(Tabler.Outline.X, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Tabler.Outline.X, contentDescription = stringResource(R.string.library_cd_close), tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
 

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Playback-sync foreground notification -->
+    <string name="data_sync_title">Synchronisation de la progression</string>
+    <string name="data_sync_finishing">Finalisation\u2026</string>
+    <plurals name="data_sync_items_queued">
+        <item quantity="one">%1$d élément en file d\'attente</item>
+        <item quantity="other">%1$d éléments en file d\'attente</item>
+    </plurals>
+
+    <!-- Playback-sync notification channel -->
+    <string name="data_sync_channel_name">Synchronisation de la progression</string>
+    <string name="data_sync_channel_desc">Synchronisation de la progression de lecture hors ligne avec le serveur</string>
+
+    <!-- Now Playing (media playback) notification channel -->
+    <string name="data_channel_now_playing">Lecture en cours</string>
+    <string name="data_channel_now_playing_desc">Commandes de lecture multimédia</string>
+
+    <!-- Downloads notification channel -->
+    <string name="data_channel_downloads">Téléchargements</string>
+    <string name="data_channel_downloads_desc">Notifications de progression des téléchargements</string>
+
+    <!-- Admin statistics: content-type breakdown labels -->
+    <string name="data_label_movies">Films</string>
+    <string name="data_label_episodes">Épisodes</string>
+    <string name="data_label_songs">Chansons</string>
+
+    <!-- Admin statistics: stale-media detail/date text -->
+    <string name="data_added_today">Ajouté aujourd\'hui</string>
+    <string name="data_added_one_day_ago">Ajouté il y a 1 jour</string>
+    <string name="data_added_days_ago">Ajouté il y a %1$dd</string>
+    <string name="data_added_months_ago">Ajouté il y a %1$dmo</string>
+    <string name="data_added_years_ago">Ajouté il y a %1$dy</string>
+    <string name="data_never_played">Jamais lu</string>
+    <string name="data_days_since_play">il y a %1$dd depuis la lecture</string>
+    <string name="data_plays_count">%1$d lectures</string>
+    <string name="data_added_date">Ajouté %1$s</string>
+    <string name="data_added_unknown">Date d\'ajout inconnue</string>
+    <string name="data_played_date">Lu %1$s</string>
+</resources>

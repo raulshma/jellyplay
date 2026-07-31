@@ -12,12 +12,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.LockAccess
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.feature.admin.R
 
 /**
  * Shared "you don't have permission" surface shown by [AdminRouteContainer]
@@ -34,7 +36,7 @@ fun AccessDeniedScreen(
 ) {
     val backgroundColor = rememberScreenBackgroundColor()
     JellyPlayScreenScaffold(
-        title = "Access Denied",
+        title = stringResource(R.string.admin_access_denied_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) {
@@ -54,13 +56,13 @@ fun AccessDeniedScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = "You don't have permission to access this area.",
+                    text = stringResource(R.string.admin_access_denied_body),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                 )
                 Text(
-                    text = "Contact your server administrator if you believe this is an error.",
+                    text = stringResource(R.string.admin_access_denied_contact),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

@@ -40,7 +40,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.auth.R
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -83,7 +85,7 @@ fun QuickConnectScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "Quick Connect",
+        title = stringResource(R.string.auth_quick_connect),
         onBack = {
             viewModel.cancelQuickConnect()
             onBack()
@@ -158,7 +160,7 @@ private fun InitiatingContent() {
         JellyPlayLoadingIndicator(modifier = Modifier.size(48.dp))
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            "Starting Quick Connect\u2026",
+            stringResource(R.string.auth_qc_starting),
             style = MaterialTheme.typography.titleMedium,
         )
     }
@@ -204,13 +206,13 @@ private fun WaitingForApprovalContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            "Enter this code on another device",
+            stringResource(R.string.auth_qc_enter_code),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Jellyfin → User Settings → Quick Connect",
+            stringResource(R.string.auth_qc_path),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -237,7 +239,7 @@ private fun WaitingForApprovalContent(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Waiting for approval…",
+            stringResource(R.string.auth_qc_waiting),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -252,7 +254,7 @@ private fun WaitingForApprovalContent(
                 .then(cancelFocusState.focusModifier)
                 .tvFocusIndicator(cancelFocusState, ShapeCache.smooth12),
         ) {
-            Text("Cancel")
+            Text(stringResource(R.string.auth_cancel))
         }
     }
 }
@@ -265,7 +267,7 @@ private fun AuthenticatingContent() {
         JellyPlayLoadingIndicator(modifier = Modifier.size(48.dp))
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            "Signing in\u2026",
+            stringResource(R.string.auth_signing_in),
             style = MaterialTheme.typography.titleMedium,
         )
     }
@@ -277,7 +279,7 @@ private fun SuccessContent() {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            "✓ Connected!",
+            stringResource(R.string.auth_qc_connected),
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -301,7 +303,7 @@ private fun ErrorContent(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            "Quick Connect Failed",
+            stringResource(R.string.auth_qc_failed),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.error,
         )
@@ -324,7 +326,7 @@ private fun ErrorContent(
         ) {
             Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Try Again")
+            Text(stringResource(R.string.auth_try_again))
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -336,7 +338,7 @@ private fun ErrorContent(
                 .then(backFocusState.focusModifier)
                 .tvFocusIndicator(backFocusState, ShapeCache.smooth12),
         ) {
-            Text("Back to Sign In")
+            Text(stringResource(R.string.auth_back_to_sign_in))
         }
     }
 }

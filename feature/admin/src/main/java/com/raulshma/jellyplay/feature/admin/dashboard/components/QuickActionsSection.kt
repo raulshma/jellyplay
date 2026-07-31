@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -39,6 +40,7 @@ import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Tool
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun QuickActionsSection(
@@ -54,7 +56,7 @@ fun QuickActionsSection(
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
         Text(
-            "Quick Access",
+            stringResource(R.string.admin_quick_access),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 12.dp),
@@ -66,7 +68,7 @@ fun QuickActionsSection(
         ) {
             QuickActionButton(
                 icon = Tabler.Outline.Users,
-                label = "Statistics",
+                label = stringResource(R.string.admin_qa_statistics),
                 iconBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
                 iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
                 onClick = onUserStatistics,
@@ -74,7 +76,7 @@ fun QuickActionsSection(
             )
             QuickActionButton(
                 icon = Tabler.Outline.PlayerPlay,
-                label = "Tasks",
+                label = stringResource(R.string.admin_qa_tasks),
                 iconBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
                 iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
                 onClick = onScheduledTasks,
@@ -82,7 +84,7 @@ fun QuickActionsSection(
             )
             QuickActionButton(
                 icon = Tabler.Outline.DeviceDesktop,
-                label = "Devices",
+                label = stringResource(R.string.admin_devices_title),
                 iconBackgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
                 iconTint = MaterialTheme.colorScheme.onTertiaryContainer,
                 onClick = onDevices,
@@ -96,7 +98,7 @@ fun QuickActionsSection(
         ) {
             QuickActionButton(
                 icon = Tabler.Outline.FileText,
-                label = "Logs",
+                label = stringResource(R.string.admin_logs_title),
                 iconBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
                 iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
                 onClick = onLogs,
@@ -104,7 +106,7 @@ fun QuickActionsSection(
             )
             QuickActionButton(
                 icon = Tabler.Outline.Trash,
-                label = "Stale Media",
+                label = stringResource(R.string.admin_stale_media_title),
                 iconBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
                 iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
                 onClick = onStaleMedia,
@@ -112,7 +114,7 @@ fun QuickActionsSection(
             )
             QuickActionButton(
                 icon = Tabler.Outline.EyeOff,
-                label = "Watched",
+                label = stringResource(R.string.admin_qa_watched),
                 iconBackgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
                 iconTint = MaterialTheme.colorScheme.onTertiaryContainer,
                 onClick = onWatchedMediaCleanup,
@@ -126,7 +128,7 @@ fun QuickActionsSection(
         ) {
             QuickActionButton(
                 icon = Tabler.Outline.Users,
-                label = "Users",
+                label = stringResource(R.string.admin_users_title),
                 iconBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
                 iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
                 onClick = onUsers,
@@ -134,7 +136,7 @@ fun QuickActionsSection(
             )
             QuickActionButton(
                 icon = Tabler.Outline.Tool,
-                label = "Plugins",
+                label = stringResource(R.string.admin_plugins_title),
                 iconBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
                 iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
                 onClick = onPlugins,

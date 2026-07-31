@@ -25,10 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.SmartPlaylist
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
@@ -42,6 +44,17 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+
+@Composable
+fun smartPlaylistDisplayName(playlist: com.raulshma.jellyplay.core.model.SmartPlaylist): String {
+    return when (playlist.id) {
+        "top_rated" -> stringResource(R.string.music_smart_playlist_top_rated)
+        "recently_added" -> stringResource(R.string.music_smart_playlist_recently_added)
+        "unplayed" -> stringResource(R.string.music_smart_playlist_unplayed)
+        "favorites" -> stringResource(R.string.music_smart_playlist_favorites)
+        else -> playlist.name
+    }
+}
 
 @Composable
 fun SmartPlaylistsScreen(
@@ -67,7 +80,7 @@ fun SmartPlaylistsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Smart Playlists",
+        title = stringResource(R.string.music_smart_playlists),
         onBack = onBack,
         actions = {
             HeaderStatusIndicator(
@@ -141,7 +154,7 @@ private fun PlaylistCard(
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = playlist.name,
+                    text = smartPlaylistDisplayName(playlist),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                 )

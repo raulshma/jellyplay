@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Screen titles -->
+    <string name="music_browse_music">音楽をブラウズ</string>
+    <string name="music_albums">アルバム</string>
+    <string name="music_artists">アーティスト</string>
+    <string name="music_tracks">トラック</string>
+    <string name="music_genres">ジャンル</string>
+    <string name="music_playlists">プレイリスト</string>
+    <string name="music_mood_playlists">ムードプレイリスト</string>
+    <string name="music_smart_playlists">スマートプレイリスト</string>
+
+    <!-- Empty / error states -->
+    <string name="music_no_albums_found">アルバムが見つかりません</string>
+    <string name="music_no_artists_found">アーティストが見つかりません</string>
+    <string name="music_no_tracks_found">トラックが見つかりません</string>
+    <string name="music_no_genres_found">ジャンルが見つかりません</string>
+    <string name="music_no_playlists_found">プレイリストが見つかりません</string>
+    <string name="music_no_tracks_mood">このムードに合うトラックはありません</string>
+    <string name="music_no_tracks_criteria">条件に合うトラックはありません</string>
+    <string name="music_no_music_available">利用可能な音楽がありません</string>
+    <string name="music_check_jellyfin_libraries">Jellyfin ライブラリを確認してください。</string>
+    <string name="music_loading_music">音楽を読み込んでいます…</string>
+    <string name="music_failed_load_albums">アルバムの読み込みに失敗しました</string>
+    <string name="music_failed_load_artists">アーティストの読み込みに失敗しました</string>
+    <string name="music_failed_load_tracks">トラックの読み込みに失敗しました</string>
+    <string name="music_failed_load_more">さらに読み込めませんでした</string>
+
+    <!-- Playback actions -->
+    <string name="music_play">再生</string>
+    <string name="music_play_all">すべて再生</string>
+    <string name="music_shuffle">シャッフル</string>
+    <string name="music_add_to_queue">キューに追加</string>
+    <string name="music_instant_mix">インスタントミックス</string>
+    <string name="music_creating_mix">ミックスを作成中…</string>
+    <string name="music_now_playing">再生中</string>
+    <string name="music_download_album">アルバムをダウンロード</string>
+    <string name="music_download_track">トラックをダウンロード</string>
+
+    <!-- Track / row menus -->
+    <string name="music_go_to_album">アルバムへ移動</string>
+    <string name="music_go_to_artist">アーティストへ移動</string>
+    <string name="music_more_options">その他のオプション</string>
+    <string name="music_favorite">お気に入り</string>
+    <string name="music_unfavorite">お気に入り解除</string>
+    <string name="music_unknown_artist">不明なアーティスト</string>
+
+    <!-- Detail screen labels -->
+    <string name="music_mood_playlist">ムードプレイリスト</string>
+    <string name="music_smart_playlist">スマートプレイリスト</string>
+    <string name="music_open">開く</string>
+
+    <!-- Counts -->
+    <string name="music_items_count">%d 件</string>
+    <string name="music_tracks_count">%d トラック</string>
+    <string name="music_one_track">1 トラック</string>
+    <string name="music_playlist_tracks_count">%d トラック</string>
+
+    <!-- Home sections -->
+    <string name="music_player_screens">プレーヤー画面</string>
+    <string name="music_player_screens_subtitle">オーディオプレーヤーの体験</string>
+    <string name="music_tracks_subtitle">ライブラリ内のすべての楽曲を閲覧</string>
+    <string name="music_albums_subtitle">完全なアルバムとコレクションを探検</string>
+    <string name="music_artists_subtitle">お気に入りのアーティストを見つけよう</string>
+    <string name="music_genres_subtitle">ジャンルとムードで音楽を閲覧</string>
+    <string name="music_playlists_subtitle">厳選されたプレイリストとミックス</string>
+    <string name="music_now_playing_subtitle">コントロール、歌詞、キュー付きのフルプレーヤー</string>
+    <string name="music_ambient_mode">アンビエントモード</string>
+    <string name="music_ambient_mode_subtitle">音楽と共に踊る没入感のある色彩</string>
+    <string name="music_artists_section_subtitle">お気に入りのミュージシャン</string>
+    <string name="music_view_all">すべて表示</string>
+    <string name="music_new_releases">新着</string>
+    <string name="music_fresh_music">あなただけの新鮮な音楽</string>
+    <string name="music_recently_played">最近再生した曲</string>
+    <string name="music_recently_played_subtitle">音楽の旅を続けよう</string>
+    <string name="music_favorite_artists">お気に入りのアーティスト</string>
+    <string name="music_favorite_artists_subtitle">何度も戻ってくる声</string>
+    <string name="music_latest_albums">最新アルバム</string>
+    <string name="music_top_rated_albums">高評価アルバム</string>
+    <string name="music_top_rated_albums_subtitle">コミュニティで最も評価されたもの</string>
+    <string name="music_favorite_tracks">お気に入りのトラック</string>
+    <string name="music_favorite_tracks_subtitle">最も愛する楽曲</string>
+
+    <!-- Playlists CRUD -->
+    <string name="music_new_playlist">新規プレイリスト</string>
+    <string name="music_edit_playlist">プレイリストを編集</string>
+    <string name="music_delete_playlist">プレイリストを削除</string>
+    <string name="music_delete_playlist_confirm">「%1$s」を削除しますか？この操作は元に戻せません。</string>
+    <string name="music_create">作成</string>
+    <string name="music_save">保存</string>
+    <string name="music_edit">編集</string>
+    <string name="music_delete">削除</string>
+    <string name="music_cancel">キャンセル</string>
+    <string name="music_name_label">名前</string>
+    <string name="music_description_optional">説明（任意）</string>
+    <string name="music_remove_from_playlist">プレイリストから削除</string>
+
+    <!-- Paged grid states -->
+    <string name="music_nothing_found">見つかりません</string>
+    <string name="music_failed_load">読み込めませんでした</string>
+
+    <!-- Built-in smart playlist names -->
+    <string name="music_smart_playlist_top_rated">高評価</string>
+    <string name="music_smart_playlist_recently_added">最近追加</string>
+    <string name="music_smart_playlist_unplayed">未再生トラック</string>
+    <string name="music_smart_playlist_favorites">お気に入り</string>
+</resources>

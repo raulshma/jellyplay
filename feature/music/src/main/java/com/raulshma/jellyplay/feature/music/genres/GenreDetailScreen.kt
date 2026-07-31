@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,6 +29,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.feature.music.components.TrackRow
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -78,7 +80,7 @@ fun GenreDetailScreen(
                 }
                 is LoadState.Error -> {
                     ErrorScreen(
-                        message = refreshState.error.localizedMessage ?: "Failed to load tracks",
+                        message = refreshState.error.localizedMessage ?: stringResource(R.string.music_failed_load_tracks),
                         onRetry = { tracks.refresh() },
                     )
                 }
@@ -86,7 +88,7 @@ fun GenreDetailScreen(
                     if (tracks.itemCount == 0) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Music,
-                            title = "No tracks found",
+                            title = stringResource(R.string.music_no_tracks_found),
                         )
                     } else {
                         val adaptiveInfo = LocalAdaptiveInfo.current
@@ -142,7 +144,7 @@ fun GenreDetailScreen(
                 }
                 is LoadState.Error -> {
                     Text(
-                        text = appendState.error.localizedMessage ?: "Failed to load more",
+                        text = appendState.error.localizedMessage ?: stringResource(R.string.music_failed_load_more),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier

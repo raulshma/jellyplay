@@ -767,7 +767,8 @@ class MediaRepositoryImpl @Inject constructor(
         name: String,
         overview: String?,
         itemIds: List<String>,
-    ): Result<String> = apiClient.createPlaylist(name, overview, itemIds)
+        mediaType: MediaType,
+    ): Result<String> = apiClient.createPlaylist(name, overview, itemIds, mediaType)
 
     override suspend fun updatePlaylist(
         playlistId: String,

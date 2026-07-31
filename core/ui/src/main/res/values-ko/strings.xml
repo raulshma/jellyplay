@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared action / component literals (enhancements §2.2).
+         Prefixed `core_` so they never collide with module-local strings
+         once resources are merged at the app level. -->
+    <string name="core_retry">다시 시도</string>
+    <string name="core_cancel">취소</string>
+    <string name="core_reset">재설정</string>
+    <string name="core_close">닫기</string>
+    <string name="core_done">완료</string>
+
+    <!-- Truly cross-module feedback (posted from the app/navigation layer
+         and referenced by multiple feature modules). -->
+    <string name="msg_no_video_player_found">비디오 재생기를 찾을 수 없습니다</string>
+    <string name="msg_smart_download_deleted">공간 확보를 위해 시청한 다운로드가 삭제되었습니다</string>
+
+    <!-- Localizable labels for [com.raulshma.jellyplay.core.model.MediaType], shared
+         by every feature screen that renders a media-type badge or filter chip.
+         Kept here (not in core/model) because the model layer has no resource
+         access; resolve them via [mediaTypeDisplayName] / [mediaTypeDisplayNamePlural]. -->
+    <string name="core_media_movie">영화</string>
+    <string name="core_media_series">시리즈</string>
+    <string name="core_media_season">시즌</string>
+    <string name="core_media_episode">에피소드</string>
+    <string name="core_media_track">트랙</string>
+    <string name="core_media_album">앨범</string>
+    <string name="core_media_artist">아티스트</string>
+    <string name="core_media_music_video">뮤직 비디오</string>
+    <string name="core_media_collection">컬렉션</string>
+    <string name="core_media_photo">사진</string>
+    <string name="core_media_live_tv">실시간 TV</string>
+    <string name="core_media_channel">채널</string>
+    <string name="core_media_unknown">항목</string>
+
+    <!-- Plural forms (e.g. filter chips, library headers). -->
+    <string name="core_media_movie_plural">영화</string>
+    <string name="core_media_series_plural">TV 프로그램</string>
+    <string name="core_media_season_plural">시즌</string>
+    <string name="core_media_episode_plural">에피소드</string>
+    <string name="core_media_music_plural">음악</string>
+    <string name="core_media_album_plural">앨범</string>
+    <string name="core_media_artist_plural">아티스트</string>
+    <string name="core_media_music_video_plural">뮤직 비디오</string>
+    <string name="core_media_collection_plural">컬렉션</string>
+    <string name="core_media_photo_plural">사진</string>
+    <string name="core_media_live_tv_plural">실시간 TV</string>
+    <string name="core_media_channel_plural">채널</string>
+    <string name="core_media_unknown_plural">알 수 없음</string>
+
+    <!-- core/ui shared -->
+    <string name="core_report">신고</string>
+    <string name="core_ui_back">뒤로</string>
+    <string name="core_ui_select">선택…</string>
+    <string name="core_ui_selected">선택됨</string>
+
+    <!-- core/ui auth challenge -->
+    <string name="core_ui_auth_title">인증</string>
+    <string name="core_ui_auth_subtitle">본인 확인</string>
+    <string name="core_ui_auth_use_pin">PIN 사용</string>
+    <string name="core_ui_auth_use_biometric">생체 인식 사용</string>
+    <string name="core_ui_auth_biometric_prompt">인증에 생체 인식 사용</string>
+
+    <!-- core/ui seerr request dialog -->
+    <string name="core_ui_seerr_request_success">요청이 성공적으로 전송되었습니다!</string>
+    <string name="core_ui_seerr_loading_options">옵션 불러오는 중…</string>
+    <string name="core_ui_seerr_destination_server_sonarr">대상 서버 (Sonarr)</string>
+    <string name="core_ui_seerr_destination_server_radarr">대상 서버 (Radarr)</string>
+    <string name="core_ui_seerr_quality_profile">품질 프로필</string>
+    <string name="core_ui_seerr_root_folder">루트 폴더</string>
+    <string name="core_ui_seerr_tags">태그</string>
+    <string name="core_ui_seerr_all_seasons">모든 시즌</string>
+    <string name="core_ui_seerr_season">시즌 %1$d</string>
+    <string name="core_ui_seerr_episodes">%1$d개 에피소드</string>
+    <string name="core_ui_seerr_loading_seasons">시즌 불러오는 중…</string>
+    <string name="core_ui_seerr_request">요청</string>
+
+    <!-- core/ui accent / color pickers -->
+    <string name="core_ui_accent_color_title">강조 색상</string>
+    <string name="core_ui_accent_color_subtitle">사용자 지정 강조 색상 견본 또는 동적 색상 선택</string>
+    <string name="core_ui_color_style_title">색상 스타일</string>
+    <string name="core_ui_color_style_subtitle">생성된 팔레트의 시각적 분위기 정의</string>
+    <string name="core_ui_dynamic_colors">동적 배경화면 색상</string>
+    <string name="core_ui_synthwave_accent_title">Synthwave 강조 색상</string>
+    <string name="core_ui_synthwave_accent_subtitle">사용자 지정 네온 강조 색상 견본 선택</string>
+    <string name="core_ui_soothing_accent_title">부드러운 강조 색상</string>
+    <string name="core_ui_soothing_accent_subtitle">차분한 강조 색상 선택</string>
+
+    <!-- core/ui component content descriptions & labels -->
+    <string name="core_ui_remove">제거</string>
+    <string name="core_ui_play">재생</string>
+    <string name="core_ui_backspace">백스페이스</string>
+    <string name="core_ui_request">요청</string>
+    <string name="core_ui_watched">시청함</string>
+    <string name="core_ui_downloaded">다운로드됨</string>
+    <string name="core_ui_cd_loading">로드 중</string>
+    <string name="core_ui_cd_error">오류</string>
+    <string name="core_ui_cd_local_network">로컬 네트워크, 인터넷 없음</string>
+    <string name="core_ui_cd_offline">오프라인</string>
+    <string name="core_ui_cd_server_unreachable">서버에 연결할 수 없음</string>
+</resources>

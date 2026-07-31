@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +52,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun RepositoriesTab(
@@ -86,7 +88,7 @@ fun RepositoriesTab(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Package Repositories",
+                    stringResource(R.string.admin_package_repositories),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -103,7 +105,7 @@ fun RepositoriesTab(
                         modifier = Modifier.size(16.dp),
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("Add", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.admin_add), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -119,7 +121,7 @@ fun RepositoriesTab(
         if (repositories.isEmpty()) {
             item {
                 Text(
-                    "No repositories configured",
+                    stringResource(R.string.admin_no_repositories),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
@@ -209,7 +211,7 @@ private fun RepositoryListItem(
             ) {
                 Icon(
                     Tabler.Outline.Trash,
-                    contentDescription = "Remove",
+                    contentDescription = stringResource(R.string.admin_remove_cd),
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.error,
                 )
@@ -228,13 +230,13 @@ private fun AddRepositoryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Repository") },
+        title = { Text(stringResource(R.string.admin_add_repository_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.admin_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = ShapeCache.smooth16,
@@ -242,7 +244,7 @@ private fun AddRepositoryDialog(
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    label = { Text("URL") },
+                    label = { Text(stringResource(R.string.admin_url)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = ShapeCache.smooth16,
@@ -255,12 +257,12 @@ private fun AddRepositoryDialog(
                 onClick = { if (name.isNotBlank() && url.isNotBlank()) onAdd(name, url) },
                 enabled = name.isNotBlank() && url.isNotBlank(),
             ) {
-                Text("Add")
+                Text(stringResource(R.string.admin_add))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.admin_cancel))
             }
         },
     )

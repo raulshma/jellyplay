@@ -24,7 +24,7 @@ internal object MpvStyleMapping {
     )
 
     fun computeValues(style: SubtitleStyle): MpvStyleValues {
-        val marginY = (style.verticalPosition.coerceIn(0f, 0.4f) * 720).toInt().coerceAtLeast(0)
+        val marginY = 0
         val outlineSize: Double
         val shadowOffset: Double
         when (style.edgeType) {

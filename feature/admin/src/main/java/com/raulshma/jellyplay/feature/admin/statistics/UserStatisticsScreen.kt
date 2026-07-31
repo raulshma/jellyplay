@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +56,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.feature.admin.statistics.components.SummaryStatCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,13 +79,13 @@ fun UserStatisticsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "User Statistics",
+        title = stringResource(R.string.admin_user_statistics_title),
         onBack = onBack,
     ) { paddingValues ->
         when {
             state.isLoading -> ScreenLoadingState()
             state.error != null -> ErrorScreen(
-                message = state.error ?: "Failed to load statistics",
+                message = state.error ?: stringResource(R.string.admin_failed_load_statistics),
                 onRetry = { viewModel.loadStatistics() },
             )
             else -> PullToRefreshBox(
@@ -184,17 +186,17 @@ private fun SummaryRow(
     ) {
         SummaryStatCard(
             value = totalUsers,
-            label = "Total Users",
+            label = stringResource(R.string.admin_stat_total_users),
             modifier = Modifier.weight(1f),
         )
         SummaryStatCard(
             value = activeThisWeek,
-            label = "Active Now",
+            label = stringResource(R.string.admin_stat_active_now),
             modifier = Modifier.weight(1f),
         )
         SummaryStatCard(
             value = totalPlays,
-            label = "Total Plays",
+            label = stringResource(R.string.admin_stat_total_plays),
             modifier = Modifier.weight(1f),
         )
     }
@@ -297,9 +299,9 @@ private fun UserStatisticsCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                StatPill("${user.moviePlayCount} Movies")
-                StatPill("${user.episodePlayCount} Episodes")
-                if (user.songPlayCount > 0) StatPill("${user.songPlayCount} Songs")
+                StatPill("${user.moviePlayCount} " + stringResource(R.string.admin_stat_movies))
+                StatPill("${user.episodePlayCount} " + stringResource(R.string.admin_stat_episodes))
+                if (user.songPlayCount > 0) StatPill("${user.songPlayCount} " + stringResource(R.string.admin_stat_songs))
                 if (pluginStatus == PlaybackReportingStatus.AVAILABLE && user.totalWatchTimeSec > 0) {
                     StatPill(formatDuration(user.totalWatchTimeSec))
                 }
@@ -312,7 +314,7 @@ private fun UserStatisticsCard(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
-                        "Completion",
+                        stringResource(R.string.admin_completion),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(0.2f),

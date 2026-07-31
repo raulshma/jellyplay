@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Per-library new-media notification -->
+    <string name="notification_new_in_library_count">%2$s 新增 %1$d 个</string>
+    <string name="notification_more_count">还有 %1$d 个</string>
+
+    <!-- Global new-media summary notification -->
+    <string name="notification_new_items_added">新增了 %1$d 个项目</string>
+    <string name="notification_across_libraries">跨越 %1$d 个媒体库</string>
+
+    <!-- Per-item notification action buttons -->
+    <string name="notification_action_mark_seen">标记为已看</string>
+    <string name="notification_action_open">打开</string>
+
+    <!-- Per-library notification channel -->
+    <string name="notification_channel_new_in_library">%1$s 的新增内容</string>
+    <string name="notification_channel_new_in_library_desc">%1$s 中新增媒体的通知</string>
+
+    <!-- Summary notification channel -->
+    <string name="notification_channel_summary">新增媒体</string>
+    <string name="notification_channel_summary_desc">新增媒体通知摘要</string>
+</resources>

@@ -8,7 +8,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.admin.R
 
 /**
  * Account tab: immediate-action buttons (change password, delete user).
@@ -29,14 +31,14 @@ fun AccountTab(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         UserEditSection(
-            title = "Sign-in",
-            description = "Set or reset this user's password.",
+            title = stringResource(R.string.admin_sign_in),
+            description = stringResource(R.string.admin_sign_in_desc),
         ) {
             PasswordSection(onChangePassword = onChangePassword)
         }
         UserEditSection(
-            title = "Danger zone",
-            description = "Permanently remove this user from the server.",
+            title = stringResource(R.string.admin_danger_zone),
+            description = stringResource(R.string.admin_danger_zone_desc),
         ) {
             DangerSection(isSelf = isSelf, onDelete = onDelete)
         }

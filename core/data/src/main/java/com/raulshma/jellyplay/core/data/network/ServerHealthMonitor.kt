@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.network
 
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,7 +28,28 @@ import javax.inject.Singleton
 class ServerHealthMonitor @Inject constructor(
     private val apiClient: JellyfinApiClient,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // The monitor loop runs on [Dispatchers.IO] in production. Unit tests swap
+    // this for their virtual-time test dispatcher (see [useDispatcherForTest])
+    // so the loop advances on the test's clock — otherwise it races runTest's
+    // scheduler and the "startMonitoring calls checkHealth" assertion flakes.
+    private var loopDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private var scope: CoroutineScope = CoroutineScope(SupervisorJob() + loopDispatcher)
+
+    /**
+     * Test-only: run the monitoring loop on [dispatcher] (typically runTest's
+     * [kotlinx.coroutines.test.StandardTestDispatcher]) so the loop advances on
+     * the test's virtual clock instead of a real IO thread. Production code
+     * constructs via Hilt and keeps [Dispatchers.IO]. Must be called before
+     * [startMonitoring].
+     */
+    internal fun useDispatcherForTest(dispatcher: CoroutineDispatcher) {
+        // Tear down any loop started on the default IO scope before swapping.
+        monitorJob?.cancel()
+        monitorJob = null
+        scope.cancel()
+        loopDispatcher = dispatcher
+        scope = CoroutineScope(SupervisorJob() + dispatcher)
+    }
 
     private val _serverHealth = MutableStateFlow<ServerHealth>(ServerHealth.Unknown)
     val serverHealth: StateFlow<ServerHealth> = _serverHealth.asStateFlow()

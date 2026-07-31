@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_title">今後の予定</string>
+
+    <!-- Month nav -->
+    <string name="calendar_today">今日</string>
+    <string name="calendar_prev_month_cd">前の月</string>
+    <string name="calendar_next_month_cd">翌月</string>
+    <string name="calendar_refresh_cd">更新</string>
+
+    <!-- Filter -->
+    <string name="calendar_filter_all">すべて</string>
+    <string name="calendar_filter_movies">映画</string>
+    <string name="calendar_filter_series">シリーズ</string>
+
+    <!-- Day header -->
+    <string name="calendar_releases_count">%1$d 件のリリース</string>
+
+    <!-- Empty / error -->
+    <string name="calendar_empty_title">予定はありません</string>
+    <string name="calendar_empty_desc">今月は予定されたリリースがありません。</string>
+    <string name="calendar_go_today">今日へ移動</string>
+    <string name="calendar_error_unknown">カレンダーを読み込めませんでした。</string>
+    <string name="calendar_no_detail">このアイテムの詳細はありません。</string>
+
+    <!-- Feature disabled -->
+    <string name="calendar_feature_disabled_title">*arr連携はオフです</string>
+    <string name="calendar_feature_disabled_desc">SonarrとRadarrからの今後のリリースを表示するには、設定 → 連携で有効にしてください。</string>
+    <string name="calendar_open_settings">*arrの設定を開く</string>
+</resources>

@@ -28,11 +28,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -54,8 +56,8 @@ fun RecentlyPlayedSection(
     onShuffleClick: () -> Unit,
     imageUrlBuilder: (String) -> String,
     modifier: Modifier = Modifier,
-    title: String = "Recently Played",
-    subtitle: String = "Continue your musical journey",
+    title: String = stringResource(R.string.music_recently_played),
+    subtitle: String = stringResource(R.string.music_recently_played_subtitle),
     headerFocusRequester: FocusRequester? = null,
     rowFocusRequester: FocusRequester? = null,
     upFocusRequester: FocusRequester? = null,
@@ -195,7 +197,7 @@ private fun RecentTrackCard(
             ) {
                 Icon(
                     imageVector = Tabler.Outline.PlayerPlay,
-                    contentDescription = "Play",
+                    contentDescription = stringResource(R.string.music_play),
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(16.dp),
                 )
@@ -217,7 +219,7 @@ private fun RecentTrackCard(
         Spacer(modifier = Modifier.height(2.dp))
 
         Text(
-            text = track.albumArtist ?: track.album ?: "Unknown Artist",
+            text = track.albumArtist ?: track.album ?: stringResource(R.string.music_unknown_artist),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,

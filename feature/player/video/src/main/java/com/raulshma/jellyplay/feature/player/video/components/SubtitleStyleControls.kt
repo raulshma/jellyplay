@@ -41,6 +41,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -55,6 +56,7 @@ import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import kotlin.math.roundToLong
 
@@ -135,8 +137,7 @@ fun SubtitleStyleControls(
                     .padding(12.dp),
             ) {
                 Text(
-                    "Full ASS/SSA styling is supported on ExoPlayer and mpv. " +
-                        "This engine renders subtitles with basic styling.",
+                    stringResource(R.string.player_video_ass_basic_notice),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -169,11 +170,11 @@ fun SubtitleStyleControls(
             ) {
                 Column {
                     Text(
-                        "Override Subtitle Styles",
+                        stringResource(R.string.player_video_override_subtitle_styles),
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                     )
                     Text(
-                        "Apply custom size, colors, and borders",
+                        stringResource(R.string.player_video_override_subtitle_styles_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -191,7 +192,7 @@ fun SubtitleStyleControls(
 
         // --- Font Size ---
         Text(
-            "Font Size: ${fontSize}sp",
+            stringResource(R.string.player_video_font_size, fontSize),
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -216,7 +217,7 @@ fun SubtitleStyleControls(
             if (capabilities.supportsFontFamily) {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Font",
+                    stringResource(R.string.player_video_font),
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 )
                 Spacer(Modifier.height(4.dp))
@@ -233,11 +234,11 @@ fun SubtitleStyleControls(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        currentStyle.fontFamilyName ?: "Bundled Default",
+                        currentStyle.fontFamilyName ?: stringResource(R.string.player_video_bundled_default),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        "Pick…",
+                        stringResource(R.string.player_video_pick),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -250,10 +251,10 @@ fun SubtitleStyleControls(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextStyleToggle(label = "Bold", selected = currentStyle.bold) {
+                TextStyleToggle(label = stringResource(R.string.player_video_bold), selected = currentStyle.bold) {
                     onStyleChange(currentStyle.copy(bold = it))
                 }
-                TextStyleToggle(label = "Italic", selected = currentStyle.italic) {
+                TextStyleToggle(label = stringResource(R.string.player_video_italic), selected = currentStyle.italic) {
                     onStyleChange(currentStyle.copy(italic = it))
                 }
             }
@@ -263,13 +264,13 @@ fun SubtitleStyleControls(
         if (capabilities.supportsAssOverride && applyCustomStyle) {
             Spacer(Modifier.height(16.dp))
             Text(
-                "ASS Styling",
+                stringResource(R.string.player_video_ass_styling),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             )
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssOverrideChip(
-                    label = "Respect",
+                    label = stringResource(R.string.player_video_ass_respect),
                     isSelected = currentStyle.assOverride == AssOverrideMode.SCALE,
                 ) {
                     onStyleChange(currentStyle.copy(assOverride = AssOverrideMode.SCALE))
@@ -281,7 +282,7 @@ fun SubtitleStyleControls(
                 // because font scale is honored on both engines.
                 if (capabilities.supportsAssStyleOverride) {
                     AssOverrideChip(
-                        label = "Force",
+                        label = stringResource(R.string.player_video_ass_force),
                         isSelected = currentStyle.assOverride == AssOverrideMode.FORCE,
                     ) {
                         onStyleChange(currentStyle.copy(assOverride = AssOverrideMode.FORCE))
@@ -290,9 +291,9 @@ fun SubtitleStyleControls(
             }
             Text(
                 if (currentStyle.assOverride == AssOverrideMode.SCALE)
-                    "Keep embedded styling; apply only your size & position"
+                    stringResource(R.string.player_video_ass_scale_hint)
                 else
-                    "Override embedded styling with your colors, font & borders",
+                    stringResource(R.string.player_video_ass_force_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -301,9 +302,7 @@ fun SubtitleStyleControls(
             if (!capabilities.supportsAssStyleOverride) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "On this engine, ASS/SSA subtitles render with their embedded " +
-                        "styling. Custom colors, borders, and Force override apply to " +
-                        "SRT/VTT only.",
+                    stringResource(R.string.player_video_ass_embedded_notice),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -313,7 +312,7 @@ fun SubtitleStyleControls(
         // --- Font Color ---
         Spacer(Modifier.height(8.dp))
         Text(
-            "Font Color",
+            stringResource(R.string.player_video_font_color),
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -347,7 +346,7 @@ fun SubtitleStyleControls(
         // --- Background Color ---
         Spacer(Modifier.height(12.dp))
         Text(
-            "Background Color",
+            stringResource(R.string.player_video_background_color),
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -379,7 +378,7 @@ fun SubtitleStyleControls(
         // --- Background Opacity ---
         Spacer(Modifier.height(8.dp))
         Text(
-            "Background Opacity: ${(backgroundOpacity * 100).toInt()}%",
+            stringResource(R.string.player_video_background_opacity, (backgroundOpacity * 100).toInt()),
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -402,7 +401,7 @@ fun SubtitleStyleControls(
         // --- Edge Type ---
         Spacer(Modifier.height(12.dp))
         Text(
-            "Edge Type",
+            stringResource(R.string.player_video_edge_type),
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = if (applyCustomStyle) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -415,11 +414,11 @@ fun SubtitleStyleControls(
                 val isSelected = currentStyle.edgeType == type
                 SubtitleStyleChip(
                     label = when (type) {
-                        SubtitleEdgeType.NONE -> "None"
-                        SubtitleEdgeType.OUTLINE -> "Outline"
-                        SubtitleEdgeType.DROP_SHADOW -> "Shadow"
-                        SubtitleEdgeType.RAISED -> "Raised"
-                        SubtitleEdgeType.DEPRESSED -> "Depressed"
+                        SubtitleEdgeType.NONE -> stringResource(R.string.player_video_edge_none)
+                        SubtitleEdgeType.OUTLINE -> stringResource(R.string.player_video_edge_outline)
+                        SubtitleEdgeType.DROP_SHADOW -> stringResource(R.string.player_video_edge_shadow)
+                        SubtitleEdgeType.RAISED -> stringResource(R.string.player_video_edge_raised)
+                        SubtitleEdgeType.DEPRESSED -> stringResource(R.string.player_video_edge_depressed)
                     },
                     selected = isSelected,
                     enabled = applyCustomStyle,
@@ -432,7 +431,7 @@ fun SubtitleStyleControls(
         if (applyCustomStyle && currentStyle.edgeType != SubtitleEdgeType.NONE) {
             Spacer(Modifier.height(8.dp))
             Text(
-                "Edge Color",
+                stringResource(R.string.player_video_edge_color),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             )
             Spacer(Modifier.height(4.dp))
@@ -467,7 +466,7 @@ fun SubtitleStyleControls(
         if (capabilities.supportsBorderStyles && capabilities.supportsAssStyleOverride && applyCustomStyle) {
             Spacer(Modifier.height(12.dp))
             Text(
-                "Border Style",
+                stringResource(R.string.player_video_border_style),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             )
             Spacer(Modifier.height(4.dp))
@@ -477,9 +476,9 @@ fun SubtitleStyleControls(
             ) {
                 SubtitleBorderStyle.entries.forEach { bs ->
                     val label = when (bs) {
-                        SubtitleBorderStyle.OUTLINE_AND_SHADOW -> "Outline+Shadow"
-                        SubtitleBorderStyle.OPAQUE_BOX -> "Opaque Box"
-                        SubtitleBorderStyle.BACKGROUND_BOX -> "Background Box"
+                        SubtitleBorderStyle.OUTLINE_AND_SHADOW -> stringResource(R.string.player_video_border_outline_shadow)
+                        SubtitleBorderStyle.OPAQUE_BOX -> stringResource(R.string.player_video_border_opaque_box)
+                        SubtitleBorderStyle.BACKGROUND_BOX -> stringResource(R.string.player_video_border_background_box)
                     }
                     val isSelected = currentStyle.borderStyle == bs
                     SubtitleStyleChip(
@@ -494,7 +493,7 @@ fun SubtitleStyleControls(
             if (currentStyle.borderStyle != SubtitleBorderStyle.BACKGROUND_BOX) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Border Width: ${"%.1f".format(borderWidth)}",
+                    stringResource(R.string.player_video_border_width, "%.1f".format(borderWidth)),
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                 )
                 TvOrTouchSlider(
@@ -512,7 +511,7 @@ fun SubtitleStyleControls(
                 if (currentStyle.borderStyle == SubtitleBorderStyle.OUTLINE_AND_SHADOW) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Shadow Offset: ${"%.1f".format(shadowOffset)}",
+                        stringResource(R.string.player_video_shadow_offset, "%.1f".format(shadowOffset)),
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                     )
                     TvOrTouchSlider(
@@ -539,7 +538,7 @@ fun SubtitleStyleControls(
                 else -> "${"%.1f".format(offsetSec)}s"
             }
             Text(
-                "Subtitle Offset: $offsetLabel",
+                stringResource(R.string.player_video_subtitle_offset, offsetLabel),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             )
             TvOrTouchSlider(
@@ -558,7 +557,7 @@ fun SubtitleStyleControls(
         if (capabilities.supportsSubtitleVerticalPosition) {
             Spacer(Modifier.height(12.dp))
             Text(
-                "Vertical Position: ${(verticalPosition * 100).toInt()}%",
+                stringResource(R.string.player_video_vertical_position, (verticalPosition * 100).toInt()),
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             )
             TvOrTouchSlider(
@@ -584,7 +583,7 @@ fun SubtitleStyleControls(
                     selected = false,
                     enabled = applyCustomStyle,
                     onClick = { onReset() },
-                    label = { Text("Reset", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium) },
+                    label = { Text(stringResource(R.string.player_video_reset), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium) },
                     shape = ShapeCache.smoothPill,
                     modifier = Modifier
                         .then(resetFocusState.focusModifier)
@@ -741,7 +740,7 @@ private fun FreeFormColorPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Pick a color") },
+        title = { Text(stringResource(R.string.player_video_pick_color)) },
         text = {
             Column {
                 Box(
@@ -752,21 +751,21 @@ private fun FreeFormColorPickerDialog(
                         .background(previewColor),
                 )
                 Spacer(Modifier.height(12.dp))
-                Text("Hue", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.player_video_hue), style = MaterialTheme.typography.labelSmall)
                 Slider(
                     value = hue,
                     onValueChange = { hue = it },
                     valueRange = 0f..360f,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Saturation", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.player_video_saturation), style = MaterialTheme.typography.labelSmall)
                 Slider(
                     value = saturation,
                     onValueChange = { saturation = it },
                     valueRange = 0f..1f,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Value", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.player_video_value), style = MaterialTheme.typography.labelSmall)
                 Slider(
                     value = value,
                     onValueChange = { value = it },
@@ -779,10 +778,10 @@ private fun FreeFormColorPickerDialog(
             TextButton(onClick = {
                 onColorSelected(previewColor.toArgb())
                 onDismiss()
-            }) { Text("Apply") }
+            }) { Text(stringResource(R.string.player_video_apply)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.player_video_cancel)) }
         },
     )
 }

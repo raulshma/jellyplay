@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Search feature user-facing strings (enhancements §2.2) -->
+    <string name="search_no_results_found">未找到结果</string>
+    <string name="search_try_adjusting_filters">试着调整筛选条件</string>
+    <string name="search_did_you_mean">你是不是要找？</string>
+    <string name="search_failed">搜索失败</string>
+    <string name="search_failed_to_load_more">加载更多失败</string>
+
+    <!-- Header / search field -->
+    <string name="search_title">搜索</string>
+    <string name="search_placeholder">搜索电影、剧集、音乐…</string>
+    <string name="search_voice_prompt">搜索电影、剧集、音乐…</string>
+    <string name="search_voice_search">语音搜索</string>
+    <string name="search_clear_search">清除搜索</string>
+    <string name="search_action_filters">筛选</string>
+    <string name="search_clear_all">清除全部</string>
+    <plurals name="search_result_count">
+        <item quantity="other">%1$d 个结果</item>
+    </plurals>
+
+    <!-- Sections -->
+    <string name="search_suggestions">建议</string>
+    <string name="search_on_device">本机</string>
+    <string name="search_recent_searches">最近搜索</string>
+    <string name="search_remove">移除</string>
+
+    <!-- Empty state -->
+    <string name="search_search_your_library">搜索你的媒体库</string>
+    <string name="search_search_your_library_desc">电影、剧集、音乐等等</string>
+
+    <!-- Seerr -->
+    <string name="search_retry">重试</string>
+
+    <!-- Clear history dialog -->
+    <string name="search_clear_search_history">清除搜索历史</string>
+    <string name="search_clear_history_confirm">移除所有最近搜索？此操作无法撤销。</string>
+    <string name="search_action_clear">清除</string>
+    <string name="search_action_cancel">取消</string>
+
+    <!-- Filter sheet -->
+    <string name="search_filters_title">筛选</string>
+    <string name="search_filter_media_type">媒体类型</string>
+    <string name="search_filter_genres">类型</string>
+    <string name="search_filter_year_range">年份范围</string>
+    <string name="search_filter_tags">标签</string>
+    <string name="search_filter_minimum_rating">最低评分</string>
+    <string name="search_filter_any">任意</string>
+    <string name="search_filter_rating_plus">%1$.1f+</string>
+    <string name="search_apply_filters">应用筛选</string>
+</resources>

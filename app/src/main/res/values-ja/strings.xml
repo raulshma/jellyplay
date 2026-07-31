@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_app_description">%1$sを開く</string>
+    <string name="tile_paused_label">一時停止中: %1$s</string>
+    <string name="tile_playing_cd">再生中</string>
+    <string name="tile_paused_cd">一時停止中</string>
+
+    <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
+    <string name="press_back_again_to_exit">もう一度「戻る」を押すと終了します</string>
+
+    <string name="shortcut_continue_watching_short">続ける</string>
+    <string name="shortcut_continue_watching_long">視聴を続ける</string>
+    <string name="shortcut_search_short">検索</string>
+    <string name="shortcut_search_long">ライブラリーを検索</string>
+    <string name="shortcut_play_music_short">音楽</string>
+    <string name="shortcut_play_music_long">音楽を再生</string>
+    <string name="shortcut_downloads_short">ダウンロード</string>
+    <string name="shortcut_downloads_long">ダウンロードを開く</string>
+
+    <string name="widget_now_playing_label">再生中</string>
+    <string name="widget_now_playing_description">ホーム画面から今聴いている音楽を確認・操作できます。</string>
+    <string name="widget_continue_watching_label">視聴を続ける</string>
+    <string name="widget_continue_watching_description">見始めたまま終わっていない番組や映画に戻れます。</string>
+    <string name="widget_nothing_playing">再生中ではありません</string>
+    <string name="widget_continue_watching_empty">まだ続きはありません</string>
+    <string name="widget_continue_watching_empty_subtitle">番組の視聴を始めるとここに表示されます</string>
+    <string name="widget_placeholder_title">トラック名</string>
+    <string name="widget_placeholder_subtitle">アーティスト名</string>
+    <string name="widget_album_art">アルバムアート</string>
+    <string name="widget_play_pause">再生または一時停止</string>
+    <string name="widget_next">次のトラック</string>
+    <string name="widget_previous">前のトラック</string>
+    <string name="widget_rewind">10秒巻き戻し</string>
+    <string name="widget_forward">10秒早送り</string>
+    <string name="widget_seek_to">位置を指定して移動</string>
+    <string name="widget_continue_watching_title">視聴を続ける</string>
+    <string name="widget_continue_watching_see_all">すべて見る</string>
+    <string name="widget_minutes_left">残り %1$d 分</string>
+    <string name="widget_progress_percent">%1$d%%</string>
+    <string name="widget_placeholder_position">—</string>
+
+    <!-- Library Recommendations widget -->
+    <string name="widget_library_recommendations_label">ライブラリーのおすすめ</string>
+    <string name="widget_library_recommendations_title">ライブラリーのおすすめ</string>
+    <string name="widget_library_recommendations_subtitle">あなたが視聴した作品から</string>
+    <string name="widget_library_recommendations_empty">まだおすすめはありません</string>
+
+    <!-- Seerr Recommendations widget -->
+    <string name="widget_seerr_recommendations_subtitle">今週のトレンド</string>
+    <string name="widget_seerr_no_recommendations">まだおすすめはありません</string>
+    <string name="widget_seerr_no_recommendations_subtitle">更新をタップするか、また後で確認してください</string>
+
+    <!-- Shared -->
+    <string name="widget_refresh">更新</string>
+
+    <!-- Configuration activity -->
+    <string name="widget_config_title">おすすめを選択</string>
+    <string name="widget_config_save">保存</string>
+    <string name="widget_config_source_similar">あなたが視聴した作品から</string>
+    <string name="widget_config_source_similar_description">直近に視聴したアイテムに基づくパーソナライズされたおすすめ</string>
+    <string name="widget_config_source_latest">ライブラリーの最新</string>
+    <string name="widget_config_source_latest_description">ライブラリー全体に新しく追加されたメディア</string>
+    <string name="widget_config_source_favorites">お気に入り</string>
+    <string name="widget_config_source_favorites_description">お気に入りに登録したアイテム</string>
+    <string name="widget_config_source_surprise_me">ランダムでお願い</string>
+    <string name="widget_config_source_surprise_me_description">ライブラリーからのランダムなシャッフル</string>
+    <string name="widget_config_source_trending">今週のトレンド</string>
+    <string name="widget_config_source_trending_description">みんなが話している作品</string>
+    <string name="widget_config_source_popular_movies">人気の映画</string>
+    <string name="widget_config_source_popular_movies_description">今いちばん評価の高い映画</string>
+    <string name="widget_config_source_popular_tv">人気のテレビ</string>
+    <string name="widget_config_source_popular_tv_description">今いちばん評価の高い番組</string>
+    <string name="widget_config_source_upcoming_movies">公開予定の映画</string>
+    <string name="widget_config_source_upcoming_movies_description">もうすぐ公開の映画</string>
+    <string name="widget_config_source_upcoming_tv">放送予定のテレビ</string>
+    <string name="widget_config_source_upcoming_tv_description">もうすぐ放送開始の番組</string>
+
+    <!-- In-app self-update sheet -->
+    <string name="update_checking">更新を確認中\u2026</string>
+    <string name="update_up_to_date_title">最新です</string>
+    <string name="update_view_notes">リリースノートを表示</string>
+    <string name="update_hide_notes">リリースノートを隠す</string>
+    <string name="update_available_title">更新があります — v%1$s</string>
+    <string name="update_no_notes">リリースノートはありません。</string>
+    <string name="update_no_matching_apk">該当するAPKがありません</string>
+    <string name="update_download">ダウンロード</string>
+    <string name="update_later">後で</string>
+    <string name="update_downloading">更新をダウンロード中\u2026</string>
+    <string name="update_cancel">キャンセル</string>
+    <string name="update_ready_title">インストール準備完了 — v%1$s</string>
+    <string name="update_ready_body">更新がダウンロードされました。続行するにはインストールをタップしてください。</string>
+    <string name="update_install">インストール</string>
+    <string name="update_failed_title">更新に失敗しました</string>
+    <string name="update_close">閉じる</string>
+
+    <!-- Shared media transport (content descriptions & labels) -->
+    <string name="media_play">再生</string>
+    <string name="media_pause">一時停止</string>
+    <string name="media_next">次</string>
+    <string name="media_previous">前</string>
+    <string name="media_stop">停止</string>
+    <string name="media_close">閉じる</string>
+    <string name="media_disconnect">切断</string>
+    <string name="media_rewind_seconds">10秒巻き戻し</string>
+    <string name="media_forward_seconds">10秒早送り</string>
+
+    <!-- Play On companion screen -->
+    <string name="cast_title">キャスト中</string>
+    <string name="cast_title_to">%1$sにキャスト中</string>
+    <string name="cast_open_companion">パネルを開く</string>
+    <string name="cast_back_seconds">10秒戻る</string>
+    <string name="cast_forward_seconds">30秒進む</string>
+
+    <!-- Floating player overlay -->
+    <string name="floating_player_close">フローティングプレーヤーを閉じる</string>
+
+    <!-- Floating player foreground notification -->
+    <string name="floating_player_channel_name">フローティングプレーヤー</string>
+    <string name="floating_player_channel_desc">フローティングメディアプレーヤーのオーバーレイ</string>
+    <string name="floating_player_notification_text">メディアコントロールが画面上にフローティング表示されています</string>
+
+    <!-- Lock screen authentication -->
+    <string name="auth_title_biometric">認証</string>
+    <string name="auth_title_pin">PINを入力</string>
+    <string name="auth_subtitle">JellyPlayのロックを解除</string>
+    <string name="pin_incorrect">PINが正しくありません</string>
+    <string name="pin_lockout_now">試行回数が多すぎます。もう一度お試しください。</string>
+    <string name="pin_lockout_seconds">試行回数が多すぎます。%1$ds後にもう一度お試しください。</string>
+    <string name="pin_lockout_minutes">試行回数が多すぎます。%1$dm後にもう一度お試しください。</string>
+    <string name="pin_lockout_hours">試行回数が多すぎます。%1$dh後にもう一度お試しください。</string>
+    <string name="pin_lockout_hours_minutes">試行回数が多すぎます。%1$dh %2$dm後にもう一度お試しください。</string>
+
+    <!-- Picture-in-picture actions -->
+    <string name="pip_rewind">巻き戻し</string>
+    <string name="pip_forward">早送り</string>
+    <string name="pip_next">次</string>
+
+    <!-- TV navigation drawer -->
+    <string name="nav_now_playing">再生中</string>
+    <string name="nav_settings">設定</string>
+
+    <!-- Play On device sheet -->
+    <string name="play_on_title">再生先</string>
+    <string name="play_on_no_clients">Jellyfin クライアントが見つかりません。別のデバイスで JellyPlay または Jellyfin を開くと、ここに表示されます。</string>
+    <string name="play_on_jellyfin_session">Jellyfin セッション</string>
+</resources>

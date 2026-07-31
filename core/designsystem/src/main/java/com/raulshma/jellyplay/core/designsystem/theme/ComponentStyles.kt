@@ -28,10 +28,13 @@ object ComponentStyles {
         minWidth(keySize)
         minHeight(keySize)
         textStyle(typography.headlineMedium)
-        
+
         pressed {
             background(colors.primaryContainer)
-            scale(0.95f)
+            // NOTE: a `scale(0.95f)` pressed-state transform previously lived here
+            // but was dropped — Compose Foundation 1.12.0-beta01's Styles API no
+            // longer resolves `scale` inside the `pressed { }` lambda (it now
+            // routes through `state(StyleStateKey)`). Re-add once the API stabilizes.
         }
     }
 

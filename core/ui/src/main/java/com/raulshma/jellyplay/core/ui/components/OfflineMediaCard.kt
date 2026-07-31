@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -29,6 +30,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.model.toMediaItem
+import com.raulshma.jellyplay.core.ui.R
 
 /**
  * Offline library / home card. A thin wrapper over the shared [PosterCard]
@@ -83,7 +85,7 @@ fun OfflineMediaCard(
         // with PosterCard's watched badge — both treat >=95% resume as played.
         if (mediaItem.isPlayed) {
             OfflineStatusChip(
-                label = "Watched",
+                label = stringResource(R.string.core_ui_watched),
                 icon = Tabler.Outline.Check,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
@@ -98,7 +100,7 @@ fun OfflineMediaCard(
         if (showStatusBadge) {
             when (item.downloadStatus) {
                 DownloadStatus.COMPLETED -> OfflineStatusChip(
-                    label = "Downloaded",
+                    label = stringResource(R.string.core_ui_downloaded),
                     icon = Tabler.Outline.Check,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier

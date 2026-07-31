@@ -25,10 +25,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.player.playerSeekbarDpSpec
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.handleDPadKeyEvents
+import com.raulshma.jellyplay.feature.player.live.R
 
 private const val DPAD_SEEK_STEP_MS = 10_000L
 
@@ -161,9 +163,15 @@ fun LiveSeekBar(
             )
         }
         if (!isAtLiveEdge) {
-            androidx.compose.material3.Button(onClick = onSeekToLiveEdge) { Text("Go to live") }
+            androidx.compose.material3.Button(onClick = onSeekToLiveEdge) {
+                Text(stringResource(R.string.live_go_to_live))
+            }
         } else {
-            Text("LIVE", color = Color.Red, style = MaterialTheme.typography.labelSmall)
+            Text(
+                stringResource(R.string.live_badge),
+                color = Color.Red,
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }

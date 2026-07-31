@@ -105,7 +105,7 @@ fun ScheduleScreen(
                             TimerRow(
                                 title = rec.name,
                                 subtitle = rec.channelName,
-                                meta = "● Recording now",
+                                meta = stringResource(R.string.livetv_recording_now),
                                 contentPad = contentPad,
                                 onClick = { },
                             )
@@ -217,16 +217,16 @@ private fun TimerDetailDialog(
                 timer.channelName?.takeIf { it.isNotBlank() }?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text("Start: ${formatStart(timer.startDate)}", style = MaterialTheme.typography.bodySmall,
+                Text(stringResource(R.string.livetv_schedule_start, formatStart(timer.startDate)), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("End: ${formatStart(timer.endDate)}", style = MaterialTheme.typography.bodySmall,
+                Text(stringResource(R.string.livetv_schedule_end, formatStart(timer.endDate)), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = {
             TextButton(onClick = onCancel) { Text(stringResource(R.string.livetv_cancel_recording)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_close)) } },
     )
 }
 

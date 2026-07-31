@@ -69,13 +69,22 @@ sealed class LanguageSettingsDialog {
     object SubtitleBgColorPicker : LanguageSettingsDialog()
 }
 
-// TODO(i18n): ship values-*/strings.xml for these locales before re-enabling them.
-// The picker previously advertised 20 languages with zero translated resources, so every
-// selection silently rendered English — a trust-eroding silent failure (analysis F-19).
-// Restore entries here only once at least the top-5 translations exist.
+// App display languages. MUST stay in lockstep with `resourceConfigurations` in
+// app/build.gradle.kts — that list is the source of truth for which locales have
+// shipped values-<locale>/strings.xml. Advertising a locale here without translations
+// causes a silent fallback to English (analysis F-19), so never add an entry whose
+// tag isn't also in resourceConfigurations.
 internal val appLanguages = listOf(
     null to "System Default",
     "en" to "English",
+    "de" to "Deutsch",
+    "es" to "Español",
+    "fr" to "Français",
+    "it" to "Italiano",
+    "pt" to "Português",
+    "ja" to "日本語",
+    "ko" to "한국어",
+    "zh" to "中文",
 )
 
 private val appLanguageNameByCode: Map<String?, String> = appLanguages.associate { it.first to it.second }
@@ -176,6 +185,11 @@ fun LanguageSettingsScreen(
                 ) {
                     val appLangLabel = appLanguages.firstOrNull { it.first == preferences.appLanguage }?.second
                         ?: preferences.appLanguage ?: stringResource(R.string.settings_lang_system_default)
+                    val appLangFallback = stringResource(R.string.settings_lang_system_default)
+                    val audioLangTitle = stringResource(R.string.settings_audio_language)
+                    val langDefaultFallback = stringResource(R.string.settings_lang_default)
+                    val subtitleLangTitle = stringResource(R.string.settings_subtitle_language)
+                    val displayLanguageTitle = stringResource(R.string.settings_display_language)
                     SettingListItem(
                         icon = Tabler.Outline.Language,
                         title = stringResource(R.string.settings_display_language),
@@ -185,9 +199,9 @@ fun LanguageSettingsScreen(
                         index = 0, count = 3,
                         onClick = {
                             activePicker = PickerState.List(
-                                title = "Display Language",
+                                title = displayLanguageTitle,
                                 items = appLanguages.map { it.first },
-                                label = { code -> appLanguageNameByCode[code] ?: code ?: "System Default" },
+                                label = { code -> appLanguageNameByCode[code] ?: code ?: appLangFallback },
                                 isSelected = { it == preferences.appLanguage },
                                 onSelect = { viewModel.setAppLanguage(it) },
                             )
@@ -195,16 +209,16 @@ fun LanguageSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Language,
-                        title = stringResource(R.string.settings_audio_language),
+                        title = audioLangTitle,
                         subtitle = stringResource(R.string.settings_audio_language_subtitle),
                         trailingText = preferences.preferredAudioLanguage ?: stringResource(R.string.settings_lang_default),
                         highlighted = highlightSettingId == "audio_language",
                         index = 1, count = 3,
                         onClick = {
                             activePicker = PickerState.List(
-                                title = "Audio Language",
+                                title = audioLangTitle,
                                 items = langs.map { it.first },
-                                label = { code -> languageNameByCode[code] ?: code ?: "Default" },
+                                label = { code -> languageNameByCode[code] ?: code ?: langDefaultFallback },
                                 isSelected = { it == preferences.preferredAudioLanguage },
                                 onSelect = { viewModel.setPreferredAudioLanguage(it) },
                             )
@@ -212,16 +226,16 @@ fun LanguageSettingsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Subtitles,
-                        title = stringResource(R.string.settings_subtitle_language),
+                        title = subtitleLangTitle,
                         subtitle = stringResource(R.string.settings_subtitle_language_subtitle),
                         trailingText = preferences.preferredSubtitleLanguage ?: stringResource(R.string.settings_lang_default),
                         highlighted = highlightSettingId == "subtitle_language",
                         index = 2, count = 3,
                         onClick = {
                             activePicker = PickerState.List(
-                                title = "Subtitle Language",
+                                title = subtitleLangTitle,
                                 items = langs.map { it.first },
-                                label = { code -> languageNameByCode[code] ?: code ?: "Default" },
+                                label = { code -> languageNameByCode[code] ?: code ?: langDefaultFallback },
                                 isSelected = { it == preferences.preferredSubtitleLanguage },
                                 onSelect = { viewModel.setPreferredSubtitleLanguage(it) },
                             )
@@ -256,6 +270,7 @@ fun LanguageSettingsScreen(
                         index = subIdx++, count = subTotal,
                         onClick = onOpenSubtitleTester,
                     )
+                    val fontSizeTitle = stringResource(R.string.settings_subtitle_font_size)
                     SettingListItem(
                         icon = Tabler.Outline.Typography,
                         title = stringResource(R.string.settings_font_size),
@@ -266,7 +281,7 @@ fun LanguageSettingsScreen(
                         onClick = {
                             val sizes = listOf(14, 18, 22, 24, 28, 32, 36, 40)
                             activePicker = pickerChip(
-                                title = "Subtitle Font Size",
+                                title = fontSizeTitle,
                                 values = sizes,
                                 current = preferences.subtitleStyle.fontSize,
                                 label = { "${it}sp" },
@@ -316,8 +331,8 @@ fun LanguageSettingsScreen(
                         if (preferences.hdrSubtitleStyleEnabled) {
                             SettingListItem(
                                 icon = Tabler.Outline.Typography,
-                                title = "HDR Font Size",
-                                subtitle = "Subtitle text size for HDR content",
+                                title = stringResource(R.string.settings_hdr_font_size),
+                                subtitle = stringResource(R.string.settings_hdr_font_size_subtitle),
                                 trailingText = "${preferences.hdrSubtitleStyle.fontSize}sp",
                                 highlighted = highlightSettingId == "hdr_subtitle_font_size",
                                 index = subIdx++, count = subTotal,
@@ -328,16 +343,17 @@ fun LanguageSettingsScreen(
                                 },
                             )
                         }
+                        val textColorTitle = stringResource(R.string.settings_subtitle_text_color)
                         SettingListItem(
                             icon = Tabler.Outline.Palette,
-                            title = "Text Color",
-                            subtitle = "Subtitle text color",
+                            title = stringResource(R.string.settings_subtitle_text_color),
+                            subtitle = stringResource(R.string.settings_subtitle_text_color_subtitle),
                             trailingText = preferences.subtitleStyle.fontColor.name,
                             highlighted = highlightSettingId == "subtitle_color",
                             index = subIdx++, count = subTotal,
                             onClick = {
                                 activePicker = PickerState.List(
-                                    title = "Subtitle Text Color",
+                                    title = textColorTitle,
                                     items = SubtitleColor.entries,
                                     label = { it.name },
                                     isSelected = { it == preferences.subtitleStyle.fontColor },
@@ -349,23 +365,24 @@ fun LanguageSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Background,
-                            title = "Background",
-                            subtitle = "Subtitle background color and opacity",
+                            title = stringResource(R.string.settings_subtitle_background),
+                            subtitle = stringResource(R.string.settings_subtitle_background_subtitle),
                             trailingText = preferences.subtitleStyle.backgroundColor.name,
                             highlighted = highlightSettingId == "subtitle_background",
                             index = subIdx++, count = subTotal,
                             onClick = { activeDialog = LanguageSettingsDialog.SubtitleBgColorPicker },
                         )
+                        val edgeStyleTitle = stringResource(R.string.settings_subtitle_edge_style)
                         SettingListItem(
                             icon = Tabler.Outline.BorderAll,
-                            title = "Edge Style",
-                            subtitle = "Subtitle outline style",
+                            title = stringResource(R.string.settings_subtitle_edge_style),
+                            subtitle = stringResource(R.string.settings_subtitle_edge_style_subtitle),
                             trailingText = preferences.subtitleStyle.edgeType.name,
                             highlighted = highlightSettingId == "subtitle_edge_style",
                             index = subIdx++, count = subTotal,
                             onClick = {
                                 activePicker = PickerState.List(
-                                    title = "Subtitle Edge Style",
+                                    title = edgeStyleTitle,
                                     items = SubtitleEdgeType.entries,
                                     label = { it.name },
                                     isSelected = { it == preferences.subtitleStyle.edgeType },
@@ -375,16 +392,17 @@ fun LanguageSettingsScreen(
                                 )
                             },
                         )
+                        val syncOffsetTitle = stringResource(R.string.settings_subtitle_sync_offset)
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
-                            title = "Sync Offset",
-                            subtitle = if (preferences.subtitleStyle.offsetMs == 0L) "No offset" else "${preferences.subtitleStyle.offsetMs}ms",
+                            title = stringResource(R.string.settings_subtitle_sync_offset),
+                            subtitle = if (preferences.subtitleStyle.offsetMs == 0L) stringResource(R.string.settings_subtitle_no_offset) else "${preferences.subtitleStyle.offsetMs}ms",
                             trailingText = "${preferences.subtitleStyle.offsetMs}ms",
                             highlighted = highlightSettingId == "subtitle_sync_offset",
                             index = subIdx++, count = subTotal,
                             onClick = {
                                 activePicker = PickerState.Slider(
-                                    title = "Subtitle Sync Offset",
+                                    title = syncOffsetTitle,
                                     value = preferences.subtitleStyle.offsetMs.toFloat(),
                                     valueRange = -5000f..5000f,
                                     steps = 99,
@@ -397,21 +415,23 @@ fun LanguageSettingsScreen(
                                 )
                             },
                         )
+                        val verticalPositionTitle = stringResource(R.string.settings_subtitle_vertical_position)
+                        val subtitlePositionBottomLabel = stringResource(R.string.settings_subtitle_position_bottom)
                         SettingListItem(
                             icon = Tabler.Outline.ArrowBarDown,
-                            title = "Vertical Position",
-                            subtitle = "Subtitle vertical position on screen",
+                            title = stringResource(R.string.settings_subtitle_vertical_position),
+                            subtitle = stringResource(R.string.settings_subtitle_vertical_position_subtitle),
                             trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
                             highlighted = highlightSettingId == "subtitle_vertical_position",
                             index = subIdx, count = subTotal,
                             onClick = {
                             activePicker = PickerState.Slider(
-                                title = "Subtitle Vertical Position",
+                                title = verticalPositionTitle,
                                 value = preferences.subtitleStyle.verticalPosition,
                                 valueRange = 0f..0.4f,
                                 steps = 7,
                                 valueLabel = { "${(it * 100).toInt()}%" },
-                                rangeStartLabel = "Bottom",
+                                rangeStartLabel = subtitlePositionBottomLabel,
                                 rangeEndLabel = "40%",
                                 onConfirm = {
                                     viewModel.setSubtitleStyle(preferences.subtitleStyle.copy(verticalPosition = it))
@@ -445,7 +465,7 @@ fun LanguageSettingsScreen(
                     .padding(bottom = 32.dp),
             ) {
                 Text(
-                    "Subtitle Background",
+                    stringResource(R.string.settings_subtitle_background),
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Spacer(Modifier.height(12.dp))

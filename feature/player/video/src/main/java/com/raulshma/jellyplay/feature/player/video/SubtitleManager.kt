@@ -6,11 +6,14 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,13 +62,17 @@ internal class SubtitleManager(
     private var searchJob: Job? = null
 
     /**
-     * In-flight download job. A slow download landing after a newer pick
-     * used to race the post-download media-detail refresh and surface stale
-     * loading/error state. Cancel the prior download before starting a new one,
-     * mirroring [searchJob] — and cancelled jobs must not fire error toasts
-     * (cancellation is intentional, not a failure).
+     * In-flight download jobs keyed by subtitle id. The former single global
+     * download flag closed the panel on pick and gave no per-subtitle feedback;
+     * the sheet now stays open and tracks each download independently, so a
+     * retry (or a second subtitle) can't clobber a prior in-flight job.
+     * Re-tapping the same subtitle cancels only its own prior job — mirroring
+     * [searchJob]'s cancellation guard, scoped per id.
+     *
+     * Cancelled jobs must not touch UI state: cancellation is intentional, not a
+     * failure (see [downloadSubtitle]).
      */
-    private var downloadJob: Job? = null
+    private val downloadJobs = mutableMapOf<String, Job>()
 
     fun loadRemoteSubtitles() {
         val itemId = getCurrentItemId() ?: return
@@ -78,29 +85,145 @@ internal class SubtitleManager(
 
     fun downloadSubtitle(subtitleInfo: RemoteSubtitleInfo) {
         val itemId = getCurrentItemId() ?: return
-        // Cancel any in-flight download so a stale post-download refresh can't
-        // clobber the new one's state (mirrors searchJob's cancellation guard).
-        downloadJob?.cancel()
-        updateUiState { it.copy(isDownloadingSubtitle = true, subtitleDownloadError = null) }
-        downloadJob = scope.launch {
-            val result = runCatching { playbackRepository.downloadSubtitle(itemId, subtitleInfo.id) }
-            // If superseded (a newer downloadSubtitle() call cancelled us), do
-            // not touch UI state — the newer job owns it now. The new job has
-            // already reset isDownloadingSubtitle = true on entry.
+        val subtitleId = subtitleInfo.id
+        // Cancel only this subtitle's prior in-flight job — a retry (or a second
+        // pick of the same id) supersedes the old job without disturbing other
+        // concurrent downloads.
+        downloadJobs.remove(subtitleId)?.cancel()
+        // Snapshot the subtitle-stream indices present *before* the download so
+        // the post-download poll can require a genuinely new stream rather than
+        // matching an existing same-language subtitle (false positive).
+        val preDownloadStreamIndices = currentSubtitleStreamIndices()
+        markDownloadStatus(subtitleId, SubtitleDownloadState.DOWNLOADING)
+        downloadJobs[subtitleId] = scope.launch {
+            // NOTE: downloadSubtitle() returns Result<Unit>, so we fold that
+            // directly — `runCatching { repo.x() }` would swallow a returned
+            // Result.failure into onSuccess (the failure is wrapped as the
+            // success value), silently masking a failed download. This matches
+            // the repository API contract (Result, not throwing).
+            val result = playbackRepository.downloadSubtitle(itemId, subtitleId)
+            // If superseded (a newer downloadSubtitle() for this id cancelled
+            // us), do not touch UI state — the newer job owns it now and has
+            // already reset the status to DOWNLOADING on entry.
             ensureActive()
             result.fold(
                 onSuccess = {
-                    mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
-                        onMediaDetailRefreshed(detail)
-                    }
-                    updateUiState { it.copy(isDownloadingSubtitle = false, subtitleDownloadError = null) }
+                    waitForSubtitleToAppear(itemId, subtitleInfo, preDownloadStreamIndices)
                 },
                 onFailure = { e ->
                     val msg = e.message ?: "Download failed"
                     userMessageBus.error("Subtitle download failed: $msg")
-                    updateUiState { it.copy(isDownloadingSubtitle = false, subtitleDownloadError = msg) }
+                    markDownloadStatus(subtitleId, SubtitleDownloadState.FAILED, msg)
                 },
             )
+        }
+    }
+
+    /**
+     * Polls the (cache-busted) media detail until the freshly downloaded
+     * subtitle surfaces as a new `MediaStream`, then hands the refreshed detail
+     * to [onMediaDetailRefreshed] (which re-applies source/track state) and marks
+     * the row DOWNLOADED.
+     *
+     * Jellyfin queues remote-subtitle downloads server-side: the
+     * `POST .../Remote/Subtitles/{id}` call returns once the file is saved, but
+     * the new stream is not guaranteed to appear in the item's media info on the
+     * very next read. Without this poll the row would flip to "done" while the
+     * subtitle is still invisible to the player — so we wait, bounded.
+     *
+     * [invalidateDetailCache] before each fetch is load-bearing: [getMediaDetail]
+     * is a single-flight cached read with a TTL, so without invalidation the poll
+     * would keep returning the stale pre-download detail and never see the new
+     * stream. The budget ([SUBTITLE_APPEAR_MAX_ATTEMPTS] × inter-attempt
+     * [SUBTITLE_APPEAR_POLL_DELAY_MS]) is deliberately short (~9 s); on expiry we
+     * mark the row DELAYED (not FAILED) — the server may still finish — and let
+     * the user retry.
+     */
+    private suspend fun waitForSubtitleToAppear(
+        itemId: String,
+        subtitleInfo: RemoteSubtitleInfo,
+        preDownloadStreamIndices: Set<Int>,
+    ) {
+        val subtitleId = subtitleInfo.id
+        repeat(SUBTITLE_APPEAR_MAX_ATTEMPTS) { attempt ->
+            // Bust the cache so a stale single-flight read can't mask the new
+            // stream the server has just attached.
+            mediaRepository.invalidateDetailCache(itemId)
+            val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
+            currentCoroutineContext().ensureActive()
+            if (detail != null && subtitleHasAppeared(detail, subtitleInfo, preDownloadStreamIndices)) {
+                onMediaDetailRefreshed(detail)
+                markDownloadStatus(subtitleId, SubtitleDownloadState.DOWNLOADED)
+                return
+            }
+            // Don't sleep after the last attempt — the timeout branch below is
+            // the terminal state for this run, and an extra delay just slows the
+            // DELAYED transition with no benefit.
+            if (attempt < SUBTITLE_APPEAR_MAX_ATTEMPTS - 1) {
+                delay(SUBTITLE_APPEAR_POLL_DELAY_MS)
+            }
+        }
+        // Budget elapsed without the stream surfacing. The server may still be
+        // processing, so this is a soft state, not a hard failure — the user can
+        // retry from the row.
+        userMessageBus.info("Subtitle is taking a while to appear on the server")
+        markDownloadStatus(subtitleId, SubtitleDownloadState.DELAYED)
+    }
+
+    /**
+     * True if [detail]'s media sources now carry a subtitle stream attributable
+     * to the just-downloaded [subtitleInfo]. Prefers a stream whose index is
+     * *not* in [preDownloadStreamIndices] (i.e. genuinely new), to avoid a false
+     * positive on an existing same-language subtitle. Falls back to a plain
+     * language match when no snapshot was captured (defensive). The language is
+     * compared case-insensitively against the remote info's three-letter ISO
+     * name (server streams use the same form), then the human-readable name.
+     */
+    private fun subtitleHasAppeared(
+        detail: MediaDetail,
+        subtitleInfo: RemoteSubtitleInfo,
+        preDownloadStreamIndices: Set<Int>,
+    ): Boolean {
+        val subtitleStreams = detail.mediaSources.flatMap { it.mediaStreams }
+            .filter { it.type == StreamType.SUBTITLE }
+        if (subtitleStreams.isEmpty()) return false
+        val targetLang = subtitleInfo.threeLetterISOLanguageName.ifBlank { subtitleInfo.language.orEmpty() }
+        val byLanguage = if (targetLang.isBlank()) {
+            subtitleStreams
+        } else {
+            subtitleStreams.filter { stream ->
+                stream.language?.equals(targetLang, ignoreCase = true) == true
+            }
+        }
+        // If a snapshot of pre-download indices exists, require a genuinely new
+        // index whose language matches — otherwise an existing same-language
+        // subtitle would read as a false positive the instant the download call
+        // returns.
+        if (preDownloadStreamIndices.isNotEmpty()) {
+            return byLanguage.any { it.index !in preDownloadStreamIndices }
+        }
+        // No snapshot (e.g. mediaStreams were empty at download time): a plain
+        // language match is the best we can do.
+        return byLanguage.isNotEmpty()
+    }
+
+    /** Current subtitle-stream indices across all media sources, for the snapshot. */
+    private fun currentSubtitleStreamIndices(): Set<Int> =
+        getUiState().mediaStreams.filter { it.type == StreamType.SUBTITLE }.map { it.index }.toSet()
+
+    /** Sets [subtitleId]'s download status on the UiState slice. */
+    private fun markDownloadStatus(subtitleId: String, state: SubtitleDownloadState, errorMessage: String? = null) {
+        updateUiState {
+            it.copy(
+                downloadingSubtitles = it.downloadingSubtitles + (subtitleId to SubtitleDownloadStatus(subtitleId, state, errorMessage)),
+            )
+        }
+    }
+
+    /** Removes [subtitleId]'s status entry (e.g. on a fresh retry reset). */
+    private fun clearDownloadStatus(subtitleId: String) {
+        updateUiState {
+            it.copy(downloadingSubtitles = it.downloadingSubtitles - subtitleId)
         }
     }
 
@@ -135,6 +258,10 @@ internal class SubtitleManager(
      * be item-scoped on some servers.
      */
     fun resetSubtitleManagerState() {
+        // Cancel any in-flight downloads so a stale post-download refresh can't
+        // write status back into the freshly-cleared sheet state for a new item.
+        downloadJobs.values.forEach { it.cancel() }
+        downloadJobs.clear()
         updateUiState {
             it.copy(
                 searchedSubtitles = emptyList(),
@@ -142,6 +269,7 @@ internal class SubtitleManager(
                 isSearchingSubtitles = false,
                 subtitleSearchError = null,
                 subtitleCultures = emptyList(),
+                downloadingSubtitles = emptyMap(),
             )
         }
     }
@@ -256,6 +384,20 @@ internal class SubtitleManager(
      * blocking any legitimate subtitle. See [uploadSubtitle].
      */
     private val MAX_SUBTITLE_UPLOAD_BYTES = 2L * 1024 * 1024
+
+    /**
+     * How many times to re-fetch (cache-busted) media detail while waiting for a
+     * freshly downloaded subtitle stream to surface. See [waitForSubtitleToAppear].
+     */
+    private val SUBTITLE_APPEAR_MAX_ATTEMPTS = 6
+
+    /**
+     * Delay between media-detail polls while waiting for a downloaded subtitle
+     * to appear. Jellyfin queues the download server-side, so the new stream
+     * typically surfaces within the first couple of retries. See
+     * [waitForSubtitleToAppear].
+     */
+    private val SUBTITLE_APPEAR_POLL_DELAY_MS = 1500L
 
     /** Returns the byte size of [uri] via OpenableColumns.SIZE, or 0 if unknown. */
     private fun queryFileSizeBytes(uri: Uri): Long {

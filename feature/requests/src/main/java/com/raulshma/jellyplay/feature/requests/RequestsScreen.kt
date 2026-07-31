@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -51,6 +52,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.requests.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,7 +76,7 @@ fun RequestsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Requests",
+        title = stringResource(R.string.requests_title),
         onBack = onBack,
     ) { paddingValues ->
         val bottomPadding = paddingValues.calculateBottomPadding()
@@ -116,7 +118,7 @@ fun RequestsScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = state.error ?: "Unknown error",
+                                    text = state.error ?: stringResource(R.string.requests_error_unknown),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.error,
                                 )
@@ -125,7 +127,7 @@ fun RequestsScreen(
                                     onClick = { viewModel.loadRequests(refresh = true) },
                                     modifier = Modifier.focusIndicator(),
                                 ) {
-                                    Text("Retry")
+                                    Text(stringResource(R.string.requests_action_retry))
                                 }
                             }
                         }
@@ -143,13 +145,13 @@ fun RequestsScreen(
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 Text(
-                                    "No requests found",
+                                    stringResource(R.string.requests_empty_title),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    "Try adjusting your filters",
+                                    stringResource(R.string.requests_empty_subtitle),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -225,11 +227,11 @@ fun RequestsScreen(
                                                 modifier = Modifier.size(18.dp),
                                             )
                                             Spacer(Modifier.width(4.dp))
-                                            Text("Prev")
+                                            Text(stringResource(R.string.requests_pagination_prev))
                                         }
                                         Spacer(Modifier.width(16.dp))
                                         Text(
-                                            "${state.currentPage} / ${state.totalPages}",
+                                            stringResource(R.string.requests_pagination_label, state.currentPage, state.totalPages),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
@@ -240,7 +242,7 @@ fun RequestsScreen(
                                             shape = ShapeCache.smooth12,
                                             modifier = Modifier.focusIndicator(),
                                         ) {
-                                            Text("Next")
+                                            Text(stringResource(R.string.requests_pagination_next))
                                             Spacer(Modifier.width(4.dp))
                                             Icon(
                                                 Tabler.Outline.ChevronRight,

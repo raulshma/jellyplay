@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Screen title -->
+    <string name="requests_title">Requests</string>
+
+    <!-- Error / empty / pagination -->
+    <string name="requests_error_unknown">Unknown error</string>
+    <string name="requests_action_retry">Retry</string>
+    <string name="requests_empty_title">No requests found</string>
+    <string name="requests_empty_subtitle">Try adjusting your filters</string>
+    <string name="requests_pagination_label">%1$d / %2$d</string>
+    <string name="requests_pagination_prev">Prev</string>
+    <string name="requests_pagination_next">Next</string>
+
+    <!-- Filter bar -->
+    <string name="requests_filter_all">All</string>
+    <string name="requests_filter_pending">Pending</string>
+    <string name="requests_filter_approved">Approved</string>
+    <string name="requests_filter_processing">Processing</string>
+    <string name="requests_filter_available">Available</string>
+    <string name="requests_filter_unavailable">Unavailable</string>
+    <string name="requests_filter_failed">Failed</string>
+    <string name="requests_media_all">All</string>
+    <string name="requests_media_movies">Movies</string>
+    <string name="requests_media_tv">TV</string>
+    <string name="requests_sort_recent">Recent</string>
+    <string name="requests_sort_modified">Modified</string>
+    <string name="requests_filter_mine">Mine</string>
+    <string name="requests_cd_sort_direction">Sort direction</string>
+
+    <!-- Item / status labels -->
+    <string name="requests_status_declined">Declined</string>
+    <string name="requests_status_failed">Failed</string>
+    <string name="requests_status_pending">Pending</string>
+    <string name="requests_status_available">Available</string>
+    <string name="requests_status_processing">Processing</string>
+    <string name="requests_status_partially_available">Partially Available</string>
+    <string name="requests_status_deleted">Deleted</string>
+    <string name="requests_status_unknown">Unknown</string>
+    <string name="requests_fallback_title">TMDB %1$d</string>
+    <string name="requests_metadata_modified">modified %1$s</string>
+
+    <!-- Item actions -->
+    <string name="requests_action_approve">Approve</string>
+    <string name="requests_action_decline">Decline</string>
+    <string name="requests_action_delete">Delete</string>
+    <string name="requests_action_delete_confirm">Sure?</string>
+
+    <!-- Confirm dialogs -->
+    <string name="requests_dialog_approve_title">Approve request?</string>
+    <string name="requests_dialog_decline_title">Decline request?</string>
+    <string name="requests_dialog_approve_message">Approve this request? This can\'t be undone.</string>
+    <string name="requests_dialog_decline_message">Decline this request? The requester will be notified and this can\'t be undone.</string>
+    <string name="requests_action_cancel">Cancel</string>
+
+    <!-- Relative time -->
+    <string name="requests_time_just_now">just now</string>
+    <string name="requests_time_minutes_ago">%1$dm ago</string>
+    <string name="requests_time_hours_ago">%1$dh ago</string>
+    <string name="requests_time_days_ago">%1$dd ago</string>
+    <string name="requests_time_months_ago">%1$dmo ago</string>
+    <string name="requests_time_years_ago">%1$dy ago</string>
+
+    <!-- Detail bottom sheet -->
+    <string name="requests_detail_year_type">%1$d · %2$s</string>
+    <string name="requests_detail_row_request_id">Request ID</string>
+    <string name="requests_detail_row_type">Type</string>
+    <string name="requests_detail_row_tmdb_id">TMDB ID</string>
+    <string name="requests_detail_row_requested_by">Requested by</string>
+    <string name="requests_detail_row_requested">Requested</string>
+    <string name="requests_detail_row_quality_profile">Quality Profile</string>
+    <string name="requests_detail_row_root_folder">Root Folder</string>
+    <string name="requests_detail_row_seasons">Seasons</string>
+    <string name="requests_detail_row_download">Download</string>
+    <string name="requests_download_time_left">%1$s left</string>
+    <string name="requests_download_in_queue">In Queue</string>
+    <string name="requests_action_remove_search">Remove &amp; Search</string>
+    <string name="requests_action_blocklist_search">Blocklist &amp; Search</string>
+    <string name="requests_action_view_media_details">View Media Details</string>
+    <string name="requests_action_retry_request">Retry Request</string>
+    <string name="requests_action_delete_request">Delete Request</string>
+    <string name="requests_action_remove_from_service">Remove from %1$s</string>
+
+    <!-- *arr download statuses -->
+    <string name="requests_arr_status_queued">Queued</string>
+    <string name="requests_arr_status_downloading">Downloading</string>
+    <string name="requests_arr_status_paused">Paused</string>
+    <string name="requests_arr_status_completed">Downloaded</string>
+    <string name="requests_arr_status_failed">Failed</string>
+    <string name="requests_arr_status_warning">Warning</string>
+    <string name="requests_arr_status_imported">Imported</string>
+    <string name="requests_arr_status_unknown">Unknown</string>
+
+    <!-- Brand names (not translatable) -->
+    <string name="requests_service_radarr" translatable="false">Radarr</string>
+    <string name="requests_service_sonarr" translatable="false">Sonarr</string>
+
+</resources>

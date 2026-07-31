@@ -1175,7 +1175,7 @@ class ExoPlayerEngine(
         val p = player ?: return emptyList()
         val tracks = p.currentTracks
         val result = mutableListOf<MediaTrack>()
-        
+
         fun processType(exoType: Int, trackType: TrackType) {
             val groupCount = tracks.groups.size
             var groupIndex = 0
@@ -1184,36 +1184,37 @@ class ExoPlayerEngine(
                 if (group.type != exoType) continue
                 val isSelected = (0 until group.length).any { group.isTrackSelected(it) }
                 val format = group.getTrackFormat(0)
+                val selFlags = format.selectionFlags
+                val info = TrackLabelInfo(
+                    title = format.label,
+                    language = format.language,
+                    codec = format.sampleMimeType,
+                    channels = if (trackType == TrackType.AUDIO) format.channelCount else null,
+                    // Forced/default are selection flags in Media3 (not role flags).
+                    isForced = selFlags and C.SELECTION_FLAG_FORCED != 0,
+                    isDefault = selFlags and C.SELECTION_FLAG_DEFAULT != 0,
+                    // SDH/closed-caption tracks carry ROLE_FLAG_CAPTION.
+                    isHearingImpaired = format.roleFlags and C.ROLE_FLAG_CAPTION != 0,
+                )
                 result.add(
                     MediaTrack(
                         id = "${trackType.name}_${groupIndex}",
                         index = groupIndex,
-                        label = buildTrackLabel(format),
+                        label = TrackLabelFormatter.primary(info),
                         language = format.language,
                         isSelected = isSelected,
                         type = trackType,
+                        badges = TrackLabelFormatter.badges(info),
                     )
                 )
                 groupIndex++
             }
         }
-        
+
         processType(C.TRACK_TYPE_AUDIO, TrackType.AUDIO)
         processType(C.TRACK_TYPE_TEXT, TrackType.SUBTITLE)
-        
-        return result
-    }
 
-    private fun buildTrackLabel(format: Format): String {
-        val lang = format.language?.let {
-            try { java.util.Locale(it).displayLanguage.ifBlank { it } }
-            catch (_: Exception) { it }
-        }
-        val codec = format.sampleMimeType
-        val channels = when (format.channelCount) {
-            1 -> "Mono"; 2 -> "Stereo"; 6 -> "5.1"; 8 -> "7.1"; else -> null
-        }
-        return listOfNotNull(lang, codec, channels).joinToString(" · ").ifBlank { "Unknown" }
+        return result
     }
 
     override fun addExternalSubtitle(source: SubtitleSource) = runOnPlayerThread {

@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.model.MpvScaler
 import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
 import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.formatFixed
+import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -447,6 +448,21 @@ class MpvPlayerEngine(
             if (afFilters.isNotEmpty()) {
                 mpv.setOptionString("af", afFilters.joinToString(","))
             }
+
+            // Free-form, user-authored options — applied LAST so a power user
+            // can override any curated structured value above (intent: the user
+            // is explicitly opting out of the app's default). One bad line must
+            // not abort init, so each is applied in its own try/catch and the
+            // failure is logged (unknown options / bad values throw an exception
+            // from setOptionString). See MpvEngineConfig.mpvExtraConfig.
+            val rawOptions = parseMpvConfigOptions(mpvCfg.mpvExtraConfig)
+            for (option in rawOptions) {
+                try {
+                    mpv.setOptionString(option.key, option.value)
+                } catch (e: Exception) {
+                    Log.w(TAG, "mpv extra config: rejected '${option.key}=${option.value}' (${e.message})")
+                }
+            }
         }
 
         override fun postInitOptions() {
@@ -838,6 +854,29 @@ class MpvPlayerEngine(
         }
     }
 
+    /**
+     * Selects a secondary subtitle track rendered alongside the primary (G4).
+     * mpv supports this natively via `secondary-sid`; the secondary track renders
+     * above the primary by default. An [index] < 0 clears it ("no").
+     */
+    override fun setSecondarySubtitleTrack(index: Int) {
+        try {
+            val m = mpvView?.mpv ?: return
+            Log.d(TAG, "Selecting MPV secondary subtitle track id=$index")
+            if (index < 0) {
+                m.setPropertyString("secondary-sid", "no")
+            } else {
+                try {
+                    m.setPropertyInt("secondary-sid", index)
+                } catch (_: Exception) {
+                    m.setPropertyString("secondary-sid", "$index")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to select MPV secondary subtitle track id=$index", e)
+        }
+    }
+
     override fun setMaxVideoBitrate(bps: Int?) {
         // Intentional no-op. MPV plays single-URL streams (not adaptive
         // manifests), so there is no variant ladder to cap — the only lever
@@ -1109,6 +1148,10 @@ class MpvPlayerEngine(
                 } catch (_: Exception) { 0L },
                 bufferedPositionMs = _bufferedPositionMs.value,
                 bufferSizeBytes = bufferSizeBytes,
+                avsyncMs = m.propDoubleOrNull("total-avsync")?.let { if (it != 0f) it else null },
+                displayFps = m.propDoubleOrNull("display-fps")?.let { fps -> if (fps > 0f) fps else null },
+                voDelayedMs = m.propDoubleOrNull("vo-delayed")?.let { if (it != 0f) it else null },
+                voFrameDropCount = m.propIntOrNull("frame-drop-count")?.toLong(),
             )
             val currentStats = _videoStats.value
             if (newStats != currentStats) {
@@ -1117,6 +1160,25 @@ class MpvPlayerEngine(
         } catch (e: Exception) {
             Log.w(TAG, "Failed to read MPV video stats", e)
         }
+    }
+
+    /**
+     * Read an mpv double property, returning null if the property is unset or
+     * the read throws (mpv raises on unknown/unavailable properties). Collapses
+     * the repeated `try { m.getPropertyDouble(...) } catch { null }` shape that
+     * the four G10 stats each carried inline.
+     */
+    private fun MPV.propDoubleOrNull(name: String): Float? = try {
+        getPropertyDouble(name)?.toFloat()
+    } catch (_: Exception) {
+        null
+    }
+
+    /** [propDoubleOrNull] for integer properties. */
+    private fun MPV.propIntOrNull(name: String): Int? = try {
+        getPropertyInt(name)
+    } catch (_: Exception) {
+        null
     }
 
     private fun buildTracks(): List<MediaTrack> {
@@ -1145,17 +1207,28 @@ class MpvPlayerEngine(
             // for side-loaded (sub-add) tracks. Used as the robust resolution key
             // in TrackSelectionHelper instead of fragile label matching.
             val ffIndex = track["ff-index"].asTrackId()
-            val label = buildTrackLabel(trackType, id, lang, title, codec)
+            // mpv exposes forced/default flags per track; "forced" subs are
+            // marked and default-track mirrors the container's default flag.
+            val isForced = track["forced"]?.asBoolean() ?: false
+            val isDefault = track["default"]?.asBoolean() ?: false
+            val info = TrackLabelInfo(
+                title = title,
+                language = lang,
+                codec = codec,
+                isForced = isForced,
+                isDefault = isDefault,
+            )
 
             result.add(
                 MediaTrack(
                     id = "mpv_${t}_${id}",
                     index = id,
-                    label = label,
+                    label = TrackLabelFormatter.primary(info),
                     language = lang,
                     isSelected = selected,
                     type = trackType,
                     streamIndex = ffIndex,
+                    badges = TrackLabelFormatter.badges(info),
                 )
             )
         }
@@ -1528,29 +1601,6 @@ class MpvPlayerEngine(
 
     private fun subtitleStyleValues(style: SubtitleStyle): MpvStyleMapping.MpvStyleValues =
         MpvStyleMapping.computeValues(style)
-
-    private fun buildTrackLabel(
-        trackType: TrackType,
-        id: Int,
-        language: String?,
-        title: String?,
-        codec: String?,
-    ): String {
-        val cleanTitle = title?.takeIf { it.isNotBlank() }
-        if (trackType == TrackType.SUBTITLE && cleanTitle != null) return cleanTitle
-
-        val languageLabel = language?.takeIf { it.isNotBlank() }?.let { lang ->
-            try {
-                java.util.Locale.forLanguageTag(lang.replace('_', '-')).displayLanguage.takeIf { it.isNotBlank() }
-            } catch (_: Exception) {
-                lang
-            }
-        }
-        val parts = listOfNotNull(languageLabel, cleanTitle, codec?.takeIf { it.isNotBlank() })
-            .distinctBy { it.lowercase() }
-        val fallbackPrefix = if (trackType == TrackType.SUBTITLE) "Subtitle" else "Audio"
-        return parts.joinToString(" · ").ifBlank { "$fallbackPrefix $id" }
-    }
 
     private fun MPVNode?.asTrackId(): Int? =
         this?.asInt()?.toInt() ?: this?.asString()?.toIntOrNull()

@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Editor screen -->
+    <string name="editor_tab_metadata">메타데이터</string>
+    <string name="editor_tab_images">이미지</string>
+    <string name="editor_tab_subtitles">자막</string>
+    <string name="editor_default_title">메타데이터 편집</string>
+    <string name="editor_save">저장</string>
+    <string name="editor_saving">저장 중\u2026</string>
+    <string name="editor_dismiss">닫기</string>
+
+    <!-- Discard-changes dialog -->
+    <string name="editor_discard_title">변경 사항을 삭제하시겠습니까?</string>
+    <string name="editor_discard_message">저장하지 않은 편집이 있습니다. 삭제하고 나가시겠습니까?</string>
+    <string name="editor_discard_action">삭제</string>
+    <string name="editor_keep_editing">계속 편집</string>
+
+    <!-- Metadata tab: section headers -->
+    <string name="editor_section_general">일반</string>
+    <string name="editor_section_ratings">평점</string>
+    <string name="editor_section_dates_numbers">날짜 및 번호</string>
+    <string name="editor_section_series_settings">시리즈 설정</string>
+    <string name="editor_section_genres">장르</string>
+    <string name="editor_section_tags">태그</string>
+    <string name="editor_section_studios">스튜디오</string>
+    <string name="editor_section_people">인물</string>
+    <string name="editor_section_external_ids">외부 ID</string>
+    <string name="editor_section_metadata_locking">메타데이터 잠금</string>
+
+    <!-- Metadata tab: field labels -->
+    <string name="editor_field_title">제목</string>
+    <string name="editor_field_original_title">원제</string>
+    <string name="editor_field_sort_title">정렬 제목</string>
+    <string name="editor_field_overview">줄거리</string>
+    <string name="editor_field_tagline">태그라인</string>
+    <string name="editor_field_community_rating">커뮤니티 평점 (0-10)</string>
+    <string name="editor_field_critic_rating">평론가 평점</string>
+    <string name="editor_field_must_be_number">숫자여야 합니다</string>
+    <string name="editor_field_official_rating">공식 등급</string>
+    <string name="editor_field_custom_rating">사용자 지정 등급</string>
+    <string name="editor_field_production_year">제작 연도</string>
+    <string name="editor_field_premiere_date">첫 방영일</string>
+    <string name="editor_field_end_date">종료일</string>
+    <string name="editor_date_format_hint">YYYY-MM-DD</string>
+    <string name="editor_field_runtime_minutes">상영 시간(분)</string>
+    <string name="editor_field_episode_number">에피소드 번호</string>
+    <string name="editor_field_season_number">시즌 번호</string>
+    <string name="editor_field_status">상태</string>
+    <string name="editor_field_display_order">표시 순서</string>
+    <string name="editor_field_air_time">방영 시간</string>
+    <string name="editor_field_air_days">방영 요일</string>
+    <string name="editor_field_language">언어</string>
+    <string name="editor_field_name">이름</string>
+    <string name="editor_field_type">유형</string>
+    <string name="editor_field_role">역할</string>
+
+    <!-- Metadata tab: status values -->
+    <string name="editor_status_continuing">방영 중</string>
+    <string name="editor_status_ended">종료</string>
+    <string name="editor_status_unreleased">미공개</string>
+
+    <!-- Metadata tab: display order values -->
+    <string name="editor_order_aired">방영순</string>
+    <string name="editor_order_absolute">절대순</string>
+    <string name="editor_order_dvd">DVD</string>
+    <string name="editor_order_digital">디지털</string>
+    <string name="editor_order_production">제작순</string>
+
+    <!-- Metadata tab: days of week (abbreviated to 3 chars via take(3)) -->
+    <string name="editor_day_sunday">일요일</string>
+    <string name="editor_day_monday">월요일</string>
+    <string name="editor_day_tuesday">화요일</string>
+    <string name="editor_day_wednesday">수요일</string>
+    <string name="editor_day_thursday">목요일</string>
+    <string name="editor_day_friday">금요일</string>
+    <string name="editor_day_saturday">토요일</string>
+
+    <!-- Metadata tab: person types -->
+    <string name="editor_person_type_actor">배우</string>
+    <string name="editor_person_type_director">감독</string>
+    <string name="editor_person_type_writer">각본</string>
+    <string name="editor_person_type_producer">제작</string>
+    <string name="editor_person_type_composer">작곡</string>
+    <string name="editor_person_type_guest_star">특별출연</string>
+    <string name="editor_person_type_conductor">지휘</string>
+    <string name="editor_person_type_lyricist">작사</string>
+    <string name="editor_person_type_arranger">편곡</string>
+    <string name="editor_person_role_as_format">%1$s (%2$s 역)</string>
+
+    <!-- Metadata tab: chip groups -->
+    <string name="editor_add_new_placeholder">새로 추가\u2026</string>
+    <string name="editor_add_person">인물 추가</string>
+    <string name="editor_edit_person">인물 편집</string>
+
+    <!-- Metadata tab: metadata locking -->
+    <string name="editor_lock_all_metadata">모든 메타데이터 잠금</string>
+    <string name="editor_lock_individual_fields">개별 필드 잠금:</string>
+    <string name="editor_lock_field_name">이름</string>
+    <string name="editor_lock_field_overview">줄거리</string>
+    <string name="editor_lock_field_genres">장르</string>
+    <string name="editor_lock_field_parental_rating">등급</string>
+    <string name="editor_lock_field_people">인물</string>
+    <string name="editor_lock_field_production_locations">제작지</string>
+    <string name="editor_lock_field_studios">스튜디오</string>
+    <string name="editor_lock_field_tags">태그</string>
+    <string name="editor_lock_field_runtime">상영 시간</string>
+
+    <!-- Metadata tab: generic actions/icons -->
+    <string name="editor_action_collapse">접기</string>
+    <string name="editor_action_expand">펼치기</string>
+    <string name="editor_action_remove">제거</string>
+    <string name="editor_action_add">추가</string>
+    <string name="editor_action_edit">편집</string>
+    <string name="editor_action_cancel">취소</string>
+
+    <!-- Images tab -->
+    <string name="editor_images_upload">업로드</string>
+    <string name="editor_images_browse_online">온라인에서 찾아보기</string>
+    <string name="editor_images_none_available">사용 가능한 이미지가 없습니다</string>
+    <string name="editor_images_delete_title">이미지 삭제</string>
+    <string name="editor_images_delete_message">이 %1$s 이미지를 삭제하시겠습니까?</string>
+    <string name="editor_images_delete_action">삭제</string>
+    <string name="editor_images_dimensions_format">%1$dx%2$d</string>
+    <string name="editor_images_upload_title">이미지 업로드</string>
+    <string name="editor_images_browse_title">온라인 이미지 찾아보기</string>
+    <string name="editor_images_source_file">파일</string>
+    <string name="editor_images_source_url">URL</string>
+    <string name="editor_images_preview">미리보기</string>
+    <string name="editor_images_select_image">이미지 선택</string>
+    <string name="editor_images_change_file">파일 변경</string>
+    <string name="editor_images_image_url">이미지 URL</string>
+    <string name="editor_images_download_from_url">URL에서 다운로드</string>
+    <string name="editor_images_all_providers">모든 제공자</string>
+    <string name="editor_images_no_images_found">이미지를 찾을 수 없습니다</string>
+    <string name="editor_images_pagination_format">%3$d개 중 %1$d-%2$d</string>
+    <string name="editor_images_previous">이전</string>
+    <string name="editor_images_next">다음</string>
+    <string name="editor_images_download">다운로드</string>
+    <string name="editor_images_close">닫기</string>
+    <string name="editor_images_select_type">유형 선택</string>
+    <string name="editor_images_image_type">이미지 유형</string>
+    <string name="editor_images_all_types">모든 유형</string>
+
+    <!-- Image types (enum-like, kept translatable for display) -->
+    <string name="editor_image_type_primary">기본</string>
+    <string name="editor_image_type_art">아트</string>
+    <string name="editor_image_type_backdrop">배경</string>
+    <string name="editor_image_type_banner">배너</string>
+    <string name="editor_image_type_box">케이스</string>
+    <string name="editor_image_type_box_rear">케이스 뒷면</string>
+    <string name="editor_image_type_disc">디스크</string>
+    <string name="editor_image_type_logo">로고</string>
+    <string name="editor_image_type_menu">메뉴</string>
+    <string name="editor_image_type_thumb">썸네일</string>
+
+    <!-- Subtitles tab -->
+    <string name="editor_subtitles_upload">업로드</string>
+    <string name="editor_subtitles_search_remote">원격 검색</string>
+    <string name="editor_subtitles_none_available">사용 가능한 자막이 없습니다</string>
+    <string name="editor_subtitles_fallback_title">자막 %1$d</string>
+    <string name="editor_subtitles_forced">강제</string>
+    <string name="editor_subtitles_external">외부</string>
+    <string name="editor_subtitles_delete_title">자막 삭제</string>
+    <string name="editor_subtitles_delete_message">이 자막을 삭제하시겠습니까?</string>
+    <string name="editor_subtitles_delete_action">삭제</string>
+    <string name="editor_subtitles_upload_title">자막 업로드</string>
+    <string name="editor_subtitles_select_file">파일 선택 (.srt, .ass, .ssa, .vtt)</string>
+    <string name="editor_subtitles_change_file">변경: %1$s</string>
+    <string name="editor_subtitles_forced_subtitle">강제 자막</string>
+    <string name="editor_subtitles_hearing_impaired">청각 장애용</string>
+    <string name="editor_subtitles_download_count_format">다운로드 %1$d회</string>
+    <string name="editor_subtitles_frame_rate_format">%1$sfps</string>
+    <string name="editor_subtitles_search_title">원격 자막 검색</string>
+    <string name="editor_subtitles_search">검색</string>
+    <string name="editor_subtitles_no_results">검색 결과가 없습니다</string>
+    <string name="editor_subtitles_unknown">알 수 없음</string>
+    <string name="editor_subtitles_perfect_match">완벽 일치</string>
+    <string name="editor_subtitles_label_forced">강제</string>
+    <string name="editor_subtitles_label_hi">SDH</string>
+    <string name="editor_subtitles_label_mt">MT</string>
+    <string name="editor_subtitles_download">다운로드</string>
+
+</resources>

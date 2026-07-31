@@ -18,6 +18,22 @@ enum class PlaybackPrefScope {
 }
 
 /**
+ * The cross-episode track-scoring memory for one track type (G5): the display
+ * [label] (codec folded in), its [language], and its positional
+ * [indexWithinLanguage] for layout stability. Persisted per series so a specific
+ * pick (e.g. "English · 5.1") survives an app restart and carries to the next
+ * episode instead of being remembered only in-process. `null` index means
+ * "unknown / not comparable".
+ */
+@Immutable
+@Serializable
+data class RememberedTrack(
+    val label: String,
+    val language: String?,
+    val indexWithinLanguage: Int = -1,
+)
+
+/**
  * A per-item / per-series playback-language preference.
  *
  * Each language field is nullable: a `null` value means "not set / inherit",
@@ -39,8 +55,19 @@ enum class PlaybackPrefScope {
  *   (when [PlaybackPrefScope.SERIES]).
  * @param audioLanguage preferred audio language code (ISO-639), or null to inherit.
  * @param subtitleLanguage preferred subtitle language code (ISO-639), or null to inherit.
+ * @param subtitleForced whether the preferred subtitle should be a forced-narrative
+ *   track, or null to not care. Lets a series pin "English Forced" so the
+ *   restore matcher (in `TrackSelectionHelper`) prefers forced over plain for
+ *   every episode, relaxing only when absent.
+ * @param subtitleHearingImpaired whether the preferred subtitle should be an SDH /
+ *   hearing-impaired track, or null to not care. Pairs with [subtitleLanguage]
+ *   so a series can pin "English SDH" and have it carried episode to episode.
  * @param dialogueBoostStrength per-item dialogue-boost strength, or null to use the
  *   effective default ([EffectStrength.NONE]).
+ * @param rememberedAudioTrack the last-selected audio track to carry to the next
+ *   episode via track scoring, or null to not remember one.
+ * @param rememberedSubtitleTrack the last-selected subtitle track to carry to the
+ *   next episode via track scoring, or null to not remember one.
  * @param updatedAt epoch millis of the last write.
  */
 @Immutable
@@ -50,6 +77,10 @@ data class ItemPlaybackPreference(
     val key: String,
     val audioLanguage: String? = null,
     val subtitleLanguage: String? = null,
+    val subtitleForced: Boolean? = null,
+    val subtitleHearingImpaired: Boolean? = null,
     val dialogueBoostStrength: EffectStrength? = null,
+    val rememberedAudioTrack: RememberedTrack? = null,
+    val rememberedSubtitleTrack: RememberedTrack? = null,
     val updatedAt: Long = System.currentTimeMillis(),
 )

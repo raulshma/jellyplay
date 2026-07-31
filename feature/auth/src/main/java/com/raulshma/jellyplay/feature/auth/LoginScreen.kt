@@ -38,7 +38,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.auth.R
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -72,9 +74,11 @@ fun LoginScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "Sign In",
+        title = stringResource(R.string.auth_sign_in_title),
         onBack = onBack,
     ) { padding ->
+        val usernameRequiredError = stringResource(R.string.auth_error_username_required)
+        val loginFailedError = stringResource(R.string.auth_login_failed)
         val adaptiveInfo = LocalAdaptiveInfo.current
         val isTv = LocalTvMode.current
         val contentPad = adaptiveInfo.contentPadding(isTv)
@@ -130,7 +134,7 @@ fun LoginScreen(
                         username = it
                         error = null
                     },
-                    label = { Text("Username") },
+                    label = { Text(stringResource(R.string.auth_username)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().focusRequester(usernameFocusRequester),
                     isError = error != null,
@@ -152,7 +156,7 @@ fun LoginScreen(
                         password = it
                         error = null
                     },
-                    label = { Text("Password") },
+                    label = { Text(stringResource(R.string.auth_password)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     isError = error != null,
@@ -162,7 +166,7 @@ fun LoginScreen(
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(
                                 imageVector = if (passwordVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
-                                contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                contentDescription = stringResource(if (passwordVisible) R.string.auth_hide_password else R.string.auth_show_password),
                             )
                         }
                     },
@@ -202,7 +206,7 @@ fun LoginScreen(
                 Button(
                     onClick = {
                         if (username.isBlank()) {
-                            error = "Please enter a username"
+                            error = usernameRequiredError
                             return@Button
                         }
                         isLoggingIn = true
@@ -212,7 +216,7 @@ fun LoginScreen(
                             result.onSuccess {
                                 onLoginSuccess()
                             }.onFailure {
-                                error = it.message ?: "Login failed"
+                                error = it.message ?: loginFailedError
                             }
                         }
                     },
@@ -227,7 +231,7 @@ fun LoginScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
-                    Text(if (isLoggingIn) "Signing in..." else "Sign In")
+                    Text(if (isLoggingIn) stringResource(R.string.auth_signing_in) else stringResource(R.string.auth_sign_in))
                 }
             }
 
@@ -250,7 +254,7 @@ fun LoginScreen(
                 ) {
                     Icon(Tabler.Outline.Link, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Quick Connect")
+                    Text(stringResource(R.string.auth_quick_connect))
                 }
             }
         }

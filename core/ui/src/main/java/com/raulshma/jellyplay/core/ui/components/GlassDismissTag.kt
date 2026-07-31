@@ -20,12 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
@@ -85,7 +87,7 @@ fun GlassDismissTag(
         )
         Icon(
             Tabler.Outline.X,
-            contentDescription = "Remove",
+            contentDescription = stringResource(R.string.core_ui_remove),
             modifier = Modifier.size(14.dp),
             tint = iconTint,
         )

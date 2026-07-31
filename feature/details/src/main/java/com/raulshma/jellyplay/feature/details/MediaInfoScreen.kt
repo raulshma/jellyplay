@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,7 +77,7 @@ fun MediaInfoScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Technical Info",
+        title = stringResource(R.string.detail_option_technical_info),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) { innerPadding ->
@@ -175,8 +176,8 @@ private fun MediaSourceSection(
         InfoGrid(entries = buildList {
             source.container?.let { add("Container" to it.uppercase()) }
             source.size?.let { add("File Size" to formatFileSize(it)) }
-            source.bitrate?.let { add("Overall Bitrate" to formatBitrate(it)) }
-            source.runTimeTicks?.let { add("Duration" to formatTicks(it)) }
+            source.bitrate?.let { add("Overall Bitrate" to MediaInfoFormat.formatBitrate(it)) }
+            source.runTimeTicks?.let { add("Duration" to MediaInfoFormat.formatTicks(it)) }
             source.path?.let {
                 val fileName = it.substringAfterLast('/').substringAfterLast('\\')
                 add("File" to fileName)
@@ -206,7 +207,7 @@ private fun MediaSourceSection(
 
         if (videoStreams.isNotEmpty()) {
             StreamSection(
-                title = "Video",
+                title = stringResource(R.string.detail_media_info_title_video),
                 icon = Tabler.Outline.BadgeHd,
                 streams = videoStreams,
             ) { stream ->
@@ -214,10 +215,10 @@ private fun MediaSourceSection(
                     stream.codec?.let { add("Codec" to it.uppercase()) }
                     if (stream.width != null && stream.height != null) {
                         add("Resolution" to "${stream.width}x${stream.height}")
-                        add("Quality" to resolutionLabel(stream.height))
+                        add("Quality" to MediaInfoFormat.resolutionLabel(stream.height))
                     }
                     stream.realFrameRate?.let { add("Frame Rate" to "${it} fps") }
-                    stream.bitRate?.let { add("Bitrate" to formatBitrate(it)) }
+                    stream.bitRate?.let { add("Bitrate" to MediaInfoFormat.formatBitrate(it)) }
                     stream.videoRange?.let { add("Video Range" to it) }
                     stream.videoRangeType?.let { add("Range Type" to it) }
                     stream.videoDoViTitle?.let { add("Dolby Vision" to it) }
@@ -229,15 +230,15 @@ private fun MediaSourceSection(
 
         if (audioStreams.isNotEmpty()) {
             StreamSection(
-                title = "Audio",
+                title = stringResource(R.string.detail_media_info_title_audio),
                 icon = Tabler.Outline.Volume,
                 streams = audioStreams,
             ) { stream ->
                 StreamInfoRows(entries = buildList {
                     stream.codec?.let { add("Codec" to it.uppercase()) }
-                    stream.channels?.let { add("Channels" to channelLabel(it)) }
+                    stream.channels?.let { add("Channels" to MediaInfoFormat.channelLabel(it)) }
                     stream.sampleRate?.let { add("Sample Rate" to "${it / 1000.0} kHz") }
-                    stream.bitRate?.let { add("Bitrate" to formatBitrate(it)) }
+                    stream.bitRate?.let { add("Bitrate" to MediaInfoFormat.formatBitrate(it)) }
                     stream.audioSampleRate?.let { add("Sample Rate" to "${it} Hz") }
                     stream.language?.let { add("Language" to it) }
                     stream.isDefault.let { if (it) add("Default" to "Yes") }
@@ -249,7 +250,7 @@ private fun MediaSourceSection(
 
         if (subtitleStreams.isNotEmpty()) {
             StreamSection(
-                title = "Subtitles",
+                title = stringResource(R.string.detail_media_info_title_subtitles),
                 icon = Tabler.Outline.Subtitles,
                 streams = subtitleStreams,
             ) { stream ->
@@ -359,40 +360,8 @@ private fun EmptyMediaInfo() {
     ) {
         com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
             icon = Tabler.Outline.FileDescription,
-            title = "No Media Info",
-            description = "Technical information is not available for this item",
+            title = stringResource(R.string.detail_media_info_no_info),
+            description = stringResource(R.string.detail_media_info_no_info_description),
         )
     }
-}
-
-private fun formatBitrate(bps: Long): String = when {
-    bps >= 1_000_000 -> "%.1f Mbps".format(bps / 1_000_000.0)
-    bps >= 1_000 -> "%.0f Kbps".format(bps / 1_000.0)
-    else -> "$bps bps"
-}
-
-private fun formatTicks(ticks: Long): String {
-    val totalSeconds = ticks / 10_000_000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) "%dh %dm".format(hours, minutes) else "%dm %ds".format(minutes, seconds)
-}
-
-private fun resolutionLabel(height: Int?): String = when {
-    height == null -> "Unknown"
-    height >= 2160 -> "4K UHD"
-    height >= 1440 -> "1440p QHD"
-    height >= 1080 -> "1080p Full HD"
-    height >= 720 -> "720p HD"
-    height >= 480 -> "480p SD"
-    else -> "${height}p"
-}
-
-private fun channelLabel(channels: Int): String = when (channels) {
-    1 -> "1.0 (Mono)"
-    2 -> "2.0 (Stereo)"
-    6 -> "5.1 (Surround)"
-    8 -> "7.1 (Surround)"
-    else -> "$channels ch"
 }

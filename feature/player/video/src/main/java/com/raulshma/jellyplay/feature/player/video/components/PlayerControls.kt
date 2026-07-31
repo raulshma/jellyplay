@@ -71,6 +71,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,6 +110,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.formatDuration
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.composables.icons.tabler.Tabler
@@ -215,6 +217,13 @@ internal fun PlayerControls(
     videoFiltersActive: Boolean = false,
     onSleepTimerClick: () -> Unit = {},
     onVideoFilterClick: () -> Unit = {},
+    supportsScreenshot: Boolean = false,
+    onScreenshotClick: () -> Unit = {},
+    abRepeatActive: Boolean = false,
+    onAbRepeatToggle: () -> Unit = {},
+    onAbRepeatSetA: () -> Unit = {},
+    onAbRepeatSetB: () -> Unit = {},
+    onAbRepeatClear: () -> Unit = {},
     onLockClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     onOverflowMenuChange: (Boolean) -> Unit = {},
@@ -341,7 +350,7 @@ internal fun PlayerControls(
                     ) {
                         Icon(
                             Tabler.Outline.ArrowLeft,
-                            "Back",
+                            stringResource(R.string.player_video_back),
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(24.dp),
                         )
@@ -379,7 +388,7 @@ internal fun PlayerControls(
                                 ) {
                                     Icon(
                                         imageVector = Tabler.Outline.Clock,
-                                        contentDescription = "Current time",
+                                        contentDescription = stringResource(R.string.player_video_current_time),
                                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -410,7 +419,7 @@ internal fun PlayerControls(
                     if (isInSyncPlaySession) {
                         Spacer(Modifier.width(8.dp))
                         SyncPlayHeaderIndicator(
-                            groupName = syncPlayGroupName ?: "Group",
+                            groupName = syncPlayGroupName ?: stringResource(R.string.player_video_group),
                             participantCount = syncPlayParticipantCount,
                             isSynced = isSyncPlaySynced,
                             isSyncing = isSyncPlaySyncing,
@@ -445,14 +454,14 @@ internal fun PlayerControls(
                         } else Modifier
                     ),
             ) {
-                val tvRewindFocusState = rememberTvFocusState(focusedScale = 1.08f)
+                val tvPreviousEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
                     onClick = onPreviousEpisode,
                     enabled = hasPreviousEpisode,
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
-                        .then(tvRewindFocusState.focusModifier)
-                        .tvFocusIndicator(tvRewindFocusState, IconButtonDefaults.largeRoundShape),
+                        .then(tvPreviousEpisodeFocusState.focusModifier)
+                        .tvFocusIndicator(tvPreviousEpisodeFocusState, IconButtonDefaults.largeRoundShape),
                     shape = IconButtonDefaults.largeRoundShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -460,7 +469,7 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        Tabler.Outline.PlayerTrackPrev, "Previous episode",
+                        Tabler.Outline.PlayerSkipBack, stringResource(R.string.player_video_previous_episode),
                         modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }
@@ -481,19 +490,19 @@ internal fun PlayerControls(
                 ) {
                     Icon(
                         if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                        if (isPlaying) "Pause" else "Play",
+                        if (isPlaying) stringResource(R.string.player_video_pause) else stringResource(R.string.player_video_play),
                         modifier = Modifier.size(40.dp),
                     )
                 }
 
-                val tvForwardFocusState = rememberTvFocusState(focusedScale = 1.08f)
+                val tvNextEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
                 FilledTonalIconButton(
                     onClick = onNextEpisode,
                     enabled = hasNextEpisode,
                     modifier = Modifier
                         .size(IconButtonDefaults.mediumContainerSize())
-                        .then(tvForwardFocusState.focusModifier)
-                        .tvFocusIndicator(tvForwardFocusState, IconButtonDefaults.largeRoundShape),
+                        .then(tvNextEpisodeFocusState.focusModifier)
+                        .tvFocusIndicator(tvNextEpisodeFocusState, IconButtonDefaults.largeRoundShape),
                     shape = IconButtonDefaults.largeRoundShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -501,7 +510,7 @@ internal fun PlayerControls(
                     ),
                 ) {
                     Icon(
-                        Tabler.Outline.PlayerTrackNext, "Next episode",
+                        Tabler.Outline.PlayerSkipForward, stringResource(R.string.player_video_next_episode),
                         modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
                     )
                 }
@@ -612,7 +621,7 @@ internal fun PlayerControls(
                             primaryControls()
                             PlayerIconButton(
                                 icon = Tabler.Outline.Lock,
-                                contentDescription = "Lock screen",
+                                contentDescription = stringResource(R.string.player_video_lock_screen),
                                 onClick = onLockClick,
                             )
                             MuteButton(isMuted = isMuted, onClick = onMuteClick)
@@ -622,12 +631,12 @@ internal fun PlayerControls(
                             PipButton(onClick = onPipClick)
                             PlayerIconButton(
                                 icon = Tabler.Outline.Rotate,
-                                contentDescription = "Rotate Screen",
+                                contentDescription = stringResource(R.string.player_video_rotate_screen),
                                 onClick = onToggleOrientation,
                             )
                             PlayerIconButton(
                                 icon = Tabler.Outline.DotsVertical,
-                                contentDescription = "More options",
+                                contentDescription = stringResource(R.string.player_video_more_options),
                                 onClick = { showOverflow = true },
                             )
                         }
@@ -655,7 +664,7 @@ internal fun PlayerControls(
                             if (!isTv) {
                                 PlayerIconButton(
                                     icon = Tabler.Outline.Lock,
-                                    contentDescription = "Lock screen",
+                                    contentDescription = stringResource(R.string.player_video_lock_screen),
                                     onClick = onLockClick,
                                 )
                             }
@@ -668,14 +677,14 @@ internal fun PlayerControls(
                             if (!isTv) {
                                 PlayerIconButton(
                                     icon = Tabler.Outline.Rotate,
-                                    contentDescription = "Rotate Screen",
+                                    contentDescription = stringResource(R.string.player_video_rotate_screen),
                                     onClick = onToggleOrientation,
                                 )
                             }
 
                             PlayerIconButton(
                                 icon = Tabler.Outline.DotsVertical,
-                                contentDescription = "More options",
+                                contentDescription = stringResource(R.string.player_video_more_options),
                                 onClick = { showOverflow = true },
                                 modifier = Modifier.then(
                                     if (isTv) {
@@ -786,6 +795,28 @@ internal fun PlayerControls(
                 showOverflow = false
                 onVideoFilterClick()
             },
+            supportsScreenshot = supportsScreenshot,
+            onScreenshotClick = {
+                showOverflow = false
+                onScreenshotClick()
+            },
+            abRepeatActive = abRepeatActive,
+            onAbRepeatToggle = {
+                showOverflow = false
+                onAbRepeatToggle()
+            },
+            onAbRepeatSetA = {
+                showOverflow = false
+                onAbRepeatSetA()
+            },
+            onAbRepeatSetB = {
+                showOverflow = false
+                onAbRepeatSetB()
+            },
+            onAbRepeatClear = {
+                showOverflow = false
+                onAbRepeatClear()
+            },
         )
     }
 }
@@ -825,45 +856,45 @@ private fun PrimaryMediaControls(
     PlayerSpeedButton(speed = playbackSpeed, onClick = onSpeedClick)
     PlayerIconButton(
         icon = Tabler.Outline.Music,
-        contentDescription = "Audio",
+        contentDescription = stringResource(R.string.player_video_audio),
         onClick = onAudioClick,
     )
     PlayerIconButton(
         icon = Tabler.Outline.Subtitles,
-        contentDescription = "Subtitles",
+        contentDescription = stringResource(R.string.player_video_subtitles),
         onClick = onSubtitleClick,
     )
     if (chapters.isNotEmpty()) {
         PlayerIconButton(
             icon = Tabler.Outline.List,
-            contentDescription = "Chapters",
+            contentDescription = stringResource(R.string.player_video_chapters),
             onClick = onChapterClick,
         )
     }
     if (hasEpisodes && episodeBrowserEnabled) {
         PlayerIconButton(
             icon = Tabler.Outline.Video,
-            contentDescription = "Episodes",
+            contentDescription = stringResource(R.string.player_video_episodes),
             onClick = onEpisodesClick,
         )
     }
     if (isInSyncPlaySession) {
         PlayerIconButton(
             icon = Tabler.Outline.Users,
-            contentDescription = "SyncPlay",
+            contentDescription = stringResource(R.string.player_video_syncplay),
             onClick = onSyncPlayClick,
             tint = MaterialTheme.colorScheme.primary,
         )
     }
     PlayerIconButton(
         icon = Tabler.Outline.AspectRatio,
-        contentDescription = "Aspect Ratio",
+        contentDescription = stringResource(R.string.player_video_aspect_ratio_label),
         onClick = onAspectRatioClick,
         tint = if (currentAspectRatio != AspectRatio.FIT) MaterialTheme.colorScheme.primary else Color.Unspecified,
     )
     PlayerIconButton(
         icon = Tabler.Outline.InfoCircle,
-        contentDescription = "Info",
+        contentDescription = stringResource(R.string.player_video_info),
         onClick = onInfoClick,
     )
 }

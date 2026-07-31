@@ -47,12 +47,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -61,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -96,6 +100,7 @@ fun AnimatedHeroHeader(
     height: Dp,
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
+    homeBackdropEnabled: Boolean = false,
     listState: LazyListState,
     onItemClick: (String) -> Unit,
     onDetailsClick: ((String) -> Unit)? = null,
@@ -163,6 +168,7 @@ fun AnimatedHeroHeader(
             height = height,
             backgroundColor = backgroundColor,
             contentPadding = contentPadding,
+            homeBackdropEnabled = homeBackdropEnabled,
             parallaxOffset = parallaxOffset,
             onClick = { onItemClick(currentFeatured.id) },
             onDetailsClick = onDetailsClick?.let { { it(currentFeatured.id) } },
@@ -182,6 +188,7 @@ fun HeroHeader(
     height: Dp,
     backgroundColor: Color,
     contentPadding: Dp = 16.dp,
+    homeBackdropEnabled: Boolean = false,
     parallaxOffset: Float = 0f,
     onClick: () -> Unit,
     onDetailsClick: (() -> Unit)? = null,
@@ -316,11 +323,14 @@ fun HeroHeader(
 
     val heroShape = remember(isTv, adaptiveInfo.windowSizeClass) {
         if (!isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
+            // Bottom corners are squared: the hero artwork fades to transparent
+            // at the bottom edge, so a flat bottom merges seamlessly into the
+            // screen backdrop instead of showing a rounded image edge.
             smoothCornerShape(
                 cornerRadiusTL = 0.dp,
                 cornerRadiusTR = 0.dp,
-                cornerRadiusBL = 36.dp,
-                cornerRadiusBR = 14.dp,
+                cornerRadiusBL = 0.dp,
+                cornerRadiusBR = 0.dp,
             )
         } else {
             RectangleShape
@@ -352,6 +362,82 @@ fun HeroHeader(
             blurHash = item.blurHashes.backdrop,
             modifier = Modifier
                 .fillMaxSize()
+                // OUTER layer — fixed (no translation). Its only job is to isolate
+                // the DstIn erase below into an offscreen buffer so the erased
+                // pixels become transparent (letting the ambient backdrop show
+                // through) instead of blending against whatever sits behind the
+                // hero. Because this layer never moves, the dissolve mask drawn
+                // inside it stays anchored to the hero box.
+                //
+                // In reduced-motion/performance mode the offscreen buffer +
+                // DstIn erase is skipped: it forces a per-frame GPU allocation
+                // and the parallax/breath animations that justified the dissolve
+                // are already collapsed. The bottom edge instead gets a cheap
+                // static alpha gradient drawn over it (below).
+                .then(
+                    if (!reducedMotion) {
+                        Modifier.graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                    } else Modifier
+                )
+                // Dissolve the bottom edge into transparency so the hero melts
+                // into the ambient backdrop (a blurred tint of the same artwork)
+                // instead of hard-cutting at a rectangular edge. DstIn keeps the
+                // image where the mask alpha is opaque and erases it to transparent
+                // where it isn't, letting whatever sits behind (HomeBackdrop, or
+                // the flat fill when the backdrop is off) show through.
+                //
+                // The mask is evaluated in THIS node's local coordinates, which
+                // belong to the fixed outer layer above — NOT the parallaxing
+                // inner layer below. That is deliberate: if the mask shared the
+                // parallax layer it would slide down with the image as you scroll,
+                // sliding the melt zone below the hero's clipped bottom edge and
+                // leaving a hard rectangular cut against the content. Keeping the
+                // melt anchored to the box means the bottom always dissolves, so
+                // the hero stays seamless with the content at every scroll offset.
+                .then(
+                    if (!reducedMotion) {
+                        Modifier.drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.0f to Color.Black,
+                                        0.55f to Color.Black,
+                                        0.85f to Color.Transparent,
+                                        1.0f to Color.Transparent,
+                                    ),
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        }
+                    } else {
+                        // Cheap static bottom fade drawn over the artwork so the
+                        // hero's bottom edge still melts instead of hard-cutting,
+                        // without the offscreen buffer. Only the bottom needs it
+                        // here (the legibility scrim Box below covers the top).
+                        Modifier.drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.0f to Color.Transparent,
+                                        0.6f to Color.Transparent,
+                                        0.85f to backgroundColor.copy(alpha = 0.6f),
+                                        1.0f to backgroundColor,
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                )
+                // INNER layer — the image itself parallaxes (scrolls slower than
+                // the list) and breathes. It moves underneath the fixed dissolve
+                // mask above, so the artwork shifts while the melt stays put.
+                // In reduced-motion mode breathScale is 1f and parallaxOffset is
+                // still applied (scroll-coupled, not an animation), so this layer
+                // stays cheap.
                 .graphicsLayer {
                     translationY = parallaxOffset
                     scaleX = breathScale
@@ -368,29 +454,42 @@ fun HeroHeader(
             size = CoilSize(1920, 1080),
         )
 
-        // The scrim gradient is remember-ed on backgroundColor, which is an
-        // animated color (the dynamic-theming lerp). Each animation frame
-        // invalidates the remember and allocates a new 5-stop Brush. This is a
-        // draw-phase cost on a single hero instance (not a per-card grid), so
-        // it is an accepted trade-off — the constant Black stops and the
-        // variable background stops can't be split cheaply without a custom
-        // drawBehind that still allocates a Brush internally.
+        // Legibility scrim: darkens only the top third (title/overline sits at
+        // the bottom, which is protected by the dissolve into the backdrop, and
+        // the ambient backdrop itself is already dark). The bottom is left
+        // transparent so that the image, which erodes to transparent via the
+        // DstIn mask above, blends straight into the HomeBackdrop behind it —
+        // no flat fill seam. When the backdrop is off we still keep the top
+        // darkening; the bottom transparent strip just merges into the flat
+        // background fill that sits behind the whole screen.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    remember(backgroundColor) {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.45f),
-                                Color.Transparent,
-                                backgroundColor.copy(alpha = 0.3f),
-                                backgroundColor.copy(alpha = 0.85f),
-                                backgroundColor,
-                            ),
-                            startY = 0f,
-                            endY = Float.POSITIVE_INFINITY,
-                        )
+                    remember(backgroundColor, homeBackdropEnabled) {
+                        if (homeBackdropEnabled) {
+                            // Top legibility only; bottom transparent so the dissolved
+                            // artwork hands off to the ambient backdrop seamlessly.
+                            Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0.0f to Color.Black.copy(alpha = 0.45f),
+                                    0.3f to Color.Transparent,
+                                    0.6f to Color.Transparent,
+                                    1.0f to Color.Transparent,
+                                ),
+                            )
+                        } else {
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.45f),
+                                    Color.Transparent,
+                                    backgroundColor.copy(alpha = 0.3f),
+                                    backgroundColor,
+                                ),
+                                startY = 0f,
+                                endY = Float.POSITIVE_INFINITY,
+                            )
+                        }
                     }
                 )
         )
@@ -570,7 +669,7 @@ fun HeroHeader(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                if (hasProgress) "Resume" else "Play",
+                                if (hasProgress) stringResource(R.string.home_resume) else stringResource(R.string.home_play),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onPrimary,
                             )
@@ -607,7 +706,7 @@ fun HeroHeader(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            "Details",
+                            stringResource(R.string.home_details),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurface,
                         )

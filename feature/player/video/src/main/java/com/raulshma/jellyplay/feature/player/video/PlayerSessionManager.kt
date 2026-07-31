@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory
@@ -185,7 +186,7 @@ class PlayerSessionManager(
             // The file vanished after resolution — surface an error rather
             // than silently falling back online (callers that want fallback
             // should use [PlaybackSource.Auto]).
-            _sessionState.update { it.copy(title = "Error: offline file missing", isReady = false) }
+            _sessionState.update { it.copy(title = context.getString(R.string.player_video_error_offline_file_missing), isReady = false) }
             return
         }
 
@@ -290,7 +291,7 @@ class PlayerSessionManager(
     ) {
         val detailResult = mediaRepository.getMediaDetail(itemId)
         val detail = detailResult.getOrElse {
-            _sessionState.update { it.copy(title = "Error loading media") }
+            _sessionState.update { it.copy(title = context.getString(R.string.player_video_error_loading_media)) }
             return
         }
 

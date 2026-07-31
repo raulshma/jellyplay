@@ -165,6 +165,7 @@ internal fun org.jellyfin.sdk.model.api.MediaStream.toMediaStream() = MediaStrea
     displayTitle = displayTitle,
     isDefault = isDefault,
     isForced = isForced,
+    isHearingImpaired = isHearingImpaired,
     isExternal = isExternal,
     width = width,
     height = height,
