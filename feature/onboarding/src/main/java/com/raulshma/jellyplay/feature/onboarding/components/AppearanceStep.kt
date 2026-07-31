@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -45,6 +46,7 @@ import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.components.AccentColorPicker
 import com.raulshma.jellyplay.core.ui.components.ColorStylePicker
+import com.raulshma.jellyplay.feature.onboarding.R
 
 @Composable
 fun AppearanceStep(
@@ -71,8 +73,8 @@ fun AppearanceStep(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OnboardingStepScaffold(
-            title = "Appearance",
-            subtitle = "Choose how JellyPlay looks for you",
+            title = stringResource(R.string.onboarding_appearance_title),
+            subtitle = stringResource(R.string.onboarding_appearance_subtitle),
             icon = Tabler.Outline.Palette,
             onNext = {},
         ) {
@@ -151,23 +153,23 @@ fun AppearanceStep(
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                 OnboardingToggleRow(
-                    title = "Dynamic theming",
-                    subtitle = "Match colors to your wallpaper",
+                    title = stringResource(R.string.onboarding_appearance_dynamic_theming),
+                    subtitle = stringResource(R.string.onboarding_appearance_dynamic_theming_subtitle),
                     checked = dynamicTheming,
                     onCheckedChange = onDynamicThemingChange,
                 )
             }
 
             OnboardingToggleRow(
-                title = "OLED mode",
-                subtitle = "Pure black background for AMOLED displays",
+                title = stringResource(R.string.onboarding_appearance_oled_mode),
+                subtitle = stringResource(R.string.onboarding_appearance_oled_mode_subtitle),
                 checked = oledMode,
                 onCheckedChange = onOledModeChange,
             )
 
             OnboardingToggleRow(
-                title = "Home Hero Section",
-                subtitle = "Show featured content banner on home screen",
+                title = stringResource(R.string.onboarding_appearance_home_hero),
+                subtitle = stringResource(R.string.onboarding_appearance_home_hero_subtitle),
                 checked = homeHeroEnabled,
                 onCheckedChange = onHomeHeroEnabledChange,
             )

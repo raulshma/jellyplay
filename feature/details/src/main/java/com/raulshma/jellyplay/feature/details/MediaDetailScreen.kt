@@ -279,6 +279,7 @@ fun MediaDetailScreen(
                         onHideFromContinueWatching = { viewModel.hideFromContinueWatching() },
                         onShowFromContinueWatching = { viewModel.showFromContinueWatching() },
                         onManageSeries = { onManageSeries(itemId) },
+                        onAddToPlaylist = { viewModel.openPlaylistPicker() },
                     )
                 }
 
@@ -322,6 +323,34 @@ fun MediaDetailScreen(
                     )
                 }
             } // CompositionLocalProvider
+        }
+
+        if (uiState.showPlaylistPicker && detail != null) {
+            val playlistSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            TvSafeSheet(
+                onDismissRequest = { viewModel.dismissPlaylistPicker() },
+                sheetState = playlistSheetState,
+            ) {
+                AddToPlaylistSheet(
+                    playlists = uiState.playlists,
+                    isLoading = uiState.isLoadingPlaylists,
+                    isAdding = uiState.isAddingToPlaylist,
+                    onWatchLater = { viewModel.addToWatchLater() },
+                    onPick = { playlist -> viewModel.addToPlaylist(playlist) },
+                    onCreateNew = { viewModel.openCreatePlaylistDialog() },
+                    onDismiss = { viewModel.dismissPlaylistPicker() },
+                )
+            }
+        }
+
+        if (uiState.showCreatePlaylistDialog) {
+            CreatePlaylistDialog(
+                isLoading = uiState.isAddingToPlaylist,
+                onConfirm = { name, overview ->
+                    viewModel.createAndAddPlaylist(name, overview)
+                },
+                onDismiss = { viewModel.dismissCreatePlaylistDialog() },
+            )
         }
 
         val detailItem = detail?.item

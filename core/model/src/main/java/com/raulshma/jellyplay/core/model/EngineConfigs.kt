@@ -113,7 +113,62 @@ data class MpvEngineConfig(
     // up and stutters. Cheap insurance; visually identical when decode keeps up.
     val frameDrop: MpvFrameDrop = MpvFrameDrop.DECODER_VO,
     val hwdecOverride: MpvHwdec? = null,
+    /**
+     * Free-form, user-authored `mpv.conf`-style options appended to mpv's
+     * startup config **after** every structured option above. This is the power-
+     * user escape hatch for mpv knobs JellyPlay's structured settings don't
+     * expose (e.g. `scale=ewa_lanczossharp`, `tscale`, `tone-mapping`,
+     * `target-prim`, `cache-secs`, `hr-seek`, etc.).
+     *
+     * Lines are parsed by [parseMpvConfigOptions]: blank lines and `#` comments
+     * are ignored; `key=value` (or bare `key` flags) become `setOptionString`
+     * calls. Because this runs last, a raw value **overrides** its structured
+     * counterpart — which is the intent (the user is opting out of the app's
+     * curated default). An empty string (the default) applies nothing.
+     */
+    val mpvExtraConfig: String = "",
 ) : EngineSpecificConfig
+
+/**
+ * A single parsed `mpv.conf`-style option: a [key] and its [value]. A bare
+ * `key` flag (no `=`) parses with value `"yes"`. Named type (rather than the
+ * raw `Pair<String, String>` it was before) so call sites read
+ * `option.key` / `option.value` instead of the opaque `.first` / `.second`.
+ */
+@Immutable
+@Serializable
+data class MpvOption(val key: String, val value: String)
+
+/**
+ * Parses free-form mpv config text into ordered [MpvOption]s.
+ *
+ * Rules (matching mpv's own `mpv.conf` parsing for the common cases):
+ *  - Blank lines and lines whose first non-space char is `#` are dropped.
+ *  - `key=value` splits on the first `=`; surrounding whitespace trimmed.
+ *  - A bare `key` (no `=`) is treated as a boolean flag with value `"yes"`,
+ *    mirroring mpv's `--key` shorthand.
+ *  - `key=` with an empty value is kept as an empty-string value (mpv uses
+ *    this to reset some list options).
+ *
+ * The result is a plain [List] so the engine layer can apply it with
+ * `setOptionString(option.key, option.value)` and unit-test the parsing without
+ * a live mpv instance.
+ */
+fun parseMpvConfigOptions(text: String): List<MpvOption> {
+    return text.lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && !it.startsWith("#") }
+        .map { line ->
+            val eq = line.indexOf('=')
+            if (eq >= 0) {
+                MpvOption(line.substring(0, eq).trim(), line.substring(eq + 1).trim())
+            } else {
+                MpvOption(line, "yes")
+            }
+        }
+        .filter { it.key.isNotEmpty() }
+        .toList()
+}
 
 @Immutable
 @Serializable
@@ -143,6 +198,17 @@ data class LibVlcEngineConfig(
     val dropLateFrames: Boolean = true,
     val skipFrames: Boolean = true,
 ) : EngineSpecificConfig
+
+@Immutable
+@Serializable
+enum class RefreshRateMode(val displayName: String) {
+    /** Never switch the display mode — keep the user/system default. */
+    OFF("Off"),
+    /** Match the content's frame rate at the current resolution only. */
+    FRAME_RATE_ONLY("Frame Rate Only"),
+    /** Match frame rate and switch resolution to the content's native size. */
+    FRAME_RATE_AND_RESOLUTION("Frame Rate & Resolution"),
+}
 
 @Immutable
 @Serializable

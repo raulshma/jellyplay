@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Book
 import com.composables.icons.tabler.outline.DeviceTv
@@ -37,6 +38,7 @@ import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.Video
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ItemCounts
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun LibraryStatsRow(
@@ -67,7 +69,7 @@ fun LibraryStatsRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Library",
+                stringResource(R.string.admin_library),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )

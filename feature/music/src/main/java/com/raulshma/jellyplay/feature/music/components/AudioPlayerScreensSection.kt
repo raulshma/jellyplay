@@ -28,8 +28,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.feature.music.R
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -72,7 +74,7 @@ fun AudioPlayerScreensSection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Player Screens",
+                    text = stringResource(R.string.music_player_screens),
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp
@@ -81,7 +83,7 @@ fun AudioPlayerScreensSection(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Your audio player experiences",
+                    text = stringResource(R.string.music_player_screens_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -113,8 +115,8 @@ fun AudioPlayerScreensSection(
             item {
                 PlayerScreenCard(
                     onClick = onTracksClick,
-                    title = "Tracks",
-                    subtitle = "Browse all songs in your library",
+                    title = stringResource(R.string.music_tracks),
+                    subtitle = stringResource(R.string.music_tracks_subtitle),
                     icon = Tabler.Outline.Music,
                     startColor = MaterialTheme.colorScheme.secondary,
                     endColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -124,8 +126,8 @@ fun AudioPlayerScreensSection(
             item {
                 PlayerScreenCard(
                     onClick = onAlbumsClick,
-                    title = "Albums",
-                    subtitle = "Explore full albums and collections",
+                    title = stringResource(R.string.music_albums),
+                    subtitle = stringResource(R.string.music_albums_subtitle),
                     icon = Tabler.Outline.Vinyl,
                     startColor = MaterialTheme.colorScheme.primaryContainer,
                     endColor = MaterialTheme.colorScheme.tertiary,
@@ -135,8 +137,8 @@ fun AudioPlayerScreensSection(
             item {
                 PlayerScreenCard(
                     onClick = onArtistsClick,
-                    title = "Artists",
-                    subtitle = "Discover your favorite artists",
+                    title = stringResource(R.string.music_artists),
+                    subtitle = stringResource(R.string.music_artists_subtitle),
                     icon = Tabler.Outline.Users,
                     startColor = MaterialTheme.colorScheme.tertiaryContainer,
                     endColor = MaterialTheme.colorScheme.secondary,
@@ -146,8 +148,8 @@ fun AudioPlayerScreensSection(
             item {
                 PlayerScreenCard(
                     onClick = onGenresClick,
-                    title = "Genres",
-                    subtitle = "Browse music by genre and mood",
+                    title = stringResource(R.string.music_genres),
+                    subtitle = stringResource(R.string.music_genres_subtitle),
                     icon = Tabler.Outline.Category,
                     startColor = MaterialTheme.colorScheme.inversePrimary,
                     endColor = MaterialTheme.colorScheme.primary,
@@ -157,8 +159,8 @@ fun AudioPlayerScreensSection(
             item {
                 PlayerScreenCard(
                     onClick = onPlaylistsClick,
-                    title = "Playlists",
-                    subtitle = "Your curated playlists and mixes",
+                    title = stringResource(R.string.music_playlists),
+                    subtitle = stringResource(R.string.music_playlists_subtitle),
                     icon = Tabler.Outline.Playlist,
                     startColor = MaterialTheme.colorScheme.secondaryContainer,
                     endColor = MaterialTheme.colorScheme.tertiaryContainer,
@@ -246,7 +248,7 @@ private fun NowPlayingExpressiveCard(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             Text(
-                text = "Now Playing",
+                text = stringResource(R.string.music_now_playing),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
                 ),
@@ -256,7 +258,7 @@ private fun NowPlayingExpressiveCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Full player with controls, lyrics & queue",
+                text = stringResource(R.string.music_now_playing_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
@@ -442,7 +444,7 @@ private fun AmbientExpressiveCard(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             Text(
-                text = "Ambient Mode",
+                text = stringResource(R.string.music_ambient_mode),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
                 ),
@@ -452,7 +454,7 @@ private fun AmbientExpressiveCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Immersive colors that dance with your music",
+                text = stringResource(R.string.music_ambient_mode_subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,

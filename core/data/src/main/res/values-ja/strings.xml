@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Playback-sync foreground notification -->
+    <string name="data_sync_title">視聴履歴を同期中</string>
+    <string name="data_sync_finishing">完了しています\u2026</string>
+    <plurals name="data_sync_items_queued">
+        <item quantity="other">%1$d 件がキューにあります</item>
+    </plurals>
+
+    <!-- Playback-sync notification channel -->
+    <string name="data_sync_channel_name">視聴履歴の同期</string>
+    <string name="data_sync_channel_desc">オフラインの視聴履歴をサーバーに同期しています</string>
+
+    <!-- Now Playing (media playback) notification channel -->
+    <string name="data_channel_now_playing">再生中</string>
+    <string name="data_channel_now_playing_desc">メディア再生のコントロール</string>
+
+    <!-- Downloads notification channel -->
+    <string name="data_channel_downloads">ダウンロード</string>
+    <string name="data_channel_downloads_desc">ダウンロードの進行状況通知</string>
+
+    <!-- Admin statistics: content-type breakdown labels -->
+    <string name="data_label_movies">映画</string>
+    <string name="data_label_episodes">エピソード</string>
+    <string name="data_label_songs">曲</string>
+
+    <!-- Admin statistics: stale-media detail/date text -->
+    <string name="data_added_today">今日追加</string>
+    <string name="data_added_one_day_ago">1 日前に追加</string>
+    <string name="data_added_days_ago">%1$d 日前に追加</string>
+    <string name="data_added_months_ago">%1$d か月前に追加</string>
+    <string name="data_added_years_ago">%1$d 年前に追加</string>
+    <string name="data_never_played">未再生</string>
+    <string name="data_days_since_play">%1$d 日前に再生</string>
+    <string name="data_plays_count">%1$d 回再生</string>
+    <string name="data_added_date">%1$s に追加</string>
+    <string name="data_added_unknown">追加日不明</string>
+    <string name="data_played_date">%1$s に再生</string>
+</resources>

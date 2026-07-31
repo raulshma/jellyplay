@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -41,6 +42,7 @@ import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.ChevronUp
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.feature.player.live.R
 
 /**
  * Full-screen overlay shown while a live stream buffers or after it fails.
@@ -76,7 +78,7 @@ fun LiveErrorBanner(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    "Playback Error",
+                    stringResource(R.string.live_error_playback),
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 )
@@ -101,7 +103,10 @@ fun LiveErrorBanner(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
-                            if (expanded) "Hide details" else "Show details",
+                            stringResource(
+                                if (expanded) R.string.live_error_hide_details
+                                else R.string.live_error_show_details
+                            ),
                             color = Color.White.copy(alpha = 0.7f),
                             style = MaterialTheme.typography.labelMedium,
                         )
@@ -128,11 +133,13 @@ fun LiveErrorBanner(
                     }
                 }
 
-                Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text("Retry") }
+                Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.live_retry))
+                }
 
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Try a different delivery method",
+                    stringResource(R.string.live_error_try_different_method),
                     color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelMedium,
                 )
@@ -152,7 +159,9 @@ fun LiveErrorBanner(
                     }
                 }
 
-                OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+                OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.live_back))
+                }
             }
         }
     }

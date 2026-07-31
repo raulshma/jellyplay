@@ -2,12 +2,14 @@ package com.raulshma.jellyplay.feature.admin.users.detail.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.DeviceMobile
 import com.composables.icons.tabler.outline.Devices
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.feature.admin.R
 
 /**
  * Device access: "all devices" toggle + per-device toggles. Hidden entirely
@@ -23,10 +25,10 @@ fun DeviceAccessSection(
 ) {
     if (policy.isAdministrator || devices.isEmpty()) return
     val rows = if (policy.enableAllDevices) 1 else 1 + devices.size
-    UserEditSection(title = "Device access", modifier = modifier) {
+    UserEditSection(title = stringResource(R.string.admin_device_access), modifier = modifier) {
         SettingToggleItem(
             icon = Tabler.Outline.Devices,
-            title = "Enable access from all devices",
+            title = stringResource(R.string.admin_enable_all_devices),
             subtitle = if (policy.enableAllDevices) "" else "Restrict to the devices below",
             checked = policy.enableAllDevices,
             onCheckedChange = { onPolicyChange(policy.copy(enableAllDevices = it)) },

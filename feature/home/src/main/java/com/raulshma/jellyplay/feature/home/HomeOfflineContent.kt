@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.AlertCircle
 import com.composables.icons.tabler.outline.DeviceFloppy
@@ -85,9 +86,9 @@ fun OfflineHomeContent(
         Box(modifier = Modifier.fillMaxSize().background(backgroundColor), contentAlignment = Alignment.Center) {
             ScreenEmptyState(
                 icon = Tabler.Outline.Download,
-                title = "No downloads yet",
-                description = "Download media while online to access it offline.",
-                actionLabel = "Go online",
+                title = stringResource(R.string.home_no_downloads_yet),
+                description = stringResource(R.string.home_no_downloads_description),
+                actionLabel = stringResource(R.string.home_go_online_action),
                 onAction = onGoOnline,
                 actionLoading = isGoingOnline,
             )
@@ -194,7 +195,7 @@ fun OfflineHomeContent(
         item(key = "offline_header") {
             Column(modifier = Modifier.padding(horizontal = contentPadding)) {
                 Text(
-                    text = "Your Downloads",
+                    text = stringResource(R.string.home_your_downloads),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -226,11 +227,11 @@ fun OfflineHomeContent(
                             modifier = Modifier.size(16.dp),
                         )
                         Spacer(Modifier.size(6.dp))
-                        Text("Going online…")
+                        Text(stringResource(R.string.home_going_online))
                     } else {
                         Icon(Tabler.Outline.Wifi, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.size(6.dp))
-                        Text("Go online")
+                        Text(stringResource(R.string.home_go_online_action))
                     }
                 }
             }
@@ -239,7 +240,7 @@ fun OfflineHomeContent(
         if (continueWatching.isNotEmpty()) {
             item(key = "offline_continue") {
                 OfflineSection(
-                    title = "Continue Watching",
+                    title = stringResource(R.string.home_continue_watching),
                     items = continueWatching,
                     cardWidth = rowCardWidth,
                     contentPad = contentPadding,
@@ -250,7 +251,7 @@ fun OfflineHomeContent(
 
         item(key = "offline_recent") {
             OfflineSection(
-                title = "Recently Downloaded",
+                title = stringResource(R.string.home_recently_downloaded),
                 items = recent,
                 cardWidth = rowCardWidth,
                 contentPad = contentPadding,
@@ -260,17 +261,17 @@ fun OfflineHomeContent(
 
         if (movies.isNotEmpty()) {
             item(key = "offline_movies") {
-                OfflineSection(title = "Movies", items = movies, cardWidth = rowCardWidth, contentPad = contentPadding, onItemClick = onOfflineItemClick)
+                OfflineSection(title = stringResource(R.string.home_movies), items = movies, cardWidth = rowCardWidth, contentPad = contentPadding, onItemClick = onOfflineItemClick)
             }
         }
         if (series.isNotEmpty()) {
             item(key = "offline_series") {
-                OfflineSection(title = "Series", items = series, cardWidth = rowCardWidth, contentPad = contentPadding, onItemClick = onOfflineItemClick)
+                OfflineSection(title = stringResource(R.string.home_series), items = series, cardWidth = rowCardWidth, contentPad = contentPadding, onItemClick = onOfflineItemClick)
             }
         }
         if (music.isNotEmpty()) {
             item(key = "offline_music") {
-                OfflineSection(title = "Music", items = music, cardWidth = rowCardWidth, contentPad = contentPadding, onItemClick = onOfflineItemClick)
+                OfflineSection(title = stringResource(R.string.home_music), items = music, cardWidth = rowCardWidth, contentPad = contentPadding, onItemClick = onOfflineItemClick)
             }
         }
     }
@@ -348,7 +349,7 @@ fun DownloadedSection(
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
     Text(
-        text = "Downloaded",
+        text = stringResource(R.string.home_downloaded),
         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
         color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier

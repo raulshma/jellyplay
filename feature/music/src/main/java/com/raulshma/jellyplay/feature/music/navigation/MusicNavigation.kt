@@ -4,6 +4,7 @@ import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.model.isVideoType
 import com.raulshma.jellyplay.feature.music.albumdetail.AlbumDetailScreen
 import com.raulshma.jellyplay.feature.music.albums.AlbumsScreen
 import com.raulshma.jellyplay.feature.music.artistdetail.ArtistDetailScreen
@@ -140,8 +141,15 @@ fun EntryProviderScope<NavKey>.musicSection(navigator: Navigator) {
         PlaylistDetailScreen(
             playlistId = key.playlistId,
             playlistName = key.playlistName,
-            onPlayItem = { trackId ->
-                navigator.navigate(Route.AudioPlayer(trackId))
+            onPlayItem = { item ->
+                // Video items (movie/episode/music-video) open the video player;
+                // audio items fall back to the audio player. The detail screen
+                // only invokes this for video items (audio goes through playAll).
+                if (item.mediaType.isVideoType) {
+                    navigator.navigate(Route.VideoPlayer(itemId = item.id))
+                } else {
+                    navigator.navigate(Route.AudioPlayer(item.id))
+                }
             },
             onBack = { navigator.goBack() },
         )

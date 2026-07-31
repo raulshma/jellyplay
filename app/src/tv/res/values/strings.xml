@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">JellyPlay</string>
+    <string name="app_name" translatable="false">JellyPlay</string>
     <string name="search_hint">Search movies, shows, music…</string>
-    <string name="search_settings_description">Search your Jellyfin media library</string>
+    <string name="search_settings_description" translatable="false">Search your Jellyfin media library</string>
 </resources>

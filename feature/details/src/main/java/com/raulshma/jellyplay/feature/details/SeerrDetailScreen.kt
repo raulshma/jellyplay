@@ -823,13 +823,13 @@ private fun SeerrActionButtons(
             ) {
                 Icon(Tabler.Outline.Check, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Available", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.detail_available), fontWeight = FontWeight.Bold)
             }
         } else if (isRequested) {
-            val (label, icon, color) = when {
-                isProcessing -> Triple("Processing", Tabler.Outline.Hourglass, StatusColors.info)
-                isPending -> Triple("Pending", Tabler.Outline.Clock, StatusColors.pending)
-                else -> Triple("Requested", Tabler.Outline.ArrowRight, StatusColors.requested)
+            val (labelRes, icon, color) = when {
+                isProcessing -> Triple(R.string.detail_seerr_processing, Tabler.Outline.Hourglass, StatusColors.info)
+                isPending -> Triple(R.string.detail_seerr_pending, Tabler.Outline.Clock, StatusColors.pending)
+                else -> Triple(R.string.detail_seerr_requested, Tabler.Outline.ArrowRight, StatusColors.requested)
             }
             Button(
                 onClick = {},
@@ -852,7 +852,7 @@ private fun SeerrActionButtons(
             ) {
                 Icon(icon, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(label, fontWeight = FontWeight.Bold)
+                Text(stringResource(labelRes), fontWeight = FontWeight.Bold)
             }
         } else {
             Button(
@@ -873,7 +873,7 @@ private fun SeerrActionButtons(
             ) {
                 Icon(Tabler.Outline.Plus, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Request", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.detail_request), fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -1037,7 +1037,7 @@ private fun SeerrDetailBody(
                 exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
             ) {
                 SeerrHorizontalSection(
-                    title = "Recommendations",
+                    title = stringResource(R.string.detail_section_recommendations),
                     items = recommendations,
                     onNavigate = onNavigate
                 )
@@ -1054,7 +1054,7 @@ private fun SeerrDetailBody(
                 exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
             ) {
                 SeerrHorizontalSection(
-                    title = "Similar",
+                    title = stringResource(R.string.detail_section_similar),
                     items = similar,
                     onNavigate = onNavigate
                 )
@@ -1128,7 +1128,7 @@ private fun ExternalLinksRow(
         // TMDB
         SuggestionChip(
             onClick = { uriHandler.openUri("https://www.themoviedb.org/$mediaType/$tmdbId") },
-            label = { Text("TMDB", fontWeight = FontWeight.Bold) },
+            label = { Text(stringResource(R.string.detail_link_tmdb), fontWeight = FontWeight.Bold) },
             modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
             colors = SuggestionChipDefaults.suggestionChipColors(
                 containerColor = BrandColors.tmdb.copy(alpha = 0.2f),
@@ -1140,7 +1140,7 @@ private fun ExternalLinksRow(
         if (imdbId != null) {
             SuggestionChip(
                 onClick = { uriHandler.openUri("https://www.imdb.com/title/$imdbId") },
-                label = { Text("IMDb", fontWeight = FontWeight.Bold) },
+                label = { Text(stringResource(R.string.detail_link_imdb), fontWeight = FontWeight.Bold) },
                 modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
                 colors = SuggestionChipDefaults.suggestionChipColors(
                 containerColor = BrandColors.imdb.copy(alpha = 0.2f),
@@ -1153,7 +1153,7 @@ private fun ExternalLinksRow(
         if (tvdbId != null) {
             SuggestionChip(
                 onClick = { uriHandler.openUri("https://thetvdb.com/dereferrer/series/$tvdbId") },
-                label = { Text("TVDB", fontWeight = FontWeight.Bold) },
+                label = { Text(stringResource(R.string.detail_link_tvdb), fontWeight = FontWeight.Bold) },
                 modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
                 colors = SuggestionChipDefaults.suggestionChipColors(
                 containerColor = BrandColors.tvdb.copy(alpha = 0.2f),
@@ -2024,19 +2024,19 @@ private fun ReleaseTypeIcon(type: Int) {
     when (type) {
         3 -> Icon(
             imageVector = Tabler.Outline.Ticket,
-            contentDescription = "Theatrical Release",
+            contentDescription = stringResource(R.string.detail_cd_release_theatrical),
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
         4 -> Icon(
             imageVector = Tabler.Outline.CloudDownload,
-            contentDescription = "Digital Release",
+            contentDescription = stringResource(R.string.detail_cd_release_digital),
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
         5 -> Icon(
             imageVector = Tabler.Outline.Circle,
-            contentDescription = "Physical Release",
+            contentDescription = stringResource(R.string.detail_cd_release_physical),
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )

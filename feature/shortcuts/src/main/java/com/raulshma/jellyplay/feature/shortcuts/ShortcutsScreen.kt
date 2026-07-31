@@ -47,6 +47,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -79,15 +80,21 @@ import kotlinx.coroutines.delay
 // ─── Filter tab model ──────────────────────────────────────────────────────────
 
 private sealed interface ShortcutFilter {
-    data object All : ShortcutFilter
-    data class Category(val category: ShortcutCategory) : ShortcutFilter
+    val key: String
+
+    data object All : ShortcutFilter {
+        override val key: String = "all"
+    }
+    data class Category(val category: ShortcutCategory) : ShortcutFilter {
+        override val key: String get() = category.name
+    }
 }
 
-private val ShortcutFilter.label: String
-    get() = when (this) {
-        ShortcutFilter.All -> "All"
-        is ShortcutFilter.Category -> category.displayName
-    }
+@Composable
+private fun ShortcutFilter.label(): String = when (this) {
+    ShortcutFilter.All -> stringResource(R.string.shortcuts_filter_all)
+    is ShortcutFilter.Category -> stringResource(category.displayNameRes)
+}
 
 private val ShortcutFilter.icon: ImageVector
     get() = when (this) {
@@ -138,7 +145,7 @@ fun ShortcutsScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "Shortcuts",
+        title = stringResource(R.string.shortcuts_screen_title),
         onBack = onBack,
         topBarStyle = TopBarStyle.None,
     ) { paddingValues ->
@@ -176,9 +183,9 @@ fun ShortcutsScreen(
                 item(key = "empty") {
                     ScreenEmptyState(
                         icon = Tabler.Outline.Keyboard,
-                        title = "No shortcuts available",
-                        description = "Browse the app to discover features and content",
-                        actionLabel = "Browse Library",
+                        title = stringResource(R.string.shortcuts_empty_title),
+                        description = stringResource(R.string.shortcuts_empty_description),
+                        actionLabel = stringResource(R.string.shortcuts_empty_action),
                         onAction = { onNavigate(Route.Library) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -267,7 +274,7 @@ private fun ShortcutsHero(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "QUICK ACCESS",
+                text = stringResource(R.string.shortcuts_hero_eyebrow),
                 style = MaterialTheme.typography.labelSmall,
                 color = primary,
                 fontWeight = FontWeight.Bold,
@@ -278,7 +285,7 @@ private fun ShortcutsHero(
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text = "Shortcuts",
+            text = stringResource(R.string.shortcuts_hero_title),
             style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.ExtraBold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -287,7 +294,7 @@ private fun ShortcutsHero(
         Spacer(Modifier.height(4.dp))
 
         Text(
-            text = "Downloads, requests, settings & admin tools",
+            text = stringResource(R.string.shortcuts_hero_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -297,12 +304,19 @@ private fun ShortcutsHero(
         // Stat pills
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                HeroStatPill(label = "$totalShortcuts shortcuts", color = primary)
+                HeroStatPill(
+                    label = stringResource(R.string.shortcuts_stat_total, totalShortcuts),
+                    color = primary,
+                )
             }
             categories.forEach { (category, shortcuts) ->
                 item(key = category.name) {
                     HeroStatPill(
-                        label = "${shortcuts.size} ${category.displayName}",
+                        label = stringResource(
+                            R.string.shortcuts_stat_category,
+                            shortcuts.size,
+                            stringResource(category.displayNameRes),
+                        ),
                         color = category.accentColor(),
                     )
                 }
@@ -370,7 +384,7 @@ private fun ShortcutFilterRow(
         contentPadding = PaddingValues(horizontal = horizontalPadding),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        itemsIndexed(filters, key = { _, f -> f.label }) { _, filter ->
+        itemsIndexed(filters, key = { _, f -> f.key }) { _, filter ->
             ShortcutFilterChip(
                 filter = filter,
                 isSelected = activeFilter == filter,
@@ -430,7 +444,7 @@ private fun ShortcutFilterChip(
                 modifier = Modifier.size(15.dp),
             )
             Text(
-                text = filter.label,
+                text = filter.label(),
                 style = MaterialTheme.typography.labelLarge,
                 color = contentColor,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
@@ -467,7 +481,7 @@ private fun ShortcutSectionHeader(
                     .background(accentColor),
             )
             Text(
-                text = category.displayName.uppercase(),
+                text = stringResource(category.displayNameRes).uppercase(),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = accentColor,
@@ -543,7 +557,7 @@ private fun ShortcutFeaturedCard(
             ) {
                 Icon(
                     imageVector = item.icon,
-                    contentDescription = item.title,
+                    contentDescription = stringResource(item.titleRes),
                     tint = accentColor,
                     modifier = Modifier.size(if (isTv) 28.dp else 30.dp),
                 )
@@ -554,13 +568,13 @@ private fun ShortcutFeaturedCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    text = "Featured",
+                    text = stringResource(R.string.shortcuts_featured_label),
                     style = MaterialTheme.typography.labelSmall,
                     color = accentColor.copy(alpha = 0.75f),
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = item.title,
+                    text = stringResource(item.titleRes),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -568,7 +582,7 @@ private fun ShortcutFeaturedCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = item.description,
+                    text = stringResource(item.descriptionRes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -687,7 +701,7 @@ private fun ShortcutCompactRow(
                 ) {
                     Icon(
                         imageVector = item.icon,
-                        contentDescription = item.title,
+                        contentDescription = stringResource(item.titleRes),
                         tint = accentColor,
                         modifier = Modifier.size(19.dp),
                     )
@@ -698,7 +712,7 @@ private fun ShortcutCompactRow(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = item.title,
+                        text = stringResource(item.titleRes),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -706,7 +720,7 @@ private fun ShortcutCompactRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = item.description,
+                        text = stringResource(item.descriptionRes),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

@@ -21,22 +21,40 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.UserAccessSchedule
+import com.raulshma.jellyplay.feature.admin.R
 import java.util.Locale
 
 private val DAYS = listOf(
-    "Sunday" to "Sun",
-    "Monday" to "Mon",
-    "Tuesday" to "Tue",
-    "Wednesday" to "Wed",
-    "Thursday" to "Thu",
-    "Friday" to "Fri",
-    "Saturday" to "Sat",
-    "Everyday" to "Daily",
-    "Weekday" to "Weekdays",
-    "Weekend" to "Weekends",
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Everyday",
+    "Weekday",
+    "Weekend",
 )
+
+/** Localized display label for an access-schedule day serial value. */
+@Composable
+private fun dayLabel(serial: String): String = when (serial) {
+    "Sunday" -> stringResource(R.string.admin_day_sun)
+    "Monday" -> stringResource(R.string.admin_day_mon)
+    "Tuesday" -> stringResource(R.string.admin_day_tue)
+    "Wednesday" -> stringResource(R.string.admin_day_wed)
+    "Thursday" -> stringResource(R.string.admin_day_thu)
+    "Friday" -> stringResource(R.string.admin_day_fri)
+    "Saturday" -> stringResource(R.string.admin_day_sat)
+    "Everyday" -> stringResource(R.string.admin_schedule_everyday)
+    "Weekday" -> stringResource(R.string.admin_schedule_weekday)
+    "Weekend" -> stringResource(R.string.admin_schedule_weekend)
+    else -> serial
+}
 
 /** Formats a Double hour (13.5) as "HH:mm". */
 private fun Double.toTimeString() =
@@ -57,13 +75,13 @@ fun AccessScheduleSection(
     var showAdder by remember { mutableStateOf(false) }
 
     UserEditSection(
-        title = "Access schedules",
-        description = "Restrict when this user can sign in.",
+        title = stringResource(R.string.admin_access_schedules_title),
+        description = stringResource(R.string.admin_access_schedules_desc),
         modifier = modifier,
     ) {
         if (schedules.isEmpty()) {
             Text(
-                "No schedules set",
+                stringResource(R.string.admin_no_schedules),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -74,18 +92,18 @@ fun AccessScheduleSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        "${DAYS.firstOrNull { it.first == s.dayOfWeek }?.second ?: s.dayOfWeek}  " +
+                        "${dayLabel(s.dayOfWeek)}  " +
                             "${s.startHour.toTimeString()}–${s.endHour.toTimeString()}",
                         style = MaterialTheme.typography.bodyLarge,
                     )
-                    TextButton(onClick = { onChange(schedules - s) }) { Text("Delete") }
+                    TextButton(onClick = { onChange(schedules - s) }) { Text(stringResource(R.string.admin_delete)) }
                 }
             }
         }
         OutlinedButton(
             onClick = { showAdder = true },
             modifier = Modifier.padding(top = 4.dp),
-        ) { Text("Add schedule") }
+        ) { Text(stringResource(R.string.admin_add_schedule)) }
     }
 
     if (showAdder) {
@@ -113,16 +131,16 @@ private fun ScheduleAdderDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Add schedule") },
+        title = { Text(stringResource(R.string.admin_add_schedule)) },
         text = {
             Column {
-                Text("Day", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.admin_day), style = MaterialTheme.typography.bodyMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    DAYS.forEach { (serial, label) ->
+                    DAYS.forEach { serial ->
                         FilterChip(
                             selected = day == serial,
                             onClick = { day = serial },
-                            label = { Text(label) },
+                            label = { Text(dayLabel(serial)) },
                         )
                     }
                 }
@@ -131,10 +149,10 @@ private fun ScheduleAdderDialog(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     OutlinedButton(onClick = { pickingStart = true }) {
-                        Text("Start ${startHour.toTimeString()}")
+                        Text(stringResource(R.string.admin_start_time, startHour.toTimeString()))
                     }
                     OutlinedButton(onClick = { pickingEnd = true }) {
-                        Text("End ${endHour.toTimeString()}")
+                        Text(stringResource(R.string.admin_end_time, endHour.toTimeString()))
                     }
                 }
             }
@@ -142,9 +160,9 @@ private fun ScheduleAdderDialog(
         confirmButton = {
             TextButton(onClick = {
                 onSave(UserAccessSchedule(dayOfWeek = day, startHour = startHour, endHour = endHour))
-            }) { Text("Add") }
+            }) { Text(stringResource(R.string.admin_add)) }
         },
-        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.admin_cancel)) } },
     )
 
     if (pickingStart) {
@@ -186,9 +204,9 @@ private fun TimePickerDialog(
     AlertDialog(
         onDismissRequest = onCancel,
         confirmButton = {
-            TextButton(onClick = { onConfirm(state.hour, state.minute) }) { Text("OK") }
+            TextButton(onClick = { onConfirm(state.hour, state.minute) }) { Text(stringResource(R.string.admin_ok)) }
         },
-        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.admin_cancel)) } },
         text = {
             TimePicker(
                 state = state,

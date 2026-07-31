@@ -16,7 +16,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.admin.R
 
 /**
  * Tag chip editor with autocomplete suggestions (from the server's existing
@@ -79,7 +81,7 @@ fun TagEditor(
         OutlinedTextField(
             value = draft,
             onValueChange = { draft = it },
-            label = { Text("Add tag") },
+            label = { Text(stringResource(R.string.admin_add_tag)) },
             singleLine = true,
             trailingIcon = {
                 if (draft.isNotBlank()) {
@@ -87,7 +89,7 @@ fun TagEditor(
                         val v = draft.trim()
                         if (v.isNotEmpty() && v !in tags) onChange(tags + v)
                         draft = ""
-                    }) { Text("Add") }
+                    }) { Text(stringResource(R.string.admin_add)) }
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),

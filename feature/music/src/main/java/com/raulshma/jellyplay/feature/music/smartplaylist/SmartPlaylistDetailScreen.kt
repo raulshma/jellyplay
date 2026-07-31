@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -37,6 +38,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.feature.music.components.TrackRow
+import com.raulshma.jellyplay.feature.music.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -50,7 +52,6 @@ fun SmartPlaylistDetailScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
-    val navOffsetPx = com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset.current
 
     val playlist = viewModel.playlists.find { it.id == playlistId }
 
@@ -70,7 +71,7 @@ fun SmartPlaylistDetailScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = playlist?.name ?: "Smart Playlist",
+        title = if (playlist != null) smartPlaylistDisplayName(playlist) else stringResource(R.string.music_smart_playlist),
         onBack = onBack,
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
@@ -89,7 +90,7 @@ fun SmartPlaylistDetailScreen(
                 viewModel.generatedItems.isEmpty() -> {
                     ScreenEmptyState(
                         icon = Tabler.Outline.Wand,
-                        title = "No tracks match the criteria",
+                        title = stringResource(R.string.music_no_tracks_criteria),
                     )
                 }
                 else -> AnimatedEntrance(visible = true) {
@@ -133,17 +134,13 @@ fun SmartPlaylistDetailScreen(
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.playAll() },
                     icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
-                    text = { Text("Play All") },
+                    text = { Text(stringResource(R.string.music_play_all)) },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .then(playAllFocusState.focusModifier)
                         .tvFocusIndicator(playAllFocusState, ShapeCache.smooth16)
-                        .padding(end = 16.dp, bottom = 64.dp + innerPadding.calculateBottomPadding())
-                        .offset {
-                            val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                            val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                            androidx.compose.ui.unit.IntOffset(x = 0, y = yOffset.toInt())
-                        },
+                        .padding(end = 16.dp)
+                        .clearFloatingNav(),
                 )
             }
         }

@@ -91,6 +91,8 @@ data class MediaStream(
     val displayTitle: String? = null,
     val isDefault: Boolean = false,
     val isForced: Boolean = false,
+    /** Hearing-impaired / SDH caption flag from the server stream. */
+    val isHearingImpaired: Boolean = false,
     val isExternal: Boolean = false,
     val width: Int? = null,
     val height: Int? = null,

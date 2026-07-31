@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Newsletter feature user-facing strings (enhancements §2.2) -->
+    <string name="newsletter_could_not_load">Newsletter konnte nicht geladen werden</string>
+    <string name="newsletter_preparing_digest">Deine Zusammenfassung wird vorbereitet\u2026</string>
+
+    <!-- Newsletter screens & sections -->
+    <string name="newsletter_title">Newsletter</string>
+    <string name="newsletter_activity_digest">Aktivitätsverlauf</string>
+    <string name="newsletter_continue_watching">Weiter ansehen</string>
+    <string name="newsletter_fresh_picks">Frische Empfehlungen</string>
+    <string name="newsletter_recently_added">Kürzlich hinzugefügt</string>
+    <string name="newsletter_next_up">Als Nächstes</string>
+    <string name="newsletter_view_all">Alle anzeigen</string>
+    <string name="newsletter_no_items_available">Keine Elemente verfügbar</string>
+
+    <!-- Newsletter aggregated stats -->
+    <string name="newsletter_stat_total_items">Gesamtzahl</string>
+    <string name="newsletter_stat_movies">Filme</string>
+    <string name="newsletter_stat_series">Serien</string>
+    <string name="newsletter_stat_episodes">Episoden</string>
+    <string name="newsletter_stat_albums">Alben</string>
+    <string name="newsletter_stat_songs">Lieder</string>
+    <string name="newsletter_stat_new_this_week">Neu diese Woche</string>
+    <string name="newsletter_stat_in_progress">In Bearbeitung</string>
+    <string name="newsletter_stat_activity">Aktivität</string>
+</resources>

@@ -39,8 +39,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -180,7 +182,7 @@ fun TrackRow(
         if (isNowPlaying) {
             Icon(
                 Tabler.Outline.PlayerPlay,
-                contentDescription = "Now playing",
+                contentDescription = stringResource(R.string.music_now_playing),
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.primary,
             )
@@ -197,7 +199,7 @@ fun TrackRow(
             ) {
                 Icon(
                     if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
-                    contentDescription = if (isFavorite) "Unfavorite" else "Favorite",
+                    contentDescription = if (isFavorite) stringResource(R.string.music_unfavorite) else stringResource(R.string.music_favorite),
                     modifier = Modifier.size(18.dp),
                     tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -214,7 +216,7 @@ fun TrackRow(
             ) {
                 Icon(
                     Tabler.Outline.DotsVertical,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.music_more_options),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -224,7 +226,7 @@ fun TrackRow(
                 onDismissRequest = { showMenu = false },
             ) {
                 DropdownMenuItem(
-                    text = { Text("Add to Queue") },
+                    text = { Text(stringResource(R.string.music_add_to_queue)) },
                     onClick = {
                         onAddToQueue()
                         showMenu = false
@@ -238,7 +240,7 @@ fun TrackRow(
                 )
                 if (onGoToAlbum != null) {
                     DropdownMenuItem(
-                        text = { Text("Go to Album") },
+                        text = { Text(stringResource(R.string.music_go_to_album)) },
                         onClick = {
                             onGoToAlbum()
                             showMenu = false
@@ -253,7 +255,7 @@ fun TrackRow(
                 }
                 if (onGoToArtist != null) {
                     DropdownMenuItem(
-                        text = { Text("Go to Artist") },
+                        text = { Text(stringResource(R.string.music_go_to_artist)) },
                         onClick = {
                             onGoToArtist()
                             showMenu = false

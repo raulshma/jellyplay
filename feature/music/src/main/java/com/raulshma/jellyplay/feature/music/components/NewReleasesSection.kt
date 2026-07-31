@@ -13,9 +13,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -32,8 +34,8 @@ fun NewReleasesSection(
     onShuffleClick: () -> Unit,
     imageUrlBuilder: (String) -> String,
     modifier: Modifier = Modifier,
-    title: String = "New Releases",
-    subtitle: String = "Fresh music just for you",
+    title: String = stringResource(R.string.music_new_releases),
+    subtitle: String = stringResource(R.string.music_fresh_music),
     headerFocusRequester: FocusRequester? = null,
     rowFocusRequester: FocusRequester? = null,
     upFocusRequester: FocusRequester? = null,

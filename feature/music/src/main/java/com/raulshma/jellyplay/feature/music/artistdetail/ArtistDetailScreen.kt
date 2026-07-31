@@ -50,8 +50,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
@@ -208,7 +210,7 @@ private fun ArtistDetailContent(
                     Spacer(Modifier.height(16.dp))
                     if (albums.isNotEmpty()) {
                         androidx.compose.material3.Text(
-                            text = "Albums",
+                            text = stringResource(R.string.music_albums),
                             style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                         )
                     }
@@ -260,7 +262,7 @@ private fun ArtistDetailContent(
 
                         if (albums.isNotEmpty()) {
                             androidx.compose.material3.Text(
-                                text = "Albums",
+                                text = stringResource(R.string.music_albums),
                                 style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                             )
                             Spacer(Modifier.height(8.dp))
@@ -397,11 +399,11 @@ private fun InstantMixButton(
                 color = MaterialTheme.colorScheme.onPrimary,
             )
             Spacer(Modifier.size(8.dp))
-            Text("Creating Mix…")
+            Text(stringResource(R.string.music_creating_mix))
         } else {
             Icon(Tabler.Outline.Sparkles, contentDescription = null)
             Spacer(Modifier.size(8.dp))
-            Text("Instant Mix")
+            Text(stringResource(R.string.music_instant_mix))
         }
     }
 }

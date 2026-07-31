@@ -49,7 +49,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.auth.R
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.ServerInfo
 import androidx.compose.ui.unit.IntOffset
@@ -89,7 +91,7 @@ fun ServerListScreen(
         containerColor = backgroundColor,
         topBar = {
             TopAppBar(
-                title = { Text("JellyPlay") },
+                title = { Text(stringResource(R.string.auth_app_name)) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = if (isSynthwave) Color.Transparent else MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = if (isSynthwave) Color.Transparent else MaterialTheme.colorScheme.surface,
@@ -104,13 +106,13 @@ fun ServerListScreen(
 
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
             if (isLoading) {
-                ScreenLoadingState(message = "Loading...")
+                ScreenLoadingState(message = stringResource(R.string.auth_loading))
             } else if (servers.isEmpty()) {
                 ScreenEmptyState(
                     icon = Tabler.Outline.Server,
-                    title = "No servers added",
-                    description = "Add your Jellyfin server to get started",
-                    actionLabel = "Add Server",
+                    title = stringResource(R.string.auth_no_servers_added_title),
+                    description = stringResource(R.string.auth_no_servers_added_desc),
+                    actionLabel = stringResource(R.string.auth_add_server),
                     onAction = onAddServer,
                 )
             } else {
@@ -169,7 +171,7 @@ fun ServerListScreen(
                             IntOffset(x = 0, y = yOffset.toInt())
                         },
                     icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
-                    text = { Text("Add Server") },
+                    text = { Text(stringResource(R.string.auth_add_server)) },
                 )
             }
         }
@@ -247,7 +249,7 @@ private fun ServerItem(
             ) {
                 Icon(
                     Tabler.Outline.Trash,
-                    contentDescription = "Remove server",
+                    contentDescription = stringResource(R.string.auth_remove_server),
                     tint = MaterialTheme.colorScheme.error,
                 )
             }
@@ -256,10 +258,10 @@ private fun ServerItem(
 
     if (showDeleteConfirm) {
         com.raulshma.jellyplay.core.ui.components.ConfirmDialog(
-            title = "Remove server?",
-            message = "This removes \"${server.name}\" and every saved user on it. This can't be undone.",
-            confirmText = "Remove",
-            dismissText = "Cancel",
+            title = stringResource(R.string.auth_remove_server_title),
+            message = stringResource(R.string.auth_remove_server_message, server.name),
+            confirmText = stringResource(R.string.auth_remove),
+            dismissText = stringResource(R.string.auth_cancel),
             onConfirm = onDelete,
             onDismiss = { showDeleteConfirm = false },
         )

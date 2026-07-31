@@ -9,24 +9,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.annotation.StringRes
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PluginStatus
+import com.raulshma.jellyplay.feature.admin.R
 
-private data class BadgeTint(val label: String, val color: Color)
+private data class BadgeTint(@StringRes val labelRes: Int, val color: Color)
 
 @Composable
 private fun badgeTint(status: PluginStatus): BadgeTint {
     val cs = MaterialTheme.colorScheme
     return when (status) {
-        PluginStatus.ACTIVE -> BadgeTint("Active", cs.primary)
-        PluginStatus.RESTART -> BadgeTint("Restart", cs.tertiary)
-        PluginStatus.MALFUNCTIONED -> BadgeTint("Error", cs.error)
-        PluginStatus.DELETED -> BadgeTint("Deleted", cs.outline)
-        PluginStatus.DISABLED -> BadgeTint("Disabled", cs.outline)
-        PluginStatus.SUPERSEDED -> BadgeTint("Superseded", cs.secondary)
-        PluginStatus.NOT_SUPPORTED -> BadgeTint("Unsupported", cs.secondary)
+        PluginStatus.ACTIVE -> BadgeTint(R.string.admin_status_active, cs.primary)
+        PluginStatus.RESTART -> BadgeTint(R.string.admin_status_restart, cs.tertiary)
+        PluginStatus.MALFUNCTIONED -> BadgeTint(R.string.admin_status_error, cs.error)
+        PluginStatus.DELETED -> BadgeTint(R.string.admin_status_deleted, cs.outline)
+        PluginStatus.DISABLED -> BadgeTint(R.string.admin_status_disabled, cs.outline)
+        PluginStatus.SUPERSEDED -> BadgeTint(R.string.admin_status_superseded, cs.secondary)
+        PluginStatus.NOT_SUPPORTED -> BadgeTint(R.string.admin_status_unsupported, cs.secondary)
     }
 }
 
@@ -43,7 +46,7 @@ fun PluginStatusBadge(
             .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
         Text(
-            text = tint.label,
+            text = stringResource(tint.labelRes),
             style = MaterialTheme.typography.labelMedium,
             color = tint.color,
             maxLines = 1,

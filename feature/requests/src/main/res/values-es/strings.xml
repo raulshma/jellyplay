@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="requests_title">Solicitudes</string>
+
+    <string name="requests_error_unknown">Error desconocido</string>
+    <string name="requests_action_retry">Reintentar</string>
+    <string name="requests_empty_title">No se encontraron solicitudes</string>
+    <string name="requests_empty_subtitle">Prueba a ajustar tus filtros</string>
+    <string name="requests_pagination_label">%1$d / %2$d</string>
+    <string name="requests_pagination_prev">Anterior</string>
+    <string name="requests_pagination_next">Siguiente</string>
+
+    <string name="requests_filter_all">Todas</string>
+    <string name="requests_filter_pending">Pendientes</string>
+    <string name="requests_filter_approved">Aprobadas</string>
+    <string name="requests_filter_processing">Procesando</string>
+    <string name="requests_filter_available">Disponibles</string>
+    <string name="requests_filter_unavailable">No disponibles</string>
+    <string name="requests_filter_failed">Fallidas</string>
+    <string name="requests_media_all">Todo</string>
+    <string name="requests_media_movies">Películas</string>
+    <string name="requests_media_tv">TV</string>
+    <string name="requests_sort_recent">Recientes</string>
+    <string name="requests_sort_modified">Modificadas</string>
+    <string name="requests_filter_mine">Mías</string>
+    <string name="requests_cd_sort_direction">Dirección de orden</string>
+
+    <string name="requests_status_declined">Rechazada</string>
+    <string name="requests_status_failed">Fallida</string>
+    <string name="requests_status_pending">Pendiente</string>
+    <string name="requests_status_available">Disponible</string>
+    <string name="requests_status_processing">Procesando</string>
+    <string name="requests_status_partially_available">Parcialmente disponible</string>
+    <string name="requests_status_deleted">Eliminada</string>
+    <string name="requests_status_unknown">Desconocido</string>
+    <string name="requests_fallback_title">TMDB %1$d</string>
+    <string name="requests_metadata_modified">modificada %1$s</string>
+
+    <string name="requests_action_approve">Aprobar</string>
+    <string name="requests_action_decline">Rechazar</string>
+    <string name="requests_action_delete">Eliminar</string>
+    <string name="requests_action_delete_confirm">¿Seguro?</string>
+
+    <string name="requests_dialog_approve_title">¿Aprobar solicitud?</string>
+    <string name="requests_dialog_decline_title">¿Rechazar solicitud?</string>
+    <string name="requests_dialog_approve_message">¿Aprobar esta solicitud? No se puede deshacer.</string>
+    <string name="requests_dialog_decline_message">¿Rechazar esta solicitud? Se notificará al solicitante y no se puede deshacer.</string>
+    <string name="requests_action_cancel">Cancelar</string>
+
+    <string name="requests_time_just_now">justo ahora</string>
+    <string name="requests_time_minutes_ago">hace %1$d min</string>
+    <string name="requests_time_hours_ago">hace %1$d h</string>
+    <string name="requests_time_days_ago">hace %1$d d</string>
+    <string name="requests_time_months_ago">hace %1$d meses</string>
+    <string name="requests_time_years_ago">hace %1$d años</string>
+
+    <string name="requests_detail_year_type">%1$d · %2$s</string>
+    <string name="requests_detail_row_request_id">ID de solicitud</string>
+    <string name="requests_detail_row_type">Tipo</string>
+    <string name="requests_detail_row_tmdb_id">ID de TMDB</string>
+    <string name="requests_detail_row_requested_by">Solicitada por</string>
+    <string name="requests_detail_row_requested">Solicitada</string>
+    <string name="requests_detail_row_quality_profile">Perfil de calidad</string>
+    <string name="requests_detail_row_root_folder">Carpeta raíz</string>
+    <string name="requests_detail_row_seasons">Temporadas</string>
+    <string name="requests_detail_row_download">Descarga</string>
+    <string name="requests_download_time_left">%1$s restante</string>
+    <string name="requests_download_in_queue">En cola</string>
+    <string name="requests_action_remove_search">Quitar y buscar</string>
+    <string name="requests_action_blocklist_search">Lista de bloqueo y buscar</string>
+    <string name="requests_action_view_media_details">Ver detalles del contenido</string>
+    <string name="requests_action_retry_request">Reintentar solicitud</string>
+    <string name="requests_action_delete_request">Eliminar solicitud</string>
+    <string name="requests_action_remove_from_service">Quitar de %1$s</string>
+
+    <string name="requests_arr_status_queued">En cola</string>
+    <string name="requests_arr_status_downloading">Descargando</string>
+    <string name="requests_arr_status_paused">Pausado</string>
+    <string name="requests_arr_status_completed">Descargado</string>
+    <string name="requests_arr_status_failed">Fallido</string>
+    <string name="requests_arr_status_warning">Advertencia</string>
+    <string name="requests_arr_status_imported">Importado</string>
+    <string name="requests_arr_status_unknown">Desconocido</string>
+
+</resources>

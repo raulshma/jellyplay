@@ -12,6 +12,13 @@ data class UserPreferences(
     val preferredAudioLanguage: String? = null,
     val mediaStreamSelections: Map<String, MediaStreamSelection> = emptyMap(),
     val videoEffectsByItem: Map<String, VideoEffectsConfig> = emptyMap(),
+    /**
+     * Per-item subtitle-sync delay (ms), keyed by itemId. Lets a user's sync
+     * correction for a badly-timed subtitle track survive a re-watch / resume,
+     * instead of resetting to the global default each time (G9). A missing key
+     * falls back to the global `subtitleStyle.offsetMs`.
+     */
+    val subtitleDelayByItem: Map<String, Long> = emptyMap(),
     val dynamicTheming: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
@@ -37,6 +44,7 @@ data class UserPreferences(
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
     val frameRateMatching: Boolean = false,
+    val refreshRateMode: RefreshRateMode = RefreshRateMode.OFF,
     val nightModeEnabled: Boolean = false,
     val nightModeStrength: EffectStrength = EffectStrength.MODERATE,
     val homeMode: HomeMode = HomeMode.VIDEO,
@@ -124,6 +132,13 @@ data class UserPreferences(
      */
     val hideBottomNavOnScroll: Boolean = true,
     val homeHeroEnabled: Boolean = true,
+    /**
+     * Whether the home screen renders an ambient backdrop behind its content:
+     * the hero artwork's BlurHash when available, otherwise an animated
+     * palette-derived ambient gradient. Falls back to the flat background
+     * colour when disabled or in performance mode.
+     */
+    val homeBackdropEnabled: Boolean = true,
     val onboardingCompleted: Boolean = false,
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
     val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),
@@ -232,6 +247,21 @@ data class UserPreferences(
     val hiddenNavItems: Set<String> = emptySet(),
     val navItemOrder: List<String> = emptyList(),
     val selfUpdateCheckEnabled: Boolean = true,
+    /**
+     * Version of the last update the user dismissed via "Later"/"Close", plus
+     * the wall-clock millis at which it was dismissed. Used to suppress the
+     * launch-time auto-prompt for the same version for 24 hours. Manual checks
+     * (Settings → Check for updates) ignore this and always surface the result.
+     */
+    val dismissedUpdateVersion: String? = null,
+    val dismissedUpdateAtMs: Long = 0L,
+    /**
+     * Cached Jellyfin playlist id backing the pinned "Watch Later" row in the
+     * Add-to-Playlist picker. `null` until the first time the user adds to
+     * Watch Later, at which point the playlist is created and its id stored
+     * here so subsequent adds reuse it instead of creating duplicates.
+     */
+    val watchLaterPlaylistId: String? = null,
     val hideEpisodeThumbnails: Boolean = false,
     val episodesDescending: Boolean = true,
     val skipSpecials: Boolean = false,

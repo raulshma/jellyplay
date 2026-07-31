@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -24,6 +25,7 @@ import com.composables.icons.tabler.outline.Activity
 import com.composables.icons.tabler.outline.User
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
+import com.raulshma.jellyplay.feature.newsletter.R
 
 @Composable
 fun NewsletterActivityDigest(
@@ -32,7 +34,7 @@ fun NewsletterActivityDigest(
 ) {
     Column(modifier = modifier.padding(top = 12.dp)) {
         Text(
-            text = "Activity Digest",
+            text = stringResource(R.string.newsletter_activity_digest),
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 12.dp),

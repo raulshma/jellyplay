@@ -59,6 +59,7 @@ import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isMusicTrack
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
@@ -358,6 +359,12 @@ class VideoPlayerViewModel @Inject constructor(
         isMuted = { _uiState.value.isMuted },
         updateUiState = { transform -> _uiState.update(transform) },
     )
+    private val abRepeatController = AbRepeatController(
+        scope = scope,
+        getEngine = { playerSessionManager.engine },
+        positionFlow = currentPositionMs,
+        updateUiState = { transform -> _uiState.update(transform) },
+    ).also { it.start() }
     private val playerCastController = PlayerCastController(
         castManager = castManager,
         playbackRepository = playbackRepository,
@@ -603,6 +610,22 @@ class VideoPlayerViewModel @Inject constructor(
             reloadForStreamChange(audioStreamIndex, subtitleStreamIndex)
         },
         playbackPreferenceResolver = playbackPreferenceResolver,
+        persistRememberedTrack = { type, track ->
+            val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return@TrackSelectionHelper
+            launch {
+                itemPlaybackPreferenceRepository.saveRememberedTrack(
+                    scope = PlaybackPrefScope.SERIES,
+                    key = seriesId,
+                    type = type,
+                    track = track,
+                )
+                // Re-resolve per-item/series preferences so the next track
+                // resolution sees the just-persisted remembered track. Call the
+                // resolver directly — trackSelectionHelper is still being built
+                // here (its refreshPlaybackPreferences() only delegates to it).
+                playbackPreferenceResolver.refresh()
+            }
+        },
         scope = scope,
     )
 
@@ -748,6 +771,15 @@ class VideoPlayerViewModel @Inject constructor(
                             mediaStreams = session.mediaStreams,
                             playMethod = session.playMethodString,
                             isDirectPlayForced = session.isDirectPlayForced,
+                            // Mirror the session's series id so the per-series
+                            // "remember subtitle/audio" toggle row renders for
+                            // episode playback (footer is gated on seriesId !=
+                            // null). applyMediaDetail also sets this on the
+                            // initial load, but the session collector fires on
+                            // every transition (e.g. next-episode autoplay) and
+                            // must keep it in sync even when the detail refresh
+                            // lags or is skipped.
+                            seriesId = seriesId,
                             hasAudioOverride = stored?.audioStreamIndex != null,
                             hasSubtitleOverride = stored?.subtitleStreamIndex != null,
                         )
@@ -783,6 +815,17 @@ class VideoPlayerViewModel @Inject constructor(
                     )
                 }
                 updateConfigWithUiState()
+                // Re-apply the language preference once it resolves. The DAO
+                // read in ItemPlaybackPreferenceResolver is async; on next-episode
+                // autoplay the engine often publishes its track list (triggering
+                // updateTracksFromEngine) before the preference lands. Without
+                // re-running here, the preference never gets applied for that
+                // load. Only re-run when a language preference actually exists so
+                // we don't churn on null resolutions (no engine yet ⇒ no-op).
+                val hasLangPref = pref?.audioLanguage != null || pref?.subtitleLanguage != null
+                if (hasLangPref) {
+                    trackSelectionHelper.updateTracksFromEngine()
+                }
             }
         }
 
@@ -1204,6 +1247,8 @@ class VideoPlayerViewModel @Inject constructor(
                 rememberBrightness = prefs.videoRememberBrightness,
                 brightnessLevel = prefs.videoBrightnessLevel,
                 gestureIndicatorSide = prefs.videoGestureIndicatorSide,
+                frameRateMatching = prefs.frameRateMatching,
+                refreshRateMode = prefs.refreshRateMode,
                 aspectRatio = defaultAspectRatio,
                 trickplayEnabled = prefs.trickplayEnabled,
                 trickplayOnSeekGesture = prefs.trickplayOnSeekGesture,
@@ -1289,6 +1334,15 @@ class VideoPlayerViewModel @Inject constructor(
             if (_uiState.value.videoEffects != hydratedEffects) {
                 _uiState.update { it.copy(videoEffects = hydratedEffects) }
                 updateConfigWithUiStateDebounced()
+            }
+            // G9: restore a per-item subtitle-sync delay so a user's correction
+            // for a badly-timed track survives a re-watch / resume. Falls back to
+            // the global offset when no per-item value is stored.
+            prefs.subtitleDelayByItem[itemId]?.let { itemDelay ->
+                val currentStyle = _uiState.value.subtitleStyle
+                if (currentStyle.offsetMs != itemDelay) {
+                    _uiState.update { it.copy(subtitleStyle = currentStyle.copy(offsetMs = itemDelay)) }
+                }
             }
 
             if (sessionState.streamUrl != null) {
@@ -1517,13 +1571,22 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     /**
-     * Saves/clears a per-series preferred subtitle language. Pass the language
-     * of the currently-selected subtitle track to remember it, or null to
-     * forget. No-op when the current item has no series.
+     * Saves/clears a per-series preferred subtitle descriptor (language + role).
+     * Pass the language/role of the currently-selected subtitle track to remember
+     * it, or a null language to forget. The role fields ([forced] /
+     * [hearingImpaired]) are optional: null means "don't care about that role",
+     * a value pins it so the restore matcher prefers e.g. "English SDH" episode
+     * to episode. No-op when the current item has no series.
      */
-    fun setSeriesSubtitleLanguagePreference(language: String?) {
+    fun setSeriesSubtitlePreference(
+        language: String?,
+        forced: Boolean? = null,
+        hearingImpaired: Boolean? = null,
+    ) {
         val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
         launch {
+            // null = "forget": use the explicit clear so save()'s "null ⇒ preserve"
+            // semantics don't silently keep the old language forever.
             if (language == null) {
                 itemPlaybackPreferenceRepository.clearSubtitleLanguage(PlaybackPrefScope.SERIES, seriesId)
             } else {
@@ -1531,6 +1594,8 @@ class VideoPlayerViewModel @Inject constructor(
                     scope = PlaybackPrefScope.SERIES,
                     key = seriesId,
                     subtitleLanguage = language,
+                    subtitleForced = forced,
+                    subtitleHearingImpaired = hearingImpaired,
                 )
             }
             trackSelectionHelper.refreshPlaybackPreferences()
@@ -1658,6 +1723,20 @@ class VideoPlayerViewModel @Inject constructor(
         val current = _uiState.value.subtitleStyle
         if (current.offsetMs == ms) return
         setSubtitleStyle(current.copy(offsetMs = ms))
+        // G9: also persist per-item so the correction survives a re-watch/resume.
+        playerSessionManager.sessionState.value.currentItemId?.let { itemId ->
+            launch { preferencesStore.setSubtitleDelayForItem(itemId, ms) }
+        }
+    }
+
+    /**
+     * Selects a secondary subtitle track (G4). Only mpv supports this
+     * (`secondary-sid`); other engines no-op per the capability matrix. UI should
+     * gate the secondary-subtitle picker on `engineCapabilities.supportsSecondarySubtitles`.
+     * An [index] < 0 clears the secondary track.
+     */
+    fun setSecondarySubtitleTrack(index: Int) {
+        playerSessionManager.engine?.setSecondarySubtitleTrack(index)
     }
 
     fun setPlaybackMode(mode: PlaybackMode) {
@@ -1835,6 +1914,13 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(frameRateMatching = enabled) }
         launch {
             preferencesStore.setFrameRateMatching(enabled)
+        }
+    }
+
+    fun setRefreshRateMode(mode: com.raulshma.jellyplay.core.model.RefreshRateMode) {
+        _uiState.update { it.copy(refreshRateMode = mode, frameRateMatching = mode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF) }
+        launch {
+            preferencesStore.setRefreshRateMode(mode)
         }
     }
 
@@ -2278,6 +2364,13 @@ class VideoPlayerViewModel @Inject constructor(
             mediaStreams = streams,
             detectedAspectRatio = detectAspectRatio(streams),
         ) }
+        // Rebuild the audio/subtitle track options from the refreshed server
+        // streams. A subtitle download/upload attaches a new MediaStream server-
+        // side, but the engine's availableTracks flow only re-emits on an engine-
+        // level change — so without this call the newly attached subtitle never
+        // surfaces in `uiState.subtitleTracks` (the track picker source) and the
+        // user couldn't apply it. `mergeServerStreams` picks it up here.
+        trackSelectionHelper.updateTracksFromEngine()
     }
 
     // endregion
@@ -2499,6 +2592,13 @@ class VideoPlayerViewModel @Inject constructor(
     fun cancelSleepTimer() = sleepTimerController.cancelSleepTimer()
 
     fun triggerSleepTimerEndOfEpisode() = sleepTimerController.triggerSleepTimerEndOfEpisode()
+
+    // ── A/B repeat (G2) ──
+    fun setAbRepeatEnabled(enabled: Boolean) = abRepeatController.setEnabled(enabled)
+    fun setAbRepeatPointA() = abRepeatController.setPointA(_currentPositionMs.value)
+    fun setAbRepeatPointB() = abRepeatController.setPointB(_currentPositionMs.value)
+    fun clearAbRepeat() = abRepeatController.clear()
+    val abRepeatState: StateFlow<AbRepeatState> get() = abRepeatController.state
 
     fun prepareForMiniMode(
         title: String,

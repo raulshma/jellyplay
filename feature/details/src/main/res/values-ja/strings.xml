@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ════════════════════════════════════════════════════════════════════
+         Media Detail feature strings.
+
+         Prefixed `detail_` so they never collide with other modules once
+         resources are merged at the app level. Mirrors the `core_` convention
+         in core/ui/src/main/res/values/strings.xml.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Section titles / headers ─────────────────────────────────────── -->
+    <string name="detail_section_tracks">トラック</string>
+    <string name="detail_section_items">アイテム</string>
+    <string name="detail_section_cast_crew">キャスト &amp; スタッフ</string>
+    <string name="detail_section_cast">キャスト</string>
+    <string name="detail_section_more_like_this">似ている作品</string>
+    <string name="detail_section_videos">動画</string>
+    <string name="detail_section_seasons">シーズン</string>
+
+    <!-- ── Primary action button labels ─────────────────────────────────── -->
+    <string name="detail_play_play">再生</string>
+    <string name="detail_play_resume">再開</string>
+    <string name="detail_play_finding_episode">エピソードを検索中</string>
+    <string name="detail_play_no_episodes_available">視聴可能なエピソードはありません</string>
+    <string name="detail_play_no_episodes">エピソードがありません</string>
+
+    <!-- ── Smart-play templates (verb + S#:E#) ────────────────────────────
+         Positional args: %1$d = season number, %2$d = episode number. -->
+    <string name="detail_resume_episode">S%1$d:E%2$d を再開</string>
+    <string name="detail_next_up_episode">次は S%1$d:E%2$d</string>
+    <string name="detail_play_episode">S%1$d:E%2$d を再生</string>
+    <string name="detail_replay_episode">S%1$d:E%2$d をもう一度再生</string>
+
+    <!-- ── Action icon content descriptions (TalkBack) ──────────────────── -->
+    <string name="detail_cd_mark_as_watched">視聴済みにする</string>
+    <string name="detail_cd_mark_as_unwatched">未視聴にする</string>
+    <string name="detail_cd_favorite">お気に入り</string>
+    <string name="detail_cd_options">オプション</string>
+    <string name="detail_cd_episode_play">再生</string>
+    <string name="detail_cd_track_play">再生</string>
+    <string name="detail_cd_close">閉じる</string>
+    <string name="detail_cd_collapse">折りたたむ</string>
+    <string name="detail_cd_expand">展開する</string>
+    <string name="detail_cd_sort_oldest_first">古い順に並べ替え</string>
+    <string name="detail_cd_sort_newest_first">新しい順に並べ替え</string>
+
+    <!-- ── Episode / season card labels ─────────────────────────────────── -->
+    <string name="detail_season_format">シーズン %1$d</string>
+    <string name="detail_no_episodes_available">視聴可能なエピソードはありません</string>
+    <string name="detail_spoiler">ネタバレ</string>
+    <string name="detail_watched_badge">視聴済み</string>
+    <string name="detail_time_left_format">残り %1$s</string>
+
+    <!-- ── Overflow / options menu ──────────────────────────────────────── -->
+    <string name="detail_option_edit">編集</string>
+    <string name="detail_option_share">共有</string>
+    <string name="detail_option_downloaded">ダウンロード済み</string>
+    <string name="detail_option_downloading">ダウンロード中…</string>
+    <string name="detail_option_downloading_percent">ダウンロード中 (%1$d%%)</string>
+    <string name="detail_option_download">ダウンロード</string>
+    <string name="detail_option_downloading_series">シリーズをダウンロード中…</string>
+    <string name="detail_option_download_series">シリーズをダウンロード</string>
+    <string name="detail_option_hide_from_next_up">「次に見る」から非表示</string>
+    <string name="detail_option_hide_from_continue_watching">「視聴を続ける」から非表示</string>
+    <string name="detail_option_show_in_next_up">「次に見る」に表示</string>
+    <string name="detail_option_show_in_continue_watching">「視聴を続ける」に表示</string>
+    <string name="detail_option_technical_info">技術情報</string>
+
+    <!-- ── Series download sheet ────────────────────────────────────────── -->
+    <string name="detail_download_series_title">シリーズをダウンロード</string>
+    <string name="detail_download_series_subtitle">シーズンをタップしてエピソードを表示します。ダウンロードするものを選択してください。</string>
+    <string name="detail_select_all">すべて選択</string>
+    <string name="detail_deselect_all">選択をすべて解除</string>
+    <string name="detail_episodes_selected_format">%2$d 件中 %1$d 件のエピソードを選択</string>
+    <plurals name="detail_episode_count">
+        <item quantity="other">%1$d 件のエピソード</item>
+    </plurals>
+    <string name="detail_downloaded_count_format">• %1$d 件ダウンロード済み</string>
+    <string name="detail_queuing">キューに追加中…</string>
+    <string name="detail_downloaded_status">ダウンロード済み</string>
+    <string name="detail_cancel">キャンセル</string>
+
+    <!-- ── Add to Playlist picker ──────────────────────────────────────── -->
+    <string name="detail_option_add_to_playlist">プレイリストに追加</string>
+    <string name="detail_playlist_picker_title">プレイリストに追加</string>
+    <string name="detail_playlist_watch_later">後で見る</string>
+    <string name="detail_playlist_create_new">新しいプレイリストを作成</string>
+    <string name="detail_playlist_new_title">新しいプレイリスト</string>
+    <string name="detail_playlist_name_label">名前</string>
+    <string name="detail_playlist_desc_label">説明 (任意)</string>
+    <string name="detail_playlist_create">作成</string>
+    <string name="detail_msg_no_playlists">まだプレイリストはありません</string>
+    <!-- %1$s = playlist name -->
+    <string name="detail_msg_added_to_playlist">\"%1$s\" に追加しました</string>
+    <string name="detail_msg_added_to_watch_later">「後で見る」に追加しました</string>
+    <!-- %1$s = playlist name -->
+    <string name="detail_msg_playlist_created">\"%1$s\" を作成しアイテムを追加しました</string>
+    <string name="detail_msg_couldnt_add_to_playlist">プレイリストに追加できませんでした</string>
+    <plurals name="detail_playlist_item_count">
+        <item quantity="other">%1$d 件のアイテム</item>
+    </plurals>
+
+    <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
+    <string name="detail_select_audio">音声を選択</string>
+    <string name="detail_select_subtitle">字幕を選択</string>
+    <string name="detail_stream_auto">自動</string>
+    <string name="detail_stream_default">デフォルト</string>
+    <string name="detail_stream_subtitle_off">オフ</string>
+    <string name="detail_stream_default_badge">デフォルト</string>
+    <string name="detail_audio_track_format">トラック %1$d</string>
+    <string name="detail_subtitle_track_format">トラック %1$d</string>
+    <string name="detail_subtitle_off">オフ</string>
+    <string name="detail_audio_channels_format">%1$dCH</string>
+
+    <!-- ── Download dialogs ─────────────────────────────────────────────── -->
+    <string name="detail_download_dialog_title">ダウンロード</string>
+    <string name="detail_download_anyway">このままダウンロード</string>
+    <string name="detail_cellular_download_title">モバイルネットワークでの大容量ダウンロード</string>
+    <string name="detail_cellular_download_message">従量制ネットワークに接続しています。このダウンロードは約 %1$d MB で、モバイルデータ通信量を多く消費する可能性があります。</string>
+    <string name="detail_estimated_size">推定サイズ: %1$s</string>
+    <string name="detail_available_storage">利用可能なストレージ: %1$s</string>
+    <string name="detail_not_enough_storage">十分なストレージ容量がありません。</string>
+
+    <!-- ── File-size formatting ─────────────────────────────────────────── -->
+    <string name="detail_size_gb">%1$.1f GB</string>
+    <string name="detail_size_mb">%1$.1f MB</string>
+    <string name="detail_size_kb">%1$.1f KB</string>
+    <string name="detail_size_b">%1$d B</string>
+    <string name="detail_size_unknown">不明</string>
+
+    <!-- ── Share ────────────────────────────────────────────────────────── -->
+    <string name="detail_share_via">共有先</string>
+
+    <!-- ── Snackbar / user feedback (from ViewModel) ────────────────────── -->
+    <string name="detail_msg_couldnt_update_favorite">お気に入りを更新できませんでした</string>
+    <string name="detail_msg_couldnt_mark_played">再生済みにできませんでした</string>
+    <string name="detail_msg_couldnt_mark_unplayed">未再生にできませんでした</string>
+    <string name="detail_mark_season_watched">シーズンを視聴済みにする</string>
+    <string name="detail_mark_season_unwatched">シーズンを未視聴にする</string>
+    <string name="detail_cd_season_options">シーズンを視聴済み/未視聴にする</string>
+    <string name="detail_msg_no_episodes_queued">キューに追加できるエピソードはありませんでした</string>
+    <string name="detail_msg_hidden_from_next_up">「次に見る」から非表示にしました</string>
+    <string name="detail_msg_shown_in_next_up">「次に見る」に表示しました</string>
+    <string name="detail_msg_hidden_from_continue_watching">「視聴を続ける」から非表示にしました</string>
+    <string name="detail_msg_shown_in_continue_watching">「視聴を続ける」に表示しました</string>
+
+    <!-- ── Snackbar: episodes queued (plurals) ──────────────────────────── -->
+    <plurals name="detail_episodes_queued">
+        <item quantity="other">%1$d 件のエピソードをダウンロードキューに追加しました</item>
+    </plurals>
+
+    <!-- ── ViewModel error messages (shown via ErrorScreen / snackbar) ──── -->
+    <string name="detail_error_load_failed">詳細を読み込めませんでした</string>
+    <string name="detail_error_access_denied">このアイテムへのアクセス権がありません。</string>
+    <string name="detail_error_details_not_loaded">メディアの詳細が読み込まれていません</string>
+    <string name="detail_error_no_source">ダウンロードできるメディアソースがありません</string>
+    <string name="detail_error_no_stream_url">ストリームURLを取得できませんでした</string>
+    <string name="detail_error_download_failed">ダウンロードに失敗しました</string>
+    <string name="detail_error_not_a_series">これはシリーズではありません</string>
+    <string name="detail_error_queue_failed">ダウンロードのキュー追加に失敗しました</string>
+
+    <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
+    <string name="detail_option_manage_series">シリーズを管理</string>
+    <string name="detail_manage_title">シリーズを管理</string>
+    <!-- Series-level actions -->
+    <string name="detail_manage_refresh_metadata">メタデータを更新</string>
+    <string name="detail_manage_refresh_scan">更新 &amp; スキャン</string>
+    <string name="detail_manage_search_series">検索</string>
+    <!-- %1$s = formatted size (e.g. "12.3 GB") -->
+    <string name="detail_manage_disk_used_format">ディスク: %1$s</string>
+    <!-- Series monitored indicator -->
+    <string name="detail_manage_monitored">監視中</string>
+    <string name="detail_manage_unmonitored">非監視</string>
+    <!-- Season header -->
+    <string name="detail_manage_season_format">シーズン %1$d</string>
+    <string name="detail_manage_season_specials">特別編</string>
+    <!-- %1$d = downloaded count, %2$d = total count -->
+    <string name="detail_manage_season_count_format">%1$d/%2$d</string>
+    <!-- Episode status badges -->
+    <string name="detail_manage_status_downloaded">ダウンロード済み</string>
+    <string name="detail_manage_status_missing">欠落</string>
+    <string name="detail_manage_status_unmonitored">非監視</string>
+    <string name="detail_manage_status_unaired">未放送</string>
+    <!-- Episode actions -->
+    <string name="detail_manage_search">自動検索</string>
+    <string name="detail_manage_monitor">監視する</string>
+    <string name="detail_manage_unmonitor">監視しない</string>
+    <string name="detail_manage_delete_file">ファイルを削除</string>
+    <!-- Delete-file confirmation dialog. %1$s = episode title, %2$s = SxxExx -->
+    <string name="detail_manage_delete_title">エピソードファイルを削除</string>
+    <string name="detail_manage_delete_message">\"%1$s\" (%2$s) のファイルを削除しますか? Sonarrから削除され、代替を検索できます。</string>
+    <string name="detail_manage_delete_confirm">削除</string>
+    <!-- Empty / error states -->
+    <string name="detail_manage_no_episodes">このシリーズのエピソードはSonarrに見つかりませんでした。</string>
+    <string name="detail_manage_not_tracked">このシリーズを追跡しているSonarrサーバーはありません。</string>
+    <!-- Content descriptions (TalkBack / TV) -->
+    <string name="detail_manage_cd_search_season">このシーズンの監視対象を検索</string>
+    <string name="detail_manage_cd_toggle_monitor_season">シーズン内の全エピソードの監視を切り替え</string>
+    <string name="detail_manage_cd_toggle_monitor_episode">エピソードの監視を切り替え</string>
+    <string name="detail_manage_cd_episode_menu">エピソードのオプション</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">利用可能</string>
+    <string name="detail_request">リクエスト</string>
+    <string name="detail_seerr_processing">処理中</string>
+    <string name="detail_seerr_pending">保留中</string>
+    <string name="detail_seerr_requested">リクエスト済み</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">おすすめ</string>
+    <string name="detail_section_similar">類似</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">劇場公開</string>
+    <string name="detail_cd_release_digital">デジタル配信</string>
+    <string name="detail_cd_release_physical">パッケージ版</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">ビデオ</string>
+    <string name="detail_media_info_title_audio">オーディオ</string>
+    <string name="detail_media_info_title_subtitles">字幕</string>
+    <string name="detail_media_info_no_info">メディア情報なし</string>
+    <string name="detail_media_info_no_info_description">このアイテムの技術情報は利用できません</string>
+</resources>

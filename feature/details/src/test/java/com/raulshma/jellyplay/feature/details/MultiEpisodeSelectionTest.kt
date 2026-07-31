@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import androidx.compose.ui.state.ToggleableState
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.MultiEpisodeSelection
@@ -184,5 +185,187 @@ class MultiEpisodeSelectionTest {
         assertEquals(setOf("ep1"), selection.selectedForSeason("s1"))
         assertEquals(setOf("ep1"), selection.toSelectedIds())
         assertEquals(mapOf("s1" to listOf("ep1")), selection.toSelectedMap())
+    }
+
+    // ── toggleSelectAll (select branch) ────────────────────────────────
+
+    @Test
+    fun toggleSelectAll_whenNoneSelected_selectsAll() {
+        val s1 = createSeason("s1", "Season 1")
+        val ep1 = createEpisode("ep1", "Ep 1", "s1")
+        val ep2 = createEpisode("ep2", "Ep 2", "s1")
+        val episodes = mapOf("s1" to listOf(ep1, ep2))
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id),
+            selectableProvider = downloadRule(listOf(s1), episodes),
+        )
+
+        assertFalse(selection.allSelected)
+
+        selection.toggleSelectAll()
+
+        assertTrue(selection.allSelected)
+        assertEquals(2, selection.totalSelectedCount)
+    }
+
+    // ── toggleSeason ───────────────────────────────────────────────────
+
+    @Test
+    fun toggleSeason_selectsThenDeselectsAllSelectableInThatSeason() {
+        val s1 = createSeason("s1", "Season 1")
+        val ep1 = createEpisode("ep1", "Ep 1", "s1")
+        val ep2 = createEpisode("ep2", "Ep 2", "s1")
+        val episodes = mapOf("s1" to listOf(ep1, ep2))
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id),
+            selectableProvider = downloadRule(listOf(s1), episodes),
+        )
+
+        selection.toggleSeason("s1")
+        assertEquals(setOf("ep1", "ep2"), selection.selectedForSeason("s1"))
+
+        selection.toggleSeason("s1")
+        assertTrue(selection.selectedForSeason("s1").isEmpty())
+    }
+
+    @Test
+    fun toggleSeason_isPerSeasonAndDoesNotTouchOtherSeasons() {
+        val s1 = createSeason("s1", "Season 1")
+        val s2 = createSeason("s2", "Season 2")
+        val episodes = mapOf(
+            "s1" to listOf(createEpisode("ep1", "Ep 1", "s1")),
+            "s2" to listOf(createEpisode("ep2", "Ep 2", "s2")),
+        )
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id, s2.id),
+            selectableProvider = downloadRule(listOf(s1, s2), episodes),
+        )
+
+        selection.toggleSeason("s1")
+        assertEquals(setOf("ep1"), selection.selectedForSeason("s1"))
+        // Season 2 untouched.
+        assertTrue(selection.selectedForSeason("s2").isEmpty())
+    }
+
+    // ── toggleEpisode ──────────────────────────────────────────────────
+
+    @Test
+    fun toggleEpisode_addsThenRemovesASingleEpisode() {
+        val s1 = createSeason("s1", "Season 1")
+        val episodes = mapOf("s1" to listOf(createEpisode("ep1", "Ep 1", "s1")))
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id),
+            selectableProvider = downloadRule(listOf(s1), episodes),
+        )
+
+        selection.toggleEpisode("s1", "ep1")
+        assertEquals(setOf("ep1"), selection.selectedForSeason("s1"))
+        assertEquals(1, selection.totalSelectedCount)
+
+        selection.toggleEpisode("s1", "ep1")
+        assertTrue(selection.selectedForSeason("s1").isEmpty())
+    }
+
+    // ── triStateForSeason ──────────────────────────────────────────────
+
+    @Test
+    fun triStateForSeason_isOffWhenNoSelectableEpisodes() {
+        val s1 = createSeason("s1", "Season 1")
+        // Empty episodes → nothing selectable.
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id),
+            selectableProvider = downloadRule(listOf(s1), emptyMap()),
+        )
+        assertEquals(ToggleableState.Off, selection.triStateForSeason("s1"))
+    }
+
+    @Test
+    fun triStateForSeason_isOnWhenAllSelectableSelected() {
+        val s1 = createSeason("s1", "Season 1")
+        val episodes = mapOf("s1" to listOf(createEpisode("ep1", "Ep 1", "s1")))
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id),
+            selectableProvider = downloadRule(listOf(s1), episodes),
+        )
+        selection.selectAll()
+        assertEquals(ToggleableState.On, selection.triStateForSeason("s1"))
+    }
+
+    @Test
+    fun triStateForSeason_isIndeterminateWhenPartiallySelected() {
+        val s1 = createSeason("s1", "Season 1")
+        val ep1 = createEpisode("ep1", "Ep 1", "s1")
+        val ep2 = createEpisode("ep2", "Ep 2", "s1")
+        val episodes = mapOf("s1" to listOf(ep1, ep2))
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id),
+            selectableProvider = downloadRule(listOf(s1), episodes),
+        )
+        selection.toggleEpisode("s1", "ep1") // one of two
+        assertEquals(ToggleableState.Indeterminate, selection.triStateForSeason("s1"))
+    }
+
+    @Test
+    fun triStateForSeason_isOffWhenNothingSelectedButSelectablePresent() {
+        val s1 = createSeason("s1", "Season 1")
+        val episodes = mapOf("s1" to listOf(createEpisode("ep1", "Ep 1", "s1")))
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id),
+            selectableProvider = downloadRule(listOf(s1), episodes),
+        )
+        assertEquals(ToggleableState.Off, selection.triStateForSeason("s1"))
+    }
+
+    // ── Derived views ──────────────────────────────────────────────────
+
+    @Test
+    fun allSelectableIdsAndPerSeasonFlattenTheProviderAcrossSeasons() {
+        val s1 = createSeason("s1", "Season 1")
+        val s2 = createSeason("s2", "Season 2")
+        val episodes = mapOf(
+            "s1" to listOf(createEpisode("ep1", "Ep 1", "s1")),
+            "s2" to listOf(createEpisode("ep2", "Ep 2", "s2")),
+        )
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id, s2.id),
+            selectableProvider = downloadRule(listOf(s1, s2), episodes),
+        )
+
+        assertEquals(setOf("ep1", "ep2"), selection.allSelectableIds)
+        assertEquals(setOf("ep1"), selection.selectableEpisodeIdsForSeason("s1"))
+        assertEquals(setOf("ep2"), selection.selectableEpisodeIdsForSeason("s2"))
+        // Unknown season → empty, never null.
+        assertTrue(selection.selectableEpisodeIdsForSeason("nope").isEmpty())
+    }
+
+    @Test
+    fun allSelected_isFalseWhenSelectableIsEmptyEvenIfNothingSelected() {
+        // Guards the `selectable.isNotEmpty()` clause: with zero selectable ids,
+        // allSelected must be false (not vacuously true).
+        val s1 = createSeason("s1", "Season 1")
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id),
+            selectableProvider = downloadRule(listOf(s1), emptyMap()),
+        )
+        assertFalse(selection.allSelected)
+    }
+
+    @Test
+    fun selectAll_onlySelectsSelectableEpisodesAndPreservesSeasonKeys() {
+        val s1 = createSeason("s1", "Season 1")
+        val ep1 = createEpisode("ep1", "Ep 1", "s1")
+        val ep2 = createEpisode("ep2", "Ep 2", "s1")
+        val episodes = mapOf("s1" to listOf(ep1, ep2))
+        val selection = MultiEpisodeSelection(
+            initialSeasonIds = listOf(s1.id),
+            selectableProvider = downloadRule(listOf(s1), episodes, downloaded = setOf("ep1")),
+        )
+
+        selection.selectAll()
+
+        // ep1 is downloaded (excluded) → only ep2 selectable & selected.
+        assertEquals(setOf("ep2"), selection.selectedForSeason("s1"))
+        // The season key is preserved even though only one episode was selected.
+        assertEquals(setOf("s1"), selection.toSelectedMap().keys)
     }
 }

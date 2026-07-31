@@ -40,6 +40,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -86,25 +88,25 @@ fun OfflineLibraryScreen(
     val searchFocus = remember { FocusRequester() }
 
     JellyPlayScreenScaffold(
-        title = "Downloaded",
+        title = stringResource(R.string.downloads_library_title),
         onBack = onBack,
         actions = {
             IconButton(onClick = {
                 searchOpen = !searchOpen
                 if (searchOpen) searchFocus.requestFocus()
             }) {
-                Icon(if (searchOpen) Tabler.Outline.X else Tabler.Outline.Search, contentDescription = "Search")
+                Icon(if (searchOpen) Tabler.Outline.X else Tabler.Outline.Search, contentDescription = stringResource(R.string.downloads_search_cd))
             }
             Box {
                 IconButton(onClick = { sortMenuOpen = true }) {
-                    Icon(Tabler.Outline.ArrowDown, contentDescription = "Sort")
+                    Icon(Tabler.Outline.ArrowDown, contentDescription = stringResource(R.string.downloads_sort_cd))
                 }
                 DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
                     OfflineLibrarySort.entries.forEach { option ->
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    option.label,
+                                    stringResource(option.labelRes),
                                     fontWeight = if (option == sort) FontWeight.SemiBold else FontWeight.Normal,
                                 )
                             },
@@ -123,7 +125,7 @@ fun OfflineLibraryScreen(
         } else if (items.isEmpty() && query.isBlank()) {
             ScreenEmptyState(
                 icon = Tabler.Outline.Download,
-                title = "No downloaded content yet",
+                title = stringResource(R.string.downloads_no_downloaded_content),
             )
         } else {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -145,12 +147,12 @@ fun OfflineLibraryScreen(
                     OutlinedTextField(
                         value = query,
                         onValueChange = viewModel::setQuery,
-                        placeholder = { Text("Search downloads…") },
+                        placeholder = { Text(stringResource(R.string.downloads_search_downloads_placeholder)) },
                         leadingIcon = { Icon(Tabler.Outline.Search, contentDescription = null) },
                         trailingIcon = {
                             if (query.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.setQuery("") }) {
-                                    Icon(Tabler.Outline.X, contentDescription = "Clear")
+                                    Icon(Tabler.Outline.X, contentDescription = stringResource(R.string.downloads_clear_cd))
                                 }
                             }
                         },
@@ -171,7 +173,7 @@ fun OfflineLibraryScreen(
                         Tab(
                             selected = filter == option,
                             onClick = { viewModel.setFilter(option) },
-                            text = { Text(option.label) },
+                            text = { Text(stringResource(option.labelRes)) },
                         )
                     }
                 }
@@ -182,7 +184,7 @@ fun OfflineLibraryScreen(
                     Box(modifier = Modifier.fillMaxSize().weight(1f)) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Search,
-                            title = if (query.isNotBlank()) "No matches" else "No downloaded items in this category",
+                            title = if (query.isNotBlank()) stringResource(R.string.downloads_no_matches) else stringResource(R.string.downloads_no_items_in_category),
                         )
                     }
                 } else {
@@ -240,7 +242,7 @@ private fun StorageHeader(
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = "${itemCount} item${if (itemCount == 1) "" else "s"}",
+            text = pluralStringResource(R.plurals.downloads_item_count, itemCount, itemCount),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Medium,
@@ -248,7 +250,7 @@ private fun StorageHeader(
         if (totalBytes > 0) {
             Spacer(Modifier.width(6.dp))
             Text(
-                text = "· ${totalBytes.formatBytes()} on device",
+                text = stringResource(R.string.downloads_on_device, totalBytes.formatBytes()),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,6 +42,7 @@ import com.raulshma.jellyplay.core.model.PluginPackage
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.feature.admin.plugins.isTrustedRepository
 
 @Composable
@@ -70,7 +72,7 @@ fun PluginCatalogCard(
         AlertDialog(
             onDismissRequest = { showTrustDialog = false },
             icon = { Icon(Tabler.Outline.AlertTriangle, contentDescription = null) },
-            title = { Text("Install third-party plugin?") },
+            title = { Text(stringResource(R.string.admin_install_third_party_title)) },
             text = {
                 Text(
                     "Plugins have the same system access as your Jellyfin server. " +
@@ -82,10 +84,10 @@ fun PluginCatalogCard(
                 TextButton(onClick = {
                     showTrustDialog = false
                     onInstall(packageInfo.name, packageInfo.guid, latestVer.version, latestVer.repositoryUrl)
-                }) { Text("Continue") }
+                }) { Text(stringResource(R.string.admin_continue)) }
             },
             dismissButton = {
-                TextButton(onClick = { showTrustDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showTrustDialog = false }) { Text(stringResource(R.string.admin_cancel)) }
             },
         )
     }
@@ -127,7 +129,7 @@ fun PluginCatalogCard(
                     ) {
                         if (packageInfo.owner.isNotBlank()) {
                             Text(
-                                text = "by ${packageInfo.owner}",
+                                text = stringResource(R.string.admin_plugin_by_author, packageInfo.owner),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -162,13 +164,13 @@ fun PluginCatalogCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Latest: v${latestVer.version}",
+                        text = stringResource(R.string.admin_latest_version, latestVer.version),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (isInstalled) {
                         Text(
-                            text = "Installed",
+                            text = stringResource(R.string.admin_installed),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary,
@@ -190,7 +192,7 @@ fun PluginCatalogCard(
                                 modifier = Modifier.size(16.dp),
                             )
                             Spacer(Modifier.width(6.dp))
-                            Text("Install", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.admin_install), style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }

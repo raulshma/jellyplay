@@ -38,6 +38,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -76,6 +77,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -109,6 +111,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.rememberDpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
@@ -116,6 +119,7 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
+import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
@@ -453,8 +457,8 @@ fun VideoPlayerScreen(
 
 
 
-    LaunchedEffect(uiState.frameRateMatching, uiState.videoFrameRate) {
-        if (uiState.frameRateMatching && uiState.videoFrameRate != null) {
+    LaunchedEffect(uiState.frameRateMatching, uiState.refreshRateMode, uiState.videoFrameRate) {
+        if (uiState.frameRateMatching && uiState.refreshRateMode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF && uiState.videoFrameRate != null) {
             val videoStream = uiState.mediaStreams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
             activity?.let {
                 if (!it.isDestroyed && !it.isFinishing) {
@@ -463,6 +467,7 @@ fun VideoPlayerScreen(
                         frameRate = uiState.videoFrameRate,
                         targetWidth = videoStream?.width,
                         targetHeight = videoStream?.height,
+                        mode = uiState.refreshRateMode,
                     )
                 }
             }
@@ -1446,6 +1451,38 @@ fun VideoPlayerScreen(
             val onChannelMixModeChange by remember { mutableStateOf({ mode: ChannelMixMode -> viewModel.setChannelMixMode(mode) }) }
             val onSleepTimerClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SleepTimer }) }
             val onVideoFilterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.VideoFilter }) }
+            // Capture the current video frame via PixelCopy on the engine's
+            // surface view. Backend-agnostic: all three engines render to a
+            // SurfaceView, which only PixelCopy (not View.drawToBitmap) can read.
+            // The titleHint seeds the MediaStore filename. Result surfaces as a
+            // snackbar with the saved path, or a share intent is offered.
+            val onScreenshotClick: () -> Unit = remember {
+                {
+                    val view = playerViewRef
+                    if (view != null) {
+                        scope.launch { snackbarHostState.showSnackbar("Capturing frame…", duration = SnackbarDuration.Short) }
+                        com.raulshma.jellyplay.feature.player.video.ScreenshotSaver.capture(
+                            surfaceView = view,
+                            titleHint = uiState.title,
+                        ) { result ->
+                            scope.launch {
+                                val msg = when (result) {
+                                    is com.raulshma.jellyplay.feature.player.video.ScreenshotSaver.Result.Saved ->
+                                        "Frame saved to Pictures/JellyPlay (${result.width}×${result.height})"
+                                    is com.raulshma.jellyplay.feature.player.video.ScreenshotSaver.Result.Failed ->
+                                        "Capture failed: ${result.reason}"
+                                }
+                                snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Long)
+                            }
+                        }
+                    } else {
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Player not ready", duration = SnackbarDuration.Short)
+                        }
+                    }
+                    Unit
+                }
+            }
             val onLockClick by remember { mutableStateOf({
                 viewModel.setScreenLocked(true)
                 showControls = false
@@ -1559,6 +1596,13 @@ fun VideoPlayerScreen(
                 supportsVideoFilters = uiState.engineCapabilities.supportsVideoFilters,
                 videoFiltersActive = uiState.videoEffects != com.raulshma.jellyplay.core.model.VideoEffectsConfig(),
                 onVideoFilterClick = onVideoFilterClick,
+                supportsScreenshot = uiState.engineCapabilities.supportsScreenshot,
+                onScreenshotClick = onScreenshotClick,
+                abRepeatActive = uiState.abRepeat.isActive,
+                onAbRepeatToggle = { viewModel.setAbRepeatEnabled(!uiState.abRepeat.enabled) },
+                onAbRepeatSetA = { viewModel.setAbRepeatPointA() },
+                onAbRepeatSetB = { viewModel.setAbRepeatPointB() },
+                onAbRepeatClear = { viewModel.clearAbRepeat() },
                 onLockClick = onLockClick,
                 onControlsFocusChange = onControlsFocusChange,
                 onOverflowMenuChange = onOverflowMenuChange,
@@ -1860,7 +1904,7 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.Audio -> {
             TrackPickerSheet(
-                title = "Audio",
+                title = stringResource(R.string.player_audio),
                 tracks = uiState.audioTracks,
                 onSelect = { viewModel.selectAudioTrack(it) },
                 onReset = if (uiState.hasAudioOverride) { { viewModel.resetAudioTrack() } } else null,
@@ -1871,7 +1915,7 @@ private fun PlayerSheetRouter(
                         // remembers the currently-selected track's language for
                         // every episode of this series; toggling off forgets it.
                         RememberPreferenceToggle(
-                            label = "Remember audio language for this series",
+                            label = stringResource(R.string.player_video_remember_audio_language),
                             checked = uiState.hasSeriesAudioPref,
                             onToggle = { remember ->
                                 val lang = if (remember) {
@@ -1888,23 +1932,36 @@ private fun PlayerSheetRouter(
         }
         is PlayerSheet.Subtitle -> {
             TrackPickerSheet(
-                title = "Subtitles",
+                title = stringResource(R.string.player_subtitles),
                 tracks = uiState.subtitleTracks,
                 onSelect = { viewModel.selectSubtitleTrack(it) },
                 onReset = if (uiState.hasSubtitleOverride) { { viewModel.resetSubtitleTrack() } } else null,
                 onDismiss = dismissSheet,
                 footer = if (uiState.seriesId != null) {
                     {
+                        // Per-series subtitle preference toggle. Saves the
+                        // currently-selected track's language AND its role
+                        // (forced / SDH) so every episode restores the right
+                        // same-language track; toggling off forgets it.
                         RememberPreferenceToggle(
-                            label = "Remember subtitle language for this series",
+                            label = stringResource(R.string.player_video_remember_subtitle_language),
                             checked = uiState.hasSeriesSubtitlePref,
                             onToggle = { remember ->
-                                val lang = if (remember) {
-                                    uiState.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }?.language
+                                val sel = if (remember) {
+                                    uiState.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }
                                 } else {
                                     null
                                 }
-                                viewModel.setSeriesSubtitleLanguagePreference(lang)
+                                viewModel.setSeriesSubtitlePreference(
+                                    language = sel?.language,
+                                    // A role is only pinned when present: selecting a
+                                    // plain track passes null ("don't care") so the
+                                    // restore matcher relaxes to any same-language
+                                    // track instead of strictly excluding forced/SDH
+                                    // tracks whose badges vary episode-to-episode.
+                                    forced = sel?.badges?.contains(TrackBadge.FORCED)?.takeIf { it },
+                                    hearingImpaired = sel?.badges?.contains(TrackBadge.SDH)?.takeIf { it },
+                                )
                             },
                         )
                     }
@@ -1996,8 +2053,10 @@ private fun PlayerSheetRouter(
                 downloadSubtitles = uiState.remoteSubtitles,
                 isDownloading = uiState.isLoadingRemoteSubtitles,
                 onDownload = {
+                    // Keep the sheet open so the row can show a per-subtitle
+                    // spinner / ✓-Downloaded / "Use" affordance instead of closing
+                    // immediately and leaving the user with no download feedback.
                     viewModel.downloadSubtitle(it)
-                    onSheetChange(PlayerSheet.None)
                 },
                 onLoadLocalFile = onLoadLocalSubtitle,
                 // Search tab
@@ -2010,8 +2069,11 @@ private fun PlayerSheetRouter(
                 onSearch = { viewModel.searchRemoteSubtitles(it) },
                 onDownloadSearched = {
                     viewModel.downloadSubtitle(it)
-                    onSheetChange(PlayerSheet.None)
                 },
+                // Shared per-subtitle download status + the "Use" affordance that
+                // opens the subtitle track picker once a download has surfaced.
+                downloadingSubtitles = uiState.downloadingSubtitles,
+                onUseSubtitle = { onSheetChange(PlayerSheet.Subtitle) },
                 // Upload tab
                 isUploading = uiState.isUploadingSubtitle,
                 onUpload = { uri, fileName, language, isForced, isHearingImpaired ->

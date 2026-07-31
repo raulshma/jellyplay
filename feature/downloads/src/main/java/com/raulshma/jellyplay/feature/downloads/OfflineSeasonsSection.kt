@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -116,7 +117,7 @@ internal fun OfflineSeasonsSection(
     Column {
         if (seasons.isNotEmpty()) {
             Text(
-                text = "Seasons",
+                text = stringResource(R.string.downloads_seasons),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(horizontal = contentPad),
@@ -157,7 +158,7 @@ internal fun OfflineSeasonsSection(
                 ) {
                     ScreenEmptyState(
                         icon = Tabler.Outline.DeviceFloppy,
-                        title = "No episodes downloaded for this season",
+                        title = stringResource(R.string.downloads_no_episodes_season),
                     )
                 }
             } else {
@@ -184,8 +185,8 @@ internal fun OfflineSeasonsSection(
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text("Delete episode") },
-            text = { Text("Remove \"${episode.name}\" from your device?") },
+            title = { Text(stringResource(R.string.downloads_delete_episode_title)) },
+            text = { Text(stringResource(R.string.downloads_delete_episode_message, episode.name)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -193,10 +194,10 @@ internal fun OfflineSeasonsSection(
                         onEpisodeDelete(episode)
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.downloads_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.downloads_cancel)) }
             },
         )
     }
@@ -240,8 +241,8 @@ private fun OfflineSeasonTab(
         containerColor = surfaceColor,
         contentColor = contentColor,
     )
-    val seasonName = season.name.takeIf { it.isNotBlank() }
-        ?: "Season ${season.seasonNumber ?: (seasonIndex + 1)}"
+    val defaultSeasonName = stringResource(R.string.downloads_season_default, season.seasonNumber ?: (seasonIndex + 1))
+    val seasonName = season.name.takeIf { it.isNotBlank() } ?: defaultSeasonName
     // Compact (extra-small) split-button variant — these tabs sit in a dense
     // horizontal row, so use the xsmall container height (shorter than the
     // default SmallContainerHeight) and a tighter label style, matching the
@@ -286,7 +287,7 @@ private fun OfflineSeasonTab(
                 ) {
                     Icon(
                         imageVector = Tabler.Outline.Eye,
-                        contentDescription = "Mark season watched or unwatched",
+                        contentDescription = stringResource(R.string.downloads_mark_season_cd),
                         modifier = Modifier.size(SplitButtonDefaults.ExtraSmallTrailingButtonIconSize),
                     )
                 }
@@ -297,7 +298,7 @@ private fun OfflineSeasonTab(
             onDismissRequest = { menuExpanded = false },
         ) {
             DropdownMenuItem(
-                text = { Text("Mark season as watched") },
+                text = { Text(stringResource(R.string.downloads_mark_season_watched)) },
                 onClick = {
                     menuExpanded = false
                     onMarkSeasonPlayed()
@@ -305,7 +306,7 @@ private fun OfflineSeasonTab(
                 leadingIcon = { Icon(Tabler.Outline.Eye, contentDescription = null) },
             )
             DropdownMenuItem(
-                text = { Text("Mark season as unwatched") },
+                text = { Text(stringResource(R.string.downloads_mark_season_unwatched)) },
                 onClick = {
                     menuExpanded = false
                     onMarkSeasonUnplayed()

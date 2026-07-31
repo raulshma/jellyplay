@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -89,7 +91,7 @@ fun TrickplayOverlay(
                 if (imageBitmap != null) {
                     Image(
                         bitmap = imageBitmap,
-                        contentDescription = "Trickplay thumbnail",
+                        contentDescription = stringResource(R.string.player_video_trickplay_thumbnail),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()

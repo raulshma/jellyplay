@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.auth
 
+import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -7,6 +8,7 @@ import com.raulshma.jellyplay.core.network.ServerDiscoveryService
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import javax.inject.Inject
 
@@ -23,6 +25,7 @@ data class AddServerUiState(
 class AddServerViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val discoveryService: ServerDiscoveryService,
+    @ApplicationContext private val appContext: Context,
 ) : JellyPlayViewModel() {
 
     private val _uiState: StateFlowHandle<AddServerUiState> = stateFlow(AddServerUiState())
@@ -94,7 +97,7 @@ class AddServerViewModel @Inject constructor(
      */
     fun connectToServer(address: String, onResult: (Result<ServerInfo>) -> Unit) {
         if (address.isBlank()) {
-            _uiState.update { it.copy(connectError = "Please enter a server address") }
+            _uiState.update { it.copy(connectError = appContext.getString(R.string.auth_error_server_address_required)) }
             return
         }
 
@@ -107,7 +110,7 @@ class AddServerViewModel @Inject constructor(
                 onResult(result)
             }.onFailure { throwable ->
                 _uiState.update {
-                    it.copy(connectError = getConnectionErrorMessage(throwable))
+                    it.copy(connectError = getConnectionErrorMessage(appContext, throwable))
                 }
                 onResult(result)
             }
@@ -130,19 +133,19 @@ private fun getRootCause(throwable: Throwable): Throwable {
     return cause
 }
 
-private fun getConnectionErrorMessage(throwable: Throwable): String {
+private fun getConnectionErrorMessage(context: Context, throwable: Throwable): String {
     val root = getRootCause(throwable)
     return when {
-        root is java.net.UnknownHostException -> "Unable to resolve server address"
-        root is java.net.ConnectException -> "Could not connect to server"
-        root is java.net.SocketTimeoutException -> "Connection timed out"
-        root is javax.net.ssl.SSLException -> "SSL/TLS error - check server certificate"
+        root is java.net.UnknownHostException -> context.getString(R.string.auth_error_resolve_address)
+        root is java.net.ConnectException -> context.getString(R.string.auth_error_could_not_connect)
+        root is java.net.SocketTimeoutException -> context.getString(R.string.auth_error_connection_timeout)
+        root is javax.net.ssl.SSLException -> context.getString(R.string.auth_error_ssl)
         root.message?.contains("cleartext", ignoreCase = true) == true ->
-            "HTTP connections are not allowed. Use HTTPS."
+            context.getString(R.string.auth_error_cleartext)
         root.message?.contains("ssl", ignoreCase = true) == true ->
-            "SSL/TLS error - check server certificate"
+            context.getString(R.string.auth_error_ssl)
         else -> root.message?.takeIf {
             it.isNotBlank() && !it.startsWith("org.") && it.length < 100
-        } ?: "Failed to connect to server"
+        } ?: context.getString(R.string.auth_error_connection_failed)
     }
 }

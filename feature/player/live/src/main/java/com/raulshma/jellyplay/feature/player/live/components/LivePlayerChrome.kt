@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
@@ -32,6 +33,7 @@ import com.composables.icons.tabler.outline.VolumeOff
 import com.composables.icons.tabler.outline.Menu2
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
+import com.raulshma.jellyplay.feature.player.live.R
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayMethod
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.player.PlayerIconButton
@@ -63,21 +65,23 @@ fun LivePlayerTopBar(
     ) {
         PlayerIconButton(
             icon = Tabler.Outline.ArrowLeft,
-            contentDescription = "Back",
+            contentDescription = stringResource(R.string.live_back),
             onClick = onBack,
         )
         Spacer(Modifier.width(8.dp))
         if (!logoUrl.isNullOrBlank()) {
             MediaImage(
                 url = logoUrl,
-                contentDescription = "${channel.name} logo",
+                contentDescription = stringResource(R.string.live_logo_cd, channel.name),
                 modifier = Modifier.size(40.dp),
             )
             Spacer(Modifier.width(8.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = (channel.number?.let { "Ch. $it — " } ?: "") + channel.name,
+                text = channel.number?.let {
+                    stringResource(R.string.live_channel_title_with_number, it, channel.name)
+                } ?: channel.name,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -98,7 +102,7 @@ fun LivePlayerTopBar(
         )
         PlayerIconButton(
             icon = if (isMuted) Tabler.Outline.VolumeOff else Tabler.Outline.Volume,
-            contentDescription = if (isMuted) "Unmute" else "Mute",
+            contentDescription = if (isMuted) stringResource(R.string.live_unmute) else stringResource(R.string.live_mute),
             onClick = onMute,
         )
     }
@@ -151,7 +155,7 @@ fun LivePlayerBottomBar(
                 horizontalArrangement = Arrangement.End,
             ) {
                 androidx.compose.material3.Button(onClick = onSeekToLiveEdge) {
-                    Text("Go to live")
+                    Text(stringResource(R.string.live_go_to_live))
                 }
             }
         } else {
@@ -170,41 +174,42 @@ fun LivePlayerBottomBar(
         ) {
             PlayerIconButton(
                 icon = Tabler.Outline.PlayerTrackPrev,
-                contentDescription = "Seek back 10s",
+                contentDescription = stringResource(R.string.live_seek_back),
                 onClick = onSeekBack,
                 enabled = canSeek,
             )
             PlayerIconButton(
                 icon = if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                contentDescription = if (isPlaying) "Pause" else "Play",
+                contentDescription = if (isPlaying) stringResource(R.string.live_pause)
+                else stringResource(R.string.live_play),
                 onClick = onPlayPause,
             )
             PlayerIconButton(
                 icon = Tabler.Outline.PlayerTrackNext,
-                contentDescription = "Seek forward 10s",
+                contentDescription = stringResource(R.string.live_seek_forward),
                 onClick = onSeekForward,
                 enabled = canSeek,
             )
             Spacer(Modifier.width(16.dp))
             PlayerIconButton(
                 icon = Tabler.Outline.ChevronUp,
-                contentDescription = "Channel up",
+                contentDescription = stringResource(R.string.live_channel_up),
                 onClick = onChannelUp,
             )
             PlayerIconButton(
                 icon = Tabler.Outline.ChevronDown,
-                contentDescription = "Channel down",
+                contentDescription = stringResource(R.string.live_channel_down),
                 onClick = onChannelDown,
             )
             Spacer(Modifier.width(16.dp))
             PlayerIconButton(
                 icon = Tabler.Outline.Menu2,
-                contentDescription = "Channels",
+                contentDescription = stringResource(R.string.live_channels),
                 onClick = onChannels,
             )
             PlayerIconButton(
                 icon = Tabler.Outline.DotsVertical,
-                contentDescription = "Stream options",
+                contentDescription = stringResource(R.string.live_stream_options),
                 onClick = onMore,
             )
         }

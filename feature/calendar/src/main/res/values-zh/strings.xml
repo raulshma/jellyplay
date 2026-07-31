@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_title">即将发布</string>
+
+    <!-- Month nav -->
+    <string name="calendar_today">今天</string>
+    <string name="calendar_prev_month_cd">上个月</string>
+    <string name="calendar_next_month_cd">下个月</string>
+    <string name="calendar_refresh_cd">刷新</string>
+
+    <!-- Filter -->
+    <string name="calendar_filter_all">全部</string>
+    <string name="calendar_filter_movies">电影</string>
+    <string name="calendar_filter_series">剧集</string>
+
+    <!-- Day header -->
+    <string name="calendar_releases_count">%1$d 个发布</string>
+
+    <!-- Empty / error -->
+    <string name="calendar_empty_title">暂无即将发布的内容</string>
+    <string name="calendar_empty_desc">本月没有安排的发布。</string>
+    <string name="calendar_go_today">回到今天</string>
+    <string name="calendar_error_unknown">无法加载日历。</string>
+    <string name="calendar_no_detail">该条目没有可用的详情。</string>
+
+    <!-- Feature disabled -->
+    <string name="calendar_feature_disabled_title">*arr 直连集成已关闭</string>
+    <string name="calendar_feature_disabled_desc">在「设置 → 集成」中启用，即可查看来自 Sonarr 和 Radarr 的即将发布内容。</string>
+    <string name="calendar_open_settings">打开 *arr 设置</string>
+</resources>

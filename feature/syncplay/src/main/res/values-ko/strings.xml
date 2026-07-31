@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="syncplay_leave_group">그룹 나가기</string>
+    <string name="syncplay_retry">다시 시도</string>
+    <string name="syncplay_no_active_groups">활성 SyncPlay 그룹이 없습니다</string>
+    <string name="syncplay_create_group_together">함께 시청할 그룹을 만드세요</string>
+    <string name="syncplay_create_group">그룹 만들기</string>
+    <string name="syncplay_join_group_question">그룹에 참여하시겠습니까?</string>
+    <string name="syncplay_join_group_confirm">\"%1$s\"에 참여하시겠습니까?</string>
+    <string name="syncplay_join">참여</string>
+    <string name="syncplay_cancel">취소</string>
+    <string name="syncplay_playing_item">재생 중: %1$s</string>
+    <string name="syncplay_playing">재생 중</string>
+    <string name="syncplay_paused">일시정지됨</string>
+    <string name="syncplay_pause">일시정지</string>
+    <string name="syncplay_play">재생</string>
+    <string name="syncplay_stop">정지</string>
+    <string name="syncplay_leave">나가기</string>
+    <string name="syncplay_group_settings">그룹 설정</string>
+    <string name="syncplay_participants">참가자</string>
+    <string name="syncplay_connected">연결됨</string>
+    <string name="syncplay_disconnected">연결 끊김</string>
+    <string name="syncplay_create_group_title">SyncPlay 그룹 만들기</string>
+    <string name="syncplay_group_name">그룹 이름</string>
+    <string name="syncplay_create">만들기</string>
+
+    <string name="syncplay_error_load_groups">그룹을 불러오지 못했습니다</string>
+    <string name="syncplay_join_disabled">설정에서 SyncPlay 그룹 참여가 비활성화되어 있습니다</string>
+    <string name="syncplay_error_join_group">그룹에 참여하지 못했습니다</string>
+    <string name="syncplay_error_leave_group">그룹에서 나가지 못했습니다</string>
+    <string name="syncplay_error_create_group">그룹을 만들지 못했습니다</string>
+
+    <plurals name="syncplay_participants_count">
+        <item quantity="other">참가자 %d명</item>
+    </plurals>
+</resources>

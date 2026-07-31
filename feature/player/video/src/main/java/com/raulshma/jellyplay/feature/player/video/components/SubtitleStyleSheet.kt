@@ -17,10 +17,12 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 
 /**
@@ -56,10 +58,10 @@ fun SubtitleStyleSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Subtitle Settings",
+                    stringResource(R.string.player_video_subtitle_settings),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 )
-                TextButton(onClick = onOpenTester) { Text("Open tester") }
+                TextButton(onClick = onOpenTester) { Text(stringResource(R.string.player_video_open_tester)) }
             }
             Spacer(Modifier.height(16.dp))
 

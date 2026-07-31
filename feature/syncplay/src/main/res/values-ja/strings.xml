@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="syncplay_leave_group">グループから退出</string>
+    <string name="syncplay_retry">再試行</string>
+    <string name="syncplay_no_active_groups">アクティブな SyncPlay グループがありません</string>
+    <string name="syncplay_create_group_together">グループを作成して一緒に視聴しましょう</string>
+    <string name="syncplay_create_group">グループを作成</string>
+    <string name="syncplay_join_group_question">グループに参加しますか?</string>
+    <string name="syncplay_join_group_confirm">「%1$s」に参加しますか?</string>
+    <string name="syncplay_join">参加</string>
+    <string name="syncplay_cancel">キャンセル</string>
+    <string name="syncplay_playing_item">再生中: %1$s</string>
+    <string name="syncplay_playing">再生中</string>
+    <string name="syncplay_paused">一時停止中</string>
+    <string name="syncplay_pause">一時停止</string>
+    <string name="syncplay_play">再生</string>
+    <string name="syncplay_stop">停止</string>
+    <string name="syncplay_leave">退出</string>
+    <string name="syncplay_group_settings">グループ設定</string>
+    <string name="syncplay_participants">参加者</string>
+    <string name="syncplay_connected">接続済み</string>
+    <string name="syncplay_disconnected">切断済み</string>
+    <string name="syncplay_create_group_title">SyncPlay グループを作成</string>
+    <string name="syncplay_group_name">グループ名</string>
+    <string name="syncplay_create">作成</string>
+
+    <string name="syncplay_error_load_groups">グループを読み込めませんでした</string>
+    <string name="syncplay_join_disabled">設定で SyncPlay グループへの参加が無効になっています</string>
+    <string name="syncplay_error_join_group">グループに参加できませんでした</string>
+    <string name="syncplay_error_leave_group">グループから退出できませんでした</string>
+    <string name="syncplay_error_create_group">グループを作成できませんでした</string>
+
+    <plurals name="syncplay_participants_count">
+        <item quantity="other">%d 人の参加者</item>
+    </plurals>
+</resources>

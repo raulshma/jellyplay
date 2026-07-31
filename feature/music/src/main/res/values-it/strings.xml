@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Screen titles -->
+    <string name="music_browse_music">Sfoglia musica</string>
+    <string name="music_albums">Album</string>
+    <string name="music_artists">Artisti</string>
+    <string name="music_tracks">Brani</string>
+    <string name="music_genres">Generi</string>
+    <string name="music_playlists">Playlist</string>
+    <string name="music_mood_playlists">Playlist per umore</string>
+    <string name="music_smart_playlists">Playlist intelligenti</string>
+
+    <!-- Empty / error states -->
+    <string name="music_no_albums_found">Nessun album trovato</string>
+    <string name="music_no_artists_found">Nessun artista trovato</string>
+    <string name="music_no_tracks_found">Nessun brano trovato</string>
+    <string name="music_no_genres_found">Nessun genere trovato</string>
+    <string name="music_no_playlists_found">Nessuna playlist trovata</string>
+    <string name="music_no_tracks_mood">Nessun brano corrisponde a questo umore</string>
+    <string name="music_no_tracks_criteria">Nessun brano corrisponde ai criteri</string>
+    <string name="music_no_music_available">Nessuna musica disponibile</string>
+    <string name="music_check_jellyfin_libraries">Controlla le tue librerie Jellyfin.</string>
+    <string name="music_loading_music">Caricamento della tua musica…</string>
+    <string name="music_failed_load_albums">Caricamento degli album non riuscito</string>
+    <string name="music_failed_load_artists">Caricamento degli artisti non riuscito</string>
+    <string name="music_failed_load_tracks">Caricamento dei brani non riuscito</string>
+    <string name="music_failed_load_more">Caricamento di altri contenuti non riuscito</string>
+
+    <!-- Playback actions -->
+    <string name="music_play">Riproduci</string>
+    <string name="music_play_all">Riproduci tutto</string>
+    <string name="music_shuffle">Casuale</string>
+    <string name="music_add_to_queue">Aggiungi alla coda</string>
+    <string name="music_instant_mix">Mix istantaneo</string>
+    <string name="music_creating_mix">Creazione del mix…</string>
+    <string name="music_now_playing">In riproduzione</string>
+    <string name="music_download_album">Scarica album</string>
+    <string name="music_download_track">Scarica brano</string>
+
+    <!-- Track / row menus -->
+    <string name="music_go_to_album">Vai all\'album</string>
+    <string name="music_go_to_artist">Vai all\'artista</string>
+    <string name="music_more_options">Altre opzioni</string>
+    <string name="music_favorite">Preferito</string>
+    <string name="music_unfavorite">Rimuovi dai preferiti</string>
+    <string name="music_unknown_artist">Artista sconosciuto</string>
+
+    <!-- Detail screen labels -->
+    <string name="music_mood_playlist">Playlist per umore</string>
+    <string name="music_smart_playlist">Playlist intelligente</string>
+    <string name="music_open">Apri</string>
+
+    <!-- Counts -->
+    <string name="music_items_count">%d elementi</string>
+    <string name="music_tracks_count">%d brani</string>
+    <string name="music_one_track">1 brano</string>
+    <string name="music_playlist_tracks_count">%d brani</string>
+
+    <!-- Home sections -->
+    <string name="music_player_screens">Schermate del lettore</string>
+    <string name="music_player_screens_subtitle">Le tue esperienze del lettore audio</string>
+    <string name="music_tracks_subtitle">Sfoglia tutti i brani della tua libreria</string>
+    <string name="music_albums_subtitle">Esplora album e raccolte complete</string>
+    <string name="music_artists_subtitle">Scopri i tuoi artisti preferiti</string>
+    <string name="music_genres_subtitle">Sfoglia la musica per genere e umore</string>
+    <string name="music_playlists_subtitle">Le tue playlist e i tuoi mix selezionati</string>
+    <string name="music_now_playing_subtitle">Lettore completo con controlli, testi e coda</string>
+    <string name="music_ambient_mode">Modalità ambientale</string>
+    <string name="music_ambient_mode_subtitle">Colori immersivi che danzano con la tua musica</string>
+    <string name="music_artists_section_subtitle">I tuoi musicisti preferiti</string>
+    <string name="music_view_all">Vedi tutto</string>
+    <string name="music_new_releases">Nuove uscite</string>
+    <string name="music_fresh_music">Musica nuova solo per te</string>
+    <string name="music_recently_played">Riprodotti di recente</string>
+    <string name="music_recently_played_subtitle">Continua il tuo viaggio musicale</string>
+    <string name="music_favorite_artists">Artisti preferiti</string>
+    <string name="music_favorite_artists_subtitle">Le voci a cui continui a tornare</string>
+    <string name="music_latest_albums">Ultimi album</string>
+    <string name="music_top_rated_albums">Album più votati</string>
+    <string name="music_top_rated_albums_subtitle">I più votati dalla community</string>
+    <string name="music_favorite_tracks">Brani preferiti</string>
+    <string name="music_favorite_tracks_subtitle">I brani che ami di più</string>
+
+    <!-- Playlists CRUD -->
+    <string name="music_new_playlist">Nuova playlist</string>
+    <string name="music_edit_playlist">Modifica playlist</string>
+    <string name="music_delete_playlist">Elimina playlist</string>
+    <string name="music_delete_playlist_confirm">Eliminare \"%1$s\"? Questa azione non può essere annullata.</string>
+    <string name="music_create">Crea</string>
+    <string name="music_save">Salva</string>
+    <string name="music_edit">Modifica</string>
+    <string name="music_delete">Elimina</string>
+    <string name="music_cancel">Annulla</string>
+    <string name="music_name_label">Nome</string>
+    <string name="music_description_optional">Descrizione (facoltativa)</string>
+    <string name="music_remove_from_playlist">Rimuovi dalla playlist</string>
+
+    <!-- Paged grid states -->
+    <string name="music_nothing_found">Nessun risultato</string>
+    <string name="music_failed_load">Caricamento non riuscito</string>
+
+    <!-- Built-in smart playlist names -->
+    <string name="music_smart_playlist_top_rated">Più votate</string>
+    <string name="music_smart_playlist_recently_added">Aggiunte di recente</string>
+    <string name="music_smart_playlist_unplayed">Brani non riprodotti</string>
+    <string name="music_smart_playlist_favorites">Preferiti</string>
+</resources>

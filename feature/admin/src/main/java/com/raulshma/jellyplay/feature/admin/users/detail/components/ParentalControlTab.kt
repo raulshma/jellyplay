@@ -23,10 +23,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
 import com.raulshma.jellyplay.core.model.UnratedItemOption
+import com.raulshma.jellyplay.feature.admin.R
 
 /**
  * Parental Control tab: max-rating dropdown (score + subScore), block-unrated
@@ -50,8 +52,8 @@ fun ParentalControlTab(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         UserEditSection(
-            title = "Max parental rating",
-            description = "Hide content above the chosen rating.",
+            title = stringResource(R.string.admin_max_parental_rating),
+            description = stringResource(R.string.admin_max_parental_rating_desc),
         ) {
             MaxParentalRatingField(
                 policy = policy,
@@ -60,8 +62,8 @@ fun ParentalControlTab(
             )
         }
         UserEditSection(
-            title = "Block unrated content",
-            description = "Block specific media types that carry no rating.",
+            title = stringResource(R.string.admin_block_unrated),
+            description = stringResource(R.string.admin_block_unrated_desc),
         ) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 UnratedItemOption.entries.forEach { item ->
@@ -81,22 +83,22 @@ fun ParentalControlTab(
             }
         }
         UserEditSection(
-            title = "Allow content with tags",
-            description = "Only media carrying one of these tags is visible.",
+            title = stringResource(R.string.admin_allow_tags),
+            description = stringResource(R.string.admin_allow_tags_desc),
         ) {
             TagEditor(
-                label = "Allow content with tags",
+                label = stringResource(R.string.admin_allow_tags),
                 tags = policy.allowedTags,
                 suggestions = tags,
                 onChange = { onPolicyChange(policy.copy(allowedTags = it)) },
             )
         }
         UserEditSection(
-            title = "Block content with tags",
-            description = "Media carrying any of these tags is hidden.",
+            title = stringResource(R.string.admin_block_tags),
+            description = stringResource(R.string.admin_block_tags_desc),
         ) {
             TagEditor(
-                label = "Block content with tags",
+                label = stringResource(R.string.admin_block_tags),
                 tags = policy.blockedTags,
                 suggestions = tags,
                 onChange = { onPolicyChange(policy.copy(blockedTags = it)) },
@@ -133,10 +135,10 @@ private fun MaxParentalRatingField(
         modifier = modifier.fillMaxWidth(),
     ) {
         OutlinedTextField(
-            value = selected.name,
+            value = if (selected.name == "No limit") stringResource(R.string.admin_no_limit) else selected.name,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Rating") },
+            label = { Text(stringResource(R.string.admin_rating)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -145,7 +147,7 @@ private fun MaxParentalRatingField(
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(option.name) },
+                    text = { Text(if (option.name == "No limit") stringResource(R.string.admin_no_limit) else option.name) },
                     onClick = {
                         onPolicyChange(
                             policy.copy(

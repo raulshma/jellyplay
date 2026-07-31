@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -126,9 +127,9 @@ fun OfflineDetailScreen(
             onDelete = { viewModel.delete(onBack) },
             onBack = onBack,
         )
-        !loaded -> JellyPlayScreenScaffold(title = "Loading…", onBack = onBack) { ScreenLoadingState() }
-        else -> JellyPlayScreenScaffold(title = "Not found", onBack = onBack) {
-            ScreenEmptyState(icon = Tabler.Outline.DeviceFloppy, title = "This download is no longer available")
+        !loaded -> JellyPlayScreenScaffold(title = stringResource(R.string.downloads_loading), onBack = onBack) { ScreenLoadingState() }
+        else -> JellyPlayScreenScaffold(title = stringResource(R.string.downloads_not_found), onBack = onBack) {
+            ScreenEmptyState(icon = Tabler.Outline.DeviceFloppy, title = stringResource(R.string.downloads_download_unavailable))
         }
     }
 }
@@ -167,9 +168,9 @@ private fun OfflineDetailContent(
     val isAudio = item.mediaType == MediaType.AUDIO || item.mediaType == MediaType.MUSIC ||
         item.mediaType == MediaType.ALBUM
     val playLabel = when {
-        item.playedPercentage in 1.0..94.99 -> "Resume"
-        item.isPlayed -> "Play again"
-        else -> "Play"
+        item.playedPercentage in 1.0..94.99 -> stringResource(R.string.downloads_play_resume)
+        item.isPlayed -> stringResource(R.string.downloads_play_again)
+        else -> stringResource(R.string.downloads_action_play)
     }
     val hasProgress = item.playedPercentage in 1.0..94.99
 
@@ -259,8 +260,9 @@ private fun OfflineDetailContent(
                                         .padding(vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
+                                    val seriesDefault = stringResource(R.string.downloads_series_default)
                                     Text(
-                                        text = item.seriesName ?: "Series",
+                                        text = item.seriesName ?: seriesDefault,
                                         style = MaterialTheme.typography.titleSmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
                                         fontWeight = FontWeight.SemiBold,
@@ -385,7 +387,7 @@ private fun OfflineDetailContent(
                                 )
                                 if (overview.length > 200) {
                                     TextButton(onClick = { overviewExpanded = !overviewExpanded }) {
-                                        Text(if (overviewExpanded) "Show less" else "Show more")
+                                        Text(stringResource(if (overviewExpanded) R.string.downloads_show_less else R.string.downloads_show_more))
                                         Icon(
                                             Tabler.Outline.ChevronDown,
                                             contentDescription = null,
@@ -432,7 +434,7 @@ private fun OfflineDetailContent(
                             Column(modifier = Modifier.padding(horizontal = contentPad)) {
                                 Spacer(Modifier.height(24.dp))
                                 Text(
-                                    text = "Tracks",
+                                    text = stringResource(R.string.downloads_tracks),
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onSurface,
                                 )
@@ -472,7 +474,7 @@ private fun OfflineDetailContent(
                         StaggeredSection(delayIndex = 5) {
                             Column {
                                 Text(
-                                    text = "Cast & Crew",
+                                    text = stringResource(R.string.downloads_cast_crew),
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.padding(horizontal = contentPad),
@@ -526,7 +528,7 @@ private fun OfflineDetailContent(
                     ) {
                         Icon(
                             Tabler.Outline.Trash,
-                            contentDescription = "Delete download",
+                            contentDescription = stringResource(R.string.downloads_delete_download_cd),
                             tint = if (scrollCollapsed < 0.5f) Color.White
                             else MaterialTheme.colorScheme.onSurface,
                         )
@@ -539,16 +541,16 @@ private fun OfflineDetailContent(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text("Delete download") },
-            text = { Text("Remove \"${item.name}\" from your device? This frees up ${item.totalSizeBytes.formatBytes()}.") },
+            title = { Text(stringResource(R.string.downloads_delete_download_title)) },
+            text = { Text(stringResource(R.string.downloads_delete_download_message, item.name, item.totalSizeBytes.formatBytes())) },
             confirmButton = {
                 TextButton(
                     onClick = { showDeleteDialog = false; onDelete() },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.downloads_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteDialog = false }) { Text(stringResource(R.string.downloads_cancel)) }
             },
         )
     }
@@ -564,13 +566,13 @@ private fun InfoRow(item: OfflineMediaItem) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Tabler.Outline.Check,
-                    contentDescription = "Watched",
+                    contentDescription = stringResource(R.string.downloads_watched),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    text = "Watched",
+                    text = stringResource(R.string.downloads_watched_label),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -671,13 +673,13 @@ private fun DownloadInfoCard(item: OfflineMediaItem) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Tabler.Outline.DeviceFloppy, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Download info", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
+            Text(stringResource(R.string.downloads_download_info), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
         }
-        InfoLine(label = "File size", value = item.totalSizeBytes.formatBytes().takeIf { it.isNotBlank() } ?: "—")
-        InfoLine(label = "Downloaded", value = if (item.createdAt > 0) formatDate(item.createdAt) else "—")
-        InfoLine(label = "Status", value = item.downloadStatus?.name?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "—")
+        InfoLine(label = stringResource(R.string.downloads_file_size), value = item.totalSizeBytes.formatBytes().takeIf { it.isNotBlank() } ?: "—")
+        InfoLine(label = stringResource(R.string.downloads_downloaded), value = if (item.createdAt > 0) formatDate(item.createdAt) else "—")
+        InfoLine(label = stringResource(R.string.downloads_status), value = item.downloadStatus?.name?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "—")
         if (item.downloadedBytes > 0 && item.totalSizeBytes > 0 && item.downloadedBytes < item.totalSizeBytes) {
-            InfoLine(label = "Progress", value = "${(item.downloadedBytes.toFloat() / item.totalSizeBytes * 100).toInt()}%")
+            InfoLine(label = stringResource(R.string.downloads_progress), value = "${(item.downloadedBytes.toFloat() / item.totalSizeBytes * 100).toInt()}%")
         }
 
         // ── Watch progress ──
@@ -700,11 +702,11 @@ private fun DownloadInfoCard(item: OfflineMediaItem) {
 @Composable
 private fun WatchProgressSection(item: OfflineMediaItem) {
     val watchStatus = when {
-        item.isPlayed -> "Watched"
-        item.playedPercentage in 1.0..94.99 -> "In progress"
-        else -> "Started"
+        item.isPlayed -> stringResource(R.string.downloads_watched)
+        item.playedPercentage in 1.0..94.99 -> stringResource(R.string.downloads_in_progress)
+        else -> stringResource(R.string.downloads_started)
     }
-    InfoLine(label = "Watch status", value = watchStatus)
+    InfoLine(label = stringResource(R.string.downloads_watch_status), value = watchStatus)
 
     // Played percentage: prefer the derived stored value, fall back to computing
     // from position/runtime so an item seeded only with ticks still shows a %.
@@ -712,7 +714,7 @@ private fun WatchProgressSection(item: OfflineMediaItem) {
         .takeIf { it > 0.0 }
         ?: computeWatchPercentage(item.playbackPositionTicks, item.runTimeTicks)
     if (percentage > 0.0) {
-        InfoLine(label = "Watched", value = "${percentage.toInt()}%")
+        InfoLine(label = stringResource(R.string.downloads_watched_label), value = "${percentage.toInt()}%")
     }
 
     // Position / runtime — "23m of 1h 2m".
@@ -720,8 +722,8 @@ private fun WatchProgressSection(item: OfflineMediaItem) {
     val runtime = item.runTimeTicks ?: 0L
     if (position > 0L) {
         val posStr = formatDurationFromTicks(position)
-        val value = if (runtime > position) "$posStr of ${formatDurationFromTicks(runtime)}" else posStr
-        InfoLine(label = "Position", value = value)
+        val value = if (runtime > position) stringResource(R.string.downloads_position_of, posStr, formatDurationFromTicks(runtime)) else posStr
+        InfoLine(label = stringResource(R.string.downloads_position), value = value)
     }
 
     // Last tracked time (relative, e.g. "2d ago"). Falls back to absolute date
@@ -730,7 +732,7 @@ private fun WatchProgressSection(item: OfflineMediaItem) {
     val lastPlayedValue = lastPlayedRelative
         ?: item.lastPlayedDate?.let { formatAbsoluteDate(it) }
     if (lastPlayedValue != null) {
-        InfoLine(label = "Last watched", value = lastPlayedValue)
+        InfoLine(label = stringResource(R.string.downloads_last_watched), value = lastPlayedValue)
     }
 }
 
@@ -798,7 +800,7 @@ private fun OfflineTrackRow(
                 Text("${seconds / 60}:${"%02d".format(seconds % 60)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Icon(Tabler.Outline.PlayerPlay, contentDescription = "Play", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+        Icon(Tabler.Outline.PlayerPlay, contentDescription = stringResource(R.string.downloads_action_play), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
     }
 }
 

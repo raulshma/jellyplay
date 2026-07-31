@@ -41,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -53,6 +54,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.feature.admin.users.detail.components.AccessTab
 import com.raulshma.jellyplay.feature.admin.users.detail.components.AccountTab
 import com.raulshma.jellyplay.feature.admin.users.detail.components.ParentalControlTab
@@ -79,17 +81,17 @@ fun UserDetailScreen(
     if (state.showDeleteDialog && user != null) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissDeleteDialog() },
-            title = { Text("Delete User") },
-            text = { Text("Delete \"${user.name}\"? This cannot be undone.") },
+            title = { Text(stringResource(R.string.admin_delete_user_title)) },
+            text = { Text(stringResource(R.string.admin_delete_user_body, user.name)) },
             confirmButton = {
                 TextButton(
                     onClick = { viewModel.deleteUser(onDone = onBack) },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.admin_delete)) }
             },
-            dismissButton = { TextButton(onClick = { viewModel.dismissDeleteDialog() }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { viewModel.dismissDeleteDialog() }) { Text(stringResource(R.string.admin_cancel)) } },
         )
     }
 
@@ -99,20 +101,20 @@ fun UserDetailScreen(
                 viewModel.dismissPasswordDialog()
                 newPassword = ""
             },
-            title = { Text(if (newPassword.isBlank()) "Reset password" else "Set password") },
+            title = { Text(if (newPassword.isBlank()) stringResource(R.string.admin_reset_password) else stringResource(R.string.admin_set_password)) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = newPassword,
                         onValueChange = { newPassword = it },
-                        label = { Text("New password") },
+                        label = { Text(stringResource(R.string.admin_new_password)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     if (newPassword.isBlank()) {
                         Text(
-                            "Leave blank to reset/clear the password.",
+                            stringResource(R.string.admin_leave_blank_password),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp),
@@ -124,26 +126,26 @@ fun UserDetailScreen(
                 TextButton(onClick = {
                     viewModel.updatePassword(newPassword.ifBlank { null })
                     newPassword = ""
-                }) { Text(if (newPassword.isBlank()) "Reset" else "Set") }
+                }) { Text(if (newPassword.isBlank()) stringResource(R.string.admin_reset) else stringResource(R.string.admin_set)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     viewModel.dismissPasswordDialog()
                     newPassword = ""
-                }) { Text("Cancel") }
+                }) { Text(stringResource(R.string.admin_cancel)) }
             },
         )
     }
 
     JellyPlayScreenScaffold(
-        title = user?.name ?: "User",
+        title = user?.name ?: stringResource(R.string.admin_user_fallback),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) {
         when {
             state.isLoading -> ScreenLoadingState(modifier = Modifier.fillMaxSize())
             state.error != null -> ErrorScreen(
-                message = state.error ?: "Unknown error",
+                message = state.error ?: stringResource(R.string.admin_unknown_error),
                 onRetry = { viewModel.loadUser(userId) },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -220,9 +222,9 @@ fun UserDetailScreen(
                         exit = slideOutVertically { it },
                     ) {
                         BottomAppBar(modifier = Modifier.fillMaxWidth()) {
-                            TextButton(onClick = viewModel::discard, modifier = Modifier.padding(start = 8.dp)) { Text("Discard") }
+                            TextButton(onClick = viewModel::discard, modifier = Modifier.padding(start = 8.dp)) { Text(stringResource(R.string.admin_discard)) }
                             Spacer(Modifier.weight(1f))
-                            Button(onClick = viewModel::save, modifier = Modifier.padding(end = 8.dp)) { Text("Save changes") }
+                            Button(onClick = viewModel::save, modifier = Modifier.padding(end = 8.dp)) { Text(stringResource(R.string.admin_save_changes)) }
                         }
                     }
                 }
@@ -241,7 +243,7 @@ private fun UserEditTabBar(
     onTabSelected: (Int) -> Unit,
     backgroundColor: androidx.compose.ui.graphics.Color,
 ) {
-    val labels = listOf("Profile", "Access", "Parental", "Account")
+    val labels = listOf(R.string.admin_tab_profile, R.string.admin_tab_access, R.string.admin_tab_parental, R.string.admin_tab_account)
     val counts = listOf(profileCount, accessCount, parentalCount, 0)
 
     PrimaryScrollableTabRow(
@@ -274,7 +276,7 @@ private fun UserEditTabBar(
                     BadgedBox(
                         badge = { if (count > 0) Badge { Text("$count") } },
                     ) {
-                        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                        Text(stringResource(label), style = MaterialTheme.typography.labelLarge, maxLines = 1)
                     }
                 },
             )
@@ -313,7 +315,7 @@ private fun SaveErrorBanner(message: String, onDismiss: () -> Unit) {
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onDismiss) { Text("Dismiss") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.admin_dismiss)) }
         }
     }
 }

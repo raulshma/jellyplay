@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared action / component literals (enhancements §2.2).
+         Prefixed `core_` so they never collide with module-local strings
+         once resources are merged at the app level. -->
+    <string name="core_retry">Tentar novamente</string>
+    <string name="core_cancel">Cancelar</string>
+    <string name="core_reset">Repor</string>
+    <string name="core_close">Fechar</string>
+    <string name="core_done">Concluído</string>
+
+    <!-- Truly cross-module feedback (posted from the app/navigation layer
+         and referenced by multiple feature modules). -->
+    <string name="msg_no_video_player_found">Nenhum reprodutor de vídeo encontrado</string>
+    <string name="msg_smart_download_deleted">Download já visto removido para libertar espaço</string>
+
+    <!-- Localizable labels for [com.raulshma.jellyplay.core.model.MediaType], shared
+         by every feature screen that renders a media-type badge or filter chip.
+         Kept here (not in core/model) because the model layer has no resource
+         access; resolve them via [mediaTypeDisplayName] / [mediaTypeDisplayNamePlural]. -->
+    <string name="core_media_movie">Filme</string>
+    <string name="core_media_series">Série</string>
+    <string name="core_media_season">Temporada</string>
+    <string name="core_media_episode">Episódio</string>
+    <string name="core_media_track">Faixa</string>
+    <string name="core_media_album">Álbum</string>
+    <string name="core_media_artist">Artista</string>
+    <string name="core_media_music_video">Videoclipe</string>
+    <string name="core_media_collection">Coleção</string>
+    <string name="core_media_photo">Fotografia</string>
+    <string name="core_media_live_tv">TV em direto</string>
+    <string name="core_media_channel">Canal</string>
+    <string name="core_media_unknown">Item</string>
+
+    <!-- Plural forms (e.g. filter chips, library headers). -->
+    <string name="core_media_movie_plural">Filmes</string>
+    <string name="core_media_series_plural">Séries de TV</string>
+    <string name="core_media_season_plural">Temporadas</string>
+    <string name="core_media_episode_plural">Episódios</string>
+    <string name="core_media_music_plural">Música</string>
+    <string name="core_media_album_plural">Álbuns</string>
+    <string name="core_media_artist_plural">Artistas</string>
+    <string name="core_media_music_video_plural">Videoclipes</string>
+    <string name="core_media_collection_plural">Coleções</string>
+    <string name="core_media_photo_plural">Fotografias</string>
+    <string name="core_media_live_tv_plural">TV em direto</string>
+    <string name="core_media_channel_plural">Canais</string>
+    <string name="core_media_unknown_plural">Desconhecido</string>
+
+    <!-- core/ui shared -->
+    <string name="core_report">Reportar</string>
+    <string name="core_ui_back">Voltar</string>
+    <string name="core_ui_select">Selecionar…</string>
+    <string name="core_ui_selected">Selecionado</string>
+
+    <!-- core/ui auth challenge -->
+    <string name="core_ui_auth_title">Autenticar</string>
+    <string name="core_ui_auth_subtitle">Confirme a sua identidade</string>
+    <string name="core_ui_auth_use_pin">Usar PIN</string>
+    <string name="core_ui_auth_use_biometric">Usar biométrico</string>
+    <string name="core_ui_auth_biometric_prompt">Usar biométrica para autenticar</string>
+
+    <!-- core/ui seerr request dialog -->
+    <string name="core_ui_seerr_request_success">Pedido enviado com sucesso!</string>
+    <string name="core_ui_seerr_loading_options">A carregar opções…</string>
+    <string name="core_ui_seerr_destination_server_sonarr">Servidor de destino (Sonarr)</string>
+    <string name="core_ui_seerr_destination_server_radarr">Servidor de destino (Radarr)</string>
+    <string name="core_ui_seerr_quality_profile">Perfil de qualidade</string>
+    <string name="core_ui_seerr_root_folder">Pasta raiz</string>
+    <string name="core_ui_seerr_tags">Etiquetas</string>
+    <string name="core_ui_seerr_all_seasons">Todas as temporadas</string>
+    <string name="core_ui_seerr_season">Temporada %1$d</string>
+    <string name="core_ui_seerr_episodes">%1$d episódios</string>
+    <string name="core_ui_seerr_loading_seasons">A carregar temporadas…</string>
+    <string name="core_ui_seerr_request">Pedir</string>
+
+    <!-- core/ui accent / color pickers -->
+    <string name="core_ui_accent_color_title">Cor de destaque</string>
+    <string name="core_ui_accent_color_subtitle">Selecione uma amostra de cor de destaque personalizada ou dinâmica</string>
+    <string name="core_ui_color_style_title">Estilo de cor</string>
+    <string name="core_ui_color_style_subtitle">Defina o ambiente visual das paletas geradas</string>
+    <string name="core_ui_dynamic_colors">Cores dinâmicas do fundo de ecrã</string>
+    <string name="core_ui_synthwave_accent_title">Destaque Synthwave</string>
+    <string name="core_ui_synthwave_accent_subtitle">Selecione uma amostra de cor de destaque neon personalizada</string>
+    <string name="core_ui_soothing_accent_title">Destaque suave</string>
+    <string name="core_ui_soothing_accent_subtitle">Selecione uma cor de destaque calmante</string>
+
+    <!-- core/ui component content descriptions & labels -->
+    <string name="core_ui_remove">Remover</string>
+    <string name="core_ui_play">Reproduzir</string>
+    <string name="core_ui_backspace">Backspace</string>
+    <string name="core_ui_request">Pedir</string>
+    <string name="core_ui_watched">Visto</string>
+    <string name="core_ui_downloaded">Baixado</string>
+    <string name="core_ui_cd_loading">Carregando</string>
+    <string name="core_ui_cd_error">Erro</string>
+    <string name="core_ui_cd_local_network">Rede local, sem internet</string>
+    <string name="core_ui_cd_offline">Offline</string>
+    <string name="core_ui_cd_server_unreachable">Servidor indisponível</string>
+</resources>

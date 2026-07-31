@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCast
 import com.raulshma.jellyplay.core.model.seerr.SeerrCast
 import com.raulshma.jellyplay.core.model.seerr.SeerrRole
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -128,5 +129,66 @@ class SeerrDetailUtilsTest {
     @Test
     fun `formatRuntime zero is zero minutes`() {
         assertEquals("0m", formatRuntime(0))
+    }
+
+    // ── Date formatting ────────────────────────────────────────────────
+
+    @Test
+    fun `formatDate renders ISO date as short locale form`() {
+        assertEquals("Jul 29, 2026", formatDate("2026-07-29"))
+    }
+
+    @Test
+    fun `formatDate handles single digit months and days`() {
+        assertEquals("Jan 5, 2025", formatDate("2025-01-05"))
+    }
+
+    @Test
+    fun `formatDate falls back to first 10 chars on garbage input`() {
+        // Not a parseable date — return the first 10 chars verbatim.
+        assertEquals("not_a_date", formatDate("not_a_date_here"))
+    }
+
+    @Test
+    fun `formatDate falls back to first 10 chars when not a date`() {
+        // SimpleDateFormat parses leniently (month 13 rolls into next year), so a
+        // genuine fallback only happens for non-date-shaped input: "garbage" yields
+        // a parse exception and returns the first 10 chars verbatim.
+        assertEquals("totally!!!", formatDate("totally!!!"))
+    }
+
+    @Test
+    fun `formatDate falls back to first 10 chars for empty input`() {
+        // Empty string is not a parseable date — returns the first 10 chars (the
+        // empty string) without throwing.
+        assertEquals("", formatDate(""))
+    }
+
+    // ── Flag emoji ─────────────────────────────────────────────────────
+
+    @Test
+    fun `getFlagEmoji converts two-letter country code to regional indicators`() {
+        // "US" → 🇺🇸 (regional indicator U+S = U+1F1FA U+1F1F8).
+        assertEquals("🇺🇸", getFlagEmoji("US"))
+    }
+
+    @Test
+    fun `getFlagEmoji null for non-two-letter code`() {
+        assertNull(getFlagEmoji("USA"))
+        assertNull(getFlagEmoji("X"))
+    }
+
+    @Test
+    fun `getFlagEmoji null for empty string`() {
+        // Empty/blank input never has two chars — guard returns null.
+        assertNull(getFlagEmoji(""))
+    }
+
+    @Test
+    fun `getFlagEmoji is uppercase-only lowercase inputs do not map to flags`() {
+        // The calc subtracts 'A' (0x41), so lowercase 'g' (0x67) resolves outside
+        // the regional-indicator range (0x1F1E6–0x1F1FF) and produces a different
+        // codepoint — the caller must pass uppercase ISO codes.
+        assertFalse(getFlagEmoji("gb") == "🇬🇧")
     }
 }

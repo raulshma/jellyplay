@@ -25,6 +25,8 @@ import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
+import com.raulshma.jellyplay.update.UpdateState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,6 +37,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
+import java.util.concurrent.atomic.AtomicBoolean
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -61,6 +64,7 @@ class MainViewModel @Inject constructor(
     val cacheManager: com.raulshma.jellyplay.core.data.cache.CacheManager,
     private val widgetWorkScheduler: com.raulshma.jellyplay.widget.WidgetWorkScheduler,
     private val cacheMaintenanceInitializer: com.raulshma.jellyplay.startup.CacheMaintenanceInitializer,
+    private val appUpdateRepository: AppUpdateRepository,
 ) : JellyPlayViewModel() {
 
     val serverHealth = serverHealthMonitor.serverHealth
@@ -102,6 +106,13 @@ class MainViewModel @Inject constructor(
     private var lastAdminRefreshAt = 0L
     private val adminRefreshIntervalMs = 30_000L
 
+    /**
+     * After the user dismisses an update prompt, the launch-time auto-check
+     * suppresses the *same* version for this long. Manual checks (Settings)
+     * are unaffected. 24 hours.
+     */
+    private val dismissedUpdateSuppressMs = 24L * 60 * 60 * 1000
+
     val preferences = preferencesStore.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
@@ -111,11 +122,35 @@ class MainViewModel @Inject constructor(
     private val _pendingRoute = stateFlow<Route?>(null)
     val pendingRoute = _pendingRoute.flow
 
+    /**
+     * `true` only on a fresh ViewModel construction — i.e. a restore *after
+     * state loss*, not a config-change recreate (which reuses the same
+     * ViewModel via `onRetainNonConfigurationInstance`). Covers every case
+     * where the player's in-memory state is gone but the saveable Navigation 3
+     * back stack round-trips: OS-killed process, "Don't keep activities", and
+     * low-memory activity eviction. Consumed exactly once (first caller wins);
+     * `MainContent` captures the result in `remember { }` so it holds for the
+     * lifetime of this Activity's composition, while a config-change recreate
+     * (same VM) re-reads `false` and keeps any player the user re-opened.
+     * See [com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState].
+     */
+    private val _isStateLossRestore = AtomicBoolean(true)
+    fun consumeStateLossRestore(): Boolean = _isStateLossRestore.getAndSet(false)
+
     private val _pendingSearchQuery = stateFlow<String?>(null)
     val pendingSearchQuery = _pendingSearchQuery.flow
 
     private val _globalMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val globalMessage = _globalMessage.asSharedFlow()
+
+    /**
+     * In-app self-update state. Observed by the update sheet so the same
+     * activity-scoped instance drives both the launch-time auto-check and any
+     * manual check. Stays [UpdateState.Idle] (sheet hidden) until an update is
+     * actually found or the user explicitly opens the flow.
+     */
+    private val _updateState = stateFlow<UpdateState>(UpdateState.Idle)
+    val updateState = _updateState.flow
 
     init {
         launch {
@@ -133,6 +168,10 @@ class MainViewModel @Inject constructor(
                 }
             }
             _isRestoring.set(false)
+            // Best-effort app-update check once the UI is up. Gated by the
+            // user's "check for updates automatically" preference so the
+            // toggle on the About screen remains the single off-switch.
+            checkForAppUpdate()
         }
 
         launch {
@@ -203,6 +242,101 @@ class MainViewModel @Inject constructor(
             mediaRepository.getLibraryFolders()
                 .onSuccess { _libraryFolders.set(it) }
         }
+    }
+
+    /**
+     * Checks GitHub Releases for a newer build, called once on launch after
+     * session restore. Gated by `selfUpdateCheckEnabled`. Stays silent unless
+     * an update is actually available — it never surfaces a sheet for an
+     * up-to-date result. Use [manualCheckForUpdate] when the user wants
+     * feedback regardless of outcome.
+     */
+    fun checkForAppUpdate() {
+        launch {
+            val prefs = preferencesStore.preferences.first()
+            if (!prefs.selfUpdateCheckEnabled) return@launch
+            val result = appUpdateRepository.checkForUpdate(
+                supportedAbis = android.os.Build.SUPPORTED_ABIS,
+            )
+            result.onSuccess { info ->
+                if (!info.isUpdateAvailable) return@onSuccess // stay Idle.
+                // Honor a prior dismissal: if the user dismissed this exact
+                // version less than 24h ago, stay quiet on the launch auto-check.
+                if (isUpdateRecentlyDismissed(info.latestVersion, prefs)) return@onSuccess
+                _updateState.set(UpdateState.UpdateAvailable(info))
+            }
+        }
+    }
+
+    /**
+     * True when [version] matches the last dismissed update and that dismissal
+     * happened within [dismissedUpdateSuppressMs]. Manual checks ignore this.
+     */
+    private fun isUpdateRecentlyDismissed(
+        version: String,
+        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+    ): Boolean {
+        val dismissedVersion = prefs.dismissedUpdateVersion ?: return false
+        if (dismissedVersion != version) return false
+        val elapsed = System.currentTimeMillis() - prefs.dismissedUpdateAtMs
+        return elapsed in 0..dismissedUpdateSuppressMs
+    }
+
+    /**
+     * Manual, user-initiated check (from Settings). Always surfaces the result:
+     * a sheet for an available update, or a "you're up to date" sheet (with a
+     * link to view the current version's release notes) when none is. Bypasses
+     * the auto-check preference.
+     */
+    fun manualCheckForUpdate() {
+        launch {
+            _updateState.set(UpdateState.Checking)
+            val result = appUpdateRepository.checkForUpdate(
+                supportedAbis = android.os.Build.SUPPORTED_ABIS,
+            )
+            result
+                .onSuccess { info ->
+                    _updateState.set(
+                        if (info.isUpdateAvailable) UpdateState.UpdateAvailable(info)
+                        else UpdateState.NoUpdate(info),
+                    )
+                }
+                .onFailure { _updateState.set(UpdateState.Error(it.message ?: "Update check failed")) }
+        }
+    }
+
+    /** Begins streaming the APK for the given update, reporting progress. */
+    fun startUpdateDownload(info: com.raulshma.jellyplay.core.model.AppUpdateInfo) {
+        val url = info.downloadAssetUrl ?: return
+        launch {
+            _updateState.set(UpdateState.Downloading(info, 0f, 0L, info.releaseSize))
+            val result = appUpdateRepository.downloadApk(url) { fraction, read, total ->
+                _updateState.set(UpdateState.Downloading(info, fraction, read, total))
+            }
+            result
+                .onSuccess { file -> _updateState.set(UpdateState.Downloaded(info, file)) }
+                .onFailure { _updateState.set(UpdateState.Error(it.message ?: "Download failed")) }
+        }
+    }
+
+    /** Builds and emits the system package-installer intent for the APK. */
+    fun buildInstallIntent(file: java.io.File): android.content.Intent =
+        appUpdateRepository.buildInstallIntent(file)
+
+    /**
+     * Hides the update sheet without changing download state. When dismissed
+     * from an [UpdateState.UpdateAvailable] prompt, stamps the version + time
+     * so the launch-time auto-check stays quiet for the same version for 24h.
+     * Manual checks still surface the result regardless of dismissal.
+     */
+    fun dismissUpdate() {
+        val state = _updateState.value
+        if (state is UpdateState.UpdateAvailable) {
+            launch {
+                preferencesStore.setDismissedUpdate(state.info.latestVersion)
+            }
+        }
+        _updateState.set(UpdateState.Idle)
     }
 
     /**

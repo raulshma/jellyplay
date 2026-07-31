@@ -194,6 +194,6 @@ private fun SeriesDetailDialog(
         confirmButton = {
             TextButton(onClick = onCancel) { Text(stringResource(R.string.livetv_cancel_series)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_close)) } },
     )
 }

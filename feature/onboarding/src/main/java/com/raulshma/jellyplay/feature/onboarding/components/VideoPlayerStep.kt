@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -18,6 +19,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.feature.onboarding.R
 
 @Composable
 fun VideoPlayerStep(
@@ -42,8 +44,8 @@ fun VideoPlayerStep(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OnboardingStepScaffold(
-            title = "Video Player",
-            subtitle = "Configure your default video playback experience",
+            title = stringResource(R.string.onboarding_video_title),
+            subtitle = stringResource(R.string.onboarding_video_subtitle),
             icon = Tabler.Outline.Video,
             onNext = {},
         ) {
@@ -94,14 +96,14 @@ fun VideoPlayerStep(
             Spacer(Modifier.height(8.dp))
 
             OnboardingToggleRow(
-                title = "Gestures",
-                subtitle = "Swipe to seek, adjust brightness and volume",
+                title = stringResource(R.string.onboarding_video_gestures),
+                subtitle = stringResource(R.string.onboarding_video_gestures_subtitle),
                 checked = gesturesEnabled,
                 onCheckedChange = onGesturesEnabledChange,
             )
 
             OnboardingToggleRow(
-                title = "Autoplay next episode",
+                title = stringResource(R.string.onboarding_video_autoplay_next),
                 checked = autoplayNext,
                 onCheckedChange = onAutoplayNextChange,
             )

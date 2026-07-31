@@ -42,8 +42,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.feature.music.R
 import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -270,7 +272,7 @@ private fun AlbumDetailContent(
                         ) {
                             Icon(Tabler.Outline.PlayerPlay, contentDescription = null)
                             Spacer(Modifier.size(8.dp))
-                            Text("Play All")
+                            Text(stringResource(R.string.music_play_all))
                         }
 
                         androidx.compose.material3.IconButton(
@@ -290,7 +292,7 @@ private fun AlbumDetailContent(
                             } else {
                                 Icon(
                                     imageVector = Tabler.Outline.Sparkles,
-                                    contentDescription = "Instant Mix",
+                                    contentDescription = stringResource(R.string.music_instant_mix),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -325,7 +327,7 @@ private fun AlbumDetailContent(
                             } else {
                                 Icon(
                                     imageVector = if (allDownloaded) Tabler.Outline.Check else Tabler.Outline.Download,
-                                    contentDescription = "Download Album",
+                                    contentDescription = stringResource(R.string.music_download_album),
                                     tint = if (allDownloaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -344,7 +346,7 @@ private fun AlbumDetailContent(
                     }
 
                     Text(
-                        text = "Tracks",
+                        text = stringResource(R.string.music_tracks),
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Spacer(Modifier.height(8.dp))
@@ -464,7 +466,7 @@ private fun TrackItem(
                 } else {
                     Icon(
                         imageVector = if (downloadItem?.status == DownloadStatus.COMPLETED) Tabler.Outline.Check else Tabler.Outline.Download,
-                        contentDescription = "Download Track",
+                        contentDescription = stringResource(R.string.music_download_track),
                         tint = if (downloadItem?.status == DownloadStatus.COMPLETED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
@@ -479,7 +481,7 @@ private fun TrackItem(
             ) {
                 Icon(
                     Tabler.Outline.Playlist,
-                    contentDescription = "Add to Queue",
+                    contentDescription = stringResource(R.string.music_add_to_queue),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

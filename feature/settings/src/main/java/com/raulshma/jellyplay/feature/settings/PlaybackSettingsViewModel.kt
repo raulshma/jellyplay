@@ -90,6 +90,8 @@ class PlaybackSettingsViewModel @Inject constructor(
         editor.edit { setAudioPassthrough(enabled) }
     fun setFrameRateMatching(enabled: Boolean) =
         editor.edit { setFrameRateMatching(enabled) }
+    fun setRefreshRateMode(mode: com.raulshma.jellyplay.core.model.RefreshRateMode) =
+        editor.edit { setRefreshRateMode(mode) }
     fun setStreamingQuality(quality: StreamingQuality) = editor.setStreamingQuality(quality)
     fun setLiveStreamOption(option: LiveStreamOption) = editor.setLiveStreamOption(option)
     fun setMpvConfig(config: MpvEngineConfig) =

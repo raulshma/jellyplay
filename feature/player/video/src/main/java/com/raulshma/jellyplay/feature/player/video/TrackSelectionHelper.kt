@@ -4,10 +4,14 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.isLanguageMatch
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
+import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
+import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -24,6 +28,11 @@ data class TrackOption(
      * side-loaded tracks / engines that don't expose it (matched by label).
      */
     val streamIndex: Int? = null,
+    /**
+     * Ordered role badges (Forced/Default/SDH) rendered beside the label by the
+     * picker. Mirrors [com.raulshma.jellyplay.feature.player.video.engine.MediaTrack.badges].
+     */
+    val badges: List<TrackBadge> = emptyList(),
 )
 
 internal class TrackSelectionHelper(
@@ -36,10 +45,28 @@ internal class TrackSelectionHelper(
     private val getPlayMethod: () -> PlayMethod,
     private val onReloadForStreamChange: (audioStreamIndex: Int?, subtitleStreamIndex: Int?) -> Unit,
     private val playbackPreferenceResolver: ItemPlaybackPreferenceResolver,
+    // Persists the remembered track to the series-scope preference row (G5).
+    // Default no-op so unit tests that don't exercise persistence compile unchanged.
+    private val persistRememberedTrack: (TrackType, RememberedTrack?) -> Unit = { _, _ -> },
     private val scope: CoroutineScope,
 ) {
     private var selectedSubtitleTrackIndex: Int? = null
     private var selectedAudioTrackIndex: Int? = null
+
+    // Last track of each type the user (or auto-resolution) selected, remembered
+    // so the NEXT episode can score its tracks against it (cross-episode track
+    // scoring). Cleared when the
+    // series changes so a different show's layout doesn't bleed in. Used only as
+    // a pre-pass before the language-rule fallback; the language rule remains the
+    // safety net when scoring finds no confident (≥3) match.
+    //
+    // [com.raulshma.jellyplay.core.model.RememberedTrack] per type. The index is
+    // the track's position within its language group at selection time, so the
+    // scorer's layout-stability signal (+1) can actually fire (it was being fed
+    // -1 before, which dead-coded it). Persisted to the series-scope preference
+    // row via [persistRememberedTrack] so it survives an app restart.
+    private var rememberedAudioTrack: RememberedTrack? = null
+    private var rememberedSubtitleTrack: RememberedTrack? = null
 
     // A selection (auto or manual) is "held" once applied via selectAudioTrack /
     // selectSubtitleTrack. While held, updateTracksFromEngine does NOT re-run the
@@ -61,7 +88,19 @@ internal class TrackSelectionHelper(
         // New item: a selection has not yet been applied for it.
         audioSelectionHeld = false
         subtitleSelectionHeld = false
+        // G5: forget the cross-episode track memory when the series changes, so
+        // a different show's track layout doesn't bleed into the new one. Same
+        // series (next episode) keeps the memory — that is the whole point.
+        val series = getCurrentSeriesId()
+        if (series != trackedSeriesId) {
+            trackedSeriesId = series
+            rememberedAudioTrack = null
+            rememberedSubtitleTrack = null
+        }
     }
+
+    /** Series id the remembered track selections belong to. */
+    private var trackedSeriesId: String? = null
 
     /**
      * Re-resolves the per-item / per-series language preference for the current
@@ -109,6 +148,20 @@ internal class TrackSelectionHelper(
                 track.copy(isSelected = if (isDefault) isDefaultTrack else matches)
             })
         }
+        // Remember a real (>= 0) audio selection so the next episode can score
+        // against it (G5). "Off"/Default selections don't carry forward intent.
+        if (option.index >= 0 && option.index < SERVER_TRACK_INDEX_BASE) {
+            val tracks = getUiState().audioTracks
+            val remembered = RememberedTrack(
+                label = option.label,
+                language = option.language,
+                indexWithinLanguage = engineIndexWithinLanguage(tracks, option.index),
+            )
+            rememberedAudioTrack = remembered
+            if (isUserOverride) {
+                persistRememberedTrack(TrackType.AUDIO, remembered)
+            }
+        }
         if (isUserOverride) {
             persistStreamSelectionFromPlayer(
                 audioTrackOption = option,
@@ -155,6 +208,19 @@ internal class TrackSelectionHelper(
                 track.copy(isSelected = if (isOff) isOffTrack else matches)
             })
         }
+        // Remember a real subtitle selection for cross-episode scoring (G5).
+        if (option.index >= 0 && option.index < SERVER_TRACK_INDEX_BASE) {
+            val tracks = getUiState().subtitleTracks
+            val remembered = RememberedTrack(
+                label = option.label,
+                language = option.language,
+                indexWithinLanguage = engineIndexWithinLanguage(tracks, option.index),
+            )
+            rememberedSubtitleTrack = remembered
+            if (isUserOverride) {
+                persistRememberedTrack(TrackType.SUBTITLE, remembered)
+            }
+        }
         if (isUserOverride) {
             persistStreamSelectionFromPlayer(
                 audioTrackOption = null,
@@ -194,8 +260,15 @@ internal class TrackSelectionHelper(
         }
 
         val audioOptions = rawAudioTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex)
+            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex, t.badges)
         }
+        // Upgrade each engine audio track's label/badges with the richer server
+        // MediaStream data when a match is found (by stream index, then language
+        // + positional order). This fixes Direct-Play, where engine labels are
+        // crude (e.g. ExoPlayer's "English · application/x-media3-cues") and the
+        // server stream list was previously ignored entirely. Falls through
+        // unchanged for offline playback (no server streams).
+        val enrichedAudioOptions = enrichFromServer(audioOptions, streams, StreamType.AUDIO)
 
         // For transcoded / direct-stream playback the server bakes a single
         // audio track into the HLS manifest, so mpv's track-list surfaces only
@@ -206,9 +279,9 @@ internal class TrackSelectionHelper(
         // selectAudioTrack) since mpv cannot switch audio in-place on a
         // transcode.
         val mergedAudioOptions = if (getPlayMethod() != PlayMethod.DIRECT_PLAY) {
-            mergeServerStreams(audioOptions, streams, StreamType.AUDIO)
+            mergeServerStreams(enrichedAudioOptions, streams, StreamType.AUDIO)
         } else {
-            audioOptions
+            enrichedAudioOptions
         }
 
         val audioTracks = if (mergedAudioOptions.isEmpty()) {
@@ -230,17 +303,22 @@ internal class TrackSelectionHelper(
         }
 
         val engineSubOptions = rawSubTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex)
+            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex, t.badges)
         }
+        // Same server enrichment as audio — Direct-Play subtitle tracks get
+        // their real title/codec/flags from the server MediaStream instead of
+        // ExoPlayer's synthetic mime ("application/x-media3-cues"), so
+        // duplicate-language subs become distinguishable.
+        val enrichedSubOptions = enrichFromServer(engineSubOptions, streams, StreamType.SUBTITLE)
 
         // Same merge for subtitles: side-loaded external subs may take a moment
         // to resolve in mpv's track-list, and embedded subs aren't in the
         // transcode manifest at all. Surface all server subtitle streams so the
         // picker is populated immediately; selecting one side-loads it.
         val mergedSubOptions = if (getPlayMethod() != PlayMethod.DIRECT_PLAY) {
-            mergeServerStreams(engineSubOptions, streams, StreamType.SUBTITLE)
+            mergeServerStreams(enrichedSubOptions, streams, StreamType.SUBTITLE)
         } else {
-            engineSubOptions
+            enrichedSubOptions
         }
 
         val subtitleTracks = if (mergedSubOptions.isEmpty()) {
@@ -317,7 +395,16 @@ internal class TrackSelectionHelper(
                     // global preferred audio language when set.
                     val resolvedAudioLang = playbackPreferenceResolver.resolved.value?.audioLanguage
                         ?: prefAudioLang
-                    val match = pickPreferredAudioTrack(
+                    // G5: cross-episode scoring pre-pass. If the previous episode's
+                    // selected audio track is remembered, try to find a confident
+                    // (≥3) match among this episode's tracks first — so a specific
+                    // "English · 5.1" pick carries forward instead of dropping to
+                    // the first English track. Falls through to the language rule.
+                    hydrateRememberedAudioTrack()
+                    val scored = rememberedAudioTrack?.let { remembered ->
+                        pickByScoring(audioTracks, remembered)
+                    }
+                    val match = scored ?: pickPreferredAudioTrack(
                         audioTracks = audioTracks,
                         streams = streams,
                         prefAudioLang = resolvedAudioLang,
@@ -392,7 +479,17 @@ internal class TrackSelectionHelper(
                     val resolvedSubLang = playbackPreferenceResolver.resolved.value?.subtitleLanguage
                         ?: prefSubLang
                     val forcedOnly = currentPrefs.subtitlesForcedOnly
-                    val match = if (forcedOnly) {
+                    // G5: cross-episode scoring pre-pass (non-forced only — forced/
+                    // hearing-impaired rules must take precedence for accessibility).
+                    val scored = if (!forcedOnly) {
+                        hydrateRememberedSubtitleTrack()
+                        rememberedSubtitleTrack?.let { remembered ->
+                            pickByScoring(subtitleTracks, remembered)
+                        }
+                    } else {
+                        null
+                    }
+                    val match = scored ?: if (forcedOnly) {
                         val forcedStream = streams
                             .firstOrNull { it.type == StreamType.SUBTITLE && it.isForced && isLanguageMatch(it.language, resolvedSubLang) }
                             ?: streams.firstOrNull { it.type == StreamType.SUBTITLE && it.isForced }
@@ -403,7 +500,12 @@ internal class TrackSelectionHelper(
                             null
                         }
                     } else {
-                        subtitleTracks.firstOrNull { it.index >= 0 && isLanguageMatch(it.language, resolvedSubLang) }
+                        SubtitleTrackMatcher.match(
+                            tracks = subtitleTracks,
+                            lang = resolvedSubLang,
+                            forced = playbackPreferenceResolver.resolved.value?.subtitleForced,
+                            hearingImpaired = playbackPreferenceResolver.resolved.value?.subtitleHearingImpaired,
+                        )
                     }
                     if (match != null) {
                         selectSubtitleTrack(match, isUserOverride = false)
@@ -453,6 +555,12 @@ internal class TrackSelectionHelper(
         pendingSubtitleStreamIndex = null
         pendingAudioStreamIndex = null
         playbackPreferenceResolver.clear()
+        // Forget cross-episode track memory too — reset is a teardown/explicit
+        // reset, not a series continuation, so the remembered selection no longer
+        // reflects the user's intent for the next resolution.
+        rememberedAudioTrack = null
+        rememberedSubtitleTrack = null
+        trackedSeriesId = null
     }
 
     /**
@@ -478,7 +586,16 @@ internal class TrackSelectionHelper(
         val engineLabels = engineOptions.map { it.label.lowercase() }.toSet()
         val merged = engineOptions.toMutableList()
         for (stream in streams.filter { it.type == type }) {
-            val label = stream.displayTitle ?: stream.title ?: stream.language ?: continue
+            val info = TrackLabelInfo(
+                title = stream.title,
+                language = stream.language,
+                codec = stream.codec,
+                channels = stream.channels,
+                isForced = stream.isForced,
+                isDefault = stream.isDefault,
+            )
+            val label = stream.displayTitle?.takeIf { it.isNotBlank() }
+                ?: TrackLabelFormatter.primary(info)
             if (label.lowercase() in engineLabels) continue
             val syntheticIndex = SERVER_TRACK_INDEX_BASE + stream.index
             merged.add(
@@ -487,11 +604,38 @@ internal class TrackSelectionHelper(
                     label = label,
                     language = stream.language,
                     isSelected = false,
+                    badges = TrackLabelFormatter.badges(info),
                 )
             )
         }
         return merged
     }
+
+    /**
+     * Upgrades each engine track's [TrackOption.label] and [TrackOption.badges]
+     * with the richer Jellyfin server [MediaStream] data when a match is found.
+     *
+     * This runs for **all** play methods (including Direct-Play), which is the
+     * key fix: engine-built labels (especially ExoPlayer's
+     * `Language · application/x-media3-cues`) are crude and collapse
+     * same-language tracks into identical rows. The server stream carries the
+     * real title, codec, and forced/default/hearing-impaired flags, so matching
+     * them yields `Signs & Songs - English - text/x-ssa` + a `FORCED` badge.
+     *
+     * Matching priority (see [TrackEnrichmentResolver.enrich]):
+     *  1. Container stream index (mpv `ff-index` == server `index`) — robust.
+     *  2. Language match, positional order within that language — best-effort
+     *     for engines that expose no container index (ExoPlayer). Each server
+     *     stream is consumed once, so two "eng" subs resolve to distinct tracks.
+     *  3. Title/label exact match.
+     *
+     * Tracks with no server match pass through unchanged.
+     */
+    private fun enrichFromServer(
+        engineOptions: List<TrackOption>,
+        streams: List<MediaStream>,
+        type: StreamType,
+    ): List<TrackOption> = TrackEnrichmentResolver.enrich(engineOptions, streams, type)
 
     companion object {
         /**
@@ -619,6 +763,80 @@ internal class TrackSelectionHelper(
             }
         }
         return selectable.firstOrNull { isLanguageMatch(it.language, prefAudioLang) }
+    }
+
+    /**
+     * Seeds in-process remembered-audio memory from the persisted series-scope
+     * preference (G5). The resolver reads the DAO asynchronously; this runs on
+     * the hot path so once the resolver has published a value the memory is
+     * hydrated (once) and the scoring pre-pass can use it without a restart.
+     */
+    private fun hydrateRememberedAudioTrack() {
+        if (rememberedAudioTrack != null) return
+        rememberedAudioTrack = playbackPreferenceResolver.resolved.value?.rememberedAudioTrack
+    }
+
+    /** [hydrateRememberedAudioTrack] for subtitles. */
+    private fun hydrateRememberedSubtitleTrack() {
+        if (rememberedSubtitleTrack != null) return
+        rememberedSubtitleTrack = playbackPreferenceResolver.resolved.value?.rememberedSubtitleTrack
+    }
+
+    /**
+     * Cross-episode scoring pre-pass (G5). Given the candidate [tracks] for a new
+     * episode and the previously-selected [remembered] track, returns the best-
+     * scoring candidate if one clears the confidence threshold, else null (the
+     * caller falls back to the language rule). Used for both audio and subtitle
+     * resolution — the two former near-identical helpers (`pickAudioByScoring` /
+     * `pickSubtitleByScoring`) differed only in the list variable name. See
+     * [TrackScorer].
+     */
+    private fun pickByScoring(
+        tracks: List<TrackOption>,
+        remembered: RememberedTrack,
+    ): TrackOption? {
+        if (remembered.label.isBlank()) return null
+        val selectable = tracks.filter { it.index >= 0 }
+        if (selectable.isEmpty()) return null
+        val candidates = selectable.mapIndexed { i, opt ->
+            TrackScorer.Candidate(
+                language = opt.language.orEmpty(),
+                label = opt.label,
+                indexWithinLanguage = remembered.indexWithinLanguage,
+                candidateIndexWithinLanguage = positionalIndexWithinLanguage(selectable, i),
+                optionId = i,
+            )
+        }
+        val winner = TrackScorer.bestMatch(remembered.language, remembered.label, candidates = candidates) ?: return null
+        return selectable.getOrNull(winner.optionId)
+    }
+
+    /**
+     * Position of the track at array position [i] within [tracks] among the
+     * tracks sharing its language, or -1 if unknown. Used by the scoring
+     * candidate builder, which passes the positional offset into the filtered
+     * [tracks] list. (Splits the old `positionWithinLanguage` that conflated a
+     * positional offset with an engine index — a latent bug.)
+     */
+    private fun positionalIndexWithinLanguage(tracks: List<TrackOption>, i: Int): Int {
+        val target = tracks.getOrNull(i) ?: return -1
+        val lang = target.language?.lowercase()?.trim().orEmpty()
+        if (lang.isEmpty()) return -1
+        val sameLang = tracks.filter { it.language?.lowercase()?.trim() == lang }
+        return sameLang.indexOf(target)
+    }
+
+    /**
+     * Position among same-language tracks of the track whose engine [index]
+     * matches, or -1 if unknown. Used when remembering a selection — the caller
+     * knows the real engine track index, not its array position.
+     */
+    private fun engineIndexWithinLanguage(tracks: List<TrackOption>, index: Int): Int {
+        val target = tracks.firstOrNull { it.index == index } ?: return -1
+        val lang = target.language?.lowercase()?.trim().orEmpty()
+        if (lang.isEmpty()) return -1
+        val sameLang = tracks.filter { it.language?.lowercase()?.trim() == lang }
+        return sameLang.indexOf(target)
     }
 
     /** Heuristics for detecting audio-description tracks from titles/labels. */

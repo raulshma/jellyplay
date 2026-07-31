@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.feature.newsletter.R
 
 @Composable
 fun NewsletterSectionListScreen(
@@ -45,10 +47,10 @@ fun NewsletterSectionListScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     val title = when (sectionType) {
-        "FRESH_PICKS" -> "Fresh Picks"
-        "RECENTLY_ADDED" -> "Recently Added"
-        "CONTINUE_WATCHING" -> "Continue Watching"
-        "NEXT_UP" -> "Next Up"
+        "FRESH_PICKS" -> stringResource(R.string.newsletter_fresh_picks)
+        "RECENTLY_ADDED" -> stringResource(R.string.newsletter_recently_added)
+        "CONTINUE_WATCHING" -> stringResource(R.string.newsletter_continue_watching)
+        "NEXT_UP" -> stringResource(R.string.newsletter_next_up)
         else -> sectionType
     }
 
@@ -72,7 +74,7 @@ fun NewsletterSectionListScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "No items available",
+                    text = stringResource(R.string.newsletter_no_items_available),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

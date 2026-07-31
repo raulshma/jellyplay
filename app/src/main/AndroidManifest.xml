@@ -25,6 +25,10 @@
     <!-- Floating overlay player (TYPE_APPLICATION_OVERLAY) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- In-app self-update: lets the system package installer prompt to
+         install an APK we download to the cache dir and share via FileProvider. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <uses-feature
         android:name="android.software.leanback"
         android:required="false" />

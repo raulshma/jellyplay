@@ -50,14 +50,12 @@ object EngineCapabilityMatrix {
         supportsLiveQualitySwitch = true,
         supportsBandwidthEstimate = true,
         supportsAssOverride = true,
-        // ExoPlayer renders ASS via libass but ass-media 0.4.0 exposes no
-        // compile-time override API — ASS tracks render as-authored. User style
-        // overrides (colors, borders, Force) apply to SRT/VTT only. Font SCALE
-        // is honored separately via AssRender.setFontScale (see ExoPlayerEngine).
         supportsAssStyleOverride = false,
         supportsFontFamily = true,
         supportsFreeFormColors = true,
         supportsBorderStyles = true,
+        supportsSecondarySubtitles = false,
+        supportsScreenshot = true,
     )
 
     /** libmpv backend. */
@@ -78,12 +76,12 @@ object EngineCapabilityMatrix {
         supportsLiveQualitySwitch = false,
         supportsBandwidthEstimate = false,
         supportsAssOverride = true,
-        // mpv's libass supports `--ass-override=force`, so the user's colors,
-        // borders, edges, and Force override DO apply to ASS/SSA tracks.
         supportsAssStyleOverride = true,
         supportsFontFamily = true,
         supportsFreeFormColors = true,
         supportsBorderStyles = true,
+        supportsSecondarySubtitles = true,
+        supportsScreenshot = true,
     )
 
     /** libVLC backend. */
@@ -95,21 +93,7 @@ object EngineCapabilityMatrix {
         supportsSubtitleDelay = true,
         supportsAudioPassthrough = true,
         supportsSubtitleStyle = true,
-        // `supportsSubtitleVerticalPosition` is honoured in `Media.applySubtitleStyle`
-        // via `:sub-margin`; surfacing the flag lets the SubtitleStyleSheet UI expose
-        // the slider for VLC (parity with ExoPlayer/MPV) instead of hiding it.
         supportsSubtitleVerticalPosition = true,
-        // The four flags below are Android-AudioEffect-based (DialogueBoostHelper /
-        // NightModeHelper, with normalization/channel-mix driven by the in-sink
-        // DSP processors). They bind to the engine's audio session id, but LibVLC
-        // 3.7.x exposes no audio-session API (`audioSessionId` returns the 0/UNSET
-        // sentinel), so the helpers short-circuit and these effects cannot be
-        // applied at runtime. They can be configured only as LibVLC `--audio-filter`
-        // startup options, so advertising them as supported here (and letting the UI
-        // expose live toggles) misled users into thinking a mid-playback toggle
-        // takes effect. Per the matrix behaviour contract, `false`
-        // ⇒ the engine silently no-ops the related `updateConfig` call — which is exactly
-        // what already happens. (Contrast ExoPlayer/MPV, which expose a real session id.)
         supportsDialogueBoost = false,
         supportsNightMode = false,
         supportsAudioNormalization = false,
@@ -122,6 +106,8 @@ object EngineCapabilityMatrix {
         supportsFontFamily = true,
         supportsFreeFormColors = false,
         supportsBorderStyles = false,
+        supportsSecondarySubtitles = false,
+        supportsScreenshot = true,
     )
 
     /**

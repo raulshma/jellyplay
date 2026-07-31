@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -50,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
+import com.raulshma.jellyplay.feature.onboarding.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,8 +88,8 @@ fun SeerrStep(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OnboardingStepScaffold(
-            title = "Integrations",
-            subtitle = "Optionally connect Seerr (Jellyseerr/Overseerr) for enhanced features. You can skip this step.",
+            title = stringResource(R.string.onboarding_seerr_title),
+            subtitle = stringResource(R.string.onboarding_seerr_subtitle),
             icon = Tabler.Outline.Puzzle,
             onNext = {},
         ) {
@@ -105,8 +107,8 @@ fun SeerrStep(
                     serverUrl = it
                     onSetServerUrl(it.trim())
                 },
-                label = { Text("Server URL") },
-                placeholder = { Text("http://localhost:5055") },
+                label = { Text(stringResource(R.string.onboarding_seerr_server_url)) },
+                placeholder = { Text(stringResource(R.string.onboarding_seerr_server_url_placeholder)) },
                 leadingIcon = { Icon(Tabler.Outline.Link, contentDescription = null, modifier = Modifier.size(20.dp)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -126,7 +128,7 @@ fun SeerrStep(
                     selected = authMethod == SeerrAuthMethod.API_KEY,
                     icon = {},
                 ) {
-                    Text("API Key")
+                    Text(stringResource(R.string.onboarding_seerr_api_key))
                 }
                 SegmentedButton(
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
@@ -137,7 +139,7 @@ fun SeerrStep(
                     selected = authMethod == SeerrAuthMethod.JELLYFIN,
                     icon = {},
                 ) {
-                    Text("Jellyfin")
+                    Text(stringResource(R.string.onboarding_seerr_jellyfin))
                 }
                 SegmentedButton(
                     shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
@@ -148,7 +150,7 @@ fun SeerrStep(
                     selected = authMethod == SeerrAuthMethod.LOCAL,
                     icon = {},
                 ) {
-                    Text("Local")
+                    Text(stringResource(R.string.onboarding_seerr_local))
                 }
             }
 
@@ -162,8 +164,8 @@ fun SeerrStep(
                             apiKey = it
                             onSetApiKey(it.trim())
                         },
-                        label = { Text("API Key") },
-                        placeholder = { Text("Enter your Seerr API key") },
+                        label = { Text(stringResource(R.string.onboarding_seerr_api_key)) },
+                        placeholder = { Text(stringResource(R.string.onboarding_seerr_api_key_placeholder)) },
                         leadingIcon = { Icon(Tabler.Outline.Key, contentDescription = null, modifier = Modifier.size(20.dp)) },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -178,8 +180,8 @@ fun SeerrStep(
                             username = it
                             onSetUsername(it.trim())
                         },
-                        label = { Text("Username") },
-                        placeholder = { Text("Jellyfin username") },
+                        label = { Text(stringResource(R.string.onboarding_seerr_username)) },
+                        placeholder = { Text(stringResource(R.string.onboarding_seerr_username_placeholder)) },
                         leadingIcon = { Icon(Tabler.Outline.User, contentDescription = null, modifier = Modifier.size(20.dp)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -191,8 +193,8 @@ fun SeerrStep(
                             password = it
                             onSetPassword(it)
                         },
-                        label = { Text("Password") },
-                        placeholder = { Text("Jellyfin password") },
+                        label = { Text(stringResource(R.string.onboarding_seerr_password)) },
+                        placeholder = { Text(stringResource(R.string.onboarding_seerr_password_placeholder_jellyfin)) },
                         leadingIcon = { Icon(Tabler.Outline.Lock, contentDescription = null, modifier = Modifier.size(20.dp)) },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -207,8 +209,8 @@ fun SeerrStep(
                             email = it
                             onSetEmail(it.trim())
                         },
-                        label = { Text("Email") },
-                        placeholder = { Text("Seerr account email") },
+                        label = { Text(stringResource(R.string.onboarding_seerr_email)) },
+                        placeholder = { Text(stringResource(R.string.onboarding_seerr_email_placeholder)) },
                         leadingIcon = { Icon(Tabler.Outline.Mail, contentDescription = null, modifier = Modifier.size(20.dp)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -221,8 +223,8 @@ fun SeerrStep(
                             password = it
                             onSetPassword(it)
                         },
-                        label = { Text("Password") },
-                        placeholder = { Text("Seerr account password") },
+                        label = { Text(stringResource(R.string.onboarding_seerr_password)) },
+                        placeholder = { Text(stringResource(R.string.onboarding_seerr_password_placeholder_seerr)) },
                         leadingIcon = { Icon(Tabler.Outline.Lock, contentDescription = null, modifier = Modifier.size(20.dp)) },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -269,7 +271,7 @@ fun SeerrStep(
                             .tvFocusIndicator(disconnectFocusState, ShapeCache.smooth12)
                             .height(36.dp),
                     ) {
-                        Text("Disconnect", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.onboarding_seerr_disconnect), style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
@@ -285,8 +287,8 @@ fun SeerrStep(
                 Spacer(Modifier.height(4.dp))
 
                 OnboardingToggleRow(
-                    title = "Enable Seerr Integration",
-                    subtitle = "Master switch for all Seerr features",
+                    title = stringResource(R.string.onboarding_seerr_enable_integration),
+                    subtitle = stringResource(R.string.onboarding_seerr_master_switch),
                     checked = seerrPreferences.enabled,
                     onCheckedChange = onSetEnabled,
                 )
@@ -298,20 +300,20 @@ fun SeerrStep(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         OnboardingToggleRow(
-                            title = "Search Integration",
-                            subtitle = "Show Seerr results in search",
+                            title = stringResource(R.string.onboarding_seerr_search_integration),
+                            subtitle = stringResource(R.string.onboarding_seerr_search_subtitle),
                             checked = seerrPreferences.searchEnabled,
                             onCheckedChange = onSetSearchEnabled,
                         )
                         OnboardingToggleRow(
-                            title = "Recommendations",
-                            subtitle = "Show similar titles and recommendations",
+                            title = stringResource(R.string.onboarding_seerr_recommendations),
+                            subtitle = stringResource(R.string.onboarding_seerr_recommendations_subtitle),
                             checked = seerrPreferences.recommendationsEnabled,
                             onCheckedChange = onSetRecommendationsEnabled,
                         )
                         OnboardingToggleRow(
-                            title = "Discover",
-                            subtitle = "Trending and popular content from Seerr",
+                            title = stringResource(R.string.onboarding_seerr_discover),
+                            subtitle = stringResource(R.string.onboarding_seerr_discover_subtitle),
                             checked = seerrPreferences.discoverEnabled,
                             onCheckedChange = onSetDiscoverEnabled,
                         )
@@ -332,14 +334,14 @@ fun SeerrStep(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     RegionChip(
-                        label = "Streaming",
+                        label = stringResource(R.string.onboarding_seerr_streaming_region),
                         selected = seerrPreferences.streamingRegion,
                         options = SeerrRegions,
                         onSelect = onSetStreamingRegion,
                         modifier = Modifier.weight(1f),
                     )
                     RegionChip(
-                        label = "Discover",
+                        label = stringResource(R.string.onboarding_seerr_discover),
                         selected = seerrPreferences.discoverRegion,
                         options = SeerrRegions,
                         onSelect = onSetDiscoverRegion,

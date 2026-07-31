@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.feature.player.live.R
 
 /**
  * In-player channel list. Rendered as a TvSafeSheet on TV / ModalBottomSheet
@@ -59,7 +61,7 @@ fun LiveChannelListSheet(
 ) {
     TvSafeSheet(
         onDismissRequest = onDismiss,
-        title = "Channels",
+        title = stringResource(R.string.live_channels),
     ) {
         val listState = rememberLazyListState()
         val currentRequester = remember { FocusRequester() }
@@ -131,7 +133,7 @@ private fun ChannelRow(
         if (!logoUrl.isNullOrBlank()) {
             MediaImage(
                 url = logoUrl,
-                contentDescription = "${channel.name} logo",
+                contentDescription = stringResource(R.string.live_logo_cd, channel.name),
                 blurHash = channel.primaryBlurHash,
                 modifier = Modifier
                     .size(48.dp)
@@ -165,7 +167,8 @@ private fun ChannelRow(
         IconButton(onClick = onToggleFavorite) {
             Icon(
                 imageVector = Tabler.Outline.Star,
-                contentDescription = if (isFavorite) "Unfavorite" else "Favorite",
+                contentDescription = if (isFavorite) stringResource(R.string.live_unfavorite)
+                else stringResource(R.string.live_favorite),
                 tint = if (isFavorite) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
             )

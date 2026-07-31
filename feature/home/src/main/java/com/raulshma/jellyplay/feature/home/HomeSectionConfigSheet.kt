@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -181,14 +182,14 @@ internal fun HomeSectionConfigSheet(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         MoveButton(
-                            label = "Move Up",
+                            label = stringResource(R.string.home_move_up),
                             icon = Tabler.Outline.ArrowUp,
                             enabled = canMoveUp,
                             onClick = onMoveUp,
                             modifier = Modifier.weight(1f),
                         )
                         MoveButton(
-                            label = "Move Down",
+                            label = stringResource(R.string.home_move_down),
                             icon = Tabler.Outline.ArrowDown,
                             enabled = canMoveDown,
                             onClick = onMoveDown,

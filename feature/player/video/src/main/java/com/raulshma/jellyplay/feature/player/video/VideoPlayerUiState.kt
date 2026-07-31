@@ -104,7 +104,7 @@ data class VideoPlayerUiState(
     val detectedAspectRatio: AspectRatio? = null,
     val playMethod: String = "",
     val isDirectPlayForced: Boolean = false,
-    val subtitleStyle: SubtitleStyle = SubtitleStyle(),
+    val subtitleStyle: SubtitleStyle = SubtitleStyle.DEFAULT,
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val nightModeEnabled: Boolean = false,
@@ -124,11 +124,12 @@ data class VideoPlayerUiState(
     /** Non-null when the last subtitle search failed (network/server). Lets the
      *  Search tab distinguish a failure from a genuine empty result. */
     val subtitleSearchError: String? = null,
-    /** Download-from-server in-flight flag + failure surface. Mirrors the
-     *  upload path so the UI can show a spinner and retry on network failure
-     *  (previously the failure was silent — see SubtitleManager.downloadSubtitle). */
-    val isDownloadingSubtitle: Boolean = false,
-    val subtitleDownloadError: String? = null,
+    /** Per-subtitle-id download status for the "Get Subtitles" sheet (Download +
+     *  Search tabs). The sheet stays open after a pick and renders a per-row
+     *  spinner / ✓-Downloaded / "taking a while" / failed state keyed by this map,
+     *  instead of the former single global boolean that closed the panel on pick.
+     *  See [SubtitleManager.downloadSubtitle] and [SubtitleDownloadStatus]. */
+    val downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),
     val isUploadingSubtitle: Boolean = false,
     val defaultSearchLanguage: String = "eng",
     val syncPlayGroupName: String? = null,
@@ -159,6 +160,7 @@ data class VideoPlayerUiState(
     val volumeLevel: Float = 1.0f,
     val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     val frameRateMatching: Boolean = false,
+    val refreshRateMode: com.raulshma.jellyplay.core.model.RefreshRateMode = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF,
     val audioDelayMs: Long = 0L,
     val segments: List<MediaSegment> = emptyList(),
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
@@ -202,6 +204,8 @@ data class VideoPlayerUiState(
     val sleepTimerActive: Boolean = false,
     val sleepTimerEndOfEpisode: Boolean = false,
     val sleepTimerLastUsedDurationMs: Long = 0L,
+    /** A/B repeat window (G2). Inert unless [AbRepeatState.isActive]. */
+    val abRepeat: AbRepeatState = AbRepeatState(),
     val videoEffects: VideoEffectsConfig = VideoEffectsConfig(),
     val isScreenLocked: Boolean = false,
     val usePinForPlayerLock: Boolean = false,
@@ -269,6 +273,7 @@ data class VideoPlayerUiState(
             isUploadingSubtitle = isUploadingSubtitle,
             isLoadingRemoteSubtitles = isLoadingRemoteSubtitles,
             defaultSearchLanguage = defaultSearchLanguage,
+            downloadingSubtitles = downloadingSubtitles,
         )
 
     val effects: AudioEffectsState
@@ -339,6 +344,7 @@ data class VideoPlayerUiState(
             seekDurationMs = seekDurationMs, rememberBrightness = rememberBrightness,
             brightnessLevel = brightnessLevel, gestureIndicatorSide = gestureIndicatorSide,
             frameRateMatching = frameRateMatching,
+            refreshRateMode = refreshRateMode,
         )
 
     val uiPrefs: PlayerUiPrefsState

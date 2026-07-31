@@ -99,4 +99,80 @@ class ItemPlaybackPreferenceDaoTest {
         assertNotNull(dao.getByKey("SERIES", "series-2"))
         assertEquals(1, dao.countByScope("SERIES"))
     }
+
+    @Test
+    fun `subtitle role fields round-trip`() = runTest {
+        // Proves the v38→v39 columns (subtitleForced / subtitleHearingImpaired)
+        // exist and are read/written by the Room-generated mapping.
+        dao.upsert(
+            ItemPlaybackPreferenceEntity(
+                scope = "SERIES",
+                key = "series-1",
+                audioLanguage = null,
+                subtitleLanguage = "eng",
+                subtitleForced = true,
+                subtitleHearingImpaired = true,
+                updatedAt = 1_000L,
+            )
+        )
+        val saved = dao.getByKey("SERIES", "series-1")
+        assertNotNull(saved)
+        assertEquals(true, saved!!.subtitleForced)
+        assertEquals(true, saved.subtitleHearingImpaired)
+    }
+
+    @Test
+    fun `subtitle role fields default to null when omitted`() = runTest {
+        // Legacy/default behaviour: a row written without the role fields reads
+        // both as null (preserves today's language-only semantics).
+        dao.upsert(pref(subtitleLanguage = "eng"))
+        val saved = dao.getByKey("SERIES", "series-1")
+        assertNotNull(saved)
+        assertNull(saved!!.subtitleForced)
+        assertNull(saved.subtitleHearingImpaired)
+    }
+
+    @Test
+    fun `remembered track fields round-trip`() = runTest {
+        // Proves the v39→v40 columns (the six remembered* fields) exist and are
+        // read/written by the Room-generated mapping.
+        dao.upsert(
+            ItemPlaybackPreferenceEntity(
+                scope = "SERIES",
+                key = "series-1",
+                audioLanguage = null,
+                subtitleLanguage = null,
+                rememberedAudioLabel = "English · 5.1 · DTS",
+                rememberedAudioLanguage = "eng",
+                rememberedAudioIndex = 0,
+                rememberedSubtitleLabel = "English · SDH",
+                rememberedSubtitleLanguage = "eng",
+                rememberedSubtitleIndex = 1,
+                updatedAt = 1_000L,
+            )
+        )
+        val saved = dao.getByKey("SERIES", "series-1")
+        assertNotNull(saved)
+        assertEquals("English · 5.1 · DTS", saved!!.rememberedAudioLabel)
+        assertEquals("eng", saved.rememberedAudioLanguage)
+        assertEquals(0, saved.rememberedAudioIndex)
+        assertEquals("English · SDH", saved.rememberedSubtitleLabel)
+        assertEquals("eng", saved.rememberedSubtitleLanguage)
+        assertEquals(1, saved.rememberedSubtitleIndex)
+    }
+
+    @Test
+    fun `remembered track fields default to null when omitted`() = runTest {
+        // Legacy/default behaviour: a row written without the remembered fields
+        // reads all six as null (preserves today's language-only semantics).
+        dao.upsert(pref())
+        val saved = dao.getByKey("SERIES", "series-1")
+        assertNotNull(saved)
+        assertNull(saved!!.rememberedAudioLabel)
+        assertNull(saved.rememberedAudioLanguage)
+        assertNull(saved.rememberedAudioIndex)
+        assertNull(saved.rememberedSubtitleLabel)
+        assertNull(saved.rememberedSubtitleLanguage)
+        assertNull(saved.rememberedSubtitleIndex)
+    }
 }

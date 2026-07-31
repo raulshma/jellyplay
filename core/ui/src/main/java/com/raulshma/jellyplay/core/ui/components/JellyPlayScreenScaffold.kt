@@ -49,7 +49,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
+import com.raulshma.jellyplay.core.ui.R
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -226,7 +228,7 @@ fun CircleBgBackButton(
     ) {
         Icon(
             Tabler.Outline.ArrowLeft,
-            contentDescription = "Back",
+            contentDescription = stringResource(R.string.core_ui_back),
             tint = resolvedIconColor,
         )
     }
@@ -384,12 +386,12 @@ fun ScreenErrorState(
                     if (retryLoading) {
                         JellyPlayCircularProgressIndicator(modifier = Modifier.size(16.dp))
                     } else {
-                        Text("Retry")
+                        Text(stringResource(R.string.core_retry))
                     }
                 }
             }
             if (onReport != null) {
-                androidx.compose.material3.TextButton(onClick = onReport) { Text("Report") }
+                androidx.compose.material3.TextButton(onClick = onReport) { Text(stringResource(R.string.core_report)) }
             }
         }
     }

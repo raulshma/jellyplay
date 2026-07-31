@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -33,6 +34,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.TaskState
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun RunningTasksCard(
@@ -81,7 +83,7 @@ fun RunningTasksCard(
                     modifier = Modifier
                         .then(viewAllFocusState.focusModifier)
                         .tvFocusIndicator(viewAllFocusState, ShapeCache.smooth12),
-                ) { Text("View All") }
+                ) { Text(stringResource(R.string.admin_view_all)) }
             }
             Spacer(Modifier.height(8.dp))
             tasks.take(3).forEachIndexed { index, task ->

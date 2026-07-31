@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="insights_title_watch_progress">Wiedergabefortschritt</string>
+    <string name="insights_cd_share">Teilen</string>
+    <string name="insights_cd_configure_heatmap">Heatmap konfigurieren</string>
+    <string name="insights_filter_type">Filtertyp</string>
+    <string name="insights_select_year">Jahr auswählen</string>
+    <string name="insights_loading">Wird geladen…</string>
+    <string name="insights_plugin_missing_message">Installiere das Playback Reporting Plugin auf deinem Jellyfin-Server für detaillierte Heatmap-Daten. Es werden grundlegende Aktivitäten aus dem Wiedergabeverlauf angezeigt.</string>
+    <string name="insights_no_activity_for_year">Für %1$d wurde keine Wiedergabeaktivität erfasst. Spiele etwas ab, um dein Jahr zu füllen.</string>
+    <string name="insights_activity_grid">Aktivitätsraster</string>
+    <string name="insights_cd_previous_year">Vorheriges Jahr</string>
+    <string name="insights_cd_next_year">Nächstes Jahr</string>
+    <string name="insights_stat_current_streak">Aktuelle Serie</string>
+    <string name="insights_stat_longest_streak">Längste Serie</string>
+    <string name="insights_stat_active_days">Aktive Tage</string>
+    <string name="insights_days_format">%1$d Tage</string>
+    <string name="insights_day_sun">So</string>
+    <string name="insights_day_tue">Di</string>
+    <string name="insights_day_thu">Do</string>
+    <string name="insights_day_sat">Sa</string>
+    <string name="insights_legend_less">Weniger</string>
+    <string name="insights_legend_more">Mehr</string>
+    <string name="insights_duration_hm">%1$dh %2$dm</string>
+    <string name="insights_duration_m">%1$dm</string>
+    <string name="insights_duration_under_minute">&lt; 1 Min.</string>
+    <string name="insights_no_activity">Keine Aktivität</string>
+    <string name="insights_minutes_watched">%1$d Min. angesehen</string>
+    <string name="insights_played">Abgespielt</string>
+    <string name="insights_share_chooser_title">Wiedergabefortschritt teilen</string>
+
+    <plurals name="insights_heatmap_summary">
+        <item quantity="one">Wiedergabeaktivitäts-Heatmap für %1$d. %2$d aktiver Tag.</item>
+        <item quantity="other">Wiedergabeaktivitäts-Heatmap für %1$d. %2$d aktive Tage.</item>
+    </plurals>
+
+    <plurals name="insights_sessions_watched">
+        <item quantity="one">%1$d Sitzung &#183; %2$s angesehen</item>
+        <item quantity="other">%1$d Sitzungen &#183; %2$s angesehen</item>
+    </plurals>
+</resources>

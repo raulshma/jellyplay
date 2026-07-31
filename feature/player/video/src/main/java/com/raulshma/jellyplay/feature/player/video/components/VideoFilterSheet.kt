@@ -27,8 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -96,7 +98,7 @@ fun VideoFilterSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Video Filters",
+                    text = stringResource(R.string.player_video_video_filters),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 )
                 val resetAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -122,7 +124,7 @@ fun VideoFilterSheet(
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
                     Text(
-                        text = "Reset All",
+                        text = stringResource(R.string.player_video_reset_all),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.tertiary,
                         fontWeight = FontWeight.SemiBold,
@@ -132,7 +134,7 @@ fun VideoFilterSheet(
             Spacer(modifier = Modifier.height(20.dp))
 
             FilterSlider(
-                label = "Brightness",
+                label = stringResource(R.string.player_video_brightness),
                 value = brightness,
                 valueRange = -1f..1f,
                 valueLabel = String.format("%+.1f", brightness),
@@ -143,7 +145,7 @@ fun VideoFilterSheet(
             )
             FilterSpacer()
             FilterSlider(
-                label = "Contrast",
+                label = stringResource(R.string.player_video_contrast),
                 value = contrast,
                 valueRange = 0.5f..2f,
                 valueLabel = String.format("%.1f", contrast),
@@ -153,7 +155,7 @@ fun VideoFilterSheet(
             )
             FilterSpacer()
             FilterSlider(
-                label = "Saturation",
+                label = stringResource(R.string.player_video_saturation),
                 value = saturation,
                 valueRange = 0f..3f,
                 valueLabel = String.format("%.1f", saturation),
@@ -163,7 +165,7 @@ fun VideoFilterSheet(
             )
             FilterSpacer()
             FilterSlider(
-                label = "Sharpness",
+                label = stringResource(R.string.player_video_sharpness),
                 value = sharpness,
                 valueRange = 0f..1f,
                 valueLabel = String.format("%.1f", sharpness),
@@ -173,7 +175,7 @@ fun VideoFilterSheet(
             )
             FilterSpacer()
             FilterSlider(
-                label = "Hue",
+                label = stringResource(R.string.player_video_hue),
                 value = hue,
                 valueRange = 0f..360f,
                 valueLabel = String.format("%.0f°", hue),
@@ -183,7 +185,7 @@ fun VideoFilterSheet(
             )
             FilterSpacer()
             FilterSlider(
-                label = "Rotation",
+                label = stringResource(R.string.player_video_rotation),
                 value = rotation,
                 valueRange = -180f..180f,
                 valueLabel = String.format("%.0f°", rotation),
@@ -193,7 +195,7 @@ fun VideoFilterSheet(
             )
             FilterSpacer()
             FilterSlider(
-                label = "Red Gain",
+                label = stringResource(R.string.player_video_red_gain),
                 value = redGain,
                 valueRange = 0f..2f,
                 valueLabel = String.format("%.2f", redGain),
@@ -203,7 +205,7 @@ fun VideoFilterSheet(
             )
             FilterSpacer()
             FilterSlider(
-                label = "Green Gain",
+                label = stringResource(R.string.player_video_green_gain),
                 value = greenGain,
                 valueRange = 0f..2f,
                 valueLabel = String.format("%.2f", greenGain),
@@ -213,7 +215,7 @@ fun VideoFilterSheet(
             )
             FilterSpacer()
             FilterSlider(
-                label = "Blue Gain",
+                label = stringResource(R.string.player_video_blue_gain),
                 value = blueGain,
                 valueRange = 0f..2f,
                 valueLabel = String.format("%.2f", blueGain),
@@ -223,7 +225,7 @@ fun VideoFilterSheet(
             )
             FilterSpacer()
             FilterSlider(
-                label = "Gaussian Blur",
+                label = stringResource(R.string.player_video_gaussian_blur),
                 value = blur,
                 valueRange = 0f..10f,
                 valueLabel = String.format("%.1f", blur),
@@ -286,7 +288,7 @@ private fun FilterSlider(
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "Reset",
+                        text = stringResource(R.string.player_video_reset),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.tertiary,
                         fontWeight = FontWeight.Medium,

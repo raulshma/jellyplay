@@ -890,7 +890,17 @@ class AudioPlaybackManager @Inject constructor(
 
     fun seekTo(positionMs: Long) {
         assertMainThread("seekTo")
-        exoPlayer?.seekTo(positionMs)
+        // Optimistically publish the target position so the seek-bar indicator
+        // snaps to the user's touch immediately. Without this the bar only moves
+        // when the position-poll loop (up to 250ms when playing, 2.5s when
+        // paused) echoes the new position back, making seeking feel laggy.
+        // ExoPlayer updates its reported currentPosition synchronously on
+        // seekTo(), and the next poll confirms this value — so there is no
+        // visible flicker, the write just front-loads the update to the frame
+        // the gesture landed in.
+        val clamped = positionMs.coerceAtLeast(0L)
+        _currentPosition.value = clamped
+        exoPlayer?.seekTo(clamped)
     }
 
     /**

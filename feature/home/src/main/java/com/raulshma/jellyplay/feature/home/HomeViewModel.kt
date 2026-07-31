@@ -51,7 +51,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -263,6 +262,16 @@ class HomeViewModel @Inject constructor(
     private val discoverCache = TtlCacheGate(DISCOVER_TTL_MS)
 
     private val searchQueryFlow: MutableStateFlow<String> = MutableStateFlow("")
+
+    /**
+     * Read-only view of the search query string. Kept in lockstep with
+     * [HomeUiState.searchState]'s `query` field (both are written by
+     * `updateSearchQuery`/`clearSearch`), but exposed separately so the home
+     * screen can read it in a leaf composable without recomposing the whole
+     * `MainHomeContent` body on every keystroke — mirrors the `scrollFraction`
+     * deferral pattern in `HomeScrollState`.
+     */
+    val searchQuery: StateFlow<String> = searchQueryFlow
     private var searchJob: Job? = null
 
     private val _searchHistory = MutableStateFlow<List<SearchHistoryItem>>(emptyList())
@@ -345,6 +354,8 @@ class HomeViewModel @Inject constructor(
                     colorStyle = prefs.colorStyle,
                     accentColorSwatch = prefs.accentColorSwatch,
                     homeHeroEnabled = prefs.homeHeroEnabled,
+                    homeBackdropEnabled = prefs.homeBackdropEnabled,
+                    performanceMode = prefs.performanceMode,
                     showClock = prefs.showClockOnHome,
                     showSettingsInHomeSearch = prefs.showSettingsInHomeSearch,
                     continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
@@ -639,12 +650,21 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun updateSearchQuery(query: String) {
-        updateSearch { it.copy(query = query, isSearching = if (query.isBlank()) false else it.isSearching) }
+        // Only the rarely-changing blank/nonblank signal touches _uiState.
+        // Writing the per-keystroke query string here would change HomeUiState
+        // equality on every keystroke and recompose the whole MainHomeContent
+        // body. The live query lives on searchQueryFlow, read in a leaf.
+        _uiState.update {
+            it.copy(
+                searchState = it.searchState.copy(isSearching = if (query.isBlank()) false else it.searchState.isSearching),
+                isSearchActive = query.isNotBlank(),
+            )
+        }
         searchQueryFlow.value = query
     }
 
     private fun clearSearch() {
-        _uiState.update { it.copy(searchState = HomeSearchState()) }
+        _uiState.update { it.copy(searchState = HomeSearchState(), isSearchActive = false) }
         searchQueryFlow.value = ""
     }
 
@@ -817,13 +837,16 @@ class HomeViewModel @Inject constructor(
                     // NOT failures — previously the size-mismatch heuristic
                     // false-positived on new users and after merges.
                     _uiState.update { it.copy(partialLoadError = homeResult.failedSectionTypes.isNotEmpty()) }
-                    val finalSections = withContext(Dispatchers.Default) {
-                        orderHomeSections(
-                            sections = fetchedSections,
-                            order = homeSectionOrder,
-                            mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
-                        )
-                    }
+                    // OrderHomeSectionsUseCase is pure and operates on a handful
+                    // of sections (sub-microsecond), so no thread offload. The
+                    // previous withContext(Dispatchers.Default) hop escaped the
+                    // test scheduler and made isRefreshing/isLoading assertions
+                    // racy under StandardTestDispatcher.
+                    val finalSections = orderHomeSections(
+                        sections = fetchedSections,
+                        order = homeSectionOrder,
+                        mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
+                    )
 
                     _uiState.update { it.copy(sections = finalSections) }
 

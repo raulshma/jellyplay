@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,6 +66,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.admin.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,7 +89,7 @@ fun ScheduledTasksScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Scheduled Tasks",
+        title = stringResource(R.string.admin_scheduled_tasks_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -96,7 +98,7 @@ fun ScheduledTasksScreen(
                 onClick = { viewModel.refresh() },
                 modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
             ) {
-                Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.admin_refresh))
             }
         },
     ) {
@@ -111,6 +113,17 @@ fun ScheduledTasksScreen(
                 )
             }
             else -> {
+                // Group by Category, mirroring jellyfin-web's
+                // getCategories()/getTasksByCategory(): tasks with a
+                // blank category are dropped, categories and tasks are
+                // sorted alphabetically (locale-aware).
+                // Memoized at the composable scope (not inside LazyColumn's
+                // LazyListScope, where @Composable calls aren't allowed) so the
+                // filter/groupBy/sort chain runs only when the task list changes,
+                // not on every recomposition.
+                val groupedTasks = remember(state.tasks) {
+                    groupScheduledTasksByCategory(state.tasks)
+                }
                 PullToRefreshBox(
                     isRefreshing = state.isRefreshing,
                     onRefresh = { viewModel.refresh() },
@@ -128,17 +141,6 @@ fun ScheduledTasksScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        // Group by Category, mirroring jellyfin-web's
-                        // getCategories()/getTasksByCategory(): tasks with a
-                        // blank category are dropped, categories and tasks are
-                        // sorted alphabetically (locale-aware).
-                        val groupedTasks = state.tasks
-                            .filter { !it.category.isNullOrBlank() }
-                            .groupBy { it.category!! }
-                            .toSortedMap(compareBy(String.CASE_INSENSITIVE_ORDER) { it })
-                            .mapValues { (_, tasks) ->
-                                tasks.sortedBy { it.name.lowercase() }
-                            }
                         groupedTasks.forEach { (category, tasks) ->
                             item(key = "header_$category") {
                                 Text(
@@ -241,7 +243,7 @@ private fun TaskItem(
                         ) {
                             Icon(Tabler.Outline.PlayerPause, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Stop", style = MaterialTheme.typography.labelMedium)
+                            Text(stringResource(R.string.admin_stop), style = MaterialTheme.typography.labelMedium)
                         }
                     }
                     TaskState.IDLE -> {
@@ -254,7 +256,7 @@ private fun TaskItem(
                         ) {
                             Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Run", style = MaterialTheme.typography.labelMedium)
+                            Text(stringResource(R.string.admin_run), style = MaterialTheme.typography.labelMedium)
                         }
                     }
                     TaskState.CANCELLING -> {
@@ -449,11 +451,16 @@ private fun TriggerChip(type: String, intervalTicks: Long?, dayOfWeek: String?) 
     val label = when {
         type == "IntervalTrigger" && intervalTicks != null -> {
             val hours = intervalTicks / 36_000_000_000
-            if (hours > 24) "Every ${hours / 24}d" else "Every ${hours}h"
+            if (hours > 24) {
+                stringResource(R.string.admin_trigger_every_days, (hours / 24).toInt())
+            } else {
+                stringResource(R.string.admin_trigger_every_hours, hours.toInt())
+            }
         }
-        type == "DailyTrigger" -> "Daily"
-        type == "WeeklyTrigger" -> dayOfWeek?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "Weekly"
-        type == "StartupTrigger" -> "On Startup"
+        type == "DailyTrigger" -> stringResource(R.string.admin_trigger_daily)
+        type == "WeeklyTrigger" -> dayOfWeek?.lowercase()?.replaceFirstChar { it.uppercase() }
+            ?: stringResource(R.string.admin_trigger_weekly)
+        type == "StartupTrigger" -> stringResource(R.string.admin_trigger_on_startup)
         else -> type.removeSuffix("Trigger")
     }
     Box(

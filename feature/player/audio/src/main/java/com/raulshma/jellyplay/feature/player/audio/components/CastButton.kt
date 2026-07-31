@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.cast.CastDevice
@@ -21,6 +22,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.player.audio.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -39,6 +41,8 @@ fun CastButton(
     val context = LocalContext.current
     val isConnected by castManager.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
     val discoveredDevices by castManager.discoveredDevices.collectAsStateWithLifecycle(initialValue = emptyList())
+    val castConnectedDesc = stringResource(R.string.audio_cast_connected)
+    val castDesc = stringResource(R.string.audio_cast)
     var showDialog by remember { mutableStateOf(false) }
     val castFocusState = rememberTvFocusState(focusedScale = 1.1f)
 
@@ -75,7 +79,7 @@ fun CastButton(
     ) {
         Icon(
             imageVector = Tabler.Outline.Cast,
-            contentDescription = if (isConnected) "Cast connected" else "Cast",
+            contentDescription = if (isConnected) castConnectedDesc else castDesc,
             tint = if (isConnected) CastColors.connected else playerOnScrim(),
         )
     }
@@ -88,24 +92,29 @@ private fun CastDeviceDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val castTitle = stringResource(R.string.audio_cast)
+    val castNoDevices = stringResource(R.string.audio_cast_no_devices)
+    val castOk = stringResource(R.string.audio_cast_ok)
+    val castToDevice = stringResource(R.string.audio_cast_to_device)
+    val castCancel = stringResource(R.string.audio_cancel)
 
     DisposableEffect(devices) {
         val dialog = if (devices.isEmpty()) {
             AlertDialog.Builder(context)
-                .setTitle("Cast")
-                .setMessage("No cast devices found. Make sure your device is on the same network.")
-                .setPositiveButton("OK") { dialog, _ -> dialog.dismiss(); onDismiss() }
+                .setTitle(castTitle)
+                .setMessage(castNoDevices)
+                .setPositiveButton(castOk) { dialog, _ -> dialog.dismiss(); onDismiss() }
                 .setOnDismissListener { onDismiss() }
                 .create()
         } else {
             val deviceNames = devices.map { it.name }.toTypedArray()
             AlertDialog.Builder(context)
-                .setTitle("Cast to device")
+                .setTitle(castToDevice)
                 .setItems(deviceNames) { dialog, which ->
                     onSelect(devices[which])
                     dialog.dismiss()
                 }
-                .setNegativeButton("Cancel") { dialog, _ -> dialog.dismiss(); onDismiss() }
+                .setNegativeButton(castCancel) { dialog, _ -> dialog.dismiss(); onDismiss() }
                 .setOnDismissListener { onDismiss() }
                 .create()
         }

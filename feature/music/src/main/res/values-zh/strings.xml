@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Screen titles -->
+    <string name="music_browse_music">浏览音乐</string>
+    <string name="music_albums">专辑</string>
+    <string name="music_artists">艺术家</string>
+    <string name="music_tracks">曲目</string>
+    <string name="music_genres">流派</string>
+    <string name="music_playlists">播放列表</string>
+    <string name="music_mood_playlists">心情播放列表</string>
+    <string name="music_smart_playlists">智能播放列表</string>
+
+    <!-- Empty / error states -->
+    <string name="music_no_albums_found">未找到专辑</string>
+    <string name="music_no_artists_found">未找到艺术家</string>
+    <string name="music_no_tracks_found">未找到曲目</string>
+    <string name="music_no_genres_found">未找到流派</string>
+    <string name="music_no_playlists_found">未找到播放列表</string>
+    <string name="music_no_tracks_mood">没有曲目符合此心情</string>
+    <string name="music_no_tracks_criteria">没有曲目符合条件</string>
+    <string name="music_no_music_available">没有可用音乐</string>
+    <string name="music_check_jellyfin_libraries">请检查您的 Jellyfin 媒体库。</string>
+    <string name="music_loading_music">正在加载您的音乐…</string>
+    <string name="music_failed_load_albums">加载专辑失败</string>
+    <string name="music_failed_load_artists">加载艺术家失败</string>
+    <string name="music_failed_load_tracks">加载曲目失败</string>
+    <string name="music_failed_load_more">加载更多失败</string>
+
+    <!-- Playback actions -->
+    <string name="music_play">播放</string>
+    <string name="music_play_all">全部播放</string>
+    <string name="music_shuffle">随机播放</string>
+    <string name="music_add_to_queue">加入队列</string>
+    <string name="music_instant_mix">即时混音</string>
+    <string name="music_creating_mix">正在创建混音…</string>
+    <string name="music_now_playing">正在播放</string>
+    <string name="music_download_album">下载专辑</string>
+    <string name="music_download_track">下载曲目</string>
+
+    <!-- Track / row menus -->
+    <string name="music_go_to_album">前往专辑</string>
+    <string name="music_go_to_artist">前往艺术家</string>
+    <string name="music_more_options">更多选项</string>
+    <string name="music_favorite">收藏</string>
+    <string name="music_unfavorite">取消收藏</string>
+    <string name="music_unknown_artist">未知艺术家</string>
+
+    <!-- Detail screen labels -->
+    <string name="music_mood_playlist">心情播放列表</string>
+    <string name="music_smart_playlist">智能播放列表</string>
+    <string name="music_open">打开</string>
+
+    <!-- Counts -->
+    <string name="music_items_count">%d 项</string>
+    <string name="music_tracks_count">%d 首曲目</string>
+    <string name="music_one_track">1 首曲目</string>
+    <string name="music_playlist_tracks_count">%d 首曲目</string>
+
+    <!-- Home sections -->
+    <string name="music_player_screens">播放器界面</string>
+    <string name="music_player_screens_subtitle">您的音频播放器体验</string>
+    <string name="music_tracks_subtitle">浏览媒体库中的所有歌曲</string>
+    <string name="music_albums_subtitle">探索完整专辑和合集</string>
+    <string name="music_artists_subtitle">发现您喜爱的艺术家</string>
+    <string name="music_genres_subtitle">按流派和心情浏览音乐</string>
+    <string name="music_playlists_subtitle">您精选的播放列表和混音</string>
+    <string name="music_now_playing_subtitle">带控制、歌词和队列的完整播放器</string>
+    <string name="music_ambient_mode">氛围模式</string>
+    <string name="music_ambient_mode_subtitle">随音乐舞动的沉浸式色彩</string>
+    <string name="music_artists_section_subtitle">您喜爱的音乐人</string>
+    <string name="music_view_all">查看全部</string>
+    <string name="music_new_releases">新发布</string>
+    <string name="music_fresh_music">专为您准备的新鲜音乐</string>
+    <string name="music_recently_played">最近播放</string>
+    <string name="music_recently_played_subtitle">继续您的音乐之旅</string>
+    <string name="music_favorite_artists">最爱的艺术家</string>
+    <string name="music_favorite_artists_subtitle">您总想重温的声音</string>
+    <string name="music_latest_albums">最新专辑</string>
+    <string name="music_top_rated_albums">最高评分专辑</string>
+    <string name="music_top_rated_albums_subtitle">社区评分最高</string>
+    <string name="music_favorite_tracks">最爱的曲目</string>
+    <string name="music_favorite_tracks_subtitle">您最爱的歌曲</string>
+
+    <!-- Playlists CRUD -->
+    <string name="music_new_playlist">新建播放列表</string>
+    <string name="music_edit_playlist">编辑播放列表</string>
+    <string name="music_delete_playlist">删除播放列表</string>
+    <string name="music_delete_playlist_confirm">删除“%1$s”？此操作无法撤销。</string>
+    <string name="music_create">创建</string>
+    <string name="music_save">保存</string>
+    <string name="music_edit">编辑</string>
+    <string name="music_delete">删除</string>
+    <string name="music_cancel">取消</string>
+    <string name="music_name_label">名称</string>
+    <string name="music_description_optional">描述（可选）</string>
+    <string name="music_remove_from_playlist">从播放列表移除</string>
+
+    <!-- Paged grid states -->
+    <string name="music_nothing_found">未找到任何内容</string>
+    <string name="music_failed_load">加载失败</string>
+
+    <!-- Built-in smart playlist names -->
+    <string name="music_smart_playlist_top_rated">最高评分</string>
+    <string name="music_smart_playlist_recently_added">最近添加</string>
+    <string name="music_smart_playlist_unplayed">未播放曲目</string>
+    <string name="music_smart_playlist_favorites">收藏</string>
+</resources>

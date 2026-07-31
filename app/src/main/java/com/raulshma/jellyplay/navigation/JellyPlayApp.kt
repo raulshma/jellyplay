@@ -13,6 +13,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -177,6 +178,7 @@ import com.raulshma.jellyplay.feature.arrqueue.navigation.arrQueueSection
 import com.raulshma.jellyplay.feature.calendar.navigation.calendarSection
 import com.raulshma.jellyplay.feature.shortcuts.navigation.shortcutsSection
 import com.raulshma.jellyplay.feature.subtitle.tester.navigation.subtitleTesterSection
+import com.raulshma.jellyplay.update.AppUpdateSheet
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -230,6 +232,39 @@ fun JellyPlayApp(
             )
         }
     }
+
+    // In-app self-update sheet. Rendered at the root so it overlays every
+    // screen (auth, onboarding, main). Stays hidden while Idle; the launch-time
+    // check in MainViewModel flips it to UpdateAvailable when a newer build
+    // exists. Keep this after the `when` so the sheet sits above all content.
+    UpdateSheetOverlay(viewModel)
+}
+
+/**
+ * Collects [MainViewModel.updateState] and shows the [AppUpdateSheet] when an
+ * update flow is active. Centralized here so the launch-time auto-check and
+ * any manual check (Settings) drive the same single sheet.
+ */
+@Composable
+private fun UpdateSheetOverlay(viewModel: MainViewModel) {
+    val state by viewModel.updateState.collectAsStateWithLifecycle()
+    if (state !is com.raulshma.jellyplay.update.UpdateState.Idle) {
+        val context = LocalContext.current
+        AppUpdateSheet(
+            state = state,
+            onDownload = { info -> viewModel.startUpdateDownload(info) },
+            onInstall = { intent ->
+                runCatching { context.startActivity(intent) }
+            },
+            onCancel = { viewModel.dismissUpdate() },
+            onDismiss = { viewModel.dismissUpdate() },
+            buildInstallIntent = {
+                // Only valid in the Downloaded state, where the file is held.
+                val downloaded = state as? com.raulshma.jellyplay.update.UpdateState.Downloaded
+                viewModel.buildInstallIntent(downloaded?.file ?: java.io.File(""))
+            },
+        )
+    }
 }
 
 @Composable
@@ -276,9 +311,19 @@ private fun MainContent(
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
     val isMonochrome = com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme.current
 
+    // `true` once per fresh ViewModel (state-loss restore): process death,
+    // "Don't keep activities", or low-memory eviction — every case where the
+    // player's in-memory state is gone but the saveable nav back stack
+    // survives. Config-change recreate reuses the VM, so this reads false and
+    // rotation/locale keep the player. Captured in `remember` so it is stable
+    // for this Activity's lifetime; rememberNavigationState runs the strip at
+    // most once.
+    val stripPlayerRoutesOnRestore = remember { viewModel.consumeStateLossRestore() }
+
     val navigationState = rememberNavigationState(
         startRoute = Route.Home,
         topLevelRoutes = ALL_TOP_LEVEL_ROUTE_KEYS,
+        stripPlayerRoutesOnRestore = stripPlayerRoutesOnRestore,
     )
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -1560,7 +1605,12 @@ private fun MainNavDisplay(
             audioPlayerSection(navigator)
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }
-            settingsSection(navigator, onLogout) { navigator.navigate(Route.Onboarding) }
+            settingsSection(
+                navigator = navigator,
+                onLogout = onLogout,
+                onSetupWizard = { navigator.navigate(Route.Onboarding) },
+                onCheckForUpdates = { mainViewModel.manualCheckForUpdate() },
+            )
             adminSection(
                 navigator = navigator,
                 isAdmin = { isAdminState.value },

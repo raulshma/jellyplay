@@ -15,6 +15,8 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
+import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelInfo
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.MimeTypes
@@ -202,7 +204,18 @@ internal class PlayerCastController(
 
                 MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUrl))
                     .setMimeType(mimeType)
-                    .setLabel(stream.displayTitle ?: stream.title ?: stream.language)
+                    .setLabel(
+                        stream.displayTitle?.takeIf { it.isNotBlank() }
+                            ?: TrackLabelFormatter.primary(
+                                TrackLabelInfo(
+                                    title = stream.title,
+                                    language = stream.language,
+                                    codec = stream.codec,
+                                    isForced = stream.isForced,
+                                    isDefault = stream.isDefault,
+                                )
+                            )
+                    )
                     .setLanguage(stream.language)
                     .build()
             }

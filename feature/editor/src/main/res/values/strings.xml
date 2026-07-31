@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Editor screen -->
+    <string name="editor_tab_metadata">Metadata</string>
+    <string name="editor_tab_images">Images</string>
+    <string name="editor_tab_subtitles">Subtitles</string>
+    <string name="editor_default_title">Edit Metadata</string>
+    <string name="editor_save">Save</string>
+    <string name="editor_saving">Saving\u2026</string>
+    <string name="editor_dismiss">Dismiss</string>
+
+    <!-- Discard-changes dialog -->
+    <string name="editor_discard_title">Discard changes?</string>
+    <string name="editor_discard_message">You have unsaved edits. Discard them and leave?</string>
+    <string name="editor_discard_action">Discard</string>
+    <string name="editor_keep_editing">Keep editing</string>
+
+    <!-- Metadata tab: section headers -->
+    <string name="editor_section_general">General</string>
+    <string name="editor_section_ratings">Ratings</string>
+    <string name="editor_section_dates_numbers">Dates &amp; Numbers</string>
+    <string name="editor_section_series_settings">Series Settings</string>
+    <string name="editor_section_genres">Genres</string>
+    <string name="editor_section_tags">Tags</string>
+    <string name="editor_section_studios">Studios</string>
+    <string name="editor_section_people">People</string>
+    <string name="editor_section_external_ids">External IDs</string>
+    <string name="editor_section_metadata_locking">Metadata Locking</string>
+
+    <!-- Metadata tab: field labels -->
+    <string name="editor_field_title">Title</string>
+    <string name="editor_field_original_title">Original Title</string>
+    <string name="editor_field_sort_title">Sort Title</string>
+    <string name="editor_field_overview">Overview</string>
+    <string name="editor_field_tagline">Tagline</string>
+    <string name="editor_field_community_rating">Community Rating (0-10)</string>
+    <string name="editor_field_critic_rating">Critic Rating</string>
+    <string name="editor_field_must_be_number">Must be a number</string>
+    <string name="editor_field_official_rating">Official Rating</string>
+    <string name="editor_field_custom_rating">Custom Rating</string>
+    <string name="editor_field_production_year">Production Year</string>
+    <string name="editor_field_premiere_date">Premiere Date</string>
+    <string name="editor_field_end_date">End Date</string>
+    <string name="editor_date_format_hint">YYYY-MM-DD</string>
+    <string name="editor_field_runtime_minutes">Runtime (minutes)</string>
+    <string name="editor_field_episode_number">Episode Number</string>
+    <string name="editor_field_season_number">Season Number</string>
+    <string name="editor_field_status">Status</string>
+    <string name="editor_field_display_order">Display Order</string>
+    <string name="editor_field_air_time">Air Time</string>
+    <string name="editor_field_air_days">Air Days</string>
+    <string name="editor_field_language">Language</string>
+    <string name="editor_field_name">Name</string>
+    <string name="editor_field_type">Type</string>
+    <string name="editor_field_role">Role</string>
+
+    <!-- Metadata tab: status values -->
+    <string name="editor_status_continuing">Continuing</string>
+    <string name="editor_status_ended">Ended</string>
+    <string name="editor_status_unreleased">Unreleased</string>
+
+    <!-- Metadata tab: display order values -->
+    <string name="editor_order_aired">Aired</string>
+    <string name="editor_order_absolute">Absolute</string>
+    <string name="editor_order_dvd">DVD</string>
+    <string name="editor_order_digital">Digital</string>
+    <string name="editor_order_production">Production</string>
+
+    <!-- Metadata tab: days of week (abbreviated to 3 chars via take(3)) -->
+    <string name="editor_day_sunday">Sunday</string>
+    <string name="editor_day_monday">Monday</string>
+    <string name="editor_day_tuesday">Tuesday</string>
+    <string name="editor_day_wednesday">Wednesday</string>
+    <string name="editor_day_thursday">Thursday</string>
+    <string name="editor_day_friday">Friday</string>
+    <string name="editor_day_saturday">Saturday</string>
+
+    <!-- Metadata tab: person types -->
+    <string name="editor_person_type_actor">Actor</string>
+    <string name="editor_person_type_director">Director</string>
+    <string name="editor_person_type_writer">Writer</string>
+    <string name="editor_person_type_producer">Producer</string>
+    <string name="editor_person_type_composer">Composer</string>
+    <string name="editor_person_type_guest_star">GuestStar</string>
+    <string name="editor_person_type_conductor">Conductor</string>
+    <string name="editor_person_type_lyricist">Lyricist</string>
+    <string name="editor_person_type_arranger">Arranger</string>
+    <string name="editor_person_role_as_format">%1$s as %2$s</string>
+
+    <!-- Metadata tab: chip groups -->
+    <string name="editor_add_new_placeholder">Add new\u2026</string>
+    <string name="editor_add_person">Add Person</string>
+    <string name="editor_edit_person">Edit Person</string>
+
+    <!-- Metadata tab: metadata locking -->
+    <string name="editor_lock_all_metadata">Lock all metadata</string>
+    <string name="editor_lock_individual_fields">Lock individual fields:</string>
+    <string name="editor_lock_field_name">Name</string>
+    <string name="editor_lock_field_overview">Overview</string>
+    <string name="editor_lock_field_genres">Genres</string>
+    <string name="editor_lock_field_parental_rating">Parental Rating</string>
+    <string name="editor_lock_field_people">People</string>
+    <string name="editor_lock_field_production_locations">Production Locations</string>
+    <string name="editor_lock_field_studios">Studios</string>
+    <string name="editor_lock_field_tags">Tags</string>
+    <string name="editor_lock_field_runtime">Runtime</string>
+
+    <!-- Metadata tab: generic actions/icons -->
+    <string name="editor_action_collapse">Collapse</string>
+    <string name="editor_action_expand">Expand</string>
+    <string name="editor_action_remove">Remove</string>
+    <string name="editor_action_add">Add</string>
+    <string name="editor_action_edit">Edit</string>
+    <string name="editor_action_cancel">Cancel</string>
+
+    <!-- Images tab -->
+    <string name="editor_images_upload">Upload</string>
+    <string name="editor_images_browse_online">Browse Online</string>
+    <string name="editor_images_none_available">No images available</string>
+    <string name="editor_images_delete_title">Delete Image</string>
+    <string name="editor_images_delete_message">Are you sure you want to delete this %1$s image?</string>
+    <string name="editor_images_delete_action">Delete</string>
+    <string name="editor_images_dimensions_format">%1$dx%2$d</string>
+    <string name="editor_images_upload_title">Upload Image</string>
+    <string name="editor_images_browse_title">Browse Online Images</string>
+    <string name="editor_images_source_file">File</string>
+    <string name="editor_images_source_url">URL</string>
+    <string name="editor_images_preview">Preview</string>
+    <string name="editor_images_select_image">Select Image</string>
+    <string name="editor_images_change_file">Change File</string>
+    <string name="editor_images_image_url">Image URL</string>
+    <string name="editor_images_download_from_url">Download from URL</string>
+    <string name="editor_images_all_providers">All Providers</string>
+    <string name="editor_images_no_images_found">No images found</string>
+    <string name="editor_images_pagination_format">%1$d-%2$d of %3$d</string>
+    <string name="editor_images_previous">Previous</string>
+    <string name="editor_images_next">Next</string>
+    <string name="editor_images_download">Download</string>
+    <string name="editor_images_close">Close</string>
+    <string name="editor_images_select_type">Select Type</string>
+    <string name="editor_images_image_type">Image Type</string>
+    <string name="editor_images_all_types">All Types</string>
+
+    <!-- Image types (enum-like, kept translatable for display) -->
+    <string name="editor_image_type_primary">Primary</string>
+    <string name="editor_image_type_art">Art</string>
+    <string name="editor_image_type_backdrop">Backdrop</string>
+    <string name="editor_image_type_banner">Banner</string>
+    <string name="editor_image_type_box">Box</string>
+    <string name="editor_image_type_box_rear">BoxRear</string>
+    <string name="editor_image_type_disc">Disc</string>
+    <string name="editor_image_type_logo">Logo</string>
+    <string name="editor_image_type_menu">Menu</string>
+    <string name="editor_image_type_thumb">Thumb</string>
+
+    <!-- Subtitles tab -->
+    <string name="editor_subtitles_upload">Upload</string>
+    <string name="editor_subtitles_search_remote">Search Remote</string>
+    <string name="editor_subtitles_none_available">No subtitles available</string>
+    <string name="editor_subtitles_fallback_title">Subtitle %1$d</string>
+    <string name="editor_subtitles_forced">Forced</string>
+    <string name="editor_subtitles_external">External</string>
+    <string name="editor_subtitles_delete_title">Delete Subtitle</string>
+    <string name="editor_subtitles_delete_message">Are you sure you want to delete this subtitle?</string>
+    <string name="editor_subtitles_delete_action">Delete</string>
+    <string name="editor_subtitles_upload_title">Upload Subtitle</string>
+    <string name="editor_subtitles_select_file">Select File (.srt, .ass, .ssa, .vtt)</string>
+    <string name="editor_subtitles_change_file">Change: %1$s</string>
+    <string name="editor_subtitles_forced_subtitle">Forced subtitle</string>
+    <string name="editor_subtitles_hearing_impaired">Hearing impaired</string>
+    <string name="editor_subtitles_download_count_format">%1$d downloads</string>
+    <string name="editor_subtitles_frame_rate_format">%1$sfps</string>
+    <string name="editor_subtitles_search_title">Search Remote Subtitles</string>
+    <string name="editor_subtitles_search">Search</string>
+    <string name="editor_subtitles_no_results">No results found</string>
+    <string name="editor_subtitles_unknown">Unknown</string>
+    <string name="editor_subtitles_perfect_match">Perfect Match</string>
+    <string name="editor_subtitles_label_forced">Forced</string>
+    <string name="editor_subtitles_label_hi">HI</string>
+    <string name="editor_subtitles_label_mt">MT</string>
+    <string name="editor_subtitles_download">Download</string>
+
+</resources>

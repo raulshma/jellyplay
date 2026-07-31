@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">JellyPlay</string>
+    <string name="app_name" translatable="false">JellyPlay</string>
     <string name="open_app_description">Open %1$s</string>
     <string name="tile_paused_label">Paused: %1$s</string>
     <string name="tile_playing_cd">Playing</string>
@@ -22,13 +22,13 @@
     <string name="widget_continue_watching_label">Continue Watching</string>
     <string name="widget_continue_watching_description">Jump back into the shows and movies you started but haven\'t finished.</string>
     <string name="widget_nothing_playing">Nothing playing</string>
-    <string name="widget_open_to_play">Tap to open JellyPlay</string>
+    <string name="widget_open_to_play" translatable="false">Tap to open JellyPlay</string>
     <string name="widget_continue_watching_empty">Nothing to continue yet</string>
     <string name="widget_continue_watching_empty_subtitle">Start watching a show and it will appear here</string>
     <string name="widget_placeholder_title">Track title</string>
     <string name="widget_placeholder_subtitle">Artist name</string>
     <string name="widget_album_art">Album art</string>
-    <string name="widget_app_icon">JellyPlay</string>
+    <string name="widget_app_icon" translatable="false">JellyPlay</string>
     <string name="widget_play_pause">Play or pause</string>
     <string name="widget_next">Next track</string>
     <string name="widget_previous">Previous track</string>
@@ -45,17 +45,17 @@
     <string name="widget_library_recommendations_label">Library Picks</string>
     <string name="widget_library_recommendations_title">Library Picks</string>
     <string name="widget_library_recommendations_subtitle">Because you watched</string>
-    <string name="widget_library_recommendations_description">Personalized picks from your Jellyfin library — based on what you have been watching.</string>
+    <string name="widget_library_recommendations_description" translatable="false">Personalized picks from your Jellyfin library — based on what you have been watching.</string>
     <string name="widget_library_recommendations_empty">No recommendations yet</string>
-    <string name="widget_library_recommendations_empty_subtitle">Open JellyPlay to start exploring your library</string>
+    <string name="widget_library_recommendations_empty_subtitle" translatable="false">Open JellyPlay to start exploring your library</string>
 
     <!-- Seerr Recommendations widget -->
-    <string name="widget_seerr_recommendations_label">Seerr Picks</string>
-    <string name="widget_seerr_recommendations_title">Seerr Picks</string>
+    <string name="widget_seerr_recommendations_label" translatable="false">Seerr Picks</string>
+    <string name="widget_seerr_recommendations_title" translatable="false">Seerr Picks</string>
     <string name="widget_seerr_recommendations_subtitle">Trending this week</string>
-    <string name="widget_seerr_recommendations_description">Trending and upcoming movies and TV from your Seerr (Jellyseerr / Overseerr) server.</string>
-    <string name="widget_seerr_recommendations_empty">Seerr is not connected</string>
-    <string name="widget_seerr_recommendations_empty_subtitle">Configure Seerr in JellyPlay settings to see picks</string>
+    <string name="widget_seerr_recommendations_description" translatable="false">Trending and upcoming movies and TV from your Seerr (Jellyseerr / Overseerr) server.</string>
+    <string name="widget_seerr_recommendations_empty" translatable="false">Seerr is not connected</string>
+    <string name="widget_seerr_recommendations_empty_subtitle" translatable="false">Configure Seerr in JellyPlay settings to see picks</string>
     <string name="widget_seerr_no_recommendations">No recommendations yet</string>
     <string name="widget_seerr_no_recommendations_subtitle">Tap refresh or check back later</string>
 
@@ -83,4 +83,75 @@
     <string name="widget_config_source_upcoming_movies_description">Movies releasing soon</string>
     <string name="widget_config_source_upcoming_tv">Upcoming TV</string>
     <string name="widget_config_source_upcoming_tv_description">Shows premiering soon</string>
+
+    <!-- In-app self-update sheet -->
+    <string name="update_checking">Checking for updates\u2026</string>
+    <string name="update_up_to_date_title">You\'re up to date</string>
+    <string name="update_up_to_date_body" translatable="false">JellyPlay is already the latest version.</string>
+    <string name="update_view_notes">View release notes</string>
+    <string name="update_hide_notes">Hide release notes</string>
+    <string name="update_available_title">Update available — v%1$s</string>
+    <string name="update_no_notes">No release notes provided.</string>
+    <string name="update_no_matching_apk">No matching APK</string>
+    <string name="update_download">Download</string>
+    <string name="update_later">Later</string>
+    <string name="update_downloading">Downloading update\u2026</string>
+    <string name="update_cancel">Cancel</string>
+    <string name="update_ready_title">Ready to install — v%1$s</string>
+    <string name="update_ready_body">The update has been downloaded. Tap Install to continue.</string>
+    <string name="update_install">Install</string>
+    <string name="update_failed_title">Update failed</string>
+    <string name="update_close">Close</string>
+
+    <!-- Shared media transport (content descriptions & labels) -->
+    <string name="media_play">Play</string>
+    <string name="media_pause">Pause</string>
+    <string name="media_next">Next</string>
+    <string name="media_previous">Previous</string>
+    <string name="media_stop">Stop</string>
+    <string name="media_close">Close</string>
+    <string name="media_disconnect">Disconnect</string>
+    <string name="media_rewind_seconds">Rewind 10 seconds</string>
+    <string name="media_forward_seconds">Forward 10 seconds</string>
+
+    <!-- Play On companion screen -->
+    <string name="cast_title">Casting</string>
+    <string name="cast_title_to">Casting to %1$s</string>
+    <string name="cast_open_companion">Open companion</string>
+    <string name="cast_back_seconds">Back 10 seconds</string>
+    <string name="cast_forward_seconds">Forward 30 seconds</string>
+
+    <!-- Floating player overlay -->
+    <string name="floating_player_close">Close floating player</string>
+
+    <!-- Floating player foreground notification -->
+    <string name="floating_player_channel_name">Floating Player</string>
+    <string name="floating_player_channel_desc">Floating media player overlay</string>
+    <string name="floating_player_notification_title" translatable="false">JellyPlay Floating Player</string>
+    <string name="floating_player_notification_text">Media controls are floating on screen</string>
+
+    <!-- Lock screen authentication -->
+    <string name="auth_title_biometric">Authenticate</string>
+    <string name="auth_title_pin">Enter PIN</string>
+    <string name="auth_subtitle">Unlock JellyPlay</string>
+    <string name="pin_incorrect">Incorrect PIN</string>
+    <string name="pin_lockout_now">Too many attempts. Try again.</string>
+    <string name="pin_lockout_seconds">Too many attempts. Try again in %1$ds.</string>
+    <string name="pin_lockout_minutes">Too many attempts. Try again in %1$dm.</string>
+    <string name="pin_lockout_hours">Too many attempts. Try again in %1$dh.</string>
+    <string name="pin_lockout_hours_minutes">Too many attempts. Try again in %1$dh %2$dm.</string>
+
+    <!-- Picture-in-picture actions -->
+    <string name="pip_rewind">Rewind</string>
+    <string name="pip_forward">Forward</string>
+    <string name="pip_next">Next</string>
+
+    <!-- TV navigation drawer -->
+    <string name="nav_now_playing">Now Playing</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Play On device sheet -->
+    <string name="play_on_title">Play On</string>
+    <string name="play_on_no_clients">No Jellyfin clients found. Open JellyPlay or Jellyfin on another device and it will appear here.</string>
+    <string name="play_on_jellyfin_session">Jellyfin session</string>
 </resources>

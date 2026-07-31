@@ -69,7 +69,7 @@ fun LiveTvScreen(
     val badges by overviewViewModel.badges.collectAsStateWithLifecycle()
 
     JellyPlayScreenScaffold(
-        title = "Live TV",
+        title = stringResource(R.string.livetv_screen_title),
         backgroundColor = backgroundColor,
     ) { paddingValues ->
         Column(

@@ -21,11 +21,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import androidx.compose.animation.core.animateFloatAsState
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -61,7 +63,7 @@ fun ArtistsSection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Artists",
+                    text = stringResource(R.string.music_artists),
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp
@@ -70,7 +72,7 @@ fun ArtistsSection(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Your favorite musicians",
+                    text = stringResource(R.string.music_artists_section_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -155,7 +157,7 @@ private fun ViewAllButton(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
-            text = "View All",
+            text = stringResource(R.string.music_view_all),
             style = MaterialTheme.typography.labelLarge.copy(
                 fontWeight = FontWeight.Medium
             ),
@@ -163,7 +165,7 @@ private fun ViewAllButton(
         )
         Icon(
             imageVector = Tabler.Outline.ArrowRight,
-            contentDescription = "View All",
+            contentDescription = stringResource(R.string.music_view_all),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp),
         )

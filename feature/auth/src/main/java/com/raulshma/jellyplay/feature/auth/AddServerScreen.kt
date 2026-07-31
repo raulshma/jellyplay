@@ -51,7 +51,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.auth.R
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -84,7 +86,7 @@ fun AddServerScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "Add Server",
+        title = stringResource(R.string.auth_add_server_title),
         onBack = onBack,
     ) { padding ->
         val adaptiveInfo = LocalAdaptiveInfo.current
@@ -122,12 +124,12 @@ fun AddServerScreen(
                         )
                         Spacer(modifier = Modifier.height(24.dp))
                         Text(
-                            "Connect to Jellyfin",
+                            stringResource(R.string.auth_connect_to_jellyfin),
                             style = MaterialTheme.typography.headlineSmall,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            "Find a server on your network or enter an address manually",
+                            stringResource(R.string.auth_add_server_subtitle),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -175,7 +177,7 @@ fun AddServerScreen(
                         ) {
                             HorizontalDivider(modifier = Modifier.weight(1f))
                             Text(
-                                "or enter manually",
+                                stringResource(R.string.auth_or_enter_manually),
                                 modifier = Modifier.padding(horizontal = 16.dp),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -267,7 +269,7 @@ private fun ScanningRow(onStop: () -> Unit) {
         )
         Spacer(modifier = Modifier.width(12.dp))
         Text(
-            text = "Scanning for servers\u2026",
+            text = stringResource(R.string.auth_scanning_for_servers),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
@@ -278,7 +280,7 @@ private fun ScanningRow(onStop: () -> Unit) {
             contentPadding = androidx.compose.foundation.layout.PaddingValues(),
             modifier = Modifier.then(stopFocusState.focusModifier).tvFocusIndicator(stopFocusState, ShapeCache.smooth12),
         ) {
-            Text("Stop")
+            Text(stringResource(R.string.auth_stop))
         }
     }
 }
@@ -325,12 +327,13 @@ private fun ServerCountRow(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
             }
+            val serversFoundTemplate = if (isScanning) {
+                stringResource(if (serverCount == 1) R.string.auth_server_one_found_scanning else R.string.auth_servers_found_scanning)
+            } else {
+                stringResource(if (serverCount == 1) R.string.auth_server_one_found else R.string.auth_servers_found)
+            }
             Text(
-                text = if (isScanning) {
-                    "$serverCount server${if (serverCount != 1) "s" else ""} found\u2026"
-                } else {
-                    "$serverCount server${if (serverCount != 1) "s" else ""} found"
-                },
+                text = serversFoundTemplate.format(serverCount),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -338,7 +341,7 @@ private fun ServerCountRow(
             )
             Icon(
                 Tabler.Outline.ChevronDown,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = stringResource(if (expanded) R.string.auth_collapse else R.string.auth_expand),
                 modifier = Modifier
                     .size(20.dp)
                     .rotate(chevronRotation),
@@ -394,7 +397,7 @@ private fun DiscoveryFailedRow(onRetry: () -> Unit) {
         )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-            text = "Discovery unavailable",
+            text = stringResource(R.string.auth_discovery_unavailable),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
@@ -405,7 +408,7 @@ private fun DiscoveryFailedRow(onRetry: () -> Unit) {
             contentPadding = androidx.compose.foundation.layout.PaddingValues(),
             modifier = Modifier.then(retryFocusState.focusModifier).tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
         ) {
-            Text("Retry")
+            Text(stringResource(R.string.auth_retry))
         }
     }
 }
@@ -421,7 +424,7 @@ private fun NoServersRow(onRetry: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Text(
-            text = "No servers found on your network",
+            text = stringResource(R.string.auth_no_servers_found),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
@@ -432,7 +435,7 @@ private fun NoServersRow(onRetry: () -> Unit) {
             contentPadding = androidx.compose.foundation.layout.PaddingValues(),
             modifier = Modifier.then(noServersRetryFocusState.focusModifier).tvFocusIndicator(noServersRetryFocusState, ShapeCache.smooth12),
         ) {
-            Text("Retry")
+            Text(stringResource(R.string.auth_retry))
         }
     }
 }
@@ -483,7 +486,7 @@ private fun DiscoveredServerItem(
         }
         Icon(
             Tabler.Outline.CircleCheck,
-            contentDescription = "Connect",
+            contentDescription = stringResource(R.string.auth_connect),
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp),
         )
@@ -507,8 +510,8 @@ private fun ManualEntrySection(
         OutlinedTextField(
             value = uiState.manualAddress,
             onValueChange = onAddressChange,
-            label = { Text("Server Address") },
-            placeholder = { Text("https://jellyfin.example.com") },
+            label = { Text(stringResource(R.string.auth_server_address)) },
+            placeholder = { Text(stringResource(R.string.auth_server_address_hint)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().focusRequester(addressFocusRequester),
             isError = uiState.connectError != null,
@@ -533,7 +536,7 @@ private fun ManualEntrySection(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            Text(if (uiState.isConnecting) "Connecting\u2026" else "Connect")
+            Text(if (uiState.isConnecting) stringResource(R.string.auth_connecting) else stringResource(R.string.auth_connect))
         }
     }
 }

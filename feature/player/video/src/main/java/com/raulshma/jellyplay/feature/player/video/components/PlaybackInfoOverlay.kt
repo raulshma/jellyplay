@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 
 @Composable
@@ -82,70 +84,70 @@ fun PlaybackInfoOverlay(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "Playback Info",
+                text = stringResource(R.string.player_video_playback_info),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
                 color = MaterialTheme.colorScheme.onSurface,
             )
 
-            InfoSection(title = "Media Source") {
+            InfoSection(title = stringResource(R.string.player_video_media_source)) {
                 mediaSource?.let { source ->
-                    InfoRow("Container", source.container ?: "Unknown")
-                    InfoRow("Size", source.size?.let { formatFileSize(it) } ?: "Unknown")
-                    InfoRow("Bitrate", source.bitrate?.let { "${it / 1000} kbps" } ?: "Unknown")
-                    InfoRow("Play Method", playMethod)
+                    InfoRow(stringResource(R.string.player_video_container), source.container ?: stringResource(R.string.player_video_unknown))
+                    InfoRow(stringResource(R.string.player_video_size), source.size?.let { formatFileSize(it) } ?: stringResource(R.string.player_video_unknown))
+                    InfoRow(stringResource(R.string.player_video_bitrate), source.bitrate?.let { "${it / 1000} kbps" } ?: stringResource(R.string.player_video_unknown))
+                    InfoRow(stringResource(R.string.player_video_play_method), playMethod)
                     InfoRow(
-                        "Connection",
-                        if (isConnectionMetered) "Metered" else "Unmetered",
+                        stringResource(R.string.player_video_connection),
+                        if (isConnectionMetered) stringResource(R.string.player_video_metered) else stringResource(R.string.player_video_unmetered),
                     )
                 }
             }
 
             val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
             if (videoStream != null) {
-                InfoSection(title = "Video") {
-                    InfoRow("Codec", videoStream.codec?.uppercase() ?: "Unknown")
+                InfoSection(title = stringResource(R.string.player_video_video)) {
+                    InfoRow(stringResource(R.string.player_video_codec), videoStream.codec?.uppercase() ?: stringResource(R.string.player_video_unknown))
                     InfoRow(
-                        "Resolution",
+                        stringResource(R.string.player_video_resolution),
                         if (videoStream.width != null && videoStream.height != null) {
                             "${videoStream.width}x${videoStream.height}"
-                        } else "Unknown"
+                        } else stringResource(R.string.player_video_unknown)
                     )
-                    InfoRow("Bitrate", videoStream.bitRate?.let { "${it / 1000} kbps" } ?: "Unknown")
-                    
+                    InfoRow(stringResource(R.string.player_video_bitrate), videoStream.bitRate?.let { "${it / 1000} kbps" } ?: stringResource(R.string.player_video_unknown))
+
                     val hdrTypeDetails = listOfNotNull(
                         hdrType,
                         videoStream.videoRangeType,
                         videoStream.videoDoViTitle
                     ).distinct().joinToString(" - ")
-                    
+
                     val videoRange = videoStream.videoRange
                     if (hdrTypeDetails.isNotEmpty()) {
-                        InfoRow("HDR Format", hdrTypeDetails)
+                        InfoRow(stringResource(R.string.player_video_hdr_format), hdrTypeDetails)
                     } else if (videoRange != null) {
-                        InfoRow("Range", videoRange)
+                        InfoRow(stringResource(R.string.player_video_range), videoRange)
                     }
 
                     videoStream.realFrameRate?.let { fps ->
-                        InfoRow("Frame Rate", "${"%.2f".format(fps)} fps")
+                        InfoRow(stringResource(R.string.player_video_frame_rate), "${"%.2f".format(fps)} fps")
                     }
                 }
             }
 
             val audioStreams = mediaStreams.filter { it.type == StreamType.AUDIO }
             if (audioStreams.isNotEmpty()) {
-                InfoSection(title = "Audio") {
+                InfoSection(title = stringResource(R.string.player_audio)) {
                     audioStreams.forEachIndexed { index, stream ->
                         val label = stream.language?.let { lang ->
                             stream.title?.let { "$lang - $it" } ?: lang
-                        } ?: stream.title ?: "Track ${index + 1}"
-                        
-                        val codecUpper = stream.codec?.uppercase() ?: "Unknown"
+                        } ?: stream.title ?: stringResource(R.string.player_video_track_n, index + 1)
+
+                        val codecUpper = stream.codec?.uppercase() ?: stringResource(R.string.player_video_unknown)
                         val matchText = (stream.title ?: "") + " " + (stream.displayTitle ?: "")
                         val isAtmos = matchText.contains("atmos", ignoreCase = true) || codecUpper.contains("ATMOS", ignoreCase = true)
                         val isDtsX = matchText.contains("dts:x", ignoreCase = true) || matchText.contains("dtsx", ignoreCase = true) || codecUpper.contains("DTS", ignoreCase = true) && matchText.contains("x", ignoreCase = true)
-                        
+
                         val audioFormat = buildString {
                             append(codecUpper)
                             if (isAtmos && !codecUpper.contains("ATMOS")) append(" (Atmos)")
@@ -154,7 +156,7 @@ fun PlaybackInfoOverlay(
 
                         InfoRow(label, audioFormat)
                         if (stream.channels != null) {
-                            InfoRow("Channels", "${stream.channels}ch")
+                            InfoRow(stringResource(R.string.player_video_channels), "${stream.channels}ch")
                         }
                     }
                 }
@@ -162,32 +164,32 @@ fun PlaybackInfoOverlay(
 
             val subtitleStreams = mediaStreams.filter { it.type == StreamType.SUBTITLE }
             if (subtitleStreams.isNotEmpty()) {
-                InfoSection(title = "Subtitles") {
+                InfoSection(title = stringResource(R.string.player_subtitles)) {
                     subtitleStreams.forEach { stream ->
-                        val label = stream.language ?: stream.title ?: "Unknown"
-                        InfoRow(label, if (stream.isDefault) "Default" else "")
+                        val label = stream.language ?: stream.title ?: stringResource(R.string.player_video_unknown)
+                        InfoRow(label, if (stream.isDefault) stringResource(R.string.player_track_default) else "")
                     }
                 }
             }
 
-            InfoSection(title = "Active Controls") {
-                InfoRow("Player Engine", playerType)
-                InfoRow("Decoder Mode", decoderMode)
-                InfoRow("Speed", "${playbackSpeed}x")
-                if (audioDelayMs != 0L) InfoRow("Audio Delay", "${audioDelayMs} ms")
-                InfoRow("Aspect Ratio", aspectRatio)
-                InfoRow("Night Mode", if (nightModeEnabled) nightModeStrength.displayName else "Off")
-                InfoRow("Dialogue Boost", if (dialogueBoostEnabled) dialogueBoostStrength.displayName else "Off")
-                InfoRow("Audio Passthrough", if (audioPassthrough) "On" else "Off")
-                
-                val activeAudio = audioTracks.find { it.isSelected }?.label ?: "Unknown"
-                InfoRow("Active Audio", activeAudio)
-                val activeSubtitle = subtitleTracks.find { it.isSelected }?.label ?: "None"
-                InfoRow("Active Subtitle", activeSubtitle)
+            InfoSection(title = stringResource(R.string.player_video_active_controls)) {
+                InfoRow(stringResource(R.string.player_video_player_engine), playerType)
+                InfoRow(stringResource(R.string.player_video_decoder_mode), decoderMode)
+                InfoRow(stringResource(R.string.player_video_speed), "${playbackSpeed}x")
+                if (audioDelayMs != 0L) InfoRow(stringResource(R.string.player_video_audio_delay), "${audioDelayMs} ms")
+                InfoRow(stringResource(R.string.player_video_aspect_ratio_label), aspectRatio)
+                InfoRow(stringResource(R.string.player_video_night_mode_label), if (nightModeEnabled) nightModeStrength.displayName else stringResource(R.string.player_video_off))
+                InfoRow(stringResource(R.string.player_video_dialogue_boost_label), if (dialogueBoostEnabled) dialogueBoostStrength.displayName else stringResource(R.string.player_video_off))
+                InfoRow(stringResource(R.string.player_video_audio_passthrough), if (audioPassthrough) stringResource(R.string.player_video_on) else stringResource(R.string.player_video_off))
+
+                val activeAudio = audioTracks.find { it.isSelected }?.label ?: stringResource(R.string.player_video_unknown)
+                InfoRow(stringResource(R.string.player_video_active_audio), activeAudio)
+                val activeSubtitle = subtitleTracks.find { it.isSelected }?.label ?: stringResource(R.string.player_track_none)
+                InfoRow(stringResource(R.string.player_video_active_subtitle), activeSubtitle)
             }
 
             if (playerError != null) {
-                InfoSection(title = "Player Errors") {
+                InfoSection(title = stringResource(R.string.player_video_player_errors)) {
                     Text(
                         text = playerError,
                         style = MaterialTheme.typography.bodySmall,

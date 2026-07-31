@@ -138,6 +138,11 @@ fun VideoStatsOverlay(
             if (stats.bufferSizeBytes > 0) {
                 StatsRow("Buffer Size", formatBytes(stats.bufferSizeBytes))
             }
+            // Sync / display diagnostics — null-safe: rows hidden when absent.
+            stats.voFrameDropCount?.let { StatsRow("VO Dropped Frames", "$it") }
+            stats.avsyncMs?.let { StatsRow("A/V Sync", "${formatFixed(it.toDouble(), 1)} ms") }
+            stats.voDelayedMs?.let { StatsRow("VO Delay", "${formatFixed(it.toDouble(), 1)} ms") }
+            stats.displayFps?.let { StatsRow("Display Rate", "${formatFixed(it.toDouble(), 2)} Hz") }
         }
 
         StatsSection("Engine") {

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
 import com.raulshma.jellyplay.core.model.PersonInfo
@@ -980,13 +981,19 @@ class LibraryApiClientImpl @Inject constructor(
         name: String,
         overview: String?,
         itemIds: List<String>,
+        mediaType: MediaType,
     ): Result<String> = engine.apiResultWithRetry {
         val userId = engine.currentUser.value?.id?.toUUID()
+        // Jellyfin tags a playlist with a single media type so the server can
+        // sort/limit it correctly. Music callers (the default) keep AUDIO;
+        // video detail screens pass VIDEO. Without this, a playlist created
+        // from a movie would be mislabelled AUDIO.
+        val sdkMediaType = if (mediaType.isAudioType) SdkMediaType.AUDIO else SdkMediaType.VIDEO
         val dto = CreatePlaylistDto(
             name = name,
             ids = itemIds.map { it.toUUID() },
             userId = userId,
-            mediaType = SdkMediaType.AUDIO,
+            mediaType = sdkMediaType,
             users = emptyList(),
             isPublic = false,
         )

@@ -10,10 +10,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.onboarding.R
 
 @Composable
 fun PerformanceStep(
@@ -28,8 +30,8 @@ fun PerformanceStep(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OnboardingStepScaffold(
-            title = "Performance",
-            subtitle = "Optimize the app for your device",
+            title = stringResource(R.string.onboarding_performance_title),
+            subtitle = stringResource(R.string.onboarding_performance_subtitle),
             icon = Tabler.Outline.Bolt,
             onNext = {},
         ) {
@@ -50,8 +52,8 @@ fun PerformanceStep(
             Spacer(Modifier.height(4.dp))
 
             OnboardingToggleRow(
-                title = "Enable Performance Mode",
-                subtitle = "Lower-end device optimization",
+                title = stringResource(R.string.onboarding_performance_enable),
+                subtitle = stringResource(R.string.onboarding_performance_enable_subtitle),
                 checked = performanceMode,
                 onCheckedChange = onPerformanceModeChange,
             )

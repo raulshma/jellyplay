@@ -87,14 +87,14 @@ fun RecordDialog(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = onDismiss) { Text("Close") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_close)) }
                 },
             )
         }
         RecordDialogState.Requesting -> AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Recording…") },
-            text = { Text("Scheduling timer") },
+            title = { Text(stringResource(R.string.livetv_recording_in_progress)) },
+            text = { Text(stringResource(R.string.livetv_scheduling_timer)) },
             confirmButton = {},
             dismissButton = {},
         )
@@ -102,14 +102,14 @@ fun RecordDialog(
             onDismissRequest = onDismiss,
             title = { Text(stringResource(R.string.livetv_record_success)) },
             text = { Text(stringResource(R.string.livetv_record_success)) },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+            confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_done)) } },
             dismissButton = {},
         )
         is RecordDialogState.Error -> AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text(stringResource(R.string.livetv_record_failed)) },
             text = { Text(state.message, modifier = Modifier) },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+            confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_ok)) } },
             dismissButton = {},
         )
     }

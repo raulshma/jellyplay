@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Per-library new-media notification -->
+    <string name="notification_new_in_library_count">%1$d neu in %2$s</string>
+    <string name="notification_more_count">+%1$d weitere</string>
+
+    <!-- Global new-media summary notification -->
+    <string name="notification_new_items_added">%1$d neue Medien hinzugefügt</string>
+    <string name="notification_across_libraries">Über %1$d Mediatheken</string>
+
+    <!-- Per-item notification action buttons -->
+    <string name="notification_action_mark_seen">Als gesehen markieren</string>
+    <string name="notification_action_open">Öffnen</string>
+
+    <!-- Per-library notification channel -->
+    <string name="notification_channel_new_in_library">Neu in %1$s</string>
+    <string name="notification_channel_new_in_library_desc">Benachrichtigungen für neue Medien in %1$s</string>
+
+    <!-- Summary notification channel -->
+    <string name="notification_channel_summary">Neue Medien</string>
+    <string name="notification_channel_summary_desc">Zusammenfassung neuer Medienbenachrichtigungen</string>
+</resources>
