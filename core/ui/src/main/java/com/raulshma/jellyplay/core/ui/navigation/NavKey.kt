@@ -238,6 +238,18 @@ val Route.isFullScreen: Boolean
         this is Route.Onboarding || this is Route.PhotoViewer
 
 /**
+ * Routes that mount a *player* — i.e. hold live playback state (ExoPlayer /
+ * equalizer / live stream) that does **not** round-trip across state loss.
+ * Unlike [isFullScreen], this excludes transient full-screen overlays
+ * (onboarding / ambient / photo) whose restore is harmless. Used by
+ * [rememberNavigationState] to strip only the routes that would auto-play a
+ * stale item/position after the OS reclaimed their in-memory state.
+ */
+val Route.isPlayer: Boolean
+    get() = this is Route.VideoPlayer || this is Route.LiveTvChannelPlayer ||
+        this is Route.AudioPlayer
+
+/**
  * Routes that present as a modal/bottom-sheet-style overlay rather than a
  * push-on-the-stack navigation. Centralised here so the transition
  * `transitionSpec` and `popTransitionSpec` lambdas do not duplicate the set;

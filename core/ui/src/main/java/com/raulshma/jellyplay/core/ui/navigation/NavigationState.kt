@@ -21,6 +21,7 @@ class NavigationState(
 fun rememberNavigationState(
     startRoute: NavKey,
     topLevelRoutes: Set<NavKey>,
+    stripPlayerRoutesOnRestore: Boolean = false,
 ): NavigationState {
     // Restore the selected top-level tab across process death. The saver
     // serializes the current tab's NavKey.toString() (data class/object
@@ -38,6 +39,29 @@ fun rememberNavigationState(
     )) { mutableStateOf(startRoute) }
 
     val backStacks = topLevelRoutes.associateWith { key -> rememberNavBackStack(key) }
+
+    // On a state-loss restore (OS-killed process, "Don't keep activities", or
+    // low-memory eviction), the saveable Navigation 3 back stack round-trips a
+    // pushed `Route.VideoPlayer(...)` etc. — but the player's in-memory state is
+    // gone, so leaving it on the stack would re-mount VideoPlayerScreen and
+    // auto-play a stale item/position (episode auto-advance mutates the VM in
+    // place without pushing a new route, so the saved route is always stale).
+    // Drop just the player routes; onboarding/ambient/photo are harmless to
+    // restore. `remember` bounds the strip to once per Activity composition —
+    // it cannot re-fire and remove a player the user re-opened after restore.
+    // Stripping synchronously here (before NavDisplay observes the stack) means
+    // VideoPlayerScreen never mounts for the stale route; reliable resume is
+    // via the Home "Continue Watching" row, which reads fresh server UserData.
+    // The caller passes false on a config-change recreate (same ViewModel), so
+    // rotation/locale keep the player intact.
+    if (stripPlayerRoutesOnRestore) {
+        remember(Unit) {
+            backStacks.values.forEach { stack ->
+                stack.removeAll { (it as? Route)?.isPlayer == true }
+            }
+            true
+        }
+    }
 
     return remember(startRoute, topLevelRoutes) {
         NavigationState(startRoute, topLevelRoute, backStacks)

@@ -37,6 +37,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
+import java.util.concurrent.atomic.AtomicBoolean
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -120,6 +121,21 @@ class MainViewModel @Inject constructor(
 
     private val _pendingRoute = stateFlow<Route?>(null)
     val pendingRoute = _pendingRoute.flow
+
+    /**
+     * `true` only on a fresh ViewModel construction — i.e. a restore *after
+     * state loss*, not a config-change recreate (which reuses the same
+     * ViewModel via `onRetainNonConfigurationInstance`). Covers every case
+     * where the player's in-memory state is gone but the saveable Navigation 3
+     * back stack round-trips: OS-killed process, "Don't keep activities", and
+     * low-memory activity eviction. Consumed exactly once (first caller wins);
+     * `MainContent` captures the result in `remember { }` so it holds for the
+     * lifetime of this Activity's composition, while a config-change recreate
+     * (same VM) re-reads `false` and keeps any player the user re-opened.
+     * See [com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState].
+     */
+    private val _isStateLossRestore = AtomicBoolean(true)
+    fun consumeStateLossRestore(): Boolean = _isStateLossRestore.getAndSet(false)
 
     private val _pendingSearchQuery = stateFlow<String?>(null)
     val pendingSearchQuery = _pendingSearchQuery.flow
