@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -41,6 +42,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
+import com.raulshma.jellyplay.feature.player.live.R
 
 /**
  * Bottom sheet for choosing the live TV stream delivery method (Auto /
@@ -74,7 +76,7 @@ fun LiveStreamOptionSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                "Live Stream",
+                stringResource(R.string.live_stream_title),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
@@ -82,7 +84,7 @@ fun LiveStreamOptionSheet(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Controls how the live tuner is delivered. Switching re-opens the tuner and may briefly re-buffer.",
+                stringResource(R.string.live_stream_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp),
@@ -166,8 +168,9 @@ fun LiveStreamOptionSheet(
     }
 }
 
+@Composable
 private fun LiveStreamOption.description(): String = when (this) {
-    LiveStreamOption.AUTO -> "Let the server pick (direct stream when possible)"
-    LiveStreamOption.DIRECT_STREAM -> "Read the open tuner directly (best quality)"
-    LiveStreamOption.TRANSCODE -> "Re-encode on the server (lower bandwidth)"
+    LiveStreamOption.AUTO -> stringResource(R.string.live_option_auto_desc)
+    LiveStreamOption.DIRECT_STREAM -> stringResource(R.string.live_option_direct_desc)
+    LiveStreamOption.TRANSCODE -> stringResource(R.string.live_option_transcode_desc)
 }

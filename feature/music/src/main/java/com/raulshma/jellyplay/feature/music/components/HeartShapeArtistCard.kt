@@ -27,10 +27,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import androidx.compose.animation.core.animateFloatAsState
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -114,7 +116,7 @@ fun HeartShapeArtistCard(
             ) {
                 Icon(
                     imageVector = Tabler.Outline.PlayerPlay,
-                    contentDescription = "Play",
+                    contentDescription = stringResource(R.string.music_play),
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(18.dp),
                 )

@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun ActivityBarChart(
@@ -55,7 +57,7 @@ fun ActivityBarChart(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                "No activity data available",
+                stringResource(R.string.admin_no_activity_data),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -144,7 +146,7 @@ fun HorizontalBreakdownChart(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                "No breakdown data available",
+                stringResource(R.string.admin_no_breakdown_data),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -330,7 +332,7 @@ fun PieChart(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                "No data available",
+                stringResource(R.string.admin_no_data),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -445,7 +447,7 @@ fun TrendLineChart(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                "No trend data available",
+                stringResource(R.string.admin_no_trend_data),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -648,7 +650,7 @@ fun WatchTimeCard(
             if (seconds == 0L) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "No watch time data available",
+                    stringResource(R.string.admin_no_watch_time_data),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -778,12 +780,15 @@ fun ComparisonCard(
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "You watched ${String.format(java.util.Locale.getDefault(), "%.0f", kotlin.math.abs(percentageChange))}% ${if (isPositive) "more" else "less"} this month",
+                    text = stringResource(
+                        if (isPositive) R.string.admin_watched_more else R.string.admin_watched_less,
+                        String.format(java.util.Locale.getDefault(), "%.0f", kotlin.math.abs(percentageChange))
+                    ),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "${formatDuration(currentMinutes)} vs ${formatDuration(previousMinutes)} last month",
+                    stringResource(R.string.admin_duration_vs_last, formatDuration(currentMinutes), formatDuration(previousMinutes)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.downloads.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -19,18 +20,18 @@ import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 /** How the downloaded library is sorted. */
-enum class OfflineLibrarySort(val label: String) {
-    RECENT("Recent"),
-    NAME("Name (A–Z)"),
-    RATING("Rating"),
-    SIZE("Size"),
+enum class OfflineLibrarySort(val labelRes: Int) {
+    RECENT(R.string.downloads_sort_recent),
+    NAME(R.string.downloads_sort_name),
+    RATING(R.string.downloads_sort_rating),
+    SIZE(R.string.downloads_sort_size),
 }
 
 /** Coarse media-type filter for the library tabs. */
-enum class OfflineLibraryFilter(val label: String) {
-    ALL("All"),
-    VIDEOS("Videos"),
-    MUSIC("Music"),
+enum class OfflineLibraryFilter(val labelRes: Int) {
+    ALL(R.string.downloads_filter_all),
+    VIDEOS(R.string.downloads_filter_videos),
+    MUSIC(R.string.downloads_filter_music),
 }
 
 data class StorageSummary(val totalBytes: Long, val itemCount: Int)

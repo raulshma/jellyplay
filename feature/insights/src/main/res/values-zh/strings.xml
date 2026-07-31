@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="insights_title_watch_progress">观看进度</string>
+    <string name="insights_cd_share">分享</string>
+    <string name="insights_cd_configure_heatmap">配置热力图</string>
+    <string name="insights_filter_type">筛选类型</string>
+    <string name="insights_select_year">选择年份</string>
+    <string name="insights_loading">加载中…</string>
+    <string name="insights_plugin_missing_message">请在 Jellyfin 服务器上安装 Playback Reporting 插件以获取详细的热力图数据。当前显示的是来自观看历史的基本活动。</string>
+    <string name="insights_no_activity_for_year">%1$d 没有记录观看活动。播放内容以开始填充你的一年。</string>
+    <string name="insights_activity_grid">活动网格</string>
+    <string name="insights_cd_previous_year">上一年</string>
+    <string name="insights_cd_next_year">下一年</string>
+    <string name="insights_stat_current_streak">当前连续</string>
+    <string name="insights_stat_longest_streak">最长连续</string>
+    <string name="insights_stat_active_days">活跃天数</string>
+    <string name="insights_days_format">%1$d 天</string>
+    <string name="insights_day_sun">周日</string>
+    <string name="insights_day_tue">周二</string>
+    <string name="insights_day_thu">周四</string>
+    <string name="insights_day_sat">周六</string>
+    <string name="insights_legend_less">较少</string>
+    <string name="insights_legend_more">较多</string>
+    <string name="insights_duration_hm">%1$d小时 %2$d分钟</string>
+    <string name="insights_duration_m">%1$d分钟</string>
+    <string name="insights_duration_under_minute">不足 1 分钟</string>
+    <string name="insights_no_activity">无活动</string>
+    <string name="insights_minutes_watched">已观看 %1$d 分钟</string>
+    <string name="insights_played">已播放</string>
+    <string name="insights_share_chooser_title">分享观看进度</string>
+
+    <plurals name="insights_heatmap_summary">
+        <item quantity="other">%1$d 的观看活动热力图。%2$d 个活跃日。</item>
+    </plurals>
+
+    <plurals name="insights_sessions_watched">
+        <item quantity="other">%1$d 个会话 &#183; 已观看 %2$s</item>
+    </plurals>
+</resources>

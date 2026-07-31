@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -23,6 +24,7 @@ import com.composables.icons.tabler.outline.Subtitles
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.SyncPlayAccessOption
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.feature.admin.R
 
 /**
  * Profile-tab permission toggles and options that have no home in the existing
@@ -39,12 +41,12 @@ fun ProfilePermissionsSection(
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         UserEditSection(
-            title = "Management & control",
-            description = "Server, collection, and device controls.",
+            title = stringResource(R.string.admin_management_control),
+            description = stringResource(R.string.admin_management_control_desc),
         ) {
             SettingToggleItem(
                 icon = Tabler.Outline.Stack,
-                title = "Allow collection management",
+                title = stringResource(R.string.admin_allow_collection_mgmt),
                 subtitle = "",
                 checked = policy.enableCollectionManagement,
                 onCheckedChange = { onPolicyChange(policy.copy(enableCollectionManagement = it)) },
@@ -52,7 +54,7 @@ fun ProfilePermissionsSection(
             )
             SettingToggleItem(
                 icon = Tabler.Outline.Subtitles,
-                title = "Allow subtitle management",
+                title = stringResource(R.string.admin_allow_subtitle_mgmt),
                 subtitle = "",
                 checked = policy.enableSubtitleManagement,
                 onCheckedChange = { onPolicyChange(policy.copy(enableSubtitleManagement = it)) },
@@ -60,7 +62,7 @@ fun ProfilePermissionsSection(
             )
             SettingToggleItem(
                 icon = Tabler.Outline.Pointer,
-                title = "Allow remote control of shared devices",
+                title = stringResource(R.string.admin_allow_remote_shared),
                 subtitle = "",
                 checked = policy.enableSharedDeviceControl,
                 onCheckedChange = { onPolicyChange(policy.copy(enableSharedDeviceControl = it)) },
@@ -68,8 +70,8 @@ fun ProfilePermissionsSection(
             )
             SettingToggleItem(
                 icon = Tabler.Outline.Cpu,
-                title = "Force transcoding of remote media sources",
-                subtitle = "Transcode all remote streams regardless of client support",
+                title = stringResource(R.string.admin_force_transcoding_remote),
+                subtitle = stringResource(R.string.admin_force_transcoding_remote_desc),
                 checked = policy.forceRemoteSourceTranscoding,
                 onCheckedChange = { onPolicyChange(policy.copy(forceRemoteSourceTranscoding = it)) },
                 index = 3, count = 4,
@@ -77,8 +79,8 @@ fun ProfilePermissionsSection(
         }
 
         UserEditSection(
-            title = "Streaming",
-            description = "SyncPlay and remote bitrate limits.",
+            title = stringResource(R.string.admin_streaming),
+            description = stringResource(R.string.admin_streaming_desc),
         ) {
             // SyncPlay access — single-select chips.
             Text(
@@ -110,8 +112,8 @@ fun ProfilePermissionsSection(
                     val mb = input.toDoubleOrNull() ?: 0.0
                     onPolicyChange(policy.copy(remoteClientBitrateLimit = (mb * 1_000_000).toInt()))
                 },
-                label = { Text("Remote client bitrate limit") },
-                supportingText = { Text("Mbps. Blank = unlimited") },
+                label = { Text(stringResource(R.string.admin_remote_bitrate_limit)) },
+                supportingText = { Text(stringResource(R.string.admin_remote_bitrate_limit_desc)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),

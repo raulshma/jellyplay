@@ -215,7 +215,8 @@ class ExoLiveEngine(
         override fun onPlayerError(error: PlaybackException) {
             // Capture both a short message and the full stacktrace-grade text
             // so the error overlay can show an expandable details section.
-            _errorMessage.value = error.localizedMessage ?: "Playback error"
+            _errorMessage.value = error.localizedMessage
+                ?: appContext.getString(com.raulshma.jellyplay.feature.player.live.R.string.live_error_playback_fallback)
             _errorDetail.value = error.toString()
             // Gate on IDLE — ExoPlayer can fire onPlayerError repeatedly during
             // a rebuffer storm and we only want one fallback trigger.

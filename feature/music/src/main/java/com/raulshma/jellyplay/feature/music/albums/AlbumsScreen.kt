@@ -21,8 +21,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.feature.music.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -62,7 +64,7 @@ fun AlbumsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Albums",
+        title = stringResource(R.string.music_albums),
         onBack = onBack,
         actions = {
             var showSortMenu by remember { mutableStateOf(false) }
@@ -112,7 +114,7 @@ fun AlbumsScreen(
                 albums.loadState.refresh is LoadState.Error -> {
                     ErrorScreen(
                         message = (albums.loadState.refresh as LoadState.Error).error.localizedMessage
-                            ?: "Failed to load albums",
+                            ?: stringResource(R.string.music_failed_load_albums),
                         onRetry = { albums.refresh() },
                     )
                 }
@@ -120,7 +122,7 @@ fun AlbumsScreen(
                     if (albums.itemCount == 0) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Disc,
-                            title = "No albums found",
+                            title = stringResource(R.string.music_no_albums_found),
                         )
                     } else {
                         val adaptiveInfo = LocalAdaptiveInfo.current
@@ -167,7 +169,7 @@ fun AlbumsScreen(
                 }
                 is LoadState.Error -> {
                     Text(
-                        text = appendState.error.localizedMessage ?: "Failed to load more",
+                        text = appendState.error.localizedMessage ?: stringResource(R.string.music_failed_load_more),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier

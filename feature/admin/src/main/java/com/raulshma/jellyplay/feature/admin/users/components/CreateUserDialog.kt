@@ -8,7 +8,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun CreateUserDialog(
@@ -21,13 +23,13 @@ fun CreateUserDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New User") },
+        title = { Text(stringResource(R.string.admin_new_user_title)) },
         text = {
             androidx.compose.foundation.layout.Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = onNameChange,
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.admin_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -35,7 +37,7 @@ fun CreateUserDialog(
                 OutlinedTextField(
                     value = password,
                     onValueChange = onPasswordChange,
-                    label = { Text("Password (optional)") },
+                    label = { Text(stringResource(R.string.admin_password_optional)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
@@ -46,10 +48,10 @@ fun CreateUserDialog(
             TextButton(
                 onClick = onConfirm,
                 enabled = name.isNotBlank(),
-            ) { Text("Create") }
+            ) { Text(stringResource(R.string.admin_create)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.admin_cancel)) }
         },
     )
 }

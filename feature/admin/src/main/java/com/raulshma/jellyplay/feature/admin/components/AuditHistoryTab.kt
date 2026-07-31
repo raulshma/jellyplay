@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.model.AuditLogEntry
 import com.raulshma.jellyplay.core.model.CleanupActionType
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.feature.admin.R
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -56,7 +58,7 @@ fun AuditHistoryTab(
         ) {
             ScreenEmptyState(
                 icon = Tabler.Outline.Clock,
-                title = "No audit history yet",
+                title = stringResource(R.string.admin_no_audit_history),
             )
         }
         return

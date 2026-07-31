@@ -42,6 +42,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -111,7 +113,7 @@ fun OfflineSeriesScreen(
     )
 
     if (viewModel.isLoading && seriesItem == null) {
-        JellyPlayScreenScaffold(title = "Loading...", onBack = onBack) { ScreenLoadingState() }
+        JellyPlayScreenScaffold(title = stringResource(R.string.downloads_loading), onBack = onBack) { ScreenLoadingState() }
         return
     }
 
@@ -182,7 +184,9 @@ fun OfflineSeriesScreen(
                                     Icon(Tabler.Outline.DeviceFloppy, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                                     Spacer(Modifier.width(4.dp))
                                     val parts = buildList {
-                                        if (downloadedEpisodeCount > 0) add("$downloadedEpisodeCount episodes")
+                                        if (downloadedEpisodeCount > 0) {
+                                            add(pluralStringResource(R.plurals.downloads_episodes_count, downloadedEpisodeCount, downloadedEpisodeCount))
+                                        }
                                         if (totalSizeBytes > 0) add(totalSizeBytes.formatBytes())
                                     }
                                     Text(parts.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
@@ -256,7 +260,7 @@ fun OfflineSeriesScreen(
                 ) {
                     Icon(
                         Tabler.Outline.Trash,
-                        contentDescription = "Delete downloads",
+                        contentDescription = stringResource(R.string.downloads_delete_downloads_title),
                         tint = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface,
                     )
                 }
@@ -333,13 +337,13 @@ private fun InfoRow(series: OfflineMediaItem) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Tabler.Outline.Check,
-                    contentDescription = "Watched",
+                    contentDescription = stringResource(R.string.downloads_watched),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    text = "Watched",
+                    text = stringResource(R.string.downloads_watched_label),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.primary,
                 )

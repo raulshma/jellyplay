@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Downloads feature user-facing strings -->
+
+    <!-- Screen titles / scaffolds -->
+    <string name="downloads_screen_title">Téléchargements</string>
+    <string name="downloads_library_title">Téléchargé</string>
+    <string name="downloads_loading">Chargement…</string>
+    <string name="downloads_not_found">Introuvable</string>
+    <string name="downloads_download_unavailable">Ce téléchargement n\'est plus disponible</string>
+
+    <!-- Empty states -->
+    <string name="downloads_empty_title">Aucun téléchargement</string>
+    <string name="downloads_empty_description">Le contenu téléchargé apparaîtra ici</string>
+    <string name="downloads_no_downloaded_content">Aucun contenu téléchargé</string>
+    <string name="downloads_no_matches">Aucun résultat</string>
+    <string name="downloads_no_items_in_category">Aucun élément téléchargé dans cette catégorie</string>
+    <string name="downloads_no_episodes_season">Aucun épisode téléchargé pour cette saison</string>
+
+    <!-- Storage / counts -->
+    <string name="downloads_storage_used">Espace utilisé : %1$s</string>
+    <string name="downloads_on_device">· %1$s sur l\'appareil</string>
+    <plurals name="downloads_item_count">
+        <item quantity="one">%1$d élément</item>
+        <item quantity="many">%1$d éléments</item>
+        <item quantity="other">%1$d éléments</item>
+    </plurals>
+    <plurals name="downloads_episodes_count">
+        <item quantity="one">%1$d épisode</item>
+        <item quantity="many">%1$d épisodes</item>
+        <item quantity="other">%1$d épisodes</item>
+    </plurals>
+    <string name="downloads_episodes_count_with_size">%1$d épisodes · %2$s</string>
+    <string name="downloads_selected_count">%1$d sélectionné(s)</string>
+
+    <!-- Common actions / buttons -->
+    <string name="downloads_delete">Supprimer</string>
+    <string name="downloads_cancel">Annuler</string>
+    <string name="downloads_close">Fermer</string>
+    <string name="downloads_action_play">Lire</string>
+    <string name="downloads_action_pause">Pause</string>
+    <string name="downloads_action_resume">Reprendre</string>
+    <string name="downloads_action_retry">Réessayer</string>
+    <string name="downloads_action_cancel">Annuler</string>
+    <string name="downloads_action_delete">Supprimer</string>
+    <string name="downloads_action_lower_priority">Baisser la priorité</string>
+    <string name="downloads_action_move_to_front">Déplacer en tête</string>
+    <string name="downloads_action_select_all">Tout sélectionner</string>
+    <string name="downloads_action_clear_selection">Effacer la sélection</string>
+    <string name="downloads_select_all">Tout sélectionner</string>
+    <string name="downloads_deselect_all">Tout désélectionner</string>
+    <string name="downloads_clear_cd">Effacer</string>
+    <string name="downloads_search_cd">Rechercher</string>
+    <string name="downloads_sort_cd">Trier</string>
+    <string name="downloads_search_downloads_placeholder">Rechercher des téléchargements…</string>
+    <string name="downloads_selection_hint">Maintenez un téléchargement pour le sélectionner et appliquer des actions groupées</string>
+
+    <!-- Delete dialogs -->
+    <string name="downloads_delete_download_title">Supprimer le téléchargement</string>
+    <string name="downloads_delete_download_cd">Supprimer le téléchargement</string>
+    <string name="downloads_delete_download_message">Supprimer \"%1$s\" de votre appareil ? Cela libère %2$s.</string>
+    <string name="downloads_delete_downloads_title">Supprimer les téléchargements</string>
+    <plurals name="downloads_delete_downloads_message">
+        <item quantity="one">Supprimer %1$d téléchargement sélectionné de votre appareil ?</item>
+        <item quantity="many">Supprimer %1$d téléchargements sélectionnés de votre appareil ?</item>
+        <item quantity="other">Supprimer %1$d téléchargements sélectionnés de votre appareil ?</item>
+    </plurals>
+    <string name="downloads_frees_up_sentence"> Cela libère %1$s.</string>
+    <string name="downloads_delete_episode_title">Supprimer l\'épisode</string>
+    <string name="downloads_delete_episode_cd">Supprimer l\'épisode</string>
+    <string name="downloads_delete_episode_message">Supprimer \"%1$s\" de votre appareil ?</string>
+    <string name="downloads_select_episodes_to_remove">Sélectionnez les épisodes à supprimer de votre appareil.</string>
+    <string name="downloads_episodes_selected">%1$d sur %2$d épisodes sélectionnés</string>
+    <string name="downloads_episodes_selected_with_freed">%1$d sur %2$d épisodes sélectionnés · %3$s</string>
+    <string name="downloads_delete_count">Supprimer %1$d</string>
+    <string name="downloads_delete_count_with_freed">Supprimer %1$d · %2$s</string>
+
+    <!-- Download statuses -->
+    <string name="downloads_status_queued">En file d\'attente</string>
+    <string name="downloads_status_waiting">En attente…</string>
+    <string name="downloads_status_failed">Échec</string>
+    <string name="downloads_status_paused">En pause</string>
+    <string name="downloads_status_cancelled">Annulé</string>
+
+    <!-- Offline detail -->
+    <string name="downloads_series_default">Série</string>
+    <string name="downloads_season_default">Saison %1$d</string>
+    <string name="downloads_play_resume">Reprendre</string>
+    <string name="downloads_play_again">Lire à nouveau</string>
+    <string name="downloads_show_less">Afficher moins</string>
+    <string name="downloads_show_more">Afficher plus</string>
+    <string name="downloads_tracks">Pistes</string>
+    <string name="downloads_cast_crew">Distribution &amp; équipe</string>
+    <string name="downloads_download_info">Infos sur le téléchargement</string>
+    <string name="downloads_file_size">Taille du fichier</string>
+    <string name="downloads_downloaded">Téléchargé</string>
+    <string name="downloads_status">Statut</string>
+    <string name="downloads_progress">Progression</string>
+    <string name="downloads_watch_status">Statut de visionnage</string>
+    <string name="downloads_watched">Visionné</string>
+    <string name="downloads_watched_label">Visionné</string>
+    <string name="downloads_in_progress">En cours</string>
+    <string name="downloads_started">Commencé</string>
+    <string name="downloads_position">Position</string>
+    <string name="downloads_position_of">%1$s sur %2$s</string>
+    <string name="downloads_last_watched">Dernier visionnage</string>
+    <string name="downloads_time_left">%1$s restant</string>
+
+    <!-- Seasons / episodes -->
+    <string name="downloads_seasons">Saisons</string>
+    <string name="downloads_collapse">Réduire</string>
+    <string name="downloads_expand">Développer</string>
+    <string name="downloads_mark_season_cd">Marquer la saison comme visionnée ou non</string>
+    <string name="downloads_mark_season_watched">Marquer la saison comme visionnée</string>
+    <string name="downloads_mark_season_unwatched">Marquer la saison comme non visionnée</string>
+
+    <!-- Library sort / filter -->
+    <string name="downloads_sort_recent">Récent</string>
+    <string name="downloads_sort_name">Nom (A–Z)</string>
+    <string name="downloads_sort_rating">Note</string>
+    <string name="downloads_sort_size">Taille</string>
+    <string name="downloads_filter_all">Tout</string>
+    <string name="downloads_filter_videos">Vidéos</string>
+    <string name="downloads_filter_music">Musique</string>
+</resources>

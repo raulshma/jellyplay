@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.auth
 
+import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
@@ -34,7 +35,9 @@ class AuthViewModelTest {
         authRepository = mockk()
         every { authRepository.servers } returns MutableStateFlow(emptyList())
         every { authRepository.currentServerUsers } returns MutableStateFlow(emptyList())
-        viewModel = AuthViewModel(authRepository)
+        val appContext = mockk<Context>()
+        every { appContext.getString(any()) } returns ""
+        viewModel = AuthViewModel(authRepository, appContext)
     }
 
     @After

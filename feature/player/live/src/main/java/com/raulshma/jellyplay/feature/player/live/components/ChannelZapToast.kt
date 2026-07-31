@@ -16,12 +16,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.feature.player.live.R
 
 /**
  * Transient toast shown for ~3s after a channel change. Renders the channel
@@ -46,7 +48,7 @@ fun ChannelZapToast(
         if (!logoUrl.isNullOrBlank()) {
             MediaImage(
                 url = logoUrl,
-                contentDescription = "${channel.name} logo",
+                contentDescription = stringResource(R.string.live_logo_cd, channel.name),
                 modifier = Modifier.size(48.dp),
             )
         }
@@ -54,7 +56,7 @@ fun ChannelZapToast(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 channel.number?.let {
                     Text(
-                        text = "Ch. $it",
+                        text = stringResource(R.string.live_channel_number, it),
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleLarge,

@@ -20,12 +20,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.X
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.core.model.PluginInstallationInfo
 
 @Composable
@@ -58,7 +60,7 @@ fun InstallationProgressBanner(
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Installing ${installation.name ?: "plugin"}",
+                        text = stringResource(R.string.admin_installing, installation.name ?: ""),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -87,7 +89,7 @@ fun InstallationProgressBanner(
                 ) {
                     Icon(
                         Tabler.Outline.X,
-                        contentDescription = "Cancel",
+                        contentDescription = stringResource(R.string.admin_cancel_cd),
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )

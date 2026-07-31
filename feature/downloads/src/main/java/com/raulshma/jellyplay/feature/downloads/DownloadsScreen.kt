@@ -61,6 +61,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -146,7 +148,7 @@ fun DownloadsScreen(
     )
 
     com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold(
-        title = "Downloads",
+        title = stringResource(R.string.downloads_screen_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -158,7 +160,7 @@ fun DownloadsScreen(
     ) {
         if (uiState.totalStorageBytes > 0) {
             Text(
-                "Storage used: ${viewModel.formatBytes(uiState.totalStorageBytes)}",
+                stringResource(R.string.downloads_storage_used, viewModel.formatBytes(uiState.totalStorageBytes)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = adaptiveInfo.contentPadding(isTv), end = adaptiveInfo.contentPadding(isTv), bottom = 8.dp),
@@ -168,8 +170,8 @@ fun DownloadsScreen(
         if (downloads.isEmpty()) {
             com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
                 icon = Tabler.Outline.Download,
-                title = "No downloads yet",
-                description = "Downloaded content will appear here",
+                title = stringResource(R.string.downloads_empty_title),
+                description = stringResource(R.string.downloads_empty_description),
             )
         } else {
             // Hoist the three pure formatter lambdas once above the list. They
@@ -284,9 +286,9 @@ fun DownloadsScreen(
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text("Delete download") },
+            title = { Text(stringResource(R.string.downloads_delete_download_title)) },
             text = {
-                Text("Remove \"${item.name}\" from your device? This frees up ${viewModel.formatBytes(item.totalSizeBytes)}.")
+                Text(stringResource(R.string.downloads_delete_download_message, item.name, viewModel.formatBytes(item.totalSizeBytes)))
             },
             confirmButton = {
                 TextButton(
@@ -295,10 +297,10 @@ fun DownloadsScreen(
                         viewModel.deleteDownload(item)
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.downloads_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.downloads_cancel)) }
             },
         )
     }
@@ -309,11 +311,11 @@ fun DownloadsScreen(
         AlertDialog(
             onDismissRequest = { pendingBulkDelete = false },
             icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text("Delete downloads") },
+            title = { Text(stringResource(R.string.downloads_delete_downloads_title)) },
             text = {
                 Text(
-                    "Remove $count selected download${if (count == 1) "" else "s"} from your device?" +
-                        if (freedBytes > 0) " This frees up ${viewModel.formatBytes(freedBytes)}." else "",
+                    pluralStringResource(R.plurals.downloads_delete_downloads_message, count, count) +
+                        if (freedBytes > 0) stringResource(R.string.downloads_frees_up_sentence, viewModel.formatBytes(freedBytes)) else "",
                 )
             },
             confirmButton = {
@@ -323,10 +325,10 @@ fun DownloadsScreen(
                         viewModel.deleteSelected()
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.downloads_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingBulkDelete = false }) { Text("Cancel") }
+                TextButton(onClick = { pendingBulkDelete = false }) { Text(stringResource(R.string.downloads_cancel)) }
             },
         )
     }
@@ -484,7 +486,7 @@ private fun DownloadItemRow(
                     }
                     DownloadStatus.QUEUED -> {
                         Text(
-                            "Queued",
+                            stringResource(R.string.downloads_status_queued),
                             style = MaterialTheme.typography.labelSmall,
                             color = StatusColors.info,
                         )
@@ -498,7 +500,7 @@ private fun DownloadItemRow(
                     }
                     DownloadStatus.PENDING -> {
                         Text(
-                            "Waiting...",
+                            stringResource(R.string.downloads_status_waiting),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -506,7 +508,7 @@ private fun DownloadItemRow(
                     DownloadStatus.FAILED -> {
                         Column {
                             Text(
-                                text = "Failed",
+                                text = stringResource(R.string.downloads_status_failed),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -523,14 +525,14 @@ private fun DownloadItemRow(
                     }
                     DownloadStatus.PAUSED -> {
                         Text(
-                            "Paused",
+                            stringResource(R.string.downloads_status_paused),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     DownloadStatus.CANCELLED -> {
                         Text(
-                            "Cancelled",
+                            stringResource(R.string.downloads_status_cancelled),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -545,19 +547,19 @@ private fun DownloadItemRow(
                     DownloadStatus.DOWNLOADING -> {
                         DownloadActionButton(
                             icon = Tabler.Outline.ArrowDown,
-                            contentDescription = "Lower Priority",
+                            contentDescription = stringResource(R.string.downloads_action_lower_priority),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = onLowerPriority,
                         )
                         DownloadActionButton(
                             icon = Tabler.Outline.PlayerPause,
-                            contentDescription = "Pause",
+                            contentDescription = stringResource(R.string.downloads_action_pause),
                             tint = MaterialTheme.colorScheme.primary,
                             onClick = onPause,
                         )
                         DownloadActionButton(
                             icon = Tabler.Outline.Trash,
-                            contentDescription = "Cancel",
+                            contentDescription = stringResource(R.string.downloads_action_cancel),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = onCancel,
                         )
@@ -565,13 +567,13 @@ private fun DownloadItemRow(
                     DownloadStatus.PENDING -> {
                         DownloadActionButton(
                             icon = Tabler.Outline.ArrowUp,
-                            contentDescription = "Move to Front",
+                            contentDescription = stringResource(R.string.downloads_action_move_to_front),
                             tint = MaterialTheme.colorScheme.primary,
                             onClick = onMoveToFront,
                         )
                         DownloadActionButton(
                             icon = Tabler.Outline.Trash,
-                            contentDescription = "Cancel",
+                            contentDescription = stringResource(R.string.downloads_action_cancel),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = onCancel,
                         )
@@ -579,13 +581,13 @@ private fun DownloadItemRow(
                     DownloadStatus.QUEUED -> {
                         DownloadActionButton(
                             icon = Tabler.Outline.ArrowUp,
-                            contentDescription = "Move to Front",
+                            contentDescription = stringResource(R.string.downloads_action_move_to_front),
                             tint = MaterialTheme.colorScheme.primary,
                             onClick = onMoveToFront,
                         )
                         DownloadActionButton(
                             icon = Tabler.Outline.Trash,
-                            contentDescription = "Cancel",
+                            contentDescription = stringResource(R.string.downloads_action_cancel),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = onCancel,
                         )
@@ -593,13 +595,13 @@ private fun DownloadItemRow(
                     DownloadStatus.PAUSED -> {
                         DownloadActionButton(
                             icon = Tabler.Outline.PlayerPlay,
-                            contentDescription = "Resume",
+                            contentDescription = stringResource(R.string.downloads_action_resume),
                             tint = MaterialTheme.colorScheme.primary,
                             onClick = onResume,
                         )
                         DownloadActionButton(
                             icon = Tabler.Outline.Trash,
-                            contentDescription = "Cancel",
+                            contentDescription = stringResource(R.string.downloads_action_cancel),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = onCancel,
                         )
@@ -607,7 +609,7 @@ private fun DownloadItemRow(
                     DownloadStatus.FAILED -> {
                         DownloadActionButton(
                             icon = Tabler.Outline.Refresh,
-                            contentDescription = "Retry",
+                            contentDescription = stringResource(R.string.downloads_action_retry),
                             tint = MaterialTheme.colorScheme.primary,
                             onClick = onRetry,
                         )
@@ -615,13 +617,13 @@ private fun DownloadItemRow(
                     DownloadStatus.COMPLETED -> {
                         DownloadActionButton(
                             icon = Tabler.Outline.PlayerPlay,
-                            contentDescription = "Play",
+                            contentDescription = stringResource(R.string.downloads_action_play),
                             tint = MaterialTheme.colorScheme.primary,
                             onClick = onPlay,
                         )
                         DownloadActionButton(
                             icon = Tabler.Outline.Trash,
-                            contentDescription = "Delete",
+                            contentDescription = stringResource(R.string.downloads_action_delete),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = onDelete,
                         )
@@ -688,7 +690,7 @@ private fun SelectionActionBar(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                "$selectedCount selected",
+                stringResource(R.string.downloads_selected_count, selectedCount),
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -696,19 +698,19 @@ private fun SelectionActionBar(
             )
             // Compact icon-only actions keep the bar to one line on phones.
             CompactIconButton(onClick = onPause, enabled = hasPauseable) {
-                Icon(Tabler.Outline.PlayerPause, contentDescription = "Pause", modifier = Modifier.size(20.dp))
+                Icon(Tabler.Outline.PlayerPause, contentDescription = stringResource(R.string.downloads_action_pause), modifier = Modifier.size(20.dp))
             }
             CompactIconButton(onClick = onResume, enabled = hasResumable) {
-                Icon(Tabler.Outline.PlayerPlay, contentDescription = "Resume", modifier = Modifier.size(20.dp))
+                Icon(Tabler.Outline.PlayerPlay, contentDescription = stringResource(R.string.downloads_action_resume), modifier = Modifier.size(20.dp))
             }
             CompactIconButton(onClick = onCancel, enabled = hasCancellable) {
-                Icon(Tabler.Outline.PlayerStop, contentDescription = "Cancel", modifier = Modifier.size(20.dp))
+                Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(R.string.downloads_action_cancel), modifier = Modifier.size(20.dp))
             }
             CompactIconButton(onClick = onSelectAll, enabled = true) {
-                Icon(Tabler.Outline.Check, contentDescription = "Select all", modifier = Modifier.size(20.dp))
+                Icon(Tabler.Outline.Check, contentDescription = stringResource(R.string.downloads_action_select_all), modifier = Modifier.size(20.dp))
             }
             CompactIconButton(onClick = onClear, enabled = true) {
-                Icon(Tabler.Outline.X, contentDescription = "Clear selection", modifier = Modifier.size(20.dp))
+                Icon(Tabler.Outline.X, contentDescription = stringResource(R.string.downloads_action_clear_selection), modifier = Modifier.size(20.dp))
             }
             FilledTonalButton(
                 onClick = onBulkDelete,
@@ -721,7 +723,7 @@ private fun SelectionActionBar(
             ) {
                 Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Delete")
+                Text(stringResource(R.string.downloads_delete))
             }
         }
     }
@@ -761,7 +763,7 @@ private fun SelectionHintRow() {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Long-press a download to select and apply bulk actions",
+                stringResource(R.string.downloads_selection_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

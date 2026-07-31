@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="insights_title_watch_progress">Progression du visionnage</string>
+    <string name="insights_cd_share">Partager</string>
+    <string name="insights_cd_configure_heatmap">Configurer la carte de chaleur</string>
+    <string name="insights_filter_type">Type de filtre</string>
+    <string name="insights_select_year">Sélectionner l\'année</string>
+    <string name="insights_loading">Chargement…</string>
+    <string name="insights_plugin_missing_message">Installez le plugin Playback Reporting sur votre serveur Jellyfin pour des données détaillées de la carte de chaleur. Affichage de l\'activité de base issue de l\'historique de visionnage.</string>
+    <string name="insights_no_activity_for_year">Aucune activité de visionnage enregistrée pour %1$d. Lancez une lecture pour commencer à remplir votre année.</string>
+    <string name="insights_activity_grid">Grille d\'activité</string>
+    <string name="insights_cd_previous_year">Année précédente</string>
+    <string name="insights_cd_next_year">Année suivante</string>
+    <string name="insights_stat_current_streak">Série actuelle</string>
+    <string name="insights_stat_longest_streak">Plus longue série</string>
+    <string name="insights_stat_active_days">Jours actifs</string>
+    <string name="insights_days_format">%1$d jours</string>
+    <string name="insights_day_sun">Dim</string>
+    <string name="insights_day_tue">Mar</string>
+    <string name="insights_day_thu">Jeu</string>
+    <string name="insights_day_sat">Sam</string>
+    <string name="insights_legend_less">Moins</string>
+    <string name="insights_legend_more">Plus</string>
+    <string name="insights_duration_hm">%1$dh %2$dm</string>
+    <string name="insights_duration_m">%1$dm</string>
+    <string name="insights_duration_under_minute">&lt; 1 min</string>
+    <string name="insights_no_activity">Aucune activité</string>
+    <string name="insights_minutes_watched">%1$d min regardées</string>
+    <string name="insights_played">Lu</string>
+    <string name="insights_share_chooser_title">Partager la progression du visionnage</string>
+
+    <plurals name="insights_heatmap_summary">
+        <item quantity="one">Carte de chaleur de l\'activité de visionnage pour %1$d. %2$d jour actif.</item>
+        <item quantity="other">Carte de chaleur de l\'activité de visionnage pour %1$d. %2$d jours actifs.</item>
+    </plurals>
+
+    <plurals name="insights_sessions_watched">
+        <item quantity="one">%1$d session &#183; %2$s regardé</item>
+        <item quantity="other">%1$d sessions &#183; %2$s regardé</item>
+    </plurals>
+</resources>

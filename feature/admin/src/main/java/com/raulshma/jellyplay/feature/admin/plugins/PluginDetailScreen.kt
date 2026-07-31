@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,6 +70,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.MarkdownText
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.feature.admin.plugins.components.PluginStatusBadge
 
 @Composable
@@ -155,7 +157,7 @@ fun PluginDetailScreen(
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
-                                        "Description",
+                                        stringResource(R.string.admin_description),
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.SemiBold,
                                     )
@@ -186,7 +188,7 @@ fun PluginDetailScreen(
                         if (pkg.versions.isNotEmpty()) {
                             item {
                                 Text(
-                                    "Version History",
+                                    stringResource(R.string.admin_version_history),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.padding(top = 4.dp, start = 4.dp),
@@ -225,7 +227,7 @@ fun PluginDetailScreen(
                                         strokeWidth = 2.dp,
                                     )
                                     Text(
-                                        "Loading version history...",
+                                        stringResource(R.string.admin_loading_version_history),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -241,9 +243,9 @@ fun PluginDetailScreen(
     if (showUninstallDialog) {
         AlertDialog(
             onDismissRequest = { showUninstallDialog = false },
-            title = { Text("Uninstall Plugin") },
+            title = { Text(stringResource(R.string.admin_uninstall_plugin_title)) },
             text = {
-                Text("Are you sure you want to uninstall ${state.plugin?.name ?: "this plugin"}? This action cannot be undone.")
+                Text(stringResource(R.string.admin_uninstall_plugin_body, state.plugin?.name ?: ""))
             },
             confirmButton = {
                 TextButton(
@@ -256,13 +258,13 @@ fun PluginDetailScreen(
                     if (state.isUninstalling) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp))
                     } else {
-                        Text("Uninstall", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.admin_uninstall), color = MaterialTheme.colorScheme.error)
                     }
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showUninstallDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.admin_cancel))
                 }
             },
         )
@@ -273,7 +275,7 @@ fun PluginDetailScreen(
         AlertDialog(
             onDismissRequest = { pendingTrustInstall = null },
             icon = { Icon(Tabler.Outline.AlertTriangle, contentDescription = null) },
-            title = { Text("Install third-party plugin?") },
+            title = { Text(stringResource(R.string.admin_install_third_party_title)) },
             text = {
                 Text(
                     "Plugins have the same system access as your Jellyfin server. " +
@@ -286,10 +288,10 @@ fun PluginDetailScreen(
                     val v = version
                     pendingTrustInstall = null
                     viewModel.installVersion(v)
-                }) { Text("Continue") }
+                }) { Text(stringResource(R.string.admin_continue)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingTrustInstall = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingTrustInstall = null }) { Text(stringResource(R.string.admin_cancel)) }
             },
         )
     }
@@ -365,7 +367,7 @@ private fun PluginHeaderCard(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                     modifier = Modifier.then(toggleFocusState.focusModifier).tvFocusIndicator(toggleFocusState, ShapeCache.smooth12),
                 ) {
-                    Text(if (isEnabled) "Disable" else "Enable")
+                    Text(if (isEnabled) stringResource(R.string.admin_disable) else stringResource(R.string.admin_enable))
                 }
                 if (plugin.canUninstall) {
                     Spacer(Modifier.width(8.dp))
@@ -381,7 +383,7 @@ private fun PluginHeaderCard(
                             tint = MaterialTheme.colorScheme.error,
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("Uninstall", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.admin_uninstall), color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -442,12 +444,12 @@ private fun ConfigActionCard(
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Configuration",
+                    stringResource(R.string.admin_configuration),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "Edit plugin settings",
+                    stringResource(R.string.admin_edit_plugin_settings),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -504,7 +506,7 @@ private fun VersionHistoryItem(
                     )
                     if (isCurrentVersion) {
                         Text(
-                            "Current",
+                            stringResource(R.string.admin_current),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary,
@@ -557,7 +559,7 @@ private fun VersionHistoryItem(
                             modifier = Modifier.size(14.dp),
                         )
                         Spacer(Modifier.width(4.dp))
-                        Text("Install", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.admin_install), style = MaterialTheme.typography.labelLarge)
                     }
                 }
             }
@@ -594,7 +596,7 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onDismiss) { Text("Dismiss") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.admin_dismiss)) }
         }
     }
 }
@@ -619,25 +621,25 @@ private fun PluginDetailsMetadataCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                "Details",
+                stringResource(R.string.admin_details),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(8.dp))
             val developer = when {
-                !plugin.canUninstall -> "Bundled"
+                !plugin.canUninstall -> stringResource(R.string.admin_bundled)
                 !owner.isNullOrBlank() -> owner
-                else -> "Unknown"
+                else -> stringResource(R.string.admin_unknown)
             }
             val repository = when {
-                !plugin.canUninstall -> "Bundled"
+                !plugin.canUninstall -> stringResource(R.string.admin_bundled)
                 !repositoryUrl.isNullOrBlank() -> repositoryUrl
-                else -> "Unknown"
+                else -> stringResource(R.string.admin_unknown)
             }
-            MetadataRow("Status", plugin.status.name.lowercase().replaceFirstChar { it.uppercase() })
-            MetadataRow("Version", plugin.version.ifBlank { "—" })
-            MetadataRow("Developer", developer)
-            MetadataRow("Repository", repository)
+            MetadataRow(stringResource(R.string.admin_status), plugin.status.name.lowercase().replaceFirstChar { it.uppercase() })
+            MetadataRow(stringResource(R.string.admin_version), plugin.version.ifBlank { "—" })
+            MetadataRow(stringResource(R.string.admin_developer), developer)
+            MetadataRow(stringResource(R.string.admin_repository), repository)
         }
     }
 }

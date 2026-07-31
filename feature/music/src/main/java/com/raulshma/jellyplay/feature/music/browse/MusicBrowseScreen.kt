@@ -22,9 +22,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.raulshma.jellyplay.feature.music.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -63,12 +65,18 @@ fun MusicBrowseScreen(
     val gridMin = adaptiveInfo.gridMinSize(isTv)
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
-    val tabs = listOf("Artists", "Albums", "Tracks", "Genres", "Playlists")
+    val tabs = listOf(
+        stringResource(R.string.music_artists),
+        stringResource(R.string.music_albums),
+        stringResource(R.string.music_tracks),
+        stringResource(R.string.music_genres),
+        stringResource(R.string.music_playlists),
+    )
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
 
     JellyPlayScreenScaffold(
-        title = "Browse Music",
+        title = stringResource(R.string.music_browse_music),
     ) { _ ->
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -174,14 +182,14 @@ private fun TracksPage(
         when (val refreshState = tracks.loadState.refresh) {
             is LoadState.Loading -> ScreenLoadingState()
             is LoadState.Error -> ErrorScreen(
-                message = refreshState.error.localizedMessage ?: "Failed to load tracks",
+                message = refreshState.error.localizedMessage ?: stringResource(R.string.music_failed_load_tracks),
                 onRetry = { tracks.refresh() },
             )
             is LoadState.NotLoading -> {
                 if (tracks.itemCount == 0) {
                     ScreenEmptyState(
                         icon = Tabler.Outline.Music,
-                        title = "No tracks found",
+                        title = stringResource(R.string.music_no_tracks_found),
                     )
                 } else {
                     LazyColumn(
@@ -227,7 +235,7 @@ private fun GenresPage(
     if (genres.isEmpty()) {
         ScreenEmptyState(
             icon = Tabler.Outline.Music,
-            title = "No genres found",
+            title = stringResource(R.string.music_no_genres_found),
         )
     } else {
         TvFocusableGrid(
@@ -261,7 +269,7 @@ private fun PlaylistsPage(
     if (playlists.isEmpty()) {
         ScreenEmptyState(
             icon = Tabler.Outline.Playlist,
-            title = "No playlists found",
+            title = stringResource(R.string.music_no_playlists_found),
         )
     } else {
         TvFocusableGrid(
@@ -277,7 +285,7 @@ private fun PlaylistsPage(
             val imageUrl = remember(playlist.id) { viewModel.getImageUrl(playlist.id) }
             AlbumCard(
                 name = playlist.name,
-                artist = if (playlist.itemCount > 0) "${playlist.itemCount} items" else null,
+                artist = if (playlist.itemCount > 0) stringResource(R.string.music_items_count, playlist.itemCount) else null,
                 year = null,
                 imageUrl = imageUrl,
                 onClick = { onItemClick(playlist.id) },

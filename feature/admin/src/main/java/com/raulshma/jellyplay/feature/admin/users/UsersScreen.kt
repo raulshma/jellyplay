@@ -32,12 +32,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.UserPlus
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -104,32 +106,32 @@ fun UsersScreen(
         val target = state.selectedUser
         AlertDialog(
             onDismissRequest = { viewModel.dismissDeleteDialog() },
-            title = { Text("Delete User") },
-            text = { Text("Delete \"${target?.name}\"? This cannot be undone.") },
+            title = { Text(stringResource(R.string.admin_delete_user_title)) },
+            text = { Text(stringResource(R.string.admin_delete_user_body, target?.name ?: "")) },
             confirmButton = {
                 TextButton(
                     onClick = { viewModel.deleteUser() },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.admin_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissDeleteDialog() }) { Text("Cancel") }
+                TextButton(onClick = { viewModel.dismissDeleteDialog() }) { Text(stringResource(R.string.admin_cancel)) }
             },
         )
     }
 
     val refreshFocusState = rememberTvFocusState()
     JellyPlayScreenScaffold(
-        title = "Users",
+        title = stringResource(R.string.admin_users_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
             IconButton(
                 onClick = { viewModel.refresh() },
                 modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
-            ) { Icon(Tabler.Outline.Refresh, contentDescription = "Refresh") }
+            ) { Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.admin_refresh)) }
         },
     ) {
         // JellyPlayScreenScaffold has no floatingActionButton slot, so overlay the FAB inside a
@@ -150,7 +152,7 @@ fun UsersScreen(
                         onRefresh = { viewModel.refresh() },
                     ) {
                         if (state.users.isEmpty()) {
-                            ScreenEmptyState(icon = Tabler.Outline.UserPlus, title = "No users")
+                            ScreenEmptyState(icon = Tabler.Outline.UserPlus, title = stringResource(R.string.admin_no_users))
                         } else {
                             LazyColumn(
                                 modifier = Modifier
@@ -198,7 +200,7 @@ fun UsersScreen(
                             IntOffset(x = 0, y = yOffset.toInt())
                         },
                 ) {
-                    Icon(Tabler.Outline.UserPlus, contentDescription = "Add user")
+                    Icon(Tabler.Outline.UserPlus, contentDescription = stringResource(R.string.admin_add_user_cd))
                 }
             }
         }

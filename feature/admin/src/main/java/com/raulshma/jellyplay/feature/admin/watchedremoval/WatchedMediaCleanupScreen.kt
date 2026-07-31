@@ -58,6 +58,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -83,6 +84,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.feature.admin.components.AuditHistoryTab
 import com.raulshma.jellyplay.feature.admin.stalemedia.MediaSortOption
 
@@ -110,7 +112,7 @@ fun WatchedMediaCleanupScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Watched Media Cleanup",
+        title = stringResource(R.string.admin_watched_cleanup_title),
         onBack = onBack,
     ) { paddingValues ->
         Column(
@@ -124,17 +126,17 @@ fun WatchedMediaCleanupScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Scan Results") },
+                    text = { Text(stringResource(R.string.admin_scan_results_tab)) },
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Configuration") },
+                    text = { Text(stringResource(R.string.admin_configuration_tab)) },
                 )
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    text = { Text("Audit History") },
+                    text = { Text(stringResource(R.string.admin_audit_history_tab)) },
                 )
             }
 
@@ -243,14 +245,14 @@ private fun WatchedScanResultsTab(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Scanning...", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.admin_scanning), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     JellyPlayLinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth().height(6.dp).clip(ShapeCache.smooth4),
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "${state.scanProgress.scanned} items checked, ${state.scanProgress.itemsFound} watched items found",
+                        stringResource(R.string.admin_scan_progress_watched, state.scanProgress.scanned, state.scanProgress.itemsFound),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -302,7 +304,7 @@ private fun WatchedScanResultsTab(
                         onCheckedChange = { onSelectAll() },
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text("Select All", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.admin_select_all), style = MaterialTheme.typography.labelMedium)
                 }
                 Spacer(Modifier.weight(1f))
                 if (state.selectedItems.isNotEmpty()) {
@@ -312,7 +314,7 @@ private fun WatchedScanResultsTab(
                             .background(MaterialTheme.colorScheme.primaryContainer)
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
-                        Text("${state.selectedItems.size} selected", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(stringResource(R.string.admin_n_selected, state.selectedItems.size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                     Spacer(Modifier.width(8.dp))
                     FilledTonalButton(
@@ -329,7 +331,7 @@ private fun WatchedScanResultsTab(
                     ) {
                         Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Delete")
+                        Text(stringResource(R.string.admin_delete))
                     }
                 }
             }
@@ -341,7 +343,7 @@ private fun WatchedScanResultsTab(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "${state.scanResults.size} items",
+                    stringResource(R.string.admin_n_items, state.scanResults.size),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -358,7 +360,7 @@ private fun WatchedScanResultsTab(
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 ScreenEmptyState(
                     icon = Tabler.Outline.EyeOff,
-                    title = if (state.scanProgress.phase == ScanPhase.COMPLETED) "No watched media found" else "Run a scan to find watched media",
+                    title = stringResource(if (state.scanProgress.phase == ScanPhase.COMPLETED) R.string.admin_no_watched_found else R.string.admin_run_scan_watched),
                 )
             }
         } else if (state.scanResults.isNotEmpty()) {
@@ -505,8 +507,8 @@ private fun WatchedDeleteConfirmationSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val content: @Composable ColumnScope.() -> Unit = {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Text("Confirm Deletion", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            Text("The following ${items.size} watched items will be removed from the library:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp))
+            Text(stringResource(R.string.admin_confirm_deletion), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+            Text(stringResource(R.string.admin_confirm_deletion_body, items.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp))
             Spacer(Modifier.height(12.dp))
             LazyColumn(
                 modifier = Modifier.height(300.dp),
@@ -526,14 +528,14 @@ private fun WatchedDeleteConfirmationSheet(
             }
             Spacer(Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onDismiss, shape = ShapeCache.smooth16, modifier = Modifier.weight(1f)) { Text("Cancel") }
+                OutlinedButton(onClick = onDismiss, shape = ShapeCache.smooth16, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.admin_cancel)) }
                 Button(
                     onClick = onConfirm,
                     shape = ShapeCache.smooth16,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     modifier = Modifier.weight(1f),
                     enabled = !isDeleting,
-                ) { Text(if (isDeleting) "Deleting..." else "Delete from Library") }
+                ) { Text(if (isDeleting) stringResource(R.string.admin_deleting) else stringResource(R.string.admin_delete_from_library)) }
             }
         }
     }
@@ -568,21 +570,25 @@ private fun WatchedConfigurationTab(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Cleanup Configuration", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.admin_cleanup_configuration), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(20.dp))
 
-                    Text("Media types", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.admin_media_types), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(8.dp))
-                    val allTypes = listOf("Movie", "Episode", "MusicVideo")
+                    val allTypes = listOf(
+                        "Movie" to R.string.admin_type_movie,
+                        "Episode" to R.string.admin_type_episode,
+                        "MusicVideo" to R.string.admin_type_music_video,
+                    )
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        allTypes.forEach { type ->
+                        allTypes.forEach { (type, typeRes) ->
                             FilterChip(
                                 selected = config.includeItemTypes.contains(type),
                                 onClick = {
                                     val newTypes = if (config.includeItemTypes.contains(type)) config.includeItemTypes - type else config.includeItemTypes + type
                                     if (newTypes.isNotEmpty()) onConfigChange(config.copy(includeItemTypes = newTypes))
                                 },
-                                label = { Text(type) },
+                                label = { Text(stringResource(typeRes)) },
                             )
                         }
                     }
@@ -590,9 +596,9 @@ private fun WatchedConfigurationTab(
                     Spacer(Modifier.height(12.dp))
 
                     if (config.minDaysSinceWatched > 0) {
-                        Text("Minimum days since watched: ${config.minDaysSinceWatched}", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.admin_minimum_days_watched, config.minDaysSinceWatched), style = MaterialTheme.typography.bodyMedium)
                     } else {
-                        Text("No minimum time filter", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.admin_no_minimum_time), style = MaterialTheme.typography.bodyMedium)
                     }
                     Slider(
                         value = config.minDaysSinceWatched.toFloat(),
@@ -608,7 +614,7 @@ private fun WatchedConfigurationTab(
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                             Icon(Tabler.Outline.Heart, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                             Spacer(Modifier.width(8.dp))
-                            Text("Keep favorites", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.admin_keep_favorites), style = MaterialTheme.typography.bodyMedium)
                         }
                         Switch(checked = config.keepFavorites, onCheckedChange = { onConfigChange(config.copy(keepFavorites = it)) })
                     }
@@ -616,14 +622,14 @@ private fun WatchedConfigurationTab(
                     Spacer(Modifier.height(12.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Include partially watched", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.admin_include_partially_watched), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         Switch(checked = config.includePartiallyWatched, onCheckedChange = { onConfigChange(config.copy(includePartiallyWatched = it)) })
                     }
 
                     Spacer(Modifier.height(12.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Dry run (preview only)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.admin_dry_run), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         Switch(checked = config.dryRun, onCheckedChange = { onConfigChange(config.copy(dryRun = it)) })
                     }
                 }
@@ -647,7 +653,7 @@ private fun WatchedConfigurationTab(
             ) {
                 Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(if (isScanning) "Scanning..." else "Scan Now")
+                Text(if (isScanning) stringResource(R.string.admin_scanning) else stringResource(R.string.admin_scan_now))
             }
         }
     }

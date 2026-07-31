@@ -2,12 +2,14 @@ package com.raulshma.jellyplay.feature.admin.users.detail.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Folder
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.feature.admin.R
 
 /**
  * Per-library media-deletion permission. "All libraries" toggles
@@ -23,10 +25,10 @@ fun DeletionFolderSection(
     modifier: Modifier = Modifier,
 ) {
     val rows = if (policy.enableContentDeletion) 1 else 1 + libraries.size
-    UserEditSection(title = "Media deletion from", modifier = modifier) {
+    UserEditSection(title = stringResource(R.string.admin_media_deletion_from), modifier = modifier) {
         SettingToggleItem(
             icon = Tabler.Outline.Trash,
-            title = "All libraries",
+            title = stringResource(R.string.admin_all_libraries),
             subtitle = if (policy.enableContentDeletion) "User may delete from anywhere" else "User may only delete from the libraries below",
             checked = policy.enableContentDeletion,
             onCheckedChange = { onPolicyChange(policy.copy(enableContentDeletion = it)) },

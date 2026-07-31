@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="insights_title_watch_progress">Progreso de reproducción</string>
+    <string name="insights_cd_share">Compartir</string>
+    <string name="insights_cd_configure_heatmap">Configurar mapa de calor</string>
+    <string name="insights_filter_type">Tipo de filtro</string>
+    <string name="insights_select_year">Seleccionar año</string>
+    <string name="insights_loading">Cargando…</string>
+    <string name="insights_plugin_missing_message">Instala el complemento Playback Reporting en tu servidor Jellyfin para obtener datos detallados del mapa de calor. Se muestra la actividad básica del historial de reproducción.</string>
+    <string name="insights_no_activity_for_year">No se registró actividad de reproducción para %1$d. Reproduce algo para empezar a completar tu año.</string>
+    <string name="insights_activity_grid">Cuadrícula de actividad</string>
+    <string name="insights_cd_previous_year">Año anterior</string>
+    <string name="insights_cd_next_year">Año siguiente</string>
+    <string name="insights_stat_current_streak">Racha actual</string>
+    <string name="insights_stat_longest_streak">Racha más larga</string>
+    <string name="insights_stat_active_days">Días activos</string>
+    <string name="insights_days_format">%1$d días</string>
+    <string name="insights_day_sun">Dom</string>
+    <string name="insights_day_tue">Mar</string>
+    <string name="insights_day_thu">Jue</string>
+    <string name="insights_day_sat">Sáb</string>
+    <string name="insights_legend_less">Menos</string>
+    <string name="insights_legend_more">Más</string>
+    <string name="insights_duration_hm">%1$dh %2$dm</string>
+    <string name="insights_duration_m">%1$dm</string>
+    <string name="insights_duration_under_minute">&lt; 1 min</string>
+    <string name="insights_no_activity">Sin actividad</string>
+    <string name="insights_minutes_watched">%1$d min vistos</string>
+    <string name="insights_played">Reproducido</string>
+    <string name="insights_share_chooser_title">Compartir progreso de reproducción</string>
+
+    <plurals name="insights_heatmap_summary">
+        <item quantity="one">Mapa de calor de actividad de reproducción para %1$d. %2$d día activo.</item>
+        <item quantity="many">Mapa de calor de actividad de reproducción para %1$d. %2$d días activos.</item>
+        <item quantity="other">Mapa de calor de actividad de reproducción para %1$d. %2$d días activos.</item>
+    </plurals>
+
+    <plurals name="insights_sessions_watched">
+        <item quantity="one">%1$d sesión &#183; %2$s vistos</item>
+        <item quantity="many">%1$d sesiones &#183; %2$s vistos</item>
+        <item quantity="other">%1$d sesiones &#183; %2$s vistos</item>
+    </plurals>
+</resources>

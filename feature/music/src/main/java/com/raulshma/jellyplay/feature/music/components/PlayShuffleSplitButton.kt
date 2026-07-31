@@ -16,12 +16,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.music.R
 
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -64,12 +66,12 @@ fun PlayShuffleSplitButton(
             ) {
                 Icon(
                     imageVector = Tabler.Outline.PlayerPlay,
-                    contentDescription = "Play",
+                    contentDescription = stringResource(R.string.music_play),
                     modifier = Modifier.size(SplitButtonDefaults.leadingButtonIconSizeFor(40.dp)),
                 )
                 Spacer(Modifier.size(ButtonDefaults.iconSpacingFor(40.dp)))
                 Text(
-                    text = "Play",
+                    text = stringResource(R.string.music_play),
                     style = ButtonDefaults.textStyleFor(40.dp),
                 )
             }
@@ -98,7 +100,7 @@ fun PlayShuffleSplitButton(
             ) {
                 Icon(
                     imageVector = Tabler.Outline.ArrowsShuffle,
-                    contentDescription = "Shuffle",
+                    contentDescription = stringResource(R.string.music_shuffle),
                     modifier = Modifier.size(SplitButtonDefaults.trailingButtonIconSizeFor(40.dp)),
                 )
             }

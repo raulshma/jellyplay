@@ -37,11 +37,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.isVideoType
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -168,7 +170,7 @@ fun PlaylistDetailScreen(
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.playAll() },
                     icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
-                    text = { Text("Play All") },
+                    text = { Text(stringResource(R.string.music_play_all)) },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .then(playAllFocusState.focusModifier)
@@ -243,7 +245,7 @@ private fun PlaylistTrackRow(
             ) {
                 Icon(
                     Tabler.Outline.DotsVertical,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.music_more_options),
                     tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
                 )
             }
@@ -253,7 +255,7 @@ private fun PlaylistTrackRow(
                 onDismissRequest = { showMenu = false },
             ) {
                 DropdownMenuItem(
-                    text = { Text("Add to Queue") },
+                    text = { Text(stringResource(R.string.music_add_to_queue)) },
                     onClick = {
                         onAddToQueue()
                         showMenu = false
@@ -267,7 +269,7 @@ private fun PlaylistTrackRow(
                 )
                 if (onRemoveFromPlaylist != null) {
                     DropdownMenuItem(
-                        text = { Text("Remove from Playlist", color = MaterialTheme.colorScheme.error) },
+                        text = { Text(stringResource(R.string.music_remove_from_playlist), color = MaterialTheme.colorScheme.error) },
                         onClick = {
                             onRemoveFromPlaylist()
                             showMenu = false
@@ -289,7 +291,7 @@ private fun PlaylistTrackRow(
         ) {
             Icon(
                 Tabler.Outline.PlayerPlay,
-                contentDescription = "Play",
+                contentDescription = stringResource(R.string.music_play),
                 tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             )
         }

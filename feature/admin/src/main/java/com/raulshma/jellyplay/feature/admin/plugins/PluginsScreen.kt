@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -50,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.feature.admin.plugins.components.InstalledPluginsTab
 import com.raulshma.jellyplay.feature.admin.plugins.components.CatalogTab
 import com.raulshma.jellyplay.feature.admin.plugins.components.RepositoriesTab
@@ -84,7 +86,7 @@ fun PluginsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Plugins",
+        title = stringResource(R.string.admin_plugins_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -93,7 +95,7 @@ fun PluginsScreen(
                 onClick = { viewModel.refresh() },
                 modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
             ) {
-                Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.admin_refresh))
             }
         },
     ) { paddingValues ->
@@ -122,7 +124,7 @@ fun PluginsScreen(
                         selectedTab = 0
                         viewModel.selectTab(0)
                     },
-                    text = { Text("Installed") },
+                    text = { Text(stringResource(R.string.admin_installed_tab)) },
                 )
                 Tab(
                     selected = selectedTab == 1,
@@ -130,7 +132,7 @@ fun PluginsScreen(
                         selectedTab = 1
                         viewModel.selectTab(1)
                     },
-                    text = { Text("Catalog") },
+                    text = { Text(stringResource(R.string.admin_catalog_tab)) },
                 )
                 Tab(
                     selected = selectedTab == 2,
@@ -138,7 +140,7 @@ fun PluginsScreen(
                         selectedTab = 2
                         viewModel.selectTab(2)
                     },
-                    text = { Text("Repositories") },
+                    text = { Text(stringResource(R.string.admin_repositories_tab)) },
                 )
             }
 
@@ -209,7 +211,7 @@ fun PluginsScreen(
     pendingUninstallId?.let { pluginId ->
         AlertDialog(
             onDismissRequest = { pendingUninstallId = null },
-            title = { Text("Uninstall plugin?") },
+            title = { Text(stringResource(R.string.admin_uninstall_plugin_confirm_title)) },
             text = {
                 Text(
                     "This removes the plugin from the server. It can be reinstalled from the Catalog.",
@@ -221,12 +223,12 @@ fun PluginsScreen(
                     viewModel.uninstallPlugin(pluginId)
                     pendingUninstallId = null
                 }) {
-                    Text("Uninstall")
+                    Text(stringResource(R.string.admin_uninstall))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingUninstallId = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.admin_cancel))
                 }
             },
         )
@@ -259,13 +261,13 @@ private fun AlphaBanner() {
             )
             Column {
                 Text(
-                    text = "Plugin Management - Alpha",
+                    text = stringResource(R.string.admin_plugin_management_alpha),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
                 Text(
-                    text = "This feature is experimental. Use at your own risk.",
+                    text = stringResource(R.string.admin_plugin_experimental),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
                 )

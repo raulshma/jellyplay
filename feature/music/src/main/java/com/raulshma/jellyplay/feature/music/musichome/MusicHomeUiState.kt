@@ -1,15 +1,17 @@
 package com.raulshma.jellyplay.feature.music.musichome
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.feature.music.R
 
 /**
  * Identifies a home-screen music section by type rather than by display title, so
  * rendering can use an exhaustive `when` and a renamed label can never silently
- * hide a section. Display strings live on [displayName]/[subtitle] so the UI
+ * hide a section. Display strings live on [displayNameRes]/[subtitleRes] so the UI
  * layer never matches against magic strings.
  */
 enum class MusicHomeSectionType {
@@ -20,23 +22,25 @@ enum class MusicHomeSectionType {
     FAVORITE_TRACKS,
     ;
 
-    val displayName: String
+    @get:StringRes
+    val displayNameRes: Int
         get() = when (this) {
-            FAVORITE_ARTISTS -> "Favorite Artists"
-            LATEST_ALBUMS -> "Latest Albums"
-            RECENTLY_PLAYED -> "Recently Played"
-            TOP_RATED_ALBUMS -> "Top Rated Albums"
-            FAVORITE_TRACKS -> "Favorite Tracks"
+            FAVORITE_ARTISTS -> R.string.music_favorite_artists
+            LATEST_ALBUMS -> R.string.music_latest_albums
+            RECENTLY_PLAYED -> R.string.music_recently_played
+            TOP_RATED_ALBUMS -> R.string.music_top_rated_albums
+            FAVORITE_TRACKS -> R.string.music_favorite_tracks
         }
 
     /** Descriptive subtitle shown under the section header. */
-    val subtitle: String
+    @get:StringRes
+    val subtitleRes: Int
         get() = when (this) {
-            FAVORITE_ARTISTS -> "The voices you keep coming back to"
-            LATEST_ALBUMS -> "Fresh music just for you"
-            RECENTLY_PLAYED -> "Continue your musical journey"
-            TOP_RATED_ALBUMS -> "Highest rated by the community"
-            FAVORITE_TRACKS -> "Songs you love the most"
+            FAVORITE_ARTISTS -> R.string.music_favorite_artists_subtitle
+            LATEST_ALBUMS -> R.string.music_fresh_music
+            RECENTLY_PLAYED -> R.string.music_recently_played_subtitle
+            TOP_RATED_ALBUMS -> R.string.music_top_rated_albums_subtitle
+            FAVORITE_TRACKS -> R.string.music_favorite_tracks_subtitle
         }
 }
 

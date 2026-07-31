@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="syncplay_leave_group">退出群组</string>
+    <string name="syncplay_retry">重试</string>
+    <string name="syncplay_no_active_groups">没有活跃的 SyncPlay 群组</string>
+    <string name="syncplay_create_group_together">创建一个群组一起观看</string>
+    <string name="syncplay_create_group">创建群组</string>
+    <string name="syncplay_join_group_question">加入群组？</string>
+    <string name="syncplay_join_group_confirm">加入“%1$s”？</string>
+    <string name="syncplay_join">加入</string>
+    <string name="syncplay_cancel">取消</string>
+    <string name="syncplay_playing_item">正在播放：%1$s</string>
+    <string name="syncplay_playing">正在播放</string>
+    <string name="syncplay_paused">已暂停</string>
+    <string name="syncplay_pause">暂停</string>
+    <string name="syncplay_play">播放</string>
+    <string name="syncplay_stop">停止</string>
+    <string name="syncplay_leave">退出</string>
+    <string name="syncplay_group_settings">群组设置</string>
+    <string name="syncplay_participants">参与者</string>
+    <string name="syncplay_connected">已连接</string>
+    <string name="syncplay_disconnected">已断开</string>
+    <string name="syncplay_create_group_title">创建 SyncPlay 群组</string>
+    <string name="syncplay_group_name">群组名称</string>
+    <string name="syncplay_create">创建</string>
+
+    <string name="syncplay_error_load_groups">加载群组失败</string>
+    <string name="syncplay_join_disabled">设置中已停用加入 SyncPlay 群组</string>
+    <string name="syncplay_error_join_group">加入群组失败</string>
+    <string name="syncplay_error_leave_group">退出群组失败</string>
+    <string name="syncplay_error_create_group">创建群组失败</string>
+
+    <plurals name="syncplay_participants_count">
+        <item quantity="other">%d 位参与者</item>
+    </plurals>
+</resources>

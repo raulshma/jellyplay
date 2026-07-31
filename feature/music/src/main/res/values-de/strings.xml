@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Screen titles -->
+    <string name="music_browse_music">Musik durchsuchen</string>
+    <string name="music_albums">Alben</string>
+    <string name="music_artists">Künstler</string>
+    <string name="music_tracks">Titel</string>
+    <string name="music_genres">Genres</string>
+    <string name="music_playlists">Wiedergabelisten</string>
+    <string name="music_mood_playlists">Stimmungs-Wiedergabelisten</string>
+    <string name="music_smart_playlists">Intelligente Wiedergabelisten</string>
+
+    <!-- Empty / error states -->
+    <string name="music_no_albums_found">Keine Alben gefunden</string>
+    <string name="music_no_artists_found">Keine Künstler gefunden</string>
+    <string name="music_no_tracks_found">Keine Titel gefunden</string>
+    <string name="music_no_genres_found">Keine Genres gefunden</string>
+    <string name="music_no_playlists_found">Keine Wiedergabelisten gefunden</string>
+    <string name="music_no_tracks_mood">Keine Titel passen zu dieser Stimmung</string>
+    <string name="music_no_tracks_criteria">Keine Titel erfüllen die Kriterien</string>
+    <string name="music_no_music_available">Keine Musik verfügbar</string>
+    <string name="music_check_jellyfin_libraries">Überprüfe deine Jellyfin-Bibliotheken.</string>
+    <string name="music_loading_music">Deine Musik wird geladen…</string>
+    <string name="music_failed_load_albums">Alben konnten nicht geladen werden</string>
+    <string name="music_failed_load_artists">Künstler konnten nicht geladen werden</string>
+    <string name="music_failed_load_tracks">Titel konnten nicht geladen werden</string>
+    <string name="music_failed_load_more">Weitere konnten nicht geladen werden</string>
+
+    <!-- Playback actions -->
+    <string name="music_play">Wiedergeben</string>
+    <string name="music_play_all">Alle wiedergeben</string>
+    <string name="music_shuffle">Zufall</string>
+    <string name="music_add_to_queue">Zur Warteschlange hinzufügen</string>
+    <string name="music_instant_mix">Sofortiger Mix</string>
+    <string name="music_creating_mix">Mix wird erstellt…</string>
+    <string name="music_now_playing">Wird wiedergegeben</string>
+    <string name="music_download_album">Album herunterladen</string>
+    <string name="music_download_track">Titel herunterladen</string>
+
+    <!-- Track / row menus -->
+    <string name="music_go_to_album">Zum Album</string>
+    <string name="music_go_to_artist">Zum Künstler</string>
+    <string name="music_more_options">Weitere Optionen</string>
+    <string name="music_favorite">Favorit</string>
+    <string name="music_unfavorite">Favorit entfernen</string>
+    <string name="music_unknown_artist">Unbekannter Künstler</string>
+
+    <!-- Detail screen labels -->
+    <string name="music_mood_playlist">Stimmungs-Wiedergabeliste</string>
+    <string name="music_smart_playlist">Intelligente Wiedergabeliste</string>
+    <string name="music_open">Öffnen</string>
+
+    <!-- Counts -->
+    <string name="music_items_count">%d Elemente</string>
+    <string name="music_tracks_count">%d Titel</string>
+    <string name="music_one_track">1 Titel</string>
+    <string name="music_playlist_tracks_count">%d Titel</string>
+
+    <!-- Home sections -->
+    <string name="music_player_screens">Player-Ansichten</string>
+    <string name="music_player_screens_subtitle">Deine Audio-Player-Erlebnisse</string>
+    <string name="music_tracks_subtitle">Alle Songs deiner Bibliothek durchsuchen</string>
+    <string name="music_albums_subtitle">Vollständige Alben und Sammlungen entdecken</string>
+    <string name="music_artists_subtitle">Entdecke deine Lieblingskünstler</string>
+    <string name="music_genres_subtitle">Musik nach Genre und Stimmung durchsuchen</string>
+    <string name="music_playlists_subtitle">Deine kuratierten Wiedergabelisten und Mixe</string>
+    <string name="music_now_playing_subtitle">Vollplayer mit Steuerung, Songtexten &amp; Warteschlange</string>
+    <string name="music_ambient_mode">Ambient-Modus</string>
+    <string name="music_ambient_mode_subtitle">Eintauchende Farben, die mit deiner Musik tanzen</string>
+    <string name="music_artists_section_subtitle">Deine Lieblingsmusiker</string>
+    <string name="music_view_all">Alle ansehen</string>
+    <string name="music_new_releases">Neuerscheinungen</string>
+    <string name="music_fresh_music">Frische Musik nur für dich</string>
+    <string name="music_recently_played">Zuletzt wiedergegeben</string>
+    <string name="music_recently_played_subtitle">Setze deine musikalische Reise fort</string>
+    <string name="music_favorite_artists">Lieblingskünstler</string>
+    <string name="music_favorite_artists_subtitle">Die Stimmen, zu denen du immer zurückkehrst</string>
+    <string name="music_latest_albums">Neueste Alben</string>
+    <string name="music_top_rated_albums">Top-bewertete Alben</string>
+    <string name="music_top_rated_albums_subtitle">Am höchsten von der Community bewertet</string>
+    <string name="music_favorite_tracks">Lieblingstitel</string>
+    <string name="music_favorite_tracks_subtitle">Songs, die du am liebsten magst</string>
+
+    <!-- Playlists CRUD -->
+    <string name="music_new_playlist">Neue Wiedergabeliste</string>
+    <string name="music_edit_playlist">Wiedergabeliste bearbeiten</string>
+    <string name="music_delete_playlist">Wiedergabeliste löschen</string>
+    <string name="music_delete_playlist_confirm">\"%1$s\" löschen? Diese Aktion kann nicht rückgängig gemacht werden.</string>
+    <string name="music_create">Erstellen</string>
+    <string name="music_save">Speichern</string>
+    <string name="music_edit">Bearbeiten</string>
+    <string name="music_delete">Löschen</string>
+    <string name="music_cancel">Abbrechen</string>
+    <string name="music_name_label">Name</string>
+    <string name="music_description_optional">Beschreibung (optional)</string>
+    <string name="music_remove_from_playlist">Aus Wiedergabeliste entfernen</string>
+</resources>

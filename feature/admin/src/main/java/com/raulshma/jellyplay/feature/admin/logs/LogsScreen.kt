@@ -50,6 +50,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
@@ -83,6 +84,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.admin.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,7 +96,7 @@ fun LogsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColor = rememberScreenBackgroundColor()
-    val tabs = listOf("Log Files", "Activity Log")
+    val tabs = listOf(R.string.admin_tab_log_files, R.string.admin_tab_activity_log)
 
     // TV focus-on-launch: focus the active tab's list once data arrives so D-pad input lands on
     // content, not the navigation drawer. Resets when the user switches tabs.
@@ -110,7 +112,7 @@ fun LogsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Logs",
+        title = stringResource(R.string.admin_logs_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -123,7 +125,7 @@ fun LogsScreen(
                     ) {
                         Icon(
                             Tabler.Outline.PlayerPause,
-                            contentDescription = "Stop Live",
+                            contentDescription = stringResource(R.string.admin_stop_live_cd),
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
@@ -132,7 +134,7 @@ fun LogsScreen(
                         onClick = { viewModel.startLiveStream() },
                         modifier = Modifier.then(liveFocusState.focusModifier).tvFocusIndicator(liveFocusState, CircleShape),
                     ) {
-                        Icon(Tabler.Outline.Activity, contentDescription = "Start Live")
+                        Icon(Tabler.Outline.Activity, contentDescription = stringResource(R.string.admin_start_live_cd))
                     }
                 }
             }
@@ -141,7 +143,7 @@ fun LogsScreen(
                 onClick = { viewModel.loadInitialData() },
                 modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
             ) {
-                Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.admin_refresh))
             }
         },
     ) {
@@ -151,11 +153,11 @@ fun LogsScreen(
             PrimaryTabRow(
                 selectedTabIndex = state.selectedTabIndex,
             ) {
-                tabs.forEachIndexed { index, title ->
+                tabs.forEachIndexed { index, tabRes ->
                     Tab(
                         selected = state.selectedTabIndex == index,
                         onClick = { viewModel.selectTab(index) },
-                        text = { Text(title) },
+                        text = { Text(stringResource(tabRes)) },
                     )
                 }
             }
@@ -219,11 +221,11 @@ private fun LogFilesTab(
                         modifier = Modifier.size(16.dp),
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text("Back")
+                    Text(stringResource(R.string.admin_back))
                 }
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    selectedLogFileName ?: "Loading...",
+                    selectedLogFileName ?: stringResource(R.string.admin_loading),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
@@ -238,7 +240,7 @@ private fun LogFilesTab(
                     ) {
                         Icon(
                             imageVector = if (isPollingActive) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                            contentDescription = if (isPollingActive) "Pause Live Logs" else "Resume Live Logs",
+                            contentDescription = stringResource(if (isPollingActive) R.string.admin_pause_live_logs else R.string.admin_resume_live_logs),
                             tint = if (isPollingActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -251,7 +253,7 @@ private fun LogFilesTab(
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                     ) {
                         Text(
-                            "$lineCount lines",
+                            stringResource(R.string.admin_n_lines, lineCount),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -335,7 +337,7 @@ private fun LogFilesTab(
         if (logFiles.isEmpty()) {
             ScreenEmptyState(
                 icon = Tabler.Outline.FileText,
-                title = "No log files found",
+                title = stringResource(R.string.admin_no_log_files),
             )
         } else {
             LazyColumn(
@@ -459,7 +461,7 @@ private fun ActivityLogTab(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                "Live streaming active",
+                stringResource(R.string.admin_live_streaming_active),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
@@ -469,7 +471,7 @@ private fun ActivityLogTab(
     if (entries.isEmpty()) {
         ScreenEmptyState(
             icon = Tabler.Outline.Activity,
-            title = "No activity log entries",
+            title = stringResource(R.string.admin_no_activity_log),
         )
     } else {
         LazyColumn(

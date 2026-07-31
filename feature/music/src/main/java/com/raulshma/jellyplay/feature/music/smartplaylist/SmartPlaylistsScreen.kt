@@ -25,10 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.SmartPlaylist
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
@@ -67,7 +69,7 @@ fun SmartPlaylistsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Smart Playlists",
+        title = stringResource(R.string.music_smart_playlists),
         onBack = onBack,
         actions = {
             HeaderStatusIndicator(

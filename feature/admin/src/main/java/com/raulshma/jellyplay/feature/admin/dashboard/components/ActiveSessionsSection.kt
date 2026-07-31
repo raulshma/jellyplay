@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,6 +42,7 @@ import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun ActiveSessionsSection(
@@ -89,7 +91,7 @@ fun ActiveSessionsSection(
                     modifier = Modifier
                         .then(viewAllFocusState.focusModifier)
                         .tvFocusIndicator(viewAllFocusState, ShapeCache.smooth12),
-                ) { Text("View All") }
+                ) { Text(stringResource(R.string.admin_view_all)) }
             }
             Spacer(Modifier.height(8.dp))
             sessions.take(5).forEachIndexed { index, session ->

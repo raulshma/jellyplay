@@ -9,8 +9,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.player.live.R
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayMethod
 
 /**
@@ -20,7 +22,7 @@ import com.raulshma.jellyplay.feature.player.live.engine.LivePlayMethod
 @Composable
 fun LiveBadge(modifier: Modifier = Modifier) {
     Text(
-        text = "LIVE",
+        text = stringResource(R.string.live_badge),
         color = Color.White,
         fontWeight = FontWeight.Bold,
         style = MaterialTheme.typography.labelSmall,
@@ -46,8 +48,8 @@ fun LivePlayMethodBadge(
     if (method == null) return
     val (label, color) = when (method) {
         LivePlayMethod.DIRECT_PLAY, LivePlayMethod.DIRECT_STREAM ->
-            "DIRECT" to Color(0xFF2E7D32)
-        LivePlayMethod.TRANSCODE -> "TRANSCODE" to Color(0xFFEF6C00)
+            stringResource(R.string.live_direct) to Color(0xFF2E7D32)
+        LivePlayMethod.TRANSCODE -> stringResource(R.string.live_transcode) to Color(0xFFEF6C00)
     }
     Text(
         text = label,

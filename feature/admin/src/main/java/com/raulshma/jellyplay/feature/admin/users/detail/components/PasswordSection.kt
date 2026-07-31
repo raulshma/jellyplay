@@ -6,7 +6,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun PasswordSection(
@@ -16,5 +18,5 @@ fun PasswordSection(
     OutlinedButton(
         onClick = onChangePassword,
         modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp),
-    ) { Text("Change password") }
+    ) { Text(stringResource(R.string.admin_change_password)) }
 }

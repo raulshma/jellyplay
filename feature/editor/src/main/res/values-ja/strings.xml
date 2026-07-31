@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Editor screen -->
+    <string name="editor_tab_metadata">メタデータ</string>
+    <string name="editor_tab_images">画像</string>
+    <string name="editor_tab_subtitles">字幕</string>
+    <string name="editor_default_title">メタデータを編集</string>
+    <string name="editor_save">保存</string>
+    <string name="editor_saving">保存中\u2026</string>
+    <string name="editor_dismiss">閉じる</string>
+
+    <!-- Discard-changes dialog -->
+    <string name="editor_discard_title">変更を破棄しますか？</string>
+    <string name="editor_discard_message">未保存の編集があります。破棄して終了しますか？</string>
+    <string name="editor_discard_action">破棄</string>
+    <string name="editor_keep_editing">編集を続ける</string>
+
+    <!-- Metadata tab: section headers -->
+    <string name="editor_section_general">一般</string>
+    <string name="editor_section_ratings">評価</string>
+    <string name="editor_section_dates_numbers">日付と数値</string>
+    <string name="editor_section_series_settings">シリーズ設定</string>
+    <string name="editor_section_genres">ジャンル</string>
+    <string name="editor_section_tags">タグ</string>
+    <string name="editor_section_studios">スタジオ</string>
+    <string name="editor_section_people">人物</string>
+    <string name="editor_section_external_ids">外部 ID</string>
+    <string name="editor_section_metadata_locking">メタデータのロック</string>
+
+    <!-- Metadata tab: field labels -->
+    <string name="editor_field_title">タイトル</string>
+    <string name="editor_field_original_title">原題</string>
+    <string name="editor_field_sort_title">並び替えタイトル</string>
+    <string name="editor_field_overview">あらすじ</string>
+    <string name="editor_field_tagline">キャッチコピー</string>
+    <string name="editor_field_community_rating">コミュニティ評価（0〜10）</string>
+    <string name="editor_field_critic_rating">批評家評価</string>
+    <string name="editor_field_must_be_number">数値を入力してください</string>
+    <string name="editor_field_official_rating">公式レーティング</string>
+    <string name="editor_field_custom_rating">カスタムレーティング</string>
+    <string name="editor_field_production_year">製作年</string>
+    <string name="editor_field_premiere_date">初回放送日</string>
+    <string name="editor_field_end_date">終了日</string>
+    <string name="editor_date_format_hint">YYYY-MM-DD</string>
+    <string name="editor_field_runtime_minutes">上映時間（分）</string>
+    <string name="editor_field_episode_number">エピソード番号</string>
+    <string name="editor_field_season_number">シーズン番号</string>
+    <string name="editor_field_status">ステータス</string>
+    <string name="editor_field_display_order">表示順</string>
+    <string name="editor_field_air_time">放送時間</string>
+    <string name="editor_field_air_days">放送曜日</string>
+    <string name="editor_field_language">言語</string>
+    <string name="editor_field_name">名前</string>
+    <string name="editor_field_type">種類</string>
+    <string name="editor_field_role">役割</string>
+
+    <!-- Metadata tab: status values -->
+    <string name="editor_status_continuing">継続中</string>
+    <string name="editor_status_ended">終了</string>
+    <string name="editor_status_unreleased">未公開</string>
+
+    <!-- Metadata tab: display order values -->
+    <string name="editor_order_aired">放送順</string>
+    <string name="editor_order_absolute">絶対順</string>
+    <string name="editor_order_dvd">DVD</string>
+    <string name="editor_order_digital">デジタル</string>
+    <string name="editor_order_production">製作順</string>
+
+    <!-- Metadata tab: days of week (abbreviated to 3 chars via take(3)) -->
+    <string name="editor_day_sunday">日曜日</string>
+    <string name="editor_day_monday">月曜日</string>
+    <string name="editor_day_tuesday">火曜日</string>
+    <string name="editor_day_wednesday">水曜日</string>
+    <string name="editor_day_thursday">木曜日</string>
+    <string name="editor_day_friday">金曜日</string>
+    <string name="editor_day_saturday">土曜日</string>
+
+    <!-- Metadata tab: person types -->
+    <string name="editor_person_type_actor">俳優</string>
+    <string name="editor_person_type_director">監督</string>
+    <string name="editor_person_type_writer">脚本</string>
+    <string name="editor_person_type_producer">製作</string>
+    <string name="editor_person_type_composer">作曲</string>
+    <string name="editor_person_type_guest_star">ゲスト出演</string>
+    <string name="editor_person_type_conductor">指揮</string>
+    <string name="editor_person_type_lyricist">作詞</string>
+    <string name="editor_person_type_arranger">編曲</string>
+    <string name="editor_person_role_as_format">%1$s（%2$s 役）</string>
+
+    <!-- Metadata tab: chip groups -->
+    <string name="editor_add_new_placeholder">新規追加\u2026</string>
+    <string name="editor_add_person">人物を追加</string>
+    <string name="editor_edit_person">人物を編集</string>
+
+    <!-- Metadata tab: metadata locking -->
+    <string name="editor_lock_all_metadata">すべてのメタデータをロック</string>
+    <string name="editor_lock_individual_fields">個別フィールドをロック：</string>
+    <string name="editor_lock_field_name">名前</string>
+    <string name="editor_lock_field_overview">あらすじ</string>
+    <string name="editor_lock_field_genres">ジャンル</string>
+    <string name="editor_lock_field_parental_rating">保護者向けレーティング</string>
+    <string name="editor_lock_field_people">人物</string>
+    <string name="editor_lock_field_production_locations">製作場所</string>
+    <string name="editor_lock_field_studios">スタジオ</string>
+    <string name="editor_lock_field_tags">タグ</string>
+    <string name="editor_lock_field_runtime">上映時間</string>
+
+    <!-- Metadata tab: generic actions/icons -->
+    <string name="editor_action_collapse">折りたたむ</string>
+    <string name="editor_action_expand">展開</string>
+    <string name="editor_action_remove">削除</string>
+    <string name="editor_action_add">追加</string>
+    <string name="editor_action_edit">編集</string>
+    <string name="editor_action_cancel">キャンセル</string>
+
+    <!-- Images tab -->
+    <string name="editor_images_upload">アップロード</string>
+    <string name="editor_images_browse_online">オンラインで検索</string>
+    <string name="editor_images_none_available">画像がありません</string>
+    <string name="editor_images_delete_title">画像を削除</string>
+    <string name="editor_images_delete_message">この%1$s画像を削除してもよろしいですか？</string>
+    <string name="editor_images_delete_action">削除</string>
+    <string name="editor_images_dimensions_format">%1$dx%2$d</string>
+    <string name="editor_images_upload_title">画像をアップロード</string>
+    <string name="editor_images_browse_title">オンライン画像を検索</string>
+    <string name="editor_images_source_file">ファイル</string>
+    <string name="editor_images_source_url">URL</string>
+    <string name="editor_images_preview">プレビュー</string>
+    <string name="editor_images_select_image">画像を選択</string>
+    <string name="editor_images_change_file">ファイルを変更</string>
+    <string name="editor_images_image_url">画像 URL</string>
+    <string name="editor_images_download_from_url">URL からダウンロード</string>
+    <string name="editor_images_all_providers">すべてのプロバイダ</string>
+    <string name="editor_images_no_images_found">画像が見つかりません</string>
+    <string name="editor_images_pagination_format">%3$d 件中 %1$d-%2$d</string>
+    <string name="editor_images_previous">前へ</string>
+    <string name="editor_images_next">次へ</string>
+    <string name="editor_images_download">ダウンロード</string>
+    <string name="editor_images_close">閉じる</string>
+    <string name="editor_images_select_type">種類を選択</string>
+    <string name="editor_images_image_type">画像の種類</string>
+    <string name="editor_images_all_types">すべての種類</string>
+
+    <!-- Image types (enum-like, kept translatable for display) -->
+    <string name="editor_image_type_primary">メイン</string>
+    <string name="editor_image_type_art">アート</string>
+    <string name="editor_image_type_backdrop">背景</string>
+    <string name="editor_image_type_banner">バナー</string>
+    <string name="editor_image_type_box">パッケージ</string>
+    <string name="editor_image_type_box_rear">パッケージ裏</string>
+    <string name="editor_image_type_disc">ディスク</string>
+    <string name="editor_image_type_logo">ロゴ</string>
+    <string name="editor_image_type_menu">メニュー</string>
+    <string name="editor_image_type_thumb">サムネイル</string>
+
+    <!-- Subtitles tab -->
+    <string name="editor_subtitles_upload">アップロード</string>
+    <string name="editor_subtitles_search_remote">リモートで検索</string>
+    <string name="editor_subtitles_none_available">字幕がありません</string>
+    <string name="editor_subtitles_fallback_title">字幕 %1$d</string>
+    <string name="editor_subtitles_forced">強制</string>
+    <string name="editor_subtitles_external">外部</string>
+    <string name="editor_subtitles_delete_title">字幕を削除</string>
+    <string name="editor_subtitles_delete_message">この字幕を削除してもよろしいですか？</string>
+    <string name="editor_subtitles_delete_action">削除</string>
+    <string name="editor_subtitles_upload_title">字幕をアップロード</string>
+    <string name="editor_subtitles_select_file">ファイルを選択（.srt、.ass、.ssa、.vtt）</string>
+    <string name="editor_subtitles_change_file">変更：%1$s</string>
+    <string name="editor_subtitles_forced_subtitle">強制字幕</string>
+    <string name="editor_subtitles_hearing_impaired">聴覚障害者向け</string>
+    <string name="editor_subtitles_download_count_format">%1$d 件のダウンロード</string>
+    <string name="editor_subtitles_frame_rate_format">%1$sfps</string>
+    <string name="editor_subtitles_search_title">リモート字幕を検索</string>
+    <string name="editor_subtitles_search">検索</string>
+    <string name="editor_subtitles_no_results">結果が見つかりません</string>
+    <string name="editor_subtitles_unknown">不明</string>
+    <string name="editor_subtitles_perfect_match">完全一致</string>
+    <string name="editor_subtitles_label_forced">強制</string>
+    <string name="editor_subtitles_label_hi">SDH</string>
+    <string name="editor_subtitles_label_mt">MT</string>
+    <string name="editor_subtitles_download">ダウンロード</string>
+
+</resources>

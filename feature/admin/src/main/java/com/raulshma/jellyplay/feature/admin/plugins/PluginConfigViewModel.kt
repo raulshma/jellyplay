@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.admin.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -61,7 +62,7 @@ class PluginConfigViewModel @Inject constructor(
                         _state.value = _state.value.copy(error = e.message)
                     }
                 } else {
-                    _state.value = _state.value.copy(error = "No configuration page found")
+                    _state.value = _state.value.copy(error = context.getString(R.string.admin_no_config_page))
                 }
             }.onFailure { e ->
                 Log.e("PluginConfig", "Failed to load config pages", e)

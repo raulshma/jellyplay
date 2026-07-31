@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -75,13 +76,13 @@ fun EditorScreen(
     if (showDiscardDialog) {
         AlertDialog(
             onDismissRequest = { showDiscardDialog = false },
-            title = { Text("Discard changes?") },
-            text = { Text("You have unsaved edits. Discard them and leave?") },
+            title = { Text(stringResource(R.string.editor_discard_title)) },
+            text = { Text(stringResource(R.string.editor_discard_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     showDiscardDialog = false
                     onBack()
-                }) { Text("Discard") }
+                }) { Text(stringResource(R.string.editor_discard_action)) }
             },
             dismissButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -89,9 +90,9 @@ fun EditorScreen(
                         TextButton(onClick = {
                             showDiscardDialog = false
                             viewModel.saveMetadata()
-                        }) { Text("Save") }
+                        }) { Text(stringResource(R.string.editor_save)) }
                     }
-                    TextButton(onClick = { showDiscardDialog = false }) { Text("Keep editing") }
+                    TextButton(onClick = { showDiscardDialog = false }) { Text(stringResource(R.string.editor_keep_editing)) }
                 }
             },
         )
@@ -107,7 +108,7 @@ fun EditorScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = uiState.mediaDetail?.item?.name ?: "Edit Metadata",
+        title = uiState.mediaDetail?.item?.name ?: stringResource(R.string.editor_default_title),
         onBack = {
             // Route the toolbar back arrow through the same dirty-check as
             // system back so neither path silently discards unsaved edits.
@@ -137,7 +138,7 @@ fun EditorScreen(
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(if (uiState.isSaving) "Saving..." else "Save")
+                Text(if (uiState.isSaving) stringResource(R.string.editor_saving) else stringResource(R.string.editor_save))
             }
         },
     ) {
@@ -168,19 +169,19 @@ fun EditorScreen(
                 Tab(
                     selected = pagerState.currentPage == 0,
                     onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                    text = { Text("Metadata") },
+                    text = { Text(stringResource(R.string.editor_tab_metadata)) },
                     icon = { Icon(Tabler.Outline.Edit, contentDescription = null) },
                 )
                 Tab(
                     selected = pagerState.currentPage == 1,
                     onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
-                    text = { Text("Images") },
+                    text = { Text(stringResource(R.string.editor_tab_images)) },
                     icon = { Icon(Tabler.Outline.Photo, contentDescription = null) },
                 )
                 Tab(
                     selected = pagerState.currentPage == 2,
                     onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
-                    text = { Text("Subtitles") },
+                    text = { Text(stringResource(R.string.editor_tab_subtitles)) },
                     icon = { Icon(Tabler.Outline.Subtitles, contentDescription = null) },
                 )
             }
@@ -230,7 +231,7 @@ private fun EditorErrorBanner(message: String, onDismiss: () -> Unit) {
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onDismiss) { Text("Dismiss") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.editor_dismiss)) }
         }
     }
 }

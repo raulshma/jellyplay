@@ -51,6 +51,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -81,6 +82,7 @@ import com.raulshma.jellyplay.feature.admin.statistics.components.TrendLineChart
 import com.raulshma.jellyplay.feature.admin.statistics.components.WatchTimeCard
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Share
+import com.raulshma.jellyplay.feature.admin.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -109,7 +111,7 @@ fun UserStatisticsDetailScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = state.detail.user.name.ifBlank { "User Statistics" },
+        title = state.detail.user.name.ifBlank { stringResource(R.string.admin_user_statistics_title) },
         onBack = onBack,
         actions = {
             if (!state.isLoading && state.error == null) {
@@ -127,7 +129,7 @@ fun UserStatisticsDetailScreen(
                 ) {
                     Icon(
                         Tabler.Outline.Share,
-                        contentDescription = "Share",
+                        contentDescription = stringResource(R.string.admin_share_cd),
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
@@ -137,7 +139,7 @@ fun UserStatisticsDetailScreen(
         when {
             state.isLoading -> ScreenLoadingState()
             state.error != null -> ErrorScreen(
-                message = state.error ?: "Failed to load user details",
+                message = state.error ?: stringResource(R.string.admin_failed_load_user_details),
                 onRetry = { viewModel.loadUser(userId) },
             )
             else -> LazyColumn(
@@ -214,7 +216,7 @@ fun UserStatisticsDetailScreen(
                     item {
                         StaggeredSection(visible = true, index = 7) {
                             BreakdownCard(
-                                title = "Content Breakdown",
+                                title = stringResource(R.string.admin_content_breakdown),
                                 data = state.detail.typeBreakdown,
                             )
                         }
@@ -224,7 +226,7 @@ fun UserStatisticsDetailScreen(
                     item {
                         StaggeredSection(visible = true, index = 8) {
                             BreakdownCard(
-                                title = "By Genre",
+                                title = stringResource(R.string.admin_by_genre),
                                 data = state.detail.genreBreakdown,
                             )
                         }
@@ -248,7 +250,7 @@ fun UserStatisticsDetailScreen(
                     item {
                         StaggeredSection(visible = true, index = 11) {
                             BreakdownCard(
-                                title = "Playback Methods",
+                                title = stringResource(R.string.admin_playback_methods),
                                 data = state.detail.methodBreakdown,
                             )
                         }
@@ -258,7 +260,7 @@ fun UserStatisticsDetailScreen(
                     item {
                         StaggeredSection(visible = true, index = 12) {
                             BreakdownCard(
-                                title = "Clients & Devices",
+                                title = stringResource(R.string.admin_clients_devices),
                                 data = state.detail.deviceBreakdown,
                             )
                         }
@@ -292,7 +294,7 @@ fun UserStatisticsDetailScreen(
                                     shape = ShapeCache.smooth16,
                                     modifier = Modifier.then(loadMoreFocusState.focusModifier).tvFocusIndicator(loadMoreFocusState, ShapeCache.smooth16),
                                 ) {
-                                    Text(if (state.isLoadingMore) "Loading..." else "Load More")
+                                    Text(if (state.isLoadingMore) stringResource(R.string.admin_loading_dots) else stringResource(R.string.admin_load_more))
                                 }
                             }
                         }
@@ -362,17 +364,17 @@ private fun StatsSummaryRow(state: UserDetailState) {
     ) {
         SummaryStatCard(
             value = state.detail.statistics.totalPlayCount.toLong(),
-            label = "Total Plays",
+            label = stringResource(R.string.admin_stat_total_plays),
             modifier = Modifier.weight(1f),
         )
         SummaryStatCard(
             value = state.detail.statistics.moviePlayCount.toLong(),
-            label = "Movies",
+            label = stringResource(R.string.admin_stat_movies),
             modifier = Modifier.weight(1f),
         )
         SummaryStatCard(
             value = state.detail.statistics.episodePlayCount.toLong(),
-            label = "Episodes",
+            label = stringResource(R.string.admin_stat_episodes),
             modifier = Modifier.weight(1f),
         )
     }
@@ -389,7 +391,7 @@ private fun ActivityChartCard(state: UserDetailState) {
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
-                "Activity (30 days)",
+                stringResource(R.string.admin_activity_30_days),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -415,7 +417,7 @@ private fun TrendLineChartCard(state: UserDetailState) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Watch Time Trend (30 days)",
+                    stringResource(R.string.admin_watch_time_trend),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -444,7 +446,7 @@ private fun GenrePieChartCard(state: UserDetailState) {
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
-                "Most Watched Genres",
+                stringResource(R.string.admin_most_watched_genres),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -458,7 +460,7 @@ private fun GenrePieChartCard(state: UserDetailState) {
 private fun Top5Section(state: UserDetailState) {
     Column {
         Text(
-            "Top Watched",
+            stringResource(R.string.admin_top_watched),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 12.dp),
@@ -564,7 +566,7 @@ private fun MusicStatsSection(musicStats: MusicStatistics) {
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
-                "Music Listening",
+                stringResource(R.string.admin_music_listening),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -582,7 +584,7 @@ private fun MusicStatsSection(musicStats: MusicStatistics) {
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
-                            "Listening time",
+                            stringResource(R.string.admin_listening_time),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -592,7 +594,7 @@ private fun MusicStatsSection(musicStats: MusicStatistics) {
             }
             if (musicStats.topArtists.isNotEmpty()) {
                 Text(
-                    "Top Artists",
+                    stringResource(R.string.admin_top_artists),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -636,7 +638,7 @@ private fun MusicStatsSection(musicStats: MusicStatistics) {
             }
             if (musicStats.topGenres.isNotEmpty()) {
                 Text(
-                    "Top Genres",
+                    stringResource(R.string.admin_top_genres),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -647,7 +649,7 @@ private fun MusicStatsSection(musicStats: MusicStatistics) {
             }
             if (musicStats.topTracks.isNotEmpty()) {
                 Text(
-                    "Top Tracks",
+                    stringResource(R.string.admin_top_tracks),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -687,7 +689,7 @@ private fun MusicStatsSection(musicStats: MusicStatistics) {
             if (musicStats.totalListeningHours == 0f && musicStats.topTracks.isEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "No music listening data available",
+                    stringResource(R.string.admin_no_music_data),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -779,7 +781,7 @@ private fun SegmentedControl(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "Chart",
+                text = stringResource(R.string.admin_chart),
                 style = MaterialTheme.typography.labelMedium,
                 color = chartTextColor,
                 fontWeight = FontWeight.Medium,
@@ -794,7 +796,7 @@ private fun SegmentedControl(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "List",
+                text = stringResource(R.string.admin_list),
                 style = MaterialTheme.typography.labelMedium,
                 color = listTextColor,
                 fontWeight = FontWeight.Medium,
@@ -814,7 +816,7 @@ private fun BreakdownList(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                "No breakdown data available",
+                stringResource(R.string.admin_no_breakdown_data),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
