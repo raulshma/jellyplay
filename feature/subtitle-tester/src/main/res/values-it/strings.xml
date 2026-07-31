@@ -18,4 +18,8 @@
     <string name="subtitle_tester_preset_lyrics">Testi canzone</string>
     <string name="subtitle_tester_preset_signs">Cartelli / note traduzione</string>
     <string name="subtitle_tester_preset_action">Sequenze d\'azione</string>
+
+    <!-- Preview playback media + sample subtitle track -->
+    <string name="subtitle_tester_preview_title">Tester dei sottotitoli</string>
+    <string name="subtitle_tester_track_sample">Esempio</string>
 </resources>

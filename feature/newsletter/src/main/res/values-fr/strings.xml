@@ -3,4 +3,25 @@
     <!-- Newsletter feature user-facing strings (enhancements §2.2) -->
     <string name="newsletter_could_not_load">Impossible de charger la newsletter</string>
     <string name="newsletter_preparing_digest">Préparation de votre récapitulatif\u2026</string>
+
+    <!-- Newsletter screens & sections -->
+    <string name="newsletter_title">Newsletter</string>
+    <string name="newsletter_activity_digest">Flux d\'activité</string>
+    <string name="newsletter_continue_watching">Reprendre le visionnage</string>
+    <string name="newsletter_fresh_picks">Nouvelles sélections</string>
+    <string name="newsletter_recently_added">Ajoutés récemment</string>
+    <string name="newsletter_next_up">À suivre</string>
+    <string name="newsletter_view_all">Tout afficher</string>
+    <string name="newsletter_no_items_available">Aucun élément disponible</string>
+
+    <!-- Newsletter aggregated stats -->
+    <string name="newsletter_stat_total_items">Total</string>
+    <string name="newsletter_stat_movies">Films</string>
+    <string name="newsletter_stat_series">Séries</string>
+    <string name="newsletter_stat_episodes">Épisodes</string>
+    <string name="newsletter_stat_albums">Albums</string>
+    <string name="newsletter_stat_songs">Chansons</string>
+    <string name="newsletter_stat_new_this_week">Nouveautés cette semaine</string>
+    <string name="newsletter_stat_in_progress">En cours</string>
+    <string name="newsletter_stat_activity">Activité</string>
 </resources>

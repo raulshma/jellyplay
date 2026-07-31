@@ -111,8 +111,8 @@ fun ExperimentalSettingsScreen(
                         val enabled = preferences.isExperimentalEnabled(info.feature)
                         SettingToggleItem(
                             icon = info.icon,
-                            title = info.title,
-                            subtitle = info.subtitle,
+                            title = stringResource(info.titleRes),
+                            subtitle = stringResource(info.subtitleRes),
                             checked = enabled,
                             index = index,
                             count = features.size,

@@ -68,6 +68,8 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
+import com.raulshma.jellyplay.feature.livetv.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,7 +95,7 @@ fun EpgScreen(
     val focusRequester = remember { FocusRequester() }
 
     JellyPlayScreenScaffold(
-        title = "Program Guide",
+        title = stringResource(R.string.livetv_epg_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         topBarStyle = com.raulshma.jellyplay.core.ui.components.TopBarStyle.None,
@@ -114,7 +116,7 @@ fun EpgScreen(
             viewModel.channels.isEmpty() && !viewModel.isLoading -> {
                 ScreenEmptyState(
                     icon = Tabler.Outline.Calendar,
-                    title = "No program guide available",
+                    title = stringResource(R.string.livetv_no_guide_available),
                 )
             }
             else -> {
@@ -154,7 +156,7 @@ private fun RecordDialog(
     when (state) {
         is RecordDialogState.Confirm -> AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Record program?") },
+            title = { Text(stringResource(R.string.livetv_record_program_prompt)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
@@ -165,27 +167,27 @@ private fun RecordDialog(
                         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
-                        "A single timer will be scheduled on the server.",
+                        stringResource(R.string.livetv_record_single_timer_note),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             },
             confirmButton = {
-                TextButton(onClick = onConfirm) { Text("Record") }
+                TextButton(onClick = onConfirm) { Text(stringResource(R.string.livetv_record_once)) }
             },
             dismissButton = {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_cancel)) }
             },
         )
         is RecordDialogState.Requesting -> AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Recording…") },
+            title = { Text(stringResource(R.string.livetv_recording_in_progress)) },
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     JellyPlayLoadingIndicator()
                     Spacer(Modifier.width(12.dp))
-                    Text("Scheduling timer")
+                    Text(stringResource(R.string.livetv_scheduling_timer))
                 }
             },
             confirmButton = {},
@@ -193,15 +195,15 @@ private fun RecordDialog(
         )
         is RecordDialogState.Success -> AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Recording scheduled") },
+            title = { Text(stringResource(R.string.livetv_record_success)) },
             text = { Text("\"${state.programName}\" will be recorded.") },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+            confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_done)) } },
         )
         is RecordDialogState.Error -> AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Couldn't schedule recording") },
+            title = { Text(stringResource(R.string.livetv_record_schedule_failed)) },
             text = { Text(state.message) },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+            confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_ok)) } },
         )
     }
 }
@@ -527,7 +529,7 @@ private fun ProgramCell(
                 ) {
                     Icon(
                         imageVector = Tabler.Outline.Circle,
-                        contentDescription = "Record",
+                        contentDescription = stringResource(R.string.livetv_record_once),
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(12.dp),
                     )

@@ -67,7 +67,7 @@ fun ActiveSessionsSection(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Active Sessions",
+                        stringResource(R.string.admin_active_sessions),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )

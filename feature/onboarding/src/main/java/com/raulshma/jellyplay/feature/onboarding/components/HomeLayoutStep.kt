@@ -11,12 +11,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.feature.onboarding.R
 
 @Composable
 fun HomeLayoutStep(
@@ -35,8 +37,8 @@ fun HomeLayoutStep(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OnboardingStepScaffold(
-            title = "Home Layout",
-            subtitle = "Choose what appears on your home screen",
+            title = stringResource(R.string.onboarding_home_layout_title),
+            subtitle = stringResource(R.string.onboarding_home_layout_subtitle),
             icon = Tabler.Outline.LayoutGrid,
             onNext = {},
         ) {
@@ -69,8 +71,8 @@ fun HomeLayoutStep(
             Spacer(Modifier.height(8.dp))
 
             OnboardingToggleRow(
-                title = "Show navigation labels",
-                subtitle = "Display text labels under navigation bar icons",
+                title = stringResource(R.string.onboarding_home_layout_nav_labels),
+                subtitle = stringResource(R.string.onboarding_home_layout_nav_labels_subtitle),
                 checked = navBarShowLabels,
                 onCheckedChange = onNavBarShowLabelsChange,
             )

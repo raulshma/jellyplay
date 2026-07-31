@@ -94,4 +94,14 @@
     <string name="music_name_label">名称</string>
     <string name="music_description_optional">描述（可选）</string>
     <string name="music_remove_from_playlist">从播放列表移除</string>
+
+    <!-- Paged grid states -->
+    <string name="music_nothing_found">未找到任何内容</string>
+    <string name="music_failed_load">加载失败</string>
+
+    <!-- Built-in smart playlist names -->
+    <string name="music_smart_playlist_top_rated">最高评分</string>
+    <string name="music_smart_playlist_recently_added">最近添加</string>
+    <string name="music_smart_playlist_unplayed">未播放曲目</string>
+    <string name="music_smart_playlist_favorites">收藏</string>
 </resources>

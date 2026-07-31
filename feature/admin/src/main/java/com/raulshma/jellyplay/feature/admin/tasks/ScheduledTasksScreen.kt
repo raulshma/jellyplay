@@ -451,11 +451,16 @@ private fun TriggerChip(type: String, intervalTicks: Long?, dayOfWeek: String?) 
     val label = when {
         type == "IntervalTrigger" && intervalTicks != null -> {
             val hours = intervalTicks / 36_000_000_000
-            if (hours > 24) "Every ${hours / 24}d" else "Every ${hours}h"
+            if (hours > 24) {
+                stringResource(R.string.admin_trigger_every_days, (hours / 24).toInt())
+            } else {
+                stringResource(R.string.admin_trigger_every_hours, hours.toInt())
+            }
         }
-        type == "DailyTrigger" -> "Daily"
-        type == "WeeklyTrigger" -> dayOfWeek?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "Weekly"
-        type == "StartupTrigger" -> "On Startup"
+        type == "DailyTrigger" -> stringResource(R.string.admin_trigger_daily)
+        type == "WeeklyTrigger" -> dayOfWeek?.lowercase()?.replaceFirstChar { it.uppercase() }
+            ?: stringResource(R.string.admin_trigger_weekly)
+        type == "StartupTrigger" -> stringResource(R.string.admin_trigger_on_startup)
         else -> type.removeSuffix("Trigger")
     }
     Box(

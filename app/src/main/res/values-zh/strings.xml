@@ -92,4 +92,55 @@
     <string name="update_install">安装</string>
     <string name="update_failed_title">更新失败</string>
     <string name="update_close">关闭</string>
+
+    <!-- Shared media transport (content descriptions & labels) -->
+    <string name="media_play">播放</string>
+    <string name="media_pause">暂停</string>
+    <string name="media_next">下一个</string>
+    <string name="media_previous">上一个</string>
+    <string name="media_stop">停止</string>
+    <string name="media_close">关闭</string>
+    <string name="media_disconnect">断开</string>
+    <string name="media_rewind_seconds">快退 10 秒</string>
+    <string name="media_forward_seconds">快进 10 秒</string>
+
+    <!-- Play On companion screen -->
+    <string name="cast_title">正在投屏</string>
+    <string name="cast_title_to">正在投屏到 %1$s</string>
+    <string name="cast_open_companion">打开面板</string>
+    <string name="cast_back_seconds">后退 10 秒</string>
+    <string name="cast_forward_seconds">前进 30 秒</string>
+
+    <!-- Floating player overlay -->
+    <string name="floating_player_close">关闭悬浮播放器</string>
+
+    <!-- Floating player foreground notification -->
+    <string name="floating_player_channel_name">悬浮播放器</string>
+    <string name="floating_player_channel_desc">悬浮媒体播放器覆盖层</string>
+    <string name="floating_player_notification_text">媒体控件悬浮在屏幕上</string>
+
+    <!-- Lock screen authentication -->
+    <string name="auth_title_biometric">验证身份</string>
+    <string name="auth_title_pin">输入 PIN</string>
+    <string name="auth_subtitle">解锁 JellyPlay</string>
+    <string name="pin_incorrect">PIN 错误</string>
+    <string name="pin_lockout_now">尝试次数过多。请重试。</string>
+    <string name="pin_lockout_seconds">尝试次数过多。请在 %1$ds 后重试。</string>
+    <string name="pin_lockout_minutes">尝试次数过多。请在 %1$dm 后重试。</string>
+    <string name="pin_lockout_hours">尝试次数过多。请在 %1$dh 后重试。</string>
+    <string name="pin_lockout_hours_minutes">尝试次数过多。请在 %1$dh %2$dm 后重试。</string>
+
+    <!-- Picture-in-picture actions -->
+    <string name="pip_rewind">快退</string>
+    <string name="pip_forward">快进</string>
+    <string name="pip_next">下一个</string>
+
+    <!-- TV navigation drawer -->
+    <string name="nav_now_playing">正在播放</string>
+    <string name="nav_settings">设置</string>
+
+    <!-- Play On device sheet -->
+    <string name="play_on_title">播放到</string>
+    <string name="play_on_no_clients">未找到 Jellyfin 客户端。在其他设备上打开 JellyPlay 或 Jellyfin，它就会出现在这里。</string>
+    <string name="play_on_jellyfin_session">Jellyfin 会话</string>
 </resources>

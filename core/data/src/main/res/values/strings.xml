@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Playback-sync foreground notification -->
+    <string name="data_sync_title">Syncing watch progress</string>
+    <string name="data_sync_finishing">Finishing\u2026</string>
+    <plurals name="data_sync_items_queued">
+        <item quantity="one">%1$d item queued</item>
+        <item quantity="other">%1$d items queued</item>
+    </plurals>
+
+    <!-- Playback-sync notification channel -->
+    <string name="data_sync_channel_name">Watch progress sync</string>
+    <string name="data_sync_channel_desc">Syncing offline watch progress to the server</string>
+
+    <!-- Now Playing (media playback) notification channel -->
+    <string name="data_channel_now_playing">Now Playing</string>
+    <string name="data_channel_now_playing_desc">Media playback controls</string>
+
+    <!-- Downloads notification channel -->
+    <string name="data_channel_downloads">Downloads</string>
+    <string name="data_channel_downloads_desc">Download progress notifications</string>
+
+    <!-- Admin statistics: content-type breakdown labels -->
+    <string name="data_label_movies">Movies</string>
+    <string name="data_label_episodes">Episodes</string>
+    <string name="data_label_songs">Songs</string>
+
+    <!-- Admin statistics: stale-media detail/date text -->
+    <string name="data_added_today">Added today</string>
+    <string name="data_added_one_day_ago">Added 1 day ago</string>
+    <string name="data_added_days_ago">Added %1$dd ago</string>
+    <string name="data_added_months_ago">Added %1$dmo ago</string>
+    <string name="data_added_years_ago">Added %1$dy ago</string>
+    <string name="data_never_played">Never played</string>
+    <string name="data_days_since_play">%1$dd since play</string>
+    <string name="data_plays_count">%1$d plays</string>
+    <string name="data_added_date">Added %1$s</string>
+    <string name="data_added_unknown">Added unknown</string>
+    <string name="data_played_date">Played %1$s</string>
+</resources>

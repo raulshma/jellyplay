@@ -51,4 +51,25 @@
     <string name="library_sort_options">정렬 옵션</string>
     <string name="library_failed_to_load_photos">사진을 불러오지 못했습니다</string>
     <string name="library_no_photos_found">사진을 찾을 수 없습니다</string>
+
+    <!-- ── Photo viewer (PhotoViewerScreen) ────────────────────────────── -->
+    <string name="library_photo_adjustments">조정</string>
+    <string name="library_photo_slideshow">슬라이드쇼</string>
+    <string name="library_photo_start_slideshow">슬라이드쇼 시작</string>
+    <string name="library_photo_stop_slideshow">슬라이드쇼 중지</string>
+    <!-- %1$d = brightness as integer percent -->
+    <string name="library_photo_brightness">밝기 %1$d%%</string>
+    <!-- %1$d = contrast as integer percent -->
+    <string name="library_photo_contrast">대비 %1$d%%</string>
+    <!-- %1$d = saturation as integer percent -->
+    <string name="library_photo_saturation">채도 %1$d%%</string>
+    <string name="library_photo_failed_to_load">사진을 불러오지 못했습니다</string>
+    <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
+    <string name="library_cd_close">닫기</string>
+    <string name="library_cd_share">공유</string>
+    <string name="library_cd_save">저장</string>
+    <string name="library_cd_info">정보</string>
+    <string name="library_cd_adjust">조정</string>
+    <string name="library_cd_previous">이전</string>
+    <string name="library_cd_next">다음</string>
 </resources>

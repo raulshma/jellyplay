@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import androidx.tv.material3.DrawerState
@@ -282,7 +283,7 @@ fun TvNavigationDrawer(
                 if (nowPlayingEnabled) {
                     item(key = "now_playing") {
                         TvDrawerRow(
-                            label = "Now Playing",
+                            label = stringResource(R.string.nav_now_playing),
                             subtext = nowPlayingTitle,
                             icon = Tabler.Outline.PlayerPlay,
                             showLabel = showLabels,
@@ -325,7 +326,7 @@ fun TvNavigationDrawer(
                 // ── Settings ─────────────────────────────────────────────────────
                 item(key = "settings") {
                     TvDrawerRow(
-                        label = "Settings",
+                        label = stringResource(R.string.nav_settings),
                         icon = Tabler.Outline.Settings,
                         showLabel = showLabels,
                         selected = selectedIndex == settingsIndex,

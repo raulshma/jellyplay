@@ -129,7 +129,7 @@ fun PluginCatalogCard(
                     ) {
                         if (packageInfo.owner.isNotBlank()) {
                             Text(
-                                text = "by ${packageInfo.owner}",
+                                text = stringResource(R.string.admin_plugin_by_author, packageInfo.owner),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

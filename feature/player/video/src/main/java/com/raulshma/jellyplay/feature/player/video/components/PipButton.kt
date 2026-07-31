@@ -8,7 +8,9 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -34,7 +36,7 @@ internal fun PipButton(
     ) {
         Icon(
             Tabler.Outline.PictureInPicture,
-            contentDescription = "Picture in Picture",
+            contentDescription = stringResource(R.string.player_video_picture_in_picture),
             modifier = Modifier.size(IconButtonDefaults.smallIconSize),
         )
     }

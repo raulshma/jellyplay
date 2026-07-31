@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.feature.onboarding.R
 
 @Composable
 fun SecurityStep(
@@ -54,14 +56,14 @@ fun SecurityStep(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OnboardingStepScaffold(
-            title = "Privacy & Security",
-            subtitle = "Protect your app with a PIN or biometrics",
+            title = stringResource(R.string.onboarding_security_title),
+            subtitle = stringResource(R.string.onboarding_security_subtitle),
             icon = Tabler.Outline.Lock,
             onNext = {},
         ) {
             OnboardingToggleRow(
-                title = "PIN Lock",
-                subtitle = "Require a PIN to open the app",
+                title = stringResource(R.string.onboarding_security_pin_lock),
+                subtitle = stringResource(R.string.onboarding_security_pin_lock_subtitle),
                 checked = pinLockEnabled,
                 onCheckedChange = { enabled ->
                     if (enabled) {
@@ -84,7 +86,7 @@ fun SecurityStep(
                     OutlinedTextField(
                         value = pinInput,
                         onValueChange = { pinInput = it; pinError = null },
-                        label = { Text("Enter PIN") },
+                        label = { Text(stringResource(R.string.onboarding_security_enter_pin)) },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         singleLine = true,
@@ -93,7 +95,7 @@ fun SecurityStep(
                     OutlinedTextField(
                         value = pinConfirm,
                         onValueChange = { pinConfirm = it; pinError = null },
-                        label = { Text("Confirm PIN") },
+                        label = { Text(stringResource(R.string.onboarding_security_confirm_pin)) },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         singleLine = true,
@@ -118,7 +120,7 @@ fun SecurityStep(
                                 }
                             },
                         ) {
-                            Text("Save PIN")
+                            Text(stringResource(R.string.onboarding_security_save_pin))
                         }
                     }
                 }
@@ -127,7 +129,7 @@ fun SecurityStep(
             Spacer(Modifier.height(8.dp))
 
             OnboardingToggleRow(
-                title = "Biometric lock",
+                title = stringResource(R.string.onboarding_security_biometric_lock),
                 subtitle = if (biometricAvailable) {
                     "Use fingerprint or face unlock"
                 } else {

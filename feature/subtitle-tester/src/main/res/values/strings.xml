@@ -20,4 +20,8 @@
     <string name="subtitle_tester_preset_lyrics">Song lyrics</string>
     <string name="subtitle_tester_preset_signs">Signs / TL notes</string>
     <string name="subtitle_tester_preset_action">Action bursts</string>
+
+    <!-- Preview playback media + sample subtitle track -->
+    <string name="subtitle_tester_preview_title">Subtitle Tester</string>
+    <string name="subtitle_tester_track_sample">Sample</string>
 </resources>

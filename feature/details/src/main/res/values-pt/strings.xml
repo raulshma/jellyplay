@@ -201,4 +201,32 @@
     <string name="detail_manage_cd_toggle_monitor_season">Alternar monitorização de todos os episódios da temporada</string>
     <string name="detail_manage_cd_toggle_monitor_episode">Alternar monitorização do episódio</string>
     <string name="detail_manage_cd_episode_menu">Opções do episódio</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">Disponível</string>
+    <string name="detail_request">Pedir</string>
+    <string name="detail_seerr_processing">A processar</string>
+    <string name="detail_seerr_pending">Pendente</string>
+    <string name="detail_seerr_requested">Pedido</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">Recomendações</string>
+    <string name="detail_section_similar">Similares</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">Estreia nos cinemas</string>
+    <string name="detail_cd_release_digital">Estreia digital</string>
+    <string name="detail_cd_release_physical">Estreia física</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">Vídeo</string>
+    <string name="detail_media_info_title_audio">Áudio</string>
+    <string name="detail_media_info_title_subtitles">Legendas</string>
+    <string name="detail_media_info_no_info">Sem informações de mídia</string>
+    <string name="detail_media_info_no_info_description">As informações técnicas não estão disponíveis para este item</string>
 </resources>

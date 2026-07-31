@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,7 +77,7 @@ fun MediaInfoScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Technical Info",
+        title = stringResource(R.string.detail_option_technical_info),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) { innerPadding ->
@@ -206,7 +207,7 @@ private fun MediaSourceSection(
 
         if (videoStreams.isNotEmpty()) {
             StreamSection(
-                title = "Video",
+                title = stringResource(R.string.detail_media_info_title_video),
                 icon = Tabler.Outline.BadgeHd,
                 streams = videoStreams,
             ) { stream ->
@@ -229,7 +230,7 @@ private fun MediaSourceSection(
 
         if (audioStreams.isNotEmpty()) {
             StreamSection(
-                title = "Audio",
+                title = stringResource(R.string.detail_media_info_title_audio),
                 icon = Tabler.Outline.Volume,
                 streams = audioStreams,
             ) { stream ->
@@ -249,7 +250,7 @@ private fun MediaSourceSection(
 
         if (subtitleStreams.isNotEmpty()) {
             StreamSection(
-                title = "Subtitles",
+                title = stringResource(R.string.detail_media_info_title_subtitles),
                 icon = Tabler.Outline.Subtitles,
                 streams = subtitleStreams,
             ) { stream ->
@@ -359,8 +360,8 @@ private fun EmptyMediaInfo() {
     ) {
         com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
             icon = Tabler.Outline.FileDescription,
-            title = "No Media Info",
-            description = "Technical information is not available for this item",
+            title = stringResource(R.string.detail_media_info_no_info),
+            description = stringResource(R.string.detail_media_info_no_info_description),
         )
     }
 }

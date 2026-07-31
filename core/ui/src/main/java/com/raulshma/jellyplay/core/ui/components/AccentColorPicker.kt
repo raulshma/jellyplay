@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -41,6 +42,7 @@ import com.composables.icons.tabler.outline.ColorFilter
 import com.composables.icons.tabler.outline.Palette
 import com.composables.icons.tabler.outline.Wand
 import com.raulshma.jellyplay.core.designsystem.theme.AccentColorSwatch
+import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -51,8 +53,8 @@ fun AccentColorPicker(
     selectedSwatch: String,
     onSwatchSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
-    title: String = "Accent Color",
-    subtitle: String = "Select custom accent color swatch or dynamic",
+    title: String = stringResource(R.string.core_ui_accent_color_title),
+    subtitle: String = stringResource(R.string.core_ui_accent_color_subtitle),
     icon: ImageVector = Tabler.Outline.Palette,
 ) {
     Column(
@@ -170,7 +172,7 @@ fun SwatchCircle(
         if (isSelected) {
             Icon(
                 imageVector = Tabler.Outline.Check,
-                contentDescription = "Selected",
+                contentDescription = stringResource(R.string.core_ui_selected),
                 tint = checkTint,
                 modifier = Modifier.size(18.dp)
             )
@@ -239,7 +241,7 @@ fun DynamicSwatchCircle(
         ) {
             Icon(
                 imageVector = Tabler.Outline.Wand,
-                contentDescription = "Dynamic wallpaper colors",
+                contentDescription = stringResource(R.string.core_ui_dynamic_colors),
                 tint = Color.White,
                 modifier = Modifier.size(16.dp)
             )
@@ -252,8 +254,8 @@ fun ColorStylePicker(
     selectedStyle: ColorStyle,
     onStyleSelected: (ColorStyle) -> Unit,
     modifier: Modifier = Modifier,
-    title: String = "Color Style",
-    subtitle: String = "Define the visual vibe of generated palettes",
+    title: String = stringResource(R.string.core_ui_color_style_title),
+    subtitle: String = stringResource(R.string.core_ui_color_style_subtitle),
     icon: ImageVector = Tabler.Outline.ColorFilter,
 ) {
     Column(
@@ -379,13 +381,13 @@ fun SynthwaveAccentPicker(
             Spacer(modifier = Modifier.width(16.dp))
             Column {
                 Text(
-                    text = "Synthwave Accent",
+                    text = stringResource(R.string.core_ui_synthwave_accent_title),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Select custom neon accent color swatch",
+                    text = stringResource(R.string.core_ui_synthwave_accent_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -451,7 +453,7 @@ fun SynthwaveAccentPicker(
                     if (isSelected) {
                         Icon(
                             imageVector = Tabler.Outline.Check,
-                            contentDescription = "Selected",
+                            contentDescription = stringResource(R.string.core_ui_selected),
                             tint = checkTint,
                             modifier = Modifier.size(18.dp)
                         )
@@ -488,13 +490,13 @@ fun SoothingAccentPicker(
             Spacer(modifier = Modifier.width(16.dp))
             Column {
                 Text(
-                    text = "Soothing Accent",
+                    text = stringResource(R.string.core_ui_soothing_accent_title),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Select a calming accent color",
+                    text = stringResource(R.string.core_ui_soothing_accent_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -562,7 +564,7 @@ fun SoothingAccentPicker(
                     if (isSelected) {
                         Icon(
                             imageVector = Tabler.Outline.Check,
-                            contentDescription = "Selected",
+                            contentDescription = stringResource(R.string.core_ui_selected),
                             tint = checkTint,
                             modifier = Modifier.size(18.dp)
                         )

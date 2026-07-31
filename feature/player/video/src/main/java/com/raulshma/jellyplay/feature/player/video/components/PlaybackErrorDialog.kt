@@ -25,8 +25,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -86,7 +88,7 @@ fun PlaybackErrorOverlay(
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Playback Error",
+                    stringResource(R.string.player_video_playback_error),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -95,9 +97,9 @@ fun PlaybackErrorOverlay(
                 // stack-trace-like decoder/codec message that reads poorly to users.
                 Text(
                     if (retryable) {
-                        "Playback was interrupted. Retry on this engine, or try a different one."
+                        stringResource(R.string.player_video_playback_error_retryable)
                     } else {
-                        "This video couldn't be played on this engine. Try a different player engine, or dismiss to return."
+                        stringResource(R.string.player_video_playback_error_fatal)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -117,12 +119,12 @@ fun PlaybackErrorOverlay(
                         modifier = Modifier.fillMaxWidth(),
                         shape = ShapeCache.smooth12,
                     ) {
-                        Text("Retry on ${currentPlayerType.displayName}")
+                        Text(stringResource(R.string.player_video_retry_on, currentPlayerType.displayName))
                     }
                 }
                 Spacer(Modifier.height(20.dp))
                 Text(
-                    "Try another engine",
+                    stringResource(R.string.player_video_try_another_engine),
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxWidth(),
@@ -135,7 +137,7 @@ fun PlaybackErrorOverlay(
                         shape = ShapeCache.smooth12,
                         colors = ButtonDefaults.filledTonalButtonColors(),
                     ) {
-                        Text("Retry with ${engine.displayName}")
+                        Text(stringResource(R.string.player_video_retry_with, engine.displayName))
                     }
                     Spacer(Modifier.height(6.dp))
                 }
@@ -145,7 +147,7 @@ fun PlaybackErrorOverlay(
                     modifier = Modifier.fillMaxWidth(),
                     shape = ShapeCache.smooth12,
                 ) {
-                    Text("Dismiss")
+                    Text(stringResource(R.string.player_video_dismiss))
                 }
             }
         }

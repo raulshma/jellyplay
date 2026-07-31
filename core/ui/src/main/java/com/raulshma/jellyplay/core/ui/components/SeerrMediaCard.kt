@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,6 +57,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -493,7 +495,7 @@ fun SeerrMediaCard(
                         ) {
                             Icon(
                                 Tabler.Outline.Plus,
-                                contentDescription = "Request",
+                                contentDescription = stringResource(R.string.core_ui_request),
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(2.dp),
                             )

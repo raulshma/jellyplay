@@ -45,4 +45,55 @@
     <string name="core_media_live_tv_plural">Live TV</string>
     <string name="core_media_channel_plural">Channels</string>
     <string name="core_media_unknown_plural">Unknown</string>
+
+    <!-- core/ui shared -->
+    <string name="core_report">Report</string>
+    <string name="core_ui_back">Back</string>
+    <string name="core_ui_select">Select…</string>
+    <string name="core_ui_selected">Selected</string>
+
+    <!-- core/ui auth challenge -->
+    <string name="core_ui_auth_title">Authenticate</string>
+    <string name="core_ui_auth_subtitle">Confirm your identity</string>
+    <string name="core_ui_auth_use_pin">Use PIN</string>
+    <string name="core_ui_auth_use_biometric">Use Biometric</string>
+    <string name="core_ui_auth_biometric_prompt">Use biometric to authenticate</string>
+
+    <!-- core/ui seerr request dialog -->
+    <string name="core_ui_seerr_request_success">Request submitted successfully!</string>
+    <string name="core_ui_seerr_loading_options">Loading options…</string>
+    <string name="core_ui_seerr_destination_server_sonarr">Destination Server (Sonarr)</string>
+    <string name="core_ui_seerr_destination_server_radarr">Destination Server (Radarr)</string>
+    <string name="core_ui_seerr_quality_profile">Quality Profile</string>
+    <string name="core_ui_seerr_root_folder">Root Folder</string>
+    <string name="core_ui_seerr_tags">Tags</string>
+    <string name="core_ui_seerr_all_seasons">All Seasons</string>
+    <string name="core_ui_seerr_season">Season %1$d</string>
+    <string name="core_ui_seerr_episodes">%1$d episodes</string>
+    <string name="core_ui_seerr_loading_seasons">Loading seasons…</string>
+    <string name="core_ui_seerr_request">Request</string>
+
+    <!-- core/ui accent / color pickers -->
+    <string name="core_ui_accent_color_title">Accent Color</string>
+    <string name="core_ui_accent_color_subtitle">Select custom accent color swatch or dynamic</string>
+    <string name="core_ui_color_style_title">Color Style</string>
+    <string name="core_ui_color_style_subtitle">Define the visual vibe of generated palettes</string>
+    <string name="core_ui_dynamic_colors">Dynamic wallpaper colors</string>
+    <string name="core_ui_synthwave_accent_title">Synthwave Accent</string>
+    <string name="core_ui_synthwave_accent_subtitle">Select custom neon accent color swatch</string>
+    <string name="core_ui_soothing_accent_title">Soothing Accent</string>
+    <string name="core_ui_soothing_accent_subtitle">Select a calming accent color</string>
+
+    <!-- core/ui component content descriptions & labels -->
+    <string name="core_ui_remove">Remove</string>
+    <string name="core_ui_play">Play</string>
+    <string name="core_ui_backspace">Backspace</string>
+    <string name="core_ui_request">Request</string>
+    <string name="core_ui_watched">Watched</string>
+    <string name="core_ui_downloaded">Downloaded</string>
+    <string name="core_ui_cd_loading">Loading</string>
+    <string name="core_ui_cd_error">Error</string>
+    <string name="core_ui_cd_local_network">Local network, no internet</string>
+    <string name="core_ui_cd_offline">Offline</string>
+    <string name="core_ui_cd_server_unreachable">Server unreachable</string>
 </resources>

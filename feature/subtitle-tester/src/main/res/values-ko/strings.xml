@@ -18,4 +18,8 @@
     <string name="subtitle_tester_preset_lyrics">노래 가사</string>
     <string name="subtitle_tester_preset_signs">간판 / 번역 노트</string>
     <string name="subtitle_tester_preset_action">액션 효과</string>
+
+    <!-- Preview playback media + sample subtitle track -->
+    <string name="subtitle_tester_preview_title">자막 테스터</string>
+    <string name="subtitle_tester_track_sample">샘플</string>
 </resources>

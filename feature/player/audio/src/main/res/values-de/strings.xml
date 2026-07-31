@@ -110,4 +110,14 @@
 
     <!-- Playback error -->
     <string name="audio_error_retry">Erneut versuchen</string>
+
+    <!-- Up next strip -->
+    <string name="audio_up_next">Als Nächstes</string>
+
+    <!-- Cast -->
+    <string name="audio_cast">Übertragen</string>
+    <string name="audio_cast_connected">Übertragung verbunden</string>
+    <string name="audio_cast_to_device">Auf Gerät übertragen</string>
+    <string name="audio_cast_no_devices">Keine Übertragungsgeräte gefunden. Stellen Sie sicher, dass Ihr Gerät im selben Netzwerk ist.</string>
+    <string name="audio_cast_ok">OK</string>
 </resources>

@@ -46,6 +46,17 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
 @Composable
+fun smartPlaylistDisplayName(playlist: com.raulshma.jellyplay.core.model.SmartPlaylist): String {
+    return when (playlist.id) {
+        "top_rated" -> stringResource(R.string.music_smart_playlist_top_rated)
+        "recently_added" -> stringResource(R.string.music_smart_playlist_recently_added)
+        "unplayed" -> stringResource(R.string.music_smart_playlist_unplayed)
+        "favorites" -> stringResource(R.string.music_smart_playlist_favorites)
+        else -> playlist.name
+    }
+}
+
+@Composable
 fun SmartPlaylistsScreen(
     onPlaylistClick: (SmartPlaylist) -> Unit,
     onBack: () -> Unit,
@@ -143,7 +154,7 @@ private fun PlaylistCard(
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = playlist.name,
+                    text = smartPlaylistDisplayName(playlist),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                 )

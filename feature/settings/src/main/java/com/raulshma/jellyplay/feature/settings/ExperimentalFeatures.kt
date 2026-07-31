@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -15,8 +16,8 @@ import com.raulshma.jellyplay.core.model.ExperimentalFeature
  */
 data class ExperimentalFeatureInfo(
     val feature: ExperimentalFeature,
-    val title: String,
-    val subtitle: String,
+    @StringRes val titleRes: Int,
+    @StringRes val subtitleRes: Int,
     val icon: ImageVector,
 )
 
@@ -25,20 +26,20 @@ object ExperimentalFeatures {
     val all: List<ExperimentalFeatureInfo> = listOf(
         ExperimentalFeatureInfo(
             feature = ExperimentalFeature.HOME_CARD_CLIPPING,
-            title = "Card Clipping",
-            subtitle = "Clip home-screen cards to their row edges (and rounded shape) while scrolling",
+            titleRes = R.string.settings_exp_card_clipping,
+            subtitleRes = R.string.settings_exp_card_clipping_subtitle,
             icon = Tabler.Outline.Crop,
         ),
         ExperimentalFeatureInfo(
             feature = ExperimentalFeature.MEDIA_CARD_PEEK,
-            title = "Press-and-Hold Preview",
-            subtitle = "Long-press a media card to peek a blurred detail preview; release to dismiss",
+            titleRes = R.string.settings_exp_press_hold_preview,
+            subtitleRes = R.string.settings_exp_press_hold_preview_subtitle,
             icon = Tabler.Outline.Eye,
         ),
         ExperimentalFeatureInfo(
             feature = ExperimentalFeature.DIRECT_ARR_INTEGRATION,
-            title = "Direct *arr Integration",
-            subtitle = "Show download-queue progress on Requests and a coming-soon calendar on Home from your Radarr/Sonarr. Server details are auto-discovered from Seerr; manual override in *arr settings",
+            titleRes = R.string.settings_arr_direct_integration,
+            subtitleRes = R.string.settings_exp_arr_integration_subtitle,
             icon = Tabler.Outline.Download,
         ),
     )

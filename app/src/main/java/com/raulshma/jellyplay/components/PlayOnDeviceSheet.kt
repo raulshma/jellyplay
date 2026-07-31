@@ -22,9 +22,11 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -65,7 +67,7 @@ fun PlayOnDeviceSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = "Play On",
+                        text = stringResource(R.string.play_on_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -75,7 +77,7 @@ fun PlayOnDeviceSheet(
                 when {
                     devices.isEmpty() -> {
                         Text(
-                            text = "No Jellyfin clients found. Open JellyPlay or Jellyfin on another device and it will appear here.",
+                            text = stringResource(R.string.play_on_no_clients),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -113,7 +115,7 @@ fun PlayOnDeviceSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = "Play On",
+                        text = stringResource(R.string.play_on_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -123,7 +125,7 @@ fun PlayOnDeviceSheet(
                 when {
                     devices.isEmpty() -> {
                         Text(
-                            text = "No Jellyfin clients found. Open JellyPlay or Jellyfin on another device and it will appear here.",
+                            text = stringResource(R.string.play_on_no_clients),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -187,7 +189,7 @@ private fun DeviceRow(
                 maxLines = 1,
             )
             Text(
-                text = "Jellyfin session",
+                text = stringResource(R.string.play_on_jellyfin_session),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

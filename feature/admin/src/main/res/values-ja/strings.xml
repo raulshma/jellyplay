@@ -341,4 +341,43 @@
     <string name="admin_disabled_cannot_sign_in">無効なユーザーはサインインできません</string>
     <string name="admin_no_limit">制限なし</string>
 
+    <!-- Scheduled task trigger chips -->
+    <string name="admin_trigger_daily">毎日</string>
+    <string name="admin_trigger_weekly">毎週</string>
+    <string name="admin_trigger_on_startup">起動時</string>
+    <string name="admin_trigger_every_hours">%1$d時間ごと</string>
+    <string name="admin_trigger_every_days">%1$d日ごと</string>
+
+    <!-- Statistics chart toggle -->
+    <string name="admin_chart_weekly">週次</string>
+    <string name="admin_chart_monthly">月次</string>
+
+    <!-- Access schedule day labels -->
+    <string name="admin_day_sun">日</string>
+    <string name="admin_day_mon">月</string>
+    <string name="admin_day_tue">火</string>
+    <string name="admin_day_wed">水</string>
+    <string name="admin_day_thu">木</string>
+    <string name="admin_day_fri">金</string>
+    <string name="admin_day_sat">土</string>
+    <string name="admin_schedule_everyday">毎日</string>
+    <string name="admin_schedule_weekday">平日</string>
+    <string name="admin_schedule_weekend">週末</string>
+
+    <!-- Plugin / catalog metadata labels (batch) -->
+    <string name="admin_plugin_version">v%1$s</string>
+    <string name="admin_plugin_by_author">から %1$s</string>
+
+    <!-- Statistics time-unit suffixes (compact chart labels) -->
+    <string name="admin_unit_hours">時間 </string>
+    <string name="admin_unit_minutes">分</string>
+
+    <!-- Dashboard section titles (batch) -->
+    <string name="admin_active_sessions">アクティブなセッション</string>
+    <string name="admin_library">ライブラリ</string>
+
+    <!-- Audit history row labels (batch) -->
+    <string name="admin_audit_by_user">から %1$s</string>
+    <string name="admin_audit_items_removed">%1$d 件削除済み</string>
+
 </resources>

@@ -284,7 +284,7 @@ private fun ChannelCard(
         ) {
             Icon(
                 Tabler.Outline.PlayerPlay,
-                contentDescription = "Watch",
+                contentDescription = stringResource(R.string.livetv_watch),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(22.dp),
             )

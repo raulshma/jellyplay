@@ -46,4 +46,42 @@
     <string name="core_media_live_tv_plural">直播电视</string>
     <string name="core_media_channel_plural">频道</string>
     <string name="core_media_unknown_plural">未知</string>
+
+    <!-- core/ui shared -->
+    <string name="core_report">报告</string>
+    <string name="core_ui_back">返回</string>
+    <string name="core_ui_select">选择…</string>
+    <string name="core_ui_selected">已选择</string>
+
+    <!-- core/ui auth challenge -->
+    <string name="core_ui_auth_title">身份验证</string>
+    <string name="core_ui_auth_subtitle">确认您的身份</string>
+    <string name="core_ui_auth_use_pin">使用 PIN</string>
+    <string name="core_ui_auth_use_biometric">使用生物识别</string>
+    <string name="core_ui_auth_biometric_prompt">使用生物识别进行身份验证</string>
+
+    <!-- core/ui seerr request dialog -->
+    <string name="core_ui_seerr_request_success">请求提交成功！</string>
+    <string name="core_ui_seerr_loading_options">正在加载选项…</string>
+    <string name="core_ui_seerr_destination_server_sonarr">目标服务器 (Sonarr)</string>
+    <string name="core_ui_seerr_destination_server_radarr">目标服务器 (Radarr)</string>
+    <string name="core_ui_seerr_quality_profile">画质配置</string>
+    <string name="core_ui_seerr_root_folder">根目录</string>
+    <string name="core_ui_seerr_tags">标签</string>
+    <string name="core_ui_seerr_all_seasons">所有季</string>
+    <string name="core_ui_seerr_season">第 %1$d 季</string>
+    <string name="core_ui_seerr_episodes">%1$d 集</string>
+    <string name="core_ui_seerr_loading_seasons">正在加载季…</string>
+    <string name="core_ui_seerr_request">请求</string>
+
+    <!-- core/ui accent / color pickers -->
+    <string name="core_ui_accent_color_title">强调色</string>
+    <string name="core_ui_accent_color_subtitle">选择自定义强调色板或动态色</string>
+    <string name="core_ui_color_style_title">色彩样式</string>
+    <string name="core_ui_color_style_subtitle">定义生成调色板的视觉氛围</string>
+    <string name="core_ui_dynamic_colors">动态壁纸颜色</string>
+    <string name="core_ui_synthwave_accent_title">Synthwave 强调色</string>
+    <string name="core_ui_synthwave_accent_subtitle">选择自定义霓虹强调色板</string>
+    <string name="core_ui_soothing_accent_title">柔和强调色</string>
+    <string name="core_ui_soothing_accent_subtitle">选择舒缓的强调色</string>
 </resources>

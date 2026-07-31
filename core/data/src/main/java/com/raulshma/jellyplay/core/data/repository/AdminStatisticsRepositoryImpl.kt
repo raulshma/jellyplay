@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import android.content.Context
 import android.util.Log
+import com.raulshma.jellyplay.core.data.R
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.database.entity.MediaAuditLogEntity
@@ -36,11 +38,13 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class AdminStatisticsRepositoryImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val apiClient: JellyfinApiClient,
     private val auditLogDao: AuditLogDao,
     private val scanStateDao: ScanStateDao,
@@ -194,17 +198,17 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
 
         val typeBreakdown = listOf(
             ContentBreakdown(
-                label = "Movies",
+                label = context.getString(R.string.data_label_movies),
                 value = moviePlayedCount.toLong(),
                 colorIndex = 0,
             ),
             ContentBreakdown(
-                label = "Episodes",
+                label = context.getString(R.string.data_label_episodes),
                 value = episodePlayedCount.toLong(),
                 colorIndex = 1,
             ),
             ContentBreakdown(
-                label = "Songs",
+                label = context.getString(R.string.data_label_songs),
                 value = songPlayedCount.toLong(),
                 colorIndex = 2,
             ),

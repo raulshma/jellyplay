@@ -28,9 +28,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -204,7 +206,7 @@ internal fun BoxScope.PlayerOverflowMenu(
             if (supportsSubtitleStyle) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Subtitles,
-                    label = "Subtitle Style",
+                    label = stringResource(R.string.player_video_subtitle_style),
                     onClick = onSubtitleStyleClick,
                 )
             }
@@ -213,7 +215,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 if (showDialogueBoostSubmenu) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
-                        label = "Dialogue Boost",
+                        label = stringResource(R.string.player_video_dialogue_boost),
                         onClick = { showDialogueBoostSubmenu = false },
                         modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
                     )
@@ -252,7 +254,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 } else {
                     OverflowMenuItem(
                         icon = Tabler.Outline.Music,
-                        label = if (dialogueBoostEnabled) "Dialogue Boost \u00B7 ${dialogueBoostStrength.displayName}" else "Dialogue Boost",
+                        label = if (dialogueBoostEnabled) stringResource(R.string.player_video_dialogue_boost_on, dialogueBoostStrength.displayName) else stringResource(R.string.player_video_dialogue_boost),
                         onClick = { showDialogueBoostSubmenu = true },
                         tint = if (dialogueBoostEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.focusRequester(dialogueBoostFocusRequester),
@@ -263,7 +265,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 if (showNightModeSubmenu) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
-                        label = "Night Mode",
+                        label = stringResource(R.string.player_video_night_mode),
                         onClick = { showNightModeSubmenu = false },
                         modifier = Modifier.focusRequester(nightModeFocusRequester),
                     )
@@ -296,7 +298,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 } else {
                     OverflowMenuItem(
                         icon = Tabler.Outline.DotsVertical,
-                        label = if (nightModeEnabled) "Night Mode \u00B7 ${nightModeStrength.displayName}" else "Night Mode",
+                        label = if (nightModeEnabled) stringResource(R.string.player_video_night_mode_on, nightModeStrength.displayName) else stringResource(R.string.player_video_night_mode),
                         onClick = { showNightModeSubmenu = true },
                         tint = if (nightModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.focusRequester(nightModeFocusRequester),
@@ -307,7 +309,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 if (showAudioNormalizationSubmenu) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
-                        label = "Audio Normalization",
+                        label = stringResource(R.string.player_video_audio_normalization),
                         onClick = { showAudioNormalizationSubmenu = false },
                         modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
                     )
@@ -339,7 +341,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 } else {
                     OverflowMenuItem(
                         icon = Tabler.Outline.Volume,
-                        label = if (audioNormalizationEnabled) "Normalization \u00B7 ${audioNormalizationMode.displayName}" else "Audio Normalization",
+                        label = if (audioNormalizationEnabled) stringResource(R.string.player_video_normalization_on, audioNormalizationMode.displayName) else stringResource(R.string.player_video_audio_normalization),
                         onClick = { showAudioNormalizationSubmenu = true },
                         tint = if (audioNormalizationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.focusRequester(audioNormalizationFocusRequester),
@@ -350,7 +352,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 if (showChannelMixSubmenu) {
                     OverflowMenuItem(
                         icon = Tabler.Outline.ArrowLeft,
-                        label = "Channel Mixing",
+                        label = stringResource(R.string.player_video_channel_mixing),
                         onClick = { showChannelMixSubmenu = false },
                         modifier = Modifier.focusRequester(channelMixFocusRequester),
                     )
@@ -382,7 +384,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                 } else {
                     OverflowMenuItem(
                         icon = Tabler.Outline.Music,
-                        label = if (channelMixEnabled) "Channel Mix \u00B7 ${channelMixMode.displayName}" else "Channel Mixing",
+                        label = if (channelMixEnabled) stringResource(R.string.player_video_channel_mix_on, channelMixMode.displayName) else stringResource(R.string.player_video_channel_mixing),
                         onClick = { showChannelMixSubmenu = true },
                         tint = if (channelMixEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.focusRequester(channelMixFocusRequester),
@@ -392,52 +394,52 @@ internal fun BoxScope.PlayerOverflowMenu(
             if (supportsAudioDelay) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Adjustments,
-                    label = "A/V Sync",
+                    label = stringResource(R.string.player_video_av_sync),
                     onClick = onAVSyncClick,
                 )
             }
             OverflowMenuItem(
                 icon = Tabler.Outline.Bolt,
-                label = if (playbackMode == PlaybackMode.AUTO) "Playback Mode"
-                    else "${playbackMode.displayName} \u00B7 On",
+                label = if (playbackMode == PlaybackMode.AUTO) stringResource(R.string.player_video_playback_mode)
+                    else stringResource(R.string.player_video_playback_mode_on, playbackMode.displayName),
                 onClick = onPlaybackModeClick,
                 tint = if (playbackMode != PlaybackMode.AUTO) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface,
             )
             OverflowMenuItem(
                 icon = Tabler.Outline.InfoCircle,
-                label = "Decoder",
+                label = stringResource(R.string.player_video_decoder),
                 onClick = onDecoderClick,
             )
             if (supportsAudioPassthrough) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Volume,
-                    label = "Passthrough",
+                    label = stringResource(R.string.player_video_passthrough),
                     onClick = onPassthroughClick,
                     tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
             OverflowMenuItem(
                 icon = Tabler.Outline.DotsVertical,
-                label = "Get Subtitles",
+                label = stringResource(R.string.player_video_get_subtitles),
                 onClick = onSubtitleDownloadClick,
             )
             OverflowMenuItem(
                 icon = Tabler.Outline.InfoCircle,
-                label = if (showVideoStats) "Stats for Nerds \u00B7 On" else "Stats for Nerds",
+                label = if (showVideoStats) stringResource(R.string.player_video_stats_for_nerds_on) else stringResource(R.string.player_video_stats_for_nerds),
                 onClick = onVideoStatsClick,
                 tint = if (showVideoStats) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
             OverflowMenuItem(
                 icon = Tabler.Outline.Stopwatch,
-                label = if (sleepTimerActive) "Sleep Timer \u00B7 $sleepTimerDisplayText" else "Sleep Timer",
+                label = if (sleepTimerActive) stringResource(R.string.player_video_sleep_timer_on, sleepTimerDisplayText) else stringResource(R.string.player_video_sleep_timer),
                 onClick = onSleepTimerClick,
                 tint = if (sleepTimerActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
             if (supportsVideoFilters) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.ColorSwatch,
-                    label = if (videoFiltersActive) "Video Filters \u00B7 On" else "Video Filters",
+                    label = if (videoFiltersActive) stringResource(R.string.player_video_video_filters_on) else stringResource(R.string.player_video_video_filters),
                     onClick = onVideoFilterClick,
                     tint = if (videoFiltersActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
@@ -445,30 +447,30 @@ internal fun BoxScope.PlayerOverflowMenu(
             if (supportsScreenshot) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Photo,
-                    label = "Capture Frame",
+                    label = stringResource(R.string.player_video_capture_frame),
                     onClick = onScreenshotClick,
                 )
             }
             OverflowMenuItem(
                 icon = Tabler.Outline.Repeat,
-                label = if (abRepeatActive) "A/B Repeat \u00B7 On" else "A/B Repeat",
+                label = if (abRepeatActive) stringResource(R.string.player_video_ab_repeat_on) else stringResource(R.string.player_video_ab_repeat),
                 onClick = onAbRepeatToggle,
                 tint = if (abRepeatActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
             if (abRepeatActive) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.ArrowLeft,
-                    label = "Set A Point",
+                    label = stringResource(R.string.player_video_set_a_point),
                     onClick = onAbRepeatSetA,
                 )
                 OverflowMenuItem(
                     icon = Tabler.Outline.ArrowRight,
-                    label = "Set B Point",
+                    label = stringResource(R.string.player_video_set_b_point),
                     onClick = onAbRepeatSetB,
                 )
                 OverflowMenuItem(
                     icon = Tabler.Outline.X,
-                    label = "Clear A/B Repeat",
+                    label = stringResource(R.string.player_video_clear_ab_repeat),
                     onClick = onAbRepeatClear,
                 )
             }

@@ -46,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,6 +56,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadState
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
@@ -145,7 +147,7 @@ fun SubtitleManagerSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                "Get Subtitles",
+                stringResource(R.string.player_video_get_subtitles),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
@@ -162,7 +164,11 @@ fun SubtitleManagerSheet(
                         onClick = { selectedTab = index },
                         text = {
                             Text(
-                                tab.label,
+                                when (tab) {
+                                    SubtitleManagerTab.DOWNLOAD -> stringResource(R.string.player_video_download)
+                                    SubtitleManagerTab.SEARCH -> stringResource(R.string.player_video_search)
+                                    SubtitleManagerTab.UPLOAD -> stringResource(R.string.player_video_upload)
+                                },
                                 fontWeight = if (selectedTab == index) FontWeight.SemiBold else FontWeight.Normal,
                             )
                         },
@@ -240,7 +246,7 @@ private fun DownloadTab(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.size(8.dp))
-            Text("Load from device")
+            Text(stringResource(R.string.player_video_load_from_device))
         }
         Spacer(Modifier.height(8.dp))
 
@@ -252,7 +258,7 @@ private fun DownloadTab(
             )
         } else if (subtitles.isEmpty()) {
             Text(
-                "No remote subtitles available.",
+                stringResource(R.string.player_video_no_remote_subtitles),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
@@ -320,7 +326,7 @@ private fun SubtitleDownloadItem(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                subtitle.name ?: subtitle.language ?: "Unknown",
+                subtitle.name ?: subtitle.language ?: stringResource(R.string.player_video_unknown),
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = FontWeight.Medium,
                 ),
@@ -330,7 +336,7 @@ private fun SubtitleDownloadItem(
             ) {
                 if (subtitle.isHashMatch) {
                     Text(
-                        "Perfect Match",
+                        stringResource(R.string.player_video_perfect_match),
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontWeight = FontWeight.SemiBold,
                         ),
@@ -406,7 +412,7 @@ private fun SubtitleDownloadStatusSlot(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Taking a while…",
+                stringResource(R.string.player_video_taking_a_while),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -428,7 +434,7 @@ private fun SubtitleDownloadStatusSlot(
                     vertical = 0.dp,
                 ),
             ) {
-                Text("Use", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.player_video_use), style = MaterialTheme.typography.labelLarge)
             }
         }
         SubtitleDownloadState.FAILED -> Row(
@@ -442,7 +448,7 @@ private fun SubtitleDownloadStatusSlot(
                 tint = MaterialTheme.colorScheme.error,
             )
             Text(
-                "Failed — tap to retry",
+                stringResource(R.string.player_video_failed_tap_to_retry),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -505,7 +511,7 @@ private fun SearchTab(
             ) {
                 Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Search")
+                Text(stringResource(R.string.player_video_search))
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -524,7 +530,7 @@ private fun SearchTab(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "Search failed",
+                        stringResource(R.string.player_video_search_failed),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -541,7 +547,7 @@ private fun SearchTab(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "No results found",
+                    stringResource(R.string.player_video_no_results_found),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -550,7 +556,7 @@ private fun SearchTab(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "Pick a language and search to find subtitles.",
+                    stringResource(R.string.player_video_pick_language_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -623,7 +629,7 @@ private fun UploadTab(
         ) {
             Icon(Tabler.Outline.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text(if (selectedFile != null) "Change: $selectedFileName" else "Select File (.srt, .ass, .ssa, .vtt)")
+            Text(if (selectedFile != null) stringResource(R.string.player_video_change_file, selectedFileName) else stringResource(R.string.player_video_select_file))
         }
 
         LanguageDropdown(
@@ -631,16 +637,16 @@ private fun UploadTab(
             onLanguageChange = { selectedLanguage = it },
             cultures = cultures,
             modifier = Modifier.fillMaxWidth(),
-            label = "Language",
+            label = stringResource(R.string.player_video_language),
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = isForced, onCheckedChange = { isForced = it }, enabled = !isUploading)
-            Text("Forced subtitle")
+            Text(stringResource(R.string.player_video_forced_subtitle))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = isHearingImpaired, onCheckedChange = { isHearingImpaired = it }, enabled = !isUploading)
-            Text("Hearing impaired")
+            Text(stringResource(R.string.player_video_hearing_impaired))
         }
 
         androidx.compose.material3.Button(
@@ -653,9 +659,9 @@ private fun UploadTab(
             enabled = !isUploading && selectedFile != null && selectedLanguage.isNotBlank(),
         ) {
             if (isUploading) {
-                Text("Uploading…")
+                Text(stringResource(R.string.player_video_uploading))
             } else {
-                Text("Upload")
+                Text(stringResource(R.string.player_video_upload))
             }
         }
     }
@@ -677,7 +683,7 @@ private fun LanguageDropdown(
     onLanguageChange: (String) -> Unit,
     cultures: List<CultureInfo>,
     modifier: Modifier = Modifier,
-    label: String = "Language",
+    label: String = stringResource(R.string.player_video_language),
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(

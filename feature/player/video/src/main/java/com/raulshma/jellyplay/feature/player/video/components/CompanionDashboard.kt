@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +43,7 @@ import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.MediaItem as JellyfinMediaItem
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
@@ -156,7 +158,7 @@ fun CompanionDashboard(
                     ) {
                         MediaImage(
                             url = artworkUrl.orEmpty(),
-                            contentDescription = "Poster",
+                            contentDescription = stringResource(R.string.player_video_poster),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .size(width = 135.dp, height = 202.dp)
@@ -281,7 +283,7 @@ fun CompanionDashboard(
                     // Media Poster Card
                     MediaImage(
                         url = artworkUrl.orEmpty(),
-                        contentDescription = "Poster",
+                        contentDescription = stringResource(R.string.player_video_poster),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(width = 90.dp, height = 135.dp)
@@ -495,12 +497,12 @@ fun SubtitlesTabContent(
                 Tab(
                     selected = subTabSelected == 0,
                     onClick = { subTabSelected = 0 },
-                    text = { Text("Lyrics") }
+                    text = { Text(stringResource(R.string.player_video_lyrics)) }
                 )
                 Tab(
                     selected = subTabSelected == 1,
                     onClick = { subTabSelected = 1 },
-                    text = { Text("Media Tracks") }
+                    text = { Text(stringResource(R.string.player_video_media_tracks)) }
                 )
             }
         }
@@ -630,7 +632,7 @@ fun TrackSelectorGroup(
                 if (track.isSelected) {
                     Icon(
                         imageVector = Tabler.Outline.Check,
-                        contentDescription = "Selected",
+                        contentDescription = stringResource(R.string.player_video_selected),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -652,7 +654,7 @@ fun EpisodesTabContent(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                "No episodes found for this season",
+                stringResource(R.string.player_video_no_episodes_found),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -777,7 +779,7 @@ fun CompanionControlBar(
             ) {
                 Icon(
                     imageVector = if (localVolume <= 0.01f) Tabler.Outline.Volume3 else Tabler.Outline.Volume,
-                    contentDescription = "Volume",
+                    contentDescription = stringResource(R.string.player_video_volume),
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
@@ -914,7 +916,7 @@ private fun CompanionHeaderRow(
             ) {
                 Icon(
                     imageVector = Tabler.Outline.Rotate,
-                    contentDescription = "Rotate Screen",
+                    contentDescription = stringResource(R.string.player_video_rotate_screen),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -937,7 +939,7 @@ private fun CompanionHeaderRow(
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(Modifier.width(6.dp))
-                Text("Disconnect", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.player_video_disconnect), style = MaterialTheme.typography.labelLarge)
             }
         }
     }

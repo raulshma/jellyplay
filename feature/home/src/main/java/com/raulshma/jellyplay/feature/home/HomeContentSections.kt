@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.AlertCircle
 import com.composables.icons.tabler.outline.Movie
@@ -168,9 +169,9 @@ internal fun HomeContentList(
         } else {
             ScreenEmptyState(
                 icon = Tabler.Outline.Movie,
-                title = "No Content Available",
-                description = "Check your Jellyfin libraries and try refreshing.",
-                actionLabel = "Refresh",
+                title = stringResource(R.string.home_no_content_available),
+                description = stringResource(R.string.home_no_content_description),
+                actionLabel = stringResource(R.string.home_refresh),
                 onAction = callbacks.onRetrySectionLoad,
                 modifier = Modifier.padding(horizontal = state.contentPad),
             )
@@ -251,13 +252,13 @@ internal fun HomeContentList(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "Some sections couldn't be loaded.",
+                            text = stringResource(R.string.home_sections_load_failed),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.weight(1f),
                         )
                         TextButton(onClick = callbacks.onRetrySectionLoad) {
-                            Text("Retry")
+                            Text(stringResource(R.string.home_retry))
                         }
                     }
                 }
@@ -318,7 +319,7 @@ internal fun HomeContentList(
 
                 val seedItem = section.seedItem
                 val sectionTitle = if (section.type == HomeSectionType.RECOMMENDATIONS && seedItem != null) {
-                    "Because you watched ${seedItem.name}"
+                    stringResource(R.string.home_because_you_watched, seedItem.name)
                 } else {
                     section.title
                 }
@@ -387,7 +388,7 @@ internal fun HomeContentList(
             if (state.discoverEnabled && state.allDiscoverItems.isNotEmpty()) {
                 item(key = "seerr_discover_header") {
                     SectionHeader(
-                        text = "Discover",
+                        text = stringResource(R.string.home_discover),
                         backgroundColor = state.backgroundColor,
                         contentPad = state.contentPad,
                         homeBackdropEnabled = state.homeBackdropEnabled,
@@ -426,7 +427,7 @@ internal fun HomeContentList(
             if (state.recentlyGrabbed.isNotEmpty()) {
                 item(key = "arr_recently_grabbed_header") {
                     SectionHeader(
-                        text = "Coming Soon",
+                        text = stringResource(R.string.home_coming_soon),
                         backgroundColor = state.backgroundColor,
                         contentPad = state.contentPad,
                         homeBackdropEnabled = state.homeBackdropEnabled,
@@ -474,18 +475,18 @@ internal fun HomeContentList(
             onDismissRequest = { askContinueItem = null },
             icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
             title = { Text(askItem.name) },
-            text = { Text("Resume playback or open details?") },
+            text = { Text(stringResource(R.string.home_resume_or_details)) },
             confirmButton = {
                 TextButton(onClick = {
                     askContinueItem = null
                     callbacks.mediaOnPlayClick(askItem)
-                }) { Text("Resume") }
+                }) { Text(stringResource(R.string.home_resume)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     askContinueItem = null
                     callbacks.mediaOnItemClick(askItem)
-                }) { Text("Details") }
+                }) { Text(stringResource(R.string.home_details)) }
             },
         )
     }

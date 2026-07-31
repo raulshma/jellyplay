@@ -2,4 +2,25 @@
     <!-- Newsletter feature user-facing strings (enhancements §2.2) -->
     <string name="newsletter_could_not_load">Could not load newsletter</string>
     <string name="newsletter_preparing_digest">Preparing your digest\u2026</string>
+
+    <!-- Newsletter screens & sections -->
+    <string name="newsletter_title">Newsletter</string>
+    <string name="newsletter_activity_digest">Activity Digest</string>
+    <string name="newsletter_continue_watching">Continue Watching</string>
+    <string name="newsletter_fresh_picks">Fresh Picks</string>
+    <string name="newsletter_recently_added">Recently Added</string>
+    <string name="newsletter_next_up">Next Up</string>
+    <string name="newsletter_view_all">View All</string>
+    <string name="newsletter_no_items_available">No items available</string>
+
+    <!-- Newsletter aggregated stats -->
+    <string name="newsletter_stat_total_items">Total Items</string>
+    <string name="newsletter_stat_movies">Movies</string>
+    <string name="newsletter_stat_series">Series</string>
+    <string name="newsletter_stat_episodes">Episodes</string>
+    <string name="newsletter_stat_albums">Albums</string>
+    <string name="newsletter_stat_songs">Songs</string>
+    <string name="newsletter_stat_new_this_week">New This Week</string>
+    <string name="newsletter_stat_in_progress">In Progress</string>
+    <string name="newsletter_stat_activity">Activity</string>
 </resources>

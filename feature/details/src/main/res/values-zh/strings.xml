@@ -198,4 +198,32 @@
     <string name="detail_manage_cd_toggle_monitor_season">切换整季所有剧集的监控状态</string>
     <string name="detail_manage_cd_toggle_monitor_episode">切换该集的监控状态</string>
     <string name="detail_manage_cd_episode_menu">剧集选项</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">可用</string>
+    <string name="detail_request">请求</string>
+    <string name="detail_seerr_processing">处理中</string>
+    <string name="detail_seerr_pending">等待中</string>
+    <string name="detail_seerr_requested">已请求</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">推荐</string>
+    <string name="detail_section_similar">相似</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">院线上映</string>
+    <string name="detail_cd_release_digital">数字发行</string>
+    <string name="detail_cd_release_physical">实体发行</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">视频</string>
+    <string name="detail_media_info_title_audio">音频</string>
+    <string name="detail_media_info_title_subtitles">字幕</string>
+    <string name="detail_media_info_no_info">无媒体信息</string>
+    <string name="detail_media_info_no_info_description">此项目没有可用的技术信息</string>
 </resources>

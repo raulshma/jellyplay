@@ -111,6 +111,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.rememberDpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
@@ -1914,7 +1915,7 @@ private fun PlayerSheetRouter(
                         // remembers the currently-selected track's language for
                         // every episode of this series; toggling off forgets it.
                         RememberPreferenceToggle(
-                            label = "Remember audio language for this series",
+                            label = stringResource(R.string.player_video_remember_audio_language),
                             checked = uiState.hasSeriesAudioPref,
                             onToggle = { remember ->
                                 val lang = if (remember) {
@@ -1943,7 +1944,7 @@ private fun PlayerSheetRouter(
                         // (forced / SDH) so every episode restores the right
                         // same-language track; toggling off forgets it.
                         RememberPreferenceToggle(
-                            label = "Remember subtitle language for this series",
+                            label = stringResource(R.string.player_video_remember_subtitle_language),
                             checked = uiState.hasSeriesSubtitlePref,
                             onToggle = { remember ->
                                 val sel = if (remember) {

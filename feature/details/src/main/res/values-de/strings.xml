@@ -201,4 +201,32 @@
     <string name="detail_manage_cd_toggle_monitor_season">Überwachung für alle Episoden der Staffel umschalten</string>
     <string name="detail_manage_cd_toggle_monitor_episode">Überwachung für Episode umschalten</string>
     <string name="detail_manage_cd_episode_menu">Episoden-Optionen</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">Verfügbar</string>
+    <string name="detail_request">Anfordern</string>
+    <string name="detail_seerr_processing">Wird verarbeitet</string>
+    <string name="detail_seerr_pending">Ausstehend</string>
+    <string name="detail_seerr_requested">Angefordert</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">Empfehlungen</string>
+    <string name="detail_section_similar">Ähnlich</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">Kinostart</string>
+    <string name="detail_cd_release_digital">Digitale Veröffentlichung</string>
+    <string name="detail_cd_release_physical">Physische Veröffentlichung</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">Video</string>
+    <string name="detail_media_info_title_audio">Audio</string>
+    <string name="detail_media_info_title_subtitles">Untertitel</string>
+    <string name="detail_media_info_no_info">Keine Medieninformationen</string>
+    <string name="detail_media_info_no_info_description">Für diesen Eintrag sind keine technischen Informationen verfügbar</string>
 </resources>

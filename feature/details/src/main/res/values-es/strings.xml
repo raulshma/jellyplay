@@ -201,4 +201,32 @@
     <string name="detail_manage_cd_toggle_monitor_season">Activar o desactivar la monitorización de todos los episodios de la temporada</string>
     <string name="detail_manage_cd_toggle_monitor_episode">Activar o desactivar la monitorización del episodio</string>
     <string name="detail_manage_cd_episode_menu">Opciones del episodio</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">Disponible</string>
+    <string name="detail_request">Solicitar</string>
+    <string name="detail_seerr_processing">Procesando</string>
+    <string name="detail_seerr_pending">Pendiente</string>
+    <string name="detail_seerr_requested">Solicitado</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">Recomendaciones</string>
+    <string name="detail_section_similar">Similares</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">Estreno en cines</string>
+    <string name="detail_cd_release_digital">Estreno digital</string>
+    <string name="detail_cd_release_physical">Estreno físico</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">Vídeo</string>
+    <string name="detail_media_info_title_audio">Audio</string>
+    <string name="detail_media_info_title_subtitles">Subtítulos</string>
+    <string name="detail_media_info_no_info">Sin información de medios</string>
+    <string name="detail_media_info_no_info_description">La información técnica no está disponible para este elemento</string>
 </resources>

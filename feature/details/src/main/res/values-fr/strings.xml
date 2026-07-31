@@ -201,4 +201,32 @@
     <string name="detail_manage_cd_toggle_monitor_season">Activer/désactiver la surveillance pour tous les épisodes de la saison</string>
     <string name="detail_manage_cd_toggle_monitor_episode">Activer/désactiver la surveillance de l\'épisode</string>
     <string name="detail_manage_cd_episode_menu">Options de l\'épisode</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">Disponible</string>
+    <string name="detail_request">Demander</string>
+    <string name="detail_seerr_processing">Traitement en cours</string>
+    <string name="detail_seerr_pending">En attente</string>
+    <string name="detail_seerr_requested">Demandé</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">Recommandations</string>
+    <string name="detail_section_similar">Similaires</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">Sortie en salle</string>
+    <string name="detail_cd_release_digital">Sortie numérique</string>
+    <string name="detail_cd_release_physical">Sortie physique</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">Vidéo</string>
+    <string name="detail_media_info_title_audio">Audio</string>
+    <string name="detail_media_info_title_subtitles">Sous-titres</string>
+    <string name="detail_media_info_no_info">Aucune information sur le média</string>
+    <string name="detail_media_info_no_info_description">Les informations techniques ne sont pas disponibles pour cet élément</string>
 </resources>

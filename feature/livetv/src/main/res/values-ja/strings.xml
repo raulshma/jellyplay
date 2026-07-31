@@ -41,4 +41,25 @@
     <string name="livetv_channel_live">ライブ</string>
     <string name="livetv_channel_no_program_info">番組情報がありません</string>
     <string name="livetv_channel_load_failed">番組ガイドの読み込みに失敗しました</string>
+
+    <!-- Live TV host & EPG screen (extracted from hardcoded strings) -->
+    <string name="livetv_screen_title">ライブTV</string>
+    <string name="livetv_epg_title">番組表</string>
+    <string name="livetv_no_guide_available">利用可能な番組表がありません</string>
+    <string name="livetv_record_program_prompt">番組を録画しますか？</string>
+    <string name="livetv_record_single_timer_note">サーバーに単一のタイマーが予約されます。</string>
+    <string name="livetv_record_schedule_failed">録画を予約できませんでした</string>
+    <string name="livetv_recording_in_progress">録画中…</string>
+    <string name="livetv_scheduling_timer">タイマーを予約中</string>
+    <string name="livetv_action_cancel">キャンセル</string>
+    <string name="livetv_action_close">閉じる</string>
+    <string name="livetv_action_done">完了</string>
+    <string name="livetv_action_ok">OK</string>
+    <string name="livetv_schedule_start">開始: %1$s</string>
+    <string name="livetv_schedule_end">終了: %1$s</string>
+
+    <!-- Channel / program affordances (batch) -->
+    <string name="livetv_watch">視聴</string>
+    <string name="livetv_recording_status">録画中</string>
+    <string name="livetv_recording_now">● 録画中</string>
 </resources>

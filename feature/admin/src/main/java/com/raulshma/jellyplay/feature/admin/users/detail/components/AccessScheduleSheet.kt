@@ -28,17 +28,33 @@ import com.raulshma.jellyplay.feature.admin.R
 import java.util.Locale
 
 private val DAYS = listOf(
-    "Sunday" to "Sun",
-    "Monday" to "Mon",
-    "Tuesday" to "Tue",
-    "Wednesday" to "Wed",
-    "Thursday" to "Thu",
-    "Friday" to "Fri",
-    "Saturday" to "Sat",
-    "Everyday" to "Daily",
-    "Weekday" to "Weekdays",
-    "Weekend" to "Weekends",
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Everyday",
+    "Weekday",
+    "Weekend",
 )
+
+/** Localized display label for an access-schedule day serial value. */
+@Composable
+private fun dayLabel(serial: String): String = when (serial) {
+    "Sunday" -> stringResource(R.string.admin_day_sun)
+    "Monday" -> stringResource(R.string.admin_day_mon)
+    "Tuesday" -> stringResource(R.string.admin_day_tue)
+    "Wednesday" -> stringResource(R.string.admin_day_wed)
+    "Thursday" -> stringResource(R.string.admin_day_thu)
+    "Friday" -> stringResource(R.string.admin_day_fri)
+    "Saturday" -> stringResource(R.string.admin_day_sat)
+    "Everyday" -> stringResource(R.string.admin_schedule_everyday)
+    "Weekday" -> stringResource(R.string.admin_schedule_weekday)
+    "Weekend" -> stringResource(R.string.admin_schedule_weekend)
+    else -> serial
+}
 
 /** Formats a Double hour (13.5) as "HH:mm". */
 private fun Double.toTimeString() =
@@ -76,7 +92,7 @@ fun AccessScheduleSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        "${DAYS.firstOrNull { it.first == s.dayOfWeek }?.second ?: s.dayOfWeek}  " +
+                        "${dayLabel(s.dayOfWeek)}  " +
                             "${s.startHour.toTimeString()}–${s.endHour.toTimeString()}",
                         style = MaterialTheme.typography.bodyLarge,
                     )
@@ -120,11 +136,11 @@ private fun ScheduleAdderDialog(
             Column {
                 Text(stringResource(R.string.admin_day), style = MaterialTheme.typography.bodyMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    DAYS.forEach { (serial, label) ->
+                    DAYS.forEach { serial ->
                         FilterChip(
                             selected = day == serial,
                             onClick = { day = serial },
-                            label = { Text(label) },
+                            label = { Text(dayLabel(serial)) },
                         )
                     }
                 }

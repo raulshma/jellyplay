@@ -92,4 +92,55 @@
     <string name="update_install">インストール</string>
     <string name="update_failed_title">更新に失敗しました</string>
     <string name="update_close">閉じる</string>
+
+    <!-- Shared media transport (content descriptions & labels) -->
+    <string name="media_play">再生</string>
+    <string name="media_pause">一時停止</string>
+    <string name="media_next">次</string>
+    <string name="media_previous">前</string>
+    <string name="media_stop">停止</string>
+    <string name="media_close">閉じる</string>
+    <string name="media_disconnect">切断</string>
+    <string name="media_rewind_seconds">10秒巻き戻し</string>
+    <string name="media_forward_seconds">10秒早送り</string>
+
+    <!-- Play On companion screen -->
+    <string name="cast_title">キャスト中</string>
+    <string name="cast_title_to">%1$sにキャスト中</string>
+    <string name="cast_open_companion">パネルを開く</string>
+    <string name="cast_back_seconds">10秒戻る</string>
+    <string name="cast_forward_seconds">30秒進む</string>
+
+    <!-- Floating player overlay -->
+    <string name="floating_player_close">フローティングプレーヤーを閉じる</string>
+
+    <!-- Floating player foreground notification -->
+    <string name="floating_player_channel_name">フローティングプレーヤー</string>
+    <string name="floating_player_channel_desc">フローティングメディアプレーヤーのオーバーレイ</string>
+    <string name="floating_player_notification_text">メディアコントロールが画面上にフローティング表示されています</string>
+
+    <!-- Lock screen authentication -->
+    <string name="auth_title_biometric">認証</string>
+    <string name="auth_title_pin">PINを入力</string>
+    <string name="auth_subtitle">JellyPlayのロックを解除</string>
+    <string name="pin_incorrect">PINが正しくありません</string>
+    <string name="pin_lockout_now">試行回数が多すぎます。もう一度お試しください。</string>
+    <string name="pin_lockout_seconds">試行回数が多すぎます。%1$ds後にもう一度お試しください。</string>
+    <string name="pin_lockout_minutes">試行回数が多すぎます。%1$dm後にもう一度お試しください。</string>
+    <string name="pin_lockout_hours">試行回数が多すぎます。%1$dh後にもう一度お試しください。</string>
+    <string name="pin_lockout_hours_minutes">試行回数が多すぎます。%1$dh %2$dm後にもう一度お試しください。</string>
+
+    <!-- Picture-in-picture actions -->
+    <string name="pip_rewind">巻き戻し</string>
+    <string name="pip_forward">早送り</string>
+    <string name="pip_next">次</string>
+
+    <!-- TV navigation drawer -->
+    <string name="nav_now_playing">再生中</string>
+    <string name="nav_settings">設定</string>
+
+    <!-- Play On device sheet -->
+    <string name="play_on_title">再生先</string>
+    <string name="play_on_no_clients">Jellyfin クライアントが見つかりません。別のデバイスで JellyPlay または Jellyfin を開くと、ここに表示されます。</string>
+    <string name="play_on_jellyfin_session">Jellyfin セッション</string>
 </resources>

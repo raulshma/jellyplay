@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import com.raulshma.jellyplay.core.notification.R
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -21,10 +22,10 @@ class NotificationChannelManager @Inject constructor(
         if (nm.getNotificationChannel(channelId) != null) return
         val channel = NotificationChannel(
             channelId,
-            "New in $libraryName",
+            context.getString(R.string.notification_channel_new_in_library, libraryName),
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
-            description = "Notifications for new media in $libraryName"
+            description = context.getString(R.string.notification_channel_new_in_library_desc, libraryName)
             enableVibration(prefs.vibrateEnabled)
             enableLights(prefs.lightsEnabled)
             setShowBadge(true)
@@ -46,10 +47,10 @@ class NotificationChannelManager @Inject constructor(
         if (nm.getNotificationChannel(CHANNEL_SUMMARY) != null) return
         val channel = NotificationChannel(
             CHANNEL_SUMMARY,
-            "New Media",
+            context.getString(R.string.notification_channel_summary),
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
-            description = "Summary of new media notifications"
+            description = context.getString(R.string.notification_channel_summary_desc)
             setShowBadge(true)
         }
         nm.createNotificationChannel(channel)
