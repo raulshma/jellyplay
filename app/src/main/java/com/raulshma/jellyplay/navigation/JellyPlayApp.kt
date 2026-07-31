@@ -311,9 +311,19 @@ private fun MainContent(
     val isSoothing = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme.current
     val isMonochrome = com.raulshma.jellyplay.core.designsystem.theme.LocalIsMonochromeTheme.current
 
+    // `true` once per fresh ViewModel (state-loss restore): process death,
+    // "Don't keep activities", or low-memory eviction — every case where the
+    // player's in-memory state is gone but the saveable nav back stack
+    // survives. Config-change recreate reuses the VM, so this reads false and
+    // rotation/locale keep the player. Captured in `remember` so it is stable
+    // for this Activity's lifetime; rememberNavigationState runs the strip at
+    // most once.
+    val stripPlayerRoutesOnRestore = remember { viewModel.consumeStateLossRestore() }
+
     val navigationState = rememberNavigationState(
         startRoute = Route.Home,
         topLevelRoutes = ALL_TOP_LEVEL_ROUTE_KEYS,
+        stripPlayerRoutesOnRestore = stripPlayerRoutesOnRestore,
     )
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
