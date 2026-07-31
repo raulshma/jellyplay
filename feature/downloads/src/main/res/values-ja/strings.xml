@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Downloads feature user-facing strings -->
+
+    <!-- Screen titles / scaffolds -->
+    <string name="downloads_screen_title">ダウンロード</string>
+    <string name="downloads_library_title">ダウンロード済み</string>
+    <string name="downloads_loading">読み込み中…</string>
+    <string name="downloads_not_found">見つかりません</string>
+    <string name="downloads_download_unavailable">このダウンロードは利用できなくなりました</string>
+
+    <!-- Empty states -->
+    <string name="downloads_empty_title">まだダウンロードはありません</string>
+    <string name="downloads_empty_description">ダウンロードしたコンテンツはここに表示されます</string>
+    <string name="downloads_no_downloaded_content">ダウンロード済みのコンテンツはまだありません</string>
+    <string name="downloads_no_matches">一致なし</string>
+    <string name="downloads_no_items_in_category">このカテゴリにダウンロード済みのアイテムはありません</string>
+    <string name="downloads_no_episodes_season">このシーズンにはダウンロード済みのエピソードがありません</string>
+
+    <!-- Storage / counts -->
+    <string name="downloads_storage_used">使用容量: %1$s</string>
+    <string name="downloads_on_device">· 端末に %1$s</string>
+    <plurals name="downloads_item_count">
+        <item quantity="other">%1$d 件</item>
+    </plurals>
+    <plurals name="downloads_episodes_count">
+        <item quantity="other">%1$d エピソード</item>
+    </plurals>
+    <string name="downloads_episodes_count_with_size">%1$d エピソード · %2$s</string>
+    <string name="downloads_selected_count">%1$d 件選択中</string>
+
+    <!-- Common actions / buttons -->
+    <string name="downloads_delete">削除</string>
+    <string name="downloads_cancel">キャンセル</string>
+    <string name="downloads_close">閉じる</string>
+    <string name="downloads_action_play">再生</string>
+    <string name="downloads_action_pause">一時停止</string>
+    <string name="downloads_action_resume">再開</string>
+    <string name="downloads_action_retry">再試行</string>
+    <string name="downloads_action_cancel">キャンセル</string>
+    <string name="downloads_action_delete">削除</string>
+    <string name="downloads_action_lower_priority">優先度を下げる</string>
+    <string name="downloads_action_move_to_front">先頭に移動</string>
+    <string name="downloads_action_select_all">すべて選択</string>
+    <string name="downloads_action_clear_selection">選択を解除</string>
+    <string name="downloads_select_all">すべて選択</string>
+    <string name="downloads_deselect_all">選択を解除</string>
+    <string name="downloads_clear_cd">クリア</string>
+    <string name="downloads_search_cd">検索</string>
+    <string name="downloads_sort_cd">並べ替え</string>
+    <string name="downloads_search_downloads_placeholder">ダウンロードを検索…</string>
+    <string name="downloads_selection_hint">ダウンロードを長押しして選択し、一括操作を適用できます</string>
+
+    <!-- Delete dialogs -->
+    <string name="downloads_delete_download_title">ダウンロードを削除</string>
+    <string name="downloads_delete_download_cd">ダウンロードを削除</string>
+    <string name="downloads_delete_download_message">「%1$s」を端末から削除しますか？%2$s が解放されます。</string>
+    <string name="downloads_delete_downloads_title">ダウンロードを削除</string>
+    <plurals name="downloads_delete_downloads_message">
+        <item quantity="other">選択した %1$d 件のダウンロードを端末から削除しますか？</item>
+    </plurals>
+    <string name="downloads_frees_up_sentence"> %1$s が解放されます。</string>
+    <string name="downloads_delete_episode_title">エピソードを削除</string>
+    <string name="downloads_delete_episode_cd">エピソードを削除</string>
+    <string name="downloads_delete_episode_message">「%1$s」を端末から削除しますか？</string>
+    <string name="downloads_select_episodes_to_remove">端末から削除するエピソードを選択してください。</string>
+    <string name="downloads_episodes_selected">%2$d 件中 %1$d 件のエピソードを選択</string>
+    <string name="downloads_episodes_selected_with_freed">%2$d 件中 %1$d 件のエピソードを選択 · %3$s</string>
+    <string name="downloads_delete_count">%1$d 件削除</string>
+    <string name="downloads_delete_count_with_freed">%1$d 件削除 · %2$s</string>
+
+    <!-- Download statuses -->
+    <string name="downloads_status_queued">待機中</string>
+    <string name="downloads_status_waiting">待機中…</string>
+    <string name="downloads_status_failed">失敗</string>
+    <string name="downloads_status_paused">一時停止</string>
+    <string name="downloads_status_cancelled">キャンセル済み</string>
+
+    <!-- Offline detail -->
+    <string name="downloads_series_default">シリーズ</string>
+    <string name="downloads_season_default">シーズン %1$d</string>
+    <string name="downloads_play_resume">再開</string>
+    <string name="downloads_play_again">もう一度再生</string>
+    <string name="downloads_show_less">少なく表示</string>
+    <string name="downloads_show_more">もっと見る</string>
+    <string name="downloads_tracks">トラック</string>
+    <string name="downloads_cast_crew">キャスト &amp; スタッフ</string>
+    <string name="downloads_download_info">ダウンロード情報</string>
+    <string name="downloads_file_size">ファイルサイズ</string>
+    <string name="downloads_downloaded">ダウンロード日</string>
+    <string name="downloads_status">ステータス</string>
+    <string name="downloads_progress">進捗</string>
+    <string name="downloads_watch_status">視聴ステータス</string>
+    <string name="downloads_watched">視聴済み</string>
+    <string name="downloads_watched_label">視聴済み</string>
+    <string name="downloads_in_progress">視聴中</string>
+    <string name="downloads_started">開始済み</string>
+    <string name="downloads_position">位置</string>
+    <string name="downloads_position_of">%2$s 中 %1$s</string>
+    <string name="downloads_last_watched">最後に視聴</string>
+    <string name="downloads_time_left">残り %1$s</string>
+
+    <!-- Seasons / episodes -->
+    <string name="downloads_seasons">シーズン</string>
+    <string name="downloads_collapse">折りたたむ</string>
+    <string name="downloads_expand">展開</string>
+    <string name="downloads_mark_season_cd">シーズンを視聴済み/未視聴にする</string>
+    <string name="downloads_mark_season_watched">シーズンを視聴済みにする</string>
+    <string name="downloads_mark_season_unwatched">シーズンを未視聴にする</string>
+
+    <!-- Library sort / filter -->
+    <string name="downloads_sort_recent">最近</string>
+    <string name="downloads_sort_name">名前（A–Z）</string>
+    <string name="downloads_sort_rating">評価</string>
+    <string name="downloads_sort_size">サイズ</string>
+    <string name="downloads_filter_all">すべて</string>
+    <string name="downloads_filter_videos">動画</string>
+    <string name="downloads_filter_music">音楽</string>
+</resources>

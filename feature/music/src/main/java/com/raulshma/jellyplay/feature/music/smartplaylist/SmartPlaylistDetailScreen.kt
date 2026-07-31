@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -37,6 +38,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.feature.music.components.TrackRow
+import com.raulshma.jellyplay.feature.music.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -69,7 +71,7 @@ fun SmartPlaylistDetailScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = playlist?.name ?: "Smart Playlist",
+        title = playlist?.name ?: stringResource(R.string.music_smart_playlist),
         onBack = onBack,
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
@@ -88,7 +90,7 @@ fun SmartPlaylistDetailScreen(
                 viewModel.generatedItems.isEmpty() -> {
                     ScreenEmptyState(
                         icon = Tabler.Outline.Wand,
-                        title = "No tracks match the criteria",
+                        title = stringResource(R.string.music_no_tracks_criteria),
                     )
                 }
                 else -> AnimatedEntrance(visible = true) {
@@ -132,7 +134,7 @@ fun SmartPlaylistDetailScreen(
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.playAll() },
                     icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
-                    text = { Text("Play All") },
+                    text = { Text(stringResource(R.string.music_play_all)) },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .then(playAllFocusState.focusModifier)

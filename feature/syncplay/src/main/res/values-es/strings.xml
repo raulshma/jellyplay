@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="syncplay_leave_group">Salir del grupo</string>
+    <string name="syncplay_retry">Reintentar</string>
+    <string name="syncplay_no_active_groups">No hay grupos de SyncPlay activos</string>
+    <string name="syncplay_create_group_together">Crea un grupo para ver juntos</string>
+    <string name="syncplay_create_group">Crear grupo</string>
+    <string name="syncplay_join_group_question">¿Unirse al grupo?</string>
+    <string name="syncplay_join_group_confirm">¿Unirse a \"%1$s\"?</string>
+    <string name="syncplay_join">Unirse</string>
+    <string name="syncplay_cancel">Cancelar</string>
+    <string name="syncplay_playing_item">Reproduciendo: %1$s</string>
+    <string name="syncplay_playing">Reproduciendo</string>
+    <string name="syncplay_paused">En pausa</string>
+    <string name="syncplay_pause">Pausar</string>
+    <string name="syncplay_play">Reproducir</string>
+    <string name="syncplay_stop">Detener</string>
+    <string name="syncplay_leave">Salir</string>
+    <string name="syncplay_group_settings">Ajustes del grupo</string>
+    <string name="syncplay_participants">Participantes</string>
+    <string name="syncplay_connected">Conectado</string>
+    <string name="syncplay_disconnected">Desconectado</string>
+    <string name="syncplay_create_group_title">Crear grupo de SyncPlay</string>
+    <string name="syncplay_group_name">Nombre del grupo</string>
+    <string name="syncplay_create">Crear</string>
+
+    <string name="syncplay_error_load_groups">No se pudieron cargar los grupos</string>
+    <string name="syncplay_join_disabled">Unirse a grupos de SyncPlay está desactivado en los ajustes</string>
+    <string name="syncplay_error_join_group">No se pudo unir al grupo</string>
+    <string name="syncplay_error_leave_group">No se pudo salir del grupo</string>
+    <string name="syncplay_error_create_group">No se pudo crear el grupo</string>
+
+    <plurals name="syncplay_participants_count">
+        <item quantity="one">%d participante</item>
+        <item quantity="other">%d participantes</item>
+    </plurals>
+</resources>

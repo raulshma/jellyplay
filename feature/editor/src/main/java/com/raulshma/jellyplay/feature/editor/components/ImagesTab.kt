@@ -57,6 +57,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.raulshma.jellyplay.core.model.ImageInfo
@@ -65,10 +66,25 @@ import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
+import com.raulshma.jellyplay.feature.editor.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
 private val IMAGE_TYPES = listOf("Primary", "Art", "Backdrop", "Banner", "Box", "BoxRear", "Disc", "Logo", "Menu", "Thumb")
+
+private fun imageTypeLabelRes(type: String): Int = when (type) {
+    "Primary" -> R.string.editor_image_type_primary
+    "Art" -> R.string.editor_image_type_art
+    "Backdrop" -> R.string.editor_image_type_backdrop
+    "Banner" -> R.string.editor_image_type_banner
+    "Box" -> R.string.editor_image_type_box
+    "BoxRear" -> R.string.editor_image_type_box_rear
+    "Disc" -> R.string.editor_image_type_disc
+    "Logo" -> R.string.editor_image_type_logo
+    "Menu" -> R.string.editor_image_type_menu
+    "Thumb" -> R.string.editor_image_type_thumb
+    else -> R.string.editor_image_type_primary
+}
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -100,7 +116,7 @@ fun ImagesTab(
             FilledTonalButton(onClick = { showUploadSheet = true }) {
                 Icon(Tabler.Outline.Plus, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Upload")
+                Text(stringResource(R.string.editor_images_upload))
             }
             FilledTonalButton(onClick = {
                 viewModel.loadRemoteImages(null, null, null)
@@ -108,7 +124,7 @@ fun ImagesTab(
             }) {
                 Icon(Tabler.Outline.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Browse Online")
+                Text(stringResource(R.string.editor_images_browse_online))
             }
         }
 
@@ -117,7 +133,7 @@ fun ImagesTab(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("No images available", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.editor_images_none_available), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             TvFocusableGrid(
@@ -142,8 +158,8 @@ fun ImagesTab(
     showDeleteConfirm?.let { imageInfo ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete Image") },
-            text = { Text("Are you sure you want to delete this ${imageInfo.imageType} image?") },
+            title = { Text(stringResource(R.string.editor_images_delete_title)) },
+            text = { Text(stringResource(R.string.editor_images_delete_message, stringResource(imageTypeLabelRes(imageInfo.imageType)))) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -153,10 +169,10 @@ fun ImagesTab(
                         )
                         showDeleteConfirm = null
                     },
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.editor_images_delete_action)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = null }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(R.string.editor_action_cancel)) }
             },
         )
     }
@@ -214,7 +230,7 @@ private fun ImageCard(
         Box {
             MediaImage(
                 url = imageUrl,
-                contentDescription = imageInfo.imageType,
+                contentDescription = stringResource(imageTypeLabelRes(imageInfo.imageType)),
                 size = CoilSize(512, 512),
                 placeholderIcon = Tabler.Outline.Photo,
                 modifier = Modifier
@@ -236,13 +252,13 @@ private fun ImageCard(
                     .padding(8.dp),
             ) {
                 Text(
-                    text = imageInfo.imageType,
+                    text = stringResource(imageTypeLabelRes(imageInfo.imageType)),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (imageInfo.width > 0 && imageInfo.height > 0) {
                     Text(
-                        text = "${imageInfo.width}x${imageInfo.height}",
+                        text = stringResource(R.string.editor_images_dimensions_format, imageInfo.width, imageInfo.height),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -256,7 +272,7 @@ private fun ImageCard(
             ) {
                 Icon(
                     Tabler.Outline.Trash,
-                    contentDescription = "Delete",
+                    contentDescription = stringResource(R.string.editor_images_delete_action),
                     tint = MaterialTheme.colorScheme.error,
                 )
             }
@@ -293,11 +309,11 @@ private fun ImageUploadSheet(
                     .padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Upload Image", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.editor_images_upload_title), style = MaterialTheme.typography.headlineSmall)
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 }, label = { Text("File") })
-                    FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 }, label = { Text("URL") })
+                    FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 }, label = { Text(stringResource(R.string.editor_images_source_file)) })
+                    FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 }, label = { Text(stringResource(R.string.editor_images_source_url)) })
                 }
 
                 ImageTypeSelector(
@@ -309,7 +325,7 @@ private fun ImageUploadSheet(
                     selectedUri?.let { uri ->
                         MediaImage(
                             url = uri.toString(),
-                            contentDescription = "Preview",
+                            contentDescription = stringResource(R.string.editor_images_preview),
                             size = CoilSize(512, 512),
                             placeholderIcon = Tabler.Outline.Photo,
                             modifier = Modifier
@@ -323,7 +339,7 @@ private fun ImageUploadSheet(
                         onClick = { fileLauncher.launch(arrayOf("image/*")) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(if (selectedUri != null) "Change File" else "Select Image")
+                        Text(if (selectedUri != null) stringResource(R.string.editor_images_change_file) else stringResource(R.string.editor_images_select_image))
                     }
                     Button(
                         onClick = {
@@ -333,19 +349,19 @@ private fun ImageUploadSheet(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = selectedUri != null,
-                    ) { Text("Upload") }
+                    ) { Text(stringResource(R.string.editor_images_upload)) }
                 } else {
                     OutlinedTextField(
                         value = imageUrl,
                         onValueChange = { imageUrl = it },
-                        label = { Text("Image URL") },
+                        label = { Text(stringResource(R.string.editor_images_image_url)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
                     if (imageUrl.isNotBlank()) {
                         MediaImage(
                             url = imageUrl,
-                            contentDescription = "Preview",
+                            contentDescription = stringResource(R.string.editor_images_preview),
                             size = CoilSize(512, 512),
                             placeholderIcon = Tabler.Outline.Photo,
                             modifier = Modifier
@@ -359,7 +375,7 @@ private fun ImageUploadSheet(
                         onClick = { onUploadUrl(imageUrl, selectedImageType) },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = imageUrl.isNotBlank(),
-                    ) { Text("Download from URL") }
+                    ) { Text(stringResource(R.string.editor_images_download_from_url)) }
                 }
             }
         }
@@ -375,11 +391,11 @@ private fun ImageUploadSheet(
                     .padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Upload Image", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.editor_images_upload_title), style = MaterialTheme.typography.headlineSmall)
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 }, label = { Text("File") })
-                    FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 }, label = { Text("URL") })
+                    FilterChip(selected = selectedTab == 0, onClick = { selectedTab = 0 }, label = { Text(stringResource(R.string.editor_images_source_file)) })
+                    FilterChip(selected = selectedTab == 1, onClick = { selectedTab = 1 }, label = { Text(stringResource(R.string.editor_images_source_url)) })
                 }
 
                 ImageTypeSelector(
@@ -391,7 +407,7 @@ private fun ImageUploadSheet(
                     selectedUri?.let { uri ->
                         MediaImage(
                             url = uri.toString(),
-                            contentDescription = "Preview",
+                            contentDescription = stringResource(R.string.editor_images_preview),
                             size = CoilSize(512, 512),
                             placeholderIcon = Tabler.Outline.Photo,
                             modifier = Modifier
@@ -405,7 +421,7 @@ private fun ImageUploadSheet(
                         onClick = { fileLauncher.launch(arrayOf("image/*")) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(if (selectedUri != null) "Change File" else "Select Image")
+                        Text(if (selectedUri != null) stringResource(R.string.editor_images_change_file) else stringResource(R.string.editor_images_select_image))
                     }
                     Button(
                         onClick = {
@@ -415,19 +431,19 @@ private fun ImageUploadSheet(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = selectedUri != null,
-                    ) { Text("Upload") }
+                    ) { Text(stringResource(R.string.editor_images_upload)) }
                 } else {
                     OutlinedTextField(
                         value = imageUrl,
                         onValueChange = { imageUrl = it },
-                        label = { Text("Image URL") },
+                        label = { Text(stringResource(R.string.editor_images_image_url)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
                     if (imageUrl.isNotBlank()) {
                         MediaImage(
                             url = imageUrl,
-                            contentDescription = "Preview",
+                            contentDescription = stringResource(R.string.editor_images_preview),
                             size = CoilSize(512, 512),
                             placeholderIcon = Tabler.Outline.Photo,
                             modifier = Modifier
@@ -441,7 +457,7 @@ private fun ImageUploadSheet(
                         onClick = { onUploadUrl(imageUrl, selectedImageType) },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = imageUrl.isNotBlank(),
-                    ) { Text("Download from URL") }
+                    ) { Text(stringResource(R.string.editor_images_download_from_url)) }
                 }
             }
         }
@@ -461,6 +477,8 @@ private fun ImageBrowseSheet(
     var selectedProvider by remember { mutableStateOf<String?>(null) }
     var currentPage by remember { mutableStateOf(0) }
 
+    val allProvidersLabel = stringResource(R.string.editor_images_all_providers)
+
     val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
     if (isTv) {
         com.raulshma.jellyplay.core.ui.components.TvSafeSheet(
@@ -473,7 +491,7 @@ private fun ImageBrowseSheet(
                     .padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Browse Online Images", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.editor_images_browse_title), style = MaterialTheme.typography.headlineSmall)
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ImageTypeSelector(
@@ -495,7 +513,7 @@ private fun ImageBrowseSheet(
                         onExpandedChange = { providerExpanded = it },
                     ) {
                         OutlinedTextField(
-                            value = selectedProvider ?: "All Providers",
+                            value = selectedProvider ?: allProvidersLabel,
                             onValueChange = {},
                             readOnly = true,
                             modifier = Modifier
@@ -508,7 +526,7 @@ private fun ImageBrowseSheet(
                             onDismissRequest = { providerExpanded = false },
                         ) {
                             DropdownMenuItem(
-                                text = { Text("All Providers") },
+                                text = { Text(stringResource(R.string.editor_images_all_providers)) },
                                 onClick = {
                                     selectedProvider = null
                                     currentPage = 0
@@ -539,7 +557,7 @@ private fun ImageBrowseSheet(
                             .height(200.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("No images found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.editor_images_no_images_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
                     LazyVerticalGrid(
@@ -567,7 +585,7 @@ private fun ImageBrowseSheet(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                "${currentPage * 50 + 1}-${minOf((currentPage + 1) * 50, total)} of $total",
+                                stringResource(R.string.editor_images_pagination_format, currentPage * 50 + 1, minOf((currentPage + 1) * 50, total), total),
                                 style = MaterialTheme.typography.labelMedium,
                             )
                             Row {
@@ -577,14 +595,14 @@ private fun ImageBrowseSheet(
                                         onLoadImages(selectedType, selectedProvider, currentPage * 50)
                                     },
                                     enabled = currentPage > 0,
-                                ) { Text("Previous") }
+                                ) { Text(stringResource(R.string.editor_images_previous)) }
                                 TextButton(
                                     onClick = {
                                         currentPage++
                                         onLoadImages(selectedType, selectedProvider, currentPage * 50)
                                     },
                                     enabled = (currentPage + 1) * 50 < total,
-                                ) { Text("Next") }
+                                ) { Text(stringResource(R.string.editor_images_next)) }
                             }
                         }
                     }
@@ -603,7 +621,7 @@ private fun ImageBrowseSheet(
                     .padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Browse Online Images", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.editor_images_browse_title), style = MaterialTheme.typography.headlineSmall)
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ImageTypeSelector(
@@ -625,7 +643,7 @@ private fun ImageBrowseSheet(
                         onExpandedChange = { providerExpanded = it },
                     ) {
                         OutlinedTextField(
-                            value = selectedProvider ?: "All Providers",
+                            value = selectedProvider ?: allProvidersLabel,
                             onValueChange = {},
                             readOnly = true,
                             modifier = Modifier
@@ -638,7 +656,7 @@ private fun ImageBrowseSheet(
                             onDismissRequest = { providerExpanded = false },
                         ) {
                             DropdownMenuItem(
-                                text = { Text("All Providers") },
+                                text = { Text(stringResource(R.string.editor_images_all_providers)) },
                                 onClick = {
                                     selectedProvider = null
                                     currentPage = 0
@@ -669,7 +687,7 @@ private fun ImageBrowseSheet(
                             .height(200.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("No images found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.editor_images_no_images_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
                     LazyVerticalGrid(
@@ -697,7 +715,7 @@ private fun ImageBrowseSheet(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                "${currentPage * 50 + 1}-${minOf((currentPage + 1) * 50, total)} of $total",
+                                stringResource(R.string.editor_images_pagination_format, currentPage * 50 + 1, minOf((currentPage + 1) * 50, total), total),
                                 style = MaterialTheme.typography.labelMedium,
                             )
                             Row {
@@ -707,14 +725,14 @@ private fun ImageBrowseSheet(
                                         onLoadImages(selectedType, selectedProvider, currentPage * 50)
                                     },
                                     enabled = currentPage > 0,
-                                ) { Text("Previous") }
+                                ) { Text(stringResource(R.string.editor_images_previous)) }
                                 TextButton(
                                     onClick = {
                                         currentPage++
                                         onLoadImages(selectedType, selectedProvider, currentPage * 50)
                                     },
                                     enabled = (currentPage + 1) * 50 < total,
-                                ) { Text("Next") }
+                                ) { Text(stringResource(R.string.editor_images_next)) }
                             }
                         }
                     }
@@ -760,7 +778,7 @@ private fun RemoteImageCard(
                 )
                 if (remoteImage.width > 0) {
                     Text(
-                        "${remoteImage.width}x${remoteImage.height}",
+                        stringResource(R.string.editor_images_dimensions_format, remoteImage.width, remoteImage.height),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -774,7 +792,7 @@ private fun RemoteImageCard(
             ) {
                 Icon(
                     Tabler.Outline.Download,
-                    contentDescription = "Download",
+                    contentDescription = stringResource(R.string.editor_images_download),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -808,7 +826,7 @@ private fun FullImageDialog(
         ) {
             MediaImage(
                 url = imageUrl,
-                contentDescription = imageInfo.imageType,
+                contentDescription = stringResource(imageTypeLabelRes(imageInfo.imageType)),
                 size = CoilSize(1024, 1024),
                 placeholderIcon = Tabler.Outline.Photo,
                 modifier = Modifier
@@ -829,7 +847,7 @@ private fun FullImageDialog(
             ) {
                 Icon(
                     Tabler.Outline.X,
-                    contentDescription = "Close",
+                    contentDescription = stringResource(R.string.editor_images_close),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
@@ -850,14 +868,14 @@ private fun ImageTypeSelector(
         onExpandedChange = { expanded = it },
     ) {
         OutlinedTextField(
-            value = selected.ifBlank { "Select Type" },
+            value = selected.ifBlank { stringResource(R.string.editor_images_select_type) },
             onValueChange = {},
             readOnly = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable),
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            label = { Text("Image Type") },
+            label = { Text(stringResource(R.string.editor_images_image_type)) },
         )
         ExposedDropdownMenu(
             expanded = expanded,
@@ -865,13 +883,13 @@ private fun ImageTypeSelector(
         ) {
             if (allowBlank) {
                 DropdownMenuItem(
-                    text = { Text("All Types") },
+                    text = { Text(stringResource(R.string.editor_images_all_types)) },
                     onClick = { onSelected(""); expanded = false },
                 )
             }
             IMAGE_TYPES.forEach { type ->
                 DropdownMenuItem(
-                    text = { Text(type) },
+                    text = { Text(stringResource(imageTypeLabelRes(type))) },
                     onClick = { onSelected(type); expanded = false },
                 )
             }

@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaStream
@@ -52,6 +53,7 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
+import com.raulshma.jellyplay.feature.editor.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -85,12 +87,12 @@ fun SubtitlesTab(
             FilledTonalButton(onClick = { showUploadSheet = true }) {
                 Icon(Tabler.Outline.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Upload")
+                Text(stringResource(R.string.editor_subtitles_upload))
             }
             FilledTonalButton(onClick = { showSearchSheet = true }) {
                 Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Search Remote")
+                Text(stringResource(R.string.editor_subtitles_search_remote))
             }
         }
 
@@ -99,7 +101,7 @@ fun SubtitlesTab(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("No subtitles available", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.editor_subtitles_none_available), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             LazyColumn(
@@ -110,17 +112,19 @@ fun SubtitlesTab(
                     ListItem(
                         headlineContent = {
                             Text(
-                                subtitle.displayTitle ?: subtitle.title ?: "Subtitle ${subtitle.index}",
+                                subtitle.displayTitle ?: subtitle.title ?: stringResource(R.string.editor_subtitles_fallback_title, subtitle.index),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         },
                         supportingContent = {
+                            val forcedLabel = stringResource(R.string.editor_subtitles_forced)
+                            val externalLabel = stringResource(R.string.editor_subtitles_external)
                             val info = buildString {
                                 subtitle.language?.let { append(it) }
                                 subtitle.codec?.let { append(" • $it") }
-                                if (subtitle.isForced) append(" • Forced")
-                                if (subtitle.isExternal) append(" • External")
+                                if (subtitle.isForced) append(" • $forcedLabel")
+                                if (subtitle.isExternal) append(" • $externalLabel")
                             }
                             if (info.isNotBlank()) Text(info)
                         },
@@ -129,7 +133,7 @@ fun SubtitlesTab(
                                 IconButton(onClick = { showDeleteConfirm = subtitle }) {
                                     Icon(
                                         Tabler.Outline.Trash,
-                                        contentDescription = "Delete",
+                                        contentDescription = stringResource(R.string.editor_subtitles_delete_action),
                                         tint = MaterialTheme.colorScheme.error,
                                     )
                                 }
@@ -147,18 +151,18 @@ fun SubtitlesTab(
     showDeleteConfirm?.let { subtitle ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete Subtitle") },
-            text = { Text("Are you sure you want to delete this subtitle?") },
+            title = { Text(stringResource(R.string.editor_subtitles_delete_title)) },
+            text = { Text(stringResource(R.string.editor_subtitles_delete_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         viewModel.deleteSubtitle(subtitle.index)
                         showDeleteConfirm = null
                     },
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.editor_subtitles_delete_action)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = null }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(R.string.editor_action_cancel)) }
             },
         )
     }
@@ -215,7 +219,7 @@ private fun SubtitleUploadSheet(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Upload Subtitle", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.editor_subtitles_upload_title), style = MaterialTheme.typography.headlineSmall)
 
                 FilledTonalButton(
                     onClick = {
@@ -223,7 +227,7 @@ private fun SubtitleUploadSheet(
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (selectedFile != null) "Change: $selectedFileName" else "Select File (.srt, .ass, .ssa, .vtt)")
+                    Text(if (selectedFile != null) stringResource(R.string.editor_subtitles_change_file, selectedFileName) else stringResource(R.string.editor_subtitles_select_file))
                 }
 
                 var langExpanded by remember { mutableStateOf(false) }
@@ -234,7 +238,7 @@ private fun SubtitleUploadSheet(
                     OutlinedTextField(
                         value = selectedLanguage,
                         onValueChange = { selectedLanguage = it },
-                        label = { Text("Language") },
+                        label = { Text(stringResource(R.string.editor_field_language)) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
@@ -257,11 +261,11 @@ private fun SubtitleUploadSheet(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isForced, onCheckedChange = { isForced = it })
-                    Text("Forced subtitle")
+                    Text(stringResource(R.string.editor_subtitles_forced_subtitle))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isHearingImpaired, onCheckedChange = { isHearingImpaired = it })
-                    Text("Hearing impaired")
+                    Text(stringResource(R.string.editor_subtitles_hearing_impaired))
                 }
 
                 androidx.compose.material3.Button(
@@ -272,7 +276,7 @@ private fun SubtitleUploadSheet(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = selectedFile != null && selectedLanguage.isNotBlank(),
-                ) { Text("Upload") }
+                ) { Text(stringResource(R.string.editor_subtitles_upload)) }
             }
         }
     } else {
@@ -284,7 +288,7 @@ private fun SubtitleUploadSheet(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Upload Subtitle", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.editor_subtitles_upload_title), style = MaterialTheme.typography.headlineSmall)
 
                 FilledTonalButton(
                     onClick = {
@@ -292,7 +296,7 @@ private fun SubtitleUploadSheet(
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (selectedFile != null) "Change: $selectedFileName" else "Select File (.srt, .ass, .ssa, .vtt)")
+                    Text(if (selectedFile != null) stringResource(R.string.editor_subtitles_change_file, selectedFileName) else stringResource(R.string.editor_subtitles_select_file))
                 }
 
                 var langExpanded by remember { mutableStateOf(false) }
@@ -303,7 +307,7 @@ private fun SubtitleUploadSheet(
                     OutlinedTextField(
                         value = selectedLanguage,
                         onValueChange = { selectedLanguage = it },
-                        label = { Text("Language") },
+                        label = { Text(stringResource(R.string.editor_field_language)) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
@@ -326,11 +330,11 @@ private fun SubtitleUploadSheet(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isForced, onCheckedChange = { isForced = it })
-                    Text("Forced subtitle")
+                    Text(stringResource(R.string.editor_subtitles_forced_subtitle))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isHearingImpaired, onCheckedChange = { isHearingImpaired = it })
-                    Text("Hearing impaired")
+                    Text(stringResource(R.string.editor_subtitles_hearing_impaired))
                 }
 
                 androidx.compose.material3.Button(
@@ -341,7 +345,7 @@ private fun SubtitleUploadSheet(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = selectedFile != null && selectedLanguage.isNotBlank(),
-                ) { Text("Upload") }
+                ) { Text(stringResource(R.string.editor_subtitles_upload)) }
             }
         }
     }
@@ -369,7 +373,7 @@ private fun RemoteSubtitleSearchSheet(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Search Remote Subtitles", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.editor_subtitles_search_title), style = MaterialTheme.typography.headlineSmall)
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -385,7 +389,7 @@ private fun RemoteSubtitleSearchSheet(
                         OutlinedTextField(
                             value = searchLanguage,
                             onValueChange = { searchLanguage = it },
-                            label = { Text("Language") },
+                            label = { Text(stringResource(R.string.editor_field_language)) },
                             modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                             singleLine = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
@@ -413,7 +417,7 @@ private fun RemoteSubtitleSearchSheet(
                     ) {
                         Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Search")
+                        Text(stringResource(R.string.editor_subtitles_search))
                     }
                 }
 
@@ -422,7 +426,7 @@ private fun RemoteSubtitleSearchSheet(
                         modifier = Modifier.fillMaxWidth().height(200.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("No results found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.editor_subtitles_no_results), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
                     LazyColumn(
@@ -448,7 +452,7 @@ private fun RemoteSubtitleSearchSheet(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Search Remote Subtitles", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.editor_subtitles_search_title), style = MaterialTheme.typography.headlineSmall)
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -464,7 +468,7 @@ private fun RemoteSubtitleSearchSheet(
                         OutlinedTextField(
                             value = searchLanguage,
                             onValueChange = { searchLanguage = it },
-                            label = { Text("Language") },
+                            label = { Text(stringResource(R.string.editor_field_language)) },
                             modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                             singleLine = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded) },
@@ -492,7 +496,7 @@ private fun RemoteSubtitleSearchSheet(
                     ) {
                         Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Search")
+                        Text(stringResource(R.string.editor_subtitles_search))
                     }
                 }
 
@@ -501,7 +505,7 @@ private fun RemoteSubtitleSearchSheet(
                         modifier = Modifier.fillMaxWidth().height(200.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("No results found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.editor_subtitles_no_results), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
                     LazyColumn(
@@ -529,18 +533,20 @@ private fun RemoteSubtitleCard(
     ListItem(
         headlineContent = {
             Text(
-                subtitle.name ?: "Unknown",
+                subtitle.name ?: stringResource(R.string.editor_subtitles_unknown),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         },
         supportingContent = {
             Column {
+                val downloadsFormat = stringResource(R.string.editor_subtitles_download_count_format)
+                val frameRateFormat = stringResource(R.string.editor_subtitles_frame_rate_format)
                 val info = buildString {
                     subtitle.providerName?.let { append(it) }
                     subtitle.format?.let { append(" • $it") }
-                    if (subtitle.downloadCount > 0) append(" • ${subtitle.downloadCount} downloads")
-                    if (subtitle.frameRate != null) append(" • ${subtitle.frameRate}fps")
+                    if (subtitle.downloadCount > 0) append(" • ${downloadsFormat.format(subtitle.downloadCount)}")
+                    if (subtitle.frameRate != null) append(" • ${frameRateFormat.format(subtitle.frameRate)}")
                     if (subtitle.communityRating != null) append(" • ★ ${"%.1f".format(subtitle.communityRating)}")
                 }
                 if (info.isNotBlank()) Text(info, style = MaterialTheme.typography.bodySmall)
@@ -548,28 +554,28 @@ private fun RemoteSubtitleCard(
                     if (subtitle.isHashMatch) {
                         androidx.compose.material3.AssistChip(
                             onClick = {},
-                            label = { Text("Perfect Match", style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringResource(R.string.editor_subtitles_perfect_match), style = MaterialTheme.typography.labelSmall) },
                             modifier = Modifier.height(24.dp),
                         )
                     }
                     if (subtitle.isForced) {
                         androidx.compose.material3.AssistChip(
                             onClick = {},
-                            label = { Text("Forced", style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringResource(R.string.editor_subtitles_label_forced), style = MaterialTheme.typography.labelSmall) },
                             modifier = Modifier.height(24.dp),
                         )
                     }
                     if (subtitle.isHearingImpaired) {
                         androidx.compose.material3.AssistChip(
                             onClick = {},
-                            label = { Text("HI", style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringResource(R.string.editor_subtitles_label_hi), style = MaterialTheme.typography.labelSmall) },
                             modifier = Modifier.height(24.dp),
                         )
                     }
                     if (subtitle.isMachineTranslated == true) {
                         androidx.compose.material3.AssistChip(
                             onClick = {},
-                            label = { Text("MT", style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringResource(R.string.editor_subtitles_label_mt), style = MaterialTheme.typography.labelSmall) },
                             modifier = Modifier.height(24.dp),
                         )
                     }
@@ -580,7 +586,7 @@ private fun RemoteSubtitleCard(
             IconButton(onClick = onDownload) {
                 Icon(
                     Tabler.Outline.Download,
-                    contentDescription = "Download",
+                    contentDescription = stringResource(R.string.editor_subtitles_download),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }

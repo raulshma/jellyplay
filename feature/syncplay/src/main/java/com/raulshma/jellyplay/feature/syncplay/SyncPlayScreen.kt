@@ -63,11 +63,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
+import com.raulshma.jellyplay.feature.syncplay.R
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
@@ -159,7 +162,7 @@ fun SyncPlayScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "SyncPlay",
+        title = stringResource(R.string.syncplay_title),
         onBack = onBack,
         actions = {
             HeaderStatusIndicator(
@@ -170,8 +173,8 @@ fun SyncPlayScreen(
                 TooltipIconButton(
                     onClick = { viewModel.leaveGroup() },
                     imageVector = Tabler.Outline.Logout,
-                    contentDescription = "Leave group",
-                    tooltipText = "Leave group",
+                    contentDescription = stringResource(R.string.syncplay_leave_group),
+                    tooltipText = stringResource(R.string.syncplay_leave_group),
                 )
             }
         },
@@ -186,7 +189,7 @@ fun SyncPlayScreen(
                         Text(error, color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(onClick = { viewModel.loadGroups() }, modifier = Modifier.focusIndicator()) {
-                            Text("Retry")
+                            Text(stringResource(R.string.syncplay_retry))
                         }
                     }
                 }
@@ -217,8 +220,8 @@ fun SyncPlayScreen(
                     if (groups.isEmpty()) {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Users,
-                            title = "No active SyncPlay groups",
-                            description = "Create a group to watch together",
+                            title = stringResource(R.string.syncplay_no_active_groups),
+                            description = stringResource(R.string.syncplay_create_group_together),
                         )
                     } else {
                         LazyColumn(
@@ -276,8 +279,8 @@ fun SyncPlayScreen(
                     modifier = Modifier
                         .then(createGroupFocusState.focusModifier)
                         .tvFocusIndicator(createGroupFocusState, ShapeCache.smooth16),
-                    icon = { Icon(Tabler.Outline.Plus, contentDescription = "Create group") },
-                    text = { Text("Create group") },
+                    icon = { Icon(Tabler.Outline.Plus, contentDescription = stringResource(R.string.syncplay_create_group)) },
+                    text = { Text(stringResource(R.string.syncplay_create_group)) },
                 )
             }
         }
@@ -293,19 +296,19 @@ fun SyncPlayScreen(
     uiState.pendingJoin?.let { pending ->
         AlertDialog(
             onDismissRequest = { viewModel.cancelJoin() },
-            title = { Text("Join group?") },
-            text = { Text("Join \"${pending.groupName}\"?") },
+            title = { Text(stringResource(R.string.syncplay_join_group_question)) },
+            text = { Text(stringResource(R.string.syncplay_join_group_confirm, pending.groupName)) },
             confirmButton = {
                 FilledTonalButton(
                     onClick = { viewModel.confirmJoin() },
                     modifier = Modifier.focusIndicator(),
-                ) { Text("Join") }
+                ) { Text(stringResource(R.string.syncplay_join)) }
             },
             dismissButton = {
                 OutlinedButton(
                     onClick = { viewModel.cancelJoin() },
                     modifier = Modifier.focusIndicator(),
-                ) { Text("Cancel") }
+                ) { Text(stringResource(R.string.syncplay_cancel)) }
             },
         )
     }
@@ -349,7 +352,7 @@ private fun SyncPlayGroupCard(
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        "${group.participantCount} participant${if (group.participantCount != 1) "s" else ""}",
+                        pluralStringResource(R.plurals.syncplay_participants_count, group.participantCount, group.participantCount),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -357,7 +360,7 @@ private fun SyncPlayGroupCard(
                 group.playingItemName?.let { name ->
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        "Playing: $name",
+                        stringResource(R.string.syncplay_playing_item, name),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
@@ -366,7 +369,7 @@ private fun SyncPlayGroupCard(
                 }
             }
             FilledTonalButton(onClick = onJoin, modifier = Modifier.focusIndicator()) {
-                Text("Join")
+                Text(stringResource(R.string.syncplay_join))
             }
         }
     }
@@ -417,7 +420,7 @@ private fun ActiveGroupView(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        "${groupInfo.participants.size} participant${if (groupInfo.participants.size != 1) "s" else ""}",
+                        pluralStringResource(R.plurals.syncplay_participants_count, groupInfo.participants.size, groupInfo.participants.size),
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }
@@ -434,7 +437,7 @@ private fun ActiveGroupView(
                 }
 
                 Text(
-                    if (groupInfo.isPlaying) "Playing" else "Paused",
+                    stringResource(if (groupInfo.isPlaying) R.string.syncplay_playing else R.string.syncplay_paused),
                     style = MaterialTheme.typography.labelLarge,
                     color = if (groupInfo.isPlaying) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.outline,
@@ -449,18 +452,18 @@ private fun ActiveGroupView(
                     FilledTonalButton(onClick = onTogglePlayback, modifier = Modifier.focusIndicator()) {
                         Icon(
                             if (groupInfo.isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                            contentDescription = if (groupInfo.isPlaying) "Pause" else "Play",
+                            contentDescription = stringResource(if (groupInfo.isPlaying) R.string.syncplay_pause else R.string.syncplay_play),
                         )
                         Spacer(Modifier.width(4.dp))
-                        Text(if (groupInfo.isPlaying) "Pause" else "Play")
+                        Text(stringResource(if (groupInfo.isPlaying) R.string.syncplay_pause else R.string.syncplay_play))
                     }
                     FilledTonalButton(onClick = onStop, modifier = Modifier.focusIndicator()) {
-                        Icon(Tabler.Outline.PlayerStop, contentDescription = "Stop")
+                        Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(R.string.syncplay_stop))
                     }
                     OutlinedButton(onClick = onLeave, modifier = Modifier.focusIndicator()) {
-                        Icon(Tabler.Outline.Logout, contentDescription = "Leave")
+                        Icon(Tabler.Outline.Logout, contentDescription = stringResource(R.string.syncplay_leave))
                         Spacer(Modifier.width(4.dp))
-                        Text("Leave")
+                        Text(stringResource(R.string.syncplay_leave))
                     }
                 }
             }
@@ -469,7 +472,7 @@ private fun ActiveGroupView(
         Spacer(Modifier.height(16.dp))
 
         Text(
-            "Group Settings",
+            stringResource(R.string.syncplay_group_settings),
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(Modifier.height(8.dp))
@@ -528,7 +531,7 @@ private fun ActiveGroupView(
         Spacer(Modifier.height(16.dp))
 
         Text(
-            "Participants",
+            stringResource(R.string.syncplay_participants),
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(Modifier.height(8.dp))
@@ -569,7 +572,7 @@ private fun ActiveGroupView(
                             )
                         }
                         Text(
-                            if (participant.isConnected) "Connected" else "Disconnected",
+                            stringResource(if (participant.isConnected) R.string.syncplay_connected else R.string.syncplay_disconnected),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (participant.isConnected) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.outline,
@@ -590,12 +593,12 @@ private fun CreateGroupDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Create SyncPlay Group") },
+        title = { Text(stringResource(R.string.syncplay_create_group_title)) },
         text = {
             OutlinedTextField(
                 value = groupName,
                 onValueChange = { groupName = it },
-                label = { Text("Group name") },
+                label = { Text(stringResource(R.string.syncplay_group_name)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -606,12 +609,12 @@ private fun CreateGroupDialog(
                 enabled = groupName.isNotBlank(),
                 modifier = Modifier.focusIndicator(),
             ) {
-                Text("Create")
+                Text(stringResource(R.string.syncplay_create))
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss, modifier = Modifier.focusIndicator()) {
-                Text("Cancel")
+                Text(stringResource(R.string.syncplay_cancel))
             }
         },
     )

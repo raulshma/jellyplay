@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="syncplay_leave_group">Gruppe verlassen</string>
+    <string name="syncplay_retry">Erneut versuchen</string>
+    <string name="syncplay_no_active_groups">Keine aktiven SyncPlay-Gruppen</string>
+    <string name="syncplay_create_group_together">Erstelle eine Gruppe, um gemeinsam zu schauen</string>
+    <string name="syncplay_create_group">Gruppe erstellen</string>
+    <string name="syncplay_join_group_question">Gruppe beitreten?</string>
+    <string name="syncplay_join_group_confirm">„%1$s" beitreten?</string>
+    <string name="syncplay_join">Beitreten</string>
+    <string name="syncplay_cancel">Abbrechen</string>
+    <string name="syncplay_playing_item">Spielt: %1$s</string>
+    <string name="syncplay_playing">Wird wiedergegeben</string>
+    <string name="syncplay_paused">Pausiert</string>
+    <string name="syncplay_pause">Pause</string>
+    <string name="syncplay_play">Wiedergabe</string>
+    <string name="syncplay_stop">Stopp</string>
+    <string name="syncplay_leave">Verlassen</string>
+    <string name="syncplay_group_settings">Gruppeneinstellungen</string>
+    <string name="syncplay_participants">Teilnehmer</string>
+    <string name="syncplay_connected">Verbunden</string>
+    <string name="syncplay_disconnected">Getrennt</string>
+    <string name="syncplay_create_group_title">SyncPlay-Gruppe erstellen</string>
+    <string name="syncplay_group_name">Gruppenname</string>
+    <string name="syncplay_create">Erstellen</string>
+
+    <string name="syncplay_error_load_groups">Gruppen konnten nicht geladen werden</string>
+    <string name="syncplay_join_disabled">Das Beitreten von SyncPlay-Gruppen ist in den Einstellungen deaktiviert</string>
+    <string name="syncplay_error_join_group">Beitritt zur Gruppe fehlgeschlagen</string>
+    <string name="syncplay_error_leave_group">Verlassen der Gruppe fehlgeschlagen</string>
+    <string name="syncplay_error_create_group">Gruppe konnte nicht erstellt werden</string>
+
+    <plurals name="syncplay_participants_count">
+        <item quantity="one">%d Teilnehmer</item>
+        <item quantity="other">%d Teilnehmer</item>
+    </plurals>
+</resources>

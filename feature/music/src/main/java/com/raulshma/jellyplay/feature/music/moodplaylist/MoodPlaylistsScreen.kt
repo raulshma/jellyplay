@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,6 +50,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.ui.components.rememberJellyFocusableInteraction
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.components.jellyFocusIndicator
 
 @Composable
@@ -65,7 +67,7 @@ fun MoodPlaylistsScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Mood Playlists",
+        title = stringResource(R.string.music_mood_playlists),
         onBack = onBack,
         actions = {
             HeaderStatusIndicator(

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Cpu
@@ -17,6 +18,7 @@ import com.composables.icons.tabler.outline.Transform
 import com.composables.icons.tabler.outline.VideoPlus
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun PermissionsSection(
@@ -26,20 +28,20 @@ fun PermissionsSection(
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         UserEditSection(
-            title = "Playback",
-            description = "What this user can play and how it may be transcoded.",
+            title = stringResource(R.string.admin_playback),
+            description = stringResource(R.string.admin_playback_desc),
         ) {
             SettingToggleItem(
                 icon = Tabler.Outline.PlayerPlay,
-                title = "Allow media playback",
-                subtitle = "Play movies, shows, and music",
+                title = stringResource(R.string.admin_allow_media_playback),
+                subtitle = stringResource(R.string.admin_allow_media_playback_desc),
                 checked = policy.enableMediaPlayback,
                 onCheckedChange = { onPolicyChange(policy.copy(enableMediaPlayback = it)) },
                 index = 0, count = 4,
             )
             SettingToggleItem(
                 icon = Tabler.Outline.Cpu,
-                title = "Allow audio transcoding",
+                title = stringResource(R.string.admin_allow_audio_transcoding),
                 subtitle = "",
                 checked = policy.enableAudioPlaybackTranscoding,
                 onCheckedChange = { onPolicyChange(policy.copy(enableAudioPlaybackTranscoding = it)) },
@@ -47,7 +49,7 @@ fun PermissionsSection(
             )
             SettingToggleItem(
                 icon = Tabler.Outline.Cpu,
-                title = "Allow video transcoding",
+                title = stringResource(R.string.admin_allow_video_transcoding),
                 subtitle = "",
                 checked = policy.enableVideoPlaybackTranscoding,
                 onCheckedChange = { onPolicyChange(policy.copy(enableVideoPlaybackTranscoding = it)) },
@@ -55,20 +57,20 @@ fun PermissionsSection(
             )
             SettingToggleItem(
                 icon = Tabler.Outline.Transform,
-                title = "Allow remuxing",
-                subtitle = "Direct-stream playback without re-encoding",
+                title = stringResource(R.string.admin_allow_remuxing),
+                subtitle = stringResource(R.string.admin_allow_remuxing_desc),
                 checked = policy.enablePlaybackRemuxing,
                 onCheckedChange = { onPolicyChange(policy.copy(enablePlaybackRemuxing = it)) },
                 index = 3, count = 4,
             )
         }
         UserEditSection(
-            title = "Content",
-            description = "Deleting and downloading media.",
+            title = stringResource(R.string.admin_content),
+            description = stringResource(R.string.admin_content_desc),
         ) {
             SettingToggleItem(
                 icon = Tabler.Outline.Trash,
-                title = "Allow media deletion",
+                title = stringResource(R.string.admin_allow_media_deletion),
                 subtitle = "",
                 checked = policy.enableContentDeletion,
                 onCheckedChange = { onPolicyChange(policy.copy(enableContentDeletion = it)) },
@@ -76,7 +78,7 @@ fun PermissionsSection(
             )
             SettingToggleItem(
                 icon = Tabler.Outline.Download,
-                title = "Allow media downloading",
+                title = stringResource(R.string.admin_allow_media_downloading),
                 subtitle = "",
                 checked = policy.enableContentDownloading,
                 onCheckedChange = { onPolicyChange(policy.copy(enableContentDownloading = it)) },
@@ -84,28 +86,28 @@ fun PermissionsSection(
             )
         }
         UserEditSection(
-            title = "Features",
-            description = "Live TV, remote control, and remote access.",
+            title = stringResource(R.string.admin_features),
+            description = stringResource(R.string.admin_features_desc),
         ) {
             SettingToggleItem(
                 icon = Tabler.Outline.DeviceTv,
-                title = "Allow Live TV access",
-                subtitle = "Browse the channel guide",
+                title = stringResource(R.string.admin_allow_live_tv),
+                subtitle = stringResource(R.string.admin_allow_live_tv_desc),
                 checked = policy.enableLiveTvAccess,
                 onCheckedChange = { onPolicyChange(policy.copy(enableLiveTvAccess = it)) },
                 index = 0, count = 3,
             )
             SettingToggleItem(
                 icon = Tabler.Outline.VideoPlus,
-                title = "Allow Live TV management",
-                subtitle = "Manage recordings and timers",
+                title = stringResource(R.string.admin_allow_live_tv_mgmt),
+                subtitle = stringResource(R.string.admin_allow_live_tv_mgmt_desc),
                 checked = policy.enableLiveTvManagement,
                 onCheckedChange = { onPolicyChange(policy.copy(enableLiveTvManagement = it)) },
                 index = 1, count = 3,
             )
             SettingToggleItem(
                 icon = Tabler.Outline.Pointer,
-                title = "Allow remote control of other users",
+                title = stringResource(R.string.admin_allow_remote_control),
                 subtitle = "",
                 checked = policy.enableRemoteControlOfOtherUsers,
                 onCheckedChange = { onPolicyChange(policy.copy(enableRemoteControlOfOtherUsers = it)) },

@@ -165,28 +165,30 @@ fun LibraryFilterSheet(
             // ── Sort By (ButtonGroup) ──
             SectionLabel(stringResource(R.string.library_sort_by))
             ButtonGroup(
+                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
             ) {
                 SortOption.entries.forEach { option ->
-                    ToggleButton(
-                        checked = option == selectedSort,
-                        onCheckedChange = {
-                            if (it) selectedSort = option
-                        },
-                        shapes = ToggleButtonDefaults.shapes(),
-                        colors = ToggleButtonDefaults.toggleButtonColors(
-                            containerColor = glassBg,
-                            contentColor = contentColor,
-                            checkedContainerColor = MaterialTheme.colorScheme.primary,
-                            checkedContentColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
-                    ) {
-                        Text(
-                            text = option.displayName,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (option == selectedSort) FontWeight.Bold else FontWeight.Normal,
-                        )
-                    }
+                    customItem({
+                        ToggleButton(
+                            checked = option == selectedSort,
+                            onCheckedChange = {
+                                if (it) selectedSort = option
+                            },
+                            colors = ToggleButtonDefaults.toggleButtonColors(
+                                containerColor = glassBg,
+                                contentColor = contentColor,
+                                checkedContainerColor = MaterialTheme.colorScheme.primary,
+                                checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
+                        ) {
+                            Text(
+                                text = option.displayName,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (option == selectedSort) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
+                    }) {}
                 }
             }
 
@@ -218,28 +220,30 @@ fun LibraryFilterSheet(
             // ── Status (ButtonGroup) ──
             SectionLabel(stringResource(R.string.library_status))
             ButtonGroup(
+                overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
             ) {
                 PlayedStatus.entries.forEach { status ->
-                    ToggleButton(
-                        checked = status == selectedPlayedStatus,
-                        onCheckedChange = {
-                            if (it) selectedPlayedStatus = status
-                        },
-                        shapes = ToggleButtonDefaults.shapes(),
-                        colors = ToggleButtonDefaults.toggleButtonColors(
-                            containerColor = glassBg,
-                            contentColor = contentColor,
-                            checkedContainerColor = MaterialTheme.colorScheme.primary,
-                            checkedContentColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
-                    ) {
-                        Text(
-                            text = status.displayName,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (status == selectedPlayedStatus) FontWeight.Bold else FontWeight.Normal,
-                        )
-                    }
+                    customItem({
+                        ToggleButton(
+                            checked = status == selectedPlayedStatus,
+                            onCheckedChange = {
+                                if (it) selectedPlayedStatus = status
+                            },
+                            colors = ToggleButtonDefaults.toggleButtonColors(
+                                containerColor = glassBg,
+                                contentColor = contentColor,
+                                checkedContainerColor = MaterialTheme.colorScheme.primary,
+                                checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
+                        ) {
+                            Text(
+                                text = status.displayName,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (status == selectedPlayedStatus) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
+                    }) {}
                 }
             }
 

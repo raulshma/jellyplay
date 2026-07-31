@@ -42,6 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -116,13 +118,13 @@ fun DeleteSeriesSheet(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Delete downloads",
+                    text = stringResource(R.string.downloads_delete_downloads_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "Select episodes to remove from your device.",
+                    text = stringResource(R.string.downloads_select_episodes_to_remove),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -134,7 +136,7 @@ fun DeleteSeriesSheet(
             ) {
                 Icon(
                     imageVector = Tabler.Outline.X,
-                    contentDescription = "Close",
+                    contentDescription = stringResource(R.string.downloads_close),
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -162,7 +164,9 @@ fun DeleteSeriesSheet(
                 ),
                 modifier = Modifier.weight(1f),
             ) {
-                Text(if (allSelected) "Deselect all" else "Select all")
+                val selectAllLabel = stringResource(R.string.downloads_select_all)
+                val deselectAllLabel = stringResource(R.string.downloads_deselect_all)
+                Text(if (allSelected) deselectAllLabel else selectAllLabel)
             }
         }
 
@@ -181,9 +185,12 @@ fun DeleteSeriesSheet(
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
             Spacer(Modifier.height(4.dp))
-            val freed = if (totalSelectedBytes > 0) " · ${totalSelectedBytes.formatBytes()}" else ""
+            val freedBytesStr = if (totalSelectedBytes > 0) totalSelectedBytes.formatBytes() else null
             Text(
-                text = "$totalSelectedCount of ${allSelectableIds.size} episodes selected$freed",
+                text = if (freedBytesStr != null)
+                    stringResource(R.string.downloads_episodes_selected_with_freed, totalSelectedCount, allSelectableIds.size, freedBytesStr)
+                else
+                    stringResource(R.string.downloads_episodes_selected, totalSelectedCount, allSelectableIds.size),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -245,16 +252,18 @@ fun DeleteSeriesSheet(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = season.name.takeIf { it.isNotBlank() }
-                                    ?: "Season ${season.seasonNumber ?: 1}",
+                                    ?: stringResource(R.string.downloads_season_default, season.seasonNumber ?: 1),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.SemiBold,
                             )
                             if (seasonEpisodes.isNotEmpty()) {
                                 val seasonSize = seasonEpisodes.sumOf { it.totalSizeBytes }
-                                val sizeLabel = if (seasonSize > 0) " · ${seasonSize.formatBytes()}" else ""
                                 Text(
-                                    text = "${seasonEpisodes.size} episodes$sizeLabel",
+                                    text = if (seasonSize > 0)
+                                        stringResource(R.string.downloads_episodes_count_with_size, seasonEpisodes.size, seasonSize.formatBytes())
+                                    else
+                                        pluralStringResource(R.plurals.downloads_episodes_count, seasonEpisodes.size, seasonEpisodes.size),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -262,7 +271,7 @@ fun DeleteSeriesSheet(
                         }
                         Icon(
                             imageVector = Tabler.Outline.ChevronDown,
-                            contentDescription = if (isExpanded) "Collapse" else "Expand",
+                            contentDescription = stringResource(if (isExpanded) R.string.downloads_collapse else R.string.downloads_expand),
                             modifier = Modifier
                                 .size(20.dp)
                                 .graphicsLayer { rotationZ = chevronRotation },
@@ -362,7 +371,7 @@ fun DeleteSeriesSheet(
                 onClick = onDismiss,
                 shape = ShapeCache.smoothPill,
             ) {
-                Text("Cancel")
+                Text(stringResource(R.string.downloads_cancel))
             }
             Button(
                 onClick = { onDelete(selection.toSelectedIds()) },
@@ -381,8 +390,13 @@ fun DeleteSeriesSheet(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.size(6.dp))
-                val freed = if (totalSelectedBytes > 0) " · ${totalSelectedBytes.formatBytes()}" else ""
-                Text("Delete $totalSelectedCount$freed")
+                val freedBytesStr = if (totalSelectedBytes > 0) totalSelectedBytes.formatBytes() else null
+                Text(
+                    if (freedBytesStr != null)
+                        stringResource(R.string.downloads_delete_count_with_freed, totalSelectedCount, freedBytesStr)
+                    else
+                        stringResource(R.string.downloads_delete_count, totalSelectedCount),
+                )
             }
         }
     }

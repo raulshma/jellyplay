@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,6 +66,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.admin.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,7 +89,7 @@ fun ScheduledTasksScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Scheduled Tasks",
+        title = stringResource(R.string.admin_scheduled_tasks_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
@@ -96,7 +98,7 @@ fun ScheduledTasksScreen(
                 onClick = { viewModel.refresh() },
                 modifier = Modifier.then(refreshFocusState.focusModifier).tvFocusIndicator(refreshFocusState, CircleShape),
             ) {
-                Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+                Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.admin_refresh))
             }
         },
     ) {
@@ -241,7 +243,7 @@ private fun TaskItem(
                         ) {
                             Icon(Tabler.Outline.PlayerPause, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Stop", style = MaterialTheme.typography.labelMedium)
+                            Text(stringResource(R.string.admin_stop), style = MaterialTheme.typography.labelMedium)
                         }
                     }
                     TaskState.IDLE -> {
@@ -254,7 +256,7 @@ private fun TaskItem(
                         ) {
                             Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Run", style = MaterialTheme.typography.labelMedium)
+                            Text(stringResource(R.string.admin_run), style = MaterialTheme.typography.labelMedium)
                         }
                     }
                     TaskState.CANCELLING -> {

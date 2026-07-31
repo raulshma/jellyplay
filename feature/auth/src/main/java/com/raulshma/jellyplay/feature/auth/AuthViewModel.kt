@@ -1,10 +1,12 @@
 package com.raulshma.jellyplay.feature.auth
 
+import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +25,7 @@ sealed class QuickConnectUiState {
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    @ApplicationContext private val appContext: Context,
 ) : JellyPlayViewModel() {
 
     val servers = authRepository.servers
@@ -90,7 +93,8 @@ class AuthViewModel @Inject constructor(
             if (enabledResult.isFailure) {
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        enabledResult.exceptionOrNull()?.message ?: "Failed to check Quick Connect availability"
+                        enabledResult.exceptionOrNull()?.message
+                            ?: appContext.getString(R.string.auth_qc_error_check_availability)
                     )
                 )
                 return@launch
@@ -98,7 +102,7 @@ class AuthViewModel @Inject constructor(
             if (enabledResult.getOrNull() != true) {
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        "Quick Connect is not enabled on this server"
+                        appContext.getString(R.string.auth_qc_error_not_enabled)
                     )
                 )
                 return@launch
@@ -108,7 +112,8 @@ class AuthViewModel @Inject constructor(
             if (initiateResult.isFailure) {
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        initiateResult.exceptionOrNull()?.message ?: "Failed to initiate Quick Connect"
+                        initiateResult.exceptionOrNull()?.message
+                            ?: appContext.getString(R.string.auth_qc_error_initiate)
                     )
                 )
                 return@launch
@@ -133,7 +138,8 @@ class AuthViewModel @Inject constructor(
                     if (pollResult.isFailure) {
                         _quickConnectState.set(
                             QuickConnectUiState.Error(
-                                pollResult.exceptionOrNull()?.message ?: "Quick Connect polling failed"
+                                pollResult.exceptionOrNull()?.message
+                                    ?: appContext.getString(R.string.auth_qc_error_polling)
                             )
                         )
                         return@launch
@@ -150,7 +156,8 @@ class AuthViewModel @Inject constructor(
                         } else {
                             _quickConnectState.set(
                                 QuickConnectUiState.Error(
-                                    loginResult.exceptionOrNull()?.message ?: "Quick Connect authentication failed"
+                                    loginResult.exceptionOrNull()?.message
+                                        ?: appContext.getString(R.string.auth_qc_error_auth)
                                 )
                             )
                         }
@@ -159,7 +166,7 @@ class AuthViewModel @Inject constructor(
                 }
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        "Quick Connect timed out. Please try again."
+                        appContext.getString(R.string.auth_qc_error_timeout)
                     )
                 )
             }

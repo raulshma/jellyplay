@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand name (Jellyfin feature) — not translated -->
+    <string name="syncplay_title" translatable="false">SyncPlay</string>
+
+    <string name="syncplay_leave_group">Leave group</string>
+    <string name="syncplay_retry">Retry</string>
+    <string name="syncplay_no_active_groups">No active SyncPlay groups</string>
+    <string name="syncplay_create_group_together">Create a group to watch together</string>
+    <string name="syncplay_create_group">Create group</string>
+    <string name="syncplay_join_group_question">Join group?</string>
+    <string name="syncplay_join_group_confirm">Join \"%1$s\"?</string>
+    <string name="syncplay_join">Join</string>
+    <string name="syncplay_cancel">Cancel</string>
+    <string name="syncplay_playing_item">Playing: %1$s</string>
+    <string name="syncplay_playing">Playing</string>
+    <string name="syncplay_paused">Paused</string>
+    <string name="syncplay_pause">Pause</string>
+    <string name="syncplay_play">Play</string>
+    <string name="syncplay_stop">Stop</string>
+    <string name="syncplay_leave">Leave</string>
+    <string name="syncplay_group_settings">Group Settings</string>
+    <string name="syncplay_participants">Participants</string>
+    <string name="syncplay_connected">Connected</string>
+    <string name="syncplay_disconnected">Disconnected</string>
+    <string name="syncplay_create_group_title">Create SyncPlay Group</string>
+    <string name="syncplay_group_name">Group name</string>
+    <string name="syncplay_create">Create</string>
+
+    <string name="syncplay_error_load_groups">Failed to load groups</string>
+    <string name="syncplay_join_disabled">Joining SyncPlay groups is disabled in settings</string>
+    <string name="syncplay_error_join_group">Failed to join group</string>
+    <string name="syncplay_error_leave_group">Failed to leave group</string>
+    <string name="syncplay_error_create_group">Failed to create group</string>
+
+    <plurals name="syncplay_participants_count">
+        <item quantity="one">%d participant</item>
+        <item quantity="other">%d participants</item>
+    </plurals>
+</resources>

@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,7 @@ import com.raulshma.jellyplay.core.model.ManagedUser
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.admin.R
 
 @Composable
 fun UserRow(
@@ -109,8 +111,8 @@ fun UserRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (user.policy.isAdministrator) BadgeChip("Admin", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-                    if (user.policy.isDisabled) BadgeChip("Disabled", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+                    if (user.policy.isAdministrator) BadgeChip(stringResource(R.string.admin_administrator), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                    if (user.policy.isDisabled) BadgeChip(stringResource(R.string.admin_status_disabled), MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
                     if (isSelf) BadgeChip("You", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
                 }
             }
@@ -125,7 +127,7 @@ fun UserRow(
             ) {
                 Icon(
                     Tabler.Outline.Trash,
-                    contentDescription = "Delete user",
+                    contentDescription = stringResource(R.string.admin_delete_user_cd),
                     modifier = Modifier.size(18.dp),
                     tint = if (isSelf) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                 )

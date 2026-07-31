@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Screen titles -->
+    <string name="music_browse_music">Explorar música</string>
+    <string name="music_albums">Álbumes</string>
+    <string name="music_artists">Artistas</string>
+    <string name="music_tracks">Pistas</string>
+    <string name="music_genres">Géneros</string>
+    <string name="music_playlists">Listas de reproducción</string>
+    <string name="music_mood_playlists">Listas por estado de ánimo</string>
+    <string name="music_smart_playlists">Listas inteligentes</string>
+
+    <!-- Empty / error states -->
+    <string name="music_no_albums_found">No se encontraron álbumes</string>
+    <string name="music_no_artists_found">No se encontraron artistas</string>
+    <string name="music_no_tracks_found">No se encontraron pistas</string>
+    <string name="music_no_genres_found">No se encontraron géneros</string>
+    <string name="music_no_playlists_found">No se encontraron listas</string>
+    <string name="music_no_tracks_mood">Ninguna pista coincide con este estado de ánimo</string>
+    <string name="music_no_tracks_criteria">Ninguna pista coincide con los criterios</string>
+    <string name="music_no_music_available">No hay música disponible</string>
+    <string name="music_check_jellyfin_libraries">Revisa tus bibliotecas de Jellyfin.</string>
+    <string name="music_loading_music">Cargando tu música…</string>
+    <string name="music_failed_load_albums">Error al cargar los álbumes</string>
+    <string name="music_failed_load_artists">Error al cargar los artistas</string>
+    <string name="music_failed_load_tracks">Error al cargar las pistas</string>
+    <string name="music_failed_load_more">Error al cargar más</string>
+
+    <!-- Playback actions -->
+    <string name="music_play">Reproducir</string>
+    <string name="music_play_all">Reproducir todo</string>
+    <string name="music_shuffle">Aleatorio</string>
+    <string name="music_add_to_queue">Añadir a la cola</string>
+    <string name="music_instant_mix">Mix instantáneo</string>
+    <string name="music_creating_mix">Creando mix…</string>
+    <string name="music_now_playing">Reproduciendo ahora</string>
+    <string name="music_download_album">Descargar álbum</string>
+    <string name="music_download_track">Descargar pista</string>
+
+    <!-- Track / row menus -->
+    <string name="music_go_to_album">Ir al álbum</string>
+    <string name="music_go_to_artist">Ir al artista</string>
+    <string name="music_more_options">Más opciones</string>
+    <string name="music_favorite">Favorito</string>
+    <string name="music_unfavorite">Quitar de favoritos</string>
+    <string name="music_unknown_artist">Artista desconocido</string>
+
+    <!-- Detail screen labels -->
+    <string name="music_mood_playlist">Lista por estado de ánimo</string>
+    <string name="music_smart_playlist">Lista inteligente</string>
+    <string name="music_open">Abrir</string>
+
+    <!-- Counts -->
+    <string name="music_items_count">%d elementos</string>
+    <string name="music_tracks_count">%d pistas</string>
+    <string name="music_one_track">1 pista</string>
+    <string name="music_playlist_tracks_count">%d pistas</string>
+
+    <!-- Home sections -->
+    <string name="music_player_screens">Pantallas del reproductor</string>
+    <string name="music_player_screens_subtitle">Tus experiencias del reproductor de audio</string>
+    <string name="music_tracks_subtitle">Explora todas las canciones de tu biblioteca</string>
+    <string name="music_albums_subtitle">Explora álbumes y colecciones completas</string>
+    <string name="music_artists_subtitle">Descubre a tus artistas favoritos</string>
+    <string name="music_genres_subtitle">Explora música por género y estado de ánimo</string>
+    <string name="music_playlists_subtitle">Tus listas y mezclas seleccionadas</string>
+    <string name="music_now_playing_subtitle">Reproductor completo con controles, letras y cola</string>
+    <string name="music_ambient_mode">Modo ambiental</string>
+    <string name="music_ambient_mode_subtitle">Colores inmersivos que bailan con tu música</string>
+    <string name="music_artists_section_subtitle">Tus músicos favoritos</string>
+    <string name="music_view_all">Ver todo</string>
+    <string name="music_new_releases">Nuevos lanzamientos</string>
+    <string name="music_fresh_music">Música nueva solo para ti</string>
+    <string name="music_recently_played">Reproducido recientemente</string>
+    <string name="music_recently_played_subtitle">Continúa tu viaje musical</string>
+    <string name="music_favorite_artists">Artistas favoritos</string>
+    <string name="music_favorite_artists_subtitle">Las voces a las que siempre vuelves</string>
+    <string name="music_latest_albums">Últimos álbumes</string>
+    <string name="music_top_rated_albums">Álbumes mejor valorados</string>
+    <string name="music_top_rated_albums_subtitle">Los mejor valorados por la comunidad</string>
+    <string name="music_favorite_tracks">Pistas favoritas</string>
+    <string name="music_favorite_tracks_subtitle">Las canciones que más amas</string>
+
+    <!-- Playlists CRUD -->
+    <string name="music_new_playlist">Nueva lista</string>
+    <string name="music_edit_playlist">Editar lista</string>
+    <string name="music_delete_playlist">Eliminar lista</string>
+    <string name="music_delete_playlist_confirm">¿Eliminar \"%1$s\"? Esta acción no se puede deshacer.</string>
+    <string name="music_create">Crear</string>
+    <string name="music_save">Guardar</string>
+    <string name="music_edit">Editar</string>
+    <string name="music_delete">Eliminar</string>
+    <string name="music_cancel">Cancelar</string>
+    <string name="music_name_label">Nombre</string>
+    <string name="music_description_optional">Descripción (opcional)</string>
+    <string name="music_remove_from_playlist">Quitar de la lista</string>
+</resources>

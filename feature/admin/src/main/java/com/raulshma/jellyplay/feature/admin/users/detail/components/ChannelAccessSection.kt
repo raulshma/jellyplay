@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Broadcast
@@ -12,6 +13,7 @@ import com.composables.icons.tabler.outline.DeviceTv
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.feature.admin.R
 
 /**
  * Channel access: "all channels" toggle + per-channel toggles. Hidden when the
@@ -26,10 +28,10 @@ fun ChannelAccessSection(
 ) {
     if (channels.isEmpty()) return
     val rows = if (policy.enableAllChannels) 1 else 1 + channels.size
-    UserEditSection(title = "Channel access", modifier = modifier) {
+    UserEditSection(title = stringResource(R.string.admin_channel_access), modifier = modifier) {
         SettingToggleItem(
             icon = Tabler.Outline.DeviceTv,
-            title = "Enable access to all channels",
+            title = stringResource(R.string.admin_enable_all_channels),
             subtitle = if (policy.enableAllChannels) "" else "Restrict to the channels below",
             checked = policy.enableAllChannels,
             onCheckedChange = { onPolicyChange(policy.copy(enableAllChannels = it)) },

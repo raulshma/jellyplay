@@ -42,12 +42,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
+import com.raulshma.jellyplay.feature.editor.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -79,32 +81,32 @@ fun MetadataTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        SectionHeader(title = "General", initiallyExpanded = true) {
+        SectionHeader(title = stringResource(R.string.editor_section_general), initiallyExpanded = true) {
             OutlinedTextField(
                 value = state.name,
                 onValueChange = { viewModel.updateField { s -> s.copy(name = it) } },
-                label = { Text("Title") },
+                label = { Text(stringResource(R.string.editor_field_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
                 value = state.originalTitle,
                 onValueChange = { viewModel.updateField { s -> s.copy(originalTitle = it) } },
-                label = { Text("Original Title") },
+                label = { Text(stringResource(R.string.editor_field_original_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
                 value = state.sortName,
                 onValueChange = { viewModel.updateField { s -> s.copy(sortName = it) } },
-                label = { Text("Sort Title") },
+                label = { Text(stringResource(R.string.editor_field_sort_title)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
                 value = state.overview,
                 onValueChange = { viewModel.updateField { s -> s.copy(overview = it) } },
-                label = { Text("Overview") },
+                label = { Text(stringResource(R.string.editor_field_overview)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 4,
                 maxLines = 8,
@@ -113,23 +115,23 @@ fun MetadataTab(
                 OutlinedTextField(
                     value = state.tagline,
                     onValueChange = { viewModel.updateField { s -> s.copy(tagline = it) } },
-                    label = { Text("Tagline") },
+                    label = { Text(stringResource(R.string.editor_field_tagline)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
             }
         }
 
-        SectionHeader(title = "Ratings") {
+        SectionHeader(title = stringResource(R.string.editor_section_ratings)) {
             val communityInvalid = state.communityRating.isNotEmpty() && state.communityRating.toFloatOrNull() == null
             OutlinedTextField(
                 value = state.communityRating,
                 onValueChange = { viewModel.updateField { s -> s.copy(communityRating = it) } },
-                label = { Text("Community Rating (0-10)") },
+                label = { Text(stringResource(R.string.editor_field_community_rating)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = communityInvalid,
-                supportingText = if (communityInvalid) { { Text("Must be a number") } } else null,
+                supportingText = if (communityInvalid) { { Text(stringResource(R.string.editor_field_must_be_number)) } } else null,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
             )
             if (mediaType == MediaType.MOVIE) {
@@ -137,11 +139,11 @@ fun MetadataTab(
                 OutlinedTextField(
                     value = state.criticRating,
                     onValueChange = { viewModel.updateField { s -> s.copy(criticRating = it) } },
-                    label = { Text("Critic Rating") },
+                    label = { Text(stringResource(R.string.editor_field_critic_rating)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = criticInvalid,
-                    supportingText = if (criticInvalid) { { Text("Must be a number") } } else null,
+                    supportingText = if (criticInvalid) { { Text(stringResource(R.string.editor_field_must_be_number)) } } else null,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
             }
@@ -155,7 +157,7 @@ fun MetadataTab(
                 OutlinedTextField(
                     value = state.officialRating,
                     onValueChange = { viewModel.updateField { s -> s.copy(officialRating = it) } },
-                    label = { Text("Official Rating") },
+                    label = { Text(stringResource(R.string.editor_field_official_rating)) },
                     modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                     singleLine = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = officialExpanded) },
@@ -184,7 +186,7 @@ fun MetadataTab(
                 OutlinedTextField(
                     value = state.customRating,
                     onValueChange = { viewModel.updateField { s -> s.copy(customRating = it) } },
-                    label = { Text("Custom Rating") },
+                    label = { Text(stringResource(R.string.editor_field_custom_rating)) },
                     modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                     singleLine = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customExpanded) },
@@ -206,44 +208,44 @@ fun MetadataTab(
             }
         }
 
-        SectionHeader(title = "Dates & Numbers") {
+        SectionHeader(title = stringResource(R.string.editor_section_dates_numbers)) {
             val yearInvalid = state.productionYear.isNotEmpty() && state.productionYear.toIntOrNull() == null
             OutlinedTextField(
                 value = state.productionYear,
                 onValueChange = { viewModel.updateField { s -> s.copy(productionYear = it) } },
-                label = { Text("Production Year") },
+                label = { Text(stringResource(R.string.editor_field_production_year)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = yearInvalid,
-                supportingText = if (yearInvalid) { { Text("Must be a number") } } else null,
+                supportingText = if (yearInvalid) { { Text(stringResource(R.string.editor_field_must_be_number)) } } else null,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
             )
             OutlinedTextField(
                 value = state.premiereDate,
                 onValueChange = { viewModel.updateField { s -> s.copy(premiereDate = it) } },
-                label = { Text("Premiere Date") },
+                label = { Text(stringResource(R.string.editor_field_premiere_date)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                placeholder = { Text("YYYY-MM-DD") },
+                placeholder = { Text(stringResource(R.string.editor_date_format_hint)) },
             )
             if (mediaType == MediaType.SERIES) {
                 OutlinedTextField(
                     value = state.endDate,
                     onValueChange = { viewModel.updateField { s -> s.copy(endDate = it) } },
-                    label = { Text("End Date") },
+                    label = { Text(stringResource(R.string.editor_field_end_date)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("YYYY-MM-DD") },
+                    placeholder = { Text(stringResource(R.string.editor_date_format_hint)) },
                 )
                 val runtimeInvalid = state.runtimeMinutes.isNotEmpty() && state.runtimeMinutes.toIntOrNull() == null
                 OutlinedTextField(
                     value = state.runtimeMinutes,
                     onValueChange = { viewModel.updateField { s -> s.copy(runtimeMinutes = it) } },
-                    label = { Text("Runtime (minutes)") },
+                    label = { Text(stringResource(R.string.editor_field_runtime_minutes)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = runtimeInvalid,
-                    supportingText = if (runtimeInvalid) { { Text("Must be a number") } } else null,
+                    supportingText = if (runtimeInvalid) { { Text(stringResource(R.string.editor_field_must_be_number)) } } else null,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
@@ -252,17 +254,17 @@ fun MetadataTab(
                 OutlinedTextField(
                     value = state.indexNumber,
                     onValueChange = { viewModel.updateField { s -> s.copy(indexNumber = it) } },
-                    label = { Text("Episode Number") },
+                    label = { Text(stringResource(R.string.editor_field_episode_number)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = indexInvalid,
-                    supportingText = if (indexInvalid) { { Text("Must be a number") } } else null,
+                    supportingText = if (indexInvalid) { { Text(stringResource(R.string.editor_field_must_be_number)) } } else null,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
                 OutlinedTextField(
                     value = state.parentIndexNumber,
                     onValueChange = { viewModel.updateField { s -> s.copy(parentIndexNumber = it) } },
-                    label = { Text("Season Number") },
+                    label = { Text(stringResource(R.string.editor_field_season_number)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -271,7 +273,20 @@ fun MetadataTab(
         }
 
         if (mediaType == MediaType.SERIES) {
-            SectionHeader(title = "Series Settings") {
+            SectionHeader(title = stringResource(R.string.editor_section_series_settings)) {
+                val statusLabel = remember { mapOf("Continuing" to R.string.editor_status_continuing, "Ended" to R.string.editor_status_ended, "Unreleased" to R.string.editor_status_unreleased) }
+                val displayOrderLabel = remember { mapOf("Aired" to R.string.editor_order_aired, "Absolute" to R.string.editor_order_absolute, "DVD" to R.string.editor_order_dvd, "Digital" to R.string.editor_order_digital, "Production" to R.string.editor_order_production) }
+                val dayLabel = remember {
+                    listOf(
+                        "Sunday" to R.string.editor_day_sunday,
+                        "Monday" to R.string.editor_day_monday,
+                        "Tuesday" to R.string.editor_day_tuesday,
+                        "Wednesday" to R.string.editor_day_wednesday,
+                        "Thursday" to R.string.editor_day_thursday,
+                        "Friday" to R.string.editor_day_friday,
+                        "Saturday" to R.string.editor_day_saturday,
+                    )
+                }
                 var statusExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = statusExpanded,
@@ -280,7 +295,7 @@ fun MetadataTab(
                     OutlinedTextField(
                         value = state.status,
                         onValueChange = { viewModel.updateField { s -> s.copy(status = it) } },
-                        label = { Text("Status") },
+                        label = { Text(stringResource(R.string.editor_field_status)) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusExpanded) },
@@ -289,9 +304,9 @@ fun MetadataTab(
                         expanded = statusExpanded,
                         onDismissRequest = { statusExpanded = false },
                     ) {
-                        listOf("Continuing", "Ended", "Unreleased").forEach { status ->
+                        statusLabel.forEach { (status, labelRes) ->
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text(status) },
+                                text = { Text(stringResource(labelRes)) },
                                 onClick = {
                                     viewModel.updateField { s -> s.copy(status = status) }
                                     statusExpanded = false
@@ -309,7 +324,7 @@ fun MetadataTab(
                     OutlinedTextField(
                         value = state.displayOrder,
                         onValueChange = { viewModel.updateField { s -> s.copy(displayOrder = it) } },
-                        label = { Text("Display Order") },
+                        label = { Text(stringResource(R.string.editor_field_display_order)) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = displayExpanded) },
@@ -318,9 +333,9 @@ fun MetadataTab(
                         expanded = displayExpanded,
                         onDismissRequest = { displayExpanded = false },
                     ) {
-                        listOf("Aired", "Absolute", "DVD", "Digital", "Production").forEach { order ->
+                        displayOrderLabel.forEach { (order, labelRes) ->
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text(order) },
+                                text = { Text(stringResource(labelRes)) },
                                 onClick = {
                                     viewModel.updateField { s -> s.copy(displayOrder = order) }
                                     displayExpanded = false
@@ -333,36 +348,36 @@ fun MetadataTab(
                 OutlinedTextField(
                     value = state.airTime,
                     onValueChange = { viewModel.updateField { s -> s.copy(airTime = it) } },
-                    label = { Text("Air Time") },
+                    label = { Text(stringResource(R.string.editor_field_air_time)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
 
-                Text("Air Days", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.editor_field_air_days), style = MaterialTheme.typography.titleSmall)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    val days = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
-                    days.forEach { day ->
+                    val dayKeys = dayLabel.map { it.first }
+                    dayLabel.forEach { (day, labelRes) ->
                         FilterChip(
                             selected = day in state.airDays,
                             onClick = {
                                 val newDays = if (day in state.airDays) {
                                     state.airDays - day
                                 } else {
-                                    (state.airDays + day).sortedBy { days.indexOf(it) }
+                                    (state.airDays + day).sortedBy { dayKeys.indexOf(it) }
                                 }
                                 viewModel.updateField { s -> s.copy(airDays = newDays) }
                             },
-                            label = { Text(day.take(3)) },
+                            label = { Text(stringResource(labelRes).take(3)) },
                         )
                     }
                 }
             }
         }
 
-        SectionHeader(title = "Genres") {
+        SectionHeader(title = stringResource(R.string.editor_section_genres)) {
             EditableChipGroup(
                 items = state.genres,
                 onAdd = { viewModel.updateField { s -> s.copy(genres = (s.genres + it).sortedBy { g -> g.lowercase() }) } },
@@ -370,7 +385,7 @@ fun MetadataTab(
             )
         }
 
-        SectionHeader(title = "Tags") {
+        SectionHeader(title = stringResource(R.string.editor_section_tags)) {
             EditableChipGroup(
                 items = state.tags,
                 onAdd = { viewModel.updateField { s -> s.copy(tags = (s.tags + it).sortedBy { t -> t.lowercase() }) } },
@@ -378,7 +393,7 @@ fun MetadataTab(
             )
         }
 
-        SectionHeader(title = "Studios") {
+        SectionHeader(title = stringResource(R.string.editor_section_studios)) {
             EditableChipGroup(
                 items = state.studios,
                 onAdd = { viewModel.updateField { s -> s.copy(studios = (s.studios + it).sortedBy { st -> st.lowercase() }) } },
@@ -386,7 +401,7 @@ fun MetadataTab(
             )
         }
 
-        SectionHeader(title = "People") {
+        SectionHeader(title = stringResource(R.string.editor_section_people)) {
             PeopleEditor(
                 people = state.people,
                 onAdd = { person -> viewModel.updateField { s -> s.copy(people = s.people + person) } },
@@ -399,7 +414,7 @@ fun MetadataTab(
 
         val externalIds = state.editorInfo?.externalIdInfos ?: emptyList()
         if (externalIds.isNotEmpty()) {
-            SectionHeader(title = "External IDs") {
+            SectionHeader(title = stringResource(R.string.editor_section_external_ids)) {
                 externalIds.forEach { extId ->
                     val currentValue = state.providerIds[extId.key] ?: ""
                     OutlinedTextField(
@@ -420,12 +435,12 @@ fun MetadataTab(
             }
         }
 
-        SectionHeader(title = "Metadata Locking") {
+        SectionHeader(title = stringResource(R.string.editor_section_metadata_locking)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Lock all metadata", modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.editor_lock_all_metadata), modifier = Modifier.weight(1f))
                 Switch(
                     checked = state.lockData,
                     onCheckedChange = { viewModel.updateField { s -> s.copy(lockData = it) } },
@@ -434,17 +449,17 @@ fun MetadataTab(
 
             if (!state.lockData) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Lock individual fields:", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.editor_lock_individual_fields), style = MaterialTheme.typography.titleSmall)
                 val lockableFields = listOf(
-                    "Name" to "Name",
-                    "Overview" to "Overview",
-                    "Genres" to "Genres",
-                    "OfficialRating" to "Parental Rating",
-                    "Cast" to "People",
-                    "ProductionLocations" to "Production Locations",
-                    "Studios" to "Studios",
-                    "Tags" to "Tags",
-                    "Runtime" to "Runtime",
+                    "Name" to R.string.editor_lock_field_name,
+                    "Overview" to R.string.editor_lock_field_overview,
+                    "Genres" to R.string.editor_lock_field_genres,
+                    "OfficialRating" to R.string.editor_lock_field_parental_rating,
+                    "Cast" to R.string.editor_lock_field_people,
+                    "ProductionLocations" to R.string.editor_lock_field_production_locations,
+                    "Studios" to R.string.editor_lock_field_studios,
+                    "Tags" to R.string.editor_lock_field_tags,
+                    "Runtime" to R.string.editor_lock_field_runtime,
                 )
                 lockableFields.forEach { (key, label) ->
                     Row(
@@ -465,7 +480,7 @@ fun MetadataTab(
                                 }
                             },
                         )
-                        Text(label, modifier = Modifier.focusIndicator().clickable {
+                        Text(stringResource(label), modifier = Modifier.focusIndicator().clickable {
                             val checked = key !in state.lockedFields
                             viewModel.updateField { s ->
                                 s.copy(
@@ -510,7 +525,7 @@ private fun SectionHeader(
             )
             Icon(
                 imageVector = if (expanded) Tabler.Outline.ChevronUp else Tabler.Outline.ChevronDown,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = if (expanded) stringResource(R.string.editor_action_collapse) else stringResource(R.string.editor_action_expand),
             )
         }
         AnimatedVisibility(visible = expanded) {
@@ -546,7 +561,7 @@ private fun EditableChipGroup(
                     trailingIcon = {
                         Icon(
                             Tabler.Outline.X,
-                            contentDescription = "Remove",
+                            contentDescription = stringResource(R.string.editor_action_remove),
                             modifier = Modifier.size(18.dp),
                         )
                     },
@@ -561,7 +576,7 @@ private fun EditableChipGroup(
                 value = newEntry,
                 onValueChange = { newEntry = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Add new...") },
+                placeholder = { Text(stringResource(R.string.editor_add_new_placeholder)) },
                 singleLine = true,
             )
             IconButton(
@@ -572,7 +587,7 @@ private fun EditableChipGroup(
                     }
                 },
             ) {
-                Icon(Tabler.Outline.Plus, contentDescription = "Add")
+                Icon(Tabler.Outline.Plus, contentDescription = stringResource(R.string.editor_action_add))
             }
         }
     }
@@ -603,7 +618,9 @@ private fun PeopleEditor(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(person.name, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "${person.type}${person.role?.let { " as $it" } ?: ""}",
+                        person.role?.takeIf { it.isNotBlank() }
+                            ?.let { stringResource(R.string.editor_person_role_as_format, stringResource(personTypeLabelRes(person.type)), it) }
+                            ?: stringResource(personTypeLabelRes(person.type)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -612,10 +629,10 @@ private fun PeopleEditor(
                     isNewPerson = false
                     showPersonDialog = person
                 }) {
-                    Icon(Tabler.Outline.ChevronDown, contentDescription = "Edit")
+                    Icon(Tabler.Outline.ChevronDown, contentDescription = stringResource(R.string.editor_action_edit))
                 }
                 IconButton(onClick = { onRemove(person) }) {
-                    Icon(Tabler.Outline.Trash, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
+                    Icon(Tabler.Outline.Trash, contentDescription = stringResource(R.string.editor_action_remove), tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -626,7 +643,7 @@ private fun PeopleEditor(
         }) {
             Icon(Tabler.Outline.Plus, contentDescription = null)
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Add Person")
+            Text(stringResource(R.string.editor_add_person))
         }
     }
 
@@ -644,6 +661,19 @@ private fun PeopleEditor(
     }
 }
 
+private fun personTypeLabelRes(type: String): Int = when (type) {
+    "Actor" -> R.string.editor_person_type_actor
+    "Director" -> R.string.editor_person_type_director
+    "Writer" -> R.string.editor_person_type_writer
+    "Producer" -> R.string.editor_person_type_producer
+    "Composer" -> R.string.editor_person_type_composer
+    "GuestStar" -> R.string.editor_person_type_guest_star
+    "Conductor" -> R.string.editor_person_type_conductor
+    "Lyricist" -> R.string.editor_person_type_lyricist
+    "Arranger" -> R.string.editor_person_type_arranger
+    else -> R.string.editor_person_type_actor
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PersonEditorDialog(
@@ -658,13 +688,13 @@ private fun PersonEditorDialog(
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isNew) "Add Person" else "Edit Person") },
+        title = { Text(if (isNew) stringResource(R.string.editor_add_person) else stringResource(R.string.editor_edit_person)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.editor_field_name)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
@@ -677,7 +707,7 @@ private fun PersonEditorDialog(
                     OutlinedTextField(
                         value = type,
                         onValueChange = { type = it },
-                        label = { Text("Type") },
+                        label = { Text(stringResource(R.string.editor_field_type)) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryEditable),
                         singleLine = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
@@ -688,7 +718,7 @@ private fun PersonEditorDialog(
                     ) {
                         personTypes.forEach { pType ->
                             androidx.compose.material3.DropdownMenuItem(
-                                text = { Text(pType) },
+                                text = { Text(stringResource(personTypeLabelRes(pType))) },
                                 onClick = { type = pType; typeExpanded = false },
                             )
                         }
@@ -698,7 +728,7 @@ private fun PersonEditorDialog(
                     OutlinedTextField(
                         value = role,
                         onValueChange = { role = it },
-                        label = { Text("Role") },
+                        label = { Text(stringResource(R.string.editor_field_role)) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -719,10 +749,10 @@ private fun PersonEditorDialog(
                     )
                 },
                 enabled = name.isNotBlank(),
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.editor_save)) }
         },
         dismissButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text(stringResource(R.string.editor_action_cancel)) }
         },
     )
 }

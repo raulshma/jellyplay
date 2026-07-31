@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -86,6 +87,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.feature.admin.components.AuditHistoryTab
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -115,7 +117,7 @@ fun StaleMediaScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Stale Media",
+        title = stringResource(R.string.admin_stale_media_title),
         onBack = onBack,
     ) { paddingValues ->
         Column(
@@ -129,17 +131,17 @@ fun StaleMediaScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Scan Results") },
+                    text = { Text(stringResource(R.string.admin_scan_results_tab)) },
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Configuration") },
+                    text = { Text(stringResource(R.string.admin_configuration_tab)) },
                 )
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    text = { Text("Audit History") },
+                    text = { Text(stringResource(R.string.admin_audit_history_tab)) },
                 )
             }
 
@@ -250,7 +252,7 @@ private fun ScanResultsTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "Scanning...",
+                        stringResource(R.string.admin_scanning),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -263,7 +265,7 @@ private fun ScanResultsTab(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "${state.scanProgress.scanned} items checked, ${state.scanProgress.itemsFound} stale items found",
+                        stringResource(R.string.admin_scan_progress_stale, state.scanProgress.scanned, state.scanProgress.itemsFound),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -317,7 +319,7 @@ private fun ScanResultsTab(
                         onCheckedChange = { onSelectAll() },
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text("Select All", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.admin_select_all), style = MaterialTheme.typography.labelMedium)
                 }
                 Spacer(Modifier.weight(1f))
                 if (state.selectedItems.isNotEmpty()) {
@@ -328,7 +330,7 @@ private fun ScanResultsTab(
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
                         Text(
-                            "${state.selectedItems.size} selected",
+                            stringResource(R.string.admin_n_selected, state.selectedItems.size),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
@@ -358,7 +360,7 @@ private fun ScanResultsTab(
                     ) {
                         Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Delete")
+                        Text(stringResource(R.string.admin_delete))
                     }
                 }
             }
@@ -370,7 +372,7 @@ private fun ScanResultsTab(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "${state.scanResults.size} items",
+                    stringResource(R.string.admin_n_items, state.scanResults.size),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -390,7 +392,7 @@ private fun ScanResultsTab(
             ) {
                 ScreenEmptyState(
                     icon = Tabler.Outline.Search,
-                    title = if (state.scanProgress.phase == ScanPhase.COMPLETED) "No stale media found" else "Run a scan to find stale media",
+                    title = stringResource(if (state.scanProgress.phase == ScanPhase.COMPLETED) R.string.admin_no_stale_found else R.string.admin_run_scan_stale),
                 )
             }
         } else if (state.scanResults.isNotEmpty()) {
@@ -574,13 +576,13 @@ private fun DeleteConfirmationSheet(
     val content: @Composable ColumnScope.() -> Unit = {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                "Confirm Deletion",
+                stringResource(R.string.admin_confirm_deletion),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
             Text(
-                "The following ${items.size} items will be removed from the library:",
+                stringResource(R.string.admin_confirm_deletion_body, items.size),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp),
@@ -627,7 +629,7 @@ private fun DeleteConfirmationSheet(
                     onClick = onDismiss,
                     shape = ShapeCache.smooth16,
                     modifier = Modifier.weight(1f),
-                ) { Text("Cancel") }
+                ) { Text(stringResource(R.string.admin_cancel)) }
                 Button(
                     onClick = onConfirm,
                     shape = ShapeCache.smooth16,
@@ -636,7 +638,7 @@ private fun DeleteConfirmationSheet(
                     ),
                     modifier = Modifier.weight(1f),
                     enabled = !isDeleting,
-            ) { Text(if (isDeleting) "Deleting..." else "Delete from Library") }
+            ) { Text(if (isDeleting) stringResource(R.string.admin_deleting) else stringResource(R.string.admin_delete_from_library)) }
         }
     }
     }
@@ -674,13 +676,13 @@ private fun ConfigurationTab(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
-                        "Scan Configuration",
+                        stringResource(R.string.admin_scan_configuration),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Spacer(Modifier.height(20.dp))
 
-                    Text("Stale threshold: ${config.daysThreshold} days", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.admin_stale_threshold, config.daysThreshold), style = MaterialTheme.typography.bodyMedium)
                     Slider(
                         value = config.daysThreshold.toFloat(),
                         onValueChange = { onConfigChange(config.copy(daysThreshold = it.toInt())) },
@@ -695,7 +697,7 @@ private fun ConfigurationTab(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Use date added to library", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.admin_use_date_added), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         Switch(
                             checked = config.useDateAdded,
                             onCheckedChange = { onConfigChange(config.copy(useDateAdded = it)) },
@@ -708,7 +710,7 @@ private fun ConfigurationTab(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Include never-played items", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.admin_include_never_played), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         Switch(
                             checked = config.includeNeverPlayed,
                             onCheckedChange = { onConfigChange(config.copy(includeNeverPlayed = it)) },
@@ -717,16 +719,23 @@ private fun ConfigurationTab(
 
                     Spacer(Modifier.height(12.dp))
 
-                    Text("Media types", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.admin_media_types), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(8.dp))
-                    val allTypes = listOf("Movie", "Series", "Episode", "Audio", "MusicVideo", "Book")
+                    val allTypes = listOf(
+                        "Movie" to R.string.admin_type_movie,
+                        "Series" to R.string.admin_type_series,
+                        "Episode" to R.string.admin_type_episode,
+                        "Audio" to R.string.admin_type_audio,
+                        "MusicVideo" to R.string.admin_type_music_video,
+                        "Book" to R.string.admin_type_book,
+                    )
                     @OptIn(ExperimentalLayoutApi::class)
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        allTypes.forEach { type ->
+                        allTypes.forEach { (type, typeRes) ->
                             FilterChip(
                                 selected = config.includeItemTypes.contains(type),
                                 onClick = {
@@ -737,7 +746,7 @@ private fun ConfigurationTab(
                                     }
                                     if (newTypes.isNotEmpty()) onConfigChange(config.copy(includeItemTypes = newTypes))
                                 },
-                                label = { Text(type) },
+                                label = { Text(stringResource(typeRes)) },
                             )
                         }
                     }
@@ -748,7 +757,7 @@ private fun ConfigurationTab(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Dry run (preview only)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.admin_dry_run), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         Switch(
                             checked = config.dryRun,
                             onCheckedChange = { onConfigChange(config.copy(dryRun = it)) },
@@ -780,7 +789,7 @@ private fun ConfigurationTab(
             ) {
                 Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(if (isScanning) "Scanning..." else "Scan Now")
+                Text(if (isScanning) stringResource(R.string.admin_scanning) else stringResource(R.string.admin_scan_now))
             }
         }
     }

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="insights_title_watch_progress">시청 진행 상황</string>
+    <string name="insights_cd_share">공유</string>
+    <string name="insights_cd_configure_heatmap">히트맵 설정</string>
+    <string name="insights_filter_type">필터 유형</string>
+    <string name="insights_select_year">연도 선택</string>
+    <string name="insights_loading">로드 중…</string>
+    <string name="insights_plugin_missing_message">상세한 히트맵 데이터를 위해 Jellyfin 서버에 Playback Reporting 플러그인을 설치하세요. 시청 기록의 기본 활동을 표시합니다.</string>
+    <string name="insights_no_activity_for_year">%1$d에 시청 활동이 기록되지 않았습니다. 올해를 채우려면 무언가를 재생하세요.</string>
+    <string name="insights_activity_grid">활동 그리드</string>
+    <string name="insights_cd_previous_year">이전 해</string>
+    <string name="insights_cd_next_year">다음 해</string>
+    <string name="insights_stat_current_streak">현재 연속</string>
+    <string name="insights_stat_longest_streak">최장 연속</string>
+    <string name="insights_stat_active_days">활동 일수</string>
+    <string name="insights_days_format">%1$d일</string>
+    <string name="insights_day_sun">일</string>
+    <string name="insights_day_tue">화</string>
+    <string name="insights_day_thu">목</string>
+    <string name="insights_day_sat">토</string>
+    <string name="insights_legend_less">적음</string>
+    <string name="insights_legend_more">많음</string>
+    <string name="insights_duration_hm">%1$d시간 %2$d분</string>
+    <string name="insights_duration_m">%1$d분</string>
+    <string name="insights_duration_under_minute">1분 미만</string>
+    <string name="insights_no_activity">활동 없음</string>
+    <string name="insights_minutes_watched">%1$d분 시청</string>
+    <string name="insights_played">재생됨</string>
+    <string name="insights_share_chooser_title">시청 진행 상황 공유</string>
+
+    <plurals name="insights_heatmap_summary">
+        <item quantity="other">%1$d 시청 활동 히트맵. %2$d일 활동.</item>
+    </plurals>
+
+    <plurals name="insights_sessions_watched">
+        <item quantity="other">%1$d 세션 &#183; %2$s 시청</item>
+    </plurals>
+</resources>

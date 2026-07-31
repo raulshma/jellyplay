@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="insights_title_watch_progress">Watch Progress</string>
+    <string name="insights_cd_share">Share</string>
+    <string name="insights_cd_configure_heatmap">Configure Heatmap</string>
+    <string name="insights_filter_type">Filter Type</string>
+    <string name="insights_select_year">Select Year</string>
+    <string name="insights_loading">Loading…</string>
+    <string name="insights_plugin_missing_message">Install the Playback Reporting plugin on your Jellyfin server for detailed heatmap data. Showing basic activity from watch history.</string>
+    <string name="insights_no_activity_for_year">No watch activity recorded for %1$d. Play something to start filling in your year.</string>
+    <string name="insights_activity_grid">Activity Grid</string>
+    <string name="insights_cd_previous_year">Previous year</string>
+    <string name="insights_cd_next_year">Next year</string>
+    <string name="insights_stat_current_streak">Current Streak</string>
+    <string name="insights_stat_longest_streak">Longest Streak</string>
+    <string name="insights_stat_active_days">Active Days</string>
+    <string name="insights_days_format">%1$d days</string>
+    <string name="insights_day_sun">Sun</string>
+    <string name="insights_day_tue">Tue</string>
+    <string name="insights_day_thu">Thu</string>
+    <string name="insights_day_sat">Sat</string>
+    <string name="insights_legend_less">Less</string>
+    <string name="insights_legend_more">More</string>
+    <string name="insights_duration_hm">%1$dh %2$dm</string>
+    <string name="insights_duration_m">%1$dm</string>
+    <string name="insights_duration_under_minute">&lt; 1m</string>
+    <string name="insights_no_activity">No activity</string>
+    <string name="insights_minutes_watched">%1$dm watched</string>
+    <string name="insights_played">Played</string>
+    <string name="insights_share_chooser_title">Share Watch Progress</string>
+
+    <plurals name="insights_heatmap_summary">
+        <item quantity="one">Watch activity heatmap for %1$d. %2$d active day.</item>
+        <item quantity="other">Watch activity heatmap for %1$d. %2$d active days.</item>
+    </plurals>
+
+    <plurals name="insights_sessions_watched">
+        <item quantity="one">%1$d session &#183; %2$s watched</item>
+        <item quantity="other">%1$d sessions &#183; %2$s watched</item>
+    </plurals>
+</resources>

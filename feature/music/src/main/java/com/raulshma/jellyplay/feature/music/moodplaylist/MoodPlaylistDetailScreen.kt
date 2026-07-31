@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -53,6 +54,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
 import com.raulshma.jellyplay.core.model.MoodPlaylist
+import com.raulshma.jellyplay.feature.music.R
 
 @Composable
 fun MoodPlaylistDetailScreen(
@@ -73,7 +75,7 @@ fun MoodPlaylistDetailScreen(
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
 
-    val displayTitle = playlist?.name ?: "Mood Playlist"
+    val displayTitle = playlist?.name ?: stringResource(R.string.music_mood_playlist)
 
     // TV focus-on-launch: focus the first track once data arrives so D-pad input lands on content,
     // not the navigation drawer.
@@ -104,7 +106,7 @@ fun MoodPlaylistDetailScreen(
                 viewModel.generatedItems.isEmpty() && !viewModel.isLoading -> {
                     ScreenEmptyState(
                         icon = Tabler.Outline.Music,
-                        title = "No tracks match this mood",
+                        title = stringResource(R.string.music_no_tracks_mood),
                     )
                 }
                 else -> AnimatedEntrance(visible = true) {
@@ -157,7 +159,7 @@ fun MoodPlaylistDetailScreen(
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.playAll() },
                     icon = { Icon(Tabler.Outline.PlayerPlay, contentDescription = null) },
-                    text = { Text("Play All") },
+                    text = { Text(stringResource(R.string.music_play_all)) },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .then(playAllFocusState.focusModifier)
@@ -246,7 +248,7 @@ private fun MoodHeroHeader(
                     )
                 }
                 Text(
-                    text = if (trackCount == 1) "1 Track" else "$trackCount Tracks",
+                    text = if (trackCount == 1) stringResource(R.string.music_one_track) else stringResource(R.string.music_tracks_count, trackCount),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = contentColor.copy(alpha = 0.7f),

@@ -49,8 +49,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.auth.R
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
@@ -116,14 +118,14 @@ fun UserSelectionScreen(
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
             when {
                 isLoading -> {
-                    ScreenLoadingState(message = "Loading users...")
+                    ScreenLoadingState(message = stringResource(R.string.auth_loading_users))
                 }
                 users.isEmpty() -> {
                     ScreenEmptyState(
                         icon = Tabler.Outline.User,
-                        title = "No users on this server",
-                        description = "Add a user to get started",
-                        actionLabel = "Add User",
+                        title = stringResource(R.string.auth_no_users_title),
+                        description = stringResource(R.string.auth_no_users_desc),
+                        actionLabel = stringResource(R.string.auth_add_user),
                         onAction = onAddUser,
                     )
                 }
@@ -190,7 +192,7 @@ fun UserSelectionScreen(
                             IntOffset(x = 0, y = yOffset.toInt())
                         },
                     icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
-                    text = { Text("Add User") },
+                    text = { Text(stringResource(R.string.auth_add_user)) },
                 )
             }
         }
@@ -264,7 +266,7 @@ private fun UserCard(
                 )
                 Column {
                     Text(
-                        text = user.name.ifBlank { "User" },
+                        text = user.name.ifBlank { stringResource(R.string.auth_user_placeholder) },
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
@@ -281,7 +283,7 @@ private fun UserCard(
             ) {
                 Icon(
                     Tabler.Outline.Trash,
-                    contentDescription = "Remove user",
+                    contentDescription = stringResource(R.string.auth_remove_user),
                     tint = MaterialTheme.colorScheme.error,
                 )
             }
@@ -290,10 +292,10 @@ private fun UserCard(
 
     if (showRemoveConfirm) {
         com.raulshma.jellyplay.core.ui.components.ConfirmDialog(
-            title = "Remove user?",
-            message = "Remove \"${user.name}\" from this server? You'll need to sign in again to use it.",
-            confirmText = "Remove",
-            dismissText = "Cancel",
+            title = stringResource(R.string.auth_remove_user_title),
+            message = stringResource(R.string.auth_remove_user_message, user.name),
+            confirmText = stringResource(R.string.auth_remove),
+            dismissText = stringResource(R.string.auth_cancel),
             onConfirm = onRemove,
             onDismiss = { showRemoveConfirm = false },
         )

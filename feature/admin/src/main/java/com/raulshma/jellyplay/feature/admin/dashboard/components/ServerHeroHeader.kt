@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,6 +44,7 @@ import com.raulshma.jellyplay.core.model.SystemInfo
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.admin.R
 import com.raulshma.jellyplay.feature.admin.dashboard.LibraryScanState
 
 @Composable
@@ -213,7 +215,7 @@ fun ServerHeroHeader(
                         Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     }
                     Spacer(Modifier.width(6.dp))
-                    Text(if (isRestarting) "Restarting" else "Restart")
+                    Text(if (isRestarting) stringResource(R.string.admin_restarting) else stringResource(R.string.admin_restart))
                 }
                 FilledTonalIconButton(
                     onClick = onShutdown,
@@ -222,7 +224,7 @@ fun ServerHeroHeader(
                         .then(shutdownFocusState.focusModifier)
                         .tvFocusIndicator(shutdownFocusState, ShapeCache.smooth12),
                 ) {
-                    Icon(Tabler.Outline.Power, contentDescription = "Shutdown", modifier = Modifier.size(18.dp))
+                    Icon(Tabler.Outline.Power, contentDescription = stringResource(R.string.admin_shutdown_cd), modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -267,9 +269,9 @@ private fun ScanLibraryButton(
             }
             Text(
                 text = if (isScanning) {
-                    progress?.let { "Scanning ${it.toInt()}%" } ?: "Scanning library"
+                    progress?.let { stringResource(R.string.admin_scan_progress_pct, it.toInt()) } ?: stringResource(R.string.admin_scanning_library)
                 } else {
-                    "Scan Library"
+                    stringResource(R.string.admin_scan_library)
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

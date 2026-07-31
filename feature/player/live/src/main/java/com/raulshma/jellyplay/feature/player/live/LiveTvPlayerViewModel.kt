@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
+import com.raulshma.jellyplay.feature.player.live.R
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineConfig
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
@@ -155,7 +156,7 @@ class LiveTvPlayerViewModel @Inject constructor(
             _state.value = _state.value.copy(
                 isLoadingChannels = false,
                 isBuffering = false,
-                errorMessage = "No channels available",
+                errorMessage = context.getString(R.string.live_error_no_channels),
             )
             return
         }
@@ -278,7 +279,9 @@ class LiveTvPlayerViewModel @Inject constructor(
             _state.value = _state.value.copy(
                 isBuffering = false,
                 isSwitchingChannel = false,
-                errorMessage = "Unable to resolve live stream for ${channel.name}",
+                errorMessage = context.getString(
+                    R.string.live_error_resolve_failed, channel.name
+                ),
             )
             return
         }
@@ -494,7 +497,9 @@ class LiveTvPlayerViewModel @Inject constructor(
                             if (eng.state.value == LiveEngineState.BUFFERING) {
                                 _state.value = _state.value.copy(
                                     isBuffering = false,
-                                    errorMessage = "Live stream failed to load. Check your connection and retry.",
+                                    errorMessage = context.getString(
+                                        R.string.live_error_buffering_timeout
+                                    ),
                                 )
                             }
                         }
@@ -534,7 +539,9 @@ class LiveTvPlayerViewModel @Inject constructor(
             ) ?: run {
                 _state.value = _state.value.copy(
                     isBuffering = false,
-                    errorMessage = "Transcode fallback failed for ${channel.name}",
+                    errorMessage = context.getString(
+                        R.string.live_error_transcode_fallback, channel.name
+                    ),
                 )
                 return@launch
             }

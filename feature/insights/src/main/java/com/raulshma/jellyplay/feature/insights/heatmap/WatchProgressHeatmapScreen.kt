@@ -64,7 +64,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.input.pointer.pointerInput
+import com.raulshma.jellyplay.feature.insights.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -144,7 +147,7 @@ fun WatchProgressHeatmapScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "Watch Progress",
+        title = stringResource(R.string.insights_title_watch_progress),
         onBack = onBack,
         actions = {
             val shareFocusState = rememberTvFocusState()
@@ -152,7 +155,7 @@ fun WatchProgressHeatmapScreen(
                 onClick = { viewModel.onEvent(HeatmapEvent.RequestShare) },
                 modifier = Modifier.then(shareFocusState.focusModifier).tvFocusIndicator(shareFocusState, CircleShape),
             ) {
-                Icon(Tabler.Outline.Share, contentDescription = "Share")
+                Icon(Tabler.Outline.Share, contentDescription = stringResource(R.string.insights_cd_share))
             }
             var menuExpanded by remember { mutableStateOf(false) }
             Box {
@@ -161,14 +164,14 @@ fun WatchProgressHeatmapScreen(
                     onClick = { menuExpanded = true },
                     modifier = Modifier.then(filterFocusState.focusModifier).tvFocusIndicator(filterFocusState, CircleShape),
                 ) {
-                    Icon(Tabler.Outline.Filter, contentDescription = "Configure Heatmap")
+                    Icon(Tabler.Outline.Filter, contentDescription = stringResource(R.string.insights_cd_configure_heatmap))
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {
                     Text(
-                        text = "Filter Type",
+                        text = stringResource(R.string.insights_filter_type),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         color = MaterialTheme.colorScheme.primary,
@@ -192,7 +195,7 @@ fun WatchProgressHeatmapScreen(
                     }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Text(
-                        text = "Select Year",
+                        text = stringResource(R.string.insights_select_year),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         color = MaterialTheme.colorScheme.primary,
@@ -221,7 +224,7 @@ fun WatchProgressHeatmapScreen(
     ) { innerPadding ->
         if (state.isLoading) {
             ScreenLoadingState(
-                message = "Loading...",
+                message = stringResource(R.string.insights_loading),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
@@ -245,7 +248,7 @@ fun WatchProgressHeatmapScreen(
                             color = MaterialTheme.colorScheme.errorContainer,
                         ) {
                             Text(
-                                text = "Install the Playback Reporting plugin on your Jellyfin server for detailed heatmap data. Showing basic activity from watch history.",
+                                text = stringResource(R.string.insights_plugin_missing_message),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 modifier = Modifier.padding(12.dp),
@@ -261,7 +264,7 @@ fun WatchProgressHeatmapScreen(
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         ) {
                             Text(
-                                text = "No watch activity recorded for ${state.year}. Play something to start filling in your year.",
+                                text = stringResource(R.string.insights_no_activity_for_year, state.year),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(12.dp),
@@ -334,7 +337,7 @@ fun WatchProgressHeatmapScreen(
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                             ) {
                                 Text(
-                                    text = "No watch activity recorded for ${state.year}. Play something to start filling in your year.",
+                                    text = stringResource(R.string.insights_no_activity_for_year, state.year),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(12.dp),
@@ -362,7 +365,7 @@ fun WatchProgressHeatmapScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Text(
-                            text = "Activity Grid",
+                            text = stringResource(R.string.insights_activity_grid),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                         )
@@ -404,7 +407,7 @@ private fun YearSelector(
             onClick = { onYearChange(year - 1) },
             modifier = Modifier.then(prevYearFocusState.focusModifier).tvFocusIndicator(prevYearFocusState, CircleShape),
         ) {
-            Icon(Tabler.Outline.ChevronLeft, contentDescription = "Previous year")
+            Icon(Tabler.Outline.ChevronLeft, contentDescription = stringResource(R.string.insights_cd_previous_year))
         }
         Text(
             text = year.toString(),
@@ -418,7 +421,7 @@ private fun YearSelector(
             enabled = year < currentYear,
             modifier = Modifier.then(nextYearFocusState.focusModifier).tvFocusIndicator(nextYearFocusState, CircleShape),
         ) {
-            Icon(Tabler.Outline.ChevronRight, contentDescription = "Next year")
+            Icon(Tabler.Outline.ChevronRight, contentDescription = stringResource(R.string.insights_cd_next_year))
         }
     }
 }
@@ -444,21 +447,21 @@ private fun StreakStats(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StatItem("Current Streak", "${streakInfo.currentStreak} days")
+            StatItem(stringResource(R.string.insights_stat_current_streak), stringResource(R.string.insights_days_format, streakInfo.currentStreak))
             Box(
                 modifier = Modifier
                     .width(1.dp)
                     .height(24.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
             )
-            StatItem("Longest Streak", "${streakInfo.longestStreak} days")
+            StatItem(stringResource(R.string.insights_stat_longest_streak), stringResource(R.string.insights_days_format, streakInfo.longestStreak))
             Box(
                 modifier = Modifier
                     .width(1.dp)
                     .height(24.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
             )
-            StatItem("Active Days", "${streakInfo.totalActiveDays}")
+            StatItem(stringResource(R.string.insights_stat_active_days), streakInfo.totalActiveDays.toString())
         }
     }
 }
@@ -588,7 +591,7 @@ private fun HeatmapGrid(
         calculateGrid(year, dailyActivities, minActivityDate)
     }
     val activeDays = remember(grid) { grid.count { it != null && it.level > 0 } }
-    val heatmapSummary = "Watch activity heatmap for $year. $activeDays active ${if (activeDays == 1) "day" else "days"}."
+    val heatmapSummary = pluralStringResource(R.plurals.insights_heatmap_summary, activeDays, year, activeDays)
 
     val cellSize = 11.dp
     val cellGap = 2.dp
@@ -636,8 +639,12 @@ private fun HeatmapGrid(
         months
     }
 
-    val dayLabels = remember {
-        listOf("Sun", "", "Tue", "", "Thu", "", "Sat")
+    val sun = stringResource(R.string.insights_day_sun)
+    val tue = stringResource(R.string.insights_day_tue)
+    val thu = stringResource(R.string.insights_day_thu)
+    val sat = stringResource(R.string.insights_day_sat)
+    val dayLabels = remember(sun, tue, thu, sat) {
+        listOf(sun, "", tue, "", thu, "", sat)
     }
 
     val gridWidthDp = with(LocalDensity.current) { (numWeeks * (cellSizePx + cellGapPx)).toDp() }
@@ -733,7 +740,7 @@ private fun HeatmapGrid(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "Less",
+            stringResource(R.string.insights_legend_less),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -748,7 +755,7 @@ private fun HeatmapGrid(
             Spacer(Modifier.width(2.dp))
         }
         Text(
-            "More",
+            stringResource(R.string.insights_legend_more),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -828,13 +835,13 @@ private fun DayDetailSheet(
                 val hours = totalMinutes / 60
                 val mins = totalMinutes % 60
                 val durationText = when {
-                    hours > 0 -> "${hours}h ${mins}m"
-                    mins > 0 -> "${mins}m"
-                    dayInfo.sessions.isNotEmpty() -> "< 1m"
-                    else -> "No activity"
+                    hours > 0 -> stringResource(R.string.insights_duration_hm, hours, mins)
+                    mins > 0 -> stringResource(R.string.insights_duration_m, mins)
+                    dayInfo.sessions.isNotEmpty() -> stringResource(R.string.insights_duration_under_minute)
+                    else -> stringResource(R.string.insights_no_activity)
                 }
                 Text(
-                    text = "${dayInfo.sessions.size} session${if (dayInfo.sessions.size != 1) "s" else ""} \u00B7 $durationText watched",
+                    text = pluralStringResource(R.plurals.insights_sessions_watched, dayInfo.sessions.size, dayInfo.sessions.size, durationText),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -898,7 +905,7 @@ private fun DayDetailSheet(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = if (posMinutes > 0) "${posMinutes}m watched" else "Played",
+                                text = if (posMinutes > 0) stringResource(R.string.insights_minutes_watched, posMinutes) else stringResource(R.string.insights_played),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -937,13 +944,13 @@ private fun DayDetailSheet(
                 val hours = totalMinutes / 60
                 val mins = totalMinutes % 60
                 val durationText = when {
-                    hours > 0 -> "${hours}h ${mins}m"
-                    mins > 0 -> "${mins}m"
-                    dayInfo.sessions.isNotEmpty() -> "< 1m"
-                    else -> "No activity"
+                    hours > 0 -> stringResource(R.string.insights_duration_hm, hours, mins)
+                    mins > 0 -> stringResource(R.string.insights_duration_m, mins)
+                    dayInfo.sessions.isNotEmpty() -> stringResource(R.string.insights_duration_under_minute)
+                    else -> stringResource(R.string.insights_no_activity)
                 }
                 Text(
-                    text = "${dayInfo.sessions.size} session${if (dayInfo.sessions.size != 1) "s" else ""} \u00B7 $durationText watched",
+                    text = pluralStringResource(R.plurals.insights_sessions_watched, dayInfo.sessions.size, dayInfo.sessions.size, durationText),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1007,7 +1014,7 @@ private fun DayDetailSheet(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = if (posMinutes > 0) "${posMinutes}m watched" else "Played",
+                                text = if (posMinutes > 0) stringResource(R.string.insights_minutes_watched, posMinutes) else stringResource(R.string.insights_played),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1039,5 +1046,5 @@ private fun shareHeatmapImage(context: Context, bitmap: Bitmap) {
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(shareIntent, "Share Watch Progress"))
+    context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.insights_share_chooser_title)))
 }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.syncplay
 
+import android.content.Context
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
@@ -11,7 +12,9 @@ import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.syncplay.R
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -40,6 +43,7 @@ data class SyncPlayUiState(
 
 @HiltViewModel
 class SyncPlayViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val syncPlayManager: SyncPlayManager,
     private val preferencesStore: UserPreferencesStore,
@@ -86,7 +90,7 @@ class SyncPlayViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
-                    _uiState.update { state -> state.copy(error = it.message ?: "Failed to load groups") }
+                    _uiState.update { state -> state.copy(error = it.message ?: context.getString(R.string.syncplay_error_load_groups)) }
                 }
             _uiState.update { it.copy(isLoading = false) }
         }
@@ -102,7 +106,7 @@ class SyncPlayViewModel @Inject constructor(
         when (preferencesStore.preferences.value.syncPlayJoinBehavior) {
             SyncPlayJoinBehavior.ALWAYS_JOIN -> joinGroup(group.groupId)
             SyncPlayJoinBehavior.ASK -> _uiState.update { it.copy(pendingJoin = group) }
-            SyncPlayJoinBehavior.NEVER_JOIN -> _notifications.tryEmit("Joining SyncPlay groups is disabled in settings")
+            SyncPlayJoinBehavior.NEVER_JOIN -> _notifications.tryEmit(context.getString(R.string.syncplay_join_disabled))
         }
     }
 
@@ -135,7 +139,7 @@ class SyncPlayViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
-                    _uiState.update { state -> state.copy(error = it.message ?: "Failed to join group") }
+                    _uiState.update { state -> state.copy(error = it.message ?: context.getString(R.string.syncplay_error_join_group)) }
                 }
             _uiState.update { it.copy(isLoading = false) }
         }
@@ -151,7 +155,7 @@ class SyncPlayViewModel @Inject constructor(
                     loadGroups()
                 }
                 .onFailure {
-                    _uiState.update { state -> state.copy(error = it.message ?: "Failed to leave group") }
+                    _uiState.update { state -> state.copy(error = it.message ?: context.getString(R.string.syncplay_error_leave_group)) }
                 }
         }
     }
@@ -175,7 +179,7 @@ class SyncPlayViewModel @Inject constructor(
                     }
                 }
                 .onFailure {
-                    _uiState.update { state -> state.copy(error = it.message ?: "Failed to create group") }
+                    _uiState.update { state -> state.copy(error = it.message ?: context.getString(R.string.syncplay_error_create_group)) }
                 }
             _uiState.update { it.copy(isLoading = false) }
         }

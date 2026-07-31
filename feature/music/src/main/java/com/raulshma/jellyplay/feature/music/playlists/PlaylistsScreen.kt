@@ -39,10 +39,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.Playlist
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -94,7 +96,7 @@ fun PlaylistsScreen(
     }
 
     JellyPlayScreenScaffold(
-        title = "Playlists",
+        title = stringResource(R.string.music_playlists),
         onBack = onBack,
         actions = {
             HeaderStatusIndicator(
@@ -151,7 +153,7 @@ fun PlaylistsScreen(
             ExtendedFloatingActionButton(
                 onClick = { viewModel.openCreateDialog() },
                 icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
-                text = { Text("New Playlist") },
+                text = { Text(stringResource(R.string.music_new_playlist)) },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .then(newPlaylistFocusState.focusModifier)
@@ -171,10 +173,10 @@ private fun PlaylistDialogHost(viewModel: PlaylistsViewModel) {
         PlaylistDialogState.None -> Unit
         is PlaylistDialogState.Create -> {
             PlaylistNameDialog(
-                title = "New Playlist",
+                title = stringResource(R.string.music_new_playlist),
                 initialName = state.name,
                 initialOverview = state.overview,
-                confirmLabel = "Create",
+                confirmLabel = stringResource(R.string.music_create),
                 isLoading = viewModel.isMutating,
                 onConfirm = { name, overview -> viewModel.createPlaylist(name, overview) },
                 onDismiss = { viewModel.dismissDialog() },
@@ -182,10 +184,10 @@ private fun PlaylistDialogHost(viewModel: PlaylistsViewModel) {
         }
         is PlaylistDialogState.Edit -> {
             PlaylistNameDialog(
-                title = "Edit Playlist",
+                title = stringResource(R.string.music_edit_playlist),
                 initialName = state.name,
                 initialOverview = state.overview,
-                confirmLabel = "Save",
+                confirmLabel = stringResource(R.string.music_save),
                 isLoading = viewModel.isMutating,
                 onConfirm = { name, overview ->
                     viewModel.updatePlaylist(state.playlist.id, name, overview)
@@ -196,21 +198,21 @@ private fun PlaylistDialogHost(viewModel: PlaylistsViewModel) {
         is PlaylistDialogState.Delete -> {
             AlertDialog(
                 onDismissRequest = { viewModel.dismissDialog() },
-                title = { Text("Delete Playlist") },
+                title = { Text(stringResource(R.string.music_delete_playlist)) },
                 text = {
-                    Text("Delete \"${state.playlist.name}\"? This action cannot be undone.")
+                    Text(stringResource(R.string.music_delete_playlist_confirm, state.playlist.name))
                 },
                 confirmButton = {
                     TextButton(
                         onClick = { viewModel.deletePlaylist(state.playlist) },
                         enabled = !viewModel.isMutating,
                     ) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.music_delete), color = MaterialTheme.colorScheme.error)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { viewModel.dismissDialog() }) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.music_cancel))
                     }
                 },
             )
@@ -241,7 +243,7 @@ private fun PlaylistNameDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.music_name_label)) },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -251,7 +253,7 @@ private fun PlaylistNameDialog(
                 OutlinedTextField(
                     value = overview,
                     onValueChange = { overview = it },
-                    label = { Text("Description (optional)") },
+                    label = { Text(stringResource(R.string.music_description_optional)) },
                     minLines = 2,
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth(),
@@ -268,7 +270,7 @@ private fun PlaylistNameDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss, enabled = !isLoading) {
-                Text("Cancel")
+                Text(stringResource(R.string.music_cancel))
             }
         },
     )
@@ -318,7 +320,7 @@ private fun PlaylistItemRow(
                 )
             }
             Text(
-                text = "${playlist.itemCount} tracks",
+                text = stringResource(R.string.music_playlist_tracks_count, playlist.itemCount),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -330,7 +332,7 @@ private fun PlaylistItemRow(
             ) {
                 Icon(
                     imageVector = Tabler.Outline.DotsVertical,
-                    contentDescription = "More options",
+                    contentDescription = stringResource(R.string.music_more_options),
                     tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
                 )
             }
@@ -339,7 +341,7 @@ private fun PlaylistItemRow(
                 onDismissRequest = { menuExpanded = false },
             ) {
                 DropdownMenuItem(
-                    text = { Text("Edit") },
+                    text = { Text(stringResource(R.string.music_edit)) },
                     leadingIcon = { Icon(Tabler.Outline.Edit, contentDescription = null) },
                     enabled = playlist.canEdit,
                     onClick = {
@@ -348,7 +350,7 @@ private fun PlaylistItemRow(
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    text = { Text(stringResource(R.string.music_delete), color = MaterialTheme.colorScheme.error) },
                     leadingIcon = {
                         Icon(
                             Tabler.Outline.Trash,
@@ -369,8 +371,8 @@ private fun PlaylistItemRow(
             modifier = Modifier.then(openFocusState.focusModifier).tvFocusIndicator(openFocusState, CircleShape),
         ) {
             Icon(
-                Tabler.Outline.PlayerPlay,
-                contentDescription = "Open",
+                imageVector = Tabler.Outline.PlayerPlay,
+                contentDescription = stringResource(R.string.music_open),
                 tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
             )
         }

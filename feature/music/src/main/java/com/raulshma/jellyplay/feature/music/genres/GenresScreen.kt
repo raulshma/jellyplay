@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -25,6 +26,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.feature.music.components.GenreChip
+import com.raulshma.jellyplay.feature.music.R
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -50,7 +52,7 @@ fun GenresScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Genres",
+        title = stringResource(R.string.music_genres),
         onBack = onBack,
         actions = {
             HeaderStatusIndicator(
@@ -80,7 +82,7 @@ fun GenresScreen(
                     genres.isEmpty() -> {
                         ScreenEmptyState(
                             icon = Tabler.Outline.Music,
-                            title = "No genres found",
+                            title = stringResource(R.string.music_no_genres_found),
                         )
                     }
                     else -> {
