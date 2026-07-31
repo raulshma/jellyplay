@@ -52,7 +52,7 @@ fun NewsletterScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = "Newsletter",
+        title = stringResource(R.string.newsletter_title),
         onBack = onBack,
         backgroundColor = backgroundColor,
     ) { paddingValues ->

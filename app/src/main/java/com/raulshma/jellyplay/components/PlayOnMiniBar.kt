@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -51,6 +52,7 @@ import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Volume
 import com.composables.icons.tabler.outline.X
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
@@ -151,7 +153,7 @@ fun PlayOnMiniBar(
                         // Chevron signals the bar expands into a full control surface.
                         Icon(
                             imageVector = Tabler.Outline.ChevronUp,
-                            contentDescription = "Open companion",
+                            contentDescription = stringResource(R.string.cast_open_companion),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp),
                         )
@@ -160,13 +162,13 @@ fun PlayOnMiniBar(
                     PlayOnIconButton(
                         onClick = onPlayPause,
                         iconVector = if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                        iconDescription = if (isPlaying) "Pause" else "Play",
+                        iconDescription = if (isPlaying) stringResource(R.string.media_pause) else stringResource(R.string.media_play),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     PlayOnIconButton(
                         onClick = onDisconnect,
                         iconVector = Tabler.Outline.X,
-                        iconDescription = "Disconnect",
+                        iconDescription = stringResource(R.string.media_disconnect),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

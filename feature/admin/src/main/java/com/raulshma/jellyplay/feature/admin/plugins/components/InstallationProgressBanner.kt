@@ -69,7 +69,7 @@ fun InstallationProgressBanner(
                     )
                     installation.version?.let { ver ->
                         Text(
-                            text = "v$ver",
+                            text = stringResource(R.string.admin_plugin_version, ver),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                         )

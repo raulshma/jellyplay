@@ -94,4 +94,14 @@
     <string name="music_name_label">Name</string>
     <string name="music_description_optional">Beschreibung (optional)</string>
     <string name="music_remove_from_playlist">Aus Wiedergabeliste entfernen</string>
+
+    <!-- Paged grid states -->
+    <string name="music_nothing_found">Nichts gefunden</string>
+    <string name="music_failed_load">Laden fehlgeschlagen</string>
+
+    <!-- Built-in smart playlist names -->
+    <string name="music_smart_playlist_top_rated">Top-bewertet</string>
+    <string name="music_smart_playlist_recently_added">Zuletzt hinzugefügt</string>
+    <string name="music_smart_playlist_unplayed">Ungespielte Titel</string>
+    <string name="music_smart_playlist_favorites">Favoriten</string>
 </resources>

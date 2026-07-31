@@ -110,4 +110,14 @@
 
     <!-- Playback error -->
     <string name="audio_error_retry">重试</string>
+
+    <!-- Up next strip -->
+    <string name="audio_up_next">下一首</string>
+
+    <!-- Cast -->
+    <string name="audio_cast">投射</string>
+    <string name="audio_cast_connected">投射已连接</string>
+    <string name="audio_cast_to_device">投射到设备</string>
+    <string name="audio_cast_no_devices">未找到投射设备。请确保您的设备在同一网络。</string>
+    <string name="audio_cast_ok">确定</string>
 </resources>

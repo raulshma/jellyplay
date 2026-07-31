@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ import androidx.fragment.app.FragmentActivity
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Fingerprint
 import com.composables.icons.tabler.outline.Lock
+import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -44,8 +46,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable
 fun AuthChallengeScreen(
-    title: String = "Authenticate",
-    subtitle: String = "Confirm your identity",
+    title: String = stringResource(R.string.core_ui_auth_title),
+    subtitle: String = stringResource(R.string.core_ui_auth_subtitle),
     pinHash: String?,
     biometricEnabled: Boolean = false,
     onPinEntered: (String) -> Unit,
@@ -105,7 +107,7 @@ fun AuthChallengeScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Use biometric to authenticate",
+                    text = stringResource(R.string.core_ui_auth_biometric_prompt),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -138,7 +140,7 @@ fun AuthChallengeScreen(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.padding(horizontal = 4.dp))
-                        Text("Retry")
+                        Text(stringResource(R.string.core_retry))
                     }
                     if (hasPin) {
                         val usePinFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -158,7 +160,7 @@ fun AuthChallengeScreen(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.padding(horizontal = 4.dp))
-                            Text("Use PIN")
+                            Text(stringResource(R.string.core_ui_auth_use_pin))
                         }
                     }
                 }
@@ -192,7 +194,7 @@ fun AuthChallengeScreen(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.padding(horizontal = 4.dp))
-                        Text("Use Biometric")
+                        Text(stringResource(R.string.core_ui_auth_use_biometric))
                     }
                 }
             }

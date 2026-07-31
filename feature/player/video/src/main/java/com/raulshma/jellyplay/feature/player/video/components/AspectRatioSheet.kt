@@ -29,8 +29,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -80,7 +82,7 @@ fun AspectRatioSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                text = "Aspect Ratio",
+                text = stringResource(R.string.player_video_aspect_ratio),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
@@ -89,7 +91,7 @@ fun AspectRatioSheet(
             if (detectedRatio != null && detectedRatio != AspectRatio.FIT) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Detected: ${detectedRatio.displayName}",
+                    text = stringResource(R.string.player_video_aspect_detected, detectedRatio.displayName),
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontWeight = FontWeight.Medium,
                     ),
@@ -124,7 +126,7 @@ fun AspectRatioSheet(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             val displayText = if (ratio == AspectRatio.AUTO && detectedRatio != null) {
-                                "Auto (${detectedRatio.displayName})"
+                                stringResource(R.string.player_video_aspect_auto, detectedRatio.displayName)
                             } else {
                                 ratio.displayName
                             }
@@ -163,7 +165,7 @@ fun AspectRatioSheet(
                             },
                             label = {
                                 if (ratio == AspectRatio.AUTO && detectedRatio != null) {
-                                    Text("Auto (${detectedRatio.displayName})")
+                                    Text(stringResource(R.string.player_video_aspect_auto, detectedRatio.displayName))
                                 } else {
                                     Text(
                                         ratio.displayName,

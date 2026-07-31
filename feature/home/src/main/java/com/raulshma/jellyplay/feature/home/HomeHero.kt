@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
@@ -668,7 +669,7 @@ fun HeroHeader(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                if (hasProgress) "Resume" else "Play",
+                                if (hasProgress) stringResource(R.string.home_resume) else stringResource(R.string.home_play),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onPrimary,
                             )
@@ -705,7 +706,7 @@ fun HeroHeader(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            "Details",
+                            stringResource(R.string.home_details),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurface,
                         )

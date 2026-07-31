@@ -41,4 +41,25 @@
     <string name="livetv_channel_live">直播</string>
     <string name="livetv_channel_no_program_info">没有节目信息</string>
     <string name="livetv_channel_load_failed">加载节目指南失败</string>
+
+    <!-- Live TV host & EPG screen (extracted from hardcoded strings) -->
+    <string name="livetv_screen_title">直播电视</string>
+    <string name="livetv_epg_title">节目指南</string>
+    <string name="livetv_no_guide_available">没有可用的节目指南</string>
+    <string name="livetv_record_program_prompt">录制节目？</string>
+    <string name="livetv_record_single_timer_note">将在服务器上安排单个计时器。</string>
+    <string name="livetv_record_schedule_failed">无法安排录制</string>
+    <string name="livetv_recording_in_progress">录制中…</string>
+    <string name="livetv_scheduling_timer">正在安排计时器</string>
+    <string name="livetv_action_cancel">取消</string>
+    <string name="livetv_action_close">关闭</string>
+    <string name="livetv_action_done">完成</string>
+    <string name="livetv_action_ok">确定</string>
+    <string name="livetv_schedule_start">开始: %1$s</string>
+    <string name="livetv_schedule_end">结束: %1$s</string>
+
+    <!-- Channel / program affordances (batch) -->
+    <string name="livetv_watch">观看</string>
+    <string name="livetv_recording_status">录制中</string>
+    <string name="livetv_recording_now">● 正在录制</string>
 </resources>

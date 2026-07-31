@@ -94,4 +94,14 @@
     <string name="music_name_label">名前</string>
     <string name="music_description_optional">説明（任意）</string>
     <string name="music_remove_from_playlist">プレイリストから削除</string>
+
+    <!-- Paged grid states -->
+    <string name="music_nothing_found">見つかりません</string>
+    <string name="music_failed_load">読み込めませんでした</string>
+
+    <!-- Built-in smart playlist names -->
+    <string name="music_smart_playlist_top_rated">高評価</string>
+    <string name="music_smart_playlist_recently_added">最近追加</string>
+    <string name="music_smart_playlist_unplayed">未再生トラック</string>
+    <string name="music_smart_playlist_favorites">お気に入り</string>
 </resources>

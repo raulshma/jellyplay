@@ -41,4 +41,25 @@
     <string name="livetv_channel_live">실시간</string>
     <string name="livetv_channel_no_program_info">프로그램 정보 없음</string>
     <string name="livetv_channel_load_failed">프로그램 가이드를 불러오지 못했습니다</string>
+
+    <!-- Live TV host & EPG screen (extracted from hardcoded strings) -->
+    <string name="livetv_screen_title">라이브 TV</string>
+    <string name="livetv_epg_title">프로그램 가이드</string>
+    <string name="livetv_no_guide_available">사용 가능한 프로그램 가이드가 없습니다</string>
+    <string name="livetv_record_program_prompt">프로그램을 녹화하시겠습니까?</string>
+    <string name="livetv_record_single_timer_note">서버에 단일 타이머가 예약됩니다.</string>
+    <string name="livetv_record_schedule_failed">녹화를 예약하지 못했습니다</string>
+    <string name="livetv_recording_in_progress">녹화 중…</string>
+    <string name="livetv_scheduling_timer">타이머 예약 중</string>
+    <string name="livetv_action_cancel">취소</string>
+    <string name="livetv_action_close">닫기</string>
+    <string name="livetv_action_done">완료</string>
+    <string name="livetv_action_ok">확인</string>
+    <string name="livetv_schedule_start">시작: %1$s</string>
+    <string name="livetv_schedule_end">종료: %1$s</string>
+
+    <!-- Channel / program affordances (batch) -->
+    <string name="livetv_watch">시청</string>
+    <string name="livetv_recording_status">녹화 중</string>
+    <string name="livetv_recording_now">● 녹화 중</string>
 </resources>

@@ -52,4 +52,25 @@
     <string name="library_sort_options">Opções de ordenação</string>
     <string name="library_failed_to_load_photos">Falha ao carregar fotografias</string>
     <string name="library_no_photos_found">Nenhuma fotografia encontrada</string>
+
+    <!-- ── Photo viewer (PhotoViewerScreen) ────────────────────────────── -->
+    <string name="library_photo_adjustments">Ajustes</string>
+    <string name="library_photo_slideshow">Apresentação</string>
+    <string name="library_photo_start_slideshow">Iniciar apresentação</string>
+    <string name="library_photo_stop_slideshow">Parar apresentação</string>
+    <!-- %1$d = brightness as integer percent -->
+    <string name="library_photo_brightness">Brilho %1$d%%</string>
+    <!-- %1$d = contrast as integer percent -->
+    <string name="library_photo_contrast">Contraste %1$d%%</string>
+    <!-- %1$d = saturation as integer percent -->
+    <string name="library_photo_saturation">Saturação %1$d%%</string>
+    <string name="library_photo_failed_to_load">Não foi possível carregar a fotografia</string>
+    <!-- ── Photo viewer icon content descriptions (TalkBack) ───────────── -->
+    <string name="library_cd_close">Fechar</string>
+    <string name="library_cd_share">Partilhar</string>
+    <string name="library_cd_save">Guardar</string>
+    <string name="library_cd_info">Informações</string>
+    <string name="library_cd_adjust">Ajustar</string>
+    <string name="library_cd_previous">Anterior</string>
+    <string name="library_cd_next">Seguinte</string>
 </resources>

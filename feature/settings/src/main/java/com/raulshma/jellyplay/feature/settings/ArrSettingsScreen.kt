@@ -87,13 +87,13 @@ fun ArrSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Radarr / Sonarr") },
+                title = { Text(stringResource(R.string.settings_integrations_arr)) },
                 navigationIcon = {
                     CircleBgBackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = { viewModel.refreshServers() }, enabled = !isRefreshing) {
-                        Icon(Tabler.Outline.Refresh, contentDescription = "Refresh")
+                        Icon(Tabler.Outline.Refresh, contentDescription = stringResource(R.string.settings_refresh_cd))
                     }
                 },
             )
@@ -109,16 +109,14 @@ fun ArrSettingsScreen(
         ) {
             item {
                 Text(
-                    "Direct *arr Integration",
+                    stringResource(R.string.settings_arr_direct_integration),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
             }
             item {
                 Text(
-                    "JellyPlay contacts your Radarr and Sonarr instances directly to show " +
-                        "download-queue progress on Requests and a coming-soon calendar on Home. " +
-                        "Servers are auto-discovered from Seerr; add manual entries below to override.",
+                    stringResource(R.string.settings_arr_direct_integration_body),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -133,9 +131,9 @@ fun ArrSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Auto-discover via Seerr", style = MaterialTheme.typography.bodyLarge)
+                            Text(stringResource(R.string.settings_arr_auto_discover), style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "Read configured Radarr/Sonarr servers from your Seerr connection",
+                                stringResource(R.string.settings_arr_auto_discover_subtitle),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -155,7 +153,7 @@ fun ArrSettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Servers",
+                        stringResource(R.string.settings_arr_servers),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
@@ -164,7 +162,7 @@ fun ArrSettingsScreen(
                     )
                     if (allServers.isNotEmpty()) {
                         TextButton(onClick = { viewModel.testAllServers() }) {
-                            Text("Test all")
+                            Text(stringResource(R.string.settings_arr_test_all))
                         }
                     }
                 }
@@ -173,7 +171,7 @@ fun ArrSettingsScreen(
             if (allServers.isEmpty()) {
                 item {
                     val text = when {
-                        isRefreshing -> "Resolving servers…"
+                        isRefreshing -> stringResource(R.string.settings_arr_resolving)
                         servers.discoveryError is ArrDiscoveryError.NoAdminPermission ->
                             stringResource(R.string.settings_arr_no_admin_hint)
                         servers.discoveryError is ArrDiscoveryError.Other ->
@@ -221,7 +219,7 @@ fun ArrSettingsScreen(
                 ) {
                     Icon(Tabler.Outline.Plus, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Add manual server")
+                    Text(stringResource(R.string.settings_arr_add_manual_server))
                 }
             }
         }
@@ -259,9 +257,9 @@ private fun ServerRow(
                 Text(server.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.width(8.dp))
                 val tagText = when {
-                    server.isManual -> "Manual"
-                    server.kind == ArrServiceKind.RADARR -> "Radarr · Seerr"
-                    else -> "Sonarr · Seerr"
+                    server.isManual -> stringResource(R.string.settings_arr_manual)
+                    server.kind == ArrServiceKind.RADARR -> stringResource(R.string.settings_arr_radarr_seerr)
+                    else -> stringResource(R.string.settings_arr_sonarr_seerr)
                 }
                 Text(
                     tagText,
@@ -300,7 +298,7 @@ private fun ServerRow(
                 Spacer(Modifier.width(8.dp))
                 if (server.isManual) {
                     IconButton(onClick = { onRemove(server) }) {
-                        Icon(Tabler.Outline.Trash, contentDescription = "Remove manual server")
+                        Icon(Tabler.Outline.Trash, contentDescription = stringResource(R.string.settings_arr_remove_manual_server_cd))
                     }
                 }
             }
@@ -343,7 +341,7 @@ private fun AddManualServerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add manual server") },
+        title = { Text(stringResource(R.string.settings_arr_add_manual_server)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -353,29 +351,29 @@ private fun AddManualServerDialog(
                             onClick = { kind = value },
                             shape = SegmentedButtonDefaults.itemShape(index, ArrServiceKind.entries.size),
                         ) {
-                            Text(if (value == ArrServiceKind.RADARR) "Radarr" else "Sonarr")
+                            Text(stringResource(if (value == ArrServiceKind.RADARR) R.string.settings_radarr else R.string.settings_sonarr))
                         }
                     }
                 }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.settings_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = baseUrl,
                     onValueChange = { baseUrl = it },
-                    label = { Text("Base URL") },
-                    placeholder = { Text("https://radarr.example.com") },
+                    label = { Text(stringResource(R.string.settings_arr_base_url)) },
+                    placeholder = { Text(stringResource(R.string.settings_arr_base_url_placeholder)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
-                    label = { Text("API key") },
+                    label = { Text(stringResource(R.string.settings_api_key_label)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
@@ -389,11 +387,11 @@ private fun AddManualServerDialog(
             ) {
                 Icon(Tabler.Outline.DeviceFloppy, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Add")
+                Text(stringResource(R.string.settings_add))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
         },
     )
 }

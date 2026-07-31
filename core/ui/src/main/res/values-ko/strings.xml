@@ -46,4 +46,55 @@
     <string name="core_media_live_tv_plural">실시간 TV</string>
     <string name="core_media_channel_plural">채널</string>
     <string name="core_media_unknown_plural">알 수 없음</string>
+
+    <!-- core/ui shared -->
+    <string name="core_report">신고</string>
+    <string name="core_ui_back">뒤로</string>
+    <string name="core_ui_select">선택…</string>
+    <string name="core_ui_selected">선택됨</string>
+
+    <!-- core/ui auth challenge -->
+    <string name="core_ui_auth_title">인증</string>
+    <string name="core_ui_auth_subtitle">본인 확인</string>
+    <string name="core_ui_auth_use_pin">PIN 사용</string>
+    <string name="core_ui_auth_use_biometric">생체 인식 사용</string>
+    <string name="core_ui_auth_biometric_prompt">인증에 생체 인식 사용</string>
+
+    <!-- core/ui seerr request dialog -->
+    <string name="core_ui_seerr_request_success">요청이 성공적으로 전송되었습니다!</string>
+    <string name="core_ui_seerr_loading_options">옵션 불러오는 중…</string>
+    <string name="core_ui_seerr_destination_server_sonarr">대상 서버 (Sonarr)</string>
+    <string name="core_ui_seerr_destination_server_radarr">대상 서버 (Radarr)</string>
+    <string name="core_ui_seerr_quality_profile">품질 프로필</string>
+    <string name="core_ui_seerr_root_folder">루트 폴더</string>
+    <string name="core_ui_seerr_tags">태그</string>
+    <string name="core_ui_seerr_all_seasons">모든 시즌</string>
+    <string name="core_ui_seerr_season">시즌 %1$d</string>
+    <string name="core_ui_seerr_episodes">%1$d개 에피소드</string>
+    <string name="core_ui_seerr_loading_seasons">시즌 불러오는 중…</string>
+    <string name="core_ui_seerr_request">요청</string>
+
+    <!-- core/ui accent / color pickers -->
+    <string name="core_ui_accent_color_title">강조 색상</string>
+    <string name="core_ui_accent_color_subtitle">사용자 지정 강조 색상 견본 또는 동적 색상 선택</string>
+    <string name="core_ui_color_style_title">색상 스타일</string>
+    <string name="core_ui_color_style_subtitle">생성된 팔레트의 시각적 분위기 정의</string>
+    <string name="core_ui_dynamic_colors">동적 배경화면 색상</string>
+    <string name="core_ui_synthwave_accent_title">Synthwave 강조 색상</string>
+    <string name="core_ui_synthwave_accent_subtitle">사용자 지정 네온 강조 색상 견본 선택</string>
+    <string name="core_ui_soothing_accent_title">부드러운 강조 색상</string>
+    <string name="core_ui_soothing_accent_subtitle">차분한 강조 색상 선택</string>
+
+    <!-- core/ui component content descriptions & labels -->
+    <string name="core_ui_remove">제거</string>
+    <string name="core_ui_play">재생</string>
+    <string name="core_ui_backspace">백스페이스</string>
+    <string name="core_ui_request">요청</string>
+    <string name="core_ui_watched">시청함</string>
+    <string name="core_ui_downloaded">다운로드됨</string>
+    <string name="core_ui_cd_loading">로드 중</string>
+    <string name="core_ui_cd_error">오류</string>
+    <string name="core_ui_cd_local_network">로컬 네트워크, 인터넷 없음</string>
+    <string name="core_ui_cd_offline">오프라인</string>
+    <string name="core_ui_cd_server_unreachable">서버에 연결할 수 없음</string>
 </resources>

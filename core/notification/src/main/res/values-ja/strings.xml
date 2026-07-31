@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Per-library new-media notification -->
+    <string name="notification_new_in_library_count">%2$sに%1$d件の新着</string>
+    <string name="notification_more_count">他%1$d件</string>
+
+    <!-- Global new-media summary notification -->
+    <string name="notification_new_items_added">%1$d件の新着アイテム</string>
+    <string name="notification_across_libraries">%1$d件のライブラリにまたがる</string>
+
+    <!-- Per-item notification action buttons -->
+    <string name="notification_action_mark_seen">視聴済みにする</string>
+    <string name="notification_action_open">開く</string>
+
+    <!-- Per-library notification channel -->
+    <string name="notification_channel_new_in_library">%1$sの新着</string>
+    <string name="notification_channel_new_in_library_desc">%1$sの新着メディアの通知</string>
+
+    <!-- Summary notification channel -->
+    <string name="notification_channel_summary">新着メディア</string>
+    <string name="notification_channel_summary_desc">新着メディア通知のまとめ</string>
+</resources>

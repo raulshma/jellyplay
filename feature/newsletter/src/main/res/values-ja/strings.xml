@@ -3,4 +3,25 @@
     <!-- Newsletter feature user-facing strings (enhancements §2.2) -->
     <string name="newsletter_could_not_load">ニュースレターを読み込めませんでした</string>
     <string name="newsletter_preparing_digest">ダイジェストを準備中\u2026</string>
+
+    <!-- Newsletter screens & sections -->
+    <string name="newsletter_title">ニュースレター</string>
+    <string name="newsletter_activity_digest">アクティビティの要約</string>
+    <string name="newsletter_continue_watching">視聴を再開</string>
+    <string name="newsletter_fresh_picks">新着ピックアップ</string>
+    <string name="newsletter_recently_added">最近の追加</string>
+    <string name="newsletter_next_up">次の動画</string>
+    <string name="newsletter_view_all">すべて表示</string>
+    <string name="newsletter_no_items_available">利用可能なアイテムがありません</string>
+
+    <!-- Newsletter aggregated stats -->
+    <string name="newsletter_stat_total_items">合計アイテム</string>
+    <string name="newsletter_stat_movies">映画</string>
+    <string name="newsletter_stat_series">シリーズ</string>
+    <string name="newsletter_stat_episodes">エピソード</string>
+    <string name="newsletter_stat_albums">アルバム</string>
+    <string name="newsletter_stat_songs">楽曲</string>
+    <string name="newsletter_stat_new_this_week">今週の新着</string>
+    <string name="newsletter_stat_in_progress">進行中</string>
+    <string name="newsletter_stat_activity">アクティビティ</string>
 </resources>

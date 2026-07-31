@@ -110,4 +110,14 @@
 
     <!-- Playback error -->
     <string name="audio_error_retry">Réessayer</string>
+
+    <!-- Up next strip -->
+    <string name="audio_up_next">À suivre</string>
+
+    <!-- Cast -->
+    <string name="audio_cast">Diffuser</string>
+    <string name="audio_cast_connected">Diffusion connectée</string>
+    <string name="audio_cast_to_device">Diffuser vers l\'appareil</string>
+    <string name="audio_cast_no_devices">Aucun appareil de diffusion trouvé. Assurez-vous que votre appareil est sur le même réseau.</string>
+    <string name="audio_cast_ok">OK</string>
 </resources>

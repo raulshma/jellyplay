@@ -3,4 +3,25 @@
     <!-- Newsletter feature user-facing strings (enhancements §2.2) -->
     <string name="newsletter_could_not_load">뉴스레터를 불러올 수 없습니다</string>
     <string name="newsletter_preparing_digest">다이제스트 준비 중\u2026</string>
+
+    <!-- Newsletter screens & sections -->
+    <string name="newsletter_title">뉴스레터</string>
+    <string name="newsletter_activity_digest">활동 요약</string>
+    <string name="newsletter_continue_watching">이어서 시청</string>
+    <string name="newsletter_fresh_picks">최신 추천</string>
+    <string name="newsletter_recently_added">최근 추가</string>
+    <string name="newsletter_next_up">다음 영상</string>
+    <string name="newsletter_view_all">모두 보기</string>
+    <string name="newsletter_no_items_available">사용 가능한 항목이 없습니다</string>
+
+    <!-- Newsletter aggregated stats -->
+    <string name="newsletter_stat_total_items">총 항목</string>
+    <string name="newsletter_stat_movies">영화</string>
+    <string name="newsletter_stat_series">시리즈</string>
+    <string name="newsletter_stat_episodes">에피소드</string>
+    <string name="newsletter_stat_albums">앨범</string>
+    <string name="newsletter_stat_songs">노래</string>
+    <string name="newsletter_stat_new_this_week">이번 주 신작</string>
+    <string name="newsletter_stat_in_progress">진행 중</string>
+    <string name="newsletter_stat_activity">활동</string>
 </resources>

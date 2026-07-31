@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -101,7 +102,7 @@ fun HomeSearchResultsOverlay(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "No results found",
+                    stringResource(R.string.home_no_results_found),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -121,7 +122,7 @@ fun HomeSearchResultsOverlay(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = "Recent Searches",
+                                text = stringResource(R.string.home_recent_searches),
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     letterSpacing = 0.8.sp,
@@ -130,7 +131,7 @@ fun HomeSearchResultsOverlay(
                             )
                             val clearAllFocusState = rememberTvFocusState()
                             Text(
-                                text = "Clear all",
+                                text = stringResource(R.string.home_clear_all),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
@@ -212,7 +213,7 @@ fun HomeSearchResultsOverlay(
                             ) {
                                 Icon(
                                     Tabler.Outline.X,
-                                    contentDescription = "Remove",
+                                    contentDescription = stringResource(R.string.home_remove),
                                     modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -222,7 +223,7 @@ fun HomeSearchResultsOverlay(
                 }
                 if (jellyfinResults.isNotEmpty()) {
                     item(contentType = "libraryHeader") {
-                        SearchSectionHeader("Library")
+                        SearchSectionHeader(stringResource(R.string.home_library))
                     }
                     items(
                         count = jellyfinResults.size,
@@ -234,14 +235,17 @@ fun HomeSearchResultsOverlay(
                         // Memoized per row on stable primitives so search-as-you-type
                         // recompositions don't re-run buildString + branches for every
                         // visible row.
+                        val movieLabel = stringResource(R.string.home_movie)
+                        val seriesLabel = stringResource(R.string.home_tv_show)
+                        val musicLabel = stringResource(R.string.home_music)
                         val subtitle = remember(item.id, item.year, item.mediaType) {
                             buildString {
                                 item.year?.let { append(it) }
                                 if (item.year != null && item.mediaType != null) append(" · ")
                                 when (item.mediaType) {
-                                    MediaType.MOVIE -> append("Movie")
-                                    MediaType.SERIES -> append("TV Show")
-                                    MediaType.AUDIO, MediaType.MUSIC -> append("Music")
+                                    MediaType.MOVIE -> append(movieLabel)
+                                    MediaType.SERIES -> append(seriesLabel)
+                                    MediaType.AUDIO, MediaType.MUSIC -> append(musicLabel)
                                     else -> item.mediaType?.name?.lowercase()?.replaceFirstChar { it.uppercase() }?.let { append(it) }
                                 }
                             }
@@ -292,7 +296,7 @@ fun HomeSearchResultsOverlay(
                         }
                     }
                     item(contentType = "seerrHeader") {
-                        SearchSectionHeader("Request via Seerr")
+                        SearchSectionHeader(stringResource(R.string.home_request_via_seerr))
                     }
                     items(
                         count = seerrResults.size,
@@ -301,12 +305,14 @@ fun HomeSearchResultsOverlay(
                     ) { index ->
                         val item = seerrResults[index]
                         val placementSpec = lazyItemPlacementSpec()
+                        val movieLabel = stringResource(R.string.home_movie)
+                        val seriesLabel = stringResource(R.string.home_tv_show)
                         val subtitle = remember(item.id, item.year, item.mediaType, item.voteAverage) {
                             buildString {
                                 item.year?.let { append(it) }
                                 val typeLabel = when {
-                                    item.mediaType.equals("movie", ignoreCase = true) -> "Movie"
-                                    item.mediaType.equals("tv", ignoreCase = true) -> "TV Show"
+                                    item.mediaType.equals("movie", ignoreCase = true) -> movieLabel
+                                    item.mediaType.equals("tv", ignoreCase = true) -> seriesLabel
                                     else -> item.mediaType
                                 }
                                 if (item.year != null) append(" · ")
@@ -362,7 +368,7 @@ fun HomeSearchResultsOverlay(
                         }
                     }
                     item(contentType = "settingsHeader") {
-                        SearchSectionHeader("Settings")
+                        SearchSectionHeader(stringResource(R.string.home_settings))
                     }
                     items(
                         count = settingsResults.size,
@@ -424,10 +430,10 @@ fun HomeSearchResultsOverlay(
 
     if (showClearHistoryDialog) {
         com.raulshma.jellyplay.core.ui.components.ConfirmDialog(
-            title = "Clear search history?",
-            message = "This removes all of your recent searches. This can't be undone.",
-            confirmText = "Clear",
-            dismissText = "Cancel",
+            title = stringResource(R.string.home_clear_search_history_title),
+            message = stringResource(R.string.home_clear_search_history_message),
+            confirmText = stringResource(R.string.home_clear),
+            dismissText = stringResource(R.string.home_cancel),
             onConfirm = onClearHistory,
             onDismiss = { showClearHistoryDialog = false },
         )

@@ -92,4 +92,55 @@
     <string name="update_install">Installieren</string>
     <string name="update_failed_title">Update fehlgeschlagen</string>
     <string name="update_close">Schließen</string>
+
+    <!-- Shared media transport (content descriptions & labels) -->
+    <string name="media_play">Wiedergabe</string>
+    <string name="media_pause">Pause</string>
+    <string name="media_next">Weiter</string>
+    <string name="media_previous">Zurück</string>
+    <string name="media_stop">Stopp</string>
+    <string name="media_close">Schließen</string>
+    <string name="media_disconnect">Trennen</string>
+    <string name="media_rewind_seconds">10 Sekunden zurückspulen</string>
+    <string name="media_forward_seconds">10 Sekunden vorspulen</string>
+
+    <!-- Play On companion screen -->
+    <string name="cast_title">Wird übertragen</string>
+    <string name="cast_title_to">Wird an %1$s übertragen</string>
+    <string name="cast_open_companion">Begleitansicht öffnen</string>
+    <string name="cast_back_seconds">10 Sekunden zurück</string>
+    <string name="cast_forward_seconds">30 Sekunden vor</string>
+
+    <!-- Floating player overlay -->
+    <string name="floating_player_close">Schwebenden Player schließen</string>
+
+    <!-- Floating player foreground notification -->
+    <string name="floating_player_channel_name">Schwebender Player</string>
+    <string name="floating_player_channel_desc">Schwebendes Medien-Player-Overlay</string>
+    <string name="floating_player_notification_text">Mediensteuerung schwebt auf dem Bildschirm</string>
+
+    <!-- Lock screen authentication -->
+    <string name="auth_title_biometric">Authentifizieren</string>
+    <string name="auth_title_pin">PIN eingeben</string>
+    <string name="auth_subtitle">JellyPlay entsperren</string>
+    <string name="pin_incorrect">Falsche PIN</string>
+    <string name="pin_lockout_now">Zu viele Versuche. Bitte erneut versuchen.</string>
+    <string name="pin_lockout_seconds">Zu viele Versuche. Versuche es in %1$ds erneut.</string>
+    <string name="pin_lockout_minutes">Zu viele Versuche. Versuche es in %1$dm erneut.</string>
+    <string name="pin_lockout_hours">Zu viele Versuche. Versuche es in %1$dh erneut.</string>
+    <string name="pin_lockout_hours_minutes">Zu viele Versuche. Versuche es in %1$dh %2$dm erneut.</string>
+
+    <!-- Picture-in-picture actions -->
+    <string name="pip_rewind">Zurückspulen</string>
+    <string name="pip_forward">Vorspulen</string>
+    <string name="pip_next">Weiter</string>
+
+    <!-- TV navigation drawer -->
+    <string name="nav_now_playing">Aktuelle Wiedergabe</string>
+    <string name="nav_settings">Einstellungen</string>
+
+    <!-- Play On device sheet -->
+    <string name="play_on_title">Wiedergeben auf</string>
+    <string name="play_on_no_clients">Keine Jellyfin-Clients gefunden. Öffne JellyPlay oder Jellyfin auf einem anderen Gerät und es erscheint hier.</string>
+    <string name="play_on_jellyfin_session">Jellyfin-Sitzung</string>
 </resources>

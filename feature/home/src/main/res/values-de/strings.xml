@@ -22,4 +22,72 @@
 
     <!-- Title shown for a pending row whose media could not be resolved. -->
     <string name="sync_unknown_title">Unbekannter Eintrag</string>
+
+    <!-- Home dock / search affordances. -->
+    <string name="home_back">Zurück</string>
+    <string name="home_search">Suchen</string>
+    <string name="home_clear_search">Suche löschen</string>
+    <string name="home_search_placeholder">Filme, Serien, Musik suchen…</string>
+
+    <!-- Home floating action button menu. -->
+    <string name="home_close_menu">Menü schließen</string>
+    <string name="home_more_options">Weitere Optionen</string>
+    <string name="home_surprise_me">Überrasch mich</string>
+    <string name="home_downloads">Downloads</string>
+    <string name="home_play_on">Auf Gerät abspielen</string>
+    <string name="home_settings">Einstellungen</string>
+    <string name="home_going_online">Verbindung wird hergestellt…</string>
+    <string name="home_go_online">Online gehen</string>
+    <string name="home_go_offline">Offline gehen</string>
+
+    <!-- Home empty / partial-load states. -->
+    <string name="home_no_content_available">Keine Inhalte verfügbar</string>
+    <string name="home_no_content_description">Überprüfe deine Jellyfin-Bibliotheken und versuche es nach Aktualisierung erneut.</string>
+    <string name="home_refresh">Aktualisieren</string>
+    <string name="home_sections_load_failed">Einige Bereiche konnten nicht geladen werden.</string>
+    <string name="home_retry">Wiederholen</string>
+
+    <!-- Home section headers. -->
+    <string name="home_because_you_watched">Weil du %1$s angesehen hast</string>
+    <string name="home_discover">Entdecken</string>
+    <string name="home_coming_soon">Demnächst</string>
+    <string name="home_continue_watching">Weiter ansehen</string>
+    <string name="home_recently_downloaded">Zuletzt heruntergeladen</string>
+    <string name="home_movies">Filme</string>
+    <string name="home_series">Serien</string>
+    <string name="home_music">Musik</string>
+    <string name="home_downloaded">Heruntergeladen</string>
+
+    <!-- Home continue-watching "Resume vs Details" dialog and hero actions. -->
+    <string name="home_resume_or_details">Wiedergabe fortsetzen oder Details öffnen?</string>
+    <string name="home_resume">Fortsetzen</string>
+    <string name="home_details">Details</string>
+    <string name="home_play">Abspielen</string>
+
+    <!-- Offline home states. -->
+    <string name="home_no_downloads_yet">Noch keine Downloads</string>
+    <string name="home_no_downloads_description">Lade Medien herunter, während du online bist, um offline darauf zuzugreifen.</string>
+    <string name="home_go_online_action">Online gehen</string>
+    <string name="home_your_downloads">Deine Downloads</string>
+
+    <!-- Home search overlay. -->
+    <string name="home_no_results_found">Keine Ergebnisse gefunden</string>
+    <string name="home_recent_searches">Letzte Suchen</string>
+    <string name="home_clear_all">Alle löschen</string>
+    <string name="home_remove">Entfernen</string>
+    <string name="home_library">Bibliothek</string>
+    <string name="home_movie">Film</string>
+    <string name="home_tv_show">Serie</string>
+    <string name="home_request_via_seerr">Über Seerr anfordern</string>
+    <string name="home_clear_search_history_title">Suchverlauf löschen?</string>
+    <string name="home_clear_search_history_message">Dies entfernt alle deine letzten Suchen. Dies kann nicht rückgängig gemacht werden.</string>
+    <string name="home_clear">Löschen</string>
+    <string name="home_cancel">Abbrechen</string>
+
+    <!-- Home section config sheet reorder (batch) -->
+    <string name="home_move_up">Nach oben</string>
+    <string name="home_move_down">Nach unten</string>
+
+    <!-- Newsletter banner dismiss (batch) -->
+    <string name="home_dismiss">Verwerfen</string>
 </resources>

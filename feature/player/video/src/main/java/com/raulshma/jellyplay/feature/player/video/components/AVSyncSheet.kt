@@ -31,9 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -77,7 +79,7 @@ fun AVSyncSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                "A/V Sync",
+                stringResource(R.string.player_video_av_sync),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
@@ -85,22 +87,22 @@ fun AVSyncSheet(
             Spacer(Modifier.height(20.dp))
 
             DelayRow(
-                label = "Audio Delay",
+                label = stringResource(R.string.player_video_audio_delay),
                 delayMs = audioDelayMs,
                 focusRequester = focusRequester,
                 isTv = isTv,
-                helperText = "Negative: audio earlier. Positive: audio later.",
+                helperText = stringResource(R.string.player_video_av_sync_audio_helper),
                 onValueChange = { audioDelayMs = it; onAudioDelayChange(it) },
             )
 
             Spacer(Modifier.height(24.dp))
 
             DelayRow(
-                label = "Subtitle Delay",
+                label = stringResource(R.string.player_video_subtitle_delay),
                 delayMs = subtitleDelayMs,
                 focusRequester = null,
                 isTv = isTv,
-                helperText = "Negative: subtitles earlier. Positive: subtitles later.",
+                helperText = stringResource(R.string.player_video_av_sync_subtitle_helper),
                 onValueChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
             )
 
@@ -149,7 +151,7 @@ fun AVSyncSheet(
                         )
                         Spacer(Modifier.size(8.dp))
                         Text(
-                            "Reset both",
+                            stringResource(R.string.player_video_reset_both),
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                             color = if (anyOffset) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
@@ -200,7 +202,7 @@ private fun DelayRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (isTv) {
-                DelayStepper(icon = Tabler.Outline.Minus, description = "Decrease $label") {
+                DelayStepper(icon = Tabler.Outline.Minus, description = stringResource(R.string.player_video_av_sync_decrease, label)) {
                     val newDelay = (delayMs - 100L).coerceIn(-5000L, 5000L)
                     onValueChange(newDelay)
                 }
@@ -218,7 +220,7 @@ private fun DelayRow(
             )
 
             if (isTv) {
-                DelayStepper(icon = Tabler.Outline.Plus, description = "Increase $label") {
+                DelayStepper(icon = Tabler.Outline.Plus, description = stringResource(R.string.player_video_av_sync_increase, label)) {
                     val newDelay = (delayMs + 100L).coerceIn(-5000L, 5000L)
                     onValueChange(newDelay)
                 }
@@ -300,13 +302,13 @@ private fun SubtitleSyncMeasurer(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            "Sync helper",
+            stringResource(R.string.player_video_sync_helper),
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            "Hold “Voice heard” when a line is spoken, then “Text seen” when its subtitle appears.",
+            stringResource(R.string.player_video_sync_helper_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -316,13 +318,13 @@ private fun SubtitleSyncMeasurer(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             SyncMeasurerButton(
-                label = if (voicePressed) "Listening…" else "🔊 Voice heard",
+                label = if (voicePressed) stringResource(R.string.player_video_listening) else stringResource(R.string.player_video_voice_heard),
                 pressed = voicePressed,
                 interactionSource = voiceSource,
                 modifier = Modifier.weight(1f),
             )
             SyncMeasurerButton(
-                label = if (textPressed) "Watching…" else "💬 Text seen",
+                label = if (textPressed) stringResource(R.string.player_video_watching) else stringResource(R.string.player_video_text_seen),
                 pressed = textPressed,
                 interactionSource = textSource,
                 modifier = Modifier.weight(1f),

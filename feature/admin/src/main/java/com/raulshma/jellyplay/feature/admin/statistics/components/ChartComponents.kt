@@ -595,7 +595,7 @@ fun WatchTimeCard(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            "Weekly",
+                            stringResource(R.string.admin_chart_weekly),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (showWeekly) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Medium,
@@ -610,7 +610,7 @@ fun WatchTimeCard(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            "Monthly",
+                            stringResource(R.string.admin_chart_monthly),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (!showWeekly) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Medium,
@@ -629,7 +629,7 @@ fun WatchTimeCard(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = "h ",
+                    text = stringResource(R.string.admin_unit_hours),
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 6.dp),
@@ -641,7 +641,7 @@ fun WatchTimeCard(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = "m",
+                    text = stringResource(R.string.admin_unit_minutes),
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 6.dp),

@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,6 +44,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
+import com.raulshma.jellyplay.feature.newsletter.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,7 +70,7 @@ fun NewsletterCuratedPicks(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Fresh Picks",
+                text = stringResource(R.string.newsletter_fresh_picks),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -82,7 +84,7 @@ fun NewsletterCuratedPicks(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    text = "View All",
+                    text = stringResource(R.string.newsletter_view_all),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.primary,
                 )

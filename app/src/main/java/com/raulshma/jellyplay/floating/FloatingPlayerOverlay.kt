@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -136,24 +138,24 @@ fun FloatingPlayerOverlay(
             ) {
                 ControlIcon(
                     icon = Tabler.Outline.PlayerTrackPrev,
-                    contentDescription = "Rewind 10 seconds",
+                    contentDescription = stringResource(R.string.media_rewind_seconds),
                     onClick = { state.seekBy(deltaMs = -10_000L) },
                 )
                 ControlIcon(
                     icon = if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    contentDescription = if (isPlaying) stringResource(R.string.media_pause) else stringResource(R.string.media_play),
                     onClick = { state.togglePlayPause() },
                     tint = MaterialTheme.colorScheme.primary,
                     iconSize = 32.dp,
                 )
                 ControlIcon(
                     icon = Tabler.Outline.PlayerTrackNext,
-                    contentDescription = "Forward 10 seconds",
+                    contentDescription = stringResource(R.string.media_forward_seconds),
                     onClick = { state.seekBy(deltaMs = 10_000L) },
                 )
                 ControlIcon(
                     icon = Tabler.Outline.X,
-                    contentDescription = "Close floating player",
+                    contentDescription = stringResource(R.string.floating_player_close),
                     onClick = onClose,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

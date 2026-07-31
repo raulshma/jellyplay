@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Playback-sync foreground notification -->
+    <string name="data_sync_title">시청 진행률 동기화 중</string>
+    <string name="data_sync_finishing">완료하는 중\u2026</string>
+    <plurals name="data_sync_items_queued">
+        <item quantity="other">%1$d개 항목 대기 중</item>
+    </plurals>
+
+    <!-- Playback-sync notification channel -->
+    <string name="data_sync_channel_name">시청 진행률 동기화</string>
+    <string name="data_sync_channel_desc">오프라인 시청 진행률을 서버와 동기화하는 중</string>
+
+    <!-- Now Playing (media playback) notification channel -->
+    <string name="data_channel_now_playing">재생 중</string>
+    <string name="data_channel_now_playing_desc">미디어 재생 컨트롤</string>
+
+    <!-- Downloads notification channel -->
+    <string name="data_channel_downloads">다운로드</string>
+    <string name="data_channel_downloads_desc">다운로드 진행 상황 알림</string>
+
+    <!-- Admin statistics: content-type breakdown labels -->
+    <string name="data_label_movies">영화</string>
+    <string name="data_label_episodes">에피소드</string>
+    <string name="data_label_songs">곡</string>
+
+    <!-- Admin statistics: stale-media detail/date text -->
+    <string name="data_added_today">오늘 추가됨</string>
+    <string name="data_added_one_day_ago">1일 전에 추가됨</string>
+    <string name="data_added_days_ago">%1$d일 전에 추가됨</string>
+    <string name="data_added_months_ago">%1$d개월 전에 추가됨</string>
+    <string name="data_added_years_ago">%1$d년 전에 추가됨</string>
+    <string name="data_never_played">재생한 적 없음</string>
+    <string name="data_days_since_play">%1$d일 전에 재생됨</string>
+    <string name="data_plays_count">%1$d회 재생</string>
+    <string name="data_added_date">%1$s에 추가됨</string>
+    <string name="data_added_unknown">추가일 알 수 없음</string>
+    <string name="data_played_date">%1$s에 재생됨</string>
+</resources>

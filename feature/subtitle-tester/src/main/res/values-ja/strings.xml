@@ -18,4 +18,8 @@
     <string name="subtitle_tester_preset_lyrics">歌詞</string>
     <string name="subtitle_tester_preset_signs">看板 / 訳注</string>
     <string name="subtitle_tester_preset_action">アクション演出</string>
+
+    <!-- Preview playback media + sample subtitle track -->
+    <string name="subtitle_tester_preview_title">字幕テスター</string>
+    <string name="subtitle_tester_track_sample">サンプル</string>
 </resources>

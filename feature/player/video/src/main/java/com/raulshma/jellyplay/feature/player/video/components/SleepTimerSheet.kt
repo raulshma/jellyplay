@@ -33,8 +33,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -85,7 +87,7 @@ internal fun SleepTimerSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                "Sleep Timer",
+                stringResource(R.string.player_video_sleep_timer),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
@@ -123,7 +125,10 @@ internal fun SleepTimerSheet(
                                     )
                                     Spacer(Modifier.size(8.dp))
                                     Text(
-                                        text = "Cancel Sleep Timer (${if (isEndOfEpisodeMode) "End of episode" else formatTime(remainingMs)} left)",
+                                        text = stringResource(
+                                            R.string.player_video_cancel_sleep_timer,
+                                            if (isEndOfEpisodeMode) stringResource(R.string.player_video_end_of_episode) else formatTime(remainingMs),
+                                        ),
                                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                                         color = MaterialTheme.colorScheme.error,
                                     )
@@ -156,7 +161,7 @@ internal fun SleepTimerSheet(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = "End of episode",
+                                text = stringResource(R.string.player_video_end_of_episode),
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontWeight = if (isEndSelected) FontWeight.Bold else FontWeight.Normal,
                                 ),
@@ -227,7 +232,7 @@ internal fun SleepTimerSheet(
                     }
 
                     Text(
-                        "Duration",
+                        stringResource(R.string.player_video_duration),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -252,7 +257,7 @@ internal fun SleepTimerSheet(
                     Spacer(Modifier.height(12.dp))
 
                     SleepTimerChip(
-                        label = "Custom…",
+                        label = stringResource(R.string.player_video_custom_ellipsis),
                         isSelected = false,
                         onClick = { showCustomDialog = true },
                         modifier = Modifier.fillMaxWidth(),
@@ -262,7 +267,7 @@ internal fun SleepTimerSheet(
 
                     val isEndSelected = isActive && isEndOfEpisodeMode
                     SleepTimerChip(
-                        label = "End of episode",
+                        label = stringResource(R.string.player_video_end_of_episode),
                         isSelected = isEndSelected,
                         onClick = { onSelectEndOfEpisode(); onDismiss() },
                         modifier = Modifier.fillMaxWidth(),
@@ -326,14 +331,14 @@ private fun ActiveTimerSection(
                 )
                 Spacer(Modifier.size(8.dp))
                 Text(
-                    text = if (isEndOfEpisodeMode) "End of episode" else formatTime(displayRemaining),
+                    text = if (isEndOfEpisodeMode) stringResource(R.string.player_video_end_of_episode) else formatTime(displayRemaining),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
             Text(
-                "Cancel",
+                stringResource(R.string.player_video_cancel),
                 color = MaterialTheme.colorScheme.error,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.clickable { onCancel() },
@@ -415,16 +420,16 @@ private fun CustomSleepDurationDialog(
     val isValid = parsed != null && parsed in 1..600
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Custom duration") },
+        title = { Text(stringResource(R.string.player_video_custom_duration)) },
         text = {
             androidx.compose.material3.OutlinedTextField(
                 value = minutesText,
                 onValueChange = { minutesText = it.filter { c -> c.isDigit() }.take(3) },
-                label = { Text("Minutes") },
+                label = { Text(stringResource(R.string.player_video_minutes)) },
                 singleLine = true,
                 isError = minutesText.isNotEmpty() && !isValid,
                 supportingText = if (minutesText.isNotEmpty() && !isValid) {
-                    { Text("Enter 1–600") }
+                    { Text(stringResource(R.string.player_video_enter_1_600)) }
                 } else null,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
@@ -435,10 +440,10 @@ private fun CustomSleepDurationDialog(
             androidx.compose.material3.TextButton(
                 onClick = { parsed?.let(onConfirm) },
                 enabled = isValid,
-            ) { Text("Start") }
+            ) { Text(stringResource(R.string.player_video_start)) }
         },
         dismissButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text(stringResource(R.string.player_video_cancel)) }
         },
     )
 }

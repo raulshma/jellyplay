@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Playback-sync foreground notification -->
+    <string name="data_sync_title">Synchronisiere Wiedergabefortschritt</string>
+    <string name="data_sync_finishing">Wird abgeschlossen\u2026</string>
+    <plurals name="data_sync_items_queued">
+        <item quantity="one">%1$d Element in der Warteschlange</item>
+        <item quantity="other">%1$d Elemente in der Warteschlange</item>
+    </plurals>
+
+    <!-- Playback-sync notification channel -->
+    <string name="data_sync_channel_name">Synchronisierung des Wiedergabefortschritts</string>
+    <string name="data_sync_channel_desc">Offline-Wiedergabefortschritt wird mit dem Server synchronisiert</string>
+
+    <!-- Now Playing (media playback) notification channel -->
+    <string name="data_channel_now_playing">Aktuelle Wiedergabe</string>
+    <string name="data_channel_now_playing_desc">Medienwiedergabe-Steuerung</string>
+
+    <!-- Downloads notification channel -->
+    <string name="data_channel_downloads">Downloads</string>
+    <string name="data_channel_downloads_desc">Benachrichtigungen zum Download-Fortschritt</string>
+
+    <!-- Admin statistics: content-type breakdown labels -->
+    <string name="data_label_movies">Filme</string>
+    <string name="data_label_episodes">Episoden</string>
+    <string name="data_label_songs">Lieder</string>
+
+    <!-- Admin statistics: stale-media detail/date text -->
+    <string name="data_added_today">Heute hinzugefügt</string>
+    <string name="data_added_one_day_ago">Vor 1 Tag hinzugefügt</string>
+    <string name="data_added_days_ago">Vor %1$dd hinzugefügt</string>
+    <string name="data_added_months_ago">Vor %1$dmo hinzugefügt</string>
+    <string name="data_added_years_ago">Vor %1$dy hinzugefügt</string>
+    <string name="data_never_played">Nie abgespielt</string>
+    <string name="data_days_since_play">vor %1$dd abgespielt</string>
+    <string name="data_plays_count">%1$d Wiedergaben</string>
+    <string name="data_added_date">Hinzugefügt %1$s</string>
+    <string name="data_added_unknown">Hinzufügedatum unbekannt</string>
+    <string name="data_played_date">Abgespielt %1$s</string>
+</resources>

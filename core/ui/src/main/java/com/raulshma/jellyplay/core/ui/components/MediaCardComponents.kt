@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -64,6 +65,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
 import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
@@ -269,7 +271,7 @@ fun PlayButtonWithProgress(
 
         Icon(
             Tabler.Outline.PlayerPlay,
-            contentDescription = "Play",
+            contentDescription = stringResource(R.string.core_ui_play),
             modifier = Modifier.size(buttonSize * 0.55f),
             tint = MaterialTheme.colorScheme.onSurface,
         )

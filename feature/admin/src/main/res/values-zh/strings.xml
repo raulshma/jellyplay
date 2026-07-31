@@ -341,4 +341,43 @@
     <string name="admin_disabled_cannot_sign_in">已停用的用户无法登录</string>
     <string name="admin_no_limit">无限制</string>
 
+    <!-- Scheduled task trigger chips -->
+    <string name="admin_trigger_daily">每天</string>
+    <string name="admin_trigger_weekly">每周</string>
+    <string name="admin_trigger_on_startup">启动时</string>
+    <string name="admin_trigger_every_hours">每 %1$d 小时</string>
+    <string name="admin_trigger_every_days">每 %1$d 天</string>
+
+    <!-- Statistics chart toggle -->
+    <string name="admin_chart_weekly">每周</string>
+    <string name="admin_chart_monthly">每月</string>
+
+    <!-- Access schedule day labels -->
+    <string name="admin_day_sun">周日</string>
+    <string name="admin_day_mon">周一</string>
+    <string name="admin_day_tue">周二</string>
+    <string name="admin_day_wed">周三</string>
+    <string name="admin_day_thu">周四</string>
+    <string name="admin_day_fri">周五</string>
+    <string name="admin_day_sat">周六</string>
+    <string name="admin_schedule_everyday">每天</string>
+    <string name="admin_schedule_weekday">工作日</string>
+    <string name="admin_schedule_weekend">周末</string>
+
+    <!-- Plugin / catalog metadata labels (batch) -->
+    <string name="admin_plugin_version">v%1$s</string>
+    <string name="admin_plugin_by_author">作者：%1$s</string>
+
+    <!-- Statistics time-unit suffixes (compact chart labels) -->
+    <string name="admin_unit_hours">小时 </string>
+    <string name="admin_unit_minutes">分</string>
+
+    <!-- Dashboard section titles (batch) -->
+    <string name="admin_active_sessions">活动会话</string>
+    <string name="admin_library">媒体库</string>
+
+    <!-- Audit history row labels (batch) -->
+    <string name="admin_audit_by_user">作者：%1$s</string>
+    <string name="admin_audit_items_removed">已删除 %1$d 项</string>
+
 </resources>

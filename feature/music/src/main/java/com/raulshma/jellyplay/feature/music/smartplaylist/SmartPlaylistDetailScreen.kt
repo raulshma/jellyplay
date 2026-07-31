@@ -71,7 +71,7 @@ fun SmartPlaylistDetailScreen(
     )
 
     JellyPlayScreenScaffold(
-        title = playlist?.name ?: stringResource(R.string.music_smart_playlist),
+        title = if (playlist != null) smartPlaylistDisplayName(playlist) else stringResource(R.string.music_smart_playlist),
         onBack = onBack,
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {

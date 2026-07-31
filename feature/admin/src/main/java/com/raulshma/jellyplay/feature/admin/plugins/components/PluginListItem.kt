@@ -118,7 +118,7 @@ fun PluginListItem(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     Text(
-                        text = "v${plugin.version}",
+                        text = stringResource(R.string.admin_plugin_version, plugin.version),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

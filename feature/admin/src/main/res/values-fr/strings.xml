@@ -341,4 +341,43 @@
     <string name="admin_disabled_cannot_sign_in">Les utilisateurs désactivés ne peuvent pas se connecter</string>
     <string name="admin_no_limit">Aucune limite</string>
 
+    <!-- Scheduled task trigger chips -->
+    <string name="admin_trigger_daily">Quotidien</string>
+    <string name="admin_trigger_weekly">Hebdomadaire</string>
+    <string name="admin_trigger_on_startup">Au démarrage</string>
+    <string name="admin_trigger_every_hours">Toutes les %1$dh</string>
+    <string name="admin_trigger_every_days">Tous les %1$dd</string>
+
+    <!-- Statistics chart toggle -->
+    <string name="admin_chart_weekly">Hebdomadaire</string>
+    <string name="admin_chart_monthly">Mensuel</string>
+
+    <!-- Access schedule day labels -->
+    <string name="admin_day_sun">Dim</string>
+    <string name="admin_day_mon">Lun</string>
+    <string name="admin_day_tue">Mar</string>
+    <string name="admin_day_wed">Mer</string>
+    <string name="admin_day_thu">Jeu</string>
+    <string name="admin_day_fri">Ven</string>
+    <string name="admin_day_sat">Sam</string>
+    <string name="admin_schedule_everyday">Quotidien</string>
+    <string name="admin_schedule_weekday">Jours ouvrables</string>
+    <string name="admin_schedule_weekend">Week-ends</string>
+
+    <!-- Plugin / catalog metadata labels (batch) -->
+    <string name="admin_plugin_version">v%1$s</string>
+    <string name="admin_plugin_by_author">par %1$s</string>
+
+    <!-- Statistics time-unit suffixes (compact chart labels) -->
+    <string name="admin_unit_hours">h </string>
+    <string name="admin_unit_minutes">m</string>
+
+    <!-- Dashboard section titles (batch) -->
+    <string name="admin_active_sessions">Sessions actives</string>
+    <string name="admin_library">Bibliothèque</string>
+
+    <!-- Audit history row labels (batch) -->
+    <string name="admin_audit_by_user">par %1$s</string>
+    <string name="admin_audit_items_removed">%1$d éléments supprimés</string>
+
 </resources>

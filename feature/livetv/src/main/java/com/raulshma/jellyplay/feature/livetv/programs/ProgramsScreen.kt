@@ -240,7 +240,7 @@ private fun ProgramCard(
                 ) {
                     Icon(
                         Tabler.Outline.RecordMail,
-                        contentDescription = "Recording",
+                        contentDescription = stringResource(R.string.livetv_recording_status),
                         tint = MaterialTheme.colorScheme.onError,
                         modifier = Modifier.size(14.dp),
                     )

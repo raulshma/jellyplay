@@ -198,4 +198,32 @@
     <string name="detail_manage_cd_toggle_monitor_season">시즌의 모든 에피소드 모니터링 전환</string>
     <string name="detail_manage_cd_toggle_monitor_episode">에피소드 모니터링 전환</string>
     <string name="detail_manage_cd_episode_menu">에피소드 옵션</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">사용 가능</string>
+    <string name="detail_request">요청</string>
+    <string name="detail_seerr_processing">처리 중</string>
+    <string name="detail_seerr_pending">대기 중</string>
+    <string name="detail_seerr_requested">요청됨</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">추천</string>
+    <string name="detail_section_similar">비슷함</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">극장 개봉</string>
+    <string name="detail_cd_release_digital">디지털 개봉</string>
+    <string name="detail_cd_release_physical">실물 출시</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">비디오</string>
+    <string name="detail_media_info_title_audio">오디오</string>
+    <string name="detail_media_info_title_subtitles">자막</string>
+    <string name="detail_media_info_no_info">미디어 정보 없음</string>
+    <string name="detail_media_info_no_info_description">이 항목에 대한 기술 정보를 사용할 수 없습니다</string>
 </resources>

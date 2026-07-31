@@ -13,11 +13,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.HdrColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
@@ -39,6 +41,8 @@ fun HdrBadge(
 
     val isDolby = hdrType.lowercase() in listOf("dolbyvision", "dolby_vision", "dovi")
 
+    val description = stringResource(R.string.player_video_hdr_label, label)
+
     val bgColor = if (isDolby) {
         MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f)
     } else {
@@ -56,7 +60,7 @@ fun HdrBadge(
             .clip(ShapeCache.smoothPill)
             .background(bgColor)
             .border(1.dp, borderColor, ShapeCache.smoothPill)
-            .semantics { contentDescription = "HDR: $label" }
+            .semantics { contentDescription = description }
             .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,

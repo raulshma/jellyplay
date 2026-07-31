@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.navigation
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
@@ -39,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -181,7 +183,7 @@ fun VideoMiniPlayer(
                     ) {
                         Icon(
                             Tabler.Outline.X,
-                            contentDescription = "Close",
+                            contentDescription = stringResource(R.string.media_close),
                             modifier = Modifier.size(16.dp),
                             tint = Color.White,
                         )

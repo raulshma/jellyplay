@@ -198,4 +198,32 @@
     <string name="detail_manage_cd_toggle_monitor_season">シーズン内の全エピソードの監視を切り替え</string>
     <string name="detail_manage_cd_toggle_monitor_episode">エピソードの監視を切り替え</string>
     <string name="detail_manage_cd_episode_menu">エピソードのオプション</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">利用可能</string>
+    <string name="detail_request">リクエスト</string>
+    <string name="detail_seerr_processing">処理中</string>
+    <string name="detail_seerr_pending">保留中</string>
+    <string name="detail_seerr_requested">リクエスト済み</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">おすすめ</string>
+    <string name="detail_section_similar">類似</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">劇場公開</string>
+    <string name="detail_cd_release_digital">デジタル配信</string>
+    <string name="detail_cd_release_physical">パッケージ版</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">ビデオ</string>
+    <string name="detail_media_info_title_audio">オーディオ</string>
+    <string name="detail_media_info_title_subtitles">字幕</string>
+    <string name="detail_media_info_no_info">メディア情報なし</string>
+    <string name="detail_media_info_no_info_description">このアイテムの技術情報は利用できません</string>
 </resources>

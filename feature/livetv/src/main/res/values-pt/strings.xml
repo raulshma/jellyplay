@@ -41,4 +41,25 @@
     <string name="livetv_channel_live">DIRETO</string>
     <string name="livetv_channel_no_program_info">Sem informação do programa</string>
     <string name="livetv_channel_load_failed">Falha ao carregar o guia de programas</string>
+
+    <!-- Live TV host & EPG screen (extracted from hardcoded strings) -->
+    <string name="livetv_screen_title">TV em Direto</string>
+    <string name="livetv_epg_title">Guia de programas</string>
+    <string name="livetv_no_guide_available">Sem guia de programas disponível</string>
+    <string name="livetv_record_program_prompt">Gravar programa?</string>
+    <string name="livetv_record_single_timer_note">Será agendado um único temporizador no servidor.</string>
+    <string name="livetv_record_schedule_failed">Não foi possível agendar a gravação</string>
+    <string name="livetv_recording_in_progress">Gravação…</string>
+    <string name="livetv_scheduling_timer">A agendar temporizador</string>
+    <string name="livetv_action_cancel">Cancelar</string>
+    <string name="livetv_action_close">Fechar</string>
+    <string name="livetv_action_done">Concluído</string>
+    <string name="livetv_action_ok">OK</string>
+    <string name="livetv_schedule_start">Início: %1$s</string>
+    <string name="livetv_schedule_end">Fim: %1$s</string>
+
+    <!-- Channel / program affordances (batch) -->
+    <string name="livetv_watch">Ver</string>
+    <string name="livetv_recording_status">Gravação</string>
+    <string name="livetv_recording_now">● A gravar agora</string>
 </resources>

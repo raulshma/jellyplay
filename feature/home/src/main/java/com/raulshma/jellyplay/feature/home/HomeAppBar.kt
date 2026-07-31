@@ -235,7 +235,7 @@ private fun RowScope.SearchExpandedContent(
         ) {
             Icon(
                 Tabler.Outline.ArrowLeft,
-                contentDescription = "Back",
+                contentDescription = stringResource(R.string.home_back),
                 tint = appBarIconColorFaded,
                 modifier = Modifier.size(20.dp),
             )
@@ -261,7 +261,7 @@ private fun RowScope.SearchExpandedContent(
             .focusRequester(focusRequester),
         placeholder = {
             Text(
-                "Search movies, shows, music...",
+                stringResource(R.string.home_search_placeholder),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -289,7 +289,7 @@ private fun RowScope.SearchExpandedContent(
             ) {
                 Icon(
                     Tabler.Outline.X,
-                    contentDescription = "Clear search",
+                    contentDescription = stringResource(R.string.home_clear_search),
                     tint = appBarIconColorFaded,
                     modifier = Modifier.size(20.dp),
                 )
@@ -315,7 +315,7 @@ private fun OfflineToggleIcon(
         } else {
             Icon(
                 Tabler.Outline.Download,
-                contentDescription = "Go online",
+                contentDescription = stringResource(R.string.home_go_online),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),
             )
@@ -485,7 +485,7 @@ private fun CollapsedDockContent(
         ) {
             Icon(
                 Tabler.Outline.Search,
-                contentDescription = "Search",
+                contentDescription = stringResource(R.string.home_search),
                 tint = appBarIconColorFaded,
                 modifier = Modifier.size(20.dp),
             )
@@ -537,7 +537,7 @@ fun HomeFabMenu(
                 ) {
                     Icon(
                         if (isExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
-                        contentDescription = if (isExpanded) "Close menu" else "More options",
+                        contentDescription = if (isExpanded) stringResource(R.string.home_close_menu) else stringResource(R.string.home_more_options),
                         tint = if (isExpanded) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                     )
                 }
@@ -554,7 +554,7 @@ fun HomeFabMenu(
                 onToggle(false)
                 onSurpriseClick()
             },
-            text = { Text("Surprise Me") },
+            text = { Text(stringResource(R.string.home_surprise_me)) },
             icon = {
                 Icon(
                     Tabler.Outline.Wand,
@@ -569,7 +569,7 @@ fun HomeFabMenu(
                 onToggle(false)
                 onSyncPlayClick()
             },
-            text = { Text("SyncPlay") },
+            text = { Text(stringResource(R.string.home_syncplay)) },
             icon = {
                 Icon(
                     Tabler.Outline.Users,
@@ -586,7 +586,7 @@ fun HomeFabMenu(
             },
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Downloads")
+                    Text(stringResource(R.string.home_downloads))
                     if (activeDownloadCount > 0) {
                         Badge(
                             modifier = Modifier.padding(start = 6.dp),
@@ -618,11 +618,13 @@ fun HomeFabMenu(
             },
             text = {
                 Text(
-                    when {
-                        isGoingOnline -> "Going online…"
-                        offlineMode != OfflineMode.ONLINE -> "Go Online"
-                        else -> "Go Offline"
-                    }
+                    stringResource(
+                        when {
+                            isGoingOnline -> R.string.home_going_online
+                            offlineMode != OfflineMode.ONLINE -> R.string.home_go_online
+                            else -> R.string.home_go_offline
+                        }
+                    )
                 )
             },
             icon = {
@@ -649,7 +651,7 @@ fun HomeFabMenu(
                 onToggle(false)
                 onPlayOnClick()
             },
-            text = { Text("Play On") },
+            text = { Text(stringResource(R.string.home_play_on)) },
             icon = {
                 Icon(
                     Tabler.Outline.Cast,
@@ -664,7 +666,7 @@ fun HomeFabMenu(
                 onToggle(false)
                 onSettingsClick()
             },
-            text = { Text("Settings") },
+            text = { Text(stringResource(R.string.home_settings)) },
             icon = {
                 Icon(
                     Tabler.Outline.Settings,

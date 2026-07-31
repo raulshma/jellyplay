@@ -201,4 +201,32 @@
     <string name="detail_manage_cd_toggle_monitor_season">Attiva/disattiva monitoraggio per tutti gli episodi della stagione</string>
     <string name="detail_manage_cd_toggle_monitor_episode">Attiva/disattiva monitoraggio per l\'episodio</string>
     <string name="detail_manage_cd_episode_menu">Opzioni episodio</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">Disponibile</string>
+    <string name="detail_request">Richiedi</string>
+    <string name="detail_seerr_processing">In elaborazione</string>
+    <string name="detail_seerr_pending">In attesa</string>
+    <string name="detail_seerr_requested">Richiesto</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">Consigli</string>
+    <string name="detail_section_similar">Similiari</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">Uscita nelle sale</string>
+    <string name="detail_cd_release_digital">Uscita digitale</string>
+    <string name="detail_cd_release_physical">Uscita fisica</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">Video</string>
+    <string name="detail_media_info_title_audio">Audio</string>
+    <string name="detail_media_info_title_subtitles">Sottotitoli</string>
+    <string name="detail_media_info_no_info">Nessuna informazione multimediale</string>
+    <string name="detail_media_info_no_info_description">Le informazioni tecniche non sono disponibili per questo elemento</string>
 </resources>

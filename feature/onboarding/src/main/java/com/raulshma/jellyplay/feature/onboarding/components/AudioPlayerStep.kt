@@ -11,10 +11,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.onboarding.R
 
 @Composable
 fun AudioPlayerStep(
@@ -37,8 +39,8 @@ fun AudioPlayerStep(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         OnboardingStepScaffold(
-            title = "Audio Player",
-            subtitle = "Set up your music listening experience",
+            title = stringResource(R.string.onboarding_audio_title),
+            subtitle = stringResource(R.string.onboarding_audio_subtitle),
             icon = Tabler.Outline.Headphones,
             onNext = {},
         ) {
@@ -67,21 +69,21 @@ fun AudioPlayerStep(
             Spacer(Modifier.height(8.dp))
 
             OnboardingToggleRow(
-                title = "Gapless playback",
-                subtitle = "Seamless transition between tracks",
+                title = stringResource(R.string.onboarding_audio_gapless),
+                subtitle = stringResource(R.string.onboarding_audio_gapless_subtitle),
                 checked = gaplessEnabled,
                 onCheckedChange = onGaplessEnabledChange,
             )
 
             OnboardingToggleRow(
-                title = "Autoplay next track",
+                title = stringResource(R.string.onboarding_audio_autoplay_next),
                 checked = autoplayNext,
                 onCheckedChange = onAutoplayNextChange,
             )
 
             OnboardingToggleRow(
-                title = "Audio normalization",
-                subtitle = "Balance volume across different tracks",
+                title = stringResource(R.string.onboarding_audio_normalization),
+                subtitle = stringResource(R.string.onboarding_audio_normalization_subtitle),
                 checked = normalizationEnabled,
                 onCheckedChange = onNormalizationEnabledChange,
             )

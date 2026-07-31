@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.core.ui.components.PinLockScreen
@@ -83,9 +85,10 @@ internal fun PinLockOverlay(
         ) {
             var errorMessage by remember { mutableStateOf<String?>(null) }
             var verifying by remember { mutableStateOf(false) }
+            val incorrectPinMessage = stringResource(R.string.player_video_incorrect_pin)
             PinLockScreen(
-                title = "Enter PIN",
-                subtitle = "Unlock player",
+                title = stringResource(R.string.player_video_enter_pin),
+                subtitle = stringResource(R.string.player_video_unlock_player),
                 onPinEntered = { pin ->
                     if (verifying) return@PinLockScreen
                     verifying = true
@@ -95,7 +98,7 @@ internal fun PinLockOverlay(
                             errorMessage = null
                             onUnlock()
                         } else {
-                            errorMessage = "Incorrect PIN"
+                            errorMessage = incorrectPinMessage
                         }
                         verifying = false
                     }

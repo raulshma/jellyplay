@@ -38,6 +38,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.core.app.NotificationCompat
 import com.raulshma.jellyplay.MainActivity
+import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -75,7 +76,6 @@ class FloatingPlayerService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "jellyplay_floating_player"
-        private const val CHANNEL_NAME = "Floating Player"
         private const val NOTIFICATION_ID = 2001
 
         const val ACTION_START = "com.raulshma.jellyplay.action.START_FLOATING_PLAYER"
@@ -250,10 +250,10 @@ class FloatingPlayerService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                CHANNEL_NAME,
+                getString(R.string.floating_player_channel_name),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Floating media player overlay"
+                description = getString(R.string.floating_player_channel_desc)
                 setShowBadge(false)
             }
             val nm = getSystemService(NotificationManager::class.java)
@@ -277,11 +277,11 @@ class FloatingPlayerService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("JellyPlay Floating Player")
-            .setContentText("Media controls are floating on screen")
+            .setContentTitle(getString(R.string.floating_player_notification_title))
+            .setContentText(getString(R.string.floating_player_notification_text))
             .setOngoing(true)
             .setContentIntent(openIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Close", stopIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.media_close), stopIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }

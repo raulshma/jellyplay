@@ -110,4 +110,14 @@
 
     <!-- Playback error -->
     <string name="audio_error_retry">Reintentar</string>
+
+    <!-- Up next strip -->
+    <string name="audio_up_next">A continuación</string>
+
+    <!-- Cast -->
+    <string name="audio_cast">Transmitir</string>
+    <string name="audio_cast_connected">Transmisión conectada</string>
+    <string name="audio_cast_to_device">Transmitir al dispositivo</string>
+    <string name="audio_cast_no_devices">No se encontraron dispositivos para transmitir. Asegúrate de que tu dispositivo esté en la misma red.</string>
+    <string name="audio_cast_ok">Aceptar</string>
 </resources>

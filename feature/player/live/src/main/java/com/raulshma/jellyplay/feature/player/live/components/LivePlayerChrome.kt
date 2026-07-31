@@ -102,7 +102,7 @@ fun LivePlayerTopBar(
         )
         PlayerIconButton(
             icon = if (isMuted) Tabler.Outline.VolumeOff else Tabler.Outline.Volume,
-            contentDescription = if (isMuted) "Unmute" else "Mute",
+            contentDescription = if (isMuted) stringResource(R.string.live_unmute) else stringResource(R.string.live_mute),
             onClick = onMute,
         )
     }

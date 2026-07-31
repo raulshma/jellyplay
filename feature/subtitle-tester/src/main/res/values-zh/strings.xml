@@ -18,4 +18,8 @@
     <string name="subtitle_tester_preset_lyrics">歌曲歌词</string>
     <string name="subtitle_tester_preset_signs">标牌 / 翻译注释</string>
     <string name="subtitle_tester_preset_action">动作场景</string>
+
+    <!-- Preview playback media + sample subtitle track -->
+    <string name="subtitle_tester_preview_title">字幕测试器</string>
+    <string name="subtitle_tester_track_sample">示例</string>
 </resources>

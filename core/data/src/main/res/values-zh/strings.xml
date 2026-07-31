@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Playback-sync foreground notification -->
+    <string name="data_sync_title">正在同步观看进度</string>
+    <string name="data_sync_finishing">即将完成\u2026</string>
+    <plurals name="data_sync_items_queued">
+        <item quantity="other">%1$d 个项目正在排队</item>
+    </plurals>
+
+    <!-- Playback-sync notification channel -->
+    <string name="data_sync_channel_name">观看进度同步</string>
+    <string name="data_sync_channel_desc">正在将离线观看进度同步到服务器</string>
+
+    <!-- Now Playing (media playback) notification channel -->
+    <string name="data_channel_now_playing">正在播放</string>
+    <string name="data_channel_now_playing_desc">媒体播放控制</string>
+
+    <!-- Downloads notification channel -->
+    <string name="data_channel_downloads">下载</string>
+    <string name="data_channel_downloads_desc">下载进度通知</string>
+
+    <!-- Admin statistics: content-type breakdown labels -->
+    <string name="data_label_movies">电影</string>
+    <string name="data_label_episodes">剧集</string>
+    <string name="data_label_songs">歌曲</string>
+
+    <!-- Admin statistics: stale-media detail/date text -->
+    <string name="data_added_today">今天添加</string>
+    <string name="data_added_one_day_ago">1 天前添加</string>
+    <string name="data_added_days_ago">%1$d 天前添加</string>
+    <string name="data_added_months_ago">%1$d 个月前添加</string>
+    <string name="data_added_years_ago">%1$d 年前添加</string>
+    <string name="data_never_played">从未播放</string>
+    <string name="data_days_since_play">%1$d 天前播放</string>
+    <string name="data_plays_count">播放 %1$d 次</string>
+    <string name="data_added_date">添加于 %1$s</string>
+    <string name="data_added_unknown">添加日期未知</string>
+    <string name="data_played_date">播放于 %1$s</string>
+</resources>

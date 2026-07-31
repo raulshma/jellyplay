@@ -92,4 +92,55 @@
     <string name="update_install">설치</string>
     <string name="update_failed_title">업데이트 실패</string>
     <string name="update_close">닫기</string>
+
+    <!-- Shared media transport (content descriptions & labels) -->
+    <string name="media_play">재생</string>
+    <string name="media_pause">일시정지</string>
+    <string name="media_next">다음</string>
+    <string name="media_previous">이전</string>
+    <string name="media_stop">정지</string>
+    <string name="media_close">닫기</string>
+    <string name="media_disconnect">연결 해제</string>
+    <string name="media_rewind_seconds">10초 되감기</string>
+    <string name="media_forward_seconds">10초 빨리감기</string>
+
+    <!-- Play On companion screen -->
+    <string name="cast_title">전송 중</string>
+    <string name="cast_title_to">%1$s(으)로 전송 중</string>
+    <string name="cast_open_companion">패널 열기</string>
+    <string name="cast_back_seconds">10초 뒤로</string>
+    <string name="cast_forward_seconds">30초 앞으로</string>
+
+    <!-- Floating player overlay -->
+    <string name="floating_player_close">플로팅 플레이어 닫기</string>
+
+    <!-- Floating player foreground notification -->
+    <string name="floating_player_channel_name">플로팅 플레이어</string>
+    <string name="floating_player_channel_desc">플로팅 미디어 플레이어 오버레이</string>
+    <string name="floating_player_notification_text">미디어 컨트롤이 화면에 떠 있습니다</string>
+
+    <!-- Lock screen authentication -->
+    <string name="auth_title_biometric">인증</string>
+    <string name="auth_title_pin">PIN 입력</string>
+    <string name="auth_subtitle">JellyPlay 잠금 해제</string>
+    <string name="pin_incorrect">PIN이 올바르지 않습니다</string>
+    <string name="pin_lockout_now">시도 횟수가 너무 많습니다. 다시 시도하세요.</string>
+    <string name="pin_lockout_seconds">시도 횟수가 너무 많습니다. %1$ds 후에 다시 시도하세요.</string>
+    <string name="pin_lockout_minutes">시도 횟수가 너무 많습니다. %1$dm 후에 다시 시도하세요.</string>
+    <string name="pin_lockout_hours">시도 횟수가 너무 많습니다. %1$dh 후에 다시 시도하세요.</string>
+    <string name="pin_lockout_hours_minutes">시도 횟수가 너무 많습니다. %1$dh %2$dm 후에 다시 시도하세요.</string>
+
+    <!-- Picture-in-picture actions -->
+    <string name="pip_rewind">되감기</string>
+    <string name="pip_forward">빨리감기</string>
+    <string name="pip_next">다음</string>
+
+    <!-- TV navigation drawer -->
+    <string name="nav_now_playing">지금 재생 중</string>
+    <string name="nav_settings">설정</string>
+
+    <!-- Play On device sheet -->
+    <string name="play_on_title">재생 위치</string>
+    <string name="play_on_no_clients">Jellyfin 클라이언트를 찾을 수 없습니다. 다른 기기에서 JellyPlay 또는 Jellyfin을 열면 여기에 표시됩니다.</string>
+    <string name="play_on_jellyfin_session">Jellyfin 세션</string>
 </resources>

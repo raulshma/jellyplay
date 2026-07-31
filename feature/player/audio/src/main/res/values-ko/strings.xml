@@ -110,4 +110,14 @@
 
     <!-- Playback error -->
     <string name="audio_error_retry">다시 시도</string>
+
+    <!-- Up next strip -->
+    <string name="audio_up_next">다음 곡</string>
+
+    <!-- Cast -->
+    <string name="audio_cast">캐스트</string>
+    <string name="audio_cast_connected">캐스트 연결됨</string>
+    <string name="audio_cast_to_device">기기에 캐스트</string>
+    <string name="audio_cast_no_devices">캐스트 기기를 찾을 수 없습니다. 기기가 같은 네트워크에 있는지 확인하세요.</string>
+    <string name="audio_cast_ok">확인</string>
 </resources>

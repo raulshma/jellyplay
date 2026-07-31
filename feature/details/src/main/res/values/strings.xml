@@ -202,4 +202,32 @@
     <string name="detail_manage_cd_toggle_monitor_season">Toggle monitor for all episodes in season</string>
     <string name="detail_manage_cd_toggle_monitor_episode">Toggle monitor for episode</string>
     <string name="detail_manage_cd_episode_menu">Episode options</string>
+
+    <!-- ── Seerr request / status buttons ──────────────────────────────── -->
+    <string name="detail_available">Available</string>
+    <string name="detail_request">Request</string>
+    <string name="detail_seerr_processing">Processing</string>
+    <string name="detail_seerr_pending">Pending</string>
+    <string name="detail_seerr_requested">Requested</string>
+
+    <!-- ── Seerr horizontal sections ───────────────────────────────────── -->
+    <string name="detail_section_recommendations">Recommendations</string>
+    <string name="detail_section_similar">Similar</string>
+
+    <!-- ── External links (brand names: never translate) ───────────────── -->
+    <string name="detail_link_tmdb" translatable="false">TMDB</string>
+    <string name="detail_link_imdb" translatable="false">IMDb</string>
+    <string name="detail_link_tvdb" translatable="false">TVDB</string>
+
+    <!-- ── Release-type icons (TalkBack) ───────────────────────────────── -->
+    <string name="detail_cd_release_theatrical">Theatrical Release</string>
+    <string name="detail_cd_release_digital">Digital Release</string>
+    <string name="detail_cd_release_physical">Physical Release</string>
+
+    <!-- ── Media Info screen ───────────────────────────────────────────── -->
+    <string name="detail_media_info_title_video">Video</string>
+    <string name="detail_media_info_title_audio">Audio</string>
+    <string name="detail_media_info_title_subtitles">Subtitles</string>
+    <string name="detail_media_info_no_info">No Media Info</string>
+    <string name="detail_media_info_no_info_description">Technical information is not available for this item</string>
 </resources>

@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -52,6 +53,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -187,7 +189,7 @@ fun NextEpisodeOverlay(
                         ) {
                             Icon(
                                 imageVector = Tabler.Outline.PlayerPlay,
-                                contentDescription = "Play Next",
+                                contentDescription = stringResource(R.string.player_video_play_next),
                                 tint = playerOnScrim(),
                                 modifier = Modifier.size(30.dp),
                             )
@@ -211,7 +213,7 @@ fun NextEpisodeOverlay(
                         ) {
                             Icon(
                                 imageVector = Tabler.Outline.X,
-                                contentDescription = "Cancel",
+                                contentDescription = stringResource(R.string.player_video_cancel),
                                 tint = playerOnScrim(),
                                 modifier = Modifier.size(16.dp),
                             )
@@ -225,7 +227,7 @@ fun NextEpisodeOverlay(
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                     ) {
                         Text(
-                            text = "Next Episode",
+                            text = stringResource(R.string.player_video_next_episode),
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp,
@@ -298,7 +300,7 @@ fun NextEpisodeOverlay(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                         ) {
                             Text(
-                                text = "Turn on autoplay",
+                                text = stringResource(R.string.player_video_turn_on_autoplay),
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }

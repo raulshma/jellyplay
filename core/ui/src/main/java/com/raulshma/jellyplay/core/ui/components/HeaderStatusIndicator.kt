@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -26,6 +27,7 @@ import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.ui.R
 
 /**
  * Represents the status to display in the header indicator area.
@@ -78,6 +80,11 @@ fun HeaderStatusIndicator(
         stiffness = Spring.StiffnessMedium,
     )
     val sizeSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
+    val cdLoading = stringResource(R.string.core_ui_cd_loading)
+    val cdError = stringResource(R.string.core_ui_cd_error)
+    val cdLocal = stringResource(R.string.core_ui_cd_local_network)
+    val cdOffline = stringResource(R.string.core_ui_cd_offline)
+    val cdServerUnreachable = stringResource(R.string.core_ui_cd_server_unreachable)
     AnimatedContent(
         targetState = status,
         transitionSpec = {
@@ -96,11 +103,11 @@ fun HeaderStatusIndicator(
         label = "headerStatus",
         modifier = modifier.semantics {
             contentDescription = when (status) {
-                is HeaderStatus.Loading -> "Loading"
-                is HeaderStatus.Error -> "Error"
-                is HeaderStatus.Local -> "Local network, no internet"
-                is HeaderStatus.Offline -> "Offline"
-                is HeaderStatus.ServerUnreachable -> "Server unreachable"
+                is HeaderStatus.Loading -> cdLoading
+                is HeaderStatus.Error -> cdError
+                is HeaderStatus.Local -> cdLocal
+                is HeaderStatus.Offline -> cdOffline
+                is HeaderStatus.ServerUnreachable -> cdServerUnreachable
                 is HeaderStatus.None -> ""
             }
         },
@@ -119,7 +126,7 @@ fun HeaderStatusIndicator(
             is HeaderStatus.Error -> {
                 Icon(
                     imageVector = Tabler.Outline.AlertCircle,
-                    contentDescription = "Error",
+                    contentDescription = cdError,
                     modifier = Modifier.size(20.dp).padding(horizontal = 4.dp),
                     tint = MaterialTheme.colorScheme.error,
                 )
@@ -131,7 +138,7 @@ fun HeaderStatusIndicator(
                 ) {
                     Icon(
                         imageVector = Tabler.Outline.WifiOff,
-                        contentDescription = "Local network, no internet",
+                        contentDescription = cdLocal,
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.tertiary,
                     )
@@ -144,7 +151,7 @@ fun HeaderStatusIndicator(
                 ) {
                     Icon(
                         imageVector = Tabler.Outline.CloudOff,
-                        contentDescription = "Offline",
+                        contentDescription = cdOffline,
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.error,
                     )
@@ -157,7 +164,7 @@ fun HeaderStatusIndicator(
                 ) {
                     Icon(
                         imageVector = Tabler.Outline.Server,
-                        contentDescription = "Server unreachable",
+                        contentDescription = cdServerUnreachable,
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.error,
                     )

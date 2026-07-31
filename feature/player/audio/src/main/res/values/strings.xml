@@ -109,4 +109,14 @@
 
     <!-- Playback error -->
     <string name="audio_error_retry">Retry</string>
+
+    <!-- Up next strip -->
+    <string name="audio_up_next">Up next</string>
+
+    <!-- Cast -->
+    <string name="audio_cast">Cast</string>
+    <string name="audio_cast_connected">Cast connected</string>
+    <string name="audio_cast_to_device">Cast to device</string>
+    <string name="audio_cast_no_devices">No cast devices found. Make sure your device is on the same network.</string>
+    <string name="audio_cast_ok">OK</string>
 </resources>

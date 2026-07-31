@@ -46,4 +46,55 @@
     <string name="core_media_live_tv_plural">ライブテレビ</string>
     <string name="core_media_channel_plural">チャンネル</string>
     <string name="core_media_unknown_plural">不明</string>
+
+    <!-- core/ui shared -->
+    <string name="core_report">報告</string>
+    <string name="core_ui_back">戻る</string>
+    <string name="core_ui_select">選択…</string>
+    <string name="core_ui_selected">選択済み</string>
+
+    <!-- core/ui auth challenge -->
+    <string name="core_ui_auth_title">認証</string>
+    <string name="core_ui_auth_subtitle">本人確認を行ってください</string>
+    <string name="core_ui_auth_use_pin">PIN を使用</string>
+    <string name="core_ui_auth_use_biometric">生体認証を使用</string>
+    <string name="core_ui_auth_biometric_prompt">認証に生体認証を使用</string>
+
+    <!-- core/ui seerr request dialog -->
+    <string name="core_ui_seerr_request_success">リクエストが正常に送信されました！</string>
+    <string name="core_ui_seerr_loading_options">オプションを読み込み中…</string>
+    <string name="core_ui_seerr_destination_server_sonarr">送信先サーバー (Sonarr)</string>
+    <string name="core_ui_seerr_destination_server_radarr">送信先サーバー (Radarr)</string>
+    <string name="core_ui_seerr_quality_profile">品質プロファイル</string>
+    <string name="core_ui_seerr_root_folder">ルートフォルダー</string>
+    <string name="core_ui_seerr_tags">タグ</string>
+    <string name="core_ui_seerr_all_seasons">すべてのシーズン</string>
+    <string name="core_ui_seerr_season">シーズン %1$d</string>
+    <string name="core_ui_seerr_episodes">%1$d エピソード</string>
+    <string name="core_ui_seerr_loading_seasons">シーズンを読み込み中…</string>
+    <string name="core_ui_seerr_request">リクエスト</string>
+
+    <!-- core/ui accent / color pickers -->
+    <string name="core_ui_accent_color_title">アクセントカラー</string>
+    <string name="core_ui_accent_color_subtitle">カスタムまたは動的なアクセントカラーを選択</string>
+    <string name="core_ui_color_style_title">カラースタイル</string>
+    <string name="core_ui_color_style_subtitle">生成されるパレットの視覚的な雰囲気を定義</string>
+    <string name="core_ui_dynamic_colors">動的な壁紙の色</string>
+    <string name="core_ui_synthwave_accent_title">Synthwave アクセント</string>
+    <string name="core_ui_synthwave_accent_subtitle">カスタムネオンアクセントカラーを選択</string>
+    <string name="core_ui_soothing_accent_title">落ち着いたアクセント</string>
+    <string name="core_ui_soothing_accent_subtitle">穏やかなアクセントカラーを選択</string>
+
+    <!-- core/ui component content descriptions & labels -->
+    <string name="core_ui_remove">削除</string>
+    <string name="core_ui_play">再生</string>
+    <string name="core_ui_backspace">バックスペース</string>
+    <string name="core_ui_request">リクエスト</string>
+    <string name="core_ui_watched">視聴済み</string>
+    <string name="core_ui_downloaded">ダウンロード済み</string>
+    <string name="core_ui_cd_loading">読み込み中</string>
+    <string name="core_ui_cd_error">エラー</string>
+    <string name="core_ui_cd_local_network">ローカルネットワーク、インターネットなし</string>
+    <string name="core_ui_cd_offline">オフライン</string>
+    <string name="core_ui_cd_server_unreachable">サーバーに接続できません</string>
 </resources>

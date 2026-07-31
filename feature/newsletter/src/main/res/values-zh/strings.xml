@@ -3,4 +3,25 @@
     <!-- Newsletter feature user-facing strings (enhancements §2.2) -->
     <string name="newsletter_could_not_load">无法加载简报</string>
     <string name="newsletter_preparing_digest">正在为你准备摘要\u2026</string>
+
+    <!-- Newsletter screens & sections -->
+    <string name="newsletter_title">通讯</string>
+    <string name="newsletter_activity_digest">活动摘要</string>
+    <string name="newsletter_continue_watching">继续观看</string>
+    <string name="newsletter_fresh_picks">最新精选</string>
+    <string name="newsletter_recently_added">最近添加</string>
+    <string name="newsletter_next_up">下一集</string>
+    <string name="newsletter_view_all">查看全部</string>
+    <string name="newsletter_no_items_available">没有可用的项目</string>
+
+    <!-- Newsletter aggregated stats -->
+    <string name="newsletter_stat_total_items">总项目数</string>
+    <string name="newsletter_stat_movies">电影</string>
+    <string name="newsletter_stat_series">剧集</string>
+    <string name="newsletter_stat_episodes">集数</string>
+    <string name="newsletter_stat_albums">专辑</string>
+    <string name="newsletter_stat_songs">歌曲</string>
+    <string name="newsletter_stat_new_this_week">本周新增</string>
+    <string name="newsletter_stat_in_progress">进行中</string>
+    <string name="newsletter_stat_activity">活动</string>
 </resources>

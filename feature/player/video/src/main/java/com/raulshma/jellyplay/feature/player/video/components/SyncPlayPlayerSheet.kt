@@ -34,8 +34,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.SyncStatusColors
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
@@ -92,7 +95,7 @@ fun SyncPlayPlayerSheet(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                "SyncPlay",
+                stringResource(R.string.player_video_syncplay),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
@@ -117,12 +120,12 @@ fun SyncPlayPlayerSheet(
                     ) {}
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            groupName,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                            ),
-                        )
+                            Text(
+                                groupName,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                            )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 Tabler.Outline.Users,
@@ -132,7 +135,7 @@ fun SyncPlayPlayerSheet(
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                "$participantCount participant${if (participantCount != 1) "s" else ""}",
+                                pluralStringResource(R.plurals.player_video_participants, participantCount, participantCount),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -152,7 +155,7 @@ fun SyncPlayPlayerSheet(
                         color = pillBackground,
                     ) {
                         Text(
-                            if (isSynced) "Synced" else "Buffering",
+                            if (isSynced) stringResource(R.string.player_video_synced) else stringResource(R.string.player_video_buffering),
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
                             ),
@@ -183,7 +186,7 @@ fun SyncPlayPlayerSheet(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text(if (isPlaying) "Pause" else "Play")
+                    Text(if (isPlaying) stringResource(R.string.player_video_pause) else stringResource(R.string.player_video_play))
                 }
                 val stopFocus = rememberTvFocusState()
                 FilledTonalButton(
@@ -193,7 +196,7 @@ fun SyncPlayPlayerSheet(
                         .tvFocusIndicator(stopFocus, ShapeCache.smoothPill),
                     shape = ShapeCache.smoothPill,
                 ) {
-                    Icon(Tabler.Outline.PlayerStop, contentDescription = "Stop", modifier = Modifier.size(18.dp))
+                    Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(R.string.player_video_stop), modifier = Modifier.size(18.dp))
                 }
             }
 
@@ -226,9 +229,9 @@ fun SyncPlayPlayerSheet(
                         Icon(Tabler.Outline.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         val label = when (repeatMode) {
-                            SyncPlayRepeatMode.REPEAT_ONE -> "Repeat One"
-                            SyncPlayRepeatMode.REPEAT_ALL -> "Repeat All"
-                            SyncPlayRepeatMode.REPEAT_NONE -> "Repeat None"
+                            SyncPlayRepeatMode.REPEAT_ONE -> stringResource(R.string.player_video_repeat_one)
+                            SyncPlayRepeatMode.REPEAT_ALL -> stringResource(R.string.player_video_repeat_all)
+                            SyncPlayRepeatMode.REPEAT_NONE -> stringResource(R.string.player_video_repeat_none)
                         }
                         Text(label)
                     }
@@ -239,9 +242,9 @@ fun SyncPlayPlayerSheet(
                         ) {
                             SyncPlayRepeatMode.entries.forEach { mode ->
                                 val label = when (mode) {
-                                    SyncPlayRepeatMode.REPEAT_ONE -> "Repeat One"
-                                    SyncPlayRepeatMode.REPEAT_ALL -> "Repeat All"
-                                    SyncPlayRepeatMode.REPEAT_NONE -> "Repeat None"
+                                    SyncPlayRepeatMode.REPEAT_ONE -> stringResource(R.string.player_video_repeat_one)
+                                    SyncPlayRepeatMode.REPEAT_ALL -> stringResource(R.string.player_video_repeat_all)
+                                    SyncPlayRepeatMode.REPEAT_NONE -> stringResource(R.string.player_video_repeat_none)
                                 }
                                 DropdownMenuItem(
                                     text = { Text(label) },
@@ -279,8 +282,8 @@ fun SyncPlayPlayerSheet(
                         Icon(Tabler.Outline.ArrowsShuffle, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         val label = when (shuffleMode) {
-                            SyncPlayShuffleMode.SHUFFLE -> "Shuffle"
-                            SyncPlayShuffleMode.SORTED -> "Sorted"
+                            SyncPlayShuffleMode.SHUFFLE -> stringResource(R.string.player_video_shuffle)
+                            SyncPlayShuffleMode.SORTED -> stringResource(R.string.player_video_sorted)
                         }
                         Text(label)
                     }
@@ -291,8 +294,8 @@ fun SyncPlayPlayerSheet(
                         ) {
                             SyncPlayShuffleMode.entries.forEach { mode ->
                                 val label = when (mode) {
-                                    SyncPlayShuffleMode.SHUFFLE -> "Shuffle"
-                                    SyncPlayShuffleMode.SORTED -> "Sorted"
+                                    SyncPlayShuffleMode.SHUFFLE -> stringResource(R.string.player_video_shuffle)
+                                    SyncPlayShuffleMode.SORTED -> stringResource(R.string.player_video_sorted)
                                 }
                                 DropdownMenuItem(
                                     text = { Text(label) },
@@ -321,11 +324,11 @@ fun SyncPlayPlayerSheet(
             ) {
                 Column {
                     Text(
-                        "Ignore Wait",
+                        stringResource(R.string.player_video_ignore_wait),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        "Don't pause for buffering users",
+                        stringResource(R.string.player_video_ignore_wait_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -347,7 +350,7 @@ fun SyncPlayPlayerSheet(
             ) {
                 Icon(Tabler.Outline.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Leave Group")
+                Text(stringResource(R.string.player_video_leave_group))
             }
         }
     }
