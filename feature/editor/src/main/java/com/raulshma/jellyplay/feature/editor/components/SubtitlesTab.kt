@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -53,6 +54,7 @@ import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
+import com.raulshma.jellyplay.core.ui.components.SubtitleResultMetadata
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
@@ -463,7 +465,7 @@ private fun RemoteSubtitleSearchSheet(
                         }
                     } else {
                         LazyColumn(
-                            modifier = Modifier.height(400.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             items(results, key = { it.id }) { subtitle ->
@@ -556,7 +558,7 @@ private fun RemoteSubtitleSearchSheet(
                         }
                     } else {
                         LazyColumn(
-                            modifier = Modifier.height(400.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             items(results, key = { it.id }) { subtitle ->
@@ -597,6 +599,10 @@ private fun ProviderResultsSection(
     onDownload: (SubtitleSearchResult) -> Unit,
 ) {
     if (results.isEmpty() && errors.isEmpty() && !isLoading) return
+    // Wrap the result rows in a scrollable container: inside the search sheet the
+    // parent Column is not itself scrollable, so a long provider result list would
+    // overflow the sheet and leave rows unreachable. Nested scroll with a heightIn
+    // cap keeps the list tappable while respecting sheet bounds.
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (errors.isNotEmpty()) {
             errors.forEach { (_, msg) ->
@@ -612,7 +618,12 @@ private fun ProviderResultsSection(
                 JellyPlayLoadingIndicator()
             }
         }
-        results.forEach { r ->
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        items(results, key = { it.provider to it.id }) { r ->
             ListItem(
                 headlineContent = { Text(r.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 supportingContent = {
@@ -622,6 +633,10 @@ private fun ProviderResultsSection(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis)
                         }
+                        SubtitleResultMetadata(
+                            result = r,
+                            perfectMatchLabel = stringResource(R.string.editor_subtitles_perfect_match),
+                        )
                         Text(
                             editorProviderLabel(r.provider),
                             style = MaterialTheme.typography.labelSmall,
