@@ -169,6 +169,7 @@
     <string name="admin_security_limits">安全限制</string>
     <string name="admin_security_limits_desc">并发会话和登录保护。</string>
     <string name="admin_max_active_sessions">最大活动会话数</string>
+    <string name="admin_zero_blank_unlimited">0 或留空 = 无限制</string>
     <string name="admin_login_attempts">锁定前的登录尝试次数</string>
     <string name="admin_blank_no_lockout">留空 = 不锁定</string>
     <string name="admin_identity">身份</string>

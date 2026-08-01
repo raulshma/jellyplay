@@ -111,4 +111,7 @@
     <string name="onboarding_performance_description">Riduce animazioni, transizioni e qualità delle immagini per prestazioni più fluide su dispositivi di fascia bassa. Puoi sempre modificarlo in seguito nelle Impostazioni.</string>
     <string name="onboarding_performance_enable">Attiva modalità prestazioni</string>
     <string name="onboarding_performance_enable_subtitle">Ottimizzazione per dispositivi di fascia bassa</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="onboarding_feature_syncplay">SyncPlay — guarda insieme</string>
 </resources>

@@ -229,4 +229,8 @@
     <string name="detail_media_info_title_subtitles">Legendas</string>
     <string name="detail_media_info_no_info">Sem informações de mídia</string>
     <string name="detail_media_info_no_info_description">As informações técnicas não estão disponíveis para este item</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="detail_section_seerr_recommendations">Recomendações do Seerr</string>
+    <string name="detail_section_seerr_similar">Semelhantes segundo o Seerr</string>
 </resources>

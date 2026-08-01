@@ -111,4 +111,7 @@
     <string name="onboarding_performance_description">Réduit les animations, les transitions et la qualité d\'image pour des performances plus fluides sur les appareils d\'entrée de gamme. Vous pourrez modifier cela plus tard dans les Paramètres.</string>
     <string name="onboarding_performance_enable">Activer le mode performance</string>
     <string name="onboarding_performance_enable_subtitle">Optimisation pour appareils d\'entrée de gamme</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="onboarding_feature_syncplay">SyncPlay — regarder ensemble</string>
 </resources>

@@ -111,4 +111,7 @@
     <string name="onboarding_performance_description">Reduce animaciones, transiciones y calidad de imagen para un rendimiento más fluido en dispositivos de gama baja. Puedes cambiarlo más adelante en Ajustes.</string>
     <string name="onboarding_performance_enable">Activar modo de rendimiento</string>
     <string name="onboarding_performance_enable_subtitle">Optimización para dispositivos de gama baja</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="onboarding_feature_syncplay">SyncPlay – ver juntos</string>
 </resources>

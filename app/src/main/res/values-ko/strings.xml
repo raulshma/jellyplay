@@ -143,4 +143,19 @@
     <string name="play_on_title">재생 위치</string>
     <string name="play_on_no_clients">Jellyfin 클라이언트를 찾을 수 없습니다. 다른 기기에서 JellyPlay 또는 Jellyfin을 열면 여기에 표시됩니다.</string>
     <string name="play_on_jellyfin_session">Jellyfin 세션</string>
+
+    <!-- auto-localized: previously translatable="false" (10) -->
+    <string name="widget_open_to_play">탭하여 JellyPlay 열기</string>
+    <string name="widget_library_recommendations_description">시청 기록을 기반으로 한 Jellyfin 라이브러리의 맞춤 추천입니다.</string>
+    <string name="widget_library_recommendations_empty_subtitle">JellyPlay를 열어 라이브러리 탐색을 시작하세요</string>
+    <string name="widget_seerr_recommendations_label">Seerr 추천</string>
+    <string name="widget_seerr_recommendations_title">Seerr 추천</string>
+    <string name="widget_seerr_recommendations_description">Seerr (Jellyseerr / Overseerr) 서버의 현재 및 예정 영화·TV 프로그램입니다.</string>
+    <string name="widget_seerr_recommendations_empty">Seerr이 연결되지 않음</string>
+    <string name="widget_seerr_recommendations_empty_subtitle">추천을 보려면 JellyPlay 설정에서 Seerr을 구성하세요</string>
+    <string name="update_up_to_date_body">JellyPlay가 이미 최신 버전입니다.</string>
+    <string name="floating_player_notification_title">JellyPlay 플로팅 플레이어</string>
+
+    <!-- Now-playing snackbar -->
+    <string name="snackbar_now_playing">재생 중: %1$s</string>
 </resources>

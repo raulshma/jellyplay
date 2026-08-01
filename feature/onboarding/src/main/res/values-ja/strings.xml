@@ -111,4 +111,7 @@
     <string name="onboarding_performance_description">低スペック端末での動作を滑らかにするため、アニメーション、トランジション、画質を下げます。これは後で設定でいつでも変更できます。</string>
     <string name="onboarding_performance_enable">パフォーマンスモードを有効化</string>
     <string name="onboarding_performance_enable_subtitle">低スペック端末の最適化</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="onboarding_feature_syncplay">SyncPlay — 一緒に視聴</string>
 </resources>

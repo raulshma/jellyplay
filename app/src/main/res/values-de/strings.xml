@@ -143,4 +143,19 @@
     <string name="play_on_title">Wiedergeben auf</string>
     <string name="play_on_no_clients">Keine Jellyfin-Clients gefunden. Öffne JellyPlay oder Jellyfin auf einem anderen Gerät und es erscheint hier.</string>
     <string name="play_on_jellyfin_session">Jellyfin-Sitzung</string>
+
+    <!-- auto-localized: previously translatable="false" (10) -->
+    <string name="widget_open_to_play">Tippen, um JellyPlay zu öffnen</string>
+    <string name="widget_library_recommendations_description">Personalisierte Empfehlungen aus deiner Jellyfin-Bibliothek – basierend auf dem, was du ansiehst.</string>
+    <string name="widget_library_recommendations_empty_subtitle">Öffne JellyPlay, um deine Bibliothek zu erkunden</string>
+    <string name="widget_seerr_recommendations_label">Seerr-Auswahl</string>
+    <string name="widget_seerr_recommendations_title">Seerr-Auswahl</string>
+    <string name="widget_seerr_recommendations_description">Aktuelle und kommende Filme und Serien von deinem Seerr-Server (Jellyseerr / Overseerr).</string>
+    <string name="widget_seerr_recommendations_empty">Seerr ist nicht verbunden</string>
+    <string name="widget_seerr_recommendations_empty_subtitle">Konfiguriere Seerr in den JellyPlay-Einstellungen, um Empfehlungen zu sehen</string>
+    <string name="update_up_to_date_body">JellyPlay ist bereits auf der neuesten Version.</string>
+    <string name="floating_player_notification_title">JellyPlay Schwebender Player</string>
+
+    <!-- Now-playing snackbar -->
+    <string name="snackbar_now_playing">Wiedergabe läuft: %1$s</string>
 </resources>

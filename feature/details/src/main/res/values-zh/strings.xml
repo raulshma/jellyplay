@@ -226,4 +226,8 @@
     <string name="detail_media_info_title_subtitles">字幕</string>
     <string name="detail_media_info_no_info">无媒体信息</string>
     <string name="detail_media_info_no_info_description">此项目没有可用的技术信息</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="detail_section_seerr_recommendations">Seerr 推荐</string>
+    <string name="detail_section_seerr_similar">Seerr 相似内容</string>
 </resources>

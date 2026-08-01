@@ -46,6 +46,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -97,9 +98,10 @@ import com.raulshma.jellyplay.core.ui.tv.TvFocusDefaults
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
-import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchRegistry
+import com.raulshma.jellyplay.core.ui.settingssearch.resolve
 import com.raulshma.jellyplay.feature.settings.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -244,15 +246,18 @@ fun SettingsScreen(
 
     // Debounced + off-main-thread fuzzy search. Each keystroke only re-runs the
     // matcher after a short quiet period, and the Damerau-Levenshtein work happens
-    // on Dispatchers.Default so typing stays smooth on low-end devices.
+    // on Dispatchers.Default so typing stays smooth on low-end devices. The registry's
+    // @StringRes ids are resolved to the current locale once per query, so matching and
+    // the rendered results both reflect the user's language.
+    val context = LocalContext.current
     val filteredItems by produceState(
-        initialValue = emptyList<SettingsSearchItem>(),
+        initialValue = emptyList<ResolvedSettingsItem>(),
         searchQuery,
     ) {
         snapshotFlow { searchQuery }
             .debounce(120)
             .distinctUntilChanged()
-            .map { SettingsSearchMatcher.search(it, SettingsSearchRegistry.items) }
+            .map { SettingsSearchMatcher.search(it, SettingsSearchRegistry.items.resolve(context::getString)) }
             .flowOn(Dispatchers.Default)
             .collect { value = it }
     }

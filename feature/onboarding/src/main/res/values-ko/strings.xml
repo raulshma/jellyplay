@@ -111,4 +111,7 @@
     <string name="onboarding_performance_description">저사양 기기에서 더 부드러운 성능을 위해 애니메이션, 전환 및 이미지 품질을 낮춥니다. 설정에서 나중에 언제든 변경할 수 있습니다.</string>
     <string name="onboarding_performance_enable">성능 모드 활성화</string>
     <string name="onboarding_performance_enable_subtitle">저사양 기기 최적화</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="onboarding_feature_syncplay">SyncPlay — 함께 시청</string>
 </resources>

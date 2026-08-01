@@ -1054,4 +1054,42 @@
     <!-- AboutScreen.kt additional -->
 
     <!-- UserManagementScreen.kt - already mostly defined; confirm ones used inline -->
+
+    <!-- auto-localized: previously translatable="false" (36) -->
+    <string name="settings_requests_subtitle">Rivedi le richieste Seerr/Jellyseerr</string>
+    <string name="settings_seerr_integration">Integrazione Seerr</string>
+    <string name="settings_seerr_integration_subtitle">Configura Seerr/Jellyseerr</string>
+    <string name="settings_playback_subtitle">Motore di riproduzione: %1$s</string>
+    <string name="settings_integrations_subtitle">Seerr, Radarr e Sonarr</string>
+    <string name="settings_integrations_arr">Radarr / Sonarr</string>
+    <string name="settings_server_address_invalid">Inserisci un URL valido (es. https://host:porta)</string>
+    <string name="settings_built_with_jellyfin">Realizzato con Jellyfin SDK</string>
+    <string name="settings_factory_reset_integrations_note">Le impostazioni delle integrazioni di terze parti (Seerr, Radarr/Sonarr) sono separate e non vengono ripristinate qui — gestiscile sotto Integrazioni.</string>
+    <string name="factory_reset_cat_syncplay_casting">SyncPlay e trasmissione</string>
+    <string name="factory_reset_cat_player_engines">Motori di riproduzione</string>
+    <string name="settings_seerr_settings">Impostazioni Seerr</string>
+    <string name="settings_server_url">URL del server</string>
+    <string name="settings_arr_no_servers_hint">Nessun server rilevato. Abilita l\'individuazione automatica tramite Seerr (e assicurati che Seerr sia connesso) oppure aggiungi un server manuale qui sotto.</string>
+    <string name="settings_arr_no_admin_hint">L\'individuazione automatica richiede un account Seerr con autorizzazione di amministratore (l\'elenco dei server proviene dalle impostazioni solo-amministratore di Seerr). Usa una chiave API di un utente amministratore, poi riprova — oppure aggiungi un server manuale qui sotto.</string>
+    <string name="settings_enable_seerr_integration">Abilita integrazione Seerr</string>
+    <string name="settings_enable_seerr_subtitle">Collega il tuo server Seerr a JellyPlay</string>
+    <string name="settings_recommendations_subtitle">Mostra i consigli di Seerr nelle schermate dei dettagli dei media</string>
+    <string name="settings_popular_movies_subtitle">Film popolari su TMDB</string>
+    <string name="settings_popular_series_subtitle">Serie TV popolari su TMDB</string>
+    <string name="settings_seerr_request_hub">Centro richieste Seerr</string>
+    <string name="settings_seerr_header_description">Collega Jellyseerr o Overseerr per cercare, scoprire e richiedere contenuti direttamente da JellyPlay.</string>
+    <string name="settings_hide_api_key">Nascondi chiave API</string>
+    <string name="settings_show_api_key">Mostra chiave API</string>
+    <string name="settings_jellyfin_username_placeholder">Nome utente Jellyfin</string>
+    <string name="settings_jellyfin_password_placeholder">Password Jellyfin</string>
+    <string name="settings_seerr_email_placeholder">Email dell\'account Seerr</string>
+    <string name="settings_seerr_password_placeholder">Password dell\'account Seerr</string>
+    <string name="settings_seerr_server_reached">Server Seerr raggiunto correttamente</string>
+    <string name="settings_player_engine">Motore di riproduzione</string>
+    <string name="settings_player_engine_subtitle">Scegli il motore di riproduzione multimediale</string>
+    <string name="settings_open_subtitle_tester_subtitle">Anteprima degli stili tra i motori</string>
+    <string name="settings_pgs_direct_play_on">Renderizza i sottotitoli PGS nativamente (solo MPV)</string>
+    <string name="settings_preset_json">JSON preimpostato</string>
+    <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
+    <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
 </resources>

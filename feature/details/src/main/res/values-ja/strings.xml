@@ -226,4 +226,8 @@
     <string name="detail_media_info_title_subtitles">字幕</string>
     <string name="detail_media_info_no_info">メディア情報なし</string>
     <string name="detail_media_info_no_info_description">このアイテムの技術情報は利用できません</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="detail_section_seerr_recommendations">Seerr のおすすめ</string>
+    <string name="detail_section_seerr_similar">Seerr の類似作品</string>
 </resources>

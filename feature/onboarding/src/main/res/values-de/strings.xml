@@ -111,4 +111,7 @@
     <string name="onboarding_performance_description">Reduziert Animationen, Übergänge und Bildqualität für flüssigere Leistung auf leistungsschwächeren Geräten. Du kannst dies später in den Einstellungen ändern.</string>
     <string name="onboarding_performance_enable">Leistungsmodus aktivieren</string>
     <string name="onboarding_performance_enable_subtitle">Optimierung für leistungsschwächere Geräte</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="onboarding_feature_syncplay">SyncPlay – zusammen ansehen</string>
 </resources>

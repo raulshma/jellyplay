@@ -169,6 +169,7 @@
     <string name="admin_security_limits">Sicherheitslimits</string>
     <string name="admin_security_limits_desc">Gleichzeitige Sitzungen und Anmeldeschutz.</string>
     <string name="admin_max_active_sessions">Max. aktive Sitzungen</string>
+    <string name="admin_zero_blank_unlimited">0 oder leer = unbegrenzt</string>
     <string name="admin_login_attempts">Anmeldeversuche vor Sperrung</string>
     <string name="admin_blank_no_lockout">Leer = keine Sperrung</string>
     <string name="admin_identity">Identität</string>

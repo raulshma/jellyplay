@@ -111,4 +111,7 @@
     <string name="onboarding_performance_description">降低动画、过渡和图像质量，以在低端设备上获得更流畅的性能。你可以稍后在设置中更改此项。</string>
     <string name="onboarding_performance_enable">启用性能模式</string>
     <string name="onboarding_performance_enable_subtitle">低端设备优化</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="onboarding_feature_syncplay">SyncPlay — 一起观看</string>
 </resources>

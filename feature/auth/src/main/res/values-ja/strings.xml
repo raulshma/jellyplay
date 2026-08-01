@@ -78,4 +78,7 @@
     <string name="auth_remove_user">ユーザーを削除</string>
     <string name="auth_remove_user_title">ユーザーを削除しますか？</string>
     <string name="auth_remove_user_message">このサーバーから「%1$s」を削除しますか？使用するには再度サインインする必要があります。</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="auth_quick_connect">クイック接続</string>
 </resources>

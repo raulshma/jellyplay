@@ -169,6 +169,7 @@
     <string name="admin_security_limits">Security limits</string>
     <string name="admin_security_limits_desc">Concurrent sessions and login protection.</string>
     <string name="admin_max_active_sessions">Max active sessions</string>
+    <string name="admin_zero_blank_unlimited">0 or blank = unlimited</string>
     <string name="admin_login_attempts">Login attempts before lockout</string>
     <string name="admin_blank_no_lockout">Blank = no lockout</string>
     <string name="admin_identity">Identity</string>

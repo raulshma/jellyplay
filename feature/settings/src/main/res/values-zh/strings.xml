@@ -1052,4 +1052,42 @@
     <string name="settings_dvr_quality_low">转码为低质量（480p）</string>
 
     <!-- UserManagementScreen.kt - already mostly defined; confirm ones used inline -->
+
+    <!-- auto-localized: previously translatable="false" (36) -->
+    <string name="settings_requests_subtitle">查看 Seerr/Jellyseerr 请求</string>
+    <string name="settings_seerr_integration">Seerr 集成</string>
+    <string name="settings_seerr_integration_subtitle">配置 Seerr/Jellyseerr</string>
+    <string name="settings_playback_subtitle">播放引擎：%1$s</string>
+    <string name="settings_integrations_subtitle">Seerr、Radarr 和 Sonarr</string>
+    <string name="settings_integrations_arr">Radarr / Sonarr</string>
+    <string name="settings_server_address_invalid">请输入有效的 URL（例如 https://host:port）</string>
+    <string name="settings_built_with_jellyfin">基于 Jellyfin SDK 构建</string>
+    <string name="settings_factory_reset_integrations_note">第三方集成设置（Seerr、Radarr/Sonarr）单独管理，不会在此重置 — 请在“集成”中管理。</string>
+    <string name="factory_reset_cat_syncplay_casting">SyncPlay 与投放</string>
+    <string name="factory_reset_cat_player_engines">播放引擎</string>
+    <string name="settings_seerr_settings">Seerr 设置</string>
+    <string name="settings_server_url">服务器 URL</string>
+    <string name="settings_arr_no_servers_hint">未检测到服务器。请通过 Seerr 启用自动发现（并确保 Seerr 已连接），或在下方手动添加服务器。</string>
+    <string name="settings_arr_no_admin_hint">自动发现需要具有管理员权限的 Seerr 账户（服务器列表来自 Seerr 的仅管理员设置）。请使用管理员用户的 API 密钥后重试，或在下方手动添加服务器。</string>
+    <string name="settings_enable_seerr_integration">启用 Seerr 集成</string>
+    <string name="settings_enable_seerr_subtitle">将你的 Seerr 服务器连接到 JellyPlay</string>
+    <string name="settings_recommendations_subtitle">在媒体详情页显示 Seerr 推荐</string>
+    <string name="settings_popular_movies_subtitle">TMDB 上的热门电影</string>
+    <string name="settings_popular_series_subtitle">TMDB 上的热门剧集</string>
+    <string name="settings_seerr_request_hub">Seerr 请求中心</string>
+    <string name="settings_seerr_header_description">连接 Jellyseerr 或 Overseerr，直接从 JellyPlay 中搜索、发现和请求内容。</string>
+    <string name="settings_hide_api_key">隐藏 API 密钥</string>
+    <string name="settings_show_api_key">显示 API 密钥</string>
+    <string name="settings_jellyfin_username_placeholder">Jellyfin 用户名</string>
+    <string name="settings_jellyfin_password_placeholder">Jellyfin 密码</string>
+    <string name="settings_seerr_email_placeholder">Seerr 账户邮箱</string>
+    <string name="settings_seerr_password_placeholder">Seerr 账户密码</string>
+    <string name="settings_seerr_server_reached">已成功连接 Seerr 服务器</string>
+    <string name="settings_player_engine">播放引擎</string>
+    <string name="settings_player_engine_subtitle">选择媒体播放引擎</string>
+    <string name="settings_open_subtitle_tester_subtitle">跨引擎预览样式</string>
+    <string name="settings_pgs_direct_play_on">原生渲染 PGS 字幕（仅 MPV）</string>
+    <string name="settings_preset_json">预设 JSON</string>
+    <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
+    <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
 </resources>

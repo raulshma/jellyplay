@@ -9,6 +9,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.tween
@@ -547,11 +548,12 @@ private fun MainContent(
     }
 
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val nowPlayingTemplate = stringResource(R.string.snackbar_now_playing)
     androidx.compose.runtime.LaunchedEffect(viewModel.remoteControlReceiver) {
         viewModel.remoteControlReceiver.playEvents.collect { event ->
             val title = event.title.ifBlank { event.itemId }
             snackbarHostState.showSnackbar(
-                message = "Now playing: $title",
+                message = nowPlayingTemplate.format(title),
                 withDismissAction = true,
             )
         }

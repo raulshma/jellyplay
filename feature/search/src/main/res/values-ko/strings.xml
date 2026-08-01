@@ -48,4 +48,8 @@
     <string name="search_filter_any">전체</string>
     <string name="search_filter_rating_plus">%1$.1f+</string>
     <string name="search_apply_filters">필터 적용</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="search_request_via_seerr">Seerr을 통해 요청</string>
+    <string name="search_seerr_search_failed">Seerr 검색 실패</string>
 </resources>
