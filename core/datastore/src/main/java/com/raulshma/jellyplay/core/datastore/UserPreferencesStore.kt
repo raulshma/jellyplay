@@ -247,7 +247,7 @@ class UserPreferencesStore @Inject constructor(
         val DREAM_SLIDESHOW_INTERVAL_MS = longPreferencesKey("dream_slideshow_interval_ms")
         val NEWSLETTER_LAST_VIEWED_MS = longPreferencesKey("newsletter_last_viewed_ms")
 
-        val TYPED_MIGRATION_DONE = booleanPreferencesKey("_typed_migration_done")
+        val TYPED_MIGRATION_DONE = PreferenceCodec.TYPED_MIGRATION_DONE
 
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         val NOTIFICATIONS_CHECK_FREQUENCY = stringPreferencesKey("notifications_check_frequency")
@@ -368,20 +368,19 @@ class UserPreferencesStore @Inject constructor(
     }
 
     private companion object {
-        private val ENCODE_DEFAULTS_JSON = Json { encodeDefaults = true }
+        private val ENCODE_DEFAULTS_JSON get() = PreferenceCodec.encodeDefaultsJson
     }
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json: Json get() = PreferenceCodec.json
 
     init {
         scope.launch { migrateToTypedKeys() }
     }
 
     private suspend fun migrateToTypedKeys() {
-        dataStore.edit { prefs ->
-            if (prefs[Keys.TYPED_MIGRATION_DONE] == true) return@edit
-
-            migrateBooleans(prefs,
+        PreferenceCodec.runTypedKeyMigration(
+            dataStore,
+            booleans = arrayOf(
                 "dynamic_theming", "oled_mode", "auto_delete_cache",
                 "pin_lock_enabled", "biometric_lock_enabled", "dialogue_boost_enabled",
                 "equalizer_enabled", "audio_passthrough", "frame_rate_matching",
@@ -394,79 +393,28 @@ class UserPreferencesStore @Inject constructor(
                 "virtualizer_enabled", "auto_eq_by_genre", "home_hero_enabled", "home_backdrop_enabled",
                 "nav_bar_show_labels", "onboarding_completed", "performance_mode",
                 "newsletter_enabled", "wifi_only_downloads", "monochrome_mode",
-            )
-
-            migrateInts(prefs,
+            ),
+            ints = arrayOf(
                 "max_cache_size_mb", "audio_night_mode_gain", "download_connections",
                 "virtualizer_strength", "newsletter_day_of_week",
-            )
-
-            migrateFloats(prefs,
+            ),
+            floats = arrayOf(
                 "video_default_speed", "video_brightness_level", "audio_default_speed",
                 "audio_night_mode_volume", "replaygain_pre_amp_db", "lr_balance",
                 "pitch_semitones",
-            )
-
-            migrateLongs(prefs,
+            ),
+            longs = arrayOf(
                 "audio_delay_ms", "auto_lock_timer_ms", "video_seek_duration_ms",
                 "video_controls_timeout_ms", "video_swipe_seek_max_ms",
                 "audio_skip_previous_threshold_ms", "audio_crossfade_duration_ms",
                 "sleep_timer_duration_ms", "dream_slideshow_interval_ms",
                 "newsletter_last_viewed_ms",
-            )
-
-            prefs[Keys.TYPED_MIGRATION_DONE] = true
-        }
+            ),
+        )
     }
 
-    private fun migrateBooleans(prefs: MutablePreferences, vararg names: String) {
-        for (name in names) {
-            val legacy = prefs.legacyString(name) ?: continue
-            prefs[booleanPreferencesKey(name)] = legacy.toBoolean()
-        }
-    }
-
-    private fun migrateInts(prefs: MutablePreferences, vararg names: String) {
-        for (name in names) {
-            val legacy = prefs.legacyString(name) ?: continue
-            legacy.toIntOrNull()?.let { prefs[intPreferencesKey(name)] = it }
-        }
-    }
-
-    private fun migrateFloats(prefs: MutablePreferences, vararg names: String) {
-        for (name in names) {
-            val legacy = prefs.legacyString(name) ?: continue
-            legacy.toFloatOrNull()?.let { prefs[floatPreferencesKey(name)] = it }
-        }
-    }
-
-    private fun migrateLongs(prefs: MutablePreferences, vararg names: String) {
-        for (name in names) {
-            val legacy = prefs.legacyString(name) ?: continue
-            legacy.toLongOrNull()?.let { prefs[longPreferencesKey(name)] = it }
-        }
-    }
-
-    /**
-     * Reads a legacy string slot, tolerating a typed value (Boolean/Int/...)
-     * already living under [name] — e.g. after `clearAllPreferences` preserved
-     * some typed state but reset the migration flag. Returns null when the slot
-     * is absent or holds a non-string value, so callers `?: continue`.
-     */
-    private fun MutablePreferences.legacyString(name: String): String? =
-        try { this[stringPreferencesKey(name)] } catch (_: ClassCastException) { null }
-
-
-    private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean {
-        val typed = try { prefs[key] } catch (_: ClassCastException) { null }
-        // Once the one-shot typed-key migration has run, the legacy string-key
-        // fallback is no longer needed — every key was rewritten in place — so
-        // skip the extra string lookup on every preference emission.
-        if (typed != null || prefs[Keys.TYPED_MIGRATION_DONE] != true) {
-            return typed ?: prefs[stringPreferencesKey(name)]?.toBoolean() ?: default
-        }
-        return typed ?: default
-    }
+    private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean =
+        PreferenceCodec.readBool(prefs, key, name, default)
 
     /**
      * Reads [UserPreferences.playbackMode]. Migrates the legacy boolean
@@ -484,29 +432,14 @@ class UserPreferencesStore @Inject constructor(
         return if (legacyForce) PlaybackMode.FORCE_DIRECT_PLAY else PlaybackMode.AUTO
     }
 
-    private fun readInt(prefs: Preferences, key: Preferences.Key<Int>, name: String, default: Int): Int {
-        val typed = try { prefs[key] } catch (_: ClassCastException) { null }
-        if (typed != null || prefs[Keys.TYPED_MIGRATION_DONE] != true) {
-            return typed ?: prefs[stringPreferencesKey(name)]?.toIntOrNull() ?: default
-        }
-        return typed ?: default
-    }
+    private fun readInt(prefs: Preferences, key: Preferences.Key<Int>, name: String, default: Int): Int =
+        PreferenceCodec.readInt(prefs, key, name, default)
 
-    private fun readFloat(prefs: Preferences, key: Preferences.Key<Float>, name: String, default: Float): Float {
-        val typed = try { prefs[key] } catch (_: ClassCastException) { null }
-        if (typed != null || prefs[Keys.TYPED_MIGRATION_DONE] != true) {
-            return typed ?: prefs[stringPreferencesKey(name)]?.toFloatOrNull() ?: default
-        }
-        return typed ?: default
-    }
+    private fun readFloat(prefs: Preferences, key: Preferences.Key<Float>, name: String, default: Float): Float =
+        PreferenceCodec.readFloat(prefs, key, name, default)
 
-    private fun readLong(prefs: Preferences, key: Preferences.Key<Long>, name: String, default: Long): Long {
-        val typed = try { prefs[key] } catch (_: ClassCastException) { null }
-        if (typed != null || prefs[Keys.TYPED_MIGRATION_DONE] != true) {
-            return typed ?: prefs[stringPreferencesKey(name)]?.toLongOrNull() ?: default
-        }
-        return typed ?: default
-    }
+    private fun readLong(prefs: Preferences, key: Preferences.Key<Long>, name: String, default: Long): Long =
+        PreferenceCodec.readLong(prefs, key, name, default)
 
     private fun readMediaStreamSelections(prefs: Preferences): Map<String, MediaStreamSelection> {
         val raw = prefs[Keys.MEDIA_STREAM_SELECTIONS] ?: return emptyMap()
@@ -3147,6 +3080,12 @@ class UserPreferencesStore @Inject constructor(
         Keys.FAVORITE_CHANNELS,
         Keys.PIN_FAILED_ATTEMPTS,
         Keys.PIN_LOCKOUT_UNTIL_MS,
+        // Per-account / one-time update state: a category reset must not drop
+        // the user's Watch Later playlist binding or re-prompt an update they
+        // already dismissed.
+        Keys.WATCH_LATER_PLAYLIST_ID,
+        Keys.DISMISSED_UPDATE_VERSION,
+        Keys.DISMISSED_UPDATE_AT_MS,
     )
 
     /**
