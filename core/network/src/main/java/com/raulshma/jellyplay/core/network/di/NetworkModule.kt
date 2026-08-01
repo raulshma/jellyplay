@@ -202,6 +202,7 @@ abstract class NetworkModule {
             @ApplicationContext context: Context,
             okHttpClient: OkHttpClient,
             userPreferencesStore: UserPreferencesStore,
+            serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore,
         ): Jellyfin {
             // Use the app's persistent DataStore UUID as the SDK device id so the
             // REST/session API, the WebSocket connection (which passes the same
@@ -209,8 +210,19 @@ abstract class NetworkModule {
             // Without this the SDK defaults to Settings.Secure.ANDROID_ID, which
             // never equals ensureDeviceId() and made the app's own session show up
             // in the Play On / Cast device list.
+            //
+            // ServerIdentityStore.identity is a StateFlow shared with
+            // SharingStarted.Eagerly, so after the very first process launch its
+            // current value is the persisted UUID held in memory. Reading .value
+            // is non-blocking and avoids a DataStore disk read on the DI critical
+            // path (every screen transitively pulls this @Provides on first
+            // frame). Only on the rare first-launch case where the Eagerly flow
+            // hasn't populated yet do we fall back to the blocking
+            // ensureDeviceId() — which generates + persists the id. The resolved
+            // id is identical either way; the fast path simply skips the disk IO.
             val androidDefault = androidDevice(context)
-            val deviceId = runBlocking { userPreferencesStore.ensureDeviceId() }
+            val deviceId = serverIdentityStore.identity.value.deviceId
+                ?: runBlocking { userPreferencesStore.ensureDeviceId() }
             return createJellyfin {
                 this.context = context
                 clientInfo = ClientInfo(

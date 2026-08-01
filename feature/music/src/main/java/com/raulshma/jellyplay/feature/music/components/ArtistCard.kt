@@ -138,6 +138,17 @@ fun ArtistCard(
         val secondaryColor = MaterialTheme.colorScheme.secondary
         val tertiaryColor = MaterialTheme.colorScheme.tertiary
 
+        // The ring runs two infinite animations (rotation + pulse) while
+        // pressed, redrawing the sweep-gradient ring ~60fps. Build the brush
+        // once per palette change instead of allocating a new List<Color> +
+        // Brush.sweepGradient on every draw frame. The rotation is applied
+        // per-frame via rotate(...) around this stable brush.
+        val ringBrush = remember(primaryColor, secondaryColor, tertiaryColor) {
+            Brush.sweepGradient(
+                colors = listOf(primaryColor, secondaryColor, tertiaryColor, primaryColor)
+            )
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -151,14 +162,7 @@ fun ArtistCard(
                 .drawBehind {
                     rotate(ringRotation) {
                         drawCircle(
-                            brush = Brush.sweepGradient(
-                                colors = listOf(
-                                    primaryColor,
-                                    secondaryColor,
-                                    tertiaryColor,
-                                    primaryColor
-                                )
-                            ),
+                            brush = ringBrush,
                             radius = size.minDimension / 2f + 4.dp.toPx(),
                             style = Stroke(width = ringPulse.dp.toPx())
                         )

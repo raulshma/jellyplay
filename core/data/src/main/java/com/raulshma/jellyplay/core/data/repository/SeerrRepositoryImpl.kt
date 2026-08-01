@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.network.seerr.SeerrApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +20,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Cadence of the Seerr pending-request / current-user background poll. */
+private const val POLL_INTERVAL_MS = 60_000L
 
 @Singleton
 class SeerrRepositoryImpl @Inject constructor(
@@ -417,20 +421,43 @@ class SeerrRepositoryImpl @Inject constructor(
      * would wake up every 60s for users who have never configured Seerr.
      * Callers (currently [com.raulshma.jellyplay.feature.requests.RequestsViewModel])
      * start polling when their UI is entered and stop it when cleared.
+     *
+     * The timer cadence is decoupled from the preferences collector: a `delay`
+     * inside `collect {}` would serialize pref emissions and fire back-to-back
+     * network calls after a burst of unrelated Seerr-pref edits, instead of
+     * coalescing. The latest enabled flag is tracked reactively and the poll
+     * loop runs on its own fixed cadence gated on that flag.
      */
     override fun startPolling() {
         if (pollingJob?.isActive == true) return
         pollingJob = cacheScope.launch {
-            seerrPreferencesStore.preferences.collect { prefs ->
-                if (!prefs.enabled) return@collect
-                getRequestCount().onSuccess { count ->
-                    _pendingRequestCount.value = count.pending
+            // Track the latest enabled flag without delaying the collector.
+            var enabled = false
+            val prefsJob = launch {
+                seerrPreferencesStore.preferences.collect { prefs ->
+                    enabled = prefs.enabled
+                    // Refresh immediately when Seerr is (re)enabled so the UI
+                    // doesn't wait up to 60s for the first poll.
+                    if (enabled) doPoll()
                 }
-                if (_currentUser.value == null) {
-                    getCurrentUser()
-                }
-                kotlinx.coroutines.delay(60_000)
             }
+            try {
+                while (isActive) {
+                    kotlinx.coroutines.delay(POLL_INTERVAL_MS)
+                    if (enabled) doPoll()
+                }
+            } finally {
+                prefsJob.cancel()
+            }
+        }
+    }
+
+    private suspend fun doPoll() {
+        getRequestCount().onSuccess { count ->
+            _pendingRequestCount.value = count.pending
+        }
+        if (_currentUser.value == null) {
+            getCurrentUser()
         }
     }
 

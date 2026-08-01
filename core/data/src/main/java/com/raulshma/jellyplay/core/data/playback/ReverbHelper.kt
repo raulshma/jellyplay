@@ -36,8 +36,18 @@ class ReverbHelper : AudioFxHelper<PresetReverb>(TAG) {
     override fun shouldAttach(): Boolean = preset != ReverbPreset.NONE
 
     override fun create(audioSessionId: Int): PresetReverb? {
+        // Construct first, then configure inside try/catch so a throw during
+        // setPreset still releases the native PresetReverb handle — otherwise
+        // the object never reaches `fx` and detach()/releaseFx() can't free it.
         val target = this.preset
-        return PresetReverb(0, audioSessionId).apply { setPreset(target.androidPreset) }
+        val fx = PresetReverb(0, audioSessionId)
+        return try {
+            fx.setPreset(target.androidPreset)
+            fx
+        } catch (e: Exception) {
+            runCatching { fx.release() }
+            throw e
+        }
     }
 
     companion object {

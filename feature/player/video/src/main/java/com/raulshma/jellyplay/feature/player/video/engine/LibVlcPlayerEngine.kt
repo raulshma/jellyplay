@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -807,7 +808,7 @@ class LibVlcPlayerEngine(
             },
         ).launch()
         awaitClose { ticker.cancel() }
-    }
+    }.conflate() // only the most-recent position is meaningful; drop stale ticks
 
     private fun updateVideoStats() {
         val mp = mediaPlayer ?: return

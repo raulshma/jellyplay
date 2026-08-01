@@ -22,7 +22,10 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
     // reports from the reporter loop and a STOP from release do not interleave.
     private val mutex = Mutex()
 
-    private suspend fun nowMillis(): Long = withContext(Dispatchers.IO) { System.currentTimeMillis() }
+    // Every caller already runs inside `withContext(Dispatchers.IO)`; wrapping a
+    // non-blocking wall-clock read in its own dispatcher handoff was a redundant
+    // reschedule on the playback-progress path (called every ~10s + on release).
+    private fun nowMillis(): Long = System.currentTimeMillis()
 
     override suspend fun enqueueStart(
         itemId: String,

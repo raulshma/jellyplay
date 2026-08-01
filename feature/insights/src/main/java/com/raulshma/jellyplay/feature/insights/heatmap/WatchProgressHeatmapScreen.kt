@@ -848,9 +848,11 @@ private fun DayDetailSheet(
 
                 Spacer(Modifier.height(12.dp))
 
-                val uniqueItems = dayInfo.sessions
-                    .groupBy { it.itemId }
-                    .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
+                val uniqueItems = remember(dayInfo) {
+                    dayInfo.sessions
+                        .groupBy { it.itemId }
+                        .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
+                }
 
                 uniqueItems.forEach { (itemId, durationTicks) ->
                     val resolved = dayInfo.resolvedItems[itemId]
@@ -957,9 +959,11 @@ private fun DayDetailSheet(
 
                 Spacer(Modifier.height(12.dp))
 
-                val uniqueItems = dayInfo.sessions
-                    .groupBy { it.itemId }
-                    .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
+                val uniqueItems = remember(dayInfo) {
+                    dayInfo.sessions
+                        .groupBy { it.itemId }
+                        .mapValues { (_, sessions) -> sessions.maxOf { it.duration } }
+                }
 
                 uniqueItems.forEach { (itemId, durationTicks) ->
                     val resolved = dayInfo.resolvedItems[itemId]

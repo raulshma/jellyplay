@@ -48,6 +48,26 @@ fun AmbientColorBackdrop(
         List(blobCount) { Animatable(initialValue = 0f) }
     }
 
+    // Resolve the blob palette + the per-blob 3-stop gradient stops ONCE (keyed
+    // on the palette). The Canvas below redraws every animation frame (~60fps
+    // over a 10-22s drift), and previously allocated a fresh List<Color> per
+    // blob per frame just to build the radialGradient stops. The center/radius
+    // still vary per frame, but the stop colors are identical for a given
+    // palette, so hoisting them out of the draw phase removes that churn.
+    val blobStops = remember(colors, blobCount) {
+        val blobColors = colors.ifEmpty {
+            listOf(
+                AmbientColors.deepIndigo,
+                AmbientColors.deepPurple,
+                AmbientColors.deepTeal,
+                AmbientColors.deepRed,
+            )
+        }
+        blobColors.take(blobCount).map { color ->
+            listOf(color.copy(alpha = 0.6f), color.copy(alpha = 0.2f), Color.Transparent)
+        }
+    }
+
     // Each blob runs its own slow infinite animation. Frozen under reduced
     // motion (the LaunchedEffect bodies are skipped, values stay 0f) which also
     // serves as the performance-mode freeze — callers gate this composable on
@@ -73,16 +93,7 @@ fun AmbientColorBackdrop(
         val width = size.width
         val height = size.height
 
-        val blobColors = colors.ifEmpty {
-            listOf(
-                AmbientColors.deepIndigo,
-                AmbientColors.deepPurple,
-                AmbientColors.deepTeal,
-                AmbientColors.deepRed,
-            )
-        }
-
-        blobColors.take(blobCount).forEachIndexed { index, color ->
+        blobStops.forEachIndexed { index, stops ->
             val progress = animatables[index].value
             val x = width * (0.2f + 0.6f * sin(progress * 2f * Math.PI.toFloat() + index))
             val y = height * (0.2f + 0.6f * cos(progress * 2f * Math.PI.toFloat() + index * 1.5f))
@@ -91,11 +102,7 @@ fun AmbientColorBackdrop(
 
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(
-                        color.copy(alpha = 0.6f),
-                        color.copy(alpha = 0.2f),
-                        Color.Transparent,
-                    ),
+                    colors = stops,
                     center = Offset(x, y),
                     radius = radius,
                 ),
