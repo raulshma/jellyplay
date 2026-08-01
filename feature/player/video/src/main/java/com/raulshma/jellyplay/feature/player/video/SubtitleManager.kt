@@ -410,10 +410,17 @@ internal class SubtitleManager(
      * - [SubtitleProviderKind.JELLYFIN]: delegates to the existing server-side
      *   [downloadSubtitle] path (POST + media-detail poll) using the preserved
      *   [RemoteSubtitleInfo] in [SubtitleSearchResult.jellyfinInfo].
-     * - External providers: fetches the bytes via the repository, writes them to
-     *   a cache file, and side-loads via [addExternalSubtitle] — the track then
-     *   appears immediately in the engine's track list (no server round-trip,
-     *   unlike Jellyfin). Per-id status mirrors the Jellyfin download flow.
+     * - External providers: fetches the bytes via the repository, side-loads
+     *   them into the live engine for immediate use, **and uploads them to the
+     *   Jellyfin server** so the subtitle persists as a `MediaStream` (survives
+     *   player close/reopen). The upload mirrors the editor's provider path and
+     *   the Jellyfin download path; without it the bytes lived only in a
+     *   disposable cache file plus a one-shot side-load, so the subtitle
+     *   vanished the next time the media was played. After the upload lands the
+     *   detail cache is invalidated and re-fetched so the new stream surfaces in
+     *   `mediaStreams` (and thus in `buildExternalSubtitles` on the next
+     *   playback) and in the track picker right away. Per-id status mirrors the
+     *   Jellyfin download flow.
      */
     fun downloadProviderSubtitle(result: SubtitleSearchResult) {
         val itemId = getCurrentItemId() ?: return
@@ -431,6 +438,9 @@ internal class SubtitleManager(
                     ensureActive()
                     fileResult.fold(
                         onSuccess = { file ->
+                            // Side-load immediately so the subtitle is usable in
+                            // this playback session without waiting for the server
+                            // round-trip (kept from the original flow).
                             val saved = persistSubtitle(itemId, result, file)
                             val codec = codecForFormat(file.format)
                             val source = SubtitleSource(
@@ -444,8 +454,44 @@ internal class SubtitleManager(
                                 id = "provider:$statusKey",
                             )
                             addExternalSubtitle(source)
-                            userMessageBus.info("Subtitle added")
-                            markProviderDownloadStatus(statusKey, SubtitleDownloadState.DOWNLOADED)
+
+                            // Upload to the Jellyfin server so the subtitle is
+                            // persisted as a MediaStream — otherwise it only
+                            // exists in the disposable cache file / one-shot
+                            // side-load above and disappears on replay. Matches
+                            // the editor's provider-download path.
+                            val base64 = android.util.Base64.encodeToString(file.bytes, android.util.Base64.NO_WRAP)
+                            val uploadResult = playbackRepository.uploadSubtitle(
+                                itemId = itemId,
+                                data = base64,
+                                fileName = file.fileName,
+                                language = file.language ?: result.language,
+                                isForced = result.isForced,
+                                isHearingImpaired = result.isHearingImpaired,
+                            )
+                            ensureActive()
+                            uploadResult.fold(
+                                onSuccess = {
+                                    // Invalidate the detail cache and re-fetch so the
+                                    // freshly attached stream lands in the cached
+                                    // media detail (and thus in buildExternalSubtitles
+                                    // on the next playback) and in the track picker
+                                    // now — getMediaDetail is a single-flight cached
+                                    // read, so without invalidation it would keep
+                                    // returning the pre-upload snapshot.
+                                    mediaRepository.invalidateDetailCache(itemId)
+                                    mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
+                                        onMediaDetailRefreshed(detail)
+                                    }
+                                    userMessageBus.info("Subtitle added")
+                                    markProviderDownloadStatus(statusKey, SubtitleDownloadState.DOWNLOADED)
+                                },
+                                onFailure = { e ->
+                                    val msg = e.message ?: "Save failed"
+                                    userMessageBus.error("Subtitle save failed: $msg")
+                                    markProviderDownloadStatus(statusKey, SubtitleDownloadState.FAILED, msg)
+                                },
+                            )
                         },
                         onFailure = { e ->
                             val msg = e.message ?: "Download failed"
@@ -460,9 +506,10 @@ internal class SubtitleManager(
 
     /**
      * Writes the downloaded subtitle bytes to a per-item cache file under the
-     * app cache dir. Using cache (not files) because these are disposable — the
-     * player side-loads them for the session; the editor uploads them to
-     * Jellyfin for persistence. Naming mirrors the offline-subtitle convention.
+     * app cache dir. Using cache (not files) because the only durable copy is
+     * the one uploaded to the Jellyfin server (see [downloadProviderSubtitle]);
+     * this file is just the source for the immediate in-session side-load.
+     * Naming mirrors the offline-subtitle convention.
      */
     private suspend fun persistSubtitle(
         itemId: String,
