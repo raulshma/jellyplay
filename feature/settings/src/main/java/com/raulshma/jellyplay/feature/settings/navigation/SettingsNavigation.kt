@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.settings.AboutScreen
 import com.raulshma.jellyplay.feature.settings.ArrSettingsScreen
+import com.raulshma.jellyplay.feature.settings.SubtitleProviderSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AudioSettingsScreen
 import com.raulshma.jellyplay.feature.settings.BackupSettingsScreen
@@ -201,12 +202,20 @@ fun EntryProviderScope<NavKey>.settingsSection(
             onBack = { navigator.goBack() },
             onSeerrSettings = { navigator.navigate(Route.SeerrSettings()) },
             onArrSettings = { navigator.navigate(Route.ArrSettings()) },
+            onSubtitleProviderSettings = { navigator.navigate(Route.SubtitleProviderSettings()) },
             highlightSettingId = entry.highlightSettingId,
         )
     }
 
     entry<Route.ArrSettings> { entry ->
         ArrSettingsScreen(
+            onBack = { navigator.goBack() },
+            highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.SubtitleProviderSettings> { entry ->
+        SubtitleProviderSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
         )

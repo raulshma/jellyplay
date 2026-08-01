@@ -118,6 +118,10 @@
     <string name="player_video_search_failed">Search failed</string>
     <string name="player_video_no_results_found">No results found</string>
     <string name="player_video_pick_language_hint">Pick a language and search to find subtitles.</string>
+    <string name="player_video_subtitle_provider_all">All</string>
+    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
+    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
+    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
     <string name="player_video_change_file">Change: %1$s</string>
     <string name="player_video_select_file">Select File (.srt, .ass, .ssa, .vtt)</string>
     <string name="player_video_language">Language</string>

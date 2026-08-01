@@ -1123,4 +1123,17 @@
         <item quantity="one">고급 설정 %1$d개 숨김</item>
         <item quantity="other">고급 설정 %1$d개 숨김</item>
     </plurals>
+    <string name="settings_integrations_subtitles">자막 제공자</string>
+    <string name="settings_integrations_subtitles_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
+    <string name="settings_subtitles_wyzie">Wyzie Subs</string>
+    <string name="settings_subtitles_wyzie_help">무료 자막 API (하루 1,000회 요청). store.wyzie.io/redeem에서 키 발급.</string>
+    <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
+    <string name="settings_subtitles_opensubtitles_help">API key가 필요합니다. 사용자 이름/비밀번호(선택)로 일일 다운로드 한도가 증가합니다.</string>
+    <string name="settings_subtitles_api_key">API key</string>
+    <string name="settings_subtitles_username_optional">사용자 이름 (선택)</string>
+    <string name="settings_subtitles_password_optional">비밀번호 (선택)</string>
+    <string name="settings_subtitles_save">저장</string>
+    <string name="settings_subtitles_test">테스트</string>
+    <string name="settings_subtitles_testing">테스트 중…</string>
+    <string name="settings_subtitles_connected">연결됨</string>
 </resources>

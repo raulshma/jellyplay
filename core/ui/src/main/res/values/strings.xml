@@ -46,6 +46,14 @@
     <string name="core_media_channel_plural">Channels</string>
     <string name="core_media_unknown_plural">Unknown</string>
 
+    <!-- Display labels for [com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind],
+         shared by the player and the metadata editor so provider badges render
+         consistently. Brand names — not translated; resolve via
+         [subtitleProviderDisplayName] / [subtitleProviderDisplayNameRes]. -->
+    <string name="core_subtitle_provider_jellyfin" translatable="false">Jellyfin</string>
+    <string name="core_subtitle_provider_wyzie" translatable="false">Wyzie</string>
+    <string name="core_subtitle_provider_opensubtitles" translatable="false">OpenSubtitles</string>
+
     <!-- core/ui shared -->
     <string name="core_report">Report</string>
     <string name="core_ui_back">Back</string>

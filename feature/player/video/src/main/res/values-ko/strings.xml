@@ -301,4 +301,8 @@
     <!-- Localized error messages -->
     <string name="player_video_font_invalid_format">선택한 파일이 .ttf 또는 .otf 글꼴이 아닙니다.</string>
 
+    <string name="player_video_subtitle_provider_all">전체</string>
+    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
+    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
+    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 </resources>

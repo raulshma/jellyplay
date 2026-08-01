@@ -51,6 +51,9 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
+import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
 import com.raulshma.jellyplay.feature.editor.R
@@ -66,6 +69,10 @@ fun SubtitlesTab(
     var showUploadSheet by remember { mutableStateOf(false) }
     var showSearchSheet by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf<MediaStream?>(null) }
+
+    // Load configured providers once so the search sheet knows whether to show
+    // provider filter chips + the merged provider list.
+    androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.loadConfiguredSubtitleProviders() }
 
     if (state.isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -182,9 +189,25 @@ fun SubtitlesTab(
         RemoteSubtitleSearchSheet(
             cultures = state.editorInfo?.cultures ?: emptyList(),
             results = state.remoteSubtitleResults,
-            onSearch = { language -> viewModel.searchRemoteSubtitles(language) },
+            onSearch = { language ->
+                // configuredSubtitleProviders always includes Jellyfin (server session),
+                // so size > 1 means at least one external provider is on. Use the single
+                // merged Jellyfin + external search in that case; otherwise the legacy
+                // Jellyfin-only path avoids a wasted external round-trip.
+                if (state.configuredSubtitleProviders.size > 1) {
+                    viewModel.searchAllSubtitleProviders(language)
+                } else {
+                    viewModel.searchRemoteSubtitles(language)
+                }
+            },
             onDownload = { subtitleId -> viewModel.downloadRemoteSubtitle(subtitleId) },
             onDismiss = { showSearchSheet = false },
+            providerResults = state.providerSubtitleResults,
+            providerErrors = state.providerSubtitleErrors,
+            configuredProviders = state.configuredSubtitleProviders,
+            isSearchingProviders = state.isSearchingProviderSubtitles,
+            isDownloadingProvider = state.isDownloadingProviderSubtitle,
+            onDownloadProvider = { viewModel.downloadProviderSubtitle(it) },
         )
     }
 }
@@ -359,6 +382,12 @@ private fun RemoteSubtitleSearchSheet(
     onSearch: (String) -> Unit,
     onDownload: (String) -> Unit,
     onDismiss: () -> Unit,
+    providerResults: List<SubtitleSearchResult>,
+    providerErrors: Map<SubtitleProviderKind, String>,
+    configuredProviders: Set<SubtitleProviderKind>,
+    isSearchingProviders: Boolean,
+    isDownloadingProvider: Boolean,
+    onDownloadProvider: (SubtitleSearchResult) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var searchLanguage by remember { mutableStateOf("en") }
@@ -421,25 +450,39 @@ private fun RemoteSubtitleSearchSheet(
                     }
                 }
 
-                if (hasSearched && results.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(stringResource(R.string.editor_subtitles_no_results), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.height(400.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        items(results, key = { it.id }) { subtitle ->
-                            RemoteSubtitleCard(
-                                subtitle = subtitle,
-                                onDownload = { onDownload(subtitle.id) },
-                            )
+                // When external providers are configured the merged list
+                // (ProviderResultsSection) already includes Jellyfin rows, so
+                // the legacy Jellyfin-only list is redundant — render exactly one.
+                if (configuredProviders.size <= 1) {
+                    if (hasSearched && results.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(200.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(stringResource(R.string.editor_subtitles_no_results), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.height(400.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            items(results, key = { it.id }) { subtitle ->
+                                RemoteSubtitleCard(
+                                    subtitle = subtitle,
+                                    onDownload = { onDownload(subtitle.id) },
+                                )
+                            }
                         }
                     }
+                }
+                if (configuredProviders.size > 1) {
+                    ProviderResultsSection(
+                        results = providerResults,
+                        errors = providerErrors,
+                        isLoading = isSearchingProviders,
+                        isDownloading = isDownloadingProvider,
+                        onDownload = onDownloadProvider,
+                    )
                 }
             }
         }
@@ -500,30 +543,110 @@ private fun RemoteSubtitleSearchSheet(
                     }
                 }
 
-                if (hasSearched && results.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(stringResource(R.string.editor_subtitles_no_results), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.height(400.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        items(results, key = { it.id }) { subtitle ->
-                            RemoteSubtitleCard(
-                                subtitle = subtitle,
-                                onDownload = { onDownload(subtitle.id) },
-                            )
+                // When external providers are configured the merged list
+                // (ProviderResultsSection) already includes Jellyfin rows, so
+                // the legacy Jellyfin-only list is redundant — render exactly one.
+                if (configuredProviders.size <= 1) {
+                    if (hasSearched && results.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(200.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(stringResource(R.string.editor_subtitles_no_results), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.height(400.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            items(results, key = { it.id }) { subtitle ->
+                                RemoteSubtitleCard(
+                                    subtitle = subtitle,
+                                    onDownload = { onDownload(subtitle.id) },
+                                )
+                            }
                         }
                     }
+                }
+                if (configuredProviders.size > 1) {
+                    ProviderResultsSection(
+                        results = providerResults,
+                        errors = providerErrors,
+                        isLoading = isSearchingProviders,
+                        isDownloading = isDownloadingProvider,
+                        onDownload = onDownloadProvider,
+                    )
                 }
             }
         }
     }
 }
+
+/**
+ * Renders the merged cross-provider subtitle results (Jellyfin + Wyzie +
+ * OpenSubtitles) with a provider label per row and per-provider error chips.
+ * Only shown when external providers are configured; collapses to nothing
+ * otherwise so the legacy Jellyfin-only list stands alone.
+ */
+@Composable
+private fun ProviderResultsSection(
+    results: List<SubtitleSearchResult>,
+    errors: Map<SubtitleProviderKind, String>,
+    isLoading: Boolean,
+    isDownloading: Boolean,
+    onDownload: (SubtitleSearchResult) -> Unit,
+) {
+    if (results.isEmpty() && errors.isEmpty() && !isLoading) return
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (errors.isNotEmpty()) {
+            errors.forEach { (_, msg) ->
+                Text(
+                    msg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+        if (isLoading) {
+            Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.Center) {
+                JellyPlayLoadingIndicator()
+            }
+        }
+        results.forEach { r ->
+            ListItem(
+                headlineContent = { Text(r.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                supportingContent = {
+                    Column {
+                        r.releaseName?.takeIf { it.isNotBlank() }?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
+                        }
+                        Text(
+                            editorProviderLabel(r.provider),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                },
+                trailingContent = {
+                    FilledTonalButton(
+                        onClick = { onDownload(r) },
+                        enabled = !isDownloading,
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = 12.dp, vertical = 0.dp,
+                        ),
+                    ) {
+                        Text(stringResource(R.string.editor_subtitles_download))
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun editorProviderLabel(kind: SubtitleProviderKind): String = kind.localizedDisplayName()
 
 @Composable
 private fun RemoteSubtitleCard(

@@ -141,4 +141,44 @@ class ApiExceptionTest {
         val ex = ApiException.fromSeerrHttp(503, "HTTP 503: Service Unavailable")
         assertEquals("HTTP 503: Service Unavailable", ex.message)
     }
+
+    // --- fromHttpResponse + Retry-After parsing (subtitle-provider rate limits) ---
+
+    @Test
+    fun `parseRetryAfterMs converts delta-seconds to millis`() {
+        assertNull(ApiException.parseRetryAfterMs(null))
+        assertNull(ApiException.parseRetryAfterMs(""))
+        assertEquals(30_000L, ApiException.parseRetryAfterMs("30"))
+        assertEquals(1_000L, ApiException.parseRetryAfterMs("1"))
+    }
+
+    @Test
+    fun `parseRetryAfterMs rejects non-numeric and non-positive values`() {
+        assertNull(ApiException.parseRetryAfterMs("Wed, 21 Oct 2015 07:28:00 GMT")) // HTTP-date form
+        assertNull(ApiException.parseRetryAfterMs("not-a-number"))
+        assertNull(ApiException.parseRetryAfterMs("0"))
+        assertNull(ApiException.parseRetryAfterMs("-5"))
+    }
+
+    @Test
+    fun `fromHttpResponse captures Retry-After on 429`() {
+        val ex = ApiException.fromHttpResponse(429, "rate limited", "30")
+        assertTrue(ex.isRetryable)
+        assertEquals(429, ex.httpCode)
+        assertEquals(30_000L, ex.retryAfterMs)
+    }
+
+    @Test
+    fun `fromHttpResponse leaves retryAfterMs null when no header`() {
+        val ex = ApiException.fromHttpResponse(503, "down", null)
+        assertTrue(ex.isRetryable)
+        assertNull(ex.retryAfterMs)
+    }
+
+    @Test
+    fun `fromHttpResponse classifies non-retryable codes`() {
+        val ex = ApiException.fromHttpResponse(404, "not found", null)
+        assertFalse(ex.isRetryable)
+        assertNull(ex.retryAfterMs)
+    }
 }

@@ -301,4 +301,8 @@
     <!-- Localized error messages -->
     <string name="player_video_font_invalid_format">所选文件不是 .ttf 或 .otf 字体。</string>
 
+    <string name="player_video_subtitle_provider_all">全部</string>
+    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
+    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
+    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 </resources>
