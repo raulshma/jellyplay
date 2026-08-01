@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
@@ -88,7 +89,7 @@ internal fun HomeBackdrop(state: HomeBackdropState) {
             null
         },
     )
-    val ambientColors = extractAmbientColors(artworkColors)
+    val ambientColors = remember(artworkColors) { extractAmbientColors(artworkColors) }
 
     val layer = resolveBackdropLayer(state)
 

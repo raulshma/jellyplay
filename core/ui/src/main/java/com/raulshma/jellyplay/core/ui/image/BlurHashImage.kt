@@ -40,7 +40,12 @@ internal fun BlurHashImage(
     decodeHeight: Int = 32,
 ) {
     val bitmapState = produceState<ImageBitmap?>(null, blurHash, decodeWidth, decodeHeight) {
-        val cached = BlurHashCache.get(blurHash)
+        // Include the decode dimensions in the cache key: the same blurHash is
+        // decoded at multiple sizes (MediaImage uses 32, BlurHashBackdrop 48),
+        // so a hash-only key would collide and hand a caller a bitmap decoded
+        // for a different size, stretching it under ContentScale.
+        val cacheKey = "$blurHash ${decodeWidth}x$decodeHeight"
+        val cached = BlurHashCache.get(cacheKey)
         if (cached != null && !cached.isRecycled) {
             value = cached.asImageBitmap()
             return@produceState
@@ -48,7 +53,7 @@ internal fun BlurHashImage(
         withContext(Dispatchers.Default) {
             val bitmap = BlurHashDecoder.decode(blurHash, decodeWidth, decodeHeight)
             if (bitmap != null) {
-                BlurHashCache.put(blurHash, bitmap)
+                BlurHashCache.put(cacheKey, bitmap)
                 value = bitmap.asImageBitmap()
             }
         }

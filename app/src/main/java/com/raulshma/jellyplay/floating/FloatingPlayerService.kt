@@ -189,6 +189,12 @@ class FloatingPlayerService : Service() {
         }
         overlayView = null
         overlayParams = null
+        // Clear the ViewModelStore so ViewModels created in the overlay's
+        // Compose tree (and their injected collaborators/scopes) are torn down
+        // rather than surviving across service show/hide cycles. The lifecycle
+        // ON_DESTROY above only notifies the LifecycleOwner; without this the
+        // store keeps every ViewModel alive until the process dies.
+        overlayViewModelStoreOwner.store.clear()
     }
 
     /**

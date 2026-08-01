@@ -151,12 +151,18 @@ class EqualizerHelper {
     }
 
     fun getBandFrequencies(audioSessionId: Int): List<Int> {
+        // Construct the native Equalizer in a try/finally so its native handle
+        // is released even if numberOfBands/getCenterFreq throw after
+        // construction. android.media.audiofx.* native objects are not GC'd
+        // until release(); a throw between construct and release would leak it.
         return try {
             val eq = Equalizer(0, audioSessionId)
-            val count = eq.numberOfBands.toInt()
-            val freqs = (0 until count).map { eq.getCenterFreq(it.toShort()) / 1000 }
-            eq.release()
-            freqs
+            try {
+                val count = eq.numberOfBands.toInt()
+                (0 until count).map { eq.getCenterFreq(it.toShort()) / 1000 }
+            } finally {
+                eq.release()
+            }
         } catch (_: Exception) {
             EqualizerSettings.BAND_FREQUENCIES
         }

@@ -93,7 +93,11 @@ private fun AmbientScreenContent(
     onSkipPrevious: () -> Unit,
 ) {
     val artworkColors = rememberArtworkColors(imageUrl)
-    val colors = extractAmbientColors(artworkColors)
+    // Memoize the resolved blob palette: extractAmbientColors builds a fresh
+    // listOfNotNull{}.map{} each call, and the list is structurally identical
+    // for a given palette. Recomposition here is gated by rememberArtworkColors
+    // but still churns the allocation whenever it re-emits.
+    val colors = remember(artworkColors) { extractAmbientColors(artworkColors) }
 
     val isTv = LocalTvMode.current
     val controlsFocusRequester = remember { FocusRequester() }
@@ -219,6 +223,25 @@ private fun AmbientBackground(colors: List<Color>) {
         List(blobCount) { Animatable(initialValue = 0f) }
     }
 
+    // Resolve the blob palette + per-blob 3-stop gradient stops ONCE (keyed on
+    // the palette). The Canvas redraws ~60fps over the whole listening session
+    // and previously rebuilt a List<Color> per blob per frame for the radial
+    // gradient stops; the stops are identical for a given palette, so hoisting
+    // them removes that per-frame churn. Center/radius still vary per frame.
+    val blobStops = remember(colors, blobCount) {
+        val blobColors = colors.ifEmpty {
+            listOf(
+                AmbientColors.deepIndigo,
+                AmbientColors.deepPurple,
+                AmbientColors.deepTeal,
+                AmbientColors.deepRed,
+            )
+        }
+        blobColors.take(blobCount).map { color ->
+            listOf(color.copy(alpha = 0.6f), color.copy(alpha = 0.2f), Color.Transparent)
+        }
+    }
+
     // Four concurrent infinite animations driving a full-screen Canvas redraw.
     // This is the most expensive decorative surface in the app and it stays
     // visible for the whole listening session. In performance mode freeze the
@@ -246,16 +269,7 @@ private fun AmbientBackground(colors: List<Color>) {
         val width = size.width
         val height = size.height
 
-        val blobColors = colors.ifEmpty {
-            listOf(
-                AmbientColors.deepIndigo,
-                AmbientColors.deepPurple,
-                AmbientColors.deepTeal,
-                AmbientColors.deepRed,
-            )
-        }
-
-        blobColors.take(blobCount).forEachIndexed { index, color ->
+        blobStops.forEachIndexed { index, stops ->
             val progress = animatables[index].value
             val x = width * (0.2f + 0.6f * kotlin.math.sin(progress * 2 * Math.PI + index).toFloat())
             val y = height * (0.2f + 0.6f * kotlin.math.cos(progress * 2 * Math.PI + index * 1.5f).toFloat())
@@ -263,11 +277,7 @@ private fun AmbientBackground(colors: List<Color>) {
 
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(
-                        color.copy(alpha = 0.6f),
-                        color.copy(alpha = 0.2f),
-                        Color.Transparent,
-                    ),
+                    colors = stops,
                     center = Offset(x, y),
                     radius = radius,
                 ),

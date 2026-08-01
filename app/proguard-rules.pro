@@ -25,23 +25,11 @@
 -keep,includedescriptorclasses class com.raulshma.jellyplay.**$$serializer { *; }
 
 -keep class org.jellyfin.sdk.model.api.** { *; }
--keep class org.jellyfin.sdk.model.** { *; }
 
 -keep class com.raulshma.jellyplay.core.data.worker.DownloadWorker { *; }
 
 -keep class com.raulshma.jellyplay.core.data.playback.JellyPlayPlaybackService { *; }
--keep class com.raulshma.jellyplay.core.data.playback.*Helper { *; }
 -keep class com.raulshma.jellyplay.screensaver.JellyPlayDreamService { *; }
-
--keep @androidx.room.Entity class * { *; }
--keep class * extends androidx.room.RoomDatabase { *; }
-
--keepclassmembers class * {
-    @androidx.room.Query <methods>;
-    @androidx.room.Insert <methods>;
-    @androidx.room.Update <methods>;
-    @androidx.room.Delete <methods>;
-}
 
 -keepclassmembers class * {
     @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
@@ -77,11 +65,6 @@
 # WorkManager
 -keepclassmembers class * extends androidx.work.Worker {
     <init>(android.content.Context,androidx.work.WorkerParameters);
-}
-
-# Hilt - consumer rules provided by library
--keepclassmembers class * {
-    @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
 }
 
 # Kotlin coroutines

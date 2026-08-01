@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.details
 
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -1243,17 +1242,6 @@ private fun SeasonsSection(
     val isTv = LocalTvMode.current
     val sortedSeasons = remember(seasons) {
         seasons.sortedByDescending { it.seasonNumber }.distinctBy { it.seasonNumber }
-    }
-    // TEMP diagnostic: capture which seasons have artwork so we can see whether
-    // posterPath is arriving null from the API or being lost locally. Remove
-    // once the season/episode image issue is confirmed resolved.
-    LaunchedEffect(sortedSeasons) {
-        sortedSeasons.forEach { s ->
-            Log.d(
-                "SeerrSeasonImg",
-                "season=${s.seasonNumber} name='${s.name}' posterPath=${s.posterPath} posterUrl=${s.posterUrl}"
-            )
-        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
