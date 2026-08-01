@@ -58,7 +58,17 @@ object RetryPolicy {
             if (lastResult.isSuccess) return lastResult
             val exception = lastResult.exceptionOrNull() ?: return lastResult
             if (!isRetryable(exception)) return lastResult
-            val backoffMs = calculateBackoff(attempt, jitterFloorMs = jitterFloorMs)
+            // Honor a server-advised Retry-After (parsed on the ApiException)
+            // by flooring the computed exponential backoff at it — do not retry
+            // faster than the server asked. The cap still bounds the wait so a
+            // pathological Retry-After can't stall indefinitely.
+            val computed = calculateBackoff(attempt, jitterFloorMs = jitterFloorMs)
+            val serverAdvised = (exception as? ApiException)?.retryAfterMs
+            val backoffMs = if (serverAdvised != null) {
+                maxOf(computed, minOf(serverAdvised, DEFAULT_MAX_DELAY_MS))
+            } else {
+                computed
+            }
             delay(backoffMs)
             lastResult = block()
         }

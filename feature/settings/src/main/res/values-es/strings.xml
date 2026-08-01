@@ -1125,4 +1125,17 @@
         <item quantity="one">%1$d ajuste avanzado oculto</item>
         <item quantity="other">%1$d ajustes avanzados ocultos</item>
     </plurals>
+    <string name="settings_integrations_subtitles">Proveedores de subtítulos</string>
+    <string name="settings_integrations_subtitles_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
+    <string name="settings_subtitles_wyzie">Wyzie Subs</string>
+    <string name="settings_subtitles_wyzie_help">API de subtítulos gratuita (1.000 solicitudes/día). Consigue una clave en store.wyzie.io/redeem.</string>
+    <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
+    <string name="settings_subtitles_opensubtitles_help">Se requiere API key. El nombre de usuario/contraseña opcionales aumentan la cuota diaria de descargas.</string>
+    <string name="settings_subtitles_api_key">API key</string>
+    <string name="settings_subtitles_username_optional">Nombre de usuario (opcional)</string>
+    <string name="settings_subtitles_password_optional">Contraseña (opcional)</string>
+    <string name="settings_subtitles_save">Guardar</string>
+    <string name="settings_subtitles_test">Probar</string>
+    <string name="settings_subtitles_testing">Probando…</string>
+    <string name="settings_subtitles_connected">Conectado</string>
 </resources>
