@@ -591,6 +591,8 @@
     <!-- LicensesScreen.kt -->
     <string name="settings_open_source_licenses_title">Open Source Licenses</string>
     <string name="settings_license_text_unavailable">Full license text is not available for this library.</string>
+    <!-- Localized error messages -->
+    <string name="settings_licenses_load_error">Could not load license information</string>
 
     <!-- ExperimentalSettingsScreen.kt -->
     <string name="settings_experimental_title">Experimental</string>
@@ -1104,4 +1106,37 @@
     <string name="settings_dvr_quality_low">Transcode to Low quality (480p)</string>
 
     <!-- UserManagementScreen.kt - already mostly defined; confirm ones used inline -->
+
+    <!-- Localized UI text extracted from settings screens -->
+    <string name="settings_nav_bar_title">Navigation Bar</string>
+    <string name="settings_nav_auto_hide">Auto-hide on scroll</string>
+    <string name="settings_nav_pinned">Pinned</string>
+    <string name="settings_nav_items_summary">%1$d of %2$d items</string>
+    <string name="settings_nav_items_summary_with_scroll">%1$d of %2$d items - %3$s</string>
+    <string name="settings_nav_hide_on_scroll">Hide on Scroll</string>
+    <string name="settings_nav_hide_on_scroll_on">Bar hides when scrolling down</string>
+    <string name="settings_nav_hide_on_scroll_off">Bar stays visible</string>
+    <string name="settings_nav_item_home">Home</string>
+    <string name="settings_nav_item_home_subtitle">Home dashboard</string>
+    <string name="settings_nav_item_library">Library</string>
+    <string name="settings_nav_item_library_subtitle">Browse your media libraries</string>
+    <string name="settings_nav_item_search">Search</string>
+    <string name="settings_nav_item_search_subtitle">Find movies, shows &amp; more</string>
+    <string name="settings_nav_item_live_tv">Live TV</string>
+    <string name="settings_nav_item_live_tv_subtitle">Live channels &amp; guide</string>
+    <string name="settings_nav_item_browse">Browse</string>
+    <string name="settings_nav_item_browse_subtitle">Music libraries (music mode)</string>
+    <string name="settings_nav_item_shortcuts">Shortcuts</string>
+    <string name="settings_nav_item_shortcuts_subtitle">Quick access shortcuts</string>
+    <string name="settings_reorder_section">Reorder section</string>
+    <string name="settings_hide_advanced">Hide advanced settings</string>
+    <string name="settings_show_advanced">Show advanced settings</string>
+    <string name="settings_advanced_hidden">Advanced settings hidden</string>
+    <string name="settings_advanced_shown">Advanced settings shown</string>
+
+
+    <plurals name="settings_advanced_settings_hidden">
+        <item quantity="one">%1$d advanced setting hidden</item>
+        <item quantity="other">%1$d advanced settings hidden</item>
+    </plurals>
 </resources>

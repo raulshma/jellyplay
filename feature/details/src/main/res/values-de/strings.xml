@@ -202,6 +202,11 @@
     <string name="detail_manage_cd_toggle_monitor_episode">Überwachung für Episode umschalten</string>
     <string name="detail_manage_cd_episode_menu">Episoden-Optionen</string>
 
+    <!-- Localized error messages -->
+    <string name="detail_manage_series_load_error">Serien konnten nicht von Jellyfin geladen werden.</string>
+    <string name="detail_manage_series_no_tvdb">Diese Serie hat keine TVDb-ID; Sonarr kann sie nicht finden.</string>
+    <string name="detail_manage_series_not_tracked">Kein Sonarr-Server verfolgt diese Serie. Füge die Serie zuerst in Sonarr hinzu.</string>
+
     <!-- ── Seerr request / status buttons ──────────────────────────────── -->
     <string name="detail_available">Verfügbar</string>
     <string name="detail_request">Anfordern</string>
@@ -233,4 +238,24 @@
     <!-- auto-localized: previously translatable="false" (2) -->
     <string name="detail_section_seerr_recommendations">Seerr-Empfehlungen</string>
     <string name="detail_section_seerr_similar">Ähnlich laut Seerr</string>
+
+    <!-- Localized UI text extracted from SeerrDetailScreen -->
+    <string name="detail_seerr_unknown_error">Unbekannter Fehler</string>
+    <string name="detail_seerr_overview">Übersicht</string>
+    <string name="detail_seerr_episodes_count">%1$d Episoden</string>
+    <string name="detail_seerr_season_n">Staffel %1$d</string>
+    <string name="detail_seerr_director_format">Regisseur: %1$s</string>
+    <string name="detail_seerr_show_more">Mehr anzeigen</string>
+    <string name="detail_seerr_video">Video</string>
+    <string name="detail_seerr_information">Informationen</string>
+    <string name="detail_seerr_status">Status</string>
+    <string name="detail_seerr_unknown">Unbekannt</string>
+    <string name="detail_seerr_release_date">Veröffentlichungsdatum</string>
+    <string name="detail_seerr_revenue">Einnahmen</string>
+    <string name="detail_seerr_budget">Budget</string>
+    <string name="detail_seerr_language">Sprache</string>
+    <string name="detail_seerr_country">Land</string>
+    <string name="detail_seerr_studios">Studios</string>
+    <string name="detail_seerr_currently_streaming_on">Aktuell streambar auf</string>
+
 </resources>

@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!--
-      TODO(i18n): these strings are the first ones extracted from hardcoded UI
-      text (analysis F-37). Continue extracting the rest of onboarding/auth,
-      then seed translations to re-enable the language picker (analysis F-19).
-    -->
+    <!-- Extracted hardcoded UI text (analysis F-37); translations seeded (F-19). -->
+
+    <string name="onboarding_skip">Pular</string>
+    <string name="onboarding_next">Próximo</string>
+    <string name="onboarding_completion_title">Tudo pronto!</string>
+    <string name="onboarding_completion_subtitle">Seu JellyPlay está configurado e pronto para uso. Você sempre pode alterar essas configurações posteriormente.</string>
+    <string name="onboarding_completion_start_watching">Começar a assistir</string>
+    <string name="onboarding_seerr_connection">Conexão</string>
+    <string name="onboarding_seerr_connected">Conectado</string>
+    <string name="onboarding_seerr_features">Recursos</string>
+    <string name="onboarding_seerr_regions">Regiões</string>
+
     <string name="onboarding_welcome_title">Bem-vindo ao\nJellyPlay</string>
     <string name="onboarding_welcome_subtitle">O seu cliente Jellyfin pessoal. Vamos configurar algumas coisas para começar.</string>
     <string name="onboarding_feature_stream">Transmita filmes e séries de TV</string>

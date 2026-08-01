@@ -553,6 +553,8 @@
     <!-- LicensesScreen.kt -->
     <string name="settings_open_source_licenses_title">오픈 소스 라이선스</string>
     <string name="settings_license_text_unavailable">이 라이브러리의 전체 라이선스 텍스트를 사용할 수 없습니다.</string>
+    <!-- Localized error messages -->
+    <string name="settings_licenses_load_error">라이선스 정보를 불러올 수 없습니다</string>
 
     <!-- ExperimentalSettingsScreen.kt -->
     <string name="settings_experimental_title">실험적 기능</string>
@@ -1088,4 +1090,37 @@
     <string name="settings_preset_json">사전 설정 JSON</string>
     <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
     <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
+
+    <!-- Localized UI text extracted from settings screens -->
+    <string name="settings_nav_bar_title">내비게이션 바</string>
+    <string name="settings_nav_auto_hide">스크롤 시 자동 숨기기</string>
+    <string name="settings_nav_pinned">고정됨</string>
+    <string name="settings_nav_items_summary">%2$d개 중 %1$d개</string>
+    <string name="settings_nav_items_summary_with_scroll">%2$d개 중 %1$d개 - %3$s</string>
+    <string name="settings_nav_hide_on_scroll">스크롤 시 숨기기</string>
+    <string name="settings_nav_hide_on_scroll_on">아래로 스크롤하면 바 숨김</string>
+    <string name="settings_nav_hide_on_scroll_off">바 계속 표시</string>
+    <string name="settings_nav_item_home">홈</string>
+    <string name="settings_nav_item_home_subtitle">홈 대시보드</string>
+    <string name="settings_nav_item_library">라이브러리</string>
+    <string name="settings_nav_item_library_subtitle">미디어 라이브러리 탐색</string>
+    <string name="settings_nav_item_search">검색</string>
+    <string name="settings_nav_item_search_subtitle">영화, 시리즈 등 찾기</string>
+    <string name="settings_nav_item_live_tv">라이브 TV</string>
+    <string name="settings_nav_item_live_tv_subtitle">라이브 채널 및 가이드</string>
+    <string name="settings_nav_item_browse">둘러보기</string>
+    <string name="settings_nav_item_browse_subtitle">음악 라이브러리(음악 모드)</string>
+    <string name="settings_nav_item_shortcuts">바로가기</string>
+    <string name="settings_nav_item_shortcuts_subtitle">빠른 접근 바로가기</string>
+    <string name="settings_reorder_section">섹션 순서 변경</string>
+    <string name="settings_hide_advanced">고급 설정 숨기기</string>
+    <string name="settings_show_advanced">고급 설정 표시</string>
+    <string name="settings_advanced_hidden">고급 설정을 숨겼습니다</string>
+    <string name="settings_advanced_shown">고급 설정을 표시했습니다</string>
+
+
+    <plurals name="settings_advanced_settings_hidden">
+        <item quantity="one">고급 설정 %1$d개 숨김</item>
+        <item quantity="other">고급 설정 %1$d개 숨김</item>
+    </plurals>
 </resources>

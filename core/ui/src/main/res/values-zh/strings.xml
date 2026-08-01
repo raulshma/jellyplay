@@ -576,4 +576,37 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">来自您的 Radarr/Sonarr 的下载队列进度以及即将推出的日历</string>
     <string name="ss_arr_settings_title">Radarr / Sonarr 服务器</string>
     <string name="ss_arr_settings_subtitle">配置直接的 Radarr/Sonarr 服务器连接</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">片头</string>
+    <string name="core_segment_intro_desc">片头/开场片段</string>
+    <string name="core_segment_outro">片尾</string>
+    <string name="core_segment_outro_desc">片尾/结尾片段</string>
+    <string name="core_segment_preview">预告</string>
+    <string name="core_segment_preview_desc">下集预告/冷开场/预告</string>
+    <string name="core_segment_recap">回顾</string>
+    <string name="core_segment_recap_desc">前情提要...</string>
+    <string name="core_segment_commercial">广告</string>
+    <string name="core_segment_commercial_desc">广告中断</string>
+    <string name="core_segment_unknown">其他</string>
+    <string name="core_segment_unknown_desc">自定义片段</string>
+    <string name="core_segment_skip_intro">跳过片头</string>
+    <string name="core_segment_skip_outro">跳过片尾</string>
+    <string name="core_segment_skip_preview">跳过预告</string>
+    <string name="core_segment_skip_recap">跳过回顾</string>
+    <string name="core_segment_skip_commercial">跳过广告</string>
+    <string name="core_segment_skip_unknown">跳过片段</string>
+    <string name="core_segment_behavior_show_button">显示按钮</string>
+    <string name="core_segment_behavior_show_button_desc">在片段期间显示跳过按钮</string>
+    <string name="core_segment_behavior_auto_skip">自动跳过</string>
+    <string name="core_segment_behavior_auto_skip_desc">自动跳过该片段</string>
+    <string name="core_segment_behavior_ignore">忽略</string>
+    <string name="core_segment_behavior_ignore_desc">对此片段类型不执行任何操作</string>
+
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">松开以关闭</string>
+    <string name="core_preview_series">剧集</string>
+    <string name="core_preview_new_format">%1$d 个新内容</string>
+
 </resources>

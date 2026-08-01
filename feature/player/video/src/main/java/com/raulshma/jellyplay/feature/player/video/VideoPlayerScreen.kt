@@ -283,6 +283,7 @@ fun VideoPlayerScreen(
         }
     }
 
+    val fontInvalidFormatMessage = stringResource(R.string.player_video_font_invalid_format)
     val fontPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: android.net.Uri? ->
@@ -294,7 +295,7 @@ fun VideoPlayerScreen(
             } else {
                 scope.launch {
                     snackbarHostState.showSnackbar(
-                        message = "Selected file isn't a .ttf or .otf font.",
+                        message = fontInvalidFormatMessage,
                         duration = androidx.compose.material3.SnackbarDuration.Short,
                     )
                 }

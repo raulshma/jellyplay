@@ -553,6 +553,8 @@
     <!-- LicensesScreen.kt -->
     <string name="settings_open_source_licenses_title">オープンソースライセンス</string>
     <string name="settings_license_text_unavailable">このライブラリの完全なライセンス文は利用できません。</string>
+    <!-- Localized error messages -->
+    <string name="settings_licenses_load_error">ライセンス情報を読み込めませんでした</string>
 
     <!-- ExperimentalSettingsScreen.kt -->
     <string name="settings_experimental_title">試験的機能</string>
@@ -1088,4 +1090,37 @@
     <string name="settings_preset_json">プリセット JSON</string>
     <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
     <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
+
+    <!-- Localized UI text extracted from settings screens -->
+    <string name="settings_nav_bar_title">ナビゲーションバー</string>
+    <string name="settings_nav_auto_hide">スクロール時に非表示</string>
+    <string name="settings_nav_pinned">固定</string>
+    <string name="settings_nav_items_summary">%1$d / %2$d 件</string>
+    <string name="settings_nav_items_summary_with_scroll">%1$d / %2$d 件 - %3$s</string>
+    <string name="settings_nav_hide_on_scroll">スクロール時に非表示</string>
+    <string name="settings_nav_hide_on_scroll_on">下にスクロールするとバーを非表示</string>
+    <string name="settings_nav_hide_on_scroll_off">バーは表示されたまま</string>
+    <string name="settings_nav_item_home">ホーム</string>
+    <string name="settings_nav_item_home_subtitle">ホームダッシュボード</string>
+    <string name="settings_nav_item_library">ライブラリ</string>
+    <string name="settings_nav_item_library_subtitle">メディアライブラリを閲覧</string>
+    <string name="settings_nav_item_search">検索</string>
+    <string name="settings_nav_item_search_subtitle">映画やシリーズなどを検索</string>
+    <string name="settings_nav_item_live_tv">ライブTV</string>
+    <string name="settings_nav_item_live_tv_subtitle">ライブチャンネルとガイド</string>
+    <string name="settings_nav_item_browse">ブラウズ</string>
+    <string name="settings_nav_item_browse_subtitle">音楽ライブラリ（音楽モード）</string>
+    <string name="settings_nav_item_shortcuts">ショートカット</string>
+    <string name="settings_nav_item_shortcuts_subtitle">クイックアクセスショートカット</string>
+    <string name="settings_reorder_section">セクションを並べ替え</string>
+    <string name="settings_hide_advanced">詳細設定を非表示</string>
+    <string name="settings_show_advanced">詳細設定を表示</string>
+    <string name="settings_advanced_hidden">詳細設定を非表示にしました</string>
+    <string name="settings_advanced_shown">詳細設定を表示しました</string>
+
+
+    <plurals name="settings_advanced_settings_hidden">
+        <item quantity="one">%1$d 件の詳細設定を非表示</item>
+        <item quantity="other">%1$d 件の詳細設定を非表示</item>
+    </plurals>
 </resources>

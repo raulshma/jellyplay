@@ -199,6 +199,11 @@
     <string name="detail_manage_cd_toggle_monitor_episode">エピソードの監視を切り替え</string>
     <string name="detail_manage_cd_episode_menu">エピソードのオプション</string>
 
+    <!-- Localized error messages -->
+    <string name="detail_manage_series_load_error">Jellyfinからシリーズを読み込めませんでした。</string>
+    <string name="detail_manage_series_no_tvdb">このシリーズにはTVDb IDがありません。Sonarrで検索できません。</string>
+    <string name="detail_manage_series_not_tracked">このシリーズを追跡しているSonarrサーバーがありません。まずSonarrでシリーズを追加してください。</string>
+
     <!-- ── Seerr request / status buttons ──────────────────────────────── -->
     <string name="detail_available">利用可能</string>
     <string name="detail_request">リクエスト</string>
@@ -230,4 +235,24 @@
     <!-- auto-localized: previously translatable="false" (2) -->
     <string name="detail_section_seerr_recommendations">Seerr のおすすめ</string>
     <string name="detail_section_seerr_similar">Seerr の類似作品</string>
+
+    <!-- Localized UI text extracted from SeerrDetailScreen -->
+    <string name="detail_seerr_unknown_error">不明なエラー</string>
+    <string name="detail_seerr_overview">概要</string>
+    <string name="detail_seerr_episodes_count">%1$d エピソード</string>
+    <string name="detail_seerr_season_n">シーズン %1$d</string>
+    <string name="detail_seerr_director_format">監督: %1$s</string>
+    <string name="detail_seerr_show_more">もっと見る</string>
+    <string name="detail_seerr_video">ビデオ</string>
+    <string name="detail_seerr_information">情報</string>
+    <string name="detail_seerr_status">ステータス</string>
+    <string name="detail_seerr_unknown">不明</string>
+    <string name="detail_seerr_release_date">公開日</string>
+    <string name="detail_seerr_revenue">興行収入</string>
+    <string name="detail_seerr_budget">予算</string>
+    <string name="detail_seerr_language">言語</string>
+    <string name="detail_seerr_country">国</string>
+    <string name="detail_seerr_studios">スタジオ</string>
+    <string name="detail_seerr_currently_streaming_on">現在配信中</string>
+
 </resources>

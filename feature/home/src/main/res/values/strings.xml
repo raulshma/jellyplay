@@ -89,6 +89,11 @@
     <string name="home_move_up">Move Up</string>
     <string name="home_move_down">Move Down</string>
 
-    <!-- Newsletter banner dismiss (batch) -->
+    <!-- Newsletter banner (batch) -->
+    <string name="home_newsletter_ready">Newsletter Ready</string>
+    <string name="home_newsletter_subtitle">Your weekly digest is here. Tap to explore.</string>
     <string name="home_dismiss">Dismiss</string>
+
+    <!-- Localized error messages -->
+    <string name="home_error_load_content">Couldn\'t load content. Check your connection and try again.</string>
 </resources>

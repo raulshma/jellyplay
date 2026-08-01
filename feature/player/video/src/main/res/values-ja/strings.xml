@@ -244,4 +244,61 @@
     <plurals name="player_video_participants">
         <item quantity="other">%1$d 人の参加者</item>
     </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">再生</string>
+    <string name="player_video_stats_network">ネットワーク</string>
+    <string name="player_video_stats_performance">パフォーマンス</string>
+    <string name="player_video_stats_engine">エンジン</string>
+    <string name="player_video_stats_state">状態</string>
+    <string name="player_video_stats_playing">再生中</string>
+    <string name="player_video_stats_position">位置</string>
+    <string name="player_video_stats_progress">進行</string>
+    <string name="player_video_stats_buffer_health">バッファ状態</string>
+    <string name="player_video_stats_buffered">バッファ済み</string>
+    <string name="player_video_stats_clock">時計</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">色域</string>
+    <string name="player_video_stats_color_depth">色深度</string>
+    <string name="player_video_stats_sample_rate">サンプリングレート</string>
+    <string name="player_video_stats_session_id">セッションID</string>
+    <string name="player_video_stats_quality">品質</string>
+    <string name="player_video_stats_est_bandwidth">推定帯域幅</string>
+    <string name="player_video_stats_stream_bitrate">ストリームビットレート</string>
+    <string name="player_video_stats_dropped_frames">ドロップフレーム</string>
+    <string name="player_video_stats_total_frames">総フレーム数</string>
+    <string name="player_video_stats_drop_rate">ドロップ率</string>
+    <string name="player_video_stats_buffer_size">バッファサイズ</string>
+    <string name="player_video_stats_vo_dropped_frames">VOドロップフレーム</string>
+    <string name="player_video_stats_vo_delay">VO遅延</string>
+    <string name="player_video_stats_display_rate">ディスプレイレート</string>
+    <string name="player_video_stats_player">プレーヤー</string>
+    <string name="player_video_cast_connecting">接続中</string>
+    <string name="player_video_casting">キャスト中</string>
+    <string name="player_video_season_n">シーズン %1$d</string>
+    <string name="player_video_no_episodes_available">エピソードがありません</string>
+    <string name="player_video_watched">視聴済み</string>
+    <string name="player_video_time_left">残り %1$s</string>
+    <string name="player_video_now_playing">再生中</string>
+    <string name="player_video_quality_title">品質</string>
+    <string name="player_video_quality_description">適応ストリーミングでは変更は直ちに適用されます。ダイレクトプレイの場合、再生の最大ビットレートを設定します。</string>
+    <string name="player_video_adaptive_bitrate_cap">適応ビットレート上限</string>
+    <string name="player_video_adaptive_bitrate_on">従量制ネットワークで品質を制限</string>
+    <string name="player_video_adaptive_bitrate_off">オフ - 最高品質（ダイレクトプレイ）</string>
+    <string name="player_video_skip_intro">イントロをスキップ</string>
+    <string name="player_video_overview_tab">概要</string>
+    <string name="player_video_lyrics_subtitles_tab">歌詞 / 字幕</string>
+    <string name="player_video_synopsis">あらすじ</string>
+    <string name="player_video_cast_and_crew">キャスト＆クルー</string>
+    <string name="player_video_audio_stream">オーディオストリーム</string>
+    <string name="player_video_episode_title">第%1$d話: %2$s</string>
+    <string name="player_video_seek_backward_10s">-10秒</string>
+    <string name="player_video_seek_forward_30s">+30초</string>
+    <string name="player_video_cast_connecting_device">デバイスに接続中...</string>
+    <string name="player_video_cast_connected_streaming">接続済み / ストリーミング</string>
+    <string name="player_video_companion">JellyPlayコンパニオン</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">選択したファイルは.ttfまたは.otfフォントではありません。</string>
+
 </resources>

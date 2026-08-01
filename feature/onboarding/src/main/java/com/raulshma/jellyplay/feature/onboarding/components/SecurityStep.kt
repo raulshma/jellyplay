@@ -143,7 +143,7 @@ fun SecurityStep(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Auto-lock Timer",
+                text = stringResource(R.string.onboarding_security_auto_lock_timer),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,

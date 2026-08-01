@@ -455,17 +455,21 @@ fun SeerrSettingsScreen(
                         ) {
                             val streamingFlagAndName = regionNameByCode[preferences.streamingRegion] ?: preferences.streamingRegion
                             val discoverFlagAndName = regionNameByCode[preferences.discoverRegion] ?: preferences.discoverRegion
+                            // Resolve region picker titles in composable scope; the
+                            // onClick lambdas below are not composable.
+                            val streamingRegionTitle = stringResource(R.string.settings_streaming_region)
+                            val discoverRegionTitle = stringResource(R.string.settings_discover_region)
 
                             SettingListItem(
                                 icon = Tabler.Outline.DeviceTv,
-                                title = stringResource(R.string.settings_streaming_region),
+                                title = streamingRegionTitle,
                                 subtitle = stringResource(R.string.settings_streaming_region_subtitle),
                                 trailingText = streamingFlagAndName,
                                 index = 0,
                                 count = 2,
                                 onClick = {
                                     activeDialog = PickerState.List(
-                                        title = "Streaming Region",
+                                        title = streamingRegionTitle,
                                         items = regionCodes,
                                         label = { code -> regionNameByCode[code] ?: code },
                                         isSelected = { it == preferences.streamingRegion },
@@ -475,14 +479,14 @@ fun SeerrSettingsScreen(
                             )
                             SettingListItem(
                                 icon = Tabler.Outline.Compass,
-                                title = stringResource(R.string.settings_discover_region),
+                                title = discoverRegionTitle,
                                 subtitle = stringResource(R.string.settings_discover_region_subtitle),
                                 trailingText = discoverFlagAndName,
                                 index = 1,
                                 count = 2,
                                 onClick = {
                                     activeDialog = PickerState.List(
-                                        title = "Discover Region",
+                                        title = discoverRegionTitle,
                                         items = regionCodes,
                                         label = { code -> regionNameByCode[code] ?: code },
                                         isSelected = { it == preferences.discoverRegion },

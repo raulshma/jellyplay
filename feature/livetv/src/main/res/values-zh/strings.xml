@@ -62,4 +62,9 @@
     <string name="livetv_watch">观看</string>
     <string name="livetv_recording_status">录制中</string>
     <string name="livetv_recording_now">● 正在录制</string>
+
+    <!-- EPG grid & live pill labels (batch) -->
+    <string name="livetv_will_be_recorded">将录制「%1$s」。</string>
+    <string name="livetv_channel">频道</string>
+    <string name="livetv_live">直播</string>
 </resources>

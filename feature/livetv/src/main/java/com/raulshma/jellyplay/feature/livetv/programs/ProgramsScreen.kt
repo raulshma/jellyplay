@@ -221,7 +221,7 @@ private fun ProgramCard(
                             .background(MaterialTheme.colorScheme.onError),
                     )
                     Text(
-                        text = "LIVE",
+                        text = stringResource(R.string.livetv_live),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onError,
                     )

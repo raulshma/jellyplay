@@ -576,4 +576,37 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">Progresso da fila de transferências e um calendário em breve do seu Radarr/Sonarr</string>
     <string name="ss_arr_settings_title">Servidores Radarr / Sonarr</string>
     <string name="ss_arr_settings_subtitle">Configurar ligações diretas aos servidores Radarr/Sonarr</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">Introdução</string>
+    <string name="core_segment_intro_desc">Sequência de abertura/introdução</string>
+    <string name="core_segment_outro">Encerramento</string>
+    <string name="core_segment_outro_desc">Sequência de creditos/encerramento</string>
+    <string name="core_segment_preview">Pré-visualização</string>
+    <string name="core_segment_preview_desc">A seguir / cold open / teaser</string>
+    <string name="core_segment_recap">Resumo</string>
+    <string name="core_segment_recap_desc">Anteriormente...</string>
+    <string name="core_segment_commercial">Comercial</string>
+    <string name="core_segment_commercial_desc">Intervallo comercial</string>
+    <string name="core_segment_unknown">Outro</string>
+    <string name="core_segment_unknown_desc">Segmento personalizado</string>
+    <string name="core_segment_skip_intro">Pular introducao</string>
+    <string name="core_segment_skip_outro">Pular creditos</string>
+    <string name="core_segment_skip_preview">Pular pré-visualização</string>
+    <string name="core_segment_skip_recap">Pular resumo</string>
+    <string name="core_segment_skip_commercial">Pular comercial</string>
+    <string name="core_segment_skip_unknown">Pular segmento</string>
+    <string name="core_segment_behavior_show_button">Mostrar botao</string>
+    <string name="core_segment_behavior_show_button_desc">Mostrar um botao de pular durante o segmento</string>
+    <string name="core_segment_behavior_auto_skip">Pular automaticamente</string>
+    <string name="core_segment_behavior_auto_skip_desc">Pular o segmento automaticamente</string>
+    <string name="core_segment_behavior_ignore">Ignorar</string>
+    <string name="core_segment_behavior_ignore_desc">Nao fazer nada para este tipo de segmento</string>
+
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">Solte para fechar</string>
+    <string name="core_preview_series">Série</string>
+    <string name="core_preview_new_format">%1$d novo</string>
+
 </resources>

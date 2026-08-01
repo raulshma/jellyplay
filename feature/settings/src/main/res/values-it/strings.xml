@@ -553,6 +553,8 @@
     <!-- LicensesScreen.kt -->
     <string name="settings_open_source_licenses_title">Licenze open source</string>
     <string name="settings_license_text_unavailable">Il testo completo della licenza non è disponibile per questa libreria.</string>
+    <!-- Localized error messages -->
+    <string name="settings_licenses_load_error">Impossibile caricare le informazioni sulla licenza</string>
 
     <!-- ExperimentalSettingsScreen.kt -->
     <string name="settings_experimental_title">Sperimentale</string>
@@ -1092,4 +1094,37 @@
     <string name="settings_preset_json">JSON preimpostato</string>
     <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
     <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
+
+    <!-- Localized UI text extracted from settings screens -->
+    <string name="settings_nav_bar_title">Barra di navigazione</string>
+    <string name="settings_nav_auto_hide">Nascondi allo scorrimento</string>
+    <string name="settings_nav_pinned">Fissato</string>
+    <string name="settings_nav_items_summary">%1$d di %2$d elementi</string>
+    <string name="settings_nav_items_summary_with_scroll">%1$d di %2$d elementi - %3$s</string>
+    <string name="settings_nav_hide_on_scroll">Nascondi allo scorrimento</string>
+    <string name="settings_nav_hide_on_scroll_on">La barra si nasconde scorrendo verso il basso</string>
+    <string name="settings_nav_hide_on_scroll_off">La barra rimane visibile</string>
+    <string name="settings_nav_item_home">Home</string>
+    <string name="settings_nav_item_home_subtitle">Dashboard principale</string>
+    <string name="settings_nav_item_library">Libreria</string>
+    <string name="settings_nav_item_library_subtitle">Sfoglia le tue librerie multimediali</string>
+    <string name="settings_nav_item_search">Cerca</string>
+    <string name="settings_nav_item_search_subtitle">Trova film, serie e altro</string>
+    <string name="settings_nav_item_live_tv">TV in diretta</string>
+    <string name="settings_nav_item_live_tv_subtitle">Canali in diretta e guida</string>
+    <string name="settings_nav_item_browse">Sfoglia</string>
+    <string name="settings_nav_item_browse_subtitle">Librerie musicali (modalita musica)</string>
+    <string name="settings_nav_item_shortcuts">Scorciatoie</string>
+    <string name="settings_nav_item_shortcuts_subtitle">Scorciatoie di accesso rapido</string>
+    <string name="settings_reorder_section">Riordina sezione</string>
+    <string name="settings_hide_advanced">Nascondi impostazioni avanzate</string>
+    <string name="settings_show_advanced">Mostra impostazioni avanzate</string>
+    <string name="settings_advanced_hidden">Impostazioni avanzate nascoste</string>
+    <string name="settings_advanced_shown">Impostazioni avanzate visibili</string>
+
+
+    <plurals name="settings_advanced_settings_hidden">
+        <item quantity="one">%1$d impostazione avanzata nascosta</item>
+        <item quantity="other">%1$d impostazioni avanzate nascoste</item>
+    </plurals>
 </resources>

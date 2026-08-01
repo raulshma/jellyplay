@@ -50,6 +50,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.model.localizedDescription
+import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -1394,19 +1396,25 @@ fun PlaybackSettingsScreen(
                     segmentTypes.forEachIndexed { index, type ->
                         val behavior = preferences.segmentBehaviors[type]
                             ?: com.raulshma.jellyplay.core.model.SegmentBehavior.IGNORE
+                        // Resolve localized strings here in composable scope; the
+                        // onClick lambda below is not composable so it must use
+                        // these pre-resolved values.
+                        val typeTitle = type.localizedDisplayName()
+                        val allBehaviors = com.raulshma.jellyplay.core.model.SegmentBehavior.entries
+                        val behaviorLabels = allBehaviors.associateWith { it.localizedDisplayName() }
+                        val behaviorDescriptions = allBehaviors.associateWith { it.localizedDescription() }
                         SettingListItem(
                             icon = Tabler.Outline.PlayerTrackNext,
-                            title = type.displayName,
-                            subtitle = type.description,
-                            trailingText = behavior.displayName,
+                            title = typeTitle,
+                            subtitle = type.localizedDescription(),
+                            trailingText = behavior.localizedDisplayName(),
                             index = index, count = totalTypes,
                             onClick = {
-                                val behaviors = com.raulshma.jellyplay.core.model.SegmentBehavior.entries
                                 activePicker = PickerState.List(
-                                    title = type.displayName,
-                                    items = behaviors,
-                                    label = { it.displayName },
-                                    subtitle = { it.description },
+                                    title = typeTitle,
+                                    items = allBehaviors,
+                                    label = { behaviorLabels.getValue(it) },
+                                    subtitle = { behaviorDescriptions.getValue(it) },
                                     isSelected = { it == behavior },
                                     onSelect = { viewModel.setSegmentBehavior(type, it) },
                                 )

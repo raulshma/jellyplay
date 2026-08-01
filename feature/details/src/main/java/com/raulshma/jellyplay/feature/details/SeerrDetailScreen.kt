@@ -222,7 +222,7 @@ fun SeerrDetailScreen(
                 }
                 error != null && movieDetail == null && tvDetail == null -> {
                     ErrorScreen(
-                        message = error ?: "Unknown error",
+                        message = error ?: stringResource(R.string.detail_seerr_unknown_error),
                         onRetry = { viewModel.loadDetails(tmdbId, mediaType) },
                         modifier = Modifier.align(Alignment.Center),
                     )
@@ -917,7 +917,7 @@ private fun SeerrDetailBody(
                 val overview = movieDetail?.overview ?: tvDetail?.overview ?: ""
                 if (overview.isNotBlank()) {
                     Text(
-                        text = "Overview",
+                        text = stringResource(R.string.detail_seerr_overview),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1338,7 +1338,7 @@ private fun SeasonsSection(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${season.episodeCount} Episodes",
+                        text = stringResource(R.string.detail_seerr_episodes_count, season.episodeCount),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1376,7 +1376,7 @@ private fun SeasonsSection(
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Text(
-                            text = sortedSeasons.find { it.seasonNumber == selectedSeason }?.name ?: "Season $selectedSeason",
+                            text = sortedSeasons.find { it.seasonNumber == selectedSeason }?.name ?: stringResource(R.string.detail_seerr_season_n, selectedSeason),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -1551,7 +1551,7 @@ private fun EpisodeRow(
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = "Director: ${directors.joinToString(", ") { it.name }}",
+                            text = stringResource(R.string.detail_seerr_director_format, directors.joinToString(", ") { it.name }),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -1619,7 +1619,7 @@ private fun EpisodeRow(
                     )
                     if (!expanded && overview.length > 200) {
                         Text(
-                            text = "Show more",
+                            text = stringResource(R.string.detail_seerr_show_more),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable { expanded = true }
@@ -1703,7 +1703,7 @@ private fun VideosSection(
                         )
                         
                         Text(
-                            text = video.name ?: "Video",
+                            text = video.name ?: stringResource(R.string.detail_seerr_video),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier
@@ -1910,7 +1910,7 @@ private fun MediaInformationSection(
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            text = "Information",
+            text = stringResource(R.string.detail_seerr_information),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -1921,27 +1921,27 @@ private fun MediaInformationSection(
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            MediaInfoRow("Status", movie?.status ?: tv?.status ?: "Unknown", Tabler.Outline.InfoCircle)
+            MediaInfoRow(stringResource(R.string.detail_seerr_status), movie?.status ?: tv?.status ?: stringResource(R.string.detail_seerr_unknown), Tabler.Outline.InfoCircle)
 
             val releaseDate = movie?.releaseDate ?: tv?.firstAirDate
             if (movie != null) {
                 ReleaseDateRow(releaseDate, movie.releases, discoverRegion)
             } else {
-                MediaInfoRow("Release Date", releaseDate ?: "Unknown", Tabler.Outline.CalendarEvent)
+                MediaInfoRow(stringResource(R.string.detail_seerr_release_date), releaseDate ?: stringResource(R.string.detail_seerr_unknown), Tabler.Outline.CalendarEvent)
             }
 
             if (movie != null) {
                 movie.revenue?.takeIf { it > 0 }?.let {
-                    MediaInfoRow("Revenue", currencyFormatter.format(it), Tabler.Outline.Cash)
+                    MediaInfoRow(stringResource(R.string.detail_seerr_revenue), currencyFormatter.format(it), Tabler.Outline.Cash)
                 }
                 movie.budget?.takeIf { it > 0 }?.let {
-                    MediaInfoRow("Budget", currencyFormatter.format(it), Tabler.Outline.Wallet)
+                    MediaInfoRow(stringResource(R.string.detail_seerr_budget), currencyFormatter.format(it), Tabler.Outline.Wallet)
                 }
             }
 
             val language = movie?.originalLanguage ?: tv?.originalLanguage
             if (language != null) {
-                MediaInfoRow("Language", Locale(language).displayLanguage, Tabler.Outline.Language)
+                MediaInfoRow(stringResource(R.string.detail_seerr_language), Locale(language).displayLanguage, Tabler.Outline.Language)
             }
 
             val productionCountries = movie?.productionCountries ?: emptyList()
@@ -1950,12 +1950,12 @@ private fun MediaInformationSection(
                     val flag = getFlagEmoji(country.iso31661)
                     if (flag != null) "$flag ${country.name}" else country.name
                 }
-                MediaInfoRow("Country", countryText, Tabler.Outline.World)
+                MediaInfoRow(stringResource(R.string.detail_seerr_country), countryText, Tabler.Outline.World)
             }
 
             val studios = movie?.productionCompanies?.map { it.name } ?: tv?.networks?.map { it.name } ?: emptyList()
             if (studios.isNotEmpty()) {
-                MediaInfoRow("Studios", studios.joinToString(", "), Tabler.Outline.Building)
+                MediaInfoRow(stringResource(R.string.detail_seerr_studios), studios.joinToString(", "), Tabler.Outline.Building)
             }
 
             val watchProviders = movie?.watchProviders ?: tv?.watchProviders ?: emptyList()
@@ -1993,7 +1993,7 @@ private fun ReleaseDateRow(
         )
         Column {
             Text(
-                text = "Release Date",
+                text = stringResource(R.string.detail_seerr_release_date),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Medium
@@ -2003,7 +2003,7 @@ private fun ReleaseDateRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = releaseDate ?: "Unknown",
+                    text = releaseDate ?: stringResource(R.string.detail_seerr_unknown),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                     lineHeight = 20.sp
@@ -2062,7 +2062,7 @@ private fun StreamingProvidersRow(
         )
         Column {
             Text(
-                text = "Currently Streaming On",
+                text = stringResource(R.string.detail_seerr_currently_streaming_on),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Medium

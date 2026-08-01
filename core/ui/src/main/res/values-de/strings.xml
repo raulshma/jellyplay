@@ -576,4 +576,37 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">Download-Warteschlangen-Fortschritt und einen Kalender für kommende Inhalte von deinem Radarr/Sonarr</string>
     <string name="ss_arr_settings_title">Radarr-/Sonarr-Server</string>
     <string name="ss_arr_settings_subtitle">Direkte Radarr-/Sonarr-Serververbindungen konfigurieren</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">Intro</string>
+    <string name="core_segment_intro_desc">Eröffnungs-/Intro-Sequenz</string>
+    <string name="core_segment_outro">Outro</string>
+    <string name="core_segment_outro_desc">Abspann-/Outro-Sequenz</string>
+    <string name="core_segment_preview">Vorschau</string>
+    <string name="core_segment_preview_desc">Es folgt / Cold Open / Teaser</string>
+    <string name="core_segment_recap">Zusammenfassung</string>
+    <string name="core_segment_recap_desc">Zuvor in...</string>
+    <string name="core_segment_commercial">Werbung</string>
+    <string name="core_segment_commercial_desc">Werbeunterbrechung</string>
+    <string name="core_segment_unknown">Sonstige</string>
+    <string name="core_segment_unknown_desc">Benutzerdefinierter Abschnitt</string>
+    <string name="core_segment_skip_intro">Intro ueberspringen</string>
+    <string name="core_segment_skip_outro">Abspann ueberspringen</string>
+    <string name="core_segment_skip_preview">Vorschau ueberspringen</string>
+    <string name="core_segment_skip_recap">Zusammenfassung ueberspringen</string>
+    <string name="core_segment_skip_commercial">Werbung ueberspringen</string>
+    <string name="core_segment_skip_unknown">Abschnitt ueberspringen</string>
+    <string name="core_segment_behavior_show_button">Schaltfläche anzeigen</string>
+    <string name="core_segment_behavior_show_button_desc">Skip-Schaltfläche waehrend des Abschnitts anzeigen</string>
+    <string name="core_segment_behavior_auto_skip">Automatisch ueberspringen</string>
+    <string name="core_segment_behavior_auto_skip_desc">Abschnitt automatisch ueberspringen</string>
+    <string name="core_segment_behavior_ignore">Ignorieren</string>
+    <string name="core_segment_behavior_ignore_desc">Fuers diesen Abschnittstyp nichts tun</string>
+
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">Zum Schließen loslassen</string>
+    <string name="core_preview_series">Serie</string>
+    <string name="core_preview_new_format">%1$d neu</string>
+
 </resources>

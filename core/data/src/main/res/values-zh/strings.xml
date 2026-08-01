@@ -36,4 +36,7 @@
     <string name="data_added_date">添加于 %1$s</string>
     <string name="data_added_unknown">添加日期未知</string>
     <string name="data_played_date">播放于 %1$s</string>
+
+    <!-- Localized error messages -->
+    <string name="data_no_media_source_download">没有可下载的媒体源</string>
 </resources>

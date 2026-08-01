@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
@@ -47,6 +48,7 @@ import com.composables.icons.tabler.outline.Heart
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.rememberDominantColor
+import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import kotlin.math.hypot
 import kotlin.math.max
@@ -416,7 +418,7 @@ private fun PreviewCard(
 
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Release to close",
+                text = stringResource(R.string.core_preview_release_to_close),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
             )
@@ -437,13 +439,20 @@ private fun InfoRow(item: com.raulshma.jellyplay.core.model.MediaItem) {
     val runtimeMinutes = remember(item.runTimeTicks) {
         item.runTimeTicks?.let { it / 600_000_000 }?.takeIf { it > 0 }
     }
+    // Resolve localized chip labels in composable scope; the buildList below
+    // runs inside a non-composable remember block.
+    val seriesLabel = stringResource(R.string.core_preview_series)
+    val seriesChip = if (isSeries) {
+        val unplayed = item.unplayedItemCount
+        if (unplayed == null || unplayed <= 0) seriesLabel
+        else stringResource(R.string.core_preview_new_format, unplayed)
+    } else null
 
-    val leadingChips = remember(item.year, isSeries, runtimeMinutes, item.unplayedItemCount) {
+    val leadingChips = remember(item.year, isSeries, runtimeMinutes, seriesChip) {
         buildList {
             item.year?.let { add(it.toString()) }
             if (isSeries) {
-                val unplayed = item.unplayedItemCount
-                add(if (unplayed == null || unplayed <= 0) "Series" else "$unplayed new")
+                seriesChip?.let { add(it) }
             } else if (runtimeMinutes != null) {
                 add("${runtimeMinutes}m")
             }

@@ -197,6 +197,10 @@
     <!-- Empty / error states -->
     <string name="detail_manage_no_episodes">No episodes found in Sonarr for this series.</string>
     <string name="detail_manage_not_tracked">No Sonarr server tracks this series.</string>
+    <!-- Localized error messages -->
+    <string name="detail_manage_series_load_error">Couldn\'t load series from Jellyfin.</string>
+    <string name="detail_manage_series_no_tvdb">This series has no tvdb id; Sonarr can\'t look it up.</string>
+    <string name="detail_manage_series_not_tracked">No Sonarr server tracks this series. Add the series in Sonarr first.</string>
     <!-- Content descriptions (TalkBack / TV) -->
     <string name="detail_manage_cd_search_season">Search monitored in season</string>
     <string name="detail_manage_cd_toggle_monitor_season">Toggle monitor for all episodes in season</string>
@@ -230,4 +234,24 @@
     <string name="detail_media_info_title_subtitles">Subtitles</string>
     <string name="detail_media_info_no_info">No Media Info</string>
     <string name="detail_media_info_no_info_description">Technical information is not available for this item</string>
+
+    <!-- Localized UI text extracted from SeerrDetailScreen -->
+    <string name="detail_seerr_unknown_error">Unknown error</string>
+    <string name="detail_seerr_overview">Overview</string>
+    <string name="detail_seerr_episodes_count">%1$d Episodes</string>
+    <string name="detail_seerr_season_n">Season %1$d</string>
+    <string name="detail_seerr_director_format">Director: %1$s</string>
+    <string name="detail_seerr_show_more">Show more</string>
+    <string name="detail_seerr_video">Video</string>
+    <string name="detail_seerr_information">Information</string>
+    <string name="detail_seerr_status">Status</string>
+    <string name="detail_seerr_unknown">Unknown</string>
+    <string name="detail_seerr_release_date">Release Date</string>
+    <string name="detail_seerr_revenue">Revenue</string>
+    <string name="detail_seerr_budget">Budget</string>
+    <string name="detail_seerr_language">Language</string>
+    <string name="detail_seerr_country">Country</string>
+    <string name="detail_seerr_studios">Studios</string>
+    <string name="detail_seerr_currently_streaming_on">Currently Streaming On</string>
+
 </resources>

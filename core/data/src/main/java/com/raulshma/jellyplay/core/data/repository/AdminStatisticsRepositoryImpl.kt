@@ -465,11 +465,11 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                             val addedDate = java.time.LocalDate.parse(added.take(10))
                             val days = java.time.temporal.ChronoUnit.DAYS.between(addedDate, java.time.LocalDate.now())
                             when {
-                                days < 1 -> "Added today"
-                                days == 1L -> "Added 1 day ago"
-                                days < 30 -> "Added ${days}d ago"
-                                days < 365 -> "Added ${days / 30}mo ago"
-                                else -> "Added ${days / 365}y ago"
+                                days < 1 -> context.getString(R.string.data_added_today)
+                                days == 1L -> context.getString(R.string.data_added_one_day_ago)
+                                days < 30 -> context.getString(R.string.data_added_days_ago, days.toInt())
+                                days < 365 -> context.getString(R.string.data_added_months_ago, (days / 30).toInt())
+                                else -> context.getString(R.string.data_added_years_ago, (days / 365).toInt())
                             }
                         } catch (_: Exception) { null }
                     }
@@ -479,10 +479,10 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                         type = staleItem.type,
                         sizeText = staleItem.sizeText,
                         detail = buildString {
-                            if (staleItem.daysSincePlay > 0) append("${staleItem.daysSincePlay}d since play")
-                            else append("Never played")
+                            if (staleItem.daysSincePlay > 0) append(context.getString(R.string.data_days_since_play, staleItem.daysSincePlay))
+                            else append(context.getString(R.string.data_never_played))
                             if (staleItem.playCount > 0) {
-                                append(" · ${staleItem.playCount} plays")
+                                append(" · " + context.getString(R.string.data_plays_count, staleItem.playCount))
                             }
                         },
                         seriesName = staleItem.seriesName,
@@ -490,11 +490,11 @@ class AdminStatisticsRepositoryImpl @Inject constructor(
                         seasonNumber = staleItem.seasonNumber,
                         episodeNumber = staleItem.episodeNumber,
                         dateText = if (config.useDateAdded) {
-                            formattedDate?.let { "Added $it" } ?: "Added unknown"
+                            formattedDate?.let { context.getString(R.string.data_added_date, it) } ?: context.getString(R.string.data_added_unknown)
                         } else if (neverPlayed) {
-                            addedAgoText ?: "Never played"
+                            addedAgoText ?: context.getString(R.string.data_never_played)
                         } else {
-                            formattedDate?.let { "Played $it" }
+                            formattedDate?.let { context.getString(R.string.data_played_date, it) }
                         },
                     )
                 }

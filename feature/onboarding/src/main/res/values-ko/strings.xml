@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!--
-      TODO(i18n): these strings are the first ones extracted from hardcoded UI
-      text (analysis F-37). Continue extracting the rest of onboarding/auth,
-      then seed translations to re-enable the language picker (analysis F-19).
-    -->
+    <!-- Extracted hardcoded UI text (analysis F-37); translations seeded (F-19). -->
+
+    <string name="onboarding_skip">건너뛰기</string>
+    <string name="onboarding_next">다음</string>
+    <string name="onboarding_completion_title">모든 준비 완료!</string>
+    <string name="onboarding_completion_subtitle">JellyPlay가 구성되어 사용할 준비가 되었습니다. 이 설정은 나중에 언제든지 변경할 수 있습니다.</string>
+    <string name="onboarding_completion_start_watching">시청 시작</string>
+    <string name="onboarding_seerr_connection">연결</string>
+    <string name="onboarding_seerr_connected">연결됨</string>
+    <string name="onboarding_seerr_features">기능</string>
+    <string name="onboarding_seerr_regions">지역</string>
+
     <string name="onboarding_welcome_title">JellyPlay에 오신 것을\n환영합니다</string>
     <string name="onboarding_welcome_subtitle">개인용 Jellyfin 클라이언트입니다. 시작하기 위해 몇 가지를 설정하세요.</string>
     <string name="onboarding_feature_stream">영화 및 TV 프로그램 스트리밍</string>

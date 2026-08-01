@@ -576,4 +576,37 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">Radarr/Sonarr からのダウンロードキューの進捗と近日公開のカレンダー</string>
     <string name="ss_arr_settings_title">Radarr / Sonarr サーバー</string>
     <string name="ss_arr_settings_subtitle">Radarr/Sonarr サーバーへの直接接続を設定します</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">イントロ</string>
+    <string name="core_segment_intro_desc">オープニング/イントロシーケンス</string>
+    <string name="core_segment_outro">アウトロ</string>
+    <string name="core_segment_outro_desc">エンディング/アウトロシーケンス</string>
+    <string name="core_segment_preview">プレビュー</string>
+    <string name="core_segment_preview_desc">次回予告/コールドオープン/ティーザー</string>
+    <string name="core_segment_recap">あらすじ</string>
+    <string name="core_segment_recap_desc">前回のあらすじ...</string>
+    <string name="core_segment_commercial">CM</string>
+    <string name="core_segment_commercial_desc">CM休止</string>
+    <string name="core_segment_unknown">その他</string>
+    <string name="core_segment_unknown_desc">カスタムセグメント</string>
+    <string name="core_segment_skip_intro">イントロをスキップ</string>
+    <string name="core_segment_skip_outro">エンディングをスキップ</string>
+    <string name="core_segment_skip_preview">プレビューをスキップ</string>
+    <string name="core_segment_skip_recap">あらすじをスキップ</string>
+    <string name="core_segment_skip_commercial">CMをスキップ</string>
+    <string name="core_segment_skip_unknown">セグメントをスキップ</string>
+    <string name="core_segment_behavior_show_button">ボタンを表示</string>
+    <string name="core_segment_behavior_show_button_desc">セグメント中にスキップボタンを表示</string>
+    <string name="core_segment_behavior_auto_skip">自動スキップ</string>
+    <string name="core_segment_behavior_auto_skip_desc">セグメントを自動的にスキップ</string>
+    <string name="core_segment_behavior_ignore">無視</string>
+    <string name="core_segment_behavior_ignore_desc">このセグメントタイプでは何もしない</string>
+
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">離して閉じる</string>
+    <string name="core_preview_series">シリーズ</string>
+    <string name="core_preview_new_format">新着 %1$d 件</string>
+
 </resources>

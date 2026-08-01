@@ -245,4 +245,61 @@
         <item quantity="one">%1$d participant</item>
         <item quantity="other">%1$d participants</item>
     </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">Playback</string>
+    <string name="player_video_stats_network">Network</string>
+    <string name="player_video_stats_performance">Performance</string>
+    <string name="player_video_stats_engine">Engine</string>
+    <string name="player_video_stats_state">State</string>
+    <string name="player_video_stats_playing">Playing</string>
+    <string name="player_video_stats_position">Position</string>
+    <string name="player_video_stats_progress">Progress</string>
+    <string name="player_video_stats_buffer_health">Buffer Health</string>
+    <string name="player_video_stats_buffered">Buffered</string>
+    <string name="player_video_stats_clock">Clock</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">Color Range</string>
+    <string name="player_video_stats_color_depth">Color Depth</string>
+    <string name="player_video_stats_sample_rate">Sample Rate</string>
+    <string name="player_video_stats_session_id">Session ID</string>
+    <string name="player_video_stats_quality">Quality</string>
+    <string name="player_video_stats_est_bandwidth">Est. Bandwidth</string>
+    <string name="player_video_stats_stream_bitrate">Stream Bitrate</string>
+    <string name="player_video_stats_dropped_frames">Dropped Frames</string>
+    <string name="player_video_stats_total_frames">Total Frames</string>
+    <string name="player_video_stats_drop_rate">Drop Rate</string>
+    <string name="player_video_stats_buffer_size">Buffer Size</string>
+    <string name="player_video_stats_vo_dropped_frames">VO Dropped Frames</string>
+    <string name="player_video_stats_vo_delay">VO Delay</string>
+    <string name="player_video_stats_display_rate">Display Rate</string>
+    <string name="player_video_stats_player">Player</string>
+    <string name="player_video_cast_connecting">Connecting</string>
+    <string name="player_video_casting">Casting</string>
+    <string name="player_video_season_n">Season %1$d</string>
+    <string name="player_video_no_episodes_available">No episodes available</string>
+    <string name="player_video_watched">Watched</string>
+    <string name="player_video_time_left">%1$s left</string>
+    <string name="player_video_now_playing">Now Playing</string>
+    <string name="player_video_quality_title">Quality</string>
+    <string name="player_video_quality_description">Changes apply immediately for adaptive streams. For direct play, this sets the maximum playback bitrate.</string>
+    <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate Cap</string>
+    <string name="player_video_adaptive_bitrate_on">Caps quality on metered networks</string>
+    <string name="player_video_adaptive_bitrate_off">Off - full quality (direct play)</string>
+    <string name="player_video_skip_intro">Skip Intro</string>
+    <string name="player_video_overview_tab">Overview</string>
+    <string name="player_video_lyrics_subtitles_tab">Lyrics / Subtitles</string>
+    <string name="player_video_synopsis">Synopsis</string>
+    <string name="player_video_cast_and_crew">Cast &amp; Crew</string>
+    <string name="player_video_audio_stream">Audio Stream</string>
+    <string name="player_video_episode_title">E%1$d: %2$s</string>
+    <string name="player_video_seek_backward_10s">-10s</string>
+    <string name="player_video_seek_forward_30s">+30s</string>
+    <string name="player_video_cast_connecting_device">Connecting to device...</string>
+    <string name="player_video_cast_connected_streaming">Connected / Streaming</string>
+    <string name="player_video_companion">JellyPlay Companion</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">Selected file isn\'t a .ttf or .otf font.</string>
+
 </resources>
