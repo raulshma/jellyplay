@@ -8,10 +8,49 @@ import org.junit.Test
 /**
  * Tests the fuzzy matcher against the real [SettingsSearchRegistry] — so coverage reflects actual
  * production data (titles, keywords, advanced flags) rather than hand-rolled fixtures.
+ *
+ * The registry stores `@StringRes` ids, so the test resolves them to their default-locale (English)
+ * text by reading the bundled `values/strings.xml` and mapping each `R.string` field name to its
+ * value. This keeps the matcher test JVM-pure (no Robolectric/Android Context) while still running
+ * against real production text exactly as the app resolves it at runtime.
  */
 class SettingsSearchMatcherTest {
 
-    private val items = SettingsSearchRegistry.items
+    /**
+     * Build a resolver `(Int) -> String` over the real `R.string` ids by reflecting the field names
+     * (e.g. `ss_logout_title`) and reading each value from the bundled default `strings.xml`.
+     */
+    private val resolve: (Int) -> String = run {
+        // name -> resource id, via reflection on the generated R.string class.
+        val nameToId: Map<String, Int> = com.raulshma.jellyplay.core.ui.R.string::class.java
+            .declaredFields
+            .filter { it.type == Int::class.javaPrimitiveType }
+            .associate { it.name to (it.get(null) as Int) }
+        // name -> English value, read from the default resource file on disk.
+        val nameToValue: Map<String, String> = run {
+            val file = java.io.File("src/main/res/values/strings.xml")
+            require(file.exists()) { "Cannot locate default strings.xml at ${file.absolutePath}" }
+            val root = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                .newDocumentBuilder()
+                .parse(file)
+                .documentElement
+            val map = mutableMapOf<String, String>()
+            val nodes = root.getElementsByTagName("string")
+            for (i in 0 until nodes.length) {
+                val el = nodes.item(i) as org.w3c.dom.Element
+                val n = el.getAttribute("name")
+                if (n.isNotEmpty()) map[n] = el.textContent ?: ""
+            }
+            map
+        }
+        // resource id -> English value
+        val idToValue: Map<Int, String> = buildMap {
+            nameToId.forEach { (name, id) -> nameToValue[name]?.let { put(id, it) } }
+        }
+        return@run { id: Int -> idToValue[id] ?: "" }
+    }
+
+    private val items = SettingsSearchRegistry.items.resolve(resolve)
 
     private fun idsFor(query: String): List<String> =
         SettingsSearchMatcher.search(query, items).map { it.id }

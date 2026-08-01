@@ -78,4 +78,7 @@
     <string name="auth_remove_user">移除用户</string>
     <string name="auth_remove_user_title">移除用户？</string>
     <string name="auth_remove_user_message">从此服务器移除“%1$s”？您需要重新登录才能使用。</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="auth_quick_connect">快速连接</string>
 </resources>

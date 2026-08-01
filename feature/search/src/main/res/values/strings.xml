@@ -30,8 +30,8 @@
     <string name="search_search_your_library_desc">Movies, shows, music, and more</string>
 
     <!-- Seerr -->
-    <string name="search_request_via_seerr" translatable="false">Request via Seerr</string>
-    <string name="search_seerr_search_failed" translatable="false">Seerr search failed</string>
+    <string name="search_request_via_seerr">Request via Seerr</string>
+    <string name="search_seerr_search_failed">Seerr search failed</string>
     <string name="search_retry">Retry</string>
 
     <!-- Clear history dialog -->

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="search_hint">Buscar películas, series, música…</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="search_settings_description">Buscar en tu biblioteca de medios de Jellyfin</string>
 </resources>

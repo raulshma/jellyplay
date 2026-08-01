@@ -78,4 +78,7 @@
     <string name="auth_remove_user">Quitar usuario</string>
     <string name="auth_remove_user_title">¿Quitar usuario?</string>
     <string name="auth_remove_user_message">¿Quitar a \"%1$s\" de este servidor? Tendrás que iniciar sesión de nuevo para usarlo.</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="auth_quick_connect">Conexión rápida</string>
 </resources>

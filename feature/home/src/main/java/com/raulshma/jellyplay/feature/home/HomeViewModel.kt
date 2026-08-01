@@ -39,9 +39,10 @@ import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchRegistry
+import com.raulshma.jellyplay.core.ui.settingssearch.resolve
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
@@ -71,10 +72,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import java.time.ZoneOffset
 import javax.inject.Inject
+import android.content.Context
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val mediaRepository: MediaRepository,
     private val orderHomeSections: OrderHomeSectionsUseCase,
     private val imageUrlProvider: ImageUrlProvider,
@@ -500,7 +504,11 @@ class HomeViewModel @Inject constructor(
                     if (query.isBlank() || !_uiState.value.showSettingsInHomeSearch) {
                         emptyList()
                     } else {
-                        SettingsSearchMatcher.search(query, SettingsSearchRegistry.items)
+                        // Resolve the registry's @StringRes ids to the current locale once per
+                        // query, then fuzzy-match against the translated text so a user typing in
+                        // their own language still finds settings.
+                        val resolved = SettingsSearchRegistry.items.resolve(appContext::getString)
+                        SettingsSearchMatcher.search(query, resolved)
                     }
                 }
                 .flowOn(Dispatchers.Default)
@@ -715,9 +723,9 @@ class HomeViewModel @Inject constructor(
      * If the target is an advanced setting that's currently hidden, enable
      * advanced settings first so the deep-linked screen actually shows it —
      * parity with the Settings screen's own search (see SettingsScreen.kt).
-     * Navigation to [SettingsSearchItem.route] is performed by the caller.
+     * Navigation to [ResolvedSettingsItem.route] is performed by the caller.
      */
-    fun onSettingsResultClicked(item: SettingsSearchItem) {
+    fun onSettingsResultClicked(item: ResolvedSettingsItem) {
         if (item.isAdvanced) {
             launch { preferencesEditor.edit { setShowAdvancedSettings(true) } }
         }

@@ -450,7 +450,7 @@ private fun MainHomeContent(
                 }
                 val searchOnClearHistory = remember(viewModel) { { viewModel.clearSearchHistory() } }
                 val searchOnSettingsClick = remember(viewModel, callbacks) {
-                    { item: com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem ->
+                    { item: com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem ->
                         isSearchExpanded = false
                         viewModel.onEvent(HomeUiEvent.ClearSearch)
                         focusManager.clearFocus()

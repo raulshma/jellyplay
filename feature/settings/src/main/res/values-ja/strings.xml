@@ -1050,4 +1050,42 @@
     <string name="settings_dvr_quality_low">低品質にトランスコード（480p）</string>
 
     <!-- UserManagementScreen.kt - already mostly defined; confirm ones used inline -->
+
+    <!-- auto-localized: previously translatable="false" (36) -->
+    <string name="settings_requests_subtitle">Seerr/Jellyseerr のリクエストを確認</string>
+    <string name="settings_seerr_integration">Seerr 連携</string>
+    <string name="settings_seerr_integration_subtitle">Seerr/Jellyseerr を構成</string>
+    <string name="settings_playback_subtitle">プレーヤーエンジン: %1$s</string>
+    <string name="settings_integrations_subtitle">Seerr、Radarr、Sonarr</string>
+    <string name="settings_integrations_arr">Radarr / Sonarr</string>
+    <string name="settings_server_address_invalid">有効な URL を入力してください (例: https://host:port)</string>
+    <string name="settings_built_with_jellyfin">Jellyfin SDK で構築</string>
+    <string name="settings_factory_reset_integrations_note">サードパーティの連携設定 (Seerr、Radarr/Sonarr) は別の場所にあり、ここではリセットされません — 「連携」で管理してください。</string>
+    <string name="factory_reset_cat_syncplay_casting">SyncPlay とキャスト</string>
+    <string name="factory_reset_cat_player_engines">プレーヤーエンジン</string>
+    <string name="settings_seerr_settings">Seerr 設定</string>
+    <string name="settings_server_url">サーバー URL</string>
+    <string name="settings_arr_no_servers_hint">サーバーが検出されませんでした。Seerr 経由の自動検出を有効にし (Seerr が接続されていることを確認してください)、または下記から手動でサーバーを追加してください。</string>
+    <string name="settings_arr_no_admin_hint">自動検出には管理者権限を持つ Seerr アカウントが必要です (サーバーリストは Seerr の管理者専用設定から取得されます)。管理者ユーザーの API キーを使用して再試行するか、下記から手動でサーバーを追加してください。</string>
+    <string name="settings_enable_seerr_integration">Seerr 連携を有効化</string>
+    <string name="settings_enable_seerr_subtitle">Seerr サーバーを JellyPlay に接続</string>
+    <string name="settings_recommendations_subtitle">メディア詳細画面に Seerr のおすすめを表示</string>
+    <string name="settings_popular_movies_subtitle">TMDB の人気映画</string>
+    <string name="settings_popular_series_subtitle">TMDB の人気シリーズ</string>
+    <string name="settings_seerr_request_hub">Seerr リクエストハブ</string>
+    <string name="settings_seerr_header_description">Jellyseerr または Overseerr に接続して、JellyPlay 内から直接コンテンツを検索、発見、リクエストできます。</string>
+    <string name="settings_hide_api_key">API キーを非表示</string>
+    <string name="settings_show_api_key">API キーを表示</string>
+    <string name="settings_jellyfin_username_placeholder">Jellyfin ユーザー名</string>
+    <string name="settings_jellyfin_password_placeholder">Jellyfin パスワード</string>
+    <string name="settings_seerr_email_placeholder">Seerr アカウントのメール</string>
+    <string name="settings_seerr_password_placeholder">Seerr アカウントのパスワード</string>
+    <string name="settings_seerr_server_reached">Seerr サーバーに正常に接続しました</string>
+    <string name="settings_player_engine">プレーヤーエンジン</string>
+    <string name="settings_player_engine_subtitle">メディア再生エンジンを選択</string>
+    <string name="settings_open_subtitle_tester_subtitle">エンジン間のスタイルをプレビュー</string>
+    <string name="settings_pgs_direct_play_on">PGS 字幕をネイティブにレンダリング (MPV のみ)</string>
+    <string name="settings_preset_json">プリセット JSON</string>
+    <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
+    <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
 </resources>

@@ -226,4 +226,8 @@
     <string name="detail_media_info_title_subtitles">자막</string>
     <string name="detail_media_info_no_info">미디어 정보 없음</string>
     <string name="detail_media_info_no_info_description">이 항목에 대한 기술 정보를 사용할 수 없습니다</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="detail_section_seerr_recommendations">Seerr 추천</string>
+    <string name="detail_section_seerr_similar">Seerr 유사 작품</string>
 </resources>

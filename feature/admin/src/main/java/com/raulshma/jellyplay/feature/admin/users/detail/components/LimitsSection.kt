@@ -33,7 +33,7 @@ fun LimitsSection(
             value = if (policy.maxActiveSessions == 0) "" else policy.maxActiveSessions.toString(),
             onValueChange = { onPolicyChange(policy.copy(maxActiveSessions = it.toIntOrNull() ?: 0)) },
             label = { Text(stringResource(R.string.admin_max_active_sessions)) },
-            supportingText = { Text("0 or blank = unlimited") },
+            supportingText = { Text(stringResource(R.string.admin_zero_blank_unlimited)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),

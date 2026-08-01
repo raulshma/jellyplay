@@ -28,6 +28,8 @@ import coil3.size.pxOrElse
 import coil3.size.Size as CoilSize
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import androidx.compose.ui.res.stringResource
+import com.raulshma.jellyplay.core.ui.R
 
 @Composable
 fun MediaImage(
@@ -178,7 +180,7 @@ private fun FallbackAsyncImage(
         ) {
             Icon(
                 imageVector = placeholderIcon,
-                contentDescription = "Image Placeholder",
+                contentDescription = stringResource(R.string.core_ui_image_placeholder),
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -45,7 +45,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.raulshma.jellyplay.core.ui.image.MediaImage
-import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import androidx.compose.ui.graphics.Color
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -67,8 +67,8 @@ fun HomeSearchResultsOverlay(
     onHistoryClick: (String) -> Unit = {},
     onDeleteHistoryItem: (Long) -> Unit = {},
     onClearHistory: () -> Unit = {},
-    settingsResults: List<SettingsSearchItem> = emptyList(),
-    onSettingsClick: (SettingsSearchItem) -> Unit = {},
+    settingsResults: List<ResolvedSettingsItem> = emptyList(),
+    onSettingsClick: (ResolvedSettingsItem) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val totalItems = jellyfinResults.size + seerrResults.size + settingsResults.size

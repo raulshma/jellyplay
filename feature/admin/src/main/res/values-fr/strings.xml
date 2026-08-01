@@ -169,6 +169,7 @@
     <string name="admin_security_limits">Limites de sécurité</string>
     <string name="admin_security_limits_desc">Sessions simultanées et protection de connexion.</string>
     <string name="admin_max_active_sessions">Sessions actives max.</string>
+    <string name="admin_zero_blank_unlimited">0 ou vide = illimité</string>
     <string name="admin_login_attempts">Tentatives de connexion avant verrouillage</string>
     <string name="admin_blank_no_lockout">Vide = pas de verrouillage</string>
     <string name="admin_identity">Identité</string>

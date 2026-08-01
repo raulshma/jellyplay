@@ -229,4 +229,8 @@
     <string name="detail_media_info_title_subtitles">Untertitel</string>
     <string name="detail_media_info_no_info">Keine Medieninformationen</string>
     <string name="detail_media_info_no_info_description">Für diesen Eintrag sind keine technischen Informationen verfügbar</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="detail_section_seerr_recommendations">Seerr-Empfehlungen</string>
+    <string name="detail_section_seerr_similar">Ähnlich laut Seerr</string>
 </resources>

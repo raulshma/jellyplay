@@ -2,7 +2,7 @@
 <resources>
     <!-- Brand / non-translatable -->
     <string name="auth_app_name" translatable="false">JellyPlay</string>
-    <string name="auth_quick_connect" translatable="false">Quick Connect</string>
+    <string name="auth_quick_connect">Quick Connect</string>
     <string name="auth_server_address_hint" translatable="false">https://jellyfin.example.com</string>
 
     <!-- Login screen -->

@@ -169,6 +169,7 @@
     <string name="admin_security_limits">Límites de seguridad</string>
     <string name="admin_security_limits_desc">Sesiones simultáneas y protección de inicio de sesión.</string>
     <string name="admin_max_active_sessions">Sesiones activas máx.</string>
+    <string name="admin_zero_blank_unlimited">0 o en blanco = ilimitado</string>
     <string name="admin_login_attempts">Intentos de inicio antes del bloqueo</string>
     <string name="admin_blank_no_lockout">Vacío = sin bloqueo</string>
     <string name="admin_identity">Identidad</string>

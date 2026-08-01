@@ -143,4 +143,19 @@
     <string name="play_on_title">Reproduzir em</string>
     <string name="play_on_no_clients">Nenhum cliente Jellyfin encontrado. Abra o JellyPlay ou o Jellyfin noutro dispositivo e ele aparecerá aqui.</string>
     <string name="play_on_jellyfin_session">Sessão Jellyfin</string>
+
+    <!-- auto-localized: previously translatable="false" (10) -->
+    <string name="widget_open_to_play">Toque para abrir o JellyPlay</string>
+    <string name="widget_library_recommendations_description">Sugestões personalizadas da sua biblioteca Jellyfin — com base no que tem assistido.</string>
+    <string name="widget_library_recommendations_empty_subtitle">Abra o JellyPlay para começar a explorar a sua biblioteca</string>
+    <string name="widget_seerr_recommendations_label">Seleção Seerr</string>
+    <string name="widget_seerr_recommendations_title">Seleção Seerr</string>
+    <string name="widget_seerr_recommendations_description">Filmes e séries atuais e futuros do seu servidor Seerr (Jellyseerr / Overseerr).</string>
+    <string name="widget_seerr_recommendations_empty">Seerr não está ligado</string>
+    <string name="widget_seerr_recommendations_empty_subtitle">Configure o Seerr nas definições do JellyPlay para ver sugestões</string>
+    <string name="update_up_to_date_body">O JellyPlay já está na versão mais recente.</string>
+    <string name="floating_player_notification_title">Leitor flutuante do JellyPlay</string>
+
+    <!-- Now-playing snackbar -->
+    <string name="snackbar_now_playing">A reproduzir: %1$s</string>
 </resources>
