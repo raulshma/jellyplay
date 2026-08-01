@@ -85,6 +85,7 @@ class VideoPlayerViewModelExtendedTest {
             context = context,
             mediaRepository = mediaRepository,
             playbackRepository = playbackRepository,
+            subtitleProviderRepository = mockk(relaxed = true),
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
