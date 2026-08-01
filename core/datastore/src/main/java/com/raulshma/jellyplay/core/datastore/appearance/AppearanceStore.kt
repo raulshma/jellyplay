@@ -1,0 +1,324 @@
+package com.raulshma.jellyplay.core.datastore.appearance
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
+import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
+import com.raulshma.jellyplay.core.model.AppFontScale
+import com.raulshma.jellyplay.core.model.ColorBlindMode
+import com.raulshma.jellyplay.core.model.ColorStyle
+import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.ThemeMode
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Deep module owning the **appearance &amp; accessibility** preference domain:
+ * theme/contrast/oled/dynamic/accent/color-style, the mutually-exclusive
+ * synthwave/soothing/monochrome accent themes, reduce-motion, blue-light filter,
+ * font scale, date format, colour-blind mode, hand mode, haptics, scheduled
+ * theme hours, backdrop theme music, performance mode, and the advanced-settings
+ * toggle.
+ *
+ * Extracted from the `UserPreferencesStore` god object so this concern owns its
+ * keys, setters (including the 3-way mutex below), read projection, and reset
+ * list end-to-end. Mirrors the `PlaybackStore` / `ServerIdentityStore` shape.
+ *
+ * **Cross-key invariant owned here:** enabling any one of
+ * synthwave/soothing/monochrome clears the other two in a single atomic edit
+ * (they are mutually exclusive accent themes).
+ *
+ * **Storage:** reuses the shared `"user_prefs"` DataStore; key strings match the
+ * legacy `UserPreferencesStore.Keys` names — no migration file.
+ */
+@Singleton
+class AppearanceStore @Inject constructor(
+    @UserPreferencesDataStore private val dataStore: DataStore<Preferences>,
+    @ApplicationScope private val externalScope: CoroutineScope,
+) {
+    private val scope = externalScope
+
+    internal object Keys {
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val CONTRAST_LEVEL = stringPreferencesKey("contrast_level")
+        val DYNAMIC_THEMING = booleanPreferencesKey("dynamic_theming")
+        val OLED_MODE = booleanPreferencesKey("oled_mode")
+        val ACCENT_COLOR_SWATCH = stringPreferencesKey("accent_color_swatch")
+        val COLOR_STYLE = stringPreferencesKey("color_style")
+        val PERFORMANCE_MODE = booleanPreferencesKey("performance_mode")
+        val REDUCE_MOTION_ENABLED = booleanPreferencesKey("reduce_motion_enabled")
+        val SYNTHWAVE_MODE = booleanPreferencesKey("synthwave_mode")
+        val SYNTHWAVE_ACCENT = stringPreferencesKey("synthwave_accent")
+        val SOOTHING_MODE = booleanPreferencesKey("soothing_mode")
+        val SOOTHING_ACCENT = stringPreferencesKey("soothing_accent")
+        val MONOCHROME_MODE = booleanPreferencesKey("monochrome_mode")
+        val BACKDROP_THEME_MUSIC_ENABLED = booleanPreferencesKey("backdrop_theme_music_enabled")
+        val BLUE_LIGHT_FILTER_ENABLED = booleanPreferencesKey("blue_light_filter_enabled")
+        val BLUE_LIGHT_FILTER_STRENGTH = floatPreferencesKey("blue_light_filter_strength")
+        val DATE_FORMAT_PREFERENCE = stringPreferencesKey("date_format_preference")
+        val APP_FONT_SCALE = stringPreferencesKey("app_font_scale")
+        val SCHEDULED_THEME_START_HOUR = intPreferencesKey("scheduled_theme_start_hour")
+        val SCHEDULED_THEME_END_HOUR = intPreferencesKey("scheduled_theme_end_hour")
+        val COLOR_BLIND_MODE = stringPreferencesKey("color_blind_mode")
+        val HAND_MODE = stringPreferencesKey("hand_mode")
+        val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
+        val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey("show_advanced_settings")
+    }
+
+    private val sharedPrefs: Flow<Preferences> = dataStore.data
+        .catch { _ -> emptyPreferences() }
+
+    val appearance: StateFlow<AppearanceSlice> = sharedPrefs
+        .map { read(it) }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, AppearanceSlice())
+
+    internal fun read(prefs: Preferences): AppearanceSlice = AppearanceSlice(
+        dynamicTheming = PreferenceCodec.readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
+        themeMode = readThemeMode(prefs),
+        contrastLevel = readContrastLevel(prefs),
+        oledMode = PreferenceCodec.readBool(prefs, Keys.OLED_MODE, "oled_mode", false),
+        performanceMode = PreferenceCodec.readBool(prefs, Keys.PERFORMANCE_MODE, "performance_mode", false),
+        accentColorSwatch = prefs[Keys.ACCENT_COLOR_SWATCH] ?: "dynamic",
+        colorStyle = readColorStyle(prefs),
+        synthwaveMode = PreferenceCodec.readBool(prefs, Keys.SYNTHWAVE_MODE, "synthwave_mode", false),
+        synthwaveAccent = prefs[Keys.SYNTHWAVE_ACCENT] ?: "magenta",
+        soothingMode = PreferenceCodec.readBool(prefs, Keys.SOOTHING_MODE, "soothing_mode", false),
+        soothingAccent = prefs[Keys.SOOTHING_ACCENT] ?: "ocean",
+        monochromeMode = PreferenceCodec.readBool(prefs, Keys.MONOCHROME_MODE, "monochrome_mode", false),
+        showAdvancedSettings = PreferenceCodec.readBool(prefs, Keys.SHOW_ADVANCED_SETTINGS, "show_advanced_settings", false),
+        reduceMotionEnabled = PreferenceCodec.readBool(prefs, Keys.REDUCE_MOTION_ENABLED, "reduce_motion_enabled", false),
+        blueLightFilterEnabled = PreferenceCodec.readBool(prefs, Keys.BLUE_LIGHT_FILTER_ENABLED, "blue_light_filter_enabled", false),
+        blueLightFilterStrength = PreferenceCodec.readFloat(prefs, Keys.BLUE_LIGHT_FILTER_STRENGTH, "blue_light_filter_strength", 0.3f),
+        backdropThemeMusicEnabled = PreferenceCodec.readBool(prefs, Keys.BACKDROP_THEME_MUSIC_ENABLED, "backdrop_theme_music_enabled", false),
+        hapticsEnabled = PreferenceCodec.readBool(prefs, Keys.HAPTICS_ENABLED, "haptics_enabled", true),
+        dateFormatPreference = readDateFormat(prefs),
+        appFontScale = readFontScale(prefs),
+        scheduledThemeStartHour = PreferenceCodec.readInt(prefs, Keys.SCHEDULED_THEME_START_HOUR, "scheduled_theme_start_hour", 22),
+        scheduledThemeEndHour = PreferenceCodec.readInt(prefs, Keys.SCHEDULED_THEME_END_HOUR, "scheduled_theme_end_hour", 7),
+        colorBlindMode = readColorBlindMode(prefs),
+        handMode = readHandMode(prefs),
+    )
+
+    private fun readThemeMode(prefs: Preferences): ThemeMode = try {
+        ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
+    } catch (_: Exception) {
+        ThemeMode.SYSTEM
+    }
+
+    private fun readContrastLevel(prefs: Preferences): ContrastLevel = try {
+        ContrastLevel.valueOf(prefs[Keys.CONTRAST_LEVEL] ?: ContrastLevel.DEFAULT.name)
+    } catch (_: Exception) {
+        ContrastLevel.DEFAULT
+    }
+
+    private fun readColorStyle(prefs: Preferences): ColorStyle = try {
+        ColorStyle.valueOf(prefs[Keys.COLOR_STYLE] ?: ColorStyle.TONAL_SPOT.name)
+    } catch (_: Exception) {
+        ColorStyle.TONAL_SPOT
+    }
+
+    private fun readDateFormat(prefs: Preferences): DateFormatPreference = try {
+        DateFormatPreference.valueOf(prefs[Keys.DATE_FORMAT_PREFERENCE] ?: DateFormatPreference.SYSTEM.name)
+    } catch (_: Exception) {
+        DateFormatPreference.SYSTEM
+    }
+
+    private fun readFontScale(prefs: Preferences): AppFontScale = try {
+        AppFontScale.valueOf(prefs[Keys.APP_FONT_SCALE] ?: AppFontScale.DEFAULT.name)
+    } catch (_: Exception) {
+        AppFontScale.DEFAULT
+    }
+
+    private fun readColorBlindMode(prefs: Preferences): ColorBlindMode = try {
+        ColorBlindMode.valueOf(prefs[Keys.COLOR_BLIND_MODE] ?: ColorBlindMode.NONE.name)
+    } catch (_: Exception) {
+        ColorBlindMode.NONE
+    }
+
+    private fun readHandMode(prefs: Preferences): HandMode = try {
+        HandMode.valueOf(prefs[Keys.HAND_MODE] ?: HandMode.RIGHT.name)
+    } catch (_: Exception) {
+        HandMode.RIGHT
+    }
+
+    // ------------------------------------------------------------------
+    // Setters
+    // ------------------------------------------------------------------
+
+    suspend fun setDynamicTheming(enabled: Boolean) {
+        dataStore.edit { it[Keys.DYNAMIC_THEMING] = enabled }
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+    }
+
+    suspend fun setContrastLevel(level: ContrastLevel) {
+        dataStore.edit { it[Keys.CONTRAST_LEVEL] = level.name }
+    }
+
+    suspend fun setOledMode(enabled: Boolean) {
+        dataStore.edit { it[Keys.OLED_MODE] = enabled }
+    }
+
+    suspend fun setAccentColorSwatch(swatch: String) {
+        dataStore.edit { it[Keys.ACCENT_COLOR_SWATCH] = swatch }
+    }
+
+    suspend fun setColorStyle(style: ColorStyle) {
+        dataStore.edit { it[Keys.COLOR_STYLE] = style.name }
+    }
+
+    suspend fun setPerformanceMode(enabled: Boolean) {
+        dataStore.edit { it[Keys.PERFORMANCE_MODE] = enabled }
+    }
+
+    suspend fun setReduceMotionEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.REDUCE_MOTION_ENABLED] = enabled }
+    }
+
+    /** Enables synthwave mode and clears soothing + monochrome (mutual exclusion). */
+    suspend fun setSynthwaveMode(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.SYNTHWAVE_MODE] = enabled
+            if (enabled) {
+                prefs[Keys.SOOTHING_MODE] = false
+                prefs[Keys.MONOCHROME_MODE] = false
+            }
+        }
+    }
+
+    suspend fun setSynthwaveAccent(accent: String) {
+        dataStore.edit { it[Keys.SYNTHWAVE_ACCENT] = accent }
+    }
+
+    /** Enables soothing mode and clears synthwave + monochrome (mutual exclusion). */
+    suspend fun setSoothingMode(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.SOOTHING_MODE] = enabled
+            if (enabled) {
+                prefs[Keys.SYNTHWAVE_MODE] = false
+                prefs[Keys.MONOCHROME_MODE] = false
+            }
+        }
+    }
+
+    suspend fun setSoothingAccent(accent: String) {
+        dataStore.edit { it[Keys.SOOTHING_ACCENT] = accent }
+    }
+
+    /** Enables monochrome mode and clears synthwave + soothing (mutual exclusion). */
+    suspend fun setMonochromeMode(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[Keys.MONOCHROME_MODE] = enabled
+            if (enabled) {
+                prefs[Keys.SYNTHWAVE_MODE] = false
+                prefs[Keys.SOOTHING_MODE] = false
+            }
+        }
+    }
+
+    suspend fun setShowAdvancedSettings(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_ADVANCED_SETTINGS] = enabled }
+    }
+
+    suspend fun setBlueLightFilterEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_ENABLED] = enabled }
+    }
+
+    suspend fun setBlueLightFilterStrength(strength: Float) {
+        dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = strength }
+    }
+
+    suspend fun setBackdropThemeMusicEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = enabled }
+    }
+
+    suspend fun setHapticsEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.HAPTICS_ENABLED] = enabled }
+    }
+
+    suspend fun setDateFormatPreference(preference: DateFormatPreference) {
+        dataStore.edit { it[Keys.DATE_FORMAT_PREFERENCE] = preference.name }
+    }
+
+    suspend fun setAppFontScale(scale: AppFontScale) {
+        dataStore.edit { it[Keys.APP_FONT_SCALE] = scale.name }
+    }
+
+    suspend fun setScheduledThemeStartHour(hour: Int) {
+        dataStore.edit { it[Keys.SCHEDULED_THEME_START_HOUR] = hour }
+    }
+
+    suspend fun setScheduledThemeEndHour(hour: Int) {
+        dataStore.edit { it[Keys.SCHEDULED_THEME_END_HOUR] = hour }
+    }
+
+    suspend fun setColorBlindMode(mode: ColorBlindMode) {
+        dataStore.edit { it[Keys.COLOR_BLIND_MODE] = mode.name }
+    }
+
+    suspend fun setHandMode(mode: HandMode) {
+        dataStore.edit { it[Keys.HAND_MODE] = mode.name }
+    }
+
+    internal val resetKeys: List<Preferences.Key<*>> = listOf(
+        Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
+        Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.PERFORMANCE_MODE,
+        Keys.REDUCE_MOTION_ENABLED, Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
+        Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
+        Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.BLUE_LIGHT_FILTER_ENABLED,
+        Keys.BLUE_LIGHT_FILTER_STRENGTH, Keys.DATE_FORMAT_PREFERENCE, Keys.APP_FONT_SCALE,
+        Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
+        Keys.COLOR_BLIND_MODE, Keys.HAND_MODE,
+    )
+}
+
+/**
+ * The appearance &amp; accessibility preference slice. Plain data class.
+ * Defaults mirror the projection defaults in [AppearanceStore.read].
+ */
+data class AppearanceSlice(
+    val dynamicTheming: Boolean = true,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
+    val oledMode: Boolean = false,
+    val performanceMode: Boolean = false,
+    val accentColorSwatch: String = "dynamic",
+    val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
+    val synthwaveMode: Boolean = false,
+    val synthwaveAccent: String = "magenta",
+    val soothingMode: Boolean = false,
+    val soothingAccent: String = "ocean",
+    val monochromeMode: Boolean = false,
+    val showAdvancedSettings: Boolean = false,
+    val reduceMotionEnabled: Boolean = false,
+    val blueLightFilterEnabled: Boolean = false,
+    val blueLightFilterStrength: Float = 0.3f,
+    val backdropThemeMusicEnabled: Boolean = false,
+    val hapticsEnabled: Boolean = true,
+    val dateFormatPreference: DateFormatPreference = DateFormatPreference.SYSTEM,
+    val appFontScale: AppFontScale = AppFontScale.DEFAULT,
+    val scheduledThemeStartHour: Int = 22,
+    val scheduledThemeEndHour: Int = 7,
+    val colorBlindMode: ColorBlindMode = ColorBlindMode.NONE,
+    val handMode: HandMode = HandMode.RIGHT,
+)
