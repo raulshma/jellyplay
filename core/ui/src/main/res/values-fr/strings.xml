@@ -576,4 +576,37 @@
 
     <!-- Accessibility / media -->
     <string name="core_ui_image_placeholder">Espace réservé d\'image</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">Intro</string>
+    <string name="core_segment_intro_desc">Sequence d ouverture/intro</string>
+    <string name="core_segment_outro">Outro</string>
+    <string name="core_segment_outro_desc">Sequence de generique/outro</string>
+    <string name="core_segment_preview">Apercu</string>
+    <string name="core_segment_preview_desc">A suivre / cold open / teaser</string>
+    <string name="core_segment_recap">Recapitulatif</string>
+    <string name="core_segment_recap_desc">Precedemment...</string>
+    <string name="core_segment_commercial">Publicite</string>
+    <string name="core_segment_commercial_desc">Pause publicitaire</string>
+    <string name="core_segment_unknown">Autre</string>
+    <string name="core_segment_unknown_desc">Segment personnalise</string>
+    <string name="core_segment_skip_intro">Passer l intro</string>
+    <string name="core_segment_skip_outro">Passer le generique</string>
+    <string name="core_segment_skip_preview">Passer l apercu</string>
+    <string name="core_segment_skip_recap">Passer le recapitulatif</string>
+    <string name="core_segment_skip_commercial">Passer la publicite</string>
+    <string name="core_segment_skip_unknown">Passer le segment</string>
+    <string name="core_segment_behavior_show_button">Afficher le bouton</string>
+    <string name="core_segment_behavior_show_button_desc">Afficher un bouton passer pendant le segment</string>
+    <string name="core_segment_behavior_auto_skip">Saut automatique</string>
+    <string name="core_segment_behavior_auto_skip_desc">Sauter automatiquement le segment</string>
+    <string name="core_segment_behavior_ignore">Ignorer</string>
+    <string name="core_segment_behavior_ignore_desc">Ne rien faire pour ce type de segment</string>
+
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">Relacher pour fermer</string>
+    <string name="core_preview_series">Serie</string>
+    <string name="core_preview_new_format">%1$d nouveau</string>
+
 </resources>

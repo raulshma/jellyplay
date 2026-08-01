@@ -575,4 +575,37 @@
 
     <!-- Accessibility / media -->
     <string name="core_ui_image_placeholder">Marcador de imagen</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">Intro</string>
+    <string name="core_segment_intro_desc">Secuencia de apertura/intro</string>
+    <string name="core_segment_outro">Outro</string>
+    <string name="core_segment_outro_desc">Secuencia de creditos/outro</string>
+    <string name="core_segment_preview">Vista previa</string>
+    <string name="core_segment_preview_desc">Proximamente / cold open / teaser</string>
+    <string name="core_segment_recap">Resumen</string>
+    <string name="core_segment_recap_desc">Previamente en...</string>
+    <string name="core_segment_commercial">Comercial</string>
+    <string name="core_segment_commercial_desc">Pausa publicitaria</string>
+    <string name="core_segment_unknown">Otro</string>
+    <string name="core_segment_unknown_desc">Segmento personalizado</string>
+    <string name="core_segment_skip_intro">Omitir intro</string>
+    <string name="core_segment_skip_outro">Omitir creditos</string>
+    <string name="core_segment_skip_preview">Omitir vista previa</string>
+    <string name="core_segment_skip_recap">Omitir resumen</string>
+    <string name="core_segment_skip_commercial">Omitir comercial</string>
+    <string name="core_segment_skip_unknown">Omitir segmento</string>
+    <string name="core_segment_behavior_show_button">Mostrar boton</string>
+    <string name="core_segment_behavior_show_button_desc">Mostrar un boton de omitir durante el segmento</string>
+    <string name="core_segment_behavior_auto_skip">Salto automatico</string>
+    <string name="core_segment_behavior_auto_skip_desc">Saltar automaticamente el segmento</string>
+    <string name="core_segment_behavior_ignore">Ignorar</string>
+    <string name="core_segment_behavior_ignore_desc">No hacer nada para este tipo de segmento</string>
+
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">Soltar para cerrar</string>
+    <string name="core_preview_series">Serie</string>
+    <string name="core_preview_new_format">%1$d nuevo</string>
+
 </resources>

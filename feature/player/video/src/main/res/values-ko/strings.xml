@@ -244,4 +244,61 @@
     <plurals name="player_video_participants">
         <item quantity="other">%1$d명 참가 중</item>
     </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">재생</string>
+    <string name="player_video_stats_network">네트워크</string>
+    <string name="player_video_stats_performance">성능</string>
+    <string name="player_video_stats_engine">엔진</string>
+    <string name="player_video_stats_state">상태</string>
+    <string name="player_video_stats_playing">재생 중</string>
+    <string name="player_video_stats_position">위치</string>
+    <string name="player_video_stats_progress">진행</string>
+    <string name="player_video_stats_buffer_health">버퍼 상태</string>
+    <string name="player_video_stats_buffered">버퍼됨</string>
+    <string name="player_video_stats_clock">시계</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">색상 범위</string>
+    <string name="player_video_stats_color_depth">색상 심도</string>
+    <string name="player_video_stats_sample_rate">샘플링 레이트</string>
+    <string name="player_video_stats_session_id">세션 ID</string>
+    <string name="player_video_stats_quality">품질</string>
+    <string name="player_video_stats_est_bandwidth">예상 대역폭</string>
+    <string name="player_video_stats_stream_bitrate">스트림 비트레이트</string>
+    <string name="player_video_stats_dropped_frames">드롭된 프레임</string>
+    <string name="player_video_stats_total_frames">총 프레임</string>
+    <string name="player_video_stats_drop_rate">드롭률</string>
+    <string name="player_video_stats_buffer_size">버퍼 크기</string>
+    <string name="player_video_stats_vo_dropped_frames">VO 드롭된 프레임</string>
+    <string name="player_video_stats_vo_delay">VO 지연</string>
+    <string name="player_video_stats_display_rate">디스플레이 주사율</string>
+    <string name="player_video_stats_player">플레이어</string>
+    <string name="player_video_cast_connecting">연결 중</string>
+    <string name="player_video_casting">캐스팅 중</string>
+    <string name="player_video_season_n">시즌 %1$d</string>
+    <string name="player_video_no_episodes_available">에피소드가 없습니다</string>
+    <string name="player_video_watched">시청함</string>
+    <string name="player_video_time_left">%1$s 남음</string>
+    <string name="player_video_now_playing">재생 중</string>
+    <string name="player_video_quality_title">품질</string>
+    <string name="player_video_quality_description">적응형 스트림의 경우 변경 사항이 즉시 적용됩니다. 다이렉트 재생에서는 최대 재생 비트레이트를 설정합니다.</string>
+    <string name="player_video_adaptive_bitrate_cap">적응형 비트레이트 상한</string>
+    <string name="player_video_adaptive_bitrate_on">종량제 네트워크에서 품질 제한</string>
+    <string name="player_video_adaptive_bitrate_off">꺼짐 - 최고 품질(다이렉트 재생)</string>
+    <string name="player_video_skip_intro">인트로 건너뛰기</string>
+    <string name="player_video_overview_tab">개요</string>
+    <string name="player_video_lyrics_subtitles_tab">가사 / 자막</string>
+    <string name="player_video_synopsis">시놉시스</string>
+    <string name="player_video_cast_and_crew">출연진 &amp; 제작진</string>
+    <string name="player_video_audio_stream">오디오 스트림</string>
+    <string name="player_video_episode_title">제%1$d화: %2$s</string>
+    <string name="player_video_seek_backward_10s">-10초</string>
+    <string name="player_video_seek_forward_30s">+30s</string>
+    <string name="player_video_cast_connecting_device">기기에 연결 중...</string>
+    <string name="player_video_cast_connected_streaming">연결됨 / 스트리밍</string>
+    <string name="player_video_companion">JellyPlay 컴패니언</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">선택한 파일이 .ttf 또는 .otf 글꼴이 아닙니다.</string>
+
 </resources>

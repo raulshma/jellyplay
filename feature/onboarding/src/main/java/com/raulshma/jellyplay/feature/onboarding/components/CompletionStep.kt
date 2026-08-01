@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -46,6 +47,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayExpressiveTitles
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.onboarding.R
 
 @Composable
 fun CompletionStep(
@@ -186,7 +188,7 @@ fun CompletionStep(
         Spacer(Modifier.height(32.dp))
 
         Text(
-            text = "All Set!",
+            text = stringResource(R.string.onboarding_completion_title),
             style = JellyPlayExpressiveTitles.displayMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -200,7 +202,7 @@ fun CompletionStep(
         Spacer(Modifier.height(12.dp))
 
         Text(
-            text = "Your JellyPlay is configured and ready to go. You can always change these settings later.",
+            text = stringResource(R.string.onboarding_completion_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -229,7 +231,7 @@ fun CompletionStep(
             ),
         ) {
             Text(
-                text = "Start Watching",
+                text = stringResource(R.string.onboarding_completion_start_watching),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )

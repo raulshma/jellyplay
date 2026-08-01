@@ -576,4 +576,37 @@
 
     <!-- Accessibility / media -->
     <string name="core_ui_image_placeholder">Image Placeholder</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">Intro</string>
+    <string name="core_segment_intro_desc">Opening/intro sequence</string>
+    <string name="core_segment_outro">Outro</string>
+    <string name="core_segment_outro_desc">Credits/outro sequence</string>
+    <string name="core_segment_preview">Preview</string>
+    <string name="core_segment_preview_desc">Coming up / cold open / teaser</string>
+    <string name="core_segment_recap">Recap</string>
+    <string name="core_segment_recap_desc">Previously on...</string>
+    <string name="core_segment_commercial">Commercial</string>
+    <string name="core_segment_commercial_desc">Commercial break</string>
+    <string name="core_segment_unknown">Other</string>
+    <string name="core_segment_unknown_desc">Custom segment</string>
+    <string name="core_segment_skip_intro">Skip Intro</string>
+    <string name="core_segment_skip_outro">Skip Credits</string>
+    <string name="core_segment_skip_preview">Skip Preview</string>
+    <string name="core_segment_skip_recap">Skip Recap</string>
+    <string name="core_segment_skip_commercial">Skip Commercial</string>
+    <string name="core_segment_skip_unknown">Skip Segment</string>
+    <string name="core_segment_behavior_show_button">Show Button</string>
+    <string name="core_segment_behavior_show_button_desc">Show a skip button during the segment</string>
+    <string name="core_segment_behavior_auto_skip">Auto-Skip</string>
+    <string name="core_segment_behavior_auto_skip_desc">Automatically skip past the segment</string>
+    <string name="core_segment_behavior_ignore">Ignore</string>
+    <string name="core_segment_behavior_ignore_desc">Do nothing for this segment type</string>
+
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">Release to close</string>
+    <string name="core_preview_series">Series</string>
+    <string name="core_preview_new_format">%1$d new</string>
+
 </resources>

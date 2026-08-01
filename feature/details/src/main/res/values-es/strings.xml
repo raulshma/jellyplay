@@ -202,6 +202,11 @@
     <string name="detail_manage_cd_toggle_monitor_episode">Activar o desactivar la monitorización del episodio</string>
     <string name="detail_manage_cd_episode_menu">Opciones del episodio</string>
 
+    <!-- Localized error messages -->
+    <string name="detail_manage_series_load_error">No se pudieron cargar las series de Jellyfin.</string>
+    <string name="detail_manage_series_no_tvdb">Esta serie no tiene id de tvdb; Sonarr no puede buscarla.</string>
+    <string name="detail_manage_series_not_tracked">Ningún servidor Sonarr rastrea esta serie. Añade la serie en Sonarr primero.</string>
+
     <!-- ── Seerr request / status buttons ──────────────────────────────── -->
     <string name="detail_available">Disponible</string>
     <string name="detail_request">Solicitar</string>
@@ -233,4 +238,24 @@
     <!-- auto-localized: previously translatable="false" (2) -->
     <string name="detail_section_seerr_recommendations">Recomendaciones de Seerr</string>
     <string name="detail_section_seerr_similar">Similares según Seerr</string>
+
+    <!-- Localized UI text extracted from SeerrDetailScreen -->
+    <string name="detail_seerr_unknown_error">Error desconocido</string>
+    <string name="detail_seerr_overview">Resumen</string>
+    <string name="detail_seerr_episodes_count">%1$d episodios</string>
+    <string name="detail_seerr_season_n">Temporada %1$d</string>
+    <string name="detail_seerr_director_format">Director: %1$s</string>
+    <string name="detail_seerr_show_more">Mostrar más</string>
+    <string name="detail_seerr_video">Video</string>
+    <string name="detail_seerr_information">Información</string>
+    <string name="detail_seerr_status">Estado</string>
+    <string name="detail_seerr_unknown">Desconocido</string>
+    <string name="detail_seerr_release_date">Fecha de estreno</string>
+    <string name="detail_seerr_revenue">Ingresos</string>
+    <string name="detail_seerr_budget">Presupuesto</string>
+    <string name="detail_seerr_language">Idioma</string>
+    <string name="detail_seerr_country">País</string>
+    <string name="detail_seerr_studios">Estudios</string>
+    <string name="detail_seerr_currently_streaming_on">Actualmente transmitiendo en</string>
+
 </resources>

@@ -553,6 +553,8 @@
     <!-- LicensesScreen.kt -->
     <string name="settings_open_source_licenses_title">Licences open source</string>
     <string name="settings_license_text_unavailable">Le texte complet de la licence n\'est pas disponible pour cette bibliothèque.</string>
+    <!-- Localized error messages -->
+    <string name="settings_licenses_load_error">Impossible de charger les informations de licence</string>
 
     <!-- ExperimentalSettingsScreen.kt -->
     <string name="settings_experimental_title">Expérimental</string>
@@ -1090,4 +1092,37 @@
     <string name="settings_preset_json">JSON de préréglage</string>
     <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
     <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
+
+    <!-- Localized UI text extracted from settings screens -->
+    <string name="settings_nav_bar_title">Barre de navigation</string>
+    <string name="settings_nav_auto_hide">Masquer au défilement</string>
+    <string name="settings_nav_pinned">Epinglé</string>
+    <string name="settings_nav_items_summary">%1$d sur %2$d elements</string>
+    <string name="settings_nav_items_summary_with_scroll">%1$d sur %2$d elements - %3$s</string>
+    <string name="settings_nav_hide_on_scroll">Masquer au défilement</string>
+    <string name="settings_nav_hide_on_scroll_on">La barre se masque en défilant vers le bas</string>
+    <string name="settings_nav_hide_on_scroll_off">La barre reste visible</string>
+    <string name="settings_nav_item_home">Accueil</string>
+    <string name="settings_nav_item_home_subtitle">Tableau de bord d accueil</string>
+    <string name="settings_nav_item_library">Bibliotheque</string>
+    <string name="settings_nav_item_library_subtitle">Parcourir vos bibliotheques multimedia</string>
+    <string name="settings_nav_item_search">Rechercher</string>
+    <string name="settings_nav_item_search_subtitle">Trouver films, series et plus</string>
+    <string name="settings_nav_item_live_tv">TV en direct</string>
+    <string name="settings_nav_item_live_tv_subtitle">Chaines en direct et guide</string>
+    <string name="settings_nav_item_browse">Parcourir</string>
+    <string name="settings_nav_item_browse_subtitle">Bibliotheques de musique (mode musique)</string>
+    <string name="settings_nav_item_shortcuts">Raccourcis</string>
+    <string name="settings_nav_item_shortcuts_subtitle">Raccourcis d acces rapide</string>
+    <string name="settings_reorder_section">Reorganiser la section</string>
+    <string name="settings_hide_advanced">Masquer les parametres avances</string>
+    <string name="settings_show_advanced">Afficher les parametres avances</string>
+    <string name="settings_advanced_hidden">Parametres avances masques</string>
+    <string name="settings_advanced_shown">Parametres avances affiches</string>
+
+
+    <plurals name="settings_advanced_settings_hidden">
+        <item quantity="one">%1$d parametre avance masque</item>
+        <item quantity="other">%1$d parametres avances masques</item>
+    </plurals>
 </resources>

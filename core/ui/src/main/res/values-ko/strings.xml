@@ -576,4 +576,37 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">Radarr/Sonarr의 다운로드 대기열 진행률 및 곧 출시될 캘린더입니다</string>
     <string name="ss_arr_settings_title">Radarr / Sonarr 서버</string>
     <string name="ss_arr_settings_subtitle">다이렉트 Radarr/Sonarr 서버 연결을 설정합니다</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">인트로</string>
+    <string name="core_segment_intro_desc">오프닝/인트로 시퀀스</string>
+    <string name="core_segment_outro">아웃트로</string>
+    <string name="core_segment_outro_desc">크레딧/아웃트로 시퀀스</string>
+    <string name="core_segment_preview">미리보기</string>
+    <string name="core_segment_preview_desc">다음 예고/콜드 오픈/티저</string>
+    <string name="core_segment_recap">요약</string>
+    <string name="core_segment_recap_desc">이전 이야기...</string>
+    <string name="core_segment_commercial">광고</string>
+    <string name="core_segment_commercial_desc">광고 휴식</string>
+    <string name="core_segment_unknown">기타</string>
+    <string name="core_segment_unknown_desc">사용자 지정 세그먼트</string>
+    <string name="core_segment_skip_intro">인트로 건너뛰기</string>
+    <string name="core_segment_skip_outro">크레딧 건너뛰기</string>
+    <string name="core_segment_skip_preview">미리보기 건너뛰기</string>
+    <string name="core_segment_skip_recap">요약 건너뛰기</string>
+    <string name="core_segment_skip_commercial">광고 건너뛰기</string>
+    <string name="core_segment_skip_unknown">세그먼트 건너뛰기</string>
+    <string name="core_segment_behavior_show_button">버튼 표시</string>
+    <string name="core_segment_behavior_show_button_desc">세그먼트 중 건너뛰기 버튼 표시</string>
+    <string name="core_segment_behavior_auto_skip">자동 건너뛰기</string>
+    <string name="core_segment_behavior_auto_skip_desc">세그먼트를 자동으로 건너뜀</string>
+    <string name="core_segment_behavior_ignore">무시</string>
+    <string name="core_segment_behavior_ignore_desc">이 세그먼트 유형에 대해 아무 작업도 수행하지 않음</string>
+
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">놓으면 닫기</string>
+    <string name="core_preview_series">시리즈</string>
+    <string name="core_preview_new_format">새 %1$d개</string>
+
 </resources>

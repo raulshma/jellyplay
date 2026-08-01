@@ -50,7 +50,7 @@ fun VideoPlayerStep(
             onNext = {},
         ) {
             Text(
-                text = "Player Engine",
+                text = stringResource(R.string.onboarding_video_player_engine),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -70,7 +70,7 @@ fun VideoPlayerStep(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Streaming Quality",
+                text = stringResource(R.string.onboarding_video_streaming_quality),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -111,7 +111,7 @@ fun VideoPlayerStep(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Default Orientation",
+                text = stringResource(R.string.onboarding_video_default_orientation),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,

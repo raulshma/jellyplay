@@ -33,10 +33,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -74,7 +76,7 @@ fun QualityPickerSheet(
                 .padding(bottom = 32.dp),
         ) {
             Text(
-                "Quality",
+                stringResource(R.string.player_video_quality_title),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                 ),
@@ -82,7 +84,7 @@ fun QualityPickerSheet(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Changes apply immediately for adaptive streams. For direct play, this sets the maximum playback bitrate.",
+                stringResource(R.string.player_video_quality_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp),
@@ -196,15 +198,15 @@ private fun AdaptiveBitrateToggle(
     ) {
         Column(modifier = Modifier.padding(end = 16.dp)) {
             Text(
-                text = "Adaptive Bitrate Cap",
+                text = stringResource(R.string.player_video_adaptive_bitrate_cap),
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = if (enabled) {
-                    "Caps quality on metered networks"
+                    stringResource(R.string.player_video_adaptive_bitrate_on)
                 } else {
-                    "Off — full quality (direct play)"
+                    stringResource(R.string.player_video_adaptive_bitrate_off)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

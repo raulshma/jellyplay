@@ -553,6 +553,8 @@
     <!-- LicensesScreen.kt -->
     <string name="settings_open_source_licenses_title">开源许可证</string>
     <string name="settings_license_text_unavailable">该库的完整许可证文本不可用。</string>
+    <!-- Localized error messages -->
+    <string name="settings_licenses_load_error">无法加载许可证信息</string>
 
     <!-- ExperimentalSettingsScreen.kt -->
     <string name="settings_experimental_title">实验性</string>
@@ -1090,4 +1092,37 @@
     <string name="settings_preset_json">预设 JSON</string>
     <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
     <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
+
+    <!-- Localized UI text extracted from settings screens -->
+    <string name="settings_nav_bar_title">导航栏</string>
+    <string name="settings_nav_auto_hide">滚动时自动隐藏</string>
+    <string name="settings_nav_pinned">已固定</string>
+    <string name="settings_nav_items_summary">%2$d 项中的 %1$d 项</string>
+    <string name="settings_nav_items_summary_with_scroll">%2$d 项中的 %1$d 项 - %3$s</string>
+    <string name="settings_nav_hide_on_scroll">滚动时隐藏</string>
+    <string name="settings_nav_hide_on_scroll_on">向下滚动时隐藏导航栏</string>
+    <string name="settings_nav_hide_on_scroll_off">导航栏保持可见</string>
+    <string name="settings_nav_item_home">首页</string>
+    <string name="settings_nav_item_home_subtitle">主页面板</string>
+    <string name="settings_nav_item_library">媒体库</string>
+    <string name="settings_nav_item_library_subtitle">浏览您的媒体库</string>
+    <string name="settings_nav_item_search">搜索</string>
+    <string name="settings_nav_item_search_subtitle">查找电影、节目等</string>
+    <string name="settings_nav_item_live_tv">直播电视</string>
+    <string name="settings_nav_item_live_tv_subtitle">直播频道与节目指南</string>
+    <string name="settings_nav_item_browse">浏览</string>
+    <string name="settings_nav_item_browse_subtitle">音乐库（音乐模式）</string>
+    <string name="settings_nav_item_shortcuts">快捷方式</string>
+    <string name="settings_nav_item_shortcuts_subtitle">快速访问快捷方式</string>
+    <string name="settings_reorder_section">重新排序分区</string>
+    <string name="settings_hide_advanced">隐藏高级设置</string>
+    <string name="settings_show_advanced">显示高级设置</string>
+    <string name="settings_advanced_hidden">已隐藏高级设置</string>
+    <string name="settings_advanced_shown">已显示高级设置</string>
+
+
+    <plurals name="settings_advanced_settings_hidden">
+        <item quantity="one">%1$d 项高级设置已隐藏</item>
+        <item quantity="other">%1$d 项高级设置已隐藏</item>
+    </plurals>
 </resources>

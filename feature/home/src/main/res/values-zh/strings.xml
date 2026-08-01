@@ -88,6 +88,11 @@
     <string name="home_move_up">上移</string>
     <string name="home_move_down">下移</string>
 
-    <!-- Newsletter banner dismiss (batch) -->
+    <!-- Newsletter banner (batch) -->
+    <string name="home_newsletter_ready">通讯已就绪</string>
+    <string name="home_newsletter_subtitle">每周摘要已送达。点击查看。</string>
     <string name="home_dismiss">关闭</string>
+
+    <!-- Localized error messages -->
+    <string name="home_error_load_content">无法加载内容。请检查您的连接并重试。</string>
 </resources>

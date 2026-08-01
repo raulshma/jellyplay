@@ -76,12 +76,12 @@ fun NewsletterBanner(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Newsletter Ready",
+                    text = stringResource(R.string.home_newsletter_ready),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Text(
-                    text = "Your weekly digest is here. Tap to explore.",
+                    text = stringResource(R.string.home_newsletter_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                 )

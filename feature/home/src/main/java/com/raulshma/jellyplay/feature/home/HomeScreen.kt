@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -326,7 +327,7 @@ private fun MainHomeContent(
                     state.error != null && state.sections.isEmpty() && state.offlineMode == OfflineMode.ONLINE &&
                         state.offlineLibrary.isEmpty() -> {
                         ErrorScreen(
-                            message = "Couldn't load content. Check your connection and try again.",
+                            message = stringResource(R.string.home_error_load_content),
                             onRetry = { viewModel.onEvent(HomeUiEvent.Refresh) },
                             modifier = Modifier.padding(horizontal = contentPad),
                         )

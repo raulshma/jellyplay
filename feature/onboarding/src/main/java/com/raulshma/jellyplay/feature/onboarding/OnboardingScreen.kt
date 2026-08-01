@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -347,7 +348,7 @@ private fun OnboardingBottomBar(
                         modifier = Modifier.then(skipFocusState.focusModifier).tvFocusIndicator(skipFocusState, ShapeCache.smooth12),
                     ) {
                         Text(
-                            text = "Skip",
+                            text = stringResource(R.string.onboarding_skip),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -383,7 +384,7 @@ private fun OnboardingBottomBar(
                             .tvFocusIndicator(nextFocusState, ShapeCache.smooth12),
                     ) {
                         Text(
-                            text = "Next",
+                            text = stringResource(R.string.onboarding_next),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
                         )

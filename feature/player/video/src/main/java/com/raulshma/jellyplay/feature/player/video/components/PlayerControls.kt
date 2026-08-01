@@ -1324,7 +1324,7 @@ private fun EndsAtLabel(
     val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
     val endsAt = rememberEndsAtTime(realRemainingMs, controlsVisible)
     Text(
-        text = "Ends at $endsAt",
+        text = stringResource(R.string.player_video_ends_at, endsAt),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
     )

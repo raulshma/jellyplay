@@ -42,10 +42,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -99,7 +101,7 @@ internal fun EpisodePickerSheet(
             }
 
             Text(
-                text = "Episodes",
+                text = stringResource(R.string.player_video_episodes),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 20.dp),
@@ -149,7 +151,7 @@ internal fun EpisodePickerSheet(
                             tonalElevation = if (isSelected) 0.dp else 1.dp,
                         ) {
                             Text(
-                                text = season.name ?: "Season ${season.indexNumber ?: 1}",
+                                text = season.name ?: stringResource(R.string.player_video_season_n, season.indexNumber ?: 1),
                                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
@@ -177,7 +179,7 @@ internal fun EpisodePickerSheet(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        "No episodes available",
+                        stringResource(R.string.player_video_no_episodes_available),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -323,7 +325,7 @@ private fun EpisodeRow(
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     Text(
-                        text = "Watched",
+                        text = stringResource(R.string.player_video_watched),
                         style = MaterialTheme.typography.labelSmall,
                         color = playerOnScrim().copy(alpha = 0.9f),
                     )
@@ -363,7 +365,7 @@ private fun EpisodeRow(
                 
                 if (remainingTime != null && totalTime != null) {
                     Text(
-                        text = "$remainingTime left",
+                        text = stringResource(R.string.player_video_time_left, remainingTime),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -395,7 +397,7 @@ private fun EpisodeRow(
                             .padding(horizontal = 8.dp, vertical = 2.dp),
                     ) {
                         Text(
-                            text = "Now Playing",
+                            text = stringResource(R.string.player_video_now_playing),
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                             ),

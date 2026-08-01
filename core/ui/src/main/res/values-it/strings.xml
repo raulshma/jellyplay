@@ -576,4 +576,37 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">Avanzamento della coda di download e un calendario in arrivo dal tuo Radarr/Sonarr</string>
     <string name="ss_arr_settings_title">Server Radarr / Sonarr</string>
     <string name="ss_arr_settings_subtitle">Configura le connessioni dirette ai server Radarr/Sonarr</string>
+
+    <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
+    <string name="core_segment_intro">Intro</string>
+    <string name="core_segment_intro_desc">Sequenza di apertura/intro</string>
+    <string name="core_segment_outro">Outro</string>
+    <string name="core_segment_outro_desc">Sequenza di titoli di coda/outro</string>
+    <string name="core_segment_preview">Anteprima</string>
+    <string name="core_segment_preview_desc">In arrivo / cold open / teaser</string>
+    <string name="core_segment_recap">Riepilogo</string>
+    <string name="core_segment_recap_desc">Precedentemente...</string>
+    <string name="core_segment_commercial">Pubblicita</string>
+    <string name="core_segment_commercial_desc">Pausa pubblicitaria</string>
+    <string name="core_segment_unknown">Altro</string>
+    <string name="core_segment_unknown_desc">Segmento personalizzato</string>
+    <string name="core_segment_skip_intro">Salta intro</string>
+    <string name="core_segment_skip_outro">Salta titoli di coda</string>
+    <string name="core_segment_skip_preview">Salta anteprima</string>
+    <string name="core_segment_skip_recap">Salta riepilogo</string>
+    <string name="core_segment_skip_commercial">Salta pubblicita</string>
+    <string name="core_segment_skip_unknown">Salta segmento</string>
+    <string name="core_segment_behavior_show_button">Mostra pulsante</string>
+    <string name="core_segment_behavior_show_button_desc">Mostra un pulsante salta durante il segmento</string>
+    <string name="core_segment_behavior_auto_skip">Salto automatico</string>
+    <string name="core_segment_behavior_auto_skip_desc">Salta automaticamente il segmento</string>
+    <string name="core_segment_behavior_ignore">Ignora</string>
+    <string name="core_segment_behavior_ignore_desc">Non fare nulla per questo tipo di segmento</string>
+
+
+    <!-- Localized UI text extracted from MediaPreviewOverlay -->
+    <string name="core_preview_release_to_close">Rilascia per chiudere</string>
+    <string name="core_preview_series">Serie</string>
+    <string name="core_preview_new_format">%1$d nuovo</string>
+
 </resources>

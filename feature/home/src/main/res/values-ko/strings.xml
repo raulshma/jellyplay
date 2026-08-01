@@ -88,6 +88,11 @@
     <string name="home_move_up">위로 이동</string>
     <string name="home_move_down">아래로 이동</string>
 
-    <!-- Newsletter banner dismiss (batch) -->
+    <!-- Newsletter banner (batch) -->
+    <string name="home_newsletter_ready">뉴스레터 준비됨</string>
+    <string name="home_newsletter_subtitle">주간 요약이 도착했습니다. 탭하여 살펴보세요.</string>
     <string name="home_dismiss">닫기</string>
+
+    <!-- Localized error messages -->
+    <string name="home_error_load_content">콘텐츠를 불러올 수 없습니다. 연결을 확인하고 다시 시도하세요.</string>
 </resources>

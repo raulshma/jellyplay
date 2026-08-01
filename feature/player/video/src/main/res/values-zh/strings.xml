@@ -244,4 +244,61 @@
     <plurals name="player_video_participants">
         <item quantity="other">%1$d 位参与者</item>
     </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">播放</string>
+    <string name="player_video_stats_network">网络</string>
+    <string name="player_video_stats_performance">性能</string>
+    <string name="player_video_stats_engine">引擎</string>
+    <string name="player_video_stats_state">状态</string>
+    <string name="player_video_stats_playing">正在播放</string>
+    <string name="player_video_stats_position">位置</string>
+    <string name="player_video_stats_progress">进度</string>
+    <string name="player_video_stats_buffer_health">缓冲健康度</string>
+    <string name="player_video_stats_buffered">已缓冲</string>
+    <string name="player_video_stats_clock">时钟</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">色彩范围</string>
+    <string name="player_video_stats_color_depth">色彩深度</string>
+    <string name="player_video_stats_sample_rate">采样率</string>
+    <string name="player_video_stats_session_id">会话 ID</string>
+    <string name="player_video_stats_quality">质量</string>
+    <string name="player_video_stats_est_bandwidth">预估带宽</string>
+    <string name="player_video_stats_stream_bitrate">串流比特率</string>
+    <string name="player_video_stats_dropped_frames">丢帧数</string>
+    <string name="player_video_stats_total_frames">总帧数</string>
+    <string name="player_video_stats_drop_rate">丢帧率</string>
+    <string name="player_video_stats_buffer_size">缓冲大小</string>
+    <string name="player_video_stats_vo_dropped_frames">VO 丢帧数</string>
+    <string name="player_video_stats_vo_delay">VO 延迟</string>
+    <string name="player_video_stats_display_rate">显示刷新率</string>
+    <string name="player_video_stats_player">播放器</string>
+    <string name="player_video_cast_connecting">连接中</string>
+    <string name="player_video_casting">正在投屏</string>
+    <string name="player_video_season_n">第 %1$d 季</string>
+    <string name="player_video_no_episodes_available">没有可用的剧集</string>
+    <string name="player_video_watched">已观看</string>
+    <string name="player_video_time_left">剩余 %1$s</string>
+    <string name="player_video_now_playing">正在播放</string>
+    <string name="player_video_quality_title">质量</string>
+    <string name="player_video_quality_description">更改会立即应用于自适应流。对于直接播放，这会设置最大播放比特率。</string>
+    <string name="player_video_adaptive_bitrate_cap">自适应比特率上限</string>
+    <string name="player_video_adaptive_bitrate_on">在按流量计费的网络中限制质量</string>
+    <string name="player_video_adaptive_bitrate_off">关闭 - 完整质量（直接播放）</string>
+    <string name="player_video_skip_intro">跳过片头</string>
+    <string name="player_video_overview_tab">概述</string>
+    <string name="player_video_lyrics_subtitles_tab">歌词 / 字幕</string>
+    <string name="player_video_synopsis">剧情简介</string>
+    <string name="player_video_cast_and_crew">演职人员</string>
+    <string name="player_video_audio_stream">音频流</string>
+    <string name="player_video_episode_title">第%1$d集: %2$s</string>
+    <string name="player_video_seek_backward_10s">-10秒</string>
+    <string name="player_video_seek_forward_30s">+30秒</string>
+    <string name="player_video_cast_connecting_device">正在连接设备...</string>
+    <string name="player_video_cast_connected_streaming">已连接 / 串流中</string>
+    <string name="player_video_companion">JellyPlay 伴侣</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">所选文件不是 .ttf 或 .otf 字体。</string>
+
 </resources>

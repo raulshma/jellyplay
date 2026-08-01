@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.ui.model.localizedSkipLabel
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -35,11 +36,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.player.video.R
 
 @Composable
 fun SegmentSkipOverlay(
@@ -51,7 +54,7 @@ fun SegmentSkipOverlay(
 ) {
     SkipButtonOverlay(
         isVisible = isVisible,
-        text = segmentType.skipLabel,
+        text = segmentType.localizedSkipLabel(),
         onSkip = onSkip,
         modifier = modifier,
         focusRequester = focusRequester,
@@ -67,7 +70,7 @@ fun IntroSkipOverlay(
 ) {
     SkipButtonOverlay(
         isVisible = isVisible,
-        text = "Skip Intro",
+        text = stringResource(R.string.player_video_skip_intro),
         onSkip = onSkip,
         modifier = modifier,
         focusRequester = focusRequester,

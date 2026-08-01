@@ -36,4 +36,7 @@
     <string name="data_added_date">%1$s に追加</string>
     <string name="data_added_unknown">追加日不明</string>
     <string name="data_played_date">%1$s に再生</string>
+
+    <!-- Localized error messages -->
+    <string name="data_no_media_source_download">ダウンロード可能なメディアソースがありません</string>
 </resources>

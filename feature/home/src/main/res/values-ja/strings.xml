@@ -88,6 +88,11 @@
     <string name="home_move_up">上に移動</string>
     <string name="home_move_down">下に移動</string>
 
-    <!-- Newsletter banner dismiss (batch) -->
+    <!-- Newsletter banner (batch) -->
+    <string name="home_newsletter_ready">ニュースレターの準備完了</string>
+    <string name="home_newsletter_subtitle">週次ダイジェストが届きました。タップして確認。</string>
     <string name="home_dismiss">閉じる</string>
+
+    <!-- Localized error messages -->
+    <string name="home_error_load_content">コンテンツを読み込めませんでした。接続を確認して再試行してください。</string>
 </resources>

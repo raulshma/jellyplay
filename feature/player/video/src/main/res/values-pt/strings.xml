@@ -245,4 +245,61 @@
         <item quantity="one">%1$d participante</item>
         <item quantity="other">%1$d participantes</item>
     </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">Reproducao</string>
+    <string name="player_video_stats_network">Rede</string>
+    <string name="player_video_stats_performance">Desempenho</string>
+    <string name="player_video_stats_engine">Mecanismo</string>
+    <string name="player_video_stats_state">Estado</string>
+    <string name="player_video_stats_playing">Reproduzindo</string>
+    <string name="player_video_stats_position">Posicao</string>
+    <string name="player_video_stats_progress">Progresso</string>
+    <string name="player_video_stats_buffer_health">Integridade do buffer</string>
+    <string name="player_video_stats_buffered">Em buffer</string>
+    <string name="player_video_stats_clock">Relogio</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">Intervallo de cores</string>
+    <string name="player_video_stats_color_depth">Profundidade de cores</string>
+    <string name="player_video_stats_sample_rate">Taxa de amostragem</string>
+    <string name="player_video_stats_session_id">ID da sessao</string>
+    <string name="player_video_stats_quality">Qualidade</string>
+    <string name="player_video_stats_est_bandwidth">Largura de banda est.</string>
+    <string name="player_video_stats_stream_bitrate">Taxa de bits do fluxo</string>
+    <string name="player_video_stats_dropped_frames">Quadros descartados</string>
+    <string name="player_video_stats_total_frames">Quadros totais</string>
+    <string name="player_video_stats_drop_rate">Taxa de descarte</string>
+    <string name="player_video_stats_buffer_size">Tamanho do buffer</string>
+    <string name="player_video_stats_vo_dropped_frames">Quadros VO descartados</string>
+    <string name="player_video_stats_vo_delay">Atraso VO</string>
+    <string name="player_video_stats_display_rate">Taxa de exibicao</string>
+    <string name="player_video_stats_player">Player</string>
+    <string name="player_video_cast_connecting">Conectando</string>
+    <string name="player_video_casting">Transmitindo</string>
+    <string name="player_video_season_n">Temporada %1$d</string>
+    <string name="player_video_no_episodes_available">Nenhum episodio disponivel</string>
+    <string name="player_video_watched">Assistido</string>
+    <string name="player_video_time_left">Restam %1$s</string>
+    <string name="player_video_now_playing">Reproduzindo agora</string>
+    <string name="player_video_quality_title">Qualidade</string>
+    <string name="player_video_quality_description">As alteracoes se aplicam imediatamente para streams adaptativos. Para reproducao direta, isso define a taxa de bits maxima de reproducao.</string>
+    <string name="player_video_adaptive_bitrate_cap">Limite de bitrate adaptativo</string>
+    <string name="player_video_adaptive_bitrate_on">Limita a qualidade em redes limitadas</string>
+    <string name="player_video_adaptive_bitrate_off">Desativado - qualidade total (reproducao direta)</string>
+    <string name="player_video_skip_intro">Pular introducao</string>
+    <string name="player_video_overview_tab">Visao geral</string>
+    <string name="player_video_lyrics_subtitles_tab">Letras / Legendas</string>
+    <string name="player_video_synopsis">Sinopse</string>
+    <string name="player_video_cast_and_crew">Elenco &amp; Equipe</string>
+    <string name="player_video_audio_stream">Fluxo de audio</string>
+    <string name="player_video_episode_title">E%1$d: %2$s</string>
+    <string name="player_video_seek_backward_10s">-10s</string>
+    <string name="player_video_seek_forward_30s">+30秒</string>
+    <string name="player_video_cast_connecting_device">Conectando ao dispositivo...</string>
+    <string name="player_video_cast_connected_streaming">Conectado / Transmitindo</string>
+    <string name="player_video_companion">JellyPlay Companion</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">O arquivo selecionado não é uma fonte .ttf ou .otf.</string>
+
 </resources>
