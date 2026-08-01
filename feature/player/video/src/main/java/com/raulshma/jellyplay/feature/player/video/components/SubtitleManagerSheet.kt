@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -59,6 +60,7 @@ import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.SubtitleResultMetadata
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadState
@@ -191,6 +193,10 @@ fun SubtitleManagerSheet(
 
             when (tabs.getOrElse(selectedTab) { SubtitleManagerTab.DOWNLOAD }) {
                 SubtitleManagerTab.DOWNLOAD -> DownloadTab(
+                    // weight(fill = false) bounds the tab — and its list — to the
+                    // space left after the title/tab row, so the LazyColumn scrolls
+                    // instead of overflowing the sheet and clipping its last rows.
+                    modifier = Modifier.weight(1f, fill = false),
                     subtitles = downloadSubtitles,
                     isLoading = isDownloading,
                     onDownload = onDownload,
@@ -202,6 +208,7 @@ fun SubtitleManagerSheet(
                     loadBtnFocus = loadBtnFocus,
                 )
                 SubtitleManagerTab.SEARCH -> SearchTab(
+                    modifier = Modifier.weight(1f, fill = false),
                     cultures = cultures,
                     defaultLanguage = defaultLanguage,
                     results = searchResults,
@@ -221,6 +228,7 @@ fun SubtitleManagerSheet(
                     onDownloadProviderSubtitle = onDownloadProviderSubtitle,
                 )
                 SubtitleManagerTab.UPLOAD -> UploadTab(
+                    modifier = Modifier.weight(1f, fill = false),
                     cultures = cultures,
                     defaultLanguage = defaultLanguage,
                     isUploading = isUploading,
@@ -246,8 +254,9 @@ private fun DownloadTab(
     isTv: Boolean,
     focusRequester: FocusRequester,
     loadBtnFocus: TvFocusState,
+    modifier: Modifier = Modifier,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         FilledTonalButton(
             onClick = onLoadLocalFile,
             modifier = Modifier
@@ -281,7 +290,7 @@ private fun DownloadTab(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
             )
         } else {
-            LazyColumn(modifier = Modifier.verticalWrapAround()) {
+            LazyColumn(modifier = Modifier.verticalWrapAround().weight(1f, fill = false)) {
                 // Composite key: providers (OpenSubtitles, etc.) occasionally
                 // return duplicate `Id`s across sources, which previously
                 // crashed with `IllegalArgumentException: Key "x" was already
@@ -509,13 +518,14 @@ private fun SearchTab(
     configuredProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind>,
     onSearchAllProviders: (String) -> Unit,
     onDownloadProviderSubtitle: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var searchLanguage by rememberSaveable { mutableStateOf(defaultLanguage) }
     val searchBtnFocus = rememberTvFocusState()
     // External providers configured beyond Jellyfin → use the merged multi-provider flow.
     val hasExternalProviders = configuredProviders.size > 1
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -545,6 +555,7 @@ private fun SearchTab(
 
         if (hasExternalProviders) {
             ProviderSearchResults(
+                modifier = Modifier.weight(1f, fill = false),
                 results = providerSearchResults,
                 errors = providerSearchErrors,
                 isLoading = isLoading,
@@ -561,6 +572,7 @@ private fun SearchTab(
             )
         } else {
             LegacySearchResults(
+                modifier = Modifier.weight(1f, fill = false),
                 results = results,
                 isLoading = isLoading,
                 hasSearched = hasSearched,
@@ -586,8 +598,9 @@ private fun LegacySearchResults(
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
     onDownload: (RemoteSubtitleInfo) -> Unit,
     onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = modifier.fillMaxWidth()) {
         when {
             isLoading -> JellyPlayLoadingIndicator(
                 modifier = Modifier
@@ -634,7 +647,7 @@ private fun LegacySearchResults(
             )
         }
         else -> LazyColumn(
-            modifier = Modifier.verticalWrapAround(),
+            modifier = Modifier.fillMaxSize().verticalWrapAround(),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             itemsIndexed(
@@ -670,6 +683,7 @@ private fun ProviderSearchResults(
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
     onDownload: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit,
     onUse: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var filter by rememberSaveable {
         mutableStateOf<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind?>(null)
@@ -677,7 +691,7 @@ private fun ProviderSearchResults(
     val visible = remember(results, filter) {
         if (filter == null) results else results.filter { it.provider == filter }
     }
-    Column {
+    Column(modifier = modifier.fillMaxWidth()) {
         // Provider filter chips — only shown when more than one provider is
         // configured. "All" + one chip per configured provider. A chip with an
         // error gets an error tint so the user sees which provider failed.
@@ -737,9 +751,9 @@ private fun ProviderSearchResults(
             // Partial results + some provider errors: render the results AND the
             // error messages (one bad key must not hide the others' results, nor
             // hide its own failure message).
-            else -> Column {
+            else -> Column(modifier = Modifier.weight(1f, fill = false)) {
                 LazyColumn(
-                    modifier = Modifier.verticalWrapAround(),
+                    modifier = Modifier.verticalWrapAround().weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     itemsIndexed(
@@ -861,11 +875,15 @@ private fun ProviderSubtitleRow(
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (result.isHearingImpaired) SubtitleBadge("SDH")
-                if (result.isForced) SubtitleBadge("FORCED")
-                if (result.isAiTranslated == true) SubtitleBadge("AI")
-            }
+            // Cross-provider metadata (SDH/FORCED/AI badges + language · format ·
+            // rating · downloads · fps · perfect-match). The player's right-side
+            // status slot already surfaces the download count when idle, so this
+            // line omits it to avoid duplication.
+            SubtitleResultMetadata(
+                result = result,
+                perfectMatchLabel = stringResource(R.string.player_video_perfect_match),
+                includeDownloadCount = false,
+            )
             result.releaseName?.takeIf { it.isNotBlank() }?.let {
                 Text(
                     text = it,
@@ -891,22 +909,6 @@ private fun providerShortName(kind: com.raulshma.jellyplay.core.model.subtitle.S
         com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind.OPENSUBTITLES -> "OS"
     }
 
-/** Small uppercase badge for subtitle flags (SDH / FORCED / AI). */
-@Composable
-private fun SubtitleBadge(text: String) {
-    Surface(
-        shape = ShapeCache.smooth8,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-        )
-    }
-}
-
 // endregion
 
 // region Upload tab ----------------------------------------------------------
@@ -920,6 +922,7 @@ private fun UploadTab(
     onUpload: (Uri, String, String?, Boolean, Boolean) -> Unit,
     isTv: Boolean,
     focusRequester: FocusRequester,
+    modifier: Modifier = Modifier,
 ) {
     var selectedLanguage by rememberSaveable { mutableStateOf(defaultLanguage) }
     var isForced by rememberSaveable { mutableStateOf(false) }
@@ -938,7 +941,7 @@ private fun UploadTab(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         FilledTonalButton(
