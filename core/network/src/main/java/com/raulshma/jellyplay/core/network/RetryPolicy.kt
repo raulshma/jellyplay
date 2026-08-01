@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network
 
+import android.util.Log
 import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -57,7 +58,14 @@ object RetryPolicy {
         repeat(maxRetries) { attempt ->
             if (lastResult.isSuccess) return lastResult
             val exception = lastResult.exceptionOrNull() ?: return lastResult
-            if (!isRetryable(exception)) return lastResult
+            if (!isRetryable(exception)) {
+                Log.d(
+                    TAG,
+                    "not retrying (attempt ${attempt + 1}): " +
+                        "${exception.javaClass.simpleName}: ${exception.message}",
+                )
+                return lastResult
+            }
             // Honor a server-advised Retry-After (parsed on the ApiException)
             // by flooring the computed exponential backoff at it — do not retry
             // faster than the server asked. The cap still bounds the wait so a
@@ -69,9 +77,12 @@ object RetryPolicy {
             } else {
                 computed
             }
+            Log.d(TAG, "retrying attempt ${attempt + 2} after ${backoffMs}ms: ${exception.message}")
             delay(backoffMs)
             lastResult = block()
         }
         return lastResult
     }
+
+    private const val TAG = "RetryPolicy"
 }

@@ -23,12 +23,12 @@ object SubtitleProviderIds {
 
     /** Extracts a TMDB id (as Int) from [providerIds] or [externalUrls]. */
     fun tmdbId(providerIds: Map<String, String>, externalUrls: List<com.raulshma.jellyplay.core.model.ExternalUrl>): Int? {
-        providerIds["tmdb"]?.toIntOrNull()?.let { return it }
-        providerIds["tmdbid"]?.toIntOrNull()?.let { return it }
+        providerIds["tmdb"]?.toIntOrNull()?.takeIf { it > 0 }?.let { return it }
+        providerIds["tmdbid"]?.toIntOrNull()?.takeIf { it > 0 }?.let { return it }
         // Scrape themoviedb.org/<type>/<id> URLs as a last resort.
         for (url in externalUrls) {
             val match = TMDB_URL.find(url.url) ?: continue
-            return match.groupValues[1].toIntOrNull()
+            return match.groupValues[1].toIntOrNull()?.takeIf { it > 0 }
         }
         return null
     }

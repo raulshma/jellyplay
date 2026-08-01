@@ -64,6 +64,30 @@ class SubtitleProviderIdsTest {
     }
 
     @Test
+    fun `tmdbId rejects zero as a sentinel emitted for unmatched items`() {
+        // Jellyfin emits "0" for items without a TMDB match; passing id=0 to
+        // Wyzie/OpenSubtitles yields a 400, so the resolver must drop it.
+        val d = detail(movie, providerIds = mapOf("tmdb" to "0"))
+        assertNull(SubtitleProviderIds.tmdbId(d.providerIds, d.externalUrls))
+    }
+
+    @Test
+    fun `tmdbId rejects negative values`() {
+        val d = detail(movie, providerIds = mapOf("tmdbid" to "-1"))
+        assertNull(SubtitleProviderIds.tmdbId(d.providerIds, d.externalUrls))
+    }
+
+    @Test
+    fun `tmdbId ignores zero and scrapes a valid id from externalUrls`() {
+        val d = detail(
+            movie,
+            providerIds = mapOf("tmdb" to "0"),
+            externalUrls = listOf(ExternalUrl("TMDB", "https://www.themoviedb.org/movie/286217")),
+        )
+        assertEquals(286217, SubtitleProviderIds.tmdbId(d.providerIds, d.externalUrls))
+    }
+
+    @Test
     fun `imdbId reads from providerIds with tt prefix preserved`() {
         val d = detail(movie, providerIds = mapOf("imdb" to "tt3659388"))
         assertEquals("tt3659388", SubtitleProviderIds.imdbId(d.providerIds, d.externalUrls))

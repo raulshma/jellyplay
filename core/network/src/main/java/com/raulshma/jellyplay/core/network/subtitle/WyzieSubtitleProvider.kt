@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderCredentials
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
+import android.util.Log
 import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,17 @@ class WyzieSubtitleProvider @Inject constructor(
     private val json = SeerrApiClientImpl.lenientJson
     private val rateLimiter = SubtitleRateLimiter(SubtitleRateLimiter.WYZIE_MIN_INTERVAL_MS)
 
+    /**
+     * Search base URL. The production endpoint (`https://sub.wyzie.io`) is fixed
+     * at compile time; `internal` so unit tests can point it at a MockWebServer
+     * via [setBaseUrlForTest].
+     */
+    internal var baseUrl: String = BASE
+        private set
+
+    /** Test-only: redirect the provider at a MockWebServer root. */
+    internal fun setBaseUrlForTest(url: String) { baseUrl = url }
+
     override suspend fun search(
         query: SubtitleQuery,
         credentials: SubtitleProviderCredentials,
@@ -50,15 +62,27 @@ class WyzieSubtitleProvider @Inject constructor(
             return Result.failure(ApiException(false, message = "Wyzie API key is not configured"))
         }
         // Wyzie requires a TMDB or IMDb id; fall back to no search if neither is present
-        // (a title query is not supported by the endpoint).
-        val id = query.tmdbId?.toString() ?: query.imdbId?.takeIf { it.isNotBlank() }
+        // (a title query is not supported by the endpoint). IMDb is preferred — it is
+        // Wyzie's native key, while a TMDB id forces an internal TMDB→IMDb lookup that
+        // can 400 when the id is stale or TMDB is unavailable. A non-positive TMDB id
+        // (Jellyfin emits "0" for unmatched items) is rejected to avoid id=0 → 400.
+        val id = query.imdbId?.takeIf { it.isNotBlank() }
+            ?: query.tmdbId?.takeIf { it > 0 }?.toString()
         if (id.isNullOrBlank()) {
+            Log.d(
+                TAG,
+                "search skipped: no usable id " +
+                    "(tmdbId=${query.tmdbId}, imdbId=${query.imdbId}, " +
+                    "season=${query.season}, episode=${query.episode})",
+            )
             return Result.success(emptyList())
         }
+        val idSource = if (query.imdbId?.takeIf { it.isNotBlank() } != null) "imdb" else "tmdb"
+        Log.d(TAG, "search id=$id ($idSource) langs=${query.languages} s=${query.season} e=${query.episode}")
         return rateLimiter.acquire {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val urlBuilder = "https://sub.wyzie.io/search".toHttpUrl().newBuilder()
+                    val urlBuilder = "$baseUrl/search".toHttpUrl().newBuilder()
                         .addQueryParameter("id", id)
                         .addQueryParameter("key", key)
                     // Wyzie uses ISO 639-1 (2-letter), comma-separated.
@@ -75,6 +99,15 @@ class WyzieSubtitleProvider @Inject constructor(
                     json.decodeFromString<List<WyzieSubtitleDto>>(body).map { it.toResult() }
                 }
             }.recoverCatching { e ->
+                // Wyzie signals "zero matches" as HTTP 400 with a
+                // {"message":"No subtitles found"} body — not an error. Map that
+                // single case to an empty success so the UI shows no results
+                // instead of a misleading "Wyzie HTTP 400" error chip. Everything
+                // else (network failure, genuine 4xx/5xx) flows through [wrapNetwork].
+                if (isEmptyMatchesResponse(e)) {
+                    Log.d(TAG, "search returned no matches (Wyzie 400 'No subtitles found') → empty success")
+                    return@recoverCatching emptyList<SubtitleSearchResult>()
+                }
                 throw wrapNetwork(e)
             }
         }
@@ -117,14 +150,39 @@ class WyzieSubtitleProvider @Inject constructor(
     private inline fun <T> execute(request: Request, onResponse: (okhttp3.Response) -> T): T {
         okHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
+                // The error body explains *why* (e.g. an unmappable TMDB id), so
+                // log it before discarding. Keep it bounded to avoid spamming
+                // logcat with a huge error page, and redact the key out of the URL.
+                val rawBody = runCatching { response.body?.string() }.getOrNull()
+                val bodyPreview = rawBody?.take(500)
+                Log.w(
+                    TAG,
+                    "HTTP ${response.code} for ${redactSecrets(request.url.toString())}" +
+                        (bodyPreview?.let { " body=$it" } ?: ""),
+                )
                 throw ApiException.fromHttpResponse(
                     response.code,
                     "Wyzie HTTP ${response.code}",
                     response.header("Retry-After"),
+                    responseBody = rawBody,
                 )
             }
             return onResponse(response)
         }
+    }
+
+    /**
+     * True when [e] is Wyzie's "no subtitles matched your query" signal. Wyzie
+     * returns this as HTTP 400 with a JSON body containing
+     * `"message":"No subtitles found"` — a 400 status misused to mean "empty
+     * result" rather than "bad request". Matched on the response body (captured
+     * on the [ApiException]) so a genuinely malformed request still surfaces as
+     * an error.
+     */
+    private fun isEmptyMatchesResponse(e: Throwable): Boolean {
+        if (e !is ApiException || e.httpCode != 400) return false
+        val body = e.responseBody ?: return false
+        return body.contains("No subtitles found", ignoreCase = true)
     }
 
     private fun wrapNetwork(e: Throwable): ApiException {
@@ -188,5 +246,10 @@ class WyzieSubtitleProvider @Inject constructor(
             fileName = fileName,
             downloadUrl = url,
         )
+    }
+
+    companion object {
+        internal const val BASE = "https://sub.wyzie.io"
+        private const val TAG = "WyzieSubs"
     }
 }

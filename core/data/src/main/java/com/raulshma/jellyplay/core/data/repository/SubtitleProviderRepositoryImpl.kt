@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import android.util.Log
 import com.raulshma.jellyplay.core.datastore.SubtitleProviderPreferencesStore
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleFile
@@ -76,10 +77,34 @@ class SubtitleProviderRepositoryImpl @Inject constructor(
                     async {
                         val provider = externalProviders.getValue(kind)
                         val cred = creds[kind]
-                        kind to searchExternal(provider, query, cred)
+                        if (cred == null) {
+                            Log.d(TAG, "search $kind skipped: no credentials")
+                        }
+                        // A raw throw (anything escaping provider.search()/
+                        // searchExternal) must never cancel sibling jobs — the
+                        // class contract is "one bad key never blanks the rest".
+                        // coroutineScope cancels siblings on a throw, so catch
+                        // here and degrade to an Error outcome instead.
+                        val outcome = runCatching { searchExternal(provider, query, cred) }
+                            .getOrElse { e ->
+                                Log.e(TAG, "search $kind threw, isolating: ${e.javaClass.simpleName}: ${e.message}", e)
+                                ProviderSearchOutcome.Error(e.message ?: "$kind search failed")
+                            }
+                        kind to outcome
                     }
                 }
-            externalJobs.awaitAll().toMap()
+            val outcomes = externalJobs.awaitAll().toMap()
+            outcomes.forEach { (kind, outcome) ->
+                when (outcome) {
+                    is ProviderSearchOutcome.Success ->
+                        Log.d(TAG, "search $kind success: ${outcome.results.size} result(s)")
+                    is ProviderSearchOutcome.Error ->
+                        Log.w(TAG, "search $kind error: ${outcome.message}")
+                    is ProviderSearchOutcome.Skipped ->
+                        Log.d(TAG, "search $kind skipped")
+                }
+            }
+            outcomes
         }
     }
 
@@ -110,6 +135,13 @@ class SubtitleProviderRepositoryImpl @Inject constructor(
         // External providers: TMDB/IMDb/title-keyed fan-out.
         val outcomes = search(query)
         val merged = mergeOutcomes(jellyfinResults, outcomes)
+        Log.d(
+            TAG,
+            "searchAll merged: ${merged.results.size} result(s), " +
+                "${merged.errors.size} provider error(s)" +
+                (merged.errors.takeIf { it.isNotEmpty() }?.entries?.joinToString { "${it.key}=${it.value}" }
+                    ?.let { " [$it]" } ?: ""),
+        )
         return MergedSubtitleSearch(results = merged.results, errors = merged.errors)
     }
 
@@ -217,4 +249,8 @@ class SubtitleProviderRepositoryImpl @Inject constructor(
         SubtitleProviderKind.entries
             .mapNotNull { kind -> preferencesStore.getCredentials(kind)?.let { kind to it } }
             .toMap()
+
+    companion object {
+        private const val TAG = "SubtitlesRepo"
+    }
 }

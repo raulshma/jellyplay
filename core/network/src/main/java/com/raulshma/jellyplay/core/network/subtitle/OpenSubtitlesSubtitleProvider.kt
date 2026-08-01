@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.subtitle
 
+import android.util.Log
 import com.raulshma.jellyplay.core.datastore.SubtitleProviderPreferencesStore
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleFile
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleLanguageCodes
@@ -271,6 +272,12 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
     private fun execute(request: Request): String =
         okHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
+                val rawBody = runCatching { response.body?.string() }.getOrNull()
+                Log.w(
+                    TAG,
+                    "HTTP ${response.code} for ${request.url}" +
+                        (rawBody?.take(500)?.let { " body=$it" } ?: ""),
+                )
                 throw ApiException.fromHttpResponse(
                     response.code,
                     "OpenSubtitles HTTP ${response.code}",
@@ -330,6 +337,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
         private const val USER_AGENT = "JellyPlay"
         private const val DEFAULT_TOKEN_TTL_MS = 24L * 60 * 60 * 1000
         private const val TOKEN_REFRESH_LEAD_MS = 5 * 60 * 1000L
+        private const val TAG = "OpenSubs"
         private val JSON_MEDIA = "application/json".toMediaType()
     }
 }

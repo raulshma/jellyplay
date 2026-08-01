@@ -703,21 +703,25 @@ private fun ProviderSearchResults(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            visible.isEmpty() && errors.isNotEmpty() -> Box(
-                modifier = Modifier.fillMaxWidth().height(160.dp),
-                contentAlignment = Alignment.Center,
+            // Every provider failed (no results at all): prominent error block
+            // listing every provider's message — not just the first. The filter
+            // chips above still tint each errored provider red.
+            visible.isEmpty() && errors.isNotEmpty() -> Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    stringResource(R.string.player_video_search_failed),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(8.dp))
+                errors.forEach { (_, msg) ->
                     Text(
-                        stringResource(R.string.player_video_search_failed),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.error,
+                        msg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(4.dp))
-                    errors.values.first().let {
-                        Text(it, style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
                 }
             }
             visible.isEmpty() -> Box(
@@ -730,23 +734,38 @@ private fun ProviderSearchResults(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            else -> LazyColumn(
-                modifier = Modifier.verticalWrapAround(),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                itemsIndexed(
-                    visible,
-                    key = { index, r -> "${r.provider.name}_${r.id}_$index" },
-                    contentType = { _, _ -> "providerSubtitle" },
-                ) { index, r ->
-                    ProviderSubtitleRow(
-                        result = r,
-                        isLast = index == visible.lastIndex,
-                        itemCount = visible.size,
-                        status = downloadingSubtitles["${r.provider}:${r.id}"],
-                        onDownload = { onDownload(r) },
-                        onUse = { onUse(r) },
-                    )
+            // Partial results + some provider errors: render the results AND the
+            // error messages (one bad key must not hide the others' results, nor
+            // hide its own failure message).
+            else -> Column {
+                LazyColumn(
+                    modifier = Modifier.verticalWrapAround(),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    itemsIndexed(
+                        visible,
+                        key = { index, r -> "${r.provider.name}_${r.id}_$index" },
+                        contentType = { _, _ -> "providerSubtitle" },
+                    ) { index, r ->
+                        ProviderSubtitleRow(
+                            result = r,
+                            isLast = index == visible.lastIndex,
+                            itemCount = visible.size,
+                            status = downloadingSubtitles["${r.provider}:${r.id}"],
+                            onDownload = { onDownload(r) },
+                            onUse = { onUse(r) },
+                        )
+                    }
+                }
+                if (errors.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    errors.forEach { (kind, msg) ->
+                        Text(
+                            "${providerDisplayName(kind)}: $msg".trim(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
         }
