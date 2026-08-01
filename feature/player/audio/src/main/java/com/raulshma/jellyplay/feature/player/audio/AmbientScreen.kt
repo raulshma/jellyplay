@@ -43,11 +43,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.raulshma.jellyplay.core.designsystem.theme.AmbientColors
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
+import com.raulshma.jellyplay.core.ui.components.rememberBlobStops
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -224,23 +224,10 @@ private fun AmbientBackground(colors: List<Color>) {
     }
 
     // Resolve the blob palette + per-blob 3-stop gradient stops ONCE (keyed on
-    // the palette). The Canvas redraws ~60fps over the whole listening session
-    // and previously rebuilt a List<Color> per blob per frame for the radial
-    // gradient stops; the stops are identical for a given palette, so hoisting
-    // them removes that per-frame churn. Center/radius still vary per frame.
-    val blobStops = remember(colors, blobCount) {
-        val blobColors = colors.ifEmpty {
-            listOf(
-                AmbientColors.deepIndigo,
-                AmbientColors.deepPurple,
-                AmbientColors.deepTeal,
-                AmbientColors.deepRed,
-            )
-        }
-        blobColors.take(blobCount).map { color ->
-            listOf(color.copy(alpha = 0.6f), color.copy(alpha = 0.2f), Color.Transparent)
-        }
-    }
+    // the palette). Shared with AmbientColorBackdrop via rememberBlobStops so
+    // the palette → stops projection isn't duplicated. Center/radius still
+    // vary per frame.
+    val blobStops = rememberBlobStops(colors, blobCount)
 
     // Four concurrent infinite animations driving a full-screen Canvas redraw.
     // This is the most expensive decorative surface in the app and it stays

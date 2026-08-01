@@ -70,6 +70,103 @@ object BiometricAuthHelper {
         }
     }
 
+    /**
+     * Checks whether the device has a screen-lock credential (PIN/pattern/password)
+     * available for [authenticateDeviceCredential]. This is the WhatsApp-style fallback
+     * for when biometric authentication cannot be completed.
+     */
+    fun checkDeviceCredentialAvailability(context: Context): Availability {
+        val manager = BiometricManager.from(context)
+        val result = manager.canAuthenticate(
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        )
+        return when (result) {
+            BiometricManager.BIOMETRIC_SUCCESS -> Availability.AVAILABLE
+            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> Availability.NO_HARDWARE
+            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> Availability.NO_ENROLLED
+            else -> Availability.UNSUPPORTED
+        }
+    }
+
+    /**
+     * Launches a system prompt authenticating against the device screen-lock credential
+     * (PIN/pattern/password). This is the fallback path when biometric authentication is
+     * unavailable or has been cancelled.
+     *
+     * Unlike the crypto-bound biometric prompt, this intentionally does **not** bind a
+     * [BiometricPrompt.CryptoObject]: a CryptoObject cannot be combined with
+     * [BiometricManager.Authenticators.DEVICE_CREDENTIAL] (the call would throw at
+     * runtime). DEVICE_CREDENTIAL authentication is enforced by the framework — the user
+     * must genuinely enter their screen-lock credential — so it is not a mere UI gate.
+     * Additionally [BiometricPrompt.PromptInfo.Builder.setNegativeButtonText] must **not**
+     * be called for DEVICE_CREDENTIAL; the system supplies its own Cancel button.
+     *
+     * Recoverable cancellations (user backed out, pressed the system Cancel button)
+     * do **not** invoke [onError]: the user should be free to retry or pick another
+     * method without a scary error message. Only genuine failures surface an error
+     * string. (Wrong-credential retries for DEVICE_CREDENTIAL are handled inside
+     * the system confirm-credentials dialog and never reach this callback — see
+     * the note on [onAuthenticationError].)
+     */
+    fun authenticateDeviceCredential(
+        activity: FragmentActivity,
+        title: String,
+        description: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        val executor = ContextCompat.getMainExecutor(activity)
+
+        val prompt = BiometricPrompt(
+            activity,
+            executor,
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    onSuccess()
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    when (errorCode) {
+                        // User-driven cancellations: the user chose not to authenticate
+                        // right now. Treat these as recoverable — let the caller keep the
+                        // user on the lock screen so they can retry or pick another method,
+                        // rather than surfacing an error string.
+                        //
+                        // Note on wrong credentials: the plan referenced
+                        // ERROR_CREDENTIAL_NOT_MATCHED, but that constant exists only on
+                        // the platform android.hardware.biometrics.BiometricPrompt
+                        // (Android 11+), not on this androidx.biometric.BiometricPrompt.
+                        // For DEVICE_CREDENTIAL the AndroidX library surfaces wrong-entry
+                        // retries inside the system confirm-credentials dialog and never
+                        // delivers them to this callback, so there is no additional error
+                        // code to handle here.
+                        BiometricPrompt.ERROR_USER_CANCELED,
+                        BiometricPrompt.ERROR_NEGATIVE_BUTTON,
+                        BiometricPrompt.ERROR_CANCELED -> {
+                            Log.d(TAG, "Device credential prompt cancelled by user ($errorCode)")
+                        }
+                        else -> {
+                            Log.w(TAG, "Device credential auth error: $errorCode ($errString)")
+                            onError(errString.toString())
+                        }
+                    }
+                }
+            },
+        )
+
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle(title)
+            .setDescription(description)
+            .setAllowedAuthenticators(
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
+            // NOTE: no setNegativeButtonText — it throws when DEVICE_CREDENTIAL is set;
+            // the framework provides its own cancel button.
+            .build()
+
+        prompt.authenticate(promptInfo)
+    }
+
     fun authenticate(
         activity: FragmentActivity,
         title: String,
@@ -203,6 +300,16 @@ fun rememberBiometricAvailability(): BiometricAuthHelper.Availability {
     val availability = remember { mutableStateOf(BiometricAuthHelper.checkAvailability(context)) }
     LaunchedEffect(Unit) {
         availability.value = BiometricAuthHelper.checkAvailability(context)
+    }
+    return availability.value
+}
+
+@Composable
+fun rememberDeviceCredentialAvailability(): BiometricAuthHelper.Availability {
+    val context = LocalContext.current
+    val availability = remember { mutableStateOf(BiometricAuthHelper.checkDeviceCredentialAvailability(context)) }
+    LaunchedEffect(Unit) {
+        availability.value = BiometricAuthHelper.checkDeviceCredentialAvailability(context)
     }
     return availability.value
 }

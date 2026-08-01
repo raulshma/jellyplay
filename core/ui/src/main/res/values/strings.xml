@@ -66,6 +66,9 @@
     <string name="core_ui_auth_use_pin">Use PIN</string>
     <string name="core_ui_auth_use_biometric">Use Biometric</string>
     <string name="core_ui_auth_biometric_prompt">Use biometric to authenticate</string>
+    <string name="core_ui_auth_use_screen_lock">Use screen lock</string>
+    <string name="core_ui_auth_unlock_screen_lock">Unlock with screen lock</string>
+    <string name="core_ui_auth_device_credential_prompt">Use your device screen lock to unlock</string>
 
     <!-- core/ui seerr request dialog -->
     <string name="core_ui_seerr_request_success">Request submitted successfully!</string>

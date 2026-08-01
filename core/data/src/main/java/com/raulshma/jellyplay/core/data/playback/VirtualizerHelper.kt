@@ -20,19 +20,13 @@ class VirtualizerHelper : AudioFxHelper<Virtualizer>(TAG) {
         }
     }
 
-    override fun create(audioSessionId: Int): Virtualizer? {
-        // Construct first, then configure inside try/catch so a throw during
+    override fun create(audioSessionId: Int): Virtualizer? =
+        // Construct first, then configure inside createSafely so a throw during
         // setStrength still releases the native Virtualizer handle — otherwise
         // the object never reaches `fx` and detach()/releaseFx() can't free it.
-        val fx = Virtualizer(0, audioSessionId)
-        return try {
-            fx.setStrength(strength.coerceIn(0, 1000).toShort())
-            fx
-        } catch (e: Exception) {
-            runCatching { fx.release() }
-            throw e
+        createSafely(audioSessionId, { Virtualizer(0, it) }) {
+            it.setStrength(strength.coerceIn(0, 1000).toShort())
         }
-    }
 
     companion object {
         private const val TAG = "VirtualizerHelper"
