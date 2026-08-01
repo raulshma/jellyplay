@@ -575,5 +575,5 @@
     <string name="ss_arr_settings_subtitle">Configurer les connexions directes aux serveurs Radarr/Sonarr</string>
 
     <!-- Accessibility / media -->
-    <string name="core_ui_image_placeholder">Espace réservé d'image</string>
+    <string name="core_ui_image_placeholder">Espace réservé d\'image</string>
 </resources>

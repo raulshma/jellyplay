@@ -134,13 +134,19 @@ class NotificationDispatcher @Inject constructor(
         groupId: String,
         notificationId: Int,
     ): Notification {
+        // The content intent is explicit: ACTION_VIEW scoped to our own package so
+        // the PendingIntent cannot be hijacked by another app claiming the scheme.
+        // `setPackage` is hoisted out of an `Intent(...).apply { ... }` block on
+        // purpose — CodeQL's implicit-PendingIntent recognition only treats a setter
+        // call as making the intent explicit when its receiver is the Intent
+        // expression itself; inside `.apply {}` the receiver is the lambda's `this`
+        // and the analysis cannot link it to the value handed to PendingIntent.
         val contentIntent = PendingIntent.getActivity(
             context,
             notificationId,
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("jellyplay://media/${item.id}")).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                setPackage(context.packageName)
-            },
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("jellyplay://media/${item.id}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .setPackage(context.packageName),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 

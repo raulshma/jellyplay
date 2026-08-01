@@ -470,7 +470,7 @@
     <string name="ss_notifications_enable_title">Notifications Check Frequency</string>
     <string name="ss_notifications_enable_subtitle">Enable library background updates checking frequency</string>
     <string name="ss_respect_system_dnd_title">Respect System DND</string>
-    <string name="ss_respect_system_dnd_subtitle">Don't show notifications when Do Not Disturb is active</string>
+    <string name="ss_respect_system_dnd_subtitle">Don\'t show notifications when Do Not Disturb is active</string>
     <string name="ss_system_notification_settings_title">System Notification Settings</string>
     <string name="ss_system_notification_settings_subtitle">Customize per-library channel in system settings</string>
     <string name="ss_notification_check_frequency_title">Notification Check Frequency</string>
