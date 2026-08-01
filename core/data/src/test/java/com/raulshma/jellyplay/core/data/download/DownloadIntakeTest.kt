@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.download
 
+import com.raulshma.jellyplay.core.data.R
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
@@ -10,6 +11,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -22,7 +24,8 @@ class DownloadIntakeTest {
 
     private val delegate: DownloadDelegate = mockk()
     private val downloadRepository: DownloadRepository = mockk()
-    private val intake = DownloadIntakeImpl(delegate, downloadRepository)
+    private val context: android.content.Context = mockk()
+    private val intake = DownloadIntakeImpl(context, delegate, downloadRepository)
 
     private fun mediaDetail(): MediaDetail {
         val item = MediaItem(
@@ -79,6 +82,8 @@ class DownloadIntakeTest {
         // blank stream URL); the intake must surface a human-readable error
         // rather than throw or return a silent success.
         coEvery { delegate.startOne(detail, any(), any()) } returns null
+        every { context.getString(R.string.data_no_media_source_download) } returns
+            "No media source available for download"
 
         val result = intake.start(detail)
 

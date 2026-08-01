@@ -34,6 +34,15 @@ class ApiException(
      * Null when the server did not advise (most failures).
      */
     val retryAfterMs: Long? = null,
+    /**
+     * Raw response body for an HTTP-status failure, when the caller captured it
+     * (subtitle providers read+log it before throwing). Lets upstream code branch
+     * on service-specific "empty result" signals — e.g. Wyzie returns HTTP 400 +
+     * `{"message":"No subtitles found"}` to mean zero matches, which callers map
+     * to an empty success rather than surfacing a (misleading) error. Null when
+     * the failure wasn't an HTTP response or the body wasn't read.
+     */
+    val responseBody: String? = null,
     message: String,
     cause: Throwable? = null,
 ) : RuntimeException(message, cause) {
@@ -82,12 +91,18 @@ class ApiException(
          * [RetryPolicy] can honor it. Used by subtitle providers (and any other
          * rate-limited service) that expose the raw OkHttp [okhttp3.Response].
          */
-        fun fromHttpResponse(httpCode: Int, message: String, retryAfterHeader: String?): ApiException =
+        fun fromHttpResponse(
+            httpCode: Int,
+            message: String,
+            retryAfterHeader: String?,
+            responseBody: String? = null,
+        ): ApiException =
             ApiException(
                 isRetryable = httpCode in com.raulshma.jellyplay.core.network.RetryPolicy.RETRYABLE_STATUS_CODES,
                 httpCode = httpCode,
                 isAccessDenied = httpCode in ACCESS_DENIED_CODES,
                 retryAfterMs = parseRetryAfterMs(retryAfterHeader),
+                responseBody = responseBody,
                 message = message,
             )
 

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.subtitle
 
+import android.util.Log
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleFile
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderCredentials
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
@@ -38,9 +39,21 @@ class ResilientSubtitleProvider @Inject constructor(
         query: SubtitleQuery,
         credentials: SubtitleProviderCredentials,
     ): Result<List<SubtitleSearchResult>> = req { delegate.search(query, credentials) }
+        .also { outcome ->
+            if (outcome.isSuccess) {
+                Log.d(TAG, "${delegate.kind} search ok: ${outcome.getOrThrow().size} result(s)")
+            } else {
+                val e = outcome.exceptionOrNull()
+                Log.w(TAG, "${delegate.kind} search failed: ${e?.javaClass?.simpleName}: ${e?.message}", e)
+            }
+        }
 
     override suspend fun download(
         result: SubtitleSearchResult,
         credentials: SubtitleProviderCredentials,
     ): Result<SubtitleFile> = req { delegate.download(result, credentials) }
+
+    companion object {
+        private const val TAG = "Subtitles"
+    }
 }
