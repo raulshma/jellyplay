@@ -54,19 +54,7 @@ fun AmbientColorBackdrop(
     // blob per frame just to build the radialGradient stops. The center/radius
     // still vary per frame, but the stop colors are identical for a given
     // palette, so hoisting them out of the draw phase removes that churn.
-    val blobStops = remember(colors, blobCount) {
-        val blobColors = colors.ifEmpty {
-            listOf(
-                AmbientColors.deepIndigo,
-                AmbientColors.deepPurple,
-                AmbientColors.deepTeal,
-                AmbientColors.deepRed,
-            )
-        }
-        blobColors.take(blobCount).map { color ->
-            listOf(color.copy(alpha = 0.6f), color.copy(alpha = 0.2f), Color.Transparent)
-        }
-    }
+    val blobStops = rememberBlobStops(colors, blobCount)
 
     // Each blob runs its own slow infinite animation. Frozen under reduced
     // motion (the LaunchedEffect bodies are skipped, values stay 0f) which also
@@ -112,3 +100,28 @@ fun AmbientColorBackdrop(
         }
     }
 }
+
+/**
+ * Resolves the per-blob 3-stop radial-gradient colour stops for a palette,
+ * memoised on ([colors], [blobCount]). Shared by [AmbientColorBackdrop] and
+ * the audio player's `AmbientBackground` so the palette → stops projection
+ * (the `ifEmpty` fallback + the alpha-stop mapping) lives in one place
+ * instead of being duplicated across both ambient surfaces.
+ *
+ * Center/radius still vary per draw frame; only the stop colours are hoisted.
+ */
+@Composable
+fun rememberBlobStops(colors: List<Color>, blobCount: Int): List<List<Color>> =
+    remember(colors, blobCount) {
+        val blobColors = colors.ifEmpty {
+            listOf(
+                AmbientColors.deepIndigo,
+                AmbientColors.deepPurple,
+                AmbientColors.deepTeal,
+                AmbientColors.deepRed,
+            )
+        }
+        blobColors.take(blobCount).map { color ->
+            listOf(color.copy(alpha = 0.6f), color.copy(alpha = 0.2f), Color.Transparent)
+        }
+    }
