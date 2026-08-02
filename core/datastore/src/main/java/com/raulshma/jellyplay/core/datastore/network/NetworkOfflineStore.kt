@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -192,12 +193,32 @@ class NetworkOfflineStore @Inject constructor(
             it[Keys.NETWORK_TIMEOUT_PRESET] = userPreferences.networkTimeoutPreset.name
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences].
+     */
+    suspend fun restore(slice: NetworkOfflineSlice) {
+        dataStore.edit { it ->
+            it[Keys.MAX_CACHE_SIZE_MB] = slice.maxCacheSizeMb
+            it[Keys.AUTO_DELETE_CACHE] = slice.autoDeleteCache
+            it[Keys.MANUAL_OFFLINE_ENABLED] = slice.manualOfflineEnabled
+            it[Keys.AUTO_OFFLINE_ENABLED] = slice.autoOfflineEnabled
+            it[Keys.MANUAL_BANDWIDTH_CAP] = slice.manualBandwidthCap
+            it[Keys.METERED_NETWORK_BEHAVIOR] = slice.meteredNetworkBehavior.name
+            it[Keys.ADAPTIVE_BITRATE_ENABLED] = slice.adaptiveBitrateEnabled
+            it[Keys.DATA_SAVER_ENABLED] = slice.dataSaverEnabled
+            it[Keys.VERBOSE_NETWORK_LOGGING] = slice.verboseNetworkLogging
+            it[Keys.NETWORK_TIMEOUT_PRESET] = slice.networkTimeoutPreset.name
+        }
+    }
 }
 
 /**
  * The network / offline-mode preference slice. Plain data class. Defaults mirror
  * the projection defaults in [NetworkOfflineStore.read].
  */
+@Serializable
 data class NetworkOfflineSlice(
     val manualOfflineEnabled: Boolean = false,
     val autoOfflineEnabled: Boolean = true,

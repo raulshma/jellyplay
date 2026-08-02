@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -273,6 +274,45 @@ class PlayerEngineStore @Inject constructor(
     }
 
     /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore. The three engine configs use the `encodeDefaultsJson` +
+     * serializer round-trip from [restorePreferences]; the two per-item maps use
+     * the plain `json` round-trip from [restorePerItemMaps] (with neutral-entry
+     * stripping and the 100-entry [capMap] eviction folded in so the bound has a
+     * single owner).
+     */
+    suspend fun restore(slice: PlayerEngineSlice) {
+        dataStore.edit { prefs ->
+            prefs[Keys.MPV_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<MpvEngineConfig>(),
+                slice.mpvConfig,
+            )
+            prefs[Keys.LIBVLC_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<LibVlcEngineConfig>(),
+                slice.libVlcConfig,
+            )
+            prefs[Keys.EXO_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<ExoPlayerEngineConfig>(),
+                slice.exoPlayerConfig,
+            )
+
+            val streams = slice.mediaStreamSelections
+                .filter { (_, v) -> v.audioStreamIndex != null || v.subtitleStreamIndex != null }
+                .let { capMap(it) }
+            prefs[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, MediaStreamSelection>>(), streams,
+            )
+
+            val effects = slice.videoEffectsByItem
+                .filter { (_, v) -> !v.isNeutral }
+                .let { capMap(it) }
+            prefs[Keys.VIDEO_EFFECTS_SELECTIONS] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, VideoEffectsConfig>>(), effects,
+            )
+        }
+    }
+
+    /**
      * Bulk-restores the two per-item recall maps from a decoded backup,
      * applying the same neutral-entry stripping and 100-entry LRU eviction as
      * [setMediaStreamSelection] / [setVideoEffectsForItem] so the cap has a
@@ -324,6 +364,7 @@ class PlayerEngineStore @Inject constructor(
  * The player-engine configuration preference slice. Plain data class.
  * Defaults mirror the projection defaults in [PlayerEngineStore.read].
  */
+@Serializable
 data class PlayerEngineSlice(
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
     val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -204,12 +205,30 @@ class LibraryStore @Inject constructor(
             it[Keys.SKIP_SPECIALS] = userPreferences.skipSpecials
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences] (JSON maps via
+     * this store's [json] codec).
+     */
+    suspend fun restore(slice: LibrarySlice) {
+        dataStore.edit { it ->
+            it[Keys.LIBRARY_VIEW_MODE] = slice.libraryViewMode.name
+            it[Keys.DEFAULT_LIBRARY_SORT_ORDERS] = json.encodeToString(slice.defaultLibrarySortOrders)
+            it[Keys.LIBRARY_VIEW_MODES] = json.encodeToString(slice.libraryViewModes)
+            it[Keys.LIBRARY_FILTERS] = json.encodeToString(slice.libraryFilters)
+            it[Keys.HIDE_EPISODE_THUMBNAILS] = slice.hideEpisodeThumbnails
+            it[Keys.EPISODES_DESCENDING] = slice.episodesDescending
+            it[Keys.SKIP_SPECIALS] = slice.skipSpecials
+        }
+    }
 }
 
 /**
  * The library browsing preference slice. Plain data class. Defaults mirror the
  * projection defaults in [LibraryStore.read].
  */
+@Serializable
 data class LibrarySlice(
     val libraryViewMode: LibraryViewMode = LibraryViewMode.GRID,
     val defaultLibrarySortOrders: Map<String, String> = emptyMap(),

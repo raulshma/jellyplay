@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -510,12 +511,43 @@ class HomeDiscoveryStore @Inject constructor(
             it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = userPreferences.showSettingsInHomeSearch
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences] (section types
+     * and order encoded as name-string sets/lists via [json]).
+     */
+    suspend fun restore(slice: HomeDiscoverySlice) {
+        dataStore.edit { it ->
+            it[Keys.HOME_MODE] = slice.homeMode.name
+            it[Keys.HOME_HERO_ENABLED] = slice.homeHeroEnabled
+            it[Keys.HOME_BACKDROP_ENABLED] = slice.homeBackdropEnabled
+            it[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(slice.enabledHomeSectionTypes.map { section -> section.name }.toSet())
+            it[Keys.HOME_SECTION_ORDER] = json.encodeToString(slice.homeSectionOrder.map { section -> section.name })
+            it[Keys.HOME_LIBRARY_SECTION_OVERRIDES] = json.encodeToString(slice.libraryHomeSectionOverrides)
+            it[Keys.PINNED_HOME_SECTIONS] = json.encodeToString(slice.pinnedHomeSections)
+            it[Keys.HOME_LAYOUT_PRESETS] = json.encodeToString(slice.homeLayoutPresets)
+            it[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] = slice.continueWatchingClickBehavior.name
+            it[Keys.SHOW_UNWATCHED_BADGE] = slice.showUnwatchedBadge
+            it[Keys.HIDE_WATCHED_ITEMS] = slice.hideWatchedItems
+            it[Keys.SHOW_WATCHED_CHECKMARK] = slice.showWatchedCheckmark
+            it[Keys.SHOW_EXTERNAL_RATINGS] = slice.showExternalRatings
+            it[Keys.MERGE_CONTINUE_WATCHING_NEXT_UP] = slice.mergeContinueWatchingAndNextUp
+            it[Keys.NEXT_UP_MAX_DAYS] = slice.nextUpMaxDays
+            it[Keys.NEXT_UP_REWATCHING] = slice.nextUpRewatching
+            it[Keys.NEXT_UP_EXCLUDED_SERIES_IDS] = json.encodeToString(slice.nextUpExcludedSeriesIds)
+            it[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(slice.hiddenCwItemIds)
+            it[Keys.SHOW_CLOCK_ON_HOME] = slice.showClockOnHome
+            it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = slice.showSettingsInHomeSearch
+        }
+    }
 }
 
 /**
  * The home discovery preference slice. Plain data class. Defaults mirror the
  * projection defaults in [HomeDiscoveryStore.read].
  */
+@Serializable
 data class HomeDiscoverySlice(
     val homeMode: HomeMode = HomeMode.VIDEO,
     val homeHeroEnabled: Boolean = true,

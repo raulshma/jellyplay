@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -272,12 +273,43 @@ class AudioEffectsStore @Inject constructor(
             it[Keys.PITCH_SEMITONES] = userPreferences.pitchSemitones
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences], including the
+     * [EqualizerSettings] JSON blob via [PreferenceCodec.encodeDefaultsJson].
+     */
+    suspend fun restore(slice: AudioEffectsSlice) {
+        dataStore.edit { it ->
+            it[Keys.DIALOGUE_BOOST_ENABLED] = slice.dialogueBoostEnabled
+            it[Keys.DIALOGUE_BOOST_STRENGTH] = slice.dialogueBoostStrength.name
+            it[Keys.EQUALIZER_ENABLED] = slice.equalizerEnabled
+            it[Keys.EQUALIZER_SETTINGS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<EqualizerSettings>(),
+                slice.equalizerSettings,
+            )
+            it[Keys.EQUALIZER_PRESET] = slice.equalizerPreset.name
+            it[Keys.NIGHT_MODE_ENABLED] = slice.nightModeEnabled
+            it[Keys.NIGHT_MODE_STRENGTH] = slice.nightModeStrength.name
+            it[Keys.BASS_BOOST_ENABLED] = slice.bassBoostEnabled
+            it[Keys.BASS_BOOST_STRENGTH] = slice.bassBoostStrength.name
+            it[Keys.VIRTUALIZER_ENABLED] = slice.virtualizerEnabled
+            it[Keys.VIRTUALIZER_STRENGTH] = slice.virtualizerStrength
+            it[Keys.REVERB_PRESET] = slice.reverbPreset.name
+            it[Keys.VOLUME_BOOST_ENABLED] = slice.volumeBoostEnabled
+            it[Keys.VOLUME_BOOST_GAIN] = slice.volumeBoostGain
+            it[Keys.LR_BALANCE] = slice.lrBalance
+            it[Keys.AUTO_EQ_BY_GENRE] = slice.autoEqByGenre
+            it[Keys.PITCH_SEMITONES] = slice.pitchSemitones
+        }
+    }
 }
 
 /**
  * The audio-effects preference slice. Plain data class.
  * Defaults mirror the projection defaults in [AudioEffectsStore.read].
  */
+@Serializable
 data class AudioEffectsSlice(
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,

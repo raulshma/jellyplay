@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -145,12 +146,28 @@ class AudioCacheStore @Inject constructor(
             it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = userPreferences.audioCacheCellularMonthlyCapMb
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences].
+     */
+    suspend fun restore(slice: AudioCacheSlice) {
+        dataStore.edit { it ->
+            it[Keys.AUDIO_CACHING_ENABLED] = slice.audioCachingEnabled
+            it[Keys.AUDIO_CACHE_SIZE_MB] = slice.audioCacheSizeMb
+            it[Keys.AUDIO_PREFETCH_LOOKAHEAD] = slice.audioPrefetchLookahead
+            it[Keys.AUDIO_PREFETCH_BACKFILL] = slice.audioPrefetchBackfill
+            it[Keys.AUDIO_CACHE_NETWORK_POLICY] = slice.audioCacheNetworkPolicy.name
+            it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = slice.audioCacheCellularMonthlyCapMb
+        }
+    }
 }
 
 /**
  * The audio-cache policy preference slice. Plain data class.
  * Defaults mirror the projection defaults in [AudioCacheStore.read].
  */
+@Serializable
 data class AudioCacheSlice(
     val audioCachingEnabled: Boolean = true,
     val audioCacheSizeMb: Int = 1024,
