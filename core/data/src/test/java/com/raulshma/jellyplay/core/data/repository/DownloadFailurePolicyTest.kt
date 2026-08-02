@@ -200,4 +200,65 @@ class DownloadFailurePolicyTest {
         ) as Outcome.MarkFailed
         assertFalse(outcome.deletePartial)
     }
+
+    // ---- decideForStatus: HTTP response-code classification -----------------
+
+    @Test
+    fun `401 marks FAILED with session-expired message and no retry`() {
+        val outcome = DownloadFailurePolicy.decideForStatus(
+            responseCode = 401,
+            currentStatus = DownloadStatus.DOWNLOADING.name,
+            isResumablePartial = true,
+        ) as Outcome.MarkFailed
+        assertEquals(SESSION_EXPIRED_ERROR, outcome.errorMessage)
+        assertFalse(outcome.shouldRetry)
+    }
+
+    @Test
+    fun `403 is classified identically to 401`() {
+        val outcome = DownloadFailurePolicy.decideForStatus(
+            responseCode = 403,
+            currentStatus = DownloadStatus.DOWNLOADING.name,
+            isResumablePartial = true,
+        ) as Outcome.MarkFailed
+        assertEquals(SESSION_EXPIRED_ERROR, outcome.errorMessage)
+        assertFalse(outcome.shouldRetry)
+    }
+
+    @Test
+    fun `transient 503 deletes partial even on single-connection and retries`() {
+        // The transient branch forces deletePartial=true regardless of strategy,
+        // mirroring the pre-extraction wipe-and-retry (avoids the stale-Range loop).
+        val outcome = DownloadFailurePolicy.decideForStatus(
+            responseCode = 503,
+            currentStatus = DownloadStatus.DOWNLOADING.name,
+            isResumablePartial = true,
+        ) as Outcome.MarkFailed
+        assertTrue(outcome.deletePartial)
+        assertTrue(outcome.shouldRetry)
+        assertNull(outcome.errorMessage)
+    }
+
+    @Test
+    fun `transient 429 retries like 503`() {
+        val outcome = DownloadFailurePolicy.decideForStatus(
+            responseCode = 429,
+            currentStatus = DownloadStatus.DOWNLOADING.name,
+            isResumablePartial = false,
+        ) as Outcome.MarkFailed
+        assertTrue(outcome.shouldRetry)
+        assertTrue(outcome.deletePartial)
+    }
+
+    @Test
+    fun `status classification suppresses when user paused concurrently`() {
+        // Same guard as decide(Throwable): PAUSED wins so the failure handler
+        // doesn't clobber the user's pause.
+        val outcome = DownloadFailurePolicy.decideForStatus(
+            responseCode = 401,
+            currentStatus = DownloadStatus.PAUSED.name,
+            isResumablePartial = true,
+        )
+        assertEquals(Outcome.Suppress, outcome)
+    }
 }
