@@ -92,6 +92,16 @@ class AppearanceStore @Inject constructor(
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.Eagerly, AppearanceSlice())
 
+    /**
+     * Whether the settings screens expose their advanced sections. An
+     * appearance-domain field surfaced independently so settings sub-screens
+     * can read it without collecting the whole preference aggregate.
+     */
+    val showAdvancedSettings: StateFlow<Boolean> = appearance
+        .map { it.showAdvancedSettings }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+
     internal fun read(prefs: Preferences): AppearanceSlice = AppearanceSlice(
         dynamicTheming = PreferenceCodec.readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
         themeMode = readThemeMode(prefs),
