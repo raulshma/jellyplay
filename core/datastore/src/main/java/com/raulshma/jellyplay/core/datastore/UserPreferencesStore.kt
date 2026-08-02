@@ -120,6 +120,10 @@ import javax.inject.Singleton
 class UserPreferencesStore @Inject constructor(
     @ApplicationScope private val externalScope: CoroutineScope,
     @com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore private val dataStore: DataStore<Preferences>,
+    // Read-layer that projects the store slices into the per-domain / per-screen
+    // preference types. The slice flows below delegate here so consumers keep
+    // the same call sites while the aggregate read path is being retired.
+    private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
     // Domain stores: the facade forwards invariant-bearing setters to these so
     // the cross-key mutex / coerce / LRU / migration logic has a single owner.
     // All stores share the same `"user_prefs"` DataStore, so writes are
@@ -595,33 +599,19 @@ class UserPreferencesStore @Inject constructor(
     // defined in `PreferenceGroups.kt`; deriving from [preferences] (rather than
     // re-reading the raw DataStore keys) keeps a single read path and avoids drift.
     val videoPlayerPreferences: StateFlow<com.raulshma.jellyplay.core.model.VideoPlayerPreferences> =
-        preferences.map { it.videoPlayer }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.VideoPlayerPreferences())
+        projections.videoPlayerPreferences
     val audioPlayerPreferences: StateFlow<com.raulshma.jellyplay.core.model.AudioPlayerPreferences> =
-        preferences.map { it.audioPlayer }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.AudioPlayerPreferences())
+        projections.audioPlayerPreferences
     val subtitlePreferences: StateFlow<com.raulshma.jellyplay.core.model.SubtitlePreferences> =
-        preferences.map { it.subtitle }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.SubtitlePreferences())
+        projections.subtitlePreferences
     val securityPreferences: StateFlow<com.raulshma.jellyplay.core.model.SecurityPreferences> =
-        preferences.map { it.security }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.SecurityPreferences())
+        projections.securityPreferences
     val downloadPreferences: StateFlow<com.raulshma.jellyplay.core.model.DownloadPreferences> =
-        preferences.map { it.download }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.DownloadPreferences())
+        projections.downloadPreferences
     val syncPlayPreferences: StateFlow<com.raulshma.jellyplay.core.model.SyncPlayPreferences> =
-        preferences.map { it.syncPlay }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.SyncPlayPreferences())
+        projections.syncPlayPreferences
     val appearancePreferences: StateFlow<com.raulshma.jellyplay.core.model.AppearancePreferences> =
-        preferences.map { it.appearance }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.AppearancePreferences())
+        projections.appearancePreferences
 
     // Per-screen preference slices. Each mirrors the exact fields one settings
     // sub-screen reads (see the slice types in `PreferenceGroups.kt`), so a
@@ -630,33 +620,19 @@ class UserPreferencesStore @Inject constructor(
     // slices above, these derive from the single source-of-truth [preferences]
     // StateFlow and de-duplicate via the slice's structural equality.
     val playbackPreferences: StateFlow<com.raulshma.jellyplay.core.model.PlaybackPreferences> =
-        preferences.map { it.playback }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.PlaybackPreferences())
+        projections.playbackPreferences
     val audioPreferences: StateFlow<com.raulshma.jellyplay.core.model.AudioPreferences> =
-        preferences.map { it.audio }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.AudioPreferences())
+        projections.audioPreferences
     val storagePreferences: StateFlow<com.raulshma.jellyplay.core.model.StoragePreferences> =
-        preferences.map { it.storage }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.StoragePreferences())
+        projections.storagePreferences
     val appearanceScreenPreferences: StateFlow<com.raulshma.jellyplay.core.model.AppearanceScreenPreferences> =
-        preferences.map { it.appearanceScreen }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.AppearanceScreenPreferences())
+        projections.appearanceScreenPreferences
     val navigationCustomizationPreferences: StateFlow<com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences> =
-        preferences.map { it.navigationCustomization }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences())
+        projections.navigationCustomizationPreferences
     val languagePreferences: StateFlow<com.raulshma.jellyplay.core.model.LanguagePreferences> =
-        preferences.map { it.language }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.LanguagePreferences())
+        projections.languagePreferences
     val experimentalPreferences: StateFlow<com.raulshma.jellyplay.core.model.ExperimentalPreferences> =
-        preferences.map { it.experimental }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.ExperimentalPreferences())
+        projections.experimentalPreferences
 
     /** Narrow flow of the pinned home-sections list for the pinned-sections screen. */
     val pinnedHomeSectionsFlow: StateFlow<List<com.raulshma.jellyplay.core.model.PinnedHomeSection>> =
@@ -1565,9 +1541,8 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
-    val notificationPreferences: StateFlow<NotificationPreferences> = preferences.map { it.notificationPreferences }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, NotificationPreferences())
+    val notificationPreferences: StateFlow<NotificationPreferences> =
+        projections.notificationPreferences
 
     suspend fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
         // Forwarded to NotificationStore: the 10-key atomic read-modify-write

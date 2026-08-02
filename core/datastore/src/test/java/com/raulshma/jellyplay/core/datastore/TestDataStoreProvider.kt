@@ -72,9 +72,30 @@ fun createUserPreferencesStore(
     val subtitleLanguageStore = SubtitleLanguageStore(dataStore, scope)
     val syncPlayCastStore = SyncPlayCastStore(dataStore, scope)
     val experimentalStore = ExperimentalStore(dataStore, scope)
+    val projections = com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections(
+        scope,
+        playbackStore,
+        videoPlayerStore,
+        engineStore,
+        subtitleLanguageStore,
+        audioStore,
+        audioEffectsStore,
+        audioCacheStore,
+        appearanceStore,
+        homeDiscoveryStore,
+        libraryStore,
+        navigationStore,
+        downloadsStore,
+        networkOfflineStore,
+        notificationStore,
+        syncPlayCastStore,
+        securityStore,
+        experimentalStore,
+    )
     return UserPreferencesStore(
         scope,
         dataStore,
+        projections,
         playbackStore,
         appearanceStore,
         videoPlayerStore,
