@@ -280,6 +280,10 @@ class VideoPlayerStore @Inject constructor(
         dataStore.edit { it[Keys.VIDEO_DEFAULT_SPEED] = speed }
     }
 
+    suspend fun setVideoDefaultAspectRatio(ratio: String) {
+        dataStore.edit { it[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = ratio }
+    }
+
     suspend fun setVideoAutoplayNext(enabled: Boolean) {
         dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled }
     }
