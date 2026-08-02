@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -146,6 +147,54 @@ class NetworkOfflineStore @Inject constructor(
         Keys.ADAPTIVE_BITRATE_ENABLED, Keys.DATA_SAVER_ENABLED,
         Keys.VERBOSE_NETWORK_LOGGING, Keys.NETWORK_TIMEOUT_PRESET,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. The network/offline keys (plus the image-cache size + auto
+     * delete toggles) all sit in the legacy `DOWNLOADS_NETWORK` reset category.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.DOWNLOADS_NETWORK -> listOf(
+            Keys.MAX_CACHE_SIZE_MB,
+            Keys.AUTO_DELETE_CACHE,
+            Keys.MANUAL_OFFLINE_ENABLED,
+            Keys.AUTO_OFFLINE_ENABLED,
+            Keys.MANUAL_BANDWIDTH_CAP,
+            Keys.METERED_NETWORK_BEHAVIOR,
+            Keys.ADAPTIVE_BITRATE_ENABLED,
+            Keys.DATA_SAVER_ENABLED,
+            Keys.VERBOSE_NETWORK_LOGGING,
+            Keys.NETWORK_TIMEOUT_PRESET,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the network/offline keys owned by
+     * this store from a decoded [UserPreferences]. The facade calls this (and
+     * every other store's hook) instead of writing these keys itself.
+     *
+     * Mirrors the legacy facade behaviour exactly: no security-sensitive keys
+     * are owned here, so [restoreSecuritySensitive] is accepted for contract
+     * parity but ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.MAX_CACHE_SIZE_MB] = userPreferences.maxCacheSizeMb
+            it[Keys.AUTO_DELETE_CACHE] = userPreferences.autoDeleteCache
+            it[Keys.MANUAL_OFFLINE_ENABLED] = userPreferences.manualOfflineEnabled
+            it[Keys.AUTO_OFFLINE_ENABLED] = userPreferences.autoOfflineEnabled
+            it[Keys.MANUAL_BANDWIDTH_CAP] = userPreferences.manualBandwidthCap
+            it[Keys.METERED_NETWORK_BEHAVIOR] = userPreferences.meteredNetworkBehavior.name
+            it[Keys.ADAPTIVE_BITRATE_ENABLED] = userPreferences.adaptiveBitrateEnabled
+            it[Keys.DATA_SAVER_ENABLED] = userPreferences.dataSaverEnabled
+            it[Keys.VERBOSE_NETWORK_LOGGING] = userPreferences.verboseNetworkLogging
+            it[Keys.NETWORK_TIMEOUT_PRESET] = userPreferences.networkTimeoutPreset.name
+        }
+    }
 }
 
 /**

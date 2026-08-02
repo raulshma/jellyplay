@@ -22,6 +22,8 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
@@ -91,6 +93,8 @@ class HomeViewModel @Inject constructor(
     private val newsletterTriggerManager: NewsletterTriggerManager,
     private val preferencesStore: UserPreferencesStore,
     private val preferencesEditor: PreferencesEditor,
+    private val serverIdentityStore: ServerIdentityStore,
+    private val widgetDataStore: WidgetDataStore,
     private val searchHistoryRepository: SearchHistoryRepository,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
@@ -467,7 +471,7 @@ class HomeViewModel @Inject constructor(
         }
 
         launch {
-            preferencesStore.activeUserId
+            serverIdentityStore.activeUserId
                 .flatMapLatest { userId ->
                     if (userId != null) searchHistoryRepository.getRecent(userId)
                     else flowOf(emptyList())
@@ -713,7 +717,7 @@ class HomeViewModel @Inject constructor(
 
     fun clearSearchHistory() {
         launch {
-            val userId = preferencesStore.activeUserId.first() ?: return@launch
+            val userId = serverIdentityStore.activeUserId.first() ?: return@launch
             searchHistoryRepository.clearAll(userId)
         }
     }
@@ -864,7 +868,7 @@ class HomeViewModel @Inject constructor(
                     val currentIds = continueWatching.map { it.id }.toSet()
                     if (currentIds != lastContinueWatchingIds) {
                         lastContinueWatchingIds = currentIds
-                        preferencesStore.setContinueWatching(continueWatching)
+                        widgetDataStore.setContinueWatching(continueWatching)
                         // Defer the widget broadcast + TV Watch Next refresh until
                         // after the mutex is released (see pendingCwSideEffect above).
                         pendingCwSideEffect = {
@@ -1050,7 +1054,7 @@ class HomeViewModel @Inject constructor(
                 jellyfinDeferred.await().onSuccess { result ->
                     updateSearch { it.copy(jellyfinResults = result.items) }
                     if (result.items.isNotEmpty()) {
-                        val userId = preferencesStore.activeUserId.first()
+                        val userId = serverIdentityStore.activeUserId.first()
                         if (userId != null) {
                             searchHistoryRepository.saveQuery(query, userId)
                         }

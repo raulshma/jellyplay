@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
@@ -35,6 +36,7 @@ class SearchViewModelHistoryTest {
     private lateinit var searchHistoryRepository: SearchHistoryRepository
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var serverIdentityStore: ServerIdentityStore
 
     private lateinit var viewModel: SearchViewModel
 
@@ -47,9 +49,10 @@ class SearchViewModelHistoryTest {
         searchHistoryRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         preferencesStore = mockk(relaxed = true)
+        serverIdentityStore = mockk(relaxed = true)
 
         every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
-        every { preferencesStore.activeUserId } returns flowOf("user-1")
+        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         every { seerrRepository.isConnected() } returns flowOf(false)
         every { seerrRepository.getPreferences() } returns flowOf(
             com.raulshma.jellyplay.core.model.seerr.SeerrPreferences()
@@ -72,6 +75,7 @@ class SearchViewModelHistoryTest {
             searchHistoryRepository,
             offlineRepository,
             preferencesStore,
+            serverIdentityStore,
         )
     }
 

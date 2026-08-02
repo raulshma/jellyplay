@@ -36,7 +36,7 @@ import kotlinx.coroutines.runBlocking
  *     6h and on user-initiated refresh.
  *   * [SeerrRecommendationsWidgetService] is bound as the grid's remote
  *     adapter and reads from
- *     [UserPreferencesStore.seerrWidgetItems] — no network in the widget
+ *     [com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore.seerrWidgetItems] — no network in the widget
  *     process.
  */
 class SeerrRecommendationsWidget : AppWidgetProvider() {
@@ -44,7 +44,7 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface WidgetEntryPoint {
-        fun userPreferencesStore(): UserPreferencesStore
+        fun widgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
         fun seerrPreferencesStore(): com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
         fun widgetWorkScheduler(): WidgetWorkScheduler
     }
@@ -232,7 +232,7 @@ class SeerrRecommendationsWidget : AppWidgetProvider() {
                 WidgetEntryPoint::class.java,
             )
             runBlocking {
-                entryPoint.userPreferencesStore().getWidgetConfigForId(appWidgetId).first()
+                entryPoint.widgetDataStore().getWidgetConfigForId(appWidgetId).first()
             }.seerrSource.displayName
         }.getOrDefault(SeerrWidgetSource.TRENDING.displayName)
     }

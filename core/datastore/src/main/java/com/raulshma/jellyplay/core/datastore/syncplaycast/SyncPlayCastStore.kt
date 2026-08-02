@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.CastingStrategy
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -141,6 +142,50 @@ class SyncPlayCastStore @Inject constructor(
         Keys.DVR_PRE_PADDING_MINUTES, Keys.DVR_POST_PADDING_MINUTES,
         Keys.DVR_RECORDING_QUALITY,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. Every key owned here descends under
+     * `PreferenceResetCategory.SYNCPLAY_CASTING`. `LIVE_STREAM_OPTION` is owned
+     * by `PlaybackStore`, and the runtime recall slots (favorite channels,
+     * recent DLNA devices, live-TV last channel) are excluded from category
+     * reset by the facade, so none appear in any category list here.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.SYNCPLAY_CASTING -> listOf(
+            Keys.SYNC_PLAY_JOIN_BEHAVIOR, Keys.SYNC_PLAY_TOLERANCE_MS,
+            Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, Keys.DEFAULT_CASTING_STRATEGY,
+            Keys.BACKGROUND_CASTING_ENABLED, Keys.PREFERRED_RENDERER,
+            Keys.DVR_PRE_PADDING_MINUTES, Keys.DVR_POST_PADDING_MINUTES,
+            Keys.DVR_RECORDING_QUALITY,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the SyncPlay + casting + DVR keys
+     * owned by this store from a decoded [UserPreferences], mirroring the
+     * facade's restore body exactly (including the nullable
+     * [Keys.PREFERRED_RENDERER] guard). No security-sensitive state is owned
+     * here, so [restoreSecuritySensitive] is accepted for contract parity but
+     * ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { prefs ->
+            prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = userPreferences.syncPlayJoinBehavior.name
+            prefs[Keys.SYNC_PLAY_TOLERANCE_MS] = userPreferences.syncPlayToleranceMs
+            prefs[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = userPreferences.syncPlayAutoAcceptInvites
+            prefs[Keys.DEFAULT_CASTING_STRATEGY] = userPreferences.defaultCastingStrategy.name
+            prefs[Keys.BACKGROUND_CASTING_ENABLED] = userPreferences.backgroundCastingEnabled
+            userPreferences.preferredRenderer?.let { prefs[Keys.PREFERRED_RENDERER] = it }
+            prefs[Keys.DVR_PRE_PADDING_MINUTES] = userPreferences.dvrPrePaddingMinutes
+            prefs[Keys.DVR_POST_PADDING_MINUTES] = userPreferences.dvrPostPaddingMinutes
+            prefs[Keys.DVR_RECORDING_QUALITY] = userPreferences.dvrRecordingQuality
+        }
+    }
 }
 
 /**

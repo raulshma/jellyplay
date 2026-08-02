@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -182,6 +183,50 @@ class ExperimentalStore @Inject constructor(
         Keys.ENABLED_EXPERIMENTAL_FEATURES,
         Keys.SHOW_ADVANCED_SETTINGS,
     )
+
+    /**
+     * Category reset participation: only the two reset-eligible keys owned here
+     * sit in the `EXPERIMENTAL` category. The onboarding + dismissed-update keys
+     * are `resetExcludedKeys` (runtime/one-time state) and never reset; the
+     * misc-app self-update/language/share/history keys are reset by their
+     * `MISC_APP` owner elsewhere.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.EXPERIMENTAL -> listOf(
+            Keys.ENABLED_EXPERIMENTAL_FEATURES,
+            Keys.SHOW_ADVANCED_SETTINGS,
+        )
+        PreferenceResetCategory.MISC_APP -> listOf(
+            Keys.SELF_UPDATE_CHECK_ENABLED,
+            Keys.SHOW_SHARE_MEDIA_OPTION,
+            Keys.HIDE_SEARCH_HISTORY,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the keys owned by this store from a
+     * decoded [UserPreferences]. The experimental-feature set is written with
+     * this store's own [json] codec (name-string set, same shape
+     * `setEnabledExperimentalFeatures` uses). One-time state
+     * ([Keys.DISMISSED_UPDATE_VERSION] / [Keys.DISMISSED_UPDATE_AT_MS]) is not
+     * written back, and no security-sensitive keys are owned here, so
+     * [restoreSecuritySensitive] is accepted for contract parity but ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(userPreferences.enabledExperimentalFeatures.map { feature -> feature.name }.toSet())
+            it[Keys.SELF_UPDATE_CHECK_ENABLED] = userPreferences.selfUpdateCheckEnabled
+            userPreferences.appLanguage?.let { language -> it[Keys.APP_LANGUAGE] = language }
+            it[Keys.SHOW_SHARE_MEDIA_OPTION] = userPreferences.showShareMediaOption
+            it[Keys.HIDE_SEARCH_HISTORY] = userPreferences.hideSearchHistory
+            it[Keys.PREFER_AUDIO_DESCRIPTION] = userPreferences.preferAudioDescription
+            it[Keys.SHOW_ADVANCED_SETTINGS] = userPreferences.showAdvancedSettings
+        }
+    }
 }
 
 /**

@@ -321,7 +321,7 @@ class MainActivity : FragmentActivity() {
                                 // Surface the rate-limit lockout to the user when present.
                                 val context = LocalContext.current
                                 val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
-                                    viewModel.preferencesStore.getPinLockoutState()
+                                    viewModel.pinRateLimiter.getPinLockoutState()
                                 }
                                 val now = remember { System.currentTimeMillis() }
                                 val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
@@ -342,7 +342,7 @@ class MainActivity : FragmentActivity() {
                                             // may have triggered it on a previous attempt
                                             // since the last composition. This counter read
                                             // is cheap and stays on the caller thread.
-                                            val currentLockout = viewModel.preferencesStore.getPinLockoutState()
+                                            val currentLockout = viewModel.pinRateLimiter.getPinLockoutState()
                                             val currentNow = System.currentTimeMillis()
                                             if (currentLockout.isLockedOut && currentLockout.lockoutUntilEpochMs > currentNow) {
                                                 val remainingMs = currentLockout.lockoutUntilEpochMs - currentNow
@@ -354,13 +354,13 @@ class MainActivity : FragmentActivity() {
                                             // accounting and optional hash upgrade follow it.
                                             pinVerifying = true
                                             lifecycleScope.launch {
-                                                val valid = viewModel.preferencesStore.verifyPinOffMainThread(pin)
+                                                val valid = viewModel.securityStore.verifyPinOffMainThread(pin)
                                                 if (valid) {
                                                     isPinUnlocked.value = true
                                                     pinError = null
-                                                    viewModel.preferencesStore.resetPinLockout()
+                                                    viewModel.pinRateLimiter.resetPinLockout()
                                                 } else {
-                                                    val newState = viewModel.preferencesStore.recordFailedPinAttempt()
+                                                    val newState = viewModel.pinRateLimiter.recordFailedPinAttempt()
                                                     pinError = if (newState.isLockedOut) {
                                                         formatLockoutMessage(context, newState.lockoutUntilEpochMs - System.currentTimeMillis())
                                                     } else {

@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -115,6 +116,42 @@ class NavigationStore @Inject constructor(
         Keys.NAV_BAR_SHOW_LABELS, Keys.HIDE_BOTTOM_NAV_ON_SCROLL,
         Keys.NAV_ITEM_ORDER, Keys.HIDDEN_NAV_ITEMS,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. The nav keys all sit in the legacy `HOME_DISCOVERY` reset
+     * category.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.HOME_DISCOVERY -> listOf(
+            Keys.NAV_BAR_SHOW_LABELS,
+            Keys.HIDE_BOTTOM_NAV_ON_SCROLL,
+            Keys.HIDDEN_NAV_ITEMS,
+            Keys.NAV_ITEM_ORDER,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the bottom-navigation keys owned by
+     * this store from a decoded [UserPreferences]. The facade calls this (and
+     * every other store's hook) instead of writing these keys itself.
+     *
+     * Mirrors the legacy facade behaviour exactly: no security-sensitive keys
+     * are owned here, so [restoreSecuritySensitive] is accepted for contract
+     * parity but ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.NAV_BAR_SHOW_LABELS] = userPreferences.navBarShowLabels
+            it[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = userPreferences.hideBottomNavOnScroll
+            it[Keys.HIDDEN_NAV_ITEMS] = json.encodeToString(userPreferences.hiddenNavItems)
+            it[Keys.NAV_ITEM_ORDER] = json.encodeToString(userPreferences.navItemOrder)
+        }
+    }
 }
 
 /**

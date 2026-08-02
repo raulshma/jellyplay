@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -203,6 +204,61 @@ class AudioStore @Inject constructor(
         Keys.AUDIO_CROSSFADE_DURATION_MS, Keys.AUDIO_DELAY_MS, Keys.AUDIO_LYRICS_VISIBLE,
         Keys.AUDIO_VISUALIZER_ENABLED, Keys.SLEEP_TIMER_DURATION_MS, Keys.SLEEP_TIMER_END_OF_EPISODE,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. A single store can own keys across several categories
+     * ([Keys.AUDIO_DELAY_MS] sits in `PLAYBACK` in the legacy mapping while the
+     * rest are `AUDIO`), so each store scopes its own keys per category. The
+     * facade aggregates these lists instead of a central `when` switch.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.PLAYBACK -> listOf(Keys.AUDIO_DELAY_MS)
+        PreferenceResetCategory.AUDIO -> listOf(
+            Keys.AUDIO_DEFAULT_SPEED, Keys.AUDIO_NIGHT_MODE_VOLUME, Keys.AUDIO_NIGHT_MODE_GAIN,
+            Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS, Keys.AUDIO_AUTOPLAY_NEXT, Keys.AUDIO_PRELOAD_BUFFER_SIZE,
+            Keys.AUDIO_NORMALIZATION_MODE, Keys.AUDIO_NORMALIZATION_ENABLED, Keys.REPLAYGAIN_PRE_AMP_DB,
+            Keys.CHANNEL_MIX_MODE, Keys.CHANNEL_MIX_ENABLED, Keys.AUDIO_GAPLESS_ENABLED,
+            Keys.AUDIO_CROSSFADE_DURATION_MS, Keys.AUDIO_LYRICS_VISIBLE,
+            Keys.AUDIO_VISUALIZER_ENABLED, Keys.SLEEP_TIMER_DURATION_MS, Keys.SLEEP_TIMER_END_OF_EPISODE,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the audio-player keys owned by this
+     * store from a decoded [UserPreferences]. The facade calls this (and every
+     * other store's hook) instead of writing these keys itself.
+     *
+     * Mirrors the legacy facade behaviour exactly. [Keys.AUDIO_LYRICS_VISIBLE]
+     * is runtime reading-state that the projection reads from its stored slot,
+     * so it is not written back. No security-sensitive keys are owned here, so
+     * [restoreSecuritySensitive] is accepted for contract parity but ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.AUDIO_DEFAULT_SPEED] = userPreferences.audioDefaultSpeed
+            it[Keys.AUDIO_NIGHT_MODE_VOLUME] = userPreferences.audioNightModeVolume
+            it[Keys.AUDIO_NIGHT_MODE_GAIN] = userPreferences.audioNightModeGain
+            it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = userPreferences.audioSkipPreviousThresholdMs
+            it[Keys.AUDIO_AUTOPLAY_NEXT] = userPreferences.audioAutoplayNext
+            it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = userPreferences.audioPreloadBufferSize.name
+            it[Keys.AUDIO_NORMALIZATION_MODE] = userPreferences.audioNormalizationMode.name
+            it[Keys.AUDIO_NORMALIZATION_ENABLED] = userPreferences.audioNormalizationEnabled
+            it[Keys.REPLAYGAIN_PRE_AMP_DB] = userPreferences.replayGainPreAmpDb
+            it[Keys.CHANNEL_MIX_MODE] = userPreferences.channelMixMode.name
+            it[Keys.CHANNEL_MIX_ENABLED] = userPreferences.channelMixEnabled
+            it[Keys.AUDIO_GAPLESS_ENABLED] = userPreferences.audioGaplessEnabled
+            it[Keys.AUDIO_CROSSFADE_DURATION_MS] = userPreferences.audioCrossfadeDurationMs
+            it[Keys.AUDIO_DELAY_MS] = userPreferences.audioDelayMs
+            it[Keys.AUDIO_VISUALIZER_ENABLED] = userPreferences.audioVisualizerEnabled
+            it[Keys.SLEEP_TIMER_DURATION_MS] = userPreferences.sleepTimerDurationMs
+            it[Keys.SLEEP_TIMER_END_OF_EPISODE] = userPreferences.sleepTimerEndOfEpisode
+        }
+    }
 }
 
 /**

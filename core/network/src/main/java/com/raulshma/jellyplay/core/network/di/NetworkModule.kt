@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.core.network.di
 import android.content.Context
 import android.net.ConnectivityManager
 import kotlinx.coroutines.runBlocking
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.JellyfinApiClientImpl
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
@@ -201,7 +200,6 @@ abstract class NetworkModule {
         fun provideJellyfin(
             @ApplicationContext context: Context,
             okHttpClient: OkHttpClient,
-            userPreferencesStore: UserPreferencesStore,
             serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore,
         ): Jellyfin {
             // Use the app's persistent DataStore UUID as the SDK device id so the
@@ -222,7 +220,7 @@ abstract class NetworkModule {
             // id is identical either way; the fast path simply skips the disk IO.
             val androidDefault = androidDevice(context)
             val deviceId = serverIdentityStore.identity.value.deviceId
-                ?: runBlocking { userPreferencesStore.ensureDeviceId() }
+                ?: runBlocking { serverIdentityStore.ensureDeviceId() }
             return createJellyfin {
                 this.context = context
                 clientInfo = ClientInfo(

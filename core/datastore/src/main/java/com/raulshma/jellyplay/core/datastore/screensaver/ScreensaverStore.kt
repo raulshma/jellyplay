@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -129,6 +130,41 @@ class ScreensaverStore @Inject constructor(
         Keys.DREAM_SHOW_TITLE,
         Keys.DREAM_SLIDESHOW_INTERVAL_MS,
     )
+
+    /**
+     * Category reset participation: every key owned here sits in the single
+     * `SCREENSAVER` reset category.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.SCREENSAVER -> listOf(
+            Keys.DREAM_IMAGE_CATEGORIES,
+            Keys.DREAM_TRANSITION_STYLE,
+            Keys.DREAM_KEN_BURNS_ENABLED,
+            Keys.DREAM_SHOW_TITLE,
+            Keys.DREAM_SLIDESHOW_INTERVAL_MS,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the dream keys owned by this store
+     * from a decoded [UserPreferences]. The JSON image-category set is written
+     * with this store's own [json] codec (same shape `setDreamImageCategories`
+     * uses). [restoreSecuritySensitive] is accepted for contract parity; no
+     * security-sensitive keys are owned here.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(userPreferences.dreamImageCategories)
+            it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = userPreferences.dreamSlideshowIntervalMs
+            it[Keys.DREAM_KEN_BURNS_ENABLED] = userPreferences.dreamKenBurnsEnabled
+            it[Keys.DREAM_TRANSITION_STYLE] = userPreferences.dreamTransitionStyle.name
+            it[Keys.DREAM_SHOW_TITLE] = userPreferences.dreamShowTitle
+        }
+    }
 }
 
 private val DEFAULT_DREAM_IMAGE_CATEGORIES: Set<DreamImageCategory> =

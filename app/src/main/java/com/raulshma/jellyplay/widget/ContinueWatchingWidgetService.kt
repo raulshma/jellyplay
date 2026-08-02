@@ -9,7 +9,7 @@ import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import dagger.hilt.EntryPoint
@@ -23,10 +23,10 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 /**
  * Backs the Continue Watching widget's `ListView` with a
  * [RemoteViewsFactory] that pulls the latest snapshot from
- * [UserPreferencesStore.continueWatching].
+ * [WidgetDataStore.continueWatching].
  *
  * RemoteViewsFactory operations are synchronous, so the Hilt entry point
- * is used to grab a [UserPreferencesStore] handle and the latest list is
+ * is used to grab a [WidgetDataStore] handle and the latest list is
  * loaded with [runBlocking] on each [onDataSetChanged] call. The
  * [ContinueWatchingWidget] calls
  * [AppWidgetManager.notifyAppWidgetViewDataChanged] whenever the data
@@ -37,7 +37,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface WidgetEntryPoint {
-        fun preferencesStore(): UserPreferencesStore
+        fun widgetDataStore(): WidgetDataStore
         fun playbackRepository(): PlaybackRepository
     }
 
@@ -46,7 +46,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
             applicationContext,
             WidgetEntryPoint::class.java,
         )
-        val store = entryPoint.preferencesStore()
+        val store = entryPoint.widgetDataStore()
         val playbackRepo = entryPoint.playbackRepository()
         val appWidgetId = intent.getIntExtra(
             AppWidgetManager.EXTRA_APPWIDGET_ID,
@@ -57,7 +57,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
 
     private class ContinueWatchingFactory(
         private val context: Context,
-        private val store: UserPreferencesStore,
+        private val store: WidgetDataStore,
         private val playbackRepository: PlaybackRepository,
         private val appWidgetId: Int,
     ) : RemoteViewsFactory {

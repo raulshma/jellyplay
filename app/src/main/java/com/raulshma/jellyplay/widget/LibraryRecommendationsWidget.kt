@@ -33,9 +33,9 @@ import kotlinx.coroutines.launch
  *     the cached list every 6h and on user-initiated refresh.
  *   * [LibraryRecommendationsWidgetService] is bound as the grid's
  *     remote adapter and reads the cached list straight from
- *     [UserPreferencesStore.libraryWidgetItems] — no network in the
+ *     [com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore.libraryWidgetItems] — no network in the
  *     widget process.
- *   * Tapping a cell launches [MainActivity] with a `jellyplay://media/{id}`
+ *   * Tapping a cell launches [MainActivity] with a `jellyfin://media/{id}`
  *     deep link, which is parsed by
  *     [com.raulshma.jellyplay.deeplink.DeepLinkHandler] and routed to
  *     the media detail screen.
@@ -45,7 +45,7 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface WidgetEntryPoint {
-        fun userPreferencesStore(): UserPreferencesStore
+        fun widgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
         fun widgetWorkScheduler(): WidgetWorkScheduler
     }
 
@@ -200,7 +200,7 @@ class LibraryRecommendationsWidget : AppWidgetProvider() {
                 context.applicationContext,
                 WidgetEntryPoint::class.java,
             )
-            entryPoint.userPreferencesStore().getWidgetConfigForIdSync(appWidgetId)
+            entryPoint.widgetDataStore().getWidgetConfigForIdSync(appWidgetId)
                 .librarySource.displayName
         }.getOrDefault(LibraryRecommendationsSource.SIMILAR_TO_RECENT.displayName)
     }

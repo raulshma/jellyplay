@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.widget
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
 import kotlinx.coroutines.flow.first
@@ -12,7 +12,7 @@ internal object WidgetPersistHelper {
 
     suspend fun persistLibraryItems(
         context: Context,
-        store: UserPreferencesStore,
+        store: WidgetDataStore,
         items: List<LibraryWidgetItem>,
         versionBumpOnly: Boolean,
     ) {
@@ -30,7 +30,7 @@ internal object WidgetPersistHelper {
 
     suspend fun persistSeerrItems(
         context: Context,
-        store: UserPreferencesStore,
+        store: WidgetDataStore,
         items: List<SeerrWidgetItem>,
         versionBumpOnly: Boolean,
     ) {

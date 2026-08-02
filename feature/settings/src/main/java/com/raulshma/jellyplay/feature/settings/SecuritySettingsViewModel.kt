@@ -31,15 +31,11 @@ class SecuritySettingsViewModel @Inject constructor(
 
     fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
 
-    fun setPin(pin: String) {
-        editor.edit { setPin(pin) }
-    }
+    fun setPin(pin: String) = editor.setPin(pin)
 
-    fun clearPin() {
-        editor.edit { clearPin() }
-    }
+    fun clearPin() = editor.clearPin()
 
-    suspend fun verifyPin(pin: String): Boolean = store.verifyPinOffMainThread(pin)
+    suspend fun verifyPin(pin: String): Boolean = editor.verifyPin(pin)
 
     fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)
 
@@ -47,8 +43,7 @@ class SecuritySettingsViewModel @Inject constructor(
 
     fun setAutoLockTimerMs(ms: Long) = editor.setAutoLockTimerMs(ms)
 
-    fun setRemoteControlEnabled(enabled: Boolean) =
-        editor.edit { setRemoteControlEnabled(enabled) }
+    fun setRemoteControlEnabled(enabled: Boolean) = editor.setRemoteControlEnabled(enabled)
 
     fun authorizeQuickConnect(code: String, onResult: (success: Boolean, error: String?) -> Unit) {
         launch {

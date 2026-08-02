@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import kotlinx.coroutines.CoroutineScope
@@ -434,6 +435,108 @@ class VideoPlayerStore @Inject constructor(
         Keys.AUTO_SKIP_INTRO,
         Keys.AUTO_SKIP_OUTRO,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. Every in-player key owned here descends under
+     * `PreferenceResetCategory.PLAYBACK`, matching the facade's
+     * `resetCategoryKeys`.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.PLAYBACK -> listOf(
+            Keys.VIDEO_SEEK_DURATION_MS,
+            Keys.VIDEO_CONTROLS_TIMEOUT_MS,
+            Keys.VIDEO_DEFAULT_ORIENTATION,
+            Keys.VIDEO_DEFAULT_ASPECT_RATIO,
+            Keys.VIDEO_GESTURES_ENABLED,
+            Keys.VIDEO_PASS_OUT_PROTECTION_HOURS,
+            Keys.VIDEO_SKIP_BACK_ON_RESUME_MS,
+            Keys.VIDEO_HOLD_SPEED_ENABLED,
+            Keys.VIDEO_HOLD_SPEED_MULTIPLIER,
+            Keys.VIDEO_DEFAULT_SPEED,
+            Keys.VIDEO_AUTOPLAY_NEXT,
+            Keys.TRAILER_AUTOPLAY,
+            Keys.CINEMA_MODE_ENABLED,
+            Keys.VIDEO_SWIPE_SEEK_MAX_MS,
+            Keys.VIDEO_REMEMBER_BRIGHTNESS,
+            Keys.VIDEO_BRIGHTNESS_LEVEL,
+            Keys.VIDEO_REMEMBER_VOLUME,
+            Keys.VIDEO_VOLUME_LEVEL,
+            Keys.VIDEO_AUTO_SKIP_INTRO,
+            Keys.VIDEO_AUTO_SKIP_OUTRO,
+            Keys.VIDEO_REMEMBER_MUTED,
+            Keys.VIDEO_MUTED,
+            Keys.VIDEO_GESTURE_INDICATOR_SIDE,
+            Keys.TRICKPLAY_ENABLED,
+            Keys.TRICKPLAY_ON_SEEK_GESTURE,
+            Keys.VIDEO_EPISODE_BROWSER_ENABLED,
+            Keys.VIDEO_SHOW_PLAYBACK_METADATA,
+            Keys.VIDEO_PRELOAD_BUFFER_SIZE,
+            Keys.SHOW_CLOCK_IN_PLAYER,
+            Keys.SHOW_TIME_REMAINING,
+            Keys.TV_ZOOM_MODE_PERCENT,
+            Keys.INCOGNITO_MODE_ENABLED,
+            Keys.SEGMENT_BEHAVIORS,
+            Keys.SKIP_INTRO_ENABLED,
+            Keys.SKIP_OUTRO_ENABLED,
+            Keys.AUTO_SKIP_INTRO,
+            Keys.AUTO_SKIP_OUTRO,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the in-player video keys owned by
+     * this store from a decoded [UserPreferences], mirroring the facade's
+     * restore body exactly (segment behaviours re-encoded via the enum-keyed
+     * map; the four legacy booleans are not written back —
+     * [readSegmentBehaviors] migrates them from the JSON blob). No
+     * security-sensitive state is owned here, so [restoreSecuritySensitive] is
+     * accepted for contract parity but ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { prefs ->
+            prefs[Keys.VIDEO_SEEK_DURATION_MS] = userPreferences.videoSeekDurationMs
+            prefs[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = userPreferences.videoControlsTimeoutMs
+            prefs[Keys.VIDEO_DEFAULT_ORIENTATION] = userPreferences.videoDefaultOrientation.name
+            prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = userPreferences.videoDefaultAspectRatio
+            prefs[Keys.VIDEO_GESTURES_ENABLED] = userPreferences.videoGesturesEnabled
+            prefs[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = userPreferences.videoPassOutProtectionHours
+            prefs[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = userPreferences.videoSkipBackOnResumeMs
+            prefs[Keys.VIDEO_HOLD_SPEED_ENABLED] = userPreferences.videoHoldSpeedEnabled
+            prefs[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = userPreferences.videoHoldSpeedMultiplier
+            prefs[Keys.VIDEO_DEFAULT_SPEED] = userPreferences.videoDefaultSpeed
+            prefs[Keys.VIDEO_AUTOPLAY_NEXT] = userPreferences.videoAutoplayNext
+            prefs[Keys.TRAILER_AUTOPLAY] = userPreferences.trailerAutoplay
+            prefs[Keys.CINEMA_MODE_ENABLED] = userPreferences.cinemaModeEnabled
+            prefs[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = userPreferences.videoSwipeSeekMaxMs
+            prefs[Keys.VIDEO_REMEMBER_BRIGHTNESS] = userPreferences.videoRememberBrightness
+            prefs[Keys.VIDEO_BRIGHTNESS_LEVEL] = userPreferences.videoBrightnessLevel
+            prefs[Keys.VIDEO_REMEMBER_VOLUME] = userPreferences.videoRememberVolume
+            prefs[Keys.VIDEO_VOLUME_LEVEL] = userPreferences.videoVolumeLevel
+            prefs[Keys.VIDEO_AUTO_SKIP_INTRO] = userPreferences.videoAutoSkipIntro
+            prefs[Keys.VIDEO_AUTO_SKIP_OUTRO] = userPreferences.videoAutoSkipOutro
+            prefs[Keys.VIDEO_REMEMBER_MUTED] = userPreferences.videoRememberMuted
+            prefs[Keys.VIDEO_MUTED] = userPreferences.videoMuted
+            prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = userPreferences.videoGestureIndicatorSide.name
+            prefs[Keys.TRICKPLAY_ENABLED] = userPreferences.trickplayEnabled
+            prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE] = userPreferences.trickplayOnSeekGesture
+            prefs[Keys.SEGMENT_BEHAVIORS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<Map<MediaSegmentType, SegmentBehavior>>(),
+                userPreferences.segmentBehaviors,
+            )
+            prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = userPreferences.videoEpisodeBrowserEnabled
+            prefs[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = userPreferences.videoShowPlaybackMetadata
+            prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = userPreferences.videoPreloadBufferSize.name
+            prefs[Keys.SHOW_CLOCK_IN_PLAYER] = userPreferences.showClockInPlayer
+            prefs[Keys.SHOW_TIME_REMAINING] = userPreferences.showTimeRemaining
+            prefs[Keys.TV_ZOOM_MODE_PERCENT] = userPreferences.tvZoomModePercent
+            prefs[Keys.INCOGNITO_MODE_ENABLED] = userPreferences.incognitoModeEnabled
+        }
+    }
 }
 
 /**

@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -452,6 +453,65 @@ class HomeDiscoveryStore @Inject constructor(
         Keys.HOME_LAYOUT_PRESETS, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR,
         Keys.SHOW_CLOCK_ON_HOME, Keys.SHOW_SETTINGS_IN_HOME_SEARCH,
     )
+
+    /**
+     * Category reset participation: every key owned here sits in the single
+     * legacy `HOME_DISCOVERY` bucket (the home section of the legacy
+     * category map; the library/nav keys that shared that category are owned by
+     * `LibraryStore` / `NavigationStore`). The legacy `HOME_HIDDEN_LIBRARY_SECTION_IDS`
+     * key is included so a reset also drops the one-shot migration source.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.HOME_DISCOVERY -> listOf(
+            Keys.HOME_MODE, Keys.HOME_HERO_ENABLED, Keys.HOME_BACKDROP_ENABLED,
+            Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
+            Keys.HOME_LIBRARY_SECTION_OVERRIDES, Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS,
+            Keys.SHOW_UNWATCHED_BADGE, Keys.HIDE_WATCHED_ITEMS,
+            Keys.SHOW_WATCHED_CHECKMARK, Keys.SHOW_EXTERNAL_RATINGS,
+            Keys.MERGE_CONTINUE_WATCHING_NEXT_UP, Keys.NEXT_UP_MAX_DAYS,
+            Keys.NEXT_UP_REWATCHING, Keys.NEXT_UP_EXCLUDED_SERIES_IDS,
+            Keys.HIDDEN_CW_ITEM_IDS, Keys.PINNED_HOME_SECTIONS,
+            Keys.HOME_LAYOUT_PRESETS, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR,
+            Keys.SHOW_CLOCK_ON_HOME, Keys.SHOW_SETTINGS_IN_HOME_SEARCH,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the home keys owned by this store
+     * from a decoded [UserPreferences]. The legacy `home_hidden_library_section_ids`
+     * key is not written back — it exists only as a migration source. JSON lists
+     * are written in the same shape this store's own setters use (name-string
+     * sets / typed lists via [json]). [restoreSecuritySensitive] is accepted for
+     * contract parity; no security-sensitive keys are owned here.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.HOME_MODE] = userPreferences.homeMode.name
+            it[Keys.HOME_HERO_ENABLED] = userPreferences.homeHeroEnabled
+            it[Keys.HOME_BACKDROP_ENABLED] = userPreferences.homeBackdropEnabled
+            it[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(userPreferences.enabledHomeSectionTypes.map { section -> section.name }.toSet())
+            it[Keys.HOME_SECTION_ORDER] = json.encodeToString(userPreferences.homeSectionOrder.map { section -> section.name })
+            it[Keys.HOME_LIBRARY_SECTION_OVERRIDES] = json.encodeToString(userPreferences.libraryHomeSectionOverrides)
+            it[Keys.PINNED_HOME_SECTIONS] = json.encodeToString(userPreferences.pinnedHomeSections)
+            it[Keys.HOME_LAYOUT_PRESETS] = json.encodeToString(userPreferences.homeLayoutPresets)
+            it[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] = userPreferences.continueWatchingClickBehavior.name
+            it[Keys.SHOW_UNWATCHED_BADGE] = userPreferences.showUnwatchedBadge
+            it[Keys.HIDE_WATCHED_ITEMS] = userPreferences.hideWatchedItems
+            it[Keys.SHOW_WATCHED_CHECKMARK] = userPreferences.showWatchedCheckmark
+            it[Keys.SHOW_EXTERNAL_RATINGS] = userPreferences.showExternalRatings
+            it[Keys.MERGE_CONTINUE_WATCHING_NEXT_UP] = userPreferences.mergeContinueWatchingAndNextUp
+            it[Keys.NEXT_UP_MAX_DAYS] = userPreferences.nextUpMaxDays
+            it[Keys.NEXT_UP_REWATCHING] = userPreferences.nextUpRewatching
+            it[Keys.NEXT_UP_EXCLUDED_SERIES_IDS] = json.encodeToString(userPreferences.nextUpExcludedSeriesIds)
+            it[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(userPreferences.hiddenCwItemIds)
+            it[Keys.SHOW_CLOCK_ON_HOME] = userPreferences.showClockOnHome
+            it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = userPreferences.showSettingsInHomeSearch
+        }
+    }
 }
 
 /**

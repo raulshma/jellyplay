@@ -6,10 +6,13 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.PinHasher
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,12 +35,14 @@ import javax.inject.Singleton
  * projection, and its reset-key list end-to-end. Mirrors the `PlaybackStore` /
  * `AppearanceStore` shape.
  *
- * **Storage-only scope:** PIN *hashing* (PBKDF2 derivation, constant-time
- * compare, legacy-format upgrade) lives in `PinHasher`, and PIN *rate-limit*
- * escalation state (failed-attempt counter / lockout deadline) lives in
- * `PinRateLimiter` — neither is duplicated here. This store persists only the
- * six user-tunable security keys. `setPinHash(null)` removes the stored hash so
- * callers that have just re-hashed via `PinHasher` can clear it atomically.
+ * **Storage &amp; verification scope:** the low-level PBKDF2 derivation and
+ * constant-time compare live in `PinHasher`, and PIN *rate-limit* escalation
+ * state (failed-attempt counter / lockout deadline) lives in `PinRateLimiter` —
+ * neither is duplicated here. This store owns the six user-tunable security
+ * keys plus the composite PIN operations that combine storage with hashing
+ * (`setPin`, `clearPin`, `verifyPinOffMainThread`, legacy-format upgrade).
+ * `setPinHash(null)` removes the stored hash so callers that have just
+ * re-hashed via `PinHasher` can clear it atomically.
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore; key strings match the
  * legacy `UserPreferencesStore.Keys` names — no migration file.
@@ -94,6 +100,87 @@ class SecurityStore @Inject constructor(
         }
     }
 
+    /**
+     * Sets a new PIN atomically: hashes [pin] and writes both the hash and
+     * `pinLockEnabled = true` in a single DataStore transaction so a concurrent
+     * reader can never observe `pinLockEnabled = true` with the previous hash.
+     */
+    suspend fun setPin(pin: String) {
+        if (pin.isBlank()) return
+        val hash = withContext(Dispatchers.Default) { PinHasher.hash(pin) }
+        dataStore.edit { prefs ->
+            prefs[Keys.PIN_HASH] = hash
+            prefs[Keys.PIN_LOCK_ENABLED] = true
+        }
+    }
+
+    /**
+     * Clears the PIN atomically: disables the lock and removes the hash in a
+     * single DataStore transaction.
+     */
+    suspend fun clearPin() {
+        dataStore.edit { prefs ->
+            prefs[Keys.PIN_LOCK_ENABLED] = false
+            prefs.remove(Keys.PIN_HASH)
+        }
+    }
+
+    /**
+     * Silently upgrades a legacy (unsalted SHA-256) PIN hash to the v2 PBKDF2
+     * format after the user has successfully unlocked with [pin]. No-op when
+     * the stored hash is already v2 or when no PIN is set. Safe to call after
+     * every successful [verifyPinOffMainThread] — callers do not need to gate
+     * on [pinHashNeedsMigration] first.
+     *
+     * @return `true` if the hash was upgraded, `false` otherwise.
+     */
+    suspend fun upgradePinHashIfLegacy(pin: String): Boolean {
+        if (pin.isBlank()) return false
+        val current = security.value.pinHash ?: return false
+        if (!pinHashNeedsMigration(current)) return false
+        // Re-verify against the legacy hash before persisting — protects
+        // against an inadvertent upgrade with the wrong PIN if the caller
+        // invokes this without first verifying.
+        if (!PinHasher.verify(pin, current)) return false
+        val upgraded = hashPin(pin)
+        // Persist only if the user hasn't cleared the PIN concurrently.
+        dataStore.edit { prefs ->
+            if (prefs[Keys.PIN_HASH] == current) {
+                prefs[Keys.PIN_HASH] = upgraded
+            }
+        }
+        return true
+    }
+
+    /**
+     * Verifies [pin] against the stored hash, running the PBKDF2 derivation on
+     * [Dispatchers.Default] so callers never block the UI thread. Returns `false`
+     * when no PIN is set. On success with a legacy hash, the hash is silently
+     * upgraded to PBKDF2 (v2).
+     */
+    suspend fun verifyPinOffMainThread(pin: String): Boolean {
+        val storedHash = security.value.pinHash ?: return false
+        val valid = withContext(Dispatchers.Default) { PinHasher.verify(pin, storedHash) }
+        if (valid && pinHashNeedsMigration(storedHash)) {
+            upgradePinHashIfLegacy(pin)
+        }
+        return valid
+    }
+
+    /** Constant-time comparison of [input] against a (v2 or legacy) [storedHash]. */
+    fun verifyPin(input: String, storedHash: String?): Boolean = PinHasher.verify(input, storedHash)
+
+    /** PBKDF2 derivation of [pin]. */
+    fun hashPin(pin: String): String = PinHasher.hash(pin)
+
+    /**
+     * Returns `true` when [storedHash] is in the legacy unsalted-SHA-256
+     * format and should be upgraded to PBKDF2 (v2) on the next successful
+     * unlock. Callers with write access should re-hash the user's PIN with
+     * [hashPin] after a successful [verifyPin] when this returns true.
+     */
+    fun pinHashNeedsMigration(storedHash: String?): Boolean = PinHasher.needsMigration(storedHash)
+
     suspend fun setBiometricLockEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled }
     }
@@ -120,6 +207,45 @@ class SecurityStore @Inject constructor(
         Keys.USE_PIN_FOR_PLAYER_LOCK, Keys.AUTO_LOCK_TIMER_MS,
         Keys.REMOTE_CONTROL_ENABLED,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. Every key owned here descends under
+     * `PreferenceResetCategory.SECURITY`. PIN rate-limit counters live in
+     * `PinRateLimiter`, not here, and are excluded from category reset.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.SECURITY -> listOf(
+            Keys.PIN_LOCK_ENABLED, Keys.PIN_HASH, Keys.BIOMETRIC_LOCK_ENABLED,
+            Keys.USE_PIN_FOR_PLAYER_LOCK, Keys.AUTO_LOCK_TIMER_MS,
+            Keys.REMOTE_CONTROL_ENABLED,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the security keys owned by this
+     * store from a decoded [UserPreferences]. Mirrors the facade exactly: the
+     * PIN lock / PIN hash / biometric / use-PIN-for-player-lock / auto-lock
+     * writes are gated on [restoreSecuritySensitive] so an imported backup can
+     * never silently replace the device's lock config; the remote-control
+     * switch is independent and restored unconditionally.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { prefs ->
+            if (restoreSecuritySensitive) {
+                prefs[Keys.PIN_LOCK_ENABLED] = userPreferences.pinLockEnabled
+                userPreferences.pinHash?.let { prefs[Keys.PIN_HASH] = it }
+                prefs[Keys.BIOMETRIC_LOCK_ENABLED] = userPreferences.biometricLockEnabled
+                prefs[Keys.USE_PIN_FOR_PLAYER_LOCK] = userPreferences.usePinForPlayerLock
+                prefs[Keys.AUTO_LOCK_TIMER_MS] = userPreferences.autoLockTimerMs
+            }
+            prefs[Keys.REMOTE_CONTROL_ENABLED] = userPreferences.remoteControlEnabled
+        }
+    }
 }
 
 /**

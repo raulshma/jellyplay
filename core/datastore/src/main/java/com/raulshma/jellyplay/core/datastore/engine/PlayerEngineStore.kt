@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -230,6 +231,49 @@ class PlayerEngineStore @Inject constructor(
     internal val resetKeys: List<Preferences.Key<*>> = listOf(
         Keys.MPV_CONFIG, Keys.LIBVLC_CONFIG, Keys.EXO_CONFIG,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. Every engine-config key this store owns descends under
+     * `PreferenceResetCategory.PLAYER_ENGINES`. The two per-item maps
+     * ([Keys.MEDIA_STREAM_SELECTIONS] / [Keys.VIDEO_EFFECTS_SELECTIONS]) are
+     * runtime state and deliberately excluded from category reset (facade's
+     * `resetExcludedKeys`), so they appear in no category list here.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.PLAYER_ENGINES -> listOf(
+            Keys.MPV_CONFIG, Keys.LIBVLC_CONFIG, Keys.EXO_CONFIG,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the three JSON-encoded engine
+     * configs owned by this store from a decoded [UserPreferences], mirroring
+     * the facade's `encodeDefaultsJson` round-trips exactly. The per-item
+     * recall maps are runtime state and are not restored here (facade rule).
+     * No security-sensitive keys are owned here, so [restoreSecuritySensitive]
+     * is accepted for contract parity but ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { prefs ->
+            prefs[Keys.MPV_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<MpvEngineConfig>(),
+                userPreferences.mpvConfig,
+            )
+            prefs[Keys.LIBVLC_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<LibVlcEngineConfig>(),
+                userPreferences.libVlcConfig,
+            )
+            prefs[Keys.EXO_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<ExoPlayerEngineConfig>(),
+                userPreferences.exoPlayerConfig,
+            )
+        }
+    }
 }
 
 /**

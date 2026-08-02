@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -285,6 +286,74 @@ class PlaybackStore @Inject constructor(
         Keys.USER_DATA_SYNC_ENABLED,
         Keys.ANDROID_TV_WATCH_NEXT_ENABLED,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. A single store can own keys across several categories (e.g.
+     * [Keys.LIVE_STREAM_OPTION] sits in `SYNCPLAY_CASTING` while the rest are
+     * `PLAYBACK`), so each store scopes its own keys per category. The facade
+     * aggregates these lists instead of a central `when` switch.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.PLAYBACK -> listOf(
+            Keys.PREFERRED_PLAYER,
+            Keys.STREAMING_QUALITY,
+            Keys.CELLULAR_STREAMING_QUALITY,
+            Keys.FORCE_DIRECT_PLAY,
+            Keys.PLAYBACK_MODE,
+            Keys.DECODER_MODE,
+            Keys.AUDIO_PASSTHROUGH,
+            Keys.FRAME_RATE_MATCHING,
+            Keys.REFRESH_RATE_MODE,
+            Keys.KEEP_SCREEN_ON_DURING_VIDEO,
+            Keys.PAUSE_ON_AUDIO_FOCUS_LOSS,
+            Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS,
+            Keys.AUTO_PLAY_COUNTDOWN_SEC,
+            Keys.BACKGROUND_VIDEO_AUDIO_ENABLED,
+        )
+        PreferenceResetCategory.SUBTITLES_LANGUAGE -> listOf(Keys.PGS_SUBTITLE_DIRECT_PLAY)
+        PreferenceResetCategory.SYNCPLAY_CASTING -> listOf(Keys.LIVE_STREAM_OPTION)
+        PreferenceResetCategory.MISC_APP -> listOf(
+            Keys.USER_DATA_SYNC_ENABLED,
+            Keys.ANDROID_TV_WATCH_NEXT_ENABLED,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the media-delivery keys owned by
+     * this store from a decoded [UserPreferences]. The facade calls this (and
+     * every other store's hook) instead of writing these keys itself.
+     *
+     * Mirrors the legacy facade behaviour exactly: no security-sensitive keys
+     * are owned here, so [restoreSecuritySensitive] is accepted for contract
+     * parity but ignored. The legacy `force_direct_play` boolean is not written
+     * back — [readPlaybackMode] migrates it from [PlaybackSlice.playbackMode],
+     * and the typed key takes precedence, so re-entering the enum is enough.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.PREFERRED_PLAYER] = userPreferences.preferredPlayer.name
+            it[Keys.STREAMING_QUALITY] = userPreferences.streamingQuality.name
+            it[Keys.CELLULAR_STREAMING_QUALITY] = userPreferences.cellularStreamingQuality.name
+            it[Keys.PLAYBACK_MODE] = userPreferences.playbackMode.name
+            it[Keys.DECODER_MODE] = userPreferences.decoderMode.name
+            it[Keys.AUDIO_PASSTHROUGH] = userPreferences.audioPassthrough
+            it[Keys.FRAME_RATE_MATCHING] = userPreferences.frameRateMatching
+            it[Keys.REFRESH_RATE_MODE] = userPreferences.refreshRateMode.name
+            it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = userPreferences.keepScreenOnDuringVideo
+            it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = userPreferences.pauseOnAudioFocusLoss
+            it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = userPreferences.duckOnTransientFocusLoss
+            it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = userPreferences.autoPlayCountdownSec
+            it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = userPreferences.backgroundVideoAudioEnabled
+            it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = userPreferences.pgsSubtitleDirectPlay
+            it[Keys.USER_DATA_SYNC_ENABLED] = userPreferences.userDataSyncEnabled
+            it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = userPreferences.androidTvWatchNextEnabled
+        }
+    }
 }
 
 /**
