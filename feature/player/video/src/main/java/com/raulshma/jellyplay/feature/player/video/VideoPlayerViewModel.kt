@@ -200,6 +200,10 @@ class VideoPlayerViewModel @Inject constructor(
     private val aggregateStore: VideoPlayerAggregateStore,
     private val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore,
     private val subtitleStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
+    private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
+    private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
+    private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
+    private val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore,
     private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore,
     private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
     private val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
@@ -365,7 +369,7 @@ class VideoPlayerViewModel @Inject constructor(
     )
     private val sleepTimerController = SleepTimerController(
         sleepTimerManager = sleepTimerManager,
-        preferencesStore = preferencesStore,
+        audioStore = audioStore,
         scope = scope,
         getEngine = { playerSessionManager.engine },
         isMuted = { _uiState.value.isMuted },
@@ -572,7 +576,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     /**
      * Auto-removes a finished download when the user crosses the watched
-     * threshold, gated by [com.raulshma.jellyplay.core.model.UserPreferences.smartDownloadsEnabled].
+     * threshold, gated by [com.raulshma.jellyplay.core.model.legacy.UserPreferences.smartDownloadsEnabled].
      *
      * Guards against the two risks flagged in the architecture analysis:
      *  - *Premature delete on misreported duration*: the reporter derives
@@ -652,7 +656,9 @@ class VideoPlayerViewModel @Inject constructor(
      */
     private val videoEffectsController = VideoEffectsController(
         scope = scope,
-        preferencesStore = preferencesStore,
+        audioStore = audioStore,
+        audioEffectsStore = audioEffectsStore,
+        playbackStore = playbackStore,
         getUiState = { _uiState.value },
         updateUiState = { transform -> _uiState.update(transform) },
         syncConfig = { updateConfigWithUiState() },
@@ -921,7 +927,7 @@ class VideoPlayerViewModel @Inject constructor(
                                         userMessageBus.info("Direct Play failed — switching to transcode")
                                         _uiState.update { it.copy(playbackMode = PlaybackMode.FORCE_TRANSCODE) }
                                         launch {
-                                            preferencesStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
+                                            playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
                                             reportCurrentPlaybackStopped()
                                             progressReporter.cancelJobs()
                                             val pos = playerSessionManager.engine?.currentPositionMs ?: 0L
@@ -1629,7 +1635,7 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(subtitleStyle = style) }
         updateConfigWithUiState()
         launch {
-            preferencesStore.setSubtitleStyle(style)
+            subtitleStore.setSubtitleStyle(style)
         }
     }
 
@@ -1652,7 +1658,7 @@ class VideoPlayerViewModel @Inject constructor(
             )
             _uiState.update { it.copy(subtitleStyle = newStyle) }
             updateConfigWithUiState()
-            preferencesStore.setSubtitleStyle(newStyle)
+            subtitleStore.setSubtitleStyle(newStyle)
         }
     }
 
@@ -1739,7 +1745,7 @@ class VideoPlayerViewModel @Inject constructor(
         setSubtitleStyle(current.copy(offsetMs = ms))
         // G9: also persist per-item so the correction survives a re-watch/resume.
         playerSessionManager.sessionState.value.currentItemId?.let { itemId ->
-            launch { preferencesStore.setSubtitleDelayForItem(itemId, ms) }
+            launch { subtitleStore.setSubtitleDelayForItem(itemId, ms) }
         }
     }
 
@@ -1760,7 +1766,7 @@ class VideoPlayerViewModel @Inject constructor(
         directPlayFallbackOffered = false
         _uiState.update { it.copy(playbackMode = mode) }
         launch {
-            preferencesStore.setPlaybackMode(mode)
+            playbackStore.setPlaybackMode(mode)
             reloadPlaybackForMode()
         }
     }
@@ -1769,7 +1775,7 @@ class VideoPlayerViewModel @Inject constructor(
         if (_uiState.value.streamingQuality == quality) return
         _uiState.update { it.copy(streamingQuality = quality) }
         launch {
-            preferencesStore.setStreamingQuality(quality)
+            playbackStore.setStreamingQuality(quality)
             reloadPlaybackForMode()
         }
     }
@@ -1784,7 +1790,7 @@ class VideoPlayerViewModel @Inject constructor(
         if (_uiState.value.adaptiveBitrateEnabled == enabled) return
         _uiState.update { it.copy(adaptiveBitrateEnabled = enabled) }
         launch {
-            preferencesStore.setAdaptiveBitrateEnabled(enabled)
+            networkOfflineStore.setAdaptiveBitrateEnabled(enabled)
             reloadPlaybackForMode()
         }
     }
@@ -1822,7 +1828,7 @@ class VideoPlayerViewModel @Inject constructor(
             userMessageBus.info("Direct Play unavailable for this item — falling back to transcode")
             _uiState.update { it.copy(playbackMode = PlaybackMode.FORCE_TRANSCODE) }
             launch {
-                preferencesStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
+                playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE)
                 reportCurrentPlaybackStopped()
                 progressReporter.cancelJobs()
                 playerSessionManager.reloadPlayback(
@@ -1873,7 +1879,7 @@ class VideoPlayerViewModel @Inject constructor(
             )
         }
         launch {
-            preferencesStore.setPreferredPlayer(playerType)
+            playbackStore.setPreferredPlayer(playerType)
             playerSessionManager.reloadWithEngine(playerType, currentPos, currentSpeed, maxBitrate)
             afterEngineReloadRebuildSessionAndTracking()
         }
@@ -1927,14 +1933,14 @@ class VideoPlayerViewModel @Inject constructor(
     fun setFrameRateMatching(enabled: Boolean) {
         _uiState.update { it.copy(frameRateMatching = enabled) }
         launch {
-            preferencesStore.setFrameRateMatching(enabled)
+            playbackStore.setFrameRateMatching(enabled)
         }
     }
 
     fun setRefreshRateMode(mode: com.raulshma.jellyplay.core.model.RefreshRateMode) {
         _uiState.update { it.copy(refreshRateMode = mode, frameRateMatching = mode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF) }
         launch {
-            preferencesStore.setRefreshRateMode(mode)
+            playbackStore.setRefreshRateMode(mode)
         }
     }
 
@@ -1942,13 +1948,13 @@ class VideoPlayerViewModel @Inject constructor(
         equalizerEnabled = !equalizerEnabled
         updateConfigWithUiState()
         launch {
-            preferencesStore.setEqualizerEnabled(equalizerEnabled)
+            audioEffectsStore.setEqualizerEnabled(equalizerEnabled)
         }
     }
 
     fun setEqualizerSettings(settings: com.raulshma.jellyplay.core.model.EqualizerSettings) {
         launch {
-            preferencesStore.setEqualizerSettings(settings)
+            audioEffectsStore.setEqualizerSettings(settings)
         }
     }
 
@@ -1983,7 +1989,7 @@ class VideoPlayerViewModel @Inject constructor(
         val itemId = playerSessionManager.sessionState.value.currentItemId
         if (itemId != null && cinemaIntroContext == null) {
             launch {
-                preferencesStore.setVideoEffectsForItem(itemId, effects)
+                engineStore.setVideoEffectsForItem(itemId, effects)
             }
         }
     }
@@ -2111,7 +2117,7 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(brightnessLevel = level) }
         if (_uiState.value.rememberBrightness) {
             launch {
-                preferencesStore.setVideoBrightnessLevel(level)
+                videoPlayerStore.setVideoBrightnessLevel(level)
             }
         }
     }
@@ -2124,7 +2130,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun saveVolume(normalizedLevel: Float) {
         _uiState.update { it.copy(volumeLevel = normalizedLevel) }
         if (_uiState.value.rememberVolume) {
-            launch { preferencesStore.setVideoVolumeLevel(normalizedLevel) }
+            launch { videoPlayerStore.setVideoVolumeLevel(normalizedLevel) }
         }
     }
 
@@ -2504,7 +2510,7 @@ class VideoPlayerViewModel @Inject constructor(
         engine.setMuted(nowMuted)
         _uiState.update { it.copy(isMuted = nowMuted) }
         if (aggregateStore.aggregate.value.videoPlayer.videoRememberMuted) {
-            launch { preferencesStore.setVideoMuted(nowMuted) }
+            launch { videoPlayerStore.setVideoMuted(nowMuted) }
         }
     }
 
@@ -2516,7 +2522,7 @@ class VideoPlayerViewModel @Inject constructor(
     fun setVideoAutoplayNext(enabled: Boolean) {
         _uiState.update { it.copy(videoAutoplayNext = enabled) }
         autoplayController.setEnabled(enabled)
-        launch { preferencesStore.setVideoAutoplayNext(enabled) }
+        launch { videoPlayerStore.setVideoAutoplayNext(enabled) }
     }
 
     suspend fun getTrickplayThumbnail(positionMs: Long): Bitmap? {

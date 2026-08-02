@@ -498,7 +498,7 @@ class VideoPlayerStore @Inject constructor(
      * [readSegmentBehaviors] migrates them from the JSON blob).
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { prefs ->
             prefs[Keys.VIDEO_SEEK_DURATION_MS] = userPreferences.videoSeekDurationMs

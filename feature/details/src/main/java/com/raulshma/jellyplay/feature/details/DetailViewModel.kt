@@ -24,7 +24,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isVideoType
 import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
@@ -79,6 +79,8 @@ class DetailViewModel @Inject constructor(
     private val downloadIntake: DownloadIntake,
     private val preferencesStore: UserPreferencesStore,
     private val preferencesAggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator,
+    private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
+    private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
     private val experimentalStore: ExperimentalStore,
     private val downloadsStore: DownloadsStore,
     private val appRuntimeStateStore: AppRuntimeStateStore,
@@ -282,7 +284,7 @@ class DetailViewModel @Inject constructor(
      * without any per-screen plumbing.
      */
     fun setEpisodesDescending(descending: Boolean) {
-        launch { preferencesStore.setEpisodesDescending(descending) }
+        launch { libraryStore.setEpisodesDescending(descending) }
     }
 
     fun getDownloadFlow(itemId: String): Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
@@ -899,7 +901,7 @@ class DetailViewModel @Inject constructor(
         val item = _uiState.value.detail?.item ?: return
         val seriesId = item.seriesId ?: item.id
         launch {
-            preferencesStore.excludeSeriesFromNextUp(seriesId)
+            homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
             _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_hidden_from_next_up)))
         }
     }
@@ -908,7 +910,7 @@ class DetailViewModel @Inject constructor(
         val item = _uiState.value.detail?.item ?: return
         val seriesId = item.seriesId ?: item.id
         launch {
-            preferencesStore.includeSeriesInNextUp(seriesId)
+            homeDiscoveryStore.includeSeriesInNextUp(seriesId)
             _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_shown_in_next_up)))
         }
     }
@@ -916,7 +918,7 @@ class DetailViewModel @Inject constructor(
     fun hideFromContinueWatching() {
         val item = _uiState.value.detail?.item ?: return
         launch {
-            preferencesStore.hideCwItem(item.id)
+            homeDiscoveryStore.hideCwItem(item.id)
             _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_hidden_from_continue_watching)))
         }
     }
@@ -924,7 +926,7 @@ class DetailViewModel @Inject constructor(
     fun showFromContinueWatching() {
         val item = _uiState.value.detail?.item ?: return
         launch {
-            preferencesStore.unhideCwItem(item.id)
+            homeDiscoveryStore.unhideCwItem(item.id)
             _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_shown_in_continue_watching)))
         }
     }
@@ -958,7 +960,7 @@ class DetailViewModel @Inject constructor(
 
     /**
      * Called from the UI after the user explicitly confirms a cellular
-     * download that exceeded the [com.raulshma.jellyplay.core.model.UserPreferences.cellularDownloadSizeWarningMb]
+     * download that exceeded the [com.raulshma.jellyplay.core.model.legacy.UserPreferences.cellularDownloadSizeWarningMb]
      * threshold. Clears the warning state and proceeds with the download.
      */
     fun confirmCellularDownload() {

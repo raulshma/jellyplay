@@ -57,10 +57,10 @@ class AdaptiveBitrateManager @Inject constructor(
     /**
      * Resolves the effective max bitrate taking the active network type into
      * account. On a metered (cellular) connection the user's
-     * [com.raulshma.jellyplay.core.model.UserPreferences.cellularStreamingQuality]
-     * is used instead of the WiFi [com.raulshma.jellyplay.core.model.UserPreferences.streamingQuality].
+     * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.cellularStreamingQuality]
+     * is used instead of the WiFi [com.raulshma.jellyplay.core.model.legacy.UserPreferences.streamingQuality].
      *
-     * When [com.raulshma.jellyplay.core.model.UserPreferences.dataSaverEnabled]
+     * When [com.raulshma.jellyplay.core.model.legacy.UserPreferences.dataSaverEnabled]
      * is on, the result is additionally clamped to the data-saver ceiling
      * ([MAX_BITRATE_DATASAVER]) so the player never exceeds a frugal bitrate
      * regardless of the user-selected quality — this matches the "Data Saver"

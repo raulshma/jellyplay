@@ -236,7 +236,7 @@ class AudioStore @Inject constructor(
      * so it is not written back.
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.AUDIO_DEFAULT_SPEED] = userPreferences.audioDefaultSpeed

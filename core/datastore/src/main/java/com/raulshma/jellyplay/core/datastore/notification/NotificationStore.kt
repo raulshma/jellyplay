@@ -294,7 +294,7 @@ class NotificationStore @Inject constructor(
      * the legacy restore.
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             val np = userPreferences.notificationPreferences

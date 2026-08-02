@@ -231,7 +231,7 @@ class SecurityStore @Inject constructor(
      * unconditionally.
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { prefs ->
             prefs[Keys.REMOTE_CONTROL_ENABLED] = userPreferences.remoteControlEnabled
@@ -245,7 +245,7 @@ class SecurityStore @Inject constructor(
      * replace the device's lock config — only when the caller explicitly opts in.
      */
     internal suspend fun restoreSecuritySensitive(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { prefs ->
             prefs[Keys.PIN_LOCK_ENABLED] = userPreferences.pinLockEnabled

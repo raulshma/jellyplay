@@ -22,7 +22,7 @@ import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -48,6 +48,9 @@ class MainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     val preferencesStore: UserPreferencesStore,
     val preferencesAggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator,
+    private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
+    val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
+    val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
     val serverIdentityStore: ServerIdentityStore,
     val pinRateLimiter: PinRateLimiter,
     val securityStore: SecurityStore,
@@ -313,7 +316,7 @@ class MainViewModel @Inject constructor(
      */
     private fun isUpdateRecentlyDismissed(
         version: String,
-        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+        prefs: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ): Boolean {
         val dismissedVersion = prefs.dismissedUpdateVersion ?: return false
         if (dismissedVersion != version) return false
@@ -372,7 +375,7 @@ class MainViewModel @Inject constructor(
         val state = _updateState.value
         if (state is UpdateState.UpdateAvailable) {
             launch {
-                preferencesStore.setDismissedUpdate(state.info.latestVersion)
+                experimentalStore.setDismissedUpdate(state.info.latestVersion)
             }
         }
         _updateState.set(UpdateState.Idle)

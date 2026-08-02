@@ -22,7 +22,7 @@ import javax.inject.Singleton
 
 /**
  * Plays ambient theme music on media detail pages when the
- * [com.raulshma.jellyplay.core.model.UserPreferences.backdropThemeMusicEnabled]
+ * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.backdropThemeMusicEnabled]
  * preference is enabled. Uses a dedicated [ExoPlayer] instance kept separate
  * from the main audio/video players so it never interferes with active
  * playback. The player loops a single theme song at a low ambient volume and

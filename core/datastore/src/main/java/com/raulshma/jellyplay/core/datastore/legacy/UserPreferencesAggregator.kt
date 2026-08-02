@@ -46,7 +46,7 @@ import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -62,7 +62,7 @@ import javax.inject.Singleton
 
 /**
  * Bridges the 18 domain-store slices back to the legacy
- * [com.raulshma.jellyplay.core.model.UserPreferences] aggregate shape for the
+ * [com.raulshma.jellyplay.core.model.legacy.UserPreferences] aggregate shape for the
  * handful of UI screens that still consume the whole object:
  *
  *  - [com.raulshma.jellyplay.feature.settings.FactoryResetViewModel] /
