@@ -252,13 +252,10 @@ class SubtitleLanguageStore @Inject constructor(
      * Restore-backup participation: writes the subtitle &amp; language keys owned
      * by this store from a decoded [UserPreferences], mirroring the facade's
      * restore body exactly (including the nullable language guards and the
-     * JSON map / style round-trips). No security-sensitive state is owned
-     * here, so [restoreSecuritySensitive] is accepted for contract parity but
-     * ignored.
+     * JSON map / style round-trips).
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { prefs ->
             userPreferences.preferredSubtitleLanguage?.let { prefs[Keys.PREFERRED_SUBTITLE_LANG] = it }

@@ -325,15 +325,13 @@ class PlaybackStore @Inject constructor(
      * this store from a decoded [UserPreferences]. The facade calls this (and
      * every other store's hook) instead of writing these keys itself.
      *
-     * Mirrors the legacy facade behaviour exactly: no security-sensitive keys
-     * are owned here, so [restoreSecuritySensitive] is accepted for contract
-     * parity but ignored. The legacy `force_direct_play` boolean is not written
-     * back — [readPlaybackMode] migrates it from [PlaybackSlice.playbackMode],
+     * Mirrors the legacy facade behaviour exactly. The legacy
+     * `force_direct_play` boolean is not written back — [readPlaybackMode]
+     * migrates it from [PlaybackSlice.playbackMode],
      * and the typed key takes precedence, so re-entering the enum is enough.
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { it ->
             it[Keys.PREFERRED_PLAYER] = userPreferences.preferredPlayer.name

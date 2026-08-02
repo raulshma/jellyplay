@@ -323,13 +323,10 @@ class AppearanceStore @Inject constructor(
      * Mirrors the legacy facade behaviour exactly: the mutually-exclusive
      * accent-theme toggles, font scale, date format, color-blind/hand mode and
      * scheduled-theme keys are not written back (the projection reads them
-     * straight from their stored slots), and no security-sensitive keys are
-     * owned here, so [restoreSecuritySensitive] is accepted for contract parity
-     * but ignored.
+     * straight from their stored slots).
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { it ->
             it[Keys.DYNAMIC_THEMING] = userPreferences.dynamicTheming

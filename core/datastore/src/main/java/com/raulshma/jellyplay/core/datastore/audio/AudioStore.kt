@@ -232,12 +232,10 @@ class AudioStore @Inject constructor(
      *
      * Mirrors the legacy facade behaviour exactly. [Keys.AUDIO_LYRICS_VISIBLE]
      * is runtime reading-state that the projection reads from its stored slot,
-     * so it is not written back. No security-sensitive keys are owned here, so
-     * [restoreSecuritySensitive] is accepted for contract parity but ignored.
+     * so it is not written back.
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { it ->
             it[Keys.AUDIO_DEFAULT_SPEED] = userPreferences.audioDefaultSpeed

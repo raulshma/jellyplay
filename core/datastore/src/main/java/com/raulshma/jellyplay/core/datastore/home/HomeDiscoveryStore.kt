@@ -482,12 +482,10 @@ class HomeDiscoveryStore @Inject constructor(
      * from a decoded [UserPreferences]. The legacy `home_hidden_library_section_ids`
      * key is not written back — it exists only as a migration source. JSON lists
      * are written in the same shape this store's own setters use (name-string
-     * sets / typed lists via [json]). [restoreSecuritySensitive] is accepted for
-     * contract parity; no security-sensitive keys are owned here.
+     * sets / typed lists via [json]).
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { it ->
             it[Keys.HOME_MODE] = userPreferences.homeMode.name

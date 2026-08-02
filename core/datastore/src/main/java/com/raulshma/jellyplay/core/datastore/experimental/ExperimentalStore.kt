@@ -210,12 +210,10 @@ class ExperimentalStore @Inject constructor(
      * this store's own [json] codec (name-string set, same shape
      * `setEnabledExperimentalFeatures` uses). One-time state
      * ([Keys.DISMISSED_UPDATE_VERSION] / [Keys.DISMISSED_UPDATE_AT_MS]) is not
-     * written back, and no security-sensitive keys are owned here, so
-     * [restoreSecuritySensitive] is accepted for contract parity but ignored.
+     * written back.
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { it ->
             it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(userPreferences.enabledExperimentalFeatures.map { feature -> feature.name }.toSet())

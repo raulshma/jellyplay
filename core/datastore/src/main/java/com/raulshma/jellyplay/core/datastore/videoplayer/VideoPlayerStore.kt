@@ -494,13 +494,10 @@ class VideoPlayerStore @Inject constructor(
      * this store from a decoded [UserPreferences], mirroring the facade's
      * restore body exactly (segment behaviours re-encoded via the enum-keyed
      * map; the four legacy booleans are not written back —
-     * [readSegmentBehaviors] migrates them from the JSON blob). No
-     * security-sensitive state is owned here, so [restoreSecuritySensitive] is
-     * accepted for contract parity but ignored.
+     * [readSegmentBehaviors] migrates them from the JSON blob).
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { prefs ->
             prefs[Keys.VIDEO_SEEK_DURATION_MS] = userPreferences.videoSeekDurationMs
