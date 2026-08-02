@@ -224,26 +224,34 @@ class SecurityStore @Inject constructor(
     }
 
     /**
-     * Restore-backup participation: writes the security keys owned by this
-     * store from a decoded [UserPreferences]. Mirrors the facade exactly: the
-     * PIN lock / PIN hash / biometric / use-PIN-for-player-lock / auto-lock
-     * writes are gated on [restoreSecuritySensitive] so an imported backup can
-     * never silently replace the device's lock config; the remote-control
-     * switch is independent and restored unconditionally.
+     * Restore-backup participation: writes the non-security-sensitive key owned
+     * by this store (the remote-control switch) from a decoded [UserPreferences].
+     * The remote-control switch is independent of the lock config and restored
+     * unconditionally.
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { prefs ->
-            if (restoreSecuritySensitive) {
-                prefs[Keys.PIN_LOCK_ENABLED] = userPreferences.pinLockEnabled
-                userPreferences.pinHash?.let { prefs[Keys.PIN_HASH] = it }
-                prefs[Keys.BIOMETRIC_LOCK_ENABLED] = userPreferences.biometricLockEnabled
-                prefs[Keys.USE_PIN_FOR_PLAYER_LOCK] = userPreferences.usePinForPlayerLock
-                prefs[Keys.AUTO_LOCK_TIMER_MS] = userPreferences.autoLockTimerMs
-            }
             prefs[Keys.REMOTE_CONTROL_ENABLED] = userPreferences.remoteControlEnabled
+        }
+    }
+
+    /**
+     * Restores the security-sensitive lock config (PIN lock/hash, biometric,
+     * use-PIN-for-player-lock, auto-lock timer) from a decoded [UserPreferences].
+     * Called separately by the facade so an imported backup can never silently
+     * replace the device's lock config — only when the caller explicitly opts in.
+     */
+    internal suspend fun restoreSecuritySensitive(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+    ) {
+        dataStore.edit { prefs ->
+            prefs[Keys.PIN_LOCK_ENABLED] = userPreferences.pinLockEnabled
+            userPreferences.pinHash?.let { prefs[Keys.PIN_HASH] = it }
+            prefs[Keys.BIOMETRIC_LOCK_ENABLED] = userPreferences.biometricLockEnabled
+            prefs[Keys.USE_PIN_FOR_PLAYER_LOCK] = userPreferences.usePinForPlayerLock
+            prefs[Keys.AUTO_LOCK_TIMER_MS] = userPreferences.autoLockTimerMs
         }
     }
 }

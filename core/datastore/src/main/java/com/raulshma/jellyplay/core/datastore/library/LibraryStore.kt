@@ -189,12 +189,10 @@ class LibraryStore @Inject constructor(
     /**
      * Restore-backup participation: writes the library keys owned by this store
      * from a decoded [UserPreferences]. JSON maps are written with this store's
-     * own [json] codec. [restoreSecuritySensitive] is accepted for contract
-     * parity; no security-sensitive keys are owned here.
+     * own [json] codec.
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { it ->
             it[Keys.LIBRARY_VIEW_MODE] = userPreferences.libraryViewMode.name

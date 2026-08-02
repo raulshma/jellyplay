@@ -189,15 +189,12 @@ class DownloadsStore @Inject constructor(
      * The facade calls this (and every other store's hook) instead of writing
      * these keys itself.
      *
-     * Mirrors the legacy facade behaviour exactly: no security-sensitive keys
-     * are owned here, so [restoreSecuritySensitive] is accepted for contract
-     * parity but ignored. The legacy restore never wrote
+     * Mirrors the legacy facade behaviour exactly: the legacy restore never wrote
      * `CELLULAR_DOWNLOAD_SIZE_WARNING_MB` or the `DOWNLOAD_SCHEDULE_*` keys, so
      * they are not written here either.
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { it ->
             it[Keys.WIFI_ONLY_DOWNLOADS] = userPreferences.wifiOnlyDownloads

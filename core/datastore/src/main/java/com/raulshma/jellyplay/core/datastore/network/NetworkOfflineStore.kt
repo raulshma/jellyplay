@@ -174,13 +174,10 @@ class NetworkOfflineStore @Inject constructor(
      * this store from a decoded [UserPreferences]. The facade calls this (and
      * every other store's hook) instead of writing these keys itself.
      *
-     * Mirrors the legacy facade behaviour exactly: no security-sensitive keys
-     * are owned here, so [restoreSecuritySensitive] is accepted for contract
-     * parity but ignored.
+     * Mirrors the legacy facade behaviour exactly.
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { it ->
             it[Keys.MAX_CACHE_SIZE_MB] = userPreferences.maxCacheSizeMb

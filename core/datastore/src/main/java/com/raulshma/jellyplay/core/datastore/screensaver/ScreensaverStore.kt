@@ -150,12 +150,10 @@ class ScreensaverStore @Inject constructor(
      * Restore-backup participation: writes the dream keys owned by this store
      * from a decoded [UserPreferences]. The JSON image-category set is written
      * with this store's own [json] codec (same shape `setDreamImageCategories`
-     * uses). [restoreSecuritySensitive] is accepted for contract parity; no
-     * security-sensitive keys are owned here.
+     * uses).
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { it ->
             it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(userPreferences.dreamImageCategories)

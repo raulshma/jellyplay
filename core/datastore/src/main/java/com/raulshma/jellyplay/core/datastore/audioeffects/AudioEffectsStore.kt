@@ -245,12 +245,9 @@ class AudioEffectsStore @Inject constructor(
      *
      * Mirrors the legacy facade behaviour exactly, including the
      * [EqualizerSettings] JSON blob written via [PreferenceCodec.encodeDefaultsJson].
-     * No security-sensitive keys are owned here, so [restoreSecuritySensitive]
-     * is accepted for contract parity but ignored.
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { it ->
             it[Keys.DIALOGUE_BOOST_ENABLED] = userPreferences.dialogueBoostEnabled

@@ -166,13 +166,10 @@ class SyncPlayCastStore @Inject constructor(
      * Restore-backup participation: writes the SyncPlay + casting + DVR keys
      * owned by this store from a decoded [UserPreferences], mirroring the
      * facade's restore body exactly (including the nullable
-     * [Keys.PREFERRED_RENDERER] guard). No security-sensitive state is owned
-     * here, so [restoreSecuritySensitive] is accepted for contract parity but
-     * ignored.
+     * [Keys.PREFERRED_RENDERER] guard).
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { prefs ->
             prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = userPreferences.syncPlayJoinBehavior.name

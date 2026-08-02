@@ -252,12 +252,9 @@ class PlayerEngineStore @Inject constructor(
      * configs owned by this store from a decoded [UserPreferences], mirroring
      * the facade's `encodeDefaultsJson` round-trips exactly. The per-item
      * recall maps are runtime state and are not restored here (facade rule).
-     * No security-sensitive keys are owned here, so [restoreSecuritySensitive]
-     * is accepted for contract parity but ignored.
      */
     internal suspend fun restorePreferences(
         userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
-        restoreSecuritySensitive: Boolean,
     ) {
         dataStore.edit { prefs ->
             prefs[Keys.MPV_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(

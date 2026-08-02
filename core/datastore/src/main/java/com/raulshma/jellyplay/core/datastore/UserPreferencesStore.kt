@@ -1527,24 +1527,30 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun restorePreferences(prefs: UserPreferences, restoreSecuritySensitive: Boolean = true) {
-        playbackStore.restorePreferences(prefs, restoreSecuritySensitive)
-        appearanceStore.restorePreferences(prefs, restoreSecuritySensitive)
-        videoPlayerStore.restorePreferences(prefs, restoreSecuritySensitive)
-        downloadsStore.restorePreferences(prefs, restoreSecuritySensitive)
-        engineStore.restorePreferences(prefs, restoreSecuritySensitive)
-        homeDiscoveryStore.restorePreferences(prefs, restoreSecuritySensitive)
-        audioStore.restorePreferences(prefs, restoreSecuritySensitive)
-        audioEffectsStore.restorePreferences(prefs, restoreSecuritySensitive)
-        audioCacheStore.restorePreferences(prefs, restoreSecuritySensitive)
-        libraryStore.restorePreferences(prefs, restoreSecuritySensitive)
-        navigationStore.restorePreferences(prefs, restoreSecuritySensitive)
-        networkOfflineStore.restorePreferences(prefs, restoreSecuritySensitive)
-        notificationStore.restorePreferences(prefs, restoreSecuritySensitive)
-        screensaverStore.restorePreferences(prefs, restoreSecuritySensitive)
-        securityStore.restorePreferences(prefs, restoreSecuritySensitive)
-        subtitleLanguageStore.restorePreferences(prefs, restoreSecuritySensitive)
-        syncPlayCastStore.restorePreferences(prefs, restoreSecuritySensitive)
-        experimentalStore.restorePreferences(prefs, restoreSecuritySensitive)
+        playbackStore.restorePreferences(prefs)
+        appearanceStore.restorePreferences(prefs)
+        videoPlayerStore.restorePreferences(prefs)
+        downloadsStore.restorePreferences(prefs)
+        engineStore.restorePreferences(prefs)
+        homeDiscoveryStore.restorePreferences(prefs)
+        audioStore.restorePreferences(prefs)
+        audioEffectsStore.restorePreferences(prefs)
+        audioCacheStore.restorePreferences(prefs)
+        libraryStore.restorePreferences(prefs)
+        navigationStore.restorePreferences(prefs)
+        networkOfflineStore.restorePreferences(prefs)
+        notificationStore.restorePreferences(prefs)
+        screensaverStore.restorePreferences(prefs)
+        // SecurityStore is the only store with security-sensitive keys. The
+        // remote-control switch restores unconditionally; the lock config only
+        // when the caller explicitly opts in via restoreSecuritySensitive.
+        securityStore.restorePreferences(prefs)
+        if (restoreSecuritySensitive) {
+            securityStore.restoreSecuritySensitive(prefs)
+        }
+        subtitleLanguageStore.restorePreferences(prefs)
+        syncPlayCastStore.restorePreferences(prefs)
+        experimentalStore.restorePreferences(prefs)
 
         engineStore.restorePerItemMaps(
             mediaStreamSelections = prefs.mediaStreamSelections,
