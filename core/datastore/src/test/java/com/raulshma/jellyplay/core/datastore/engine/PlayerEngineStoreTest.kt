@@ -125,4 +125,61 @@ class PlayerEngineStoreTest {
         store.setVideoEffectsForItem("item-0", com.raulshma.jellyplay.core.model.VideoEffectsConfig())
         assertTrue(store.playerEngine.first().videoEffectsByItem.isEmpty())
     }
+
+    /**
+     * Regression: a backup restore must not bypass the 100-entry LRU cap. The
+     * old facade wrote the per-item maps directly via `dataStore.edit`, letting
+     * a restore grow storage unbounded; [restorePerItemMaps] now owns the cap.
+     */
+    @Test
+    fun `restorePerItemMaps caps the stream map at 100 entries`() = runTest {
+        val streams = (0 until 120).associate { i ->
+            "item-$i" to com.raulshma.jellyplay.core.model.MediaStreamSelection(
+                audioStreamIndex = i, subtitleStreamIndex = null,
+            )
+        }
+        store.restorePerItemMaps(mediaStreamSelections = streams, videoEffectsByItem = emptyMap())
+        val restored = store.playerEngine.first().mediaStreamSelections
+        assertEquals(100, restored.size)
+        // Oldest 20 evicted; the newest 100 retained.
+        assertFalse(restored.containsKey("item-0"))
+        assertFalse(restored.containsKey("item-19"))
+        assertTrue(restored.containsKey("item-20"))
+        assertTrue(restored.containsKey("item-119"))
+    }
+
+    @Test
+    fun `restorePerItemMaps strips neutral entries and caps the effects map`() = runTest {
+        val effects = (0 until 105).associate { i ->
+            // Even-index entries are non-neutral (brightness ≠ 0); odd-index are
+            // neutral defaults that must be dropped by the restore path.
+            "item-$i" to if (i % 2 == 0) {
+                com.raulshma.jellyplay.core.model.VideoEffectsConfig(brightness = 0.1f + 0.1f * i)
+            } else {
+                com.raulshma.jellyplay.core.model.VideoEffectsConfig()
+            }
+        }
+        store.restorePerItemMaps(mediaStreamSelections = emptyMap(), videoEffectsByItem = effects)
+        val restored = store.playerEngine.first().videoEffectsByItem
+        // 53 non-neutral entries (even indices 0,2,...,104) → all under 100, none dropped.
+        assertEquals(53, restored.size)
+        // A neutral entry must not have been persisted.
+        assertFalse(restored.containsKey("item-1"))
+        assertTrue(restored.containsKey("item-0"))
+        assertTrue(restored.containsKey("item-104"))
+    }
+
+    @Test
+    fun `restorePerItemMaps strips null-index stream selections`() = runTest {
+        val streams = mapOf(
+            "real" to com.raulshma.jellyplay.core.model.MediaStreamSelection(audioStreamIndex = 3, subtitleStreamIndex = null),
+            // Both indices null — a no-op selection that should not be retained.
+            "empty" to com.raulshma.jellyplay.core.model.MediaStreamSelection(audioStreamIndex = null, subtitleStreamIndex = null),
+        )
+        store.restorePerItemMaps(mediaStreamSelections = streams, videoEffectsByItem = emptyMap())
+        val restored = store.playerEngine.first().mediaStreamSelections
+        assertEquals(1, restored.size)
+        assertTrue(restored.containsKey("real"))
+        assertFalse(restored.containsKey("empty"))
+    }
 }

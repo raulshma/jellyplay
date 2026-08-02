@@ -86,9 +86,28 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
+import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheSlice
+import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
+import com.raulshma.jellyplay.core.datastore.navigation.NavigationSlice
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
+import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
+import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
+import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -433,70 +452,6 @@ class UserPreferencesStore @Inject constructor(
         PreferenceCodec.readBool(prefs, key, name, default)
 
     /**
-     * Reads [UserPreferences.playbackMode]. Migrates the legacy boolean
-     * `force_direct_play` key when the new enum key is absent: a legacy
-     * value of `true` (the historical default) maps to
-     * [PlaybackMode.FORCE_DIRECT_PLAY] to preserve the prior behaviour of
-     * always requesting a static stream; `false` maps to
-     * [PlaybackMode.AUTO] so the server negotiates the best method.
-     */
-    private fun readPlaybackMode(prefs: Preferences): PlaybackMode {
-        prefs[Keys.PLAYBACK_MODE]?.let { raw ->
-            return try { PlaybackMode.valueOf(raw) } catch (_: Exception) { PlaybackMode.AUTO }
-        }
-        val legacyForce = readBool(prefs, Keys.FORCE_DIRECT_PLAY, "force_direct_play", true)
-        return if (legacyForce) PlaybackMode.FORCE_DIRECT_PLAY else PlaybackMode.AUTO
-    }
-
-    private fun readInt(prefs: Preferences, key: Preferences.Key<Int>, name: String, default: Int): Int =
-        PreferenceCodec.readInt(prefs, key, name, default)
-
-    private fun readFloat(prefs: Preferences, key: Preferences.Key<Float>, name: String, default: Float): Float =
-        PreferenceCodec.readFloat(prefs, key, name, default)
-
-    private fun readLong(prefs: Preferences, key: Preferences.Key<Long>, name: String, default: Long): Long =
-        PreferenceCodec.readLong(prefs, key, name, default)
-
-    private fun readSegmentBehaviors(prefs: Preferences): Map<MediaSegmentType, SegmentBehavior> {
-        val raw = prefs[Keys.SEGMENT_BEHAVIORS]
-        if (raw != null) {
-            return try {
-                val stored = json.decodeFromString<Map<String, String>>(raw)
-                val parsed = stored.mapNotNull { (typeStr, behaviorStr) ->
-                    try {
-                        MediaSegmentType.valueOf(typeStr) to SegmentBehavior.valueOf(behaviorStr)
-                    } catch (_: Exception) { null }
-                }.toMap()
-                // Merge: defaults fill in any types not explicitly saved, stored values override
-                SegmentBehavior.DEFAULT_BEHAVIORS + parsed
-            } catch (_: Exception) { SegmentBehavior.DEFAULT_BEHAVIORS }
-        }
-
-        val hasLegacyKeys = prefs.contains(Keys.SKIP_INTRO_ENABLED) ||
-            prefs.contains(Keys.SKIP_OUTRO_ENABLED) ||
-            prefs.contains(Keys.AUTO_SKIP_INTRO) ||
-            prefs.contains(Keys.AUTO_SKIP_OUTRO)
-        if (!hasLegacyKeys) return SegmentBehavior.DEFAULT_BEHAVIORS
-
-        val migrated = mutableMapOf<MediaSegmentType, SegmentBehavior>()
-        val skipIntro = prefs[Keys.SKIP_INTRO_ENABLED]?.toBoolean() ?: true
-        val skipOutro = prefs[Keys.SKIP_OUTRO_ENABLED]?.toBoolean() ?: true
-        val autoIntro = prefs[Keys.AUTO_SKIP_INTRO]?.toBoolean() ?: false
-        val autoOutro = prefs[Keys.AUTO_SKIP_OUTRO]?.toBoolean() ?: false
-        migrated[MediaSegmentType.INTRO] = when {
-            autoIntro -> SegmentBehavior.AUTO_SKIP
-            skipIntro -> SegmentBehavior.SHOW_BUTTON
-            else -> SegmentBehavior.IGNORE
-        }
-        migrated[MediaSegmentType.OUTRO] = when {
-            autoOutro -> SegmentBehavior.AUTO_SKIP
-            skipOutro -> SegmentBehavior.SHOW_BUTTON
-            else -> SegmentBehavior.IGNORE
-        }
-        return SegmentBehavior.DEFAULT_BEHAVIORS + migrated
-    }
-
-    /**
      * Last-watched live TV channel id, used by `:feature:player:live` to
      * reopen the player on the same channel across launches. `null` when no
      * channel has been watched yet (or after [setLiveTvLastChannelId] is
@@ -516,634 +471,332 @@ class UserPreferencesStore @Inject constructor(
         }
     }
 
-    private data class ParsedCache<T>(
-        val raw: String?,
-        val value: T,
+    /** Facade-owned fields that no domain slice owns (see Phase C plan). */
+    private data class FacadeExtras(
+        val pinFailedAttempts: Int,
+        val pinLockoutUntilEpochMs: Long,
+        val favoriteChannels: Set<String>,
+        val onboardingCompleted: Boolean,
+        val watchLaterPlaylistId: String?,
     )
 
-    private var cachedSubtitleStyle: ParsedCache<SubtitleStyle?> = ParsedCache(null, null)
-    private var cachedHdrSubtitleStyle: ParsedCache<SubtitleStyle?> = ParsedCache(null, null)
-    private var cachedEqualizerSettings: ParsedCache<EqualizerSettings?> = ParsedCache(null, null)
-    private var cachedMpvConfig: ParsedCache<MpvEngineConfig> = ParsedCache(null, MpvEngineConfig())
-    private var cachedLibVlcConfig: ParsedCache<LibVlcEngineConfig> = ParsedCache(null, LibVlcEngineConfig())
-    private var cachedExoPlayerConfig: ParsedCache<ExoPlayerEngineConfig> = ParsedCache(null, ExoPlayerEngineConfig())
-    private var cachedDreamImageCategories: ParsedCache<Set<DreamImageCategory>> = ParsedCache(null, setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES))
-    private var cachedEnabledHomeSectionTypes: ParsedCache<Set<HomeSectionType>> = ParsedCache(null, HomeSectionType.CONFIGURABLE.toSet())
-    private var cachedHomeSectionOrder: ParsedCache<List<HomeSectionType>> = ParsedCache(null, HomeSectionType.CONFIGURABLE)
-    private var cachedLibraryHomeSectionOverrides: ParsedCache<Map<String, Set<HomeSectionType>>> = ParsedCache(null, emptyMap())
-    private var cachedMediaStreamSelections: ParsedCache<Map<String, MediaStreamSelection>> = ParsedCache(null, emptyMap())
-    private var cachedVideoEffectsByItem: ParsedCache<Map<String, VideoEffectsConfig>> = ParsedCache(null, emptyMap())
-    private var cachedSubtitleDelayByItem: ParsedCache<Map<String, Long>> = ParsedCache(null, emptyMap())
-    private var cachedSegmentBehaviors: ParsedCache<Map<MediaSegmentType, SegmentBehavior>> = ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
-    private var cachedNotificationLibraryConfigs: ParsedCache<Map<String, LibraryNotificationConfig>> = ParsedCache(null, emptyMap())
-    private var cachedEnabledExperimentalFeatures: ParsedCache<Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>> = ParsedCache(null, emptySet())
-    private var cachedFavoriteChannels: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
-    private var cachedEnabledNewsletterSections: ParsedCache<Set<NewsletterSectionType>> = ParsedCache(null, NewsletterSectionType.entries.toSet())
-    private var cachedNewsletterSectionOrder: ParsedCache<List<NewsletterSectionType>> = ParsedCache(null, NewsletterSectionType.DEFAULT_ORDER)
-    private var cachedNextUpExcludedSeriesIds: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
-    private var cachedHiddenCwItemIds: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
-    private var cachedPinnedHomeSections: ParsedCache<List<PinnedHomeSection>> = ParsedCache(null, emptyList())
-    private var cachedHomeLayoutPresets: ParsedCache<List<HomeLayoutPreset>> = ParsedCache(null, emptyList())
-    private var cachedDefaultLibrarySortOrders: ParsedCache<Map<String, String>> = ParsedCache(null, emptyMap())
-    private var cachedLibraryViewModes: ParsedCache<Map<String, String>> = ParsedCache(null, emptyMap())
-    private var cachedLibraryFilters: ParsedCache<Map<String, String>> = ParsedCache(null, emptyMap())
-    private var cachedHiddenNavItems: ParsedCache<Set<String>> = ParsedCache(null, emptySet())
-    private var cachedNavItemOrder: ParsedCache<List<String>> = ParsedCache(null, emptyList())
+    private data class GroupA(
+        val playback: PlaybackSlice,
+        val videoPlayer: VideoPlayerSlice,
+        val engine: PlayerEngineSlice,
+        val subtitle: SubtitleSlice,
+        val audio: AudioSlice,
+    )
 
-    val preferences: StateFlow<UserPreferences> = sharedPrefs.map { prefs ->
-        val subtitleStyleRaw = prefs[Keys.SUBTITLE_STYLE]
-        val subtitleStyle = if (subtitleStyleRaw != cachedSubtitleStyle.raw) {
-            try {
-                subtitleStyleRaw?.let { json.decodeFromString<SubtitleStyle>(it) }
-            } catch (_: Exception) { null }.also { cachedSubtitleStyle = ParsedCache(subtitleStyleRaw, it) }
-        } else cachedSubtitleStyle.value
+    private data class GroupB(
+        val audioEffects: AudioEffectsSlice,
+        val audioCache: AudioCacheSlice,
+        val appearance: AppearanceSlice,
+        val homeDiscovery: HomeDiscoverySlice,
+        val library: LibrarySlice,
+    )
 
-        val hdrSubtitleStyleRaw = prefs[Keys.HDR_SUBTITLE_STYLE]
-        val hdrSubtitleStyleParsed = if (hdrSubtitleStyleRaw != cachedHdrSubtitleStyle.raw) {
-            try {
-                hdrSubtitleStyleRaw?.let { json.decodeFromString<SubtitleStyle>(it) }
-            } catch (_: Exception) { null }.also { cachedHdrSubtitleStyle = ParsedCache(hdrSubtitleStyleRaw, it) }
-        } else cachedHdrSubtitleStyle.value
+    private data class GroupC(
+        val navigation: NavigationSlice,
+        val downloads: DownloadsSlice,
+        val networkOffline: NetworkOfflineSlice,
+        val notification: NotificationSlice,
+        val syncPlayCast: SyncPlayCastSlice,
+    )
 
-        val equalizerSettingsRaw = prefs[Keys.EQUALIZER_SETTINGS]
-        val equalizerSettings = if (equalizerSettingsRaw != cachedEqualizerSettings.raw) {
-            try {
-                equalizerSettingsRaw?.let { json.decodeFromString<EqualizerSettings>(it) }
-            } catch (_: Exception) { null }.also { cachedEqualizerSettings = ParsedCache(equalizerSettingsRaw, it) }
-        } else cachedEqualizerSettings.value
+    private data class GroupD(
+        val screensaver: ScreensaverSlice,
+        val security: SecuritySlice,
+        val experimental: ExperimentalSlice,
+    )
 
-        val mpvConfigRaw = prefs[Keys.MPV_CONFIG]
-        val mpvConfig = if (mpvConfigRaw != cachedMpvConfig.raw) {
-            try {
-                mpvConfigRaw?.let { json.decodeFromString<MpvEngineConfig>(it) } ?: MpvEngineConfig()
-            } catch (_: Exception) { MpvEngineConfig() }.also { cachedMpvConfig = ParsedCache(mpvConfigRaw, it) }
-        } else cachedMpvConfig.value
-
-        val libVlcConfigRaw = prefs[Keys.LIBVLC_CONFIG]
-        val libVlcConfig = if (libVlcConfigRaw != cachedLibVlcConfig.raw) {
-            try {
-                libVlcConfigRaw?.let { json.decodeFromString<LibVlcEngineConfig>(it) } ?: LibVlcEngineConfig()
-            } catch (_: Exception) { LibVlcEngineConfig() }.also { cachedLibVlcConfig = ParsedCache(libVlcConfigRaw, it) }
-        } else cachedLibVlcConfig.value
-
-        val exoPlayerConfigRaw = prefs[Keys.EXO_CONFIG]
-        val exoPlayerConfig = if (exoPlayerConfigRaw != cachedExoPlayerConfig.raw) {
-            try {
-                exoPlayerConfigRaw?.let { json.decodeFromString<ExoPlayerEngineConfig>(it) } ?: ExoPlayerEngineConfig()
-            } catch (_: Exception) { ExoPlayerEngineConfig() }.also { cachedExoPlayerConfig = ParsedCache(exoPlayerConfigRaw, it) }
-        } else cachedExoPlayerConfig.value
-
-        val dreamImageCategoriesRaw = prefs[Keys.DREAM_IMAGE_CATEGORIES]
-        val dreamImageCategories = if (dreamImageCategoriesRaw != cachedDreamImageCategories.raw) {
-            try {
-                dreamImageCategoriesRaw?.let { json.decodeFromString<Set<DreamImageCategory>>(it) }
-                    ?: setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)
-            } catch (_: Exception) { setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES) }
-                .also { cachedDreamImageCategories = ParsedCache(dreamImageCategoriesRaw, it) }
-        } else cachedDreamImageCategories.value
-
-        val enabledHomeSectionTypesRaw = prefs[Keys.HOME_ENABLED_SECTION_TYPES]
-        val enabledHomeSectionTypes = if (enabledHomeSectionTypesRaw != cachedEnabledHomeSectionTypes.raw) {
-            try {
-                enabledHomeSectionTypesRaw?.let {
-                    json.decodeFromString<Set<String>>(it)
-                        .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
-                        .toSet()
-                } ?: HomeSectionType.CONFIGURABLE.toSet()
-            } catch (_: Exception) { HomeSectionType.CONFIGURABLE.toSet() }
-                .also { cachedEnabledHomeSectionTypes = ParsedCache(enabledHomeSectionTypesRaw, it) }
-        } else cachedEnabledHomeSectionTypes.value
-
-        val homeSectionOrderRaw = prefs[Keys.HOME_SECTION_ORDER]
-        val homeSectionOrder = if (homeSectionOrderRaw != cachedHomeSectionOrder.raw) {
-            try {
-                homeSectionOrderRaw?.let {
-                    val parsed = try {
-                        json.decodeFromString<List<String>>(it)
-                    } catch (_: Exception) {
-                        json.decodeFromString<Set<String>>(it).toList()
-                    }
-                    val mapped = parsed.mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
-                    buildList {
-                        addAll(mapped)
-                        addAll(HomeSectionType.CONFIGURABLE.filterNot { it in mapped })
-                    }
-                } ?: HomeSectionType.CONFIGURABLE
-            } catch (_: Exception) { HomeSectionType.CONFIGURABLE }
-                .also { cachedHomeSectionOrder = ParsedCache(homeSectionOrderRaw, it) }
-        } else cachedHomeSectionOrder.value
-
-        val libraryHomeSectionOverridesRaw = prefs[Keys.HOME_LIBRARY_SECTION_OVERRIDES]
-        val libraryHomeSectionOverrides = if (libraryHomeSectionOverridesRaw != cachedLibraryHomeSectionOverrides.raw) {
-            try {
-                libraryHomeSectionOverridesRaw?.let {
-                    json.decodeFromString<Map<String, Set<HomeSectionType>>>(it)
-                } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedLibraryHomeSectionOverrides = ParsedCache(libraryHomeSectionOverridesRaw, it) }
-        } else cachedLibraryHomeSectionOverrides.value
-
-        // One-shot migration: a prior version stored an all-or-nothing
-        // "hide library from home" Set<String>. Migrate each id to
-        // {LATEST_MEDIA, RECENTLY_ADDED} disabled, then drop the legacy key.
-        val legacyHiddenLibraryIdsRaw = prefs[Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS]
-        val libraryHomeSectionOverridesMigrated = if (
-            legacyHiddenLibraryIdsRaw != null && libraryHomeSectionOverrides.isEmpty()
-        ) {
-            try {
-                val legacyIds = json.decodeFromString<Set<String>>(legacyHiddenLibraryIdsRaw)
-                if (legacyIds.isNotEmpty()) {
-                    val migrated = legacyIds.associateWith {
-                        setOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED)
-                    }
-                    dataStore.edit {
-                        it.remove(Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS)
-                        it[Keys.HOME_LIBRARY_SECTION_OVERRIDES] = json.encodeToString(migrated)
-                    }
-                    migrated
-                } else libraryHomeSectionOverrides
-            } catch (_: Exception) { libraryHomeSectionOverrides }
-        } else libraryHomeSectionOverrides
-
-        val mediaStreamSelectionsRaw = prefs[Keys.MEDIA_STREAM_SELECTIONS]
-        val mediaStreamSelections = if (mediaStreamSelectionsRaw != cachedMediaStreamSelections.raw) {
-            try {
-                mediaStreamSelectionsRaw?.let { json.decodeFromString<Map<String, MediaStreamSelection>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedMediaStreamSelections = ParsedCache(mediaStreamSelectionsRaw, it) }
-        } else cachedMediaStreamSelections.value
-
-        val videoEffectsByItemRaw = prefs[Keys.VIDEO_EFFECTS_SELECTIONS]
-        val videoEffectsByItem = if (videoEffectsByItemRaw != cachedVideoEffectsByItem.raw) {
-            try {
-                videoEffectsByItemRaw?.let { json.decodeFromString<Map<String, VideoEffectsConfig>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedVideoEffectsByItem = ParsedCache(videoEffectsByItemRaw, it) }
-        } else cachedVideoEffectsByItem.value
-
-        val subtitleDelayByItemRaw = prefs[Keys.SUBTITLE_DELAY_BY_ITEM]
-        val subtitleDelayByItem = if (subtitleDelayByItemRaw != cachedSubtitleDelayByItem.raw) {
-            try {
-                subtitleDelayByItemRaw?.let { json.decodeFromString<Map<String, Long>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedSubtitleDelayByItem = ParsedCache(subtitleDelayByItemRaw, it) }
-        } else cachedSubtitleDelayByItem.value
-
-        val segmentBehaviorsRaw = prefs[Keys.SEGMENT_BEHAVIORS]
-        val segmentBehaviors = if (segmentBehaviorsRaw != cachedSegmentBehaviors.raw) {
-            readSegmentBehaviors(prefs).also { cachedSegmentBehaviors = ParsedCache(segmentBehaviorsRaw, it) }
-        } else cachedSegmentBehaviors.value
-
-        val notificationLibraryConfigsRaw = prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]
-        val notificationLibraryConfigs = if (notificationLibraryConfigsRaw != cachedNotificationLibraryConfigs.raw) {
-            try {
-                notificationLibraryConfigsRaw?.let {
-                    json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
-                } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedNotificationLibraryConfigs = ParsedCache(notificationLibraryConfigsRaw, it) }
-        } else cachedNotificationLibraryConfigs.value
-
-        val enabledExperimentalFeaturesRaw = prefs[Keys.ENABLED_EXPERIMENTAL_FEATURES]
-        val enabledExperimentalFeatures = if (enabledExperimentalFeaturesRaw != cachedEnabledExperimentalFeatures.raw) {
-            try {
-                enabledExperimentalFeaturesRaw?.let {
-                    json.decodeFromString<Set<String>>(it)
-                        .mapNotNull { name ->
-                            com.raulshma.jellyplay.core.model.ExperimentalFeature.entries.find { e -> e.name == name }
-                        }
-                        .toSet()
-                } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedEnabledExperimentalFeatures = ParsedCache(enabledExperimentalFeaturesRaw, it) }
-        } else cachedEnabledExperimentalFeatures.value
-
-        val favoriteChannelsRaw = prefs[Keys.FAVORITE_CHANNELS]
-        val favoriteChannels = if (favoriteChannelsRaw != cachedFavoriteChannels.raw) {
-            try {
-                favoriteChannelsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedFavoriteChannels = ParsedCache(favoriteChannelsRaw, it) }
-        } else cachedFavoriteChannels.value
-
-        val enabledNewsletterSectionsRaw = prefs[Keys.ENABLED_NEWSLETTER_SECTIONS]
-        val enabledNewsletterSections = if (enabledNewsletterSectionsRaw != cachedEnabledNewsletterSections.raw) {
-            try {
-                enabledNewsletterSectionsRaw?.let { json.decodeFromString<Set<NewsletterSectionType>>(it) }
-                    ?: NewsletterSectionType.entries.toSet()
-            } catch (_: Exception) { NewsletterSectionType.entries.toSet() }
-                .also { cachedEnabledNewsletterSections = ParsedCache(enabledNewsletterSectionsRaw, it) }
-        } else cachedEnabledNewsletterSections.value
-
-        val newsletterSectionOrderRaw = prefs[Keys.NEWSLETTER_SECTION_ORDER]
-        val newsletterSectionOrder = if (newsletterSectionOrderRaw != cachedNewsletterSectionOrder.raw) {
-            try {
-                newsletterSectionOrderRaw?.let { json.decodeFromString<List<NewsletterSectionType>>(it) }
-                    ?: NewsletterSectionType.DEFAULT_ORDER
-            } catch (_: Exception) { NewsletterSectionType.DEFAULT_ORDER }
-                .also { cachedNewsletterSectionOrder = ParsedCache(newsletterSectionOrderRaw, it) }
-        } else cachedNewsletterSectionOrder.value
-
-        val nextUpExcludedSeriesIdsRaw = prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS]
-        val nextUpExcludedSeriesIds = if (nextUpExcludedSeriesIdsRaw != cachedNextUpExcludedSeriesIds.raw) {
-            try {
-                nextUpExcludedSeriesIdsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedNextUpExcludedSeriesIds = ParsedCache(nextUpExcludedSeriesIdsRaw, it) }
-        } else cachedNextUpExcludedSeriesIds.value
-
-        val hiddenCwItemIdsRaw = prefs[Keys.HIDDEN_CW_ITEM_IDS]
-        val hiddenCwItemIds = if (hiddenCwItemIdsRaw != cachedHiddenCwItemIds.raw) {
-            try {
-                hiddenCwItemIdsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedHiddenCwItemIds = ParsedCache(hiddenCwItemIdsRaw, it) }
-        } else cachedHiddenCwItemIds.value
-
-        val pinnedHomeSectionsRaw = prefs[Keys.PINNED_HOME_SECTIONS]
-        val pinnedHomeSections = if (pinnedHomeSectionsRaw != cachedPinnedHomeSections.raw) {
-            try {
-                pinnedHomeSectionsRaw?.let { json.decodeFromString<List<PinnedHomeSection>>(it) } ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-                .also { cachedPinnedHomeSections = ParsedCache(pinnedHomeSectionsRaw, it) }
-        } else cachedPinnedHomeSections.value
-
-        val homeLayoutPresetsRaw = prefs[Keys.HOME_LAYOUT_PRESETS]
-        val homeLayoutPresets = if (homeLayoutPresetsRaw != cachedHomeLayoutPresets.raw) {
-            try {
-                homeLayoutPresetsRaw?.let { json.decodeFromString<List<HomeLayoutPreset>>(it) } ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-                .also { cachedHomeLayoutPresets = ParsedCache(homeLayoutPresetsRaw, it) }
-        } else cachedHomeLayoutPresets.value
-
-        val defaultLibrarySortOrdersRaw = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]
-        val defaultLibrarySortOrders = if (defaultLibrarySortOrdersRaw != cachedDefaultLibrarySortOrders.raw) {
-            try {
-                defaultLibrarySortOrdersRaw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedDefaultLibrarySortOrders = ParsedCache(defaultLibrarySortOrdersRaw, it) }
-        } else cachedDefaultLibrarySortOrders.value
-
-        val libraryViewModesRaw = prefs[Keys.LIBRARY_VIEW_MODES]
-        val libraryViewModes = if (libraryViewModesRaw != cachedLibraryViewModes.raw) {
-            try {
-                libraryViewModesRaw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedLibraryViewModes = ParsedCache(libraryViewModesRaw, it) }
-        } else cachedLibraryViewModes.value
-
-        val libraryFiltersRaw = prefs[Keys.LIBRARY_FILTERS]
-        val libraryFilters = if (libraryFiltersRaw != cachedLibraryFilters.raw) {
-            try {
-                libraryFiltersRaw?.let { json.decodeFromString<Map<String, String>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-                .also { cachedLibraryFilters = ParsedCache(libraryFiltersRaw, it) }
-        } else cachedLibraryFilters.value
-
-        val hiddenNavItemsRaw = prefs[Keys.HIDDEN_NAV_ITEMS]
-        val hiddenNavItems = if (hiddenNavItemsRaw != cachedHiddenNavItems.raw) {
-            try {
-                hiddenNavItemsRaw?.let { json.decodeFromString<Set<String>>(it) } ?: emptySet()
-            } catch (_: Exception) { emptySet() }
-                .also { cachedHiddenNavItems = ParsedCache(hiddenNavItemsRaw, it) }
-        } else cachedHiddenNavItems.value
-
-        val navItemOrderRaw = prefs[Keys.NAV_ITEM_ORDER]
-        val navItemOrder = if (navItemOrderRaw != cachedNavItemOrder.raw) {
-            try {
-                navItemOrderRaw?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-                .also { cachedNavItemOrder = ParsedCache(navItemOrderRaw, it) }
-        } else cachedNavItemOrder.value
-
-        UserPreferences(
-            preferredPlayer = try {
-                PlayerType.fromStoredName(prefs[Keys.PREFERRED_PLAYER] ?: PlayerType.EXO_PLAYER.name)
-            } catch (_: Exception) { PlayerType.EXO_PLAYER },
-            preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
-            subtitlesForcedOnly = readBool(prefs, Keys.SUBTITLES_FORCED_ONLY, "subtitles_forced_only", false),
-            preferredAudioLanguage = prefs[Keys.PREFERRED_AUDIO_LANG],
-            mediaStreamSelections = mediaStreamSelections,
-            videoEffectsByItem = videoEffectsByItem,
-            subtitleDelayByItem = subtitleDelayByItem,
-            dynamicTheming = readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
-            themeMode = try {
-                ThemeMode.valueOf(prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM.name)
-            } catch (_: Exception) { ThemeMode.SYSTEM },
-            contrastLevel = try {
-                ContrastLevel.valueOf(prefs[Keys.CONTRAST_LEVEL] ?: ContrastLevel.DEFAULT.name)
-            } catch (_: Exception) { ContrastLevel.DEFAULT },
-            oledMode = readBool(prefs, Keys.OLED_MODE, "oled_mode", false),
-            subtitleStyle = subtitleStyle ?: SubtitleStyle(),
-            hdrSubtitleStyleEnabled = readBool(prefs, Keys.HDR_SUBTITLE_STYLE_ENABLED, "hdr_subtitle_style_enabled", false),
-            hdrSubtitleStyle = hdrSubtitleStyleParsed ?: SubtitleStyle(
-                fontSize = 28,
-                backgroundOpacity = 0.5f,
-                edgeType = SubtitleEdgeType.OUTLINE,
-            ),
-            streamingQuality = try {
-                StreamingQuality.valueOf(prefs[Keys.STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
-            } catch (_: Exception) { StreamingQuality.AUTO },
-            playbackMode = readPlaybackMode(prefs),
-            liveStreamOption = try {
-                LiveStreamOption.valueOf(prefs[Keys.LIVE_STREAM_OPTION] ?: LiveStreamOption.AUTO.name)
-            } catch (_: Exception) { LiveStreamOption.AUTO },
-            maxCacheSizeMb = readInt(prefs, Keys.MAX_CACHE_SIZE_MB, "max_cache_size_mb", 0),
-            autoDeleteCache = readBool(prefs, Keys.AUTO_DELETE_CACHE, "auto_delete_cache", true),
-            pinLockEnabled = readBool(prefs, Keys.PIN_LOCK_ENABLED, "pin_lock_enabled", false),
-            pinHash = prefs[Keys.PIN_HASH],
-            biometricLockEnabled = readBool(prefs, Keys.BIOMETRIC_LOCK_ENABLED, "biometric_lock_enabled", false),
-            usePinForPlayerLock = readBool(prefs, Keys.USE_PIN_FOR_PLAYER_LOCK, "use_pin_for_player_lock", false),
-            autoLockTimerMs = readLong(prefs, Keys.AUTO_LOCK_TIMER_MS, "auto_lock_timer_ms", 30_000L),
+    private val extrasFlow: Flow<FacadeExtras> = sharedPrefs.map { prefs ->
+        FacadeExtras(
             pinFailedAttempts = prefs[Keys.PIN_FAILED_ATTEMPTS] ?: 0,
             pinLockoutUntilEpochMs = prefs[Keys.PIN_LOCKOUT_UNTIL_MS] ?: 0L,
-            dialogueBoostEnabled = readBool(prefs, Keys.DIALOGUE_BOOST_ENABLED, "dialogue_boost_enabled", false),
-            dialogueBoostStrength = try {
-                EffectStrength.valueOf(prefs[Keys.DIALOGUE_BOOST_STRENGTH] ?: EffectStrength.MODERATE.name)
-            } catch (_: Exception) { EffectStrength.MODERATE },
-            equalizerEnabled = readBool(prefs, Keys.EQUALIZER_ENABLED, "equalizer_enabled", false),
-            equalizerSettings = equalizerSettings ?: EqualizerSettings(),
-            audioDelayMs = readLong(prefs, Keys.AUDIO_DELAY_MS, "audio_delay_ms", 0L),
-            decoderMode = try {
-                DecoderMode.valueOf(prefs[Keys.DECODER_MODE] ?: DecoderMode.HW_PREFERRED.name)
-            } catch (_: Exception) { DecoderMode.HW_PREFERRED },
-            audioPassthrough = readBool(prefs, Keys.AUDIO_PASSTHROUGH, "audio_passthrough", false),
-            frameRateMatching = readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false),
-            refreshRateMode = try {
-                com.raulshma.jellyplay.core.model.RefreshRateMode.valueOf(
-                    prefs[Keys.REFRESH_RATE_MODE] ?: com.raulshma.jellyplay.core.model.RefreshRateMode.OFF.name
-                )
-            } catch (_: Exception) {
-                // Legacy migration: a user with the old boolean on but no mode
-                // stored is mapped to FRAME_RATE_ONLY (the old behaviour).
-                if (readBool(prefs, Keys.FRAME_RATE_MATCHING, "frame_rate_matching", false)) {
-                    com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_ONLY
-                } else {
-                    com.raulshma.jellyplay.core.model.RefreshRateMode.OFF
-                }
-            },
-            nightModeEnabled = readBool(prefs, Keys.NIGHT_MODE_ENABLED, "night_mode_enabled", false),
-            nightModeStrength = try {
-                EffectStrength.valueOf(prefs[Keys.NIGHT_MODE_STRENGTH] ?: EffectStrength.MODERATE.name)
-            } catch (_: Exception) { EffectStrength.MODERATE },
-            homeMode = try {
-                HomeMode.valueOf(prefs[Keys.HOME_MODE] ?: HomeMode.VIDEO.name)
-            } catch (_: Exception) { HomeMode.VIDEO },
-            videoSeekDurationMs = readLong(prefs, Keys.VIDEO_SEEK_DURATION_MS, "video_seek_duration_ms", 10_000L),
-            videoDefaultOrientation = try {
-                OrientationMode.valueOf(prefs[Keys.VIDEO_DEFAULT_ORIENTATION] ?: OrientationMode.SENSOR_LANDSCAPE.name)
-            } catch (_: Exception) { OrientationMode.SENSOR_LANDSCAPE },
-            videoControlsTimeoutMs = readLong(prefs, Keys.VIDEO_CONTROLS_TIMEOUT_MS, "video_controls_timeout_ms", 5_000L),
-            videoGesturesEnabled = readBool(prefs, Keys.VIDEO_GESTURES_ENABLED, "video_gestures_enabled", true),
-            videoPassOutProtectionHours = readInt(prefs, Keys.VIDEO_PASS_OUT_PROTECTION_HOURS, "video_pass_out_protection_hours", 0),
-            videoSkipBackOnResumeMs = readLong(prefs, Keys.VIDEO_SKIP_BACK_ON_RESUME_MS, "video_skip_back_on_resume_ms", 0L),
-            videoHoldSpeedEnabled = readBool(prefs, Keys.VIDEO_HOLD_SPEED_ENABLED, "video_hold_speed_enabled", true),
-            videoHoldSpeedMultiplier = readFloat(prefs, Keys.VIDEO_HOLD_SPEED_MULTIPLIER, "video_hold_speed_multiplier", 2.0f),
-            videoDefaultSpeed = readFloat(prefs, Keys.VIDEO_DEFAULT_SPEED, "video_default_speed", 1.0f),
-            videoDefaultAspectRatio = prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] ?: "AUTO",
-            videoAutoplayNext = readBool(prefs, Keys.VIDEO_AUTOPLAY_NEXT, "video_autoplay_next", true),
-            trailerAutoplay = readBool(prefs, Keys.TRAILER_AUTOPLAY, "trailer_autoplay", true),
-            cinemaModeEnabled = readBool(prefs, Keys.CINEMA_MODE_ENABLED, "cinema_mode_enabled", false),
-            videoSwipeSeekMaxMs = readLong(prefs, Keys.VIDEO_SWIPE_SEEK_MAX_MS, "video_swipe_seek_max_ms", 120_000L),
-            videoRememberBrightness = readBool(prefs, Keys.VIDEO_REMEMBER_BRIGHTNESS, "video_remember_brightness", true),
-            videoBrightnessLevel = readFloat(prefs, Keys.VIDEO_BRIGHTNESS_LEVEL, "video_brightness_level", 0.5f),
-            videoRememberVolume = readBool(prefs, Keys.VIDEO_REMEMBER_VOLUME, "video_remember_volume", true),
-            videoVolumeLevel = readFloat(prefs, Keys.VIDEO_VOLUME_LEVEL, "video_volume_level", 1.0f),
-            videoAutoSkipIntro = readBool(prefs, Keys.VIDEO_AUTO_SKIP_INTRO, "video_auto_skip_intro", false),
-            videoAutoSkipOutro = readBool(prefs, Keys.VIDEO_AUTO_SKIP_OUTRO, "video_auto_skip_outro", false),
-            videoRememberMuted = readBool(prefs, Keys.VIDEO_REMEMBER_MUTED, "video_remember_muted", true),
-            videoMuted = readBool(prefs, Keys.VIDEO_MUTED, "video_muted", false),
-            subtitlePreviewInSettings = readBool(prefs, Keys.SUBTITLE_PREVIEW_IN_SETTINGS, "subtitle_preview_in_settings", true),
-            videoGestureIndicatorSide = try {
-                GestureIndicatorSide.valueOf(prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE] ?: GestureIndicatorSide.OPPOSITE.name)
-            } catch (_: Exception) { GestureIndicatorSide.OPPOSITE },
-            audioDefaultSpeed = readFloat(prefs, Keys.AUDIO_DEFAULT_SPEED, "audio_default_speed", 1.0f),
-            audioNightModeVolume = readFloat(prefs, Keys.AUDIO_NIGHT_MODE_VOLUME, "audio_night_mode_volume", 0.4f),
-            audioNightModeGain = readInt(prefs, Keys.AUDIO_NIGHT_MODE_GAIN, "audio_night_mode_gain", 1200),
-            audioSkipPreviousThresholdMs = readLong(prefs, Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS, "audio_skip_previous_threshold_ms", 3_000L),
-            audioAutoplayNext = readBool(prefs, Keys.AUDIO_AUTOPLAY_NEXT, "audio_autoplay_next", true),
-            trickplayEnabled = readBool(prefs, Keys.TRICKPLAY_ENABLED, "trickplay_enabled", true),
-            trickplayOnSeekGesture = readBool(prefs, Keys.TRICKPLAY_ON_SEEK_GESTURE, "trickplay_on_seek_gesture", true),
-            segmentBehaviors = segmentBehaviors,
-            videoEpisodeBrowserEnabled = readBool(prefs, Keys.VIDEO_EPISODE_BROWSER_ENABLED, "video_episode_browser_enabled", true),
-            videoShowPlaybackMetadata = readBool(prefs, Keys.VIDEO_SHOW_PLAYBACK_METADATA, "video_show_playback_metadata", true),
-            videoPreloadBufferSize = try {
-                PreloadBufferSize.valueOf(prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
-            } catch (_: Exception) { PreloadBufferSize.MEDIUM },
-            audioPreloadBufferSize = try {
-                PreloadBufferSize.valueOf(prefs[Keys.AUDIO_PRELOAD_BUFFER_SIZE] ?: PreloadBufferSize.MEDIUM.name)
-            } catch (_: Exception) { PreloadBufferSize.MEDIUM },
-            audioCachingEnabled = prefs[Keys.AUDIO_CACHING_ENABLED] ?: true,
-            audioCacheSizeMb = prefs[Keys.AUDIO_CACHE_SIZE_MB] ?: 1024,
-            audioPrefetchLookahead = prefs[Keys.AUDIO_PREFETCH_LOOKAHEAD] ?: 3,
-            audioPrefetchBackfill = prefs[Keys.AUDIO_PREFETCH_BACKFILL] ?: 5,
-            audioCacheNetworkPolicy = try {
-                AudioCacheNetworkPolicy.valueOf(
-                    prefs[Keys.AUDIO_CACHE_NETWORK_POLICY] ?: AudioCacheNetworkPolicy.DEFAULT.name
-                )
-            } catch (_: Exception) { AudioCacheNetworkPolicy.DEFAULT },
-            audioCacheCellularMonthlyCapMb = prefs[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] ?: 500,
-            audioNormalizationMode = try {
-                when (val stored = prefs[Keys.AUDIO_NORMALIZATION_MODE] ?: AudioNormalizationMode.NONE.name) {
-                    "REPLAYGAIN" -> AudioNormalizationMode.TRACK
-                    else -> AudioNormalizationMode.valueOf(stored)
-                }
-            } catch (_: Exception) { AudioNormalizationMode.NONE },
-            audioNormalizationEnabled = readBool(prefs, Keys.AUDIO_NORMALIZATION_ENABLED, "audio_normalization_enabled", false),
-            replayGainPreAmpDb = readFloat(prefs, Keys.REPLAYGAIN_PRE_AMP_DB, "replaygain_pre_amp_db", 0f),
-            channelMixMode = try {
-                ChannelMixMode.valueOf(prefs[Keys.CHANNEL_MIX_MODE] ?: ChannelMixMode.AUTO.name)
-            } catch (_: Exception) { ChannelMixMode.AUTO },
-            channelMixEnabled = readBool(prefs, Keys.CHANNEL_MIX_ENABLED, "channel_mix_enabled", false),
-            audioGaplessEnabled = readBool(prefs, Keys.AUDIO_GAPLESS_ENABLED, "audio_gapless_enabled", true),
-            audioCrossfadeDurationMs = readLong(prefs, Keys.AUDIO_CROSSFADE_DURATION_MS, "audio_crossfade_duration_ms", 0L),
-            sleepTimerDurationMs = readLong(prefs, Keys.SLEEP_TIMER_DURATION_MS, "sleep_timer_duration_ms", 0L),
-            sleepTimerEndOfEpisode = readBool(prefs, Keys.SLEEP_TIMER_END_OF_EPISODE, "sleep_timer_end_of_episode", false),
-            dreamImageCategories = dreamImageCategories,
-            dreamSlideshowIntervalMs = readLong(prefs, Keys.DREAM_SLIDESHOW_INTERVAL_MS, "dream_slideshow_interval_ms", 15_000L),
-            dreamKenBurnsEnabled = readBool(prefs, Keys.DREAM_KEN_BURNS_ENABLED, "dream_ken_burns_enabled", true),
-            dreamTransitionStyle = try {
-                DreamTransitionStyle.valueOf(prefs[Keys.DREAM_TRANSITION_STYLE] ?: DreamTransitionStyle.CROSSFADE.name)
-            } catch (_: Exception) { DreamTransitionStyle.CROSSFADE },
-            dreamShowTitle = readBool(prefs, Keys.DREAM_SHOW_TITLE, "dream_show_title", true),
-            equalizerPreset = try {
-                EqualizerPreset.valueOf(prefs[Keys.EQUALIZER_PRESET] ?: EqualizerPreset.FLAT.name)
-            } catch (_: Exception) { EqualizerPreset.FLAT },
-            bassBoostEnabled = readBool(prefs, Keys.BASS_BOOST_ENABLED, "bass_boost_enabled", false),
-            bassBoostStrength = try {
-                EffectStrength.valueOf(prefs[Keys.BASS_BOOST_STRENGTH] ?: EffectStrength.MODERATE.name)
-            } catch (_: Exception) { EffectStrength.MODERATE },
-            virtualizerEnabled = readBool(prefs, Keys.VIRTUALIZER_ENABLED, "virtualizer_enabled", false),
-            virtualizerStrength = readInt(prefs, Keys.VIRTUALIZER_STRENGTH, "virtualizer_strength", 500),
-            reverbPreset = try {
-                ReverbPreset.valueOf(prefs[Keys.REVERB_PRESET] ?: ReverbPreset.NONE.name)
-            } catch (_: Exception) { ReverbPreset.NONE },
-            lrBalance = readFloat(prefs, Keys.LR_BALANCE, "lr_balance", 0f),
-            autoEqByGenre = readBool(prefs, Keys.AUTO_EQ_BY_GENRE, "auto_eq_by_genre", false),
-            pitchSemitones = readFloat(prefs, Keys.PITCH_SEMITONES, "pitch_semitones", 0f),
-            wifiOnlyDownloads = readBool(prefs, Keys.WIFI_ONLY_DOWNLOADS, "wifi_only_downloads", true),
-            downloadConnections = readInt(prefs, Keys.DOWNLOAD_CONNECTIONS, "download_connections", 4),
-            maxConcurrentDownloads = readInt(prefs, Keys.MAX_CONCURRENT_DOWNLOADS, "max_concurrent_downloads", 3)
-                .coerceIn(1, 6),
-            enabledHomeSectionTypes = enabledHomeSectionTypes,
-            homeSectionOrder = homeSectionOrder,
-            libraryHomeSectionOverrides = libraryHomeSectionOverridesMigrated,
-            navBarShowLabels = readBool(prefs, Keys.NAV_BAR_SHOW_LABELS, "nav_bar_show_labels", true),
-            hideBottomNavOnScroll = readBool(prefs, Keys.HIDE_BOTTOM_NAV_ON_SCROLL, "hide_bottom_nav_on_scroll", true),
-            homeHeroEnabled = readBool(prefs, Keys.HOME_HERO_ENABLED, "home_hero_enabled", true),
-            homeBackdropEnabled = readBool(prefs, Keys.HOME_BACKDROP_ENABLED, "home_backdrop_enabled", true),
+            favoriteChannels = readFavoriteChannels(prefs),
             onboardingCompleted = readBool(prefs, Keys.ONBOARDING_COMPLETED, "onboarding_completed", false),
-            mpvConfig = mpvConfig,
-            libVlcConfig = libVlcConfig,
-            exoPlayerConfig = exoPlayerConfig,
-            performanceMode = readBool(prefs, Keys.PERFORMANCE_MODE, "performance_mode", false),
-            newsletterEnabled = readBool(prefs, Keys.NEWSLETTER_ENABLED, "newsletter_enabled", true),
-            newsletterDayOfWeek = readInt(prefs, Keys.NEWSLETTER_DAY_OF_WEEK, "newsletter_day_of_week", 7),
-            newsletterLastViewedMs = readLong(prefs, Keys.NEWSLETTER_LAST_VIEWED_MS, "newsletter_last_viewed_ms", 0L),
-            accentColorSwatch = prefs[Keys.ACCENT_COLOR_SWATCH] ?: "dynamic",
-            colorStyle = try {
-                ColorStyle.valueOf(prefs[Keys.COLOR_STYLE] ?: ColorStyle.TONAL_SPOT.name)
-            } catch (_: Exception) { ColorStyle.TONAL_SPOT },
-            libraryViewMode = try {
-                LibraryViewMode.valueOf(prefs[Keys.LIBRARY_VIEW_MODE] ?: LibraryViewMode.GRID.name)
-            } catch (_: Exception) { LibraryViewMode.GRID },
-            synthwaveMode = readBool(prefs, Keys.SYNTHWAVE_MODE, "synthwave_mode", false),
-            synthwaveAccent = prefs[Keys.SYNTHWAVE_ACCENT] ?: "magenta",
-            soothingMode = readBool(prefs, Keys.SOOTHING_MODE, "soothing_mode", false),
-            soothingAccent = prefs[Keys.SOOTHING_ACCENT] ?: "ocean",
-            monochromeMode = readBool(prefs, Keys.MONOCHROME_MODE, "monochrome_mode", false),
-            notificationPreferences = NotificationPreferences(
-                enabled = readBool(prefs, Keys.NOTIFICATIONS_ENABLED, "notifications_enabled", false),
-                checkFrequency = try {
-                    CheckFrequency.valueOf(prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] ?: CheckFrequency.EVERY_6_HOURS.name)
-                } catch (_: Exception) { CheckFrequency.EVERY_6_HOURS },
-                quietHoursEnabled = readBool(prefs, Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED, "notifications_quiet_hours_enabled", false),
-                quietHoursStart = readInt(prefs, Keys.NOTIFICATIONS_QUIET_HOURS_START, "notifications_quiet_hours_start", 1380),
-                quietHoursEnd = readInt(prefs, Keys.NOTIFICATIONS_QUIET_HOURS_END, "notifications_quiet_hours_end", 420),
-                soundEnabled = readBool(prefs, Keys.NOTIFICATIONS_SOUND_ENABLED, "notifications_sound_enabled", true),
-                vibrateEnabled = readBool(prefs, Keys.NOTIFICATIONS_VIBRATE_ENABLED, "notifications_vibrate_enabled", true),
-                lightsEnabled = readBool(prefs, Keys.NOTIFICATIONS_LIGHTS_ENABLED, "notifications_lights_enabled", true),
-                maxPerCheck = readInt(prefs, Keys.NOTIFICATIONS_MAX_PER_CHECK, "notifications_max_per_check", 10),
-                libraryConfigs = notificationLibraryConfigs,
-            ),
-            showAdvancedSettings = readBool(prefs, Keys.SHOW_ADVANCED_SETTINGS, "show_advanced_settings", false),
-            audioVisualizerEnabled = readBool(prefs, Keys.AUDIO_VISUALIZER_ENABLED, "audio_visualizer_enabled", false),
-            syncPlayJoinBehavior = try {
-                SyncPlayJoinBehavior.valueOf(prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR] ?: SyncPlayJoinBehavior.ASK.name)
-            } catch (_: Exception) { SyncPlayJoinBehavior.ASK },
-            syncPlayToleranceMs = prefs[Keys.SYNC_PLAY_TOLERANCE_MS] ?: 100L,
-            syncPlayAutoAcceptInvites = readBool(prefs, Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, "sync_play_auto_accept_invites", false),
-            defaultCastingStrategy = try {
-                CastingStrategy.valueOf(prefs[Keys.DEFAULT_CASTING_STRATEGY] ?: CastingStrategy.ASK.name)
-            } catch (_: Exception) { CastingStrategy.ASK },
-            backgroundCastingEnabled = readBool(prefs, Keys.BACKGROUND_CASTING_ENABLED, "background_casting_enabled", true),
-            preferredRenderer = prefs[Keys.PREFERRED_RENDERER],
-            dvrPrePaddingMinutes = readInt(prefs, Keys.DVR_PRE_PADDING_MINUTES, "dvr_pre_padding_minutes", 0),
-            dvrPostPaddingMinutes = readInt(prefs, Keys.DVR_POST_PADDING_MINUTES, "dvr_post_padding_minutes", 0),
-            dvrRecordingQuality = prefs[Keys.DVR_RECORDING_QUALITY] ?: "AUTO",
-            favoriteChannels = favoriteChannels,
-            enabledNewsletterSections = enabledNewsletterSections,
-            newsletterSectionOrder = newsletterSectionOrder,
-            manualOfflineEnabled = readBool(prefs, Keys.MANUAL_OFFLINE_ENABLED, "manual_offline_enabled", false),
-            autoOfflineEnabled = readBool(prefs, Keys.AUTO_OFFLINE_ENABLED, "auto_offline_enabled", true),
-            manualBandwidthCap = prefs[Keys.MANUAL_BANDWIDTH_CAP] ?: 0L,
-            meteredNetworkBehavior = try {
-                MeteredNetworkBehavior.valueOf(prefs[Keys.METERED_NETWORK_BEHAVIOR] ?: MeteredNetworkBehavior.WARN.name)
-            } catch (_: Exception) { MeteredNetworkBehavior.WARN },
-            adaptiveBitrateEnabled = readBool(prefs, Keys.ADAPTIVE_BITRATE_ENABLED, "adaptive_bitrate_enabled", true),
-            backgroundVideoAudioEnabled = readBool(prefs, Keys.BACKGROUND_VIDEO_AUDIO_ENABLED, "background_video_audio_enabled", false),
-            autoPlayCountdownSec = readInt(prefs, Keys.AUTO_PLAY_COUNTDOWN_SEC, "auto_play_countdown_sec", 10),
-            showUnwatchedBadge = readBool(prefs, Keys.SHOW_UNWATCHED_BADGE, "show_unwatched_badge", true),
-            hideWatchedItems = readBool(prefs, Keys.HIDE_WATCHED_ITEMS, "hide_watched_items", false),
-            mergeContinueWatchingAndNextUp = readBool(prefs, Keys.MERGE_CONTINUE_WATCHING_NEXT_UP, "merge_continue_watching_next_up", false),
-            nextUpMaxDays = readInt(prefs, Keys.NEXT_UP_MAX_DAYS, "next_up_max_days", 0),
-            nextUpRewatching = readBool(prefs, Keys.NEXT_UP_REWATCHING, "next_up_rewatching", false),
-            nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
-            hiddenCwItemIds = hiddenCwItemIds,
-            pinnedHomeSections = pinnedHomeSections,
-            homeLayoutPresets = homeLayoutPresets,
-            continueWatchingClickBehavior = try {
-                ContinueWatchingClickBehavior.valueOf(prefs[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] ?: ContinueWatchingClickBehavior.DETAILS.name)
-            } catch (_: Exception) { ContinueWatchingClickBehavior.DETAILS },
-            cellularStreamingQuality = try {
-                StreamingQuality.valueOf(prefs[Keys.CELLULAR_STREAMING_QUALITY] ?: StreamingQuality.AUTO.name)
-            } catch (_: Exception) { StreamingQuality.AUTO },
-            showWatchedCheckmark = readBool(prefs, Keys.SHOW_WATCHED_CHECKMARK, "show_watched_checkmark", true),
-            defaultLibrarySortOrders = defaultLibrarySortOrders,
-            libraryViewModes = libraryViewModes,
-            libraryFilters = libraryFilters,
-            keepScreenOnDuringVideo = readBool(prefs, Keys.KEEP_SCREEN_ON_DURING_VIDEO, "keep_screen_on_during_video", true),
-            downloadQuality = try {
-                DownloadQuality.valueOf(prefs[Keys.DOWNLOAD_QUALITY] ?: DownloadQuality.ORIGINAL.name)
-            } catch (_: Exception) { DownloadQuality.ORIGINAL },
-            smartDownloadsEnabled = readBool(prefs, Keys.SMART_DOWNLOADS_ENABLED, "smart_downloads_enabled", false),
-            autoDownloadNewEpisodes = readBool(prefs, Keys.AUTO_DOWNLOAD_NEW_EPISODES, "auto_download_new_episodes", false),
-            incognitoModeEnabled = readBool(prefs, Keys.INCOGNITO_MODE_ENABLED, "incognito_mode_enabled", false),
-            showTimeRemaining = readBool(prefs, Keys.SHOW_TIME_REMAINING, "show_time_remaining", false),
-            showClockOnHome = readBool(prefs, Keys.SHOW_CLOCK_ON_HOME, "show_clock_on_home", false),
-            showClockInPlayer = readBool(prefs, Keys.SHOW_CLOCK_IN_PLAYER, "show_clock_in_player", false),
-            showSettingsInHomeSearch = readBool(prefs, Keys.SHOW_SETTINGS_IN_HOME_SEARCH, "show_settings_in_home_search", true),
-            pauseOnAudioFocusLoss = readBool(prefs, Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, "pause_on_audio_focus_loss", true),
-            duckOnTransientFocusLoss = readBool(prefs, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS, "duck_on_transient_focus_loss", false),
-            volumeBoostEnabled = readBool(prefs, Keys.VOLUME_BOOST_ENABLED, "volume_boost_enabled", false),
-            volumeBoostGain = readInt(prefs, Keys.VOLUME_BOOST_GAIN, "volume_boost_gain", 0),
-            audioLyricsVisible = readBool(prefs, Keys.AUDIO_LYRICS_VISIBLE, "audio_lyrics_visible", false),
-            showShareMediaOption = readBool(prefs, Keys.SHOW_SHARE_MEDIA_OPTION, "show_share_media_option", true),
-            showExternalRatings = readBool(prefs, Keys.SHOW_EXTERNAL_RATINGS, "show_external_ratings", true),
-            dataSaverEnabled = readBool(prefs, Keys.DATA_SAVER_ENABLED, "data_saver_enabled", false),
-            verboseNetworkLogging = readBool(prefs, Keys.VERBOSE_NETWORK_LOGGING, "verbose_network_logging", false),
-            networkTimeoutPreset = try {
-                NetworkTimeoutPreset.valueOf(prefs[Keys.NETWORK_TIMEOUT_PRESET] ?: NetworkTimeoutPreset.DEFAULT.name)
-            } catch (_: Exception) { NetworkTimeoutPreset.DEFAULT },
-            reduceMotionEnabled = readBool(prefs, Keys.REDUCE_MOTION_ENABLED, "reduce_motion_enabled", false),
-            preferAudioDescription = readBool(prefs, Keys.PREFER_AUDIO_DESCRIPTION, "prefer_audio_description", false),
-            highContrastSubtitles = readBool(prefs, Keys.HIGH_CONTRAST_SUBTITLES, "high_contrast_subtitles", false),
-            hideSearchHistory = readBool(prefs, Keys.HIDE_SEARCH_HISTORY, "hide_search_history", false),
-            blueLightFilterEnabled = readBool(prefs, Keys.BLUE_LIGHT_FILTER_ENABLED, "blue_light_filter_enabled", false),
-            blueLightFilterStrength = readFloat(prefs, Keys.BLUE_LIGHT_FILTER_STRENGTH, "blue_light_filter_strength", 0.3f),
-            tvZoomModePercent = readFloat(prefs, Keys.TV_ZOOM_MODE_PERCENT, "tv_zoom_mode_percent", 0f),
-            remoteControlEnabled = readBool(prefs, Keys.REMOTE_CONTROL_ENABLED, "remote_control_enabled", true),
-            maxDownloadStorageGb = readInt(prefs, Keys.MAX_DOWNLOAD_STORAGE_GB, "max_download_storage_gb", 0),
-            downloadStorageLocation = prefs[Keys.DOWNLOAD_STORAGE_LOCATION] ?: "INTERNAL",
-            androidTvWatchNextEnabled = readBool(prefs, Keys.ANDROID_TV_WATCH_NEXT_ENABLED, "android_tv_watch_next_enabled", true),
-            userDataSyncEnabled = readBool(prefs, Keys.USER_DATA_SYNC_ENABLED, "user_data_sync_enabled", true),
-            appLanguage = prefs[Keys.APP_LANGUAGE],
-            pgsSubtitleDirectPlay = readBool(prefs, Keys.PGS_SUBTITLE_DIRECT_PLAY, "pgs_subtitle_direct_play", false),
-            backdropThemeMusicEnabled = readBool(prefs, Keys.BACKDROP_THEME_MUSIC_ENABLED, "backdrop_theme_music_enabled", false),
-            hiddenNavItems = hiddenNavItems,
-            navItemOrder = navItemOrder,
-            selfUpdateCheckEnabled = readBool(prefs, Keys.SELF_UPDATE_CHECK_ENABLED, "self_update_check_enabled", true),
-            dismissedUpdateVersion = prefs[Keys.DISMISSED_UPDATE_VERSION],
-            dismissedUpdateAtMs = readLong(prefs, Keys.DISMISSED_UPDATE_AT_MS, "dismissed_update_at_ms", 0L),
             watchLaterPlaylistId = prefs[Keys.WATCH_LATER_PLAYLIST_ID],
-            hideEpisodeThumbnails = readBool(prefs, Keys.HIDE_EPISODE_THUMBNAILS, "hide_episode_thumbnails", false),
-            episodesDescending = readBool(prefs, Keys.EPISODES_DESCENDING, "episodes_descending", true),
-            skipSpecials = readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
-            cellularDownloadSizeWarningMb = readInt(prefs, Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB, "cellular_download_size_warning_mb", 0),
-            hapticsEnabled = readBool(prefs, Keys.HAPTICS_ENABLED, "haptics_enabled", true),
-            dateFormatPreference = try {
-                DateFormatPreference.valueOf(prefs[Keys.DATE_FORMAT_PREFERENCE] ?: DateFormatPreference.SYSTEM.name)
-            } catch (_: Exception) { DateFormatPreference.SYSTEM },
-            appFontScale = try {
-                AppFontScale.valueOf(prefs[Keys.APP_FONT_SCALE] ?: AppFontScale.DEFAULT.name)
-            } catch (_: Exception) { AppFontScale.DEFAULT },
-            scheduledThemeStartHour = readInt(prefs, Keys.SCHEDULED_THEME_START_HOUR, "scheduled_theme_start_hour", 22),
-            scheduledThemeEndHour = readInt(prefs, Keys.SCHEDULED_THEME_END_HOUR, "scheduled_theme_end_hour", 7),
-            colorBlindMode = try {
-                ColorBlindMode.valueOf(prefs[Keys.COLOR_BLIND_MODE] ?: ColorBlindMode.NONE.name)
-            } catch (_: Exception) { ColorBlindMode.NONE },
-            handMode = try {
-                HandMode.valueOf(prefs[Keys.HAND_MODE] ?: HandMode.RIGHT.name)
-            } catch (_: Exception) { HandMode.RIGHT },
-            downloadScheduleEnabled = prefs[Keys.DOWNLOAD_SCHEDULE_ENABLED] ?: false,
-            downloadScheduleWindow = DownloadScheduleWindow(
-                startHour = prefs[Keys.DOWNLOAD_SCHEDULE_START] ?: 0,
-                endHour = prefs[Keys.DOWNLOAD_SCHEDULE_END] ?: 6,
-                wifiOnly = prefs[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] ?: true,
-            ),
-            enabledExperimentalFeatures = enabledExperimentalFeatures,
         )
+    }
+
+    val preferences: StateFlow<UserPreferences> = combine(
+        combine(
+            playbackStore.playback,
+            videoPlayerStore.videoPlayer,
+            engineStore.playerEngine,
+            subtitleLanguageStore.subtitle,
+            audioStore.audio,
+        ) { playback, videoPlayer, engine, subtitle, audio ->
+            GroupA(playback, videoPlayer, engine, subtitle, audio)
+        },
+        combine(
+            audioEffectsStore.audioEffects,
+            audioCacheStore.audioCache,
+            appearanceStore.appearance,
+            homeDiscoveryStore.homeDiscovery,
+            libraryStore.library,
+        ) { audioEffects, audioCache, appearance, homeDiscovery, library ->
+            GroupB(audioEffects, audioCache, appearance, homeDiscovery, library)
+        },
+        combine(
+            navigationStore.navigation,
+            downloadsStore.downloads,
+            networkOfflineStore.networkOffline,
+            notificationStore.notification,
+            syncPlayCastStore.syncPlayCast,
+        ) { navigation, downloads, networkOffline, notification, syncPlayCast ->
+            GroupC(navigation, downloads, networkOffline, notification, syncPlayCast)
+        },
+        combine(
+            screensaverStore.screensaver,
+            securityStore.security,
+            experimentalStore.experimental,
+        ) { screensaver, security, experimental ->
+            GroupD(screensaver, security, experimental)
+        },
+        extrasFlow,
+    ) { a, b, c, d, extras ->
+        buildUserPreferences(a, b, c, d, extras)
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
+
+    private fun readFavoriteChannels(prefs: Preferences): Set<String> {
+        val raw = prefs[Keys.FAVORITE_CHANNELS] ?: return emptySet()
+        return try {
+            json.decodeFromString<Set<String>>(raw)
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun buildUserPreferences(
+        a: GroupA,
+        b: GroupB,
+        c: GroupC,
+        d: GroupD,
+        extras: FacadeExtras,
+    ): UserPreferences = UserPreferences(
+        preferredPlayer = a.playback.preferredPlayer,
+        preferredSubtitleLanguage = a.subtitle.preferredSubtitleLanguage,
+        subtitlesForcedOnly = a.subtitle.subtitlesForcedOnly,
+        preferredAudioLanguage = a.subtitle.preferredAudioLanguage,
+        mediaStreamSelections = a.engine.mediaStreamSelections,
+        videoEffectsByItem = a.engine.videoEffectsByItem,
+        subtitleDelayByItem = a.subtitle.subtitleDelayByItem,
+        dynamicTheming = b.appearance.dynamicTheming,
+        themeMode = b.appearance.themeMode,
+        contrastLevel = b.appearance.contrastLevel,
+        oledMode = b.appearance.oledMode,
+        subtitleStyle = a.subtitle.subtitleStyle,
+        streamingQuality = a.playback.streamingQuality,
+        playbackMode = a.playback.playbackMode,
+        liveStreamOption = a.playback.liveStreamOption,
+        maxCacheSizeMb = c.networkOffline.maxCacheSizeMb,
+        autoDeleteCache = c.networkOffline.autoDeleteCache,
+        pinLockEnabled = d.security.pinLockEnabled,
+        pinHash = d.security.pinHash,
+        biometricLockEnabled = d.security.biometricLockEnabled,
+        usePinForPlayerLock = d.security.usePinForPlayerLock,
+        autoLockTimerMs = d.security.autoLockTimerMs,
+        pinFailedAttempts = extras.pinFailedAttempts,
+        pinLockoutUntilEpochMs = extras.pinLockoutUntilEpochMs,
+        dialogueBoostEnabled = b.audioEffects.dialogueBoostEnabled,
+        dialogueBoostStrength = b.audioEffects.dialogueBoostStrength,
+        equalizerEnabled = b.audioEffects.equalizerEnabled,
+        equalizerSettings = b.audioEffects.equalizerSettings,
+        audioDelayMs = a.audio.audioDelayMs,
+        decoderMode = a.playback.decoderMode,
+        audioPassthrough = a.playback.audioPassthrough,
+        frameRateMatching = a.playback.frameRateMatching,
+        refreshRateMode = a.playback.refreshRateMode,
+        nightModeEnabled = b.audioEffects.nightModeEnabled,
+        nightModeStrength = b.audioEffects.nightModeStrength,
+        homeMode = b.homeDiscovery.homeMode,
+        videoSeekDurationMs = a.videoPlayer.videoSeekDurationMs,
+        videoDefaultOrientation = a.videoPlayer.videoDefaultOrientation,
+        videoControlsTimeoutMs = a.videoPlayer.videoControlsTimeoutMs,
+        videoGesturesEnabled = a.videoPlayer.videoGesturesEnabled,
+        videoPassOutProtectionHours = a.videoPlayer.videoPassOutProtectionHours,
+        videoSkipBackOnResumeMs = a.videoPlayer.videoSkipBackOnResumeMs,
+        videoHoldSpeedEnabled = a.videoPlayer.videoHoldSpeedEnabled,
+        videoHoldSpeedMultiplier = a.videoPlayer.videoHoldSpeedMultiplier,
+        videoDefaultSpeed = a.videoPlayer.videoDefaultSpeed,
+        videoDefaultAspectRatio = a.videoPlayer.videoDefaultAspectRatio,
+        videoAutoplayNext = a.videoPlayer.videoAutoplayNext,
+        trailerAutoplay = a.videoPlayer.trailerAutoplay,
+        cinemaModeEnabled = a.videoPlayer.cinemaModeEnabled,
+        videoSwipeSeekMaxMs = a.videoPlayer.videoSwipeSeekMaxMs,
+        videoRememberBrightness = a.videoPlayer.videoRememberBrightness,
+        videoBrightnessLevel = a.videoPlayer.videoBrightnessLevel,
+        videoRememberVolume = a.videoPlayer.videoRememberVolume,
+        videoVolumeLevel = a.videoPlayer.videoVolumeLevel,
+        videoAutoSkipIntro = a.videoPlayer.videoAutoSkipIntro,
+        videoAutoSkipOutro = a.videoPlayer.videoAutoSkipOutro,
+        videoRememberMuted = a.videoPlayer.videoRememberMuted,
+        videoMuted = a.videoPlayer.videoMuted,
+        subtitlePreviewInSettings = a.subtitle.subtitlePreviewInSettings,
+        videoGestureIndicatorSide = a.videoPlayer.videoGestureIndicatorSide,
+        audioDefaultSpeed = a.audio.audioDefaultSpeed,
+        audioNightModeVolume = a.audio.audioNightModeVolume,
+        audioNightModeGain = a.audio.audioNightModeGain,
+        audioSkipPreviousThresholdMs = a.audio.audioSkipPreviousThresholdMs,
+        audioAutoplayNext = a.audio.audioAutoplayNext,
+        trickplayEnabled = a.videoPlayer.trickplayEnabled,
+        trickplayOnSeekGesture = a.videoPlayer.trickplayOnSeekGesture,
+        segmentBehaviors = a.videoPlayer.segmentBehaviors,
+        videoEpisodeBrowserEnabled = a.videoPlayer.videoEpisodeBrowserEnabled,
+        videoShowPlaybackMetadata = a.videoPlayer.videoShowPlaybackMetadata,
+        videoPreloadBufferSize = a.videoPlayer.videoPreloadBufferSize,
+        audioPreloadBufferSize = a.audio.audioPreloadBufferSize,
+        audioNormalizationMode = a.audio.audioNormalizationMode,
+        audioNormalizationEnabled = a.audio.audioNormalizationEnabled,
+        replayGainPreAmpDb = a.audio.replayGainPreAmpDb,
+        channelMixMode = a.audio.channelMixMode,
+        channelMixEnabled = a.audio.channelMixEnabled,
+        audioGaplessEnabled = a.audio.audioGaplessEnabled,
+        audioCrossfadeDurationMs = a.audio.audioCrossfadeDurationMs,
+        audioCachingEnabled = b.audioCache.audioCachingEnabled,
+        audioCacheSizeMb = b.audioCache.audioCacheSizeMb,
+        audioPrefetchLookahead = b.audioCache.audioPrefetchLookahead,
+        audioPrefetchBackfill = b.audioCache.audioPrefetchBackfill,
+        audioCacheNetworkPolicy = b.audioCache.audioCacheNetworkPolicy,
+        audioCacheCellularMonthlyCapMb = b.audioCache.audioCacheCellularMonthlyCapMb,
+        sleepTimerDurationMs = a.audio.sleepTimerDurationMs,
+        sleepTimerEndOfEpisode = a.audio.sleepTimerEndOfEpisode,
+        dreamImageCategories = d.screensaver.dreamImageCategories,
+        dreamSlideshowIntervalMs = d.screensaver.dreamSlideshowIntervalMs,
+        dreamKenBurnsEnabled = d.screensaver.dreamKenBurnsEnabled,
+        dreamTransitionStyle = d.screensaver.dreamTransitionStyle,
+        dreamShowTitle = d.screensaver.dreamShowTitle,
+        equalizerPreset = b.audioEffects.equalizerPreset,
+        bassBoostEnabled = b.audioEffects.bassBoostEnabled,
+        bassBoostStrength = b.audioEffects.bassBoostStrength,
+        virtualizerEnabled = b.audioEffects.virtualizerEnabled,
+        virtualizerStrength = b.audioEffects.virtualizerStrength,
+        reverbPreset = b.audioEffects.reverbPreset,
+        lrBalance = b.audioEffects.lrBalance,
+        autoEqByGenre = b.audioEffects.autoEqByGenre,
+        pitchSemitones = b.audioEffects.pitchSemitones,
+        wifiOnlyDownloads = c.downloads.wifiOnlyDownloads,
+        downloadConnections = c.downloads.downloadConnections,
+        maxConcurrentDownloads = c.downloads.maxConcurrentDownloads,
+        enabledHomeSectionTypes = b.homeDiscovery.enabledHomeSectionTypes,
+        homeSectionOrder = b.homeDiscovery.homeSectionOrder,
+        libraryHomeSectionOverrides = b.homeDiscovery.libraryHomeSectionOverrides,
+        navBarShowLabels = c.navigation.navBarShowLabels,
+        hideBottomNavOnScroll = c.navigation.hideBottomNavOnScroll,
+        homeHeroEnabled = b.homeDiscovery.homeHeroEnabled,
+        homeBackdropEnabled = b.homeDiscovery.homeBackdropEnabled,
+        onboardingCompleted = extras.onboardingCompleted,
+        mpvConfig = a.engine.mpvConfig,
+        libVlcConfig = a.engine.libVlcConfig,
+        exoPlayerConfig = a.engine.exoPlayerConfig,
+        performanceMode = b.appearance.performanceMode,
+        newsletterEnabled = c.notification.newsletterEnabled,
+        newsletterDayOfWeek = c.notification.newsletterDayOfWeek,
+        newsletterLastViewedMs = c.notification.newsletterLastViewedMs,
+        accentColorSwatch = b.appearance.accentColorSwatch,
+        colorStyle = b.appearance.colorStyle,
+        libraryViewMode = b.library.libraryViewMode,
+        notificationPreferences = c.notification.notificationPreferences,
+        showAdvancedSettings = b.appearance.showAdvancedSettings,
+        audioVisualizerEnabled = a.audio.audioVisualizerEnabled,
+        audioLyricsVisible = a.audio.audioLyricsVisible,
+        synthwaveMode = b.appearance.synthwaveMode,
+        synthwaveAccent = b.appearance.synthwaveAccent,
+        soothingMode = b.appearance.soothingMode,
+        soothingAccent = b.appearance.soothingAccent,
+        monochromeMode = b.appearance.monochromeMode,
+        syncPlayJoinBehavior = c.syncPlayCast.syncPlayJoinBehavior,
+        syncPlayToleranceMs = c.syncPlayCast.syncPlayToleranceMs,
+        syncPlayAutoAcceptInvites = c.syncPlayCast.syncPlayAutoAcceptInvites,
+        defaultCastingStrategy = c.syncPlayCast.defaultCastingStrategy,
+        backgroundCastingEnabled = c.syncPlayCast.backgroundCastingEnabled,
+        preferredRenderer = c.syncPlayCast.preferredRenderer,
+        dvrPrePaddingMinutes = c.syncPlayCast.dvrPrePaddingMinutes,
+        dvrPostPaddingMinutes = c.syncPlayCast.dvrPostPaddingMinutes,
+        dvrRecordingQuality = c.syncPlayCast.dvrRecordingQuality,
+        favoriteChannels = extras.favoriteChannels,
+        enabledNewsletterSections = c.notification.enabledNewsletterSections,
+        newsletterSectionOrder = c.notification.newsletterSectionOrder,
+        manualOfflineEnabled = c.networkOffline.manualOfflineEnabled,
+        autoOfflineEnabled = c.networkOffline.autoOfflineEnabled,
+        manualBandwidthCap = c.networkOffline.manualBandwidthCap,
+        meteredNetworkBehavior = c.networkOffline.meteredNetworkBehavior,
+        adaptiveBitrateEnabled = c.networkOffline.adaptiveBitrateEnabled,
+        backgroundVideoAudioEnabled = a.playback.backgroundVideoAudioEnabled,
+        autoPlayCountdownSec = a.playback.autoPlayCountdownSec,
+        showUnwatchedBadge = b.homeDiscovery.showUnwatchedBadge,
+        hideWatchedItems = b.homeDiscovery.hideWatchedItems,
+        mergeContinueWatchingAndNextUp = b.homeDiscovery.mergeContinueWatchingAndNextUp,
+        nextUpMaxDays = b.homeDiscovery.nextUpMaxDays,
+        nextUpRewatching = b.homeDiscovery.nextUpRewatching,
+        nextUpExcludedSeriesIds = b.homeDiscovery.nextUpExcludedSeriesIds,
+        hiddenCwItemIds = b.homeDiscovery.hiddenCwItemIds,
+        pinnedHomeSections = b.homeDiscovery.pinnedHomeSections,
+        homeLayoutPresets = b.homeDiscovery.homeLayoutPresets,
+        continueWatchingClickBehavior = b.homeDiscovery.continueWatchingClickBehavior,
+        cellularStreamingQuality = a.playback.cellularStreamingQuality,
+        showWatchedCheckmark = b.homeDiscovery.showWatchedCheckmark,
+        defaultLibrarySortOrders = b.library.defaultLibrarySortOrders,
+        libraryViewModes = b.library.libraryViewModes,
+        libraryFilters = b.library.libraryFilters,
+        keepScreenOnDuringVideo = a.playback.keepScreenOnDuringVideo,
+        downloadQuality = c.downloads.downloadQuality,
+        smartDownloadsEnabled = c.downloads.smartDownloadsEnabled,
+        autoDownloadNewEpisodes = c.downloads.autoDownloadNewEpisodes,
+        incognitoModeEnabled = a.videoPlayer.incognitoModeEnabled,
+        showTimeRemaining = a.videoPlayer.showTimeRemaining,
+        showClockOnHome = b.homeDiscovery.showClockOnHome,
+        showClockInPlayer = a.videoPlayer.showClockInPlayer,
+        showSettingsInHomeSearch = b.homeDiscovery.showSettingsInHomeSearch,
+        pauseOnAudioFocusLoss = a.playback.pauseOnAudioFocusLoss,
+        duckOnTransientFocusLoss = a.playback.duckOnTransientFocusLoss,
+        volumeBoostEnabled = b.audioEffects.volumeBoostEnabled,
+        volumeBoostGain = b.audioEffects.volumeBoostGain,
+        showShareMediaOption = d.experimental.showShareMediaOption,
+        showExternalRatings = b.homeDiscovery.showExternalRatings,
+        dataSaverEnabled = c.networkOffline.dataSaverEnabled,
+        verboseNetworkLogging = c.networkOffline.verboseNetworkLogging,
+        networkTimeoutPreset = c.networkOffline.networkTimeoutPreset,
+        reduceMotionEnabled = b.appearance.reduceMotionEnabled,
+        preferAudioDescription = d.experimental.preferAudioDescription,
+        highContrastSubtitles = a.subtitle.highContrastSubtitles,
+        hideSearchHistory = d.experimental.hideSearchHistory,
+        blueLightFilterEnabled = b.appearance.blueLightFilterEnabled,
+        blueLightFilterStrength = b.appearance.blueLightFilterStrength,
+        tvZoomModePercent = a.videoPlayer.tvZoomModePercent,
+        remoteControlEnabled = d.security.remoteControlEnabled,
+        maxDownloadStorageGb = c.downloads.maxDownloadStorageGb,
+        downloadStorageLocation = c.downloads.downloadStorageLocation,
+        androidTvWatchNextEnabled = a.playback.androidTvWatchNextEnabled,
+        userDataSyncEnabled = a.playback.userDataSyncEnabled,
+        appLanguage = d.experimental.appLanguage,
+        pgsSubtitleDirectPlay = a.playback.pgsSubtitleDirectPlay,
+        hdrSubtitleStyleEnabled = a.subtitle.hdrSubtitleStyleEnabled,
+        hdrSubtitleStyle = a.subtitle.hdrSubtitleStyle,
+        backdropThemeMusicEnabled = b.appearance.backdropThemeMusicEnabled,
+        hiddenNavItems = c.navigation.hiddenNavItems,
+        navItemOrder = c.navigation.navItemOrder,
+        selfUpdateCheckEnabled = d.experimental.selfUpdateCheckEnabled,
+        dismissedUpdateVersion = d.experimental.dismissedUpdateVersion,
+        dismissedUpdateAtMs = d.experimental.dismissedUpdateAtMs,
+        watchLaterPlaylistId = extras.watchLaterPlaylistId,
+        hideEpisodeThumbnails = b.library.hideEpisodeThumbnails,
+        episodesDescending = b.library.episodesDescending,
+        skipSpecials = b.library.skipSpecials,
+        cellularDownloadSizeWarningMb = c.downloads.cellularDownloadSizeWarningMb,
+        hapticsEnabled = b.appearance.hapticsEnabled,
+        dateFormatPreference = b.appearance.dateFormatPreference,
+        appFontScale = b.appearance.appFontScale,
+        scheduledThemeStartHour = b.appearance.scheduledThemeStartHour,
+        scheduledThemeEndHour = b.appearance.scheduledThemeEndHour,
+        colorBlindMode = b.appearance.colorBlindMode,
+        handMode = b.appearance.handMode,
+        downloadScheduleEnabled = c.downloads.downloadScheduleEnabled,
+        downloadScheduleWindow = c.downloads.downloadScheduleWindow,
+        enabledExperimentalFeatures = d.experimental.enabledExperimentalFeatures,
+    )
 
     // Narrow per-key flows for hot-path consumers. Reading these avoids
     // collecting the full ~150-field `preferences` StateFlow (rebuilt on every
@@ -1239,45 +892,39 @@ class UserPreferencesStore @Inject constructor(
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     suspend fun setPreferredPlayer(playerType: PlayerType) {
-        dataStore.edit { it[Keys.PREFERRED_PLAYER] = playerType.name }
+        playbackStore.setPreferredPlayer(playerType)
     }
 
     suspend fun setLiveStreamOption(option: LiveStreamOption) {
-        dataStore.edit { it[Keys.LIVE_STREAM_OPTION] = option.name }
+        playbackStore.setLiveStreamOption(option)
     }
 
     suspend fun setPreferredSubtitleLanguage(language: String?) {
-        dataStore.edit {
-            if (language != null) it[Keys.PREFERRED_SUBTITLE_LANG] = language
-            else it.remove(Keys.PREFERRED_SUBTITLE_LANG)
-        }
+        subtitleLanguageStore.setPreferredSubtitleLanguage(language)
     }
 
     suspend fun setAppLanguage(language: String?) {
-        dataStore.edit {
-            if (language != null) it[Keys.APP_LANGUAGE] = language
-            else it.remove(Keys.APP_LANGUAGE)
-        }
+        subtitleLanguageStore.setAppLanguage(language)
     }
 
     suspend fun setPgsSubtitleDirectPlay(enabled: Boolean) {
-        dataStore.edit { it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = enabled }
+        playbackStore.setPgsSubtitleDirectPlay(enabled)
     }
 
     suspend fun setBackdropThemeMusicEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = enabled }
+        appearanceStore.setBackdropThemeMusicEnabled(enabled)
     }
 
     suspend fun setHiddenNavItems(items: Set<String>) {
-        dataStore.edit { it[Keys.HIDDEN_NAV_ITEMS] = json.encodeToString(items) }
+        navigationStore.setHiddenNavItems(items)
     }
 
     suspend fun setNavItemOrder(order: List<String>) {
-        dataStore.edit { it[Keys.NAV_ITEM_ORDER] = json.encodeToString(order) }
+        navigationStore.setNavItemOrder(order)
     }
 
     suspend fun setSelfUpdateCheckEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.SELF_UPDATE_CHECK_ENABLED] = enabled }
+        experimentalStore.setSelfUpdateCheckEnabled(enabled)
     }
 
     /**
@@ -1299,70 +946,63 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setHideEpisodeThumbnails(enabled: Boolean) {
-        dataStore.edit { it[Keys.HIDE_EPISODE_THUMBNAILS] = enabled }
+        libraryStore.setHideEpisodeThumbnails(enabled)
     }
 
     suspend fun setEpisodesDescending(descending: Boolean) {
-        dataStore.edit { it[Keys.EPISODES_DESCENDING] = descending }
+        libraryStore.setEpisodesDescending(descending)
     }
 
     suspend fun setSkipSpecials(enabled: Boolean) {
-        dataStore.edit { it[Keys.SKIP_SPECIALS] = enabled }
+        libraryStore.setSkipSpecials(enabled)
     }
 
     suspend fun setCellularDownloadSizeWarningMb(sizeMb: Int) {
-        dataStore.edit { it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = sizeMb }
+        downloadsStore.setCellularDownloadSizeWarningMb(sizeMb)
     }
 
     suspend fun setHapticsEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.HAPTICS_ENABLED] = enabled }
+        appearanceStore.setHapticsEnabled(enabled)
     }
 
     suspend fun setDateFormatPreference(preference: DateFormatPreference) {
-        dataStore.edit { it[Keys.DATE_FORMAT_PREFERENCE] = preference.name }
+        appearanceStore.setDateFormatPreference(preference)
     }
 
     suspend fun setAppFontScale(scale: AppFontScale) {
-        dataStore.edit { it[Keys.APP_FONT_SCALE] = scale.name }
+        appearanceStore.setAppFontScale(scale)
     }
 
     suspend fun setScheduledThemeStartHour(hour: Int) {
-        dataStore.edit { it[Keys.SCHEDULED_THEME_START_HOUR] = hour }
+        appearanceStore.setScheduledThemeStartHour(hour)
     }
 
     suspend fun setScheduledThemeEndHour(hour: Int) {
-        dataStore.edit { it[Keys.SCHEDULED_THEME_END_HOUR] = hour }
+        appearanceStore.setScheduledThemeEndHour(hour)
     }
 
     suspend fun setColorBlindMode(mode: ColorBlindMode) {
-        dataStore.edit { it[Keys.COLOR_BLIND_MODE] = mode.name }
+        appearanceStore.setColorBlindMode(mode)
     }
 
     suspend fun setHandMode(mode: HandMode) {
-        dataStore.edit { it[Keys.HAND_MODE] = mode.name }
+        appearanceStore.setHandMode(mode)
     }
 
     suspend fun setDownloadScheduleEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = enabled }
+        downloadsStore.setDownloadScheduleEnabled(enabled)
     }
 
     suspend fun setDownloadScheduleWindow(window: DownloadScheduleWindow) {
-        dataStore.edit {
-            it[Keys.DOWNLOAD_SCHEDULE_START] = window.startHour
-            it[Keys.DOWNLOAD_SCHEDULE_END] = window.endHour
-            it[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] = window.wifiOnly
-        }
+        downloadsStore.setDownloadScheduleWindow(window)
     }
 
     suspend fun setSubtitlesForcedOnly(enabled: Boolean) {
-        dataStore.edit { it[Keys.SUBTITLES_FORCED_ONLY] = enabled }
+        subtitleLanguageStore.setSubtitlesForcedOnly(enabled)
     }
 
     suspend fun setPreferredAudioLanguage(language: String?) {
-        dataStore.edit {
-            if (language != null) it[Keys.PREFERRED_AUDIO_LANG] = language
-            else it.remove(Keys.PREFERRED_AUDIO_LANG)
-        }
+        subtitleLanguageStore.setPreferredAudioLanguage(language)
     }
 
     suspend fun setMediaStreamSelection(
@@ -1388,23 +1028,23 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setDynamicTheming(enabled: Boolean) {
-        dataStore.edit { it[Keys.DYNAMIC_THEMING] = enabled }
+        appearanceStore.setDynamicTheming(enabled)
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
-        dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+        appearanceStore.setThemeMode(mode)
     }
 
     suspend fun setContrastLevel(level: ContrastLevel) {
-        dataStore.edit { it[Keys.CONTRAST_LEVEL] = level.name }
+        appearanceStore.setContrastLevel(level)
     }
 
     suspend fun setOledMode(enabled: Boolean) {
-        dataStore.edit { it[Keys.OLED_MODE] = enabled }
+        appearanceStore.setOledMode(enabled)
     }
 
     suspend fun setSubtitleStyle(style: SubtitleStyle) {
-        dataStore.edit { it[Keys.SUBTITLE_STYLE] = json.encodeToString(style) }
+        subtitleLanguageStore.setSubtitleStyle(style)
     }
 
     /**
@@ -1412,81 +1052,67 @@ class UserPreferencesStore @Inject constructor(
      * entry so the map doesn't grow unbounded with neutral values.
      */
     suspend fun setSubtitleDelayForItem(itemId: String, delayMs: Long) {
-        dataStore.edit { prefs ->
-            val current = try {
-                prefs[Keys.SUBTITLE_DELAY_BY_ITEM]
-                    ?.let { json.decodeFromString<Map<String, Long>>(it) } ?: emptyMap()
-            } catch (_: Exception) { emptyMap() }
-            val updated = if (delayMs == 0L) current - itemId else current + (itemId to delayMs)
-            prefs[Keys.SUBTITLE_DELAY_BY_ITEM] = json.encodeToString(
-                kotlinx.serialization.serializer<Map<String, Long>>(), updated,
-            )
-        }
+        subtitleLanguageStore.setSubtitleDelayForItem(itemId, delayMs)
     }
 
     suspend fun setHdrSubtitleStyleEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.HDR_SUBTITLE_STYLE_ENABLED] = enabled }
+        subtitleLanguageStore.setHdrSubtitleStyleEnabled(enabled)
     }
 
     suspend fun setHdrSubtitleStyle(style: SubtitleStyle) {
-        dataStore.edit { it[Keys.HDR_SUBTITLE_STYLE] = json.encodeToString(style) }
+        subtitleLanguageStore.setHdrSubtitleStyle(style)
     }
 
     suspend fun setStreamingQuality(quality: StreamingQuality) {
-        dataStore.edit { it[Keys.STREAMING_QUALITY] = quality.name }
+        playbackStore.setStreamingQuality(quality)
     }
 
     suspend fun setPlaybackMode(mode: PlaybackMode) {
-        dataStore.edit { it[Keys.PLAYBACK_MODE] = mode.name }
+        playbackStore.setPlaybackMode(mode)
     }
 
     suspend fun setMaxCacheSize(sizeMb: Int) {
-        dataStore.edit { it[Keys.MAX_CACHE_SIZE_MB] = sizeMb }
+        networkOfflineStore.setMaxCacheSize(sizeMb)
     }
 
     suspend fun setAutoDeleteCache(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUTO_DELETE_CACHE] = enabled }
+        networkOfflineStore.setAutoDeleteCache(enabled)
     }
 
     suspend fun setShowAdvancedSettings(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_ADVANCED_SETTINGS] = enabled }
+        appearanceStore.setShowAdvancedSettings(enabled)
     }
 
     suspend fun setEnabledExperimentalFeatures(features: Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>) {
-        dataStore.edit {
-            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] =
-                json.encodeToString(features.map { f -> f.name }.toSet())
-        }
+        experimentalStore.setEnabledExperimentalFeatures(features)
     }
 
     suspend fun setAudioVisualizerEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_VISUALIZER_ENABLED] = enabled }
+        audioStore.setAudioVisualizerEnabled(enabled)
     }
 
     suspend fun setSyncPlayJoinBehavior(behavior: SyncPlayJoinBehavior) {
-        dataStore.edit { it[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = behavior.name }
+        syncPlayCastStore.setSyncPlayJoinBehavior(behavior)
     }
 
     suspend fun setSyncPlayToleranceMs(ms: Long) {
-        dataStore.edit { it[Keys.SYNC_PLAY_TOLERANCE_MS] = ms }
+        syncPlayCastStore.setSyncPlayToleranceMs(ms)
     }
 
     suspend fun setSyncPlayAutoAcceptInvites(enabled: Boolean) {
-        dataStore.edit { it[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = enabled }
+        syncPlayCastStore.setSyncPlayAutoAcceptInvites(enabled)
     }
 
     suspend fun setDefaultCastingStrategy(strategy: CastingStrategy) {
-        dataStore.edit { it[Keys.DEFAULT_CASTING_STRATEGY] = strategy.name }
+        syncPlayCastStore.setDefaultCastingStrategy(strategy)
     }
 
     suspend fun setBackgroundCastingEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BACKGROUND_CASTING_ENABLED] = enabled }
+        syncPlayCastStore.setBackgroundCastingEnabled(enabled)
     }
 
     suspend fun setPreferredRenderer(renderer: String?) {
-        dataStore.edit {
-            if (renderer != null) it[Keys.PREFERRED_RENDERER] = renderer else it.remove(Keys.PREFERRED_RENDERER)
-        }
+        syncPlayCastStore.setPreferredRenderer(renderer)
     }
 
     suspend fun setWatchLaterPlaylistId(playlistId: String?) {
@@ -1497,15 +1123,15 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setDvrPrePaddingMinutes(minutes: Int) {
-        dataStore.edit { it[Keys.DVR_PRE_PADDING_MINUTES] = minutes }
+        syncPlayCastStore.setDvrPrePaddingMinutes(minutes)
     }
 
     suspend fun setDvrPostPaddingMinutes(minutes: Int) {
-        dataStore.edit { it[Keys.DVR_POST_PADDING_MINUTES] = minutes }
+        syncPlayCastStore.setDvrPostPaddingMinutes(minutes)
     }
 
     suspend fun setDvrRecordingQuality(quality: String) {
-        dataStore.edit { it[Keys.DVR_RECORDING_QUALITY] = quality }
+        syncPlayCastStore.setDvrRecordingQuality(quality)
     }
 
     suspend fun setFavoriteChannels(channels: Set<String>) {
@@ -1513,52 +1139,52 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setEnabledNewsletterSections(sections: Set<NewsletterSectionType>) {
-        dataStore.edit { it[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(sections) }
+        notificationStore.setEnabledNewsletterSections(sections)
     }
 
     suspend fun setNewsletterSectionOrder(order: List<NewsletterSectionType>) {
-        dataStore.edit { it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(order) }
+        notificationStore.setNewsletterSectionOrder(order)
     }
 
     suspend fun setManualOffline(enabled: Boolean) {
-        dataStore.edit { it[Keys.MANUAL_OFFLINE_ENABLED] = enabled }
+        networkOfflineStore.setManualOffline(enabled)
     }
 
     suspend fun setAutoOfflineEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUTO_OFFLINE_ENABLED] = enabled }
+        networkOfflineStore.setAutoOfflineEnabled(enabled)
     }
 
     suspend fun setManualBandwidthCap(cap: Long) {
-        dataStore.edit { it[Keys.MANUAL_BANDWIDTH_CAP] = cap }
+        networkOfflineStore.setManualBandwidthCap(cap)
     }
 
     suspend fun setMeteredNetworkBehavior(behavior: MeteredNetworkBehavior) {
-        dataStore.edit { it[Keys.METERED_NETWORK_BEHAVIOR] = behavior.name }
+        networkOfflineStore.setMeteredNetworkBehavior(behavior)
     }
 
     suspend fun setAdaptiveBitrateEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.ADAPTIVE_BITRATE_ENABLED] = enabled }
+        networkOfflineStore.setAdaptiveBitrateEnabled(enabled)
     }
 
 
     suspend fun setBackgroundVideoAudioEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = enabled }
+        playbackStore.setBackgroundVideoAudioEnabled(enabled)
     }
 
     suspend fun setAutoPlayCountdownSec(sec: Int) {
-        dataStore.edit { it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = sec }
+        playbackStore.setAutoPlayCountdownSec(sec)
     }
 
     suspend fun setShowUnwatchedBadge(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_UNWATCHED_BADGE] = enabled }
+        homeDiscoveryStore.setShowUnwatchedBadge(enabled)
     }
 
     suspend fun setHideWatchedItems(enabled: Boolean) {
-        dataStore.edit { it[Keys.HIDE_WATCHED_ITEMS] = enabled }
+        homeDiscoveryStore.setHideWatchedItems(enabled)
     }
 
     suspend fun setMergeContinueWatchingAndNextUp(enabled: Boolean) {
-        dataStore.edit { it[Keys.MERGE_CONTINUE_WATCHING_NEXT_UP] = enabled }
+        homeDiscoveryStore.setMergeContinueWatchingAndNextUp(enabled)
     }
 
     suspend fun setNextUpMaxDays(days: Int) {
@@ -1568,216 +1194,147 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setNextUpRewatching(enabled: Boolean) {
-        dataStore.edit { it[Keys.NEXT_UP_REWATCHING] = enabled }
+        homeDiscoveryStore.setNextUpRewatching(enabled)
     }
 
     suspend fun setNextUpExcludedSeriesIds(ids: Set<String>) {
-        dataStore.edit { it[Keys.NEXT_UP_EXCLUDED_SERIES_IDS] = json.encodeToString(ids) }
+        homeDiscoveryStore.setNextUpExcludedSeriesIds(ids)
     }
 
     suspend fun excludeSeriesFromNextUp(seriesId: String) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS]?.let {
-                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
-            } ?: emptySet()
-            prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS] = json.encodeToString(current + seriesId)
-        }
+        homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
     }
 
     suspend fun includeSeriesInNextUp(seriesId: String) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS]?.let {
-                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
-            } ?: emptySet()
-            prefs[Keys.NEXT_UP_EXCLUDED_SERIES_IDS] = json.encodeToString(current - seriesId)
-        }
+        homeDiscoveryStore.includeSeriesInNextUp(seriesId)
     }
 
     suspend fun setHiddenCwItemIds(ids: Set<String>) {
-        dataStore.edit { it[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(ids) }
+        homeDiscoveryStore.setHiddenCwItemIds(ids)
     }
 
     suspend fun hideCwItem(itemId: String) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.HIDDEN_CW_ITEM_IDS]?.let {
-                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
-            } ?: emptySet()
-            prefs[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(current + itemId)
-        }
+        homeDiscoveryStore.hideCwItem(itemId)
     }
 
     suspend fun unhideCwItem(itemId: String) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.HIDDEN_CW_ITEM_IDS]?.let {
-                try { json.decodeFromString<Set<String>>(it) } catch (_: Exception) { emptySet() }
-            } ?: emptySet()
-            prefs[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(current - itemId)
-        }
+        homeDiscoveryStore.unhideCwItem(itemId)
     }
 
     suspend fun unhideAllCwItems() {
-        dataStore.edit { it.remove(Keys.HIDDEN_CW_ITEM_IDS) }
+        homeDiscoveryStore.unhideAllCwItems()
     }
 
     suspend fun setPinnedHomeSections(sections: List<PinnedHomeSection>) {
-        dataStore.edit { prefs ->
-            prefs[Keys.PINNED_HOME_SECTIONS] = json.encodeToString(sections)
-        }
+        homeDiscoveryStore.setPinnedHomeSections(sections)
     }
 
     suspend fun addPinnedHomeSection(section: PinnedHomeSection) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.PINNED_HOME_SECTIONS]?.let {
-                try { json.decodeFromString<List<PinnedHomeSection>>(it) } catch (_: Exception) { emptyList() }
-            } ?: emptyList()
-            if (current.none { it.id == section.id }) {
-                prefs[Keys.PINNED_HOME_SECTIONS] = json.encodeToString(current + section)
-            }
-        }
+        homeDiscoveryStore.addPinnedHomeSection(section)
     }
 
     suspend fun removePinnedHomeSection(sectionId: String) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.PINNED_HOME_SECTIONS]?.let {
-                try { json.decodeFromString<List<PinnedHomeSection>>(it) } catch (_: Exception) { emptyList() }
-            } ?: emptyList()
-            prefs[Keys.PINNED_HOME_SECTIONS] = json.encodeToString(current.filterNot { it.id == sectionId })
-        }
+        homeDiscoveryStore.removePinnedHomeSection(sectionId)
     }
 
     suspend fun setHomeLayoutPresets(presets: List<HomeLayoutPreset>) {
-        dataStore.edit { prefs ->
-            prefs[Keys.HOME_LAYOUT_PRESETS] = json.encodeToString(presets)
-        }
+        homeDiscoveryStore.setHomeLayoutPresets(presets)
     }
 
     suspend fun saveHomeLayoutPreset(preset: HomeLayoutPreset) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.HOME_LAYOUT_PRESETS]?.let {
-                try { json.decodeFromString<List<HomeLayoutPreset>>(it) } catch (_: Exception) { emptyList() }
-            } ?: emptyList()
-            val next = if (current.any { it.id == preset.id }) {
-                current.map { if (it.id == preset.id) preset else it }
-            } else {
-                current + preset
-            }
-            prefs[Keys.HOME_LAYOUT_PRESETS] = json.encodeToString(next)
-        }
+        homeDiscoveryStore.saveHomeLayoutPreset(preset)
     }
 
     suspend fun deleteHomeLayoutPreset(presetId: String) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.HOME_LAYOUT_PRESETS]?.let {
-                try { json.decodeFromString<List<HomeLayoutPreset>>(it) } catch (_: Exception) { emptyList() }
-            } ?: emptyList()
-            prefs[Keys.HOME_LAYOUT_PRESETS] = json.encodeToString(current.filterNot { it.id == presetId })
-        }
+        homeDiscoveryStore.deleteHomeLayoutPreset(presetId)
     }
 
     suspend fun setContinueWatchingClickBehavior(behavior: ContinueWatchingClickBehavior) {
-        dataStore.edit { it[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] = behavior.name }
+        homeDiscoveryStore.setContinueWatchingClickBehavior(behavior)
     }
 
     suspend fun setCellularStreamingQuality(quality: StreamingQuality) {
-        dataStore.edit { it[Keys.CELLULAR_STREAMING_QUALITY] = quality.name }
+        playbackStore.setCellularStreamingQuality(quality)
     }
 
     suspend fun setShowWatchedCheckmark(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_WATCHED_CHECKMARK] = enabled }
+        homeDiscoveryStore.setShowWatchedCheckmark(enabled)
     }
 
     suspend fun setDefaultLibrarySortOrder(libraryId: String, order: String) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]?.let {
-                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
-            } ?: emptyMap()
-            val next = current.toMutableMap().apply { put(libraryId, order) }
-            prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS] = json.encodeToString(next)
-        }
+        libraryStore.setDefaultLibrarySortOrder(libraryId, order)
     }
 
     suspend fun setLibraryViewMode(libraryId: String, viewMode: String) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.LIBRARY_VIEW_MODES]?.let {
-                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
-            } ?: emptyMap()
-            val next = current.toMutableMap().apply { put(libraryId, viewMode) }
-            prefs[Keys.LIBRARY_VIEW_MODES] = json.encodeToString(next)
-        }
+        libraryStore.setLibraryViewMode(libraryId, viewMode)
     }
 
     suspend fun setLibraryFilters(libraryId: String, filters: String) {
-        dataStore.edit { prefs ->
-            val current = prefs[Keys.LIBRARY_FILTERS]?.let {
-                try { json.decodeFromString<Map<String, String>>(it) } catch (_: Exception) { emptyMap() }
-            } ?: emptyMap()
-            val next = current.toMutableMap().apply { put(libraryId, filters) }
-            prefs[Keys.LIBRARY_FILTERS] = json.encodeToString(next)
-        }
+        libraryStore.setLibraryFilters(libraryId, filters)
     }
 
     suspend fun setKeepScreenOnDuringVideo(enabled: Boolean) {
-        dataStore.edit { it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = enabled }
+        playbackStore.setKeepScreenOnDuringVideo(enabled)
     }
 
     suspend fun setDownloadQuality(quality: DownloadQuality) {
-        dataStore.edit { it[Keys.DOWNLOAD_QUALITY] = quality.name }
+        downloadsStore.setDownloadQuality(quality)
     }
 
     suspend fun setSmartDownloadsEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.SMART_DOWNLOADS_ENABLED] = enabled }
+        downloadsStore.setSmartDownloadsEnabled(enabled)
     }
 
     suspend fun setAutoDownloadNewEpisodes(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = enabled }
+        downloadsStore.setAutoDownloadNewEpisodes(enabled)
     }
 
     suspend fun setIncognitoModeEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.INCOGNITO_MODE_ENABLED] = enabled }
+        videoPlayerStore.setIncognitoModeEnabled(enabled)
     }
 
     suspend fun setShowTimeRemaining(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_TIME_REMAINING] = enabled }
+        videoPlayerStore.setShowTimeRemaining(enabled)
     }
 
     suspend fun setShowClockOnHome(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_CLOCK_ON_HOME] = enabled }
+        homeDiscoveryStore.setShowClockOnHome(enabled)
     }
 
     suspend fun setShowSettingsInHomeSearch(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = enabled }
+        homeDiscoveryStore.setShowSettingsInHomeSearch(enabled)
     }
 
     suspend fun setShowClockInPlayer(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_CLOCK_IN_PLAYER] = enabled }
+        videoPlayerStore.setShowClockInPlayer(enabled)
     }
 
     suspend fun setPauseOnAudioFocusLoss(enabled: Boolean) {
-        dataStore.edit { it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = enabled }
+        playbackStore.setPauseOnAudioFocusLoss(enabled)
     }
 
     suspend fun setDuckOnTransientFocusLoss(enabled: Boolean) {
-        dataStore.edit { it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = enabled }
+        playbackStore.setDuckOnTransientFocusLoss(enabled)
     }
 
     suspend fun setVolumeBoostEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.VOLUME_BOOST_ENABLED] = enabled }
+        audioEffectsStore.setVolumeBoostEnabled(enabled)
     }
 
     suspend fun setVolumeBoostGain(gain: Int) {
-        dataStore.edit { it[Keys.VOLUME_BOOST_GAIN] = gain }
+        audioEffectsStore.setVolumeBoostGain(gain)
     }
 
     suspend fun setAudioLyricsVisible(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_LYRICS_VISIBLE] = enabled }
+        audioStore.setAudioLyricsVisible(enabled)
     }
 
     suspend fun setShowShareMediaOption(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_SHARE_MEDIA_OPTION] = enabled }
+        experimentalStore.setShowShareMediaOption(enabled)
     }
 
     suspend fun setShowExternalRatings(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_EXTERNAL_RATINGS] = enabled }
+        homeDiscoveryStore.setShowExternalRatings(enabled)
     }
 
     suspend fun clearAll() {
@@ -1785,31 +1342,31 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setDialogueBoostEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.DIALOGUE_BOOST_ENABLED] = enabled }
+        audioEffectsStore.setDialogueBoostEnabled(enabled)
     }
 
     suspend fun setDialogueBoostStrength(strength: EffectStrength) {
-        dataStore.edit { it[Keys.DIALOGUE_BOOST_STRENGTH] = strength.name }
+        audioEffectsStore.setDialogueBoostStrength(strength)
     }
 
     suspend fun setEqualizerEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.EQUALIZER_ENABLED] = enabled }
+        audioEffectsStore.setEqualizerEnabled(enabled)
     }
 
     suspend fun setEqualizerSettings(settings: EqualizerSettings) {
-        dataStore.edit { it[Keys.EQUALIZER_SETTINGS] = json.encodeToString(settings) }
+        audioEffectsStore.setEqualizerSettings(settings)
     }
 
     suspend fun setAudioDelay(ms: Long) {
-        dataStore.edit { it[Keys.AUDIO_DELAY_MS] = ms }
+        audioStore.setAudioDelay(ms)
     }
 
     suspend fun setDecoderMode(mode: DecoderMode) {
-        dataStore.edit { it[Keys.DECODER_MODE] = mode.name }
+        playbackStore.setDecoderMode(mode)
     }
 
     suspend fun setAudioPassthrough(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_PASSTHROUGH] = enabled }
+        playbackStore.setAudioPassthrough(enabled)
     }
 
     suspend fun setFrameRateMatching(enabled: Boolean) {
@@ -1824,31 +1381,31 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setNightModeEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.NIGHT_MODE_ENABLED] = enabled }
+        audioEffectsStore.setNightModeEnabled(enabled)
     }
 
     suspend fun setNightModeStrength(strength: EffectStrength) {
-        dataStore.edit { it[Keys.NIGHT_MODE_STRENGTH] = strength.name }
+        audioEffectsStore.setNightModeStrength(strength)
     }
 
     suspend fun setHomeMode(mode: HomeMode) {
-        dataStore.edit { it[Keys.HOME_MODE] = mode.name }
+        homeDiscoveryStore.setHomeMode(mode)
     }
 
     suspend fun setVideoSeekDurationMs(ms: Long) {
-        dataStore.edit { it[Keys.VIDEO_SEEK_DURATION_MS] = ms }
+        videoPlayerStore.setVideoSeekDurationMs(ms)
     }
 
     suspend fun setVideoDefaultOrientation(mode: OrientationMode) {
-        dataStore.edit { it[Keys.VIDEO_DEFAULT_ORIENTATION] = mode.name }
+        videoPlayerStore.setVideoDefaultOrientation(mode)
     }
 
     suspend fun setVideoControlsTimeoutMs(ms: Long) {
-        dataStore.edit { it[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = ms }
+        videoPlayerStore.setVideoControlsTimeoutMs(ms)
     }
 
     suspend fun setVideoGesturesEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_GESTURES_ENABLED] = enabled }
+        videoPlayerStore.setVideoGesturesEnabled(enabled)
     }
 
     suspend fun setVideoSkipBackOnResumeMs(ms: Long) {
@@ -1864,103 +1421,103 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setVideoHoldSpeedEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_HOLD_SPEED_ENABLED] = enabled }
+        videoPlayerStore.setVideoHoldSpeedEnabled(enabled)
     }
 
     suspend fun setVideoHoldSpeedMultiplier(multiplier: Float) {
-        dataStore.edit { it[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = multiplier }
+        videoPlayerStore.setVideoHoldSpeedMultiplier(multiplier)
     }
 
     suspend fun setVideoDefaultSpeed(speed: Float) {
-        dataStore.edit { it[Keys.VIDEO_DEFAULT_SPEED] = speed }
+        videoPlayerStore.setVideoDefaultSpeed(speed)
     }
 
     suspend fun setVideoDefaultAspectRatio(ratio: String) {
-        dataStore.edit { it[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = ratio }
+        videoPlayerStore.setVideoDefaultAspectRatio(ratio)
     }
 
     suspend fun setVideoAutoplayNext(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_AUTOPLAY_NEXT] = enabled }
+        videoPlayerStore.setVideoAutoplayNext(enabled)
     }
 
     suspend fun setTrailerAutoplay(enabled: Boolean) {
-        dataStore.edit { it[Keys.TRAILER_AUTOPLAY] = enabled }
+        videoPlayerStore.setTrailerAutoplay(enabled)
     }
 
     suspend fun setCinemaModeEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.CINEMA_MODE_ENABLED] = enabled }
+        videoPlayerStore.setCinemaModeEnabled(enabled)
     }
 
     suspend fun setVideoSwipeSeekMaxMs(ms: Long) {
-        dataStore.edit { it[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = ms }
+        videoPlayerStore.setVideoSwipeSeekMaxMs(ms)
     }
 
     suspend fun setVideoRememberBrightness(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_REMEMBER_BRIGHTNESS] = enabled }
+        videoPlayerStore.setVideoRememberBrightness(enabled)
     }
 
     suspend fun setVideoBrightnessLevel(level: Float) {
-        dataStore.edit { it[Keys.VIDEO_BRIGHTNESS_LEVEL] = level }
+        videoPlayerStore.setVideoBrightnessLevel(level)
     }
 
     suspend fun setVideoRememberVolume(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_REMEMBER_VOLUME] = enabled }
+        videoPlayerStore.setVideoRememberVolume(enabled)
     }
 
     suspend fun setVideoVolumeLevel(level: Float) {
-        dataStore.edit { it[Keys.VIDEO_VOLUME_LEVEL] = level }
+        videoPlayerStore.setVideoVolumeLevel(level)
     }
 
     suspend fun setVideoAutoSkipIntro(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_AUTO_SKIP_INTRO] = enabled }
+        videoPlayerStore.setVideoAutoSkipIntro(enabled)
     }
 
     suspend fun setVideoAutoSkipOutro(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_AUTO_SKIP_OUTRO] = enabled }
+        videoPlayerStore.setVideoAutoSkipOutro(enabled)
     }
 
     suspend fun setVideoRememberMuted(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_REMEMBER_MUTED] = enabled }
+        videoPlayerStore.setVideoRememberMuted(enabled)
     }
 
     suspend fun setVideoMuted(muted: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_MUTED] = muted }
+        videoPlayerStore.setVideoMuted(muted)
     }
 
     suspend fun setSubtitlePreviewInSettings(enabled: Boolean) {
-        dataStore.edit { it[Keys.SUBTITLE_PREVIEW_IN_SETTINGS] = enabled }
+        subtitleLanguageStore.setSubtitlePreviewInSettings(enabled)
     }
 
     suspend fun setVideoGestureIndicatorSide(side: GestureIndicatorSide) {
-        dataStore.edit { it[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = side.name }
+        videoPlayerStore.setVideoGestureIndicatorSide(side)
     }
 
     suspend fun setAudioDefaultSpeed(speed: Float) {
-        dataStore.edit { it[Keys.AUDIO_DEFAULT_SPEED] = speed }
+        audioStore.setAudioDefaultSpeed(speed)
     }
 
     suspend fun setAudioNightModeVolume(volume: Float) {
-        dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_VOLUME] = volume }
+        audioStore.setAudioNightModeVolume(volume)
     }
 
     suspend fun setAudioNightModeGain(gain: Int) {
-        dataStore.edit { it[Keys.AUDIO_NIGHT_MODE_GAIN] = gain }
+        audioStore.setAudioNightModeGain(gain)
     }
 
     suspend fun setAudioSkipPreviousThresholdMs(ms: Long) {
-        dataStore.edit { it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = ms }
+        audioStore.setAudioSkipPreviousThresholdMs(ms)
     }
 
     suspend fun setAudioAutoplayNext(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_AUTOPLAY_NEXT] = enabled }
+        audioStore.setAudioAutoplayNext(enabled)
     }
 
     suspend fun setTrickplayEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.TRICKPLAY_ENABLED] = enabled }
+        videoPlayerStore.setTrickplayEnabled(enabled)
     }
 
     suspend fun setTrickplayOnSeekGesture(enabled: Boolean) {
-        dataStore.edit { it[Keys.TRICKPLAY_ON_SEEK_GESTURE] = enabled }
+        videoPlayerStore.setTrickplayOnSeekGesture(enabled)
     }
 
     suspend fun setSegmentBehavior(type: MediaSegmentType, behavior: SegmentBehavior) {
@@ -1970,143 +1527,143 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = enabled }
+        videoPlayerStore.setVideoEpisodeBrowserEnabled(enabled)
     }
 
     suspend fun setVideoShowPlaybackMetadata(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = enabled }
+        videoPlayerStore.setVideoShowPlaybackMetadata(enabled)
     }
 
     suspend fun setVideoPreloadBufferSize(size: PreloadBufferSize) {
-        dataStore.edit { it[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = size.name }
+        videoPlayerStore.setVideoPreloadBufferSize(size)
     }
 
     suspend fun setAudioPreloadBufferSize(size: PreloadBufferSize) {
-        dataStore.edit { it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = size.name }
+        audioStore.setAudioPreloadBufferSize(size)
     }
 
     suspend fun setAudioCachingEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_CACHING_ENABLED] = enabled }
+        audioCacheStore.setAudioCachingEnabled(enabled)
     }
 
     suspend fun setAudioCacheSizeMb(sizeMb: Int) {
-        dataStore.edit { it[Keys.AUDIO_CACHE_SIZE_MB] = sizeMb }
+        audioCacheStore.setAudioCacheSizeMb(sizeMb)
     }
 
     suspend fun setAudioPrefetchLookahead(lookahead: Int) {
-        dataStore.edit { it[Keys.AUDIO_PREFETCH_LOOKAHEAD] = lookahead }
+        audioCacheStore.setAudioPrefetchLookahead(lookahead)
     }
 
     suspend fun setAudioPrefetchBackfill(backfill: Int) {
-        dataStore.edit { it[Keys.AUDIO_PREFETCH_BACKFILL] = backfill }
+        audioCacheStore.setAudioPrefetchBackfill(backfill)
     }
 
     suspend fun setAudioCacheNetworkPolicy(policy: AudioCacheNetworkPolicy) {
-        dataStore.edit { it[Keys.AUDIO_CACHE_NETWORK_POLICY] = policy.name }
+        audioCacheStore.setAudioCacheNetworkPolicy(policy)
     }
 
     suspend fun setAudioCacheCellularMonthlyCapMb(capMb: Int) {
-        dataStore.edit { it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = capMb }
+        audioCacheStore.setAudioCacheCellularMonthlyCapMb(capMb)
     }
 
     suspend fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
-        dataStore.edit { it[Keys.AUDIO_NORMALIZATION_MODE] = mode.name }
+        audioStore.setAudioNormalizationMode(mode)
     }
 
     suspend fun setAudioNormalizationEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_NORMALIZATION_ENABLED] = enabled }
+        audioStore.setAudioNormalizationEnabled(enabled)
     }
 
     suspend fun setReplayGainPreAmpDb(db: Float) {
-        dataStore.edit { it[Keys.REPLAYGAIN_PRE_AMP_DB] = db }
+        audioStore.setReplayGainPreAmpDb(db)
     }
 
     suspend fun setChannelMixMode(mode: ChannelMixMode) {
-        dataStore.edit { it[Keys.CHANNEL_MIX_MODE] = mode.name }
+        audioStore.setChannelMixMode(mode)
     }
 
     suspend fun setChannelMixEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.CHANNEL_MIX_ENABLED] = enabled }
+        audioStore.setChannelMixEnabled(enabled)
     }
 
     suspend fun setGaplessEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUDIO_GAPLESS_ENABLED] = enabled }
+        audioStore.setAudioGaplessEnabled(enabled)
     }
 
     suspend fun setCrossfadeDurationMs(ms: Long) {
-        dataStore.edit { it[Keys.AUDIO_CROSSFADE_DURATION_MS] = ms }
+        audioStore.setAudioCrossfadeDurationMs(ms)
     }
 
     suspend fun setSleepTimerDurationMs(ms: Long) {
-        dataStore.edit { it[Keys.SLEEP_TIMER_DURATION_MS] = ms }
+        audioStore.setSleepTimerDurationMs(ms)
     }
 
     suspend fun setSleepTimerEndOfEpisode(enabled: Boolean) {
-        dataStore.edit { it[Keys.SLEEP_TIMER_END_OF_EPISODE] = enabled }
+        audioStore.setSleepTimerEndOfEpisode(enabled)
     }
 
     suspend fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
-        dataStore.edit { it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(categories) }
+        screensaverStore.setDreamImageCategories(categories)
     }
 
     suspend fun setDreamSlideshowIntervalMs(ms: Long) {
-        dataStore.edit { it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = ms }
+        screensaverStore.setDreamSlideshowIntervalMs(ms)
     }
 
     suspend fun setDreamKenBurnsEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.DREAM_KEN_BURNS_ENABLED] = enabled }
+        screensaverStore.setDreamKenBurnsEnabled(enabled)
     }
 
     suspend fun setDreamTransitionStyle(style: DreamTransitionStyle) {
-        dataStore.edit { it[Keys.DREAM_TRANSITION_STYLE] = style.name }
+        screensaverStore.setDreamTransitionStyle(style)
     }
 
     suspend fun setDreamShowTitle(enabled: Boolean) {
-        dataStore.edit { it[Keys.DREAM_SHOW_TITLE] = enabled }
+        screensaverStore.setDreamShowTitle(enabled)
     }
 
     suspend fun setEqualizerPreset(preset: EqualizerPreset) {
-        dataStore.edit { it[Keys.EQUALIZER_PRESET] = preset.name }
+        audioEffectsStore.setEqualizerPreset(preset)
     }
 
     suspend fun setBassBoostEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BASS_BOOST_ENABLED] = enabled }
+        audioEffectsStore.setBassBoostEnabled(enabled)
     }
 
     suspend fun setBassBoostStrength(strength: EffectStrength) {
-        dataStore.edit { it[Keys.BASS_BOOST_STRENGTH] = strength.name }
+        audioEffectsStore.setBassBoostStrength(strength)
     }
 
     suspend fun setVirtualizerEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIRTUALIZER_ENABLED] = enabled }
+        audioEffectsStore.setVirtualizerEnabled(enabled)
     }
 
     suspend fun setVirtualizerStrength(strength: Int) {
-        dataStore.edit { it[Keys.VIRTUALIZER_STRENGTH] = strength }
+        audioEffectsStore.setVirtualizerStrength(strength)
     }
 
     suspend fun setReverbPreset(preset: ReverbPreset) {
-        dataStore.edit { it[Keys.REVERB_PRESET] = preset.name }
+        audioEffectsStore.setReverbPreset(preset)
     }
 
     suspend fun setLrBalance(balance: Float) {
-        dataStore.edit { it[Keys.LR_BALANCE] = balance }
+        audioEffectsStore.setLrBalance(balance)
     }
 
     suspend fun setAutoEqByGenre(enabled: Boolean) {
-        dataStore.edit { it[Keys.AUTO_EQ_BY_GENRE] = enabled }
+        audioEffectsStore.setAutoEqByGenre(enabled)
     }
 
     suspend fun setPitchSemitones(semitones: Float) {
-        dataStore.edit { it[Keys.PITCH_SEMITONES] = semitones }
+        audioEffectsStore.setPitchSemitones(semitones)
     }
 
     suspend fun setWifiOnlyDownloads(enabled: Boolean) {
-        dataStore.edit { it[Keys.WIFI_ONLY_DOWNLOADS] = enabled }
+        downloadsStore.setWifiOnlyDownloads(enabled)
     }
 
     suspend fun setDownloadConnections(count: Int) {
-        dataStore.edit { it[Keys.DOWNLOAD_CONNECTIONS] = count }
+        downloadsStore.setDownloadConnections(count)
     }
 
     suspend fun setMaxConcurrentDownloads(count: Int) {
@@ -2116,44 +1673,31 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
-        dataStore.edit {
-            it[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(types.map { t -> t.name }.toSet())
-        }
+        homeDiscoveryStore.setEnabledHomeSectionTypes(types)
     }
 
     suspend fun setHomeSectionOrder(order: List<HomeSectionType>) {
-        dataStore.edit {
-            val normalized = buildList {
-                addAll(order.filter { it in HomeSectionType.CONFIGURABLE }.distinct())
-                addAll(HomeSectionType.CONFIGURABLE.filterNot { it in this })
-            }
-            it[Keys.HOME_SECTION_ORDER] = json.encodeToString(normalized.map { t -> t.name })
-        }
+        homeDiscoveryStore.setHomeSectionOrder(order)
     }
 
     suspend fun setLibraryHomeSectionOverrides(overrides: Map<String, Set<HomeSectionType>>) {
-        // Drop entries with empty disabled-sets so the map stays clean and
-        // "fully enabled" libraries simply have no key.
-        val cleaned = overrides.filterValues { it.isNotEmpty() }
-        dataStore.edit {
-            it[Keys.HOME_LIBRARY_SECTION_OVERRIDES] = json.encodeToString(cleaned)
-        }
+        homeDiscoveryStore.setLibraryHomeSectionOverrides(overrides)
     }
 
     suspend fun setNavBarShowLabels(show: Boolean) {
-        dataStore.edit { it[Keys.NAV_BAR_SHOW_LABELS] = show }
+        navigationStore.setNavBarShowLabels(show)
     }
 
     suspend fun setHideBottomNavOnScroll(hide: Boolean) {
-        dataStore.edit { it[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = hide }
+        navigationStore.setHideBottomNavOnScroll(hide)
     }
 
     suspend fun setHomeHeroEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.HOME_HERO_ENABLED] = enabled }
+        homeDiscoveryStore.setHomeHeroEnabled(enabled)
     }
 
     suspend fun setHomeBackdropEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.HOME_BACKDROP_ENABLED] = enabled }
+        homeDiscoveryStore.setHomeBackdropEnabled(enabled)
     }
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
@@ -2161,43 +1705,43 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setMpvConfig(config: MpvEngineConfig) {
-        dataStore.edit { it[Keys.MPV_CONFIG] = json.encodeToString(config) }
+        engineStore.setMpvConfig(config)
     }
 
     suspend fun setLibVlcConfig(config: LibVlcEngineConfig) {
-        dataStore.edit { it[Keys.LIBVLC_CONFIG] = json.encodeToString(config) }
+        engineStore.setLibVlcConfig(config)
     }
 
     suspend fun setExoPlayerConfig(config: ExoPlayerEngineConfig) {
-        dataStore.edit { it[Keys.EXO_CONFIG] = json.encodeToString(config) }
+        engineStore.setExoPlayerConfig(config)
     }
 
     suspend fun setPerformanceMode(enabled: Boolean) {
-        dataStore.edit { it[Keys.PERFORMANCE_MODE] = enabled }
+        appearanceStore.setPerformanceMode(enabled)
     }
 
     suspend fun setNewsletterEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled }
+        notificationStore.setNewsletterEnabled(enabled)
     }
 
     suspend fun setNewsletterDayOfWeek(day: Int) {
-        dataStore.edit { it[Keys.NEWSLETTER_DAY_OF_WEEK] = day }
+        notificationStore.setNewsletterDayOfWeek(day)
     }
 
     suspend fun setNewsletterLastViewed(timestampMs: Long) {
-        dataStore.edit { it[Keys.NEWSLETTER_LAST_VIEWED_MS] = timestampMs }
+        notificationStore.setNewsletterLastViewed(timestampMs)
     }
 
     suspend fun setAccentColorSwatch(swatch: String) {
-        dataStore.edit { it[Keys.ACCENT_COLOR_SWATCH] = swatch }
+        appearanceStore.setAccentColorSwatch(swatch)
     }
 
     suspend fun setColorStyle(style: ColorStyle) {
-        dataStore.edit { it[Keys.COLOR_STYLE] = style.name }
+        appearanceStore.setColorStyle(style)
     }
 
     suspend fun setLibraryViewMode(mode: LibraryViewMode) {
-        dataStore.edit { it[Keys.LIBRARY_VIEW_MODE] = mode.name }
+        libraryStore.setLibraryViewMode(mode)
     }
 
     suspend fun restorePreferences(prefs: UserPreferences, restoreSecuritySensitive: Boolean = true) {
@@ -2220,16 +1764,13 @@ class UserPreferencesStore @Inject constructor(
         syncPlayCastStore.restorePreferences(prefs, restoreSecuritySensitive)
         experimentalStore.restorePreferences(prefs, restoreSecuritySensitive)
 
+        engineStore.restorePerItemMaps(
+            mediaStreamSelections = prefs.mediaStreamSelections,
+            videoEffectsByItem = prefs.videoEffectsByItem,
+        )
+
         val json = ENCODE_DEFAULTS_JSON
         dataStore.edit { settings ->
-            settings[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(
-                kotlinx.serialization.serializer<Map<String, com.raulshma.jellyplay.core.model.MediaStreamSelection>>(),
-                prefs.mediaStreamSelections,
-            )
-            settings[Keys.VIDEO_EFFECTS_SELECTIONS] = json.encodeToString(
-                kotlinx.serialization.serializer<Map<String, VideoEffectsConfig>>(),
-                prefs.videoEffectsByItem,
-            )
             settings[Keys.ONBOARDING_COMPLETED] = prefs.onboardingCompleted
             prefs.watchLaterPlaylistId?.let { settings[Keys.WATCH_LATER_PLAYLIST_ID] = it }
             settings[Keys.FAVORITE_CHANNELS] = json.encodeToString(prefs.favoriteChannels)
@@ -2241,40 +1782,10 @@ class UserPreferencesStore @Inject constructor(
         .stateIn(scope, SharingStarted.Eagerly, NotificationPreferences())
 
     suspend fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
-        dataStore.edit { prefs ->
-            val current = NotificationPreferences(
-                enabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: false,
-                checkFrequency = try {
-                    CheckFrequency.valueOf(prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] ?: CheckFrequency.EVERY_6_HOURS.name)
-                } catch (_: Exception) { CheckFrequency.EVERY_6_HOURS },
-                quietHoursEnabled = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] ?: false,
-                quietHoursStart = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_START] ?: 1380,
-                quietHoursEnd = prefs[Keys.NOTIFICATIONS_QUIET_HOURS_END] ?: 420,
-                soundEnabled = prefs[Keys.NOTIFICATIONS_SOUND_ENABLED] ?: true,
-                vibrateEnabled = prefs[Keys.NOTIFICATIONS_VIBRATE_ENABLED] ?: true,
-                lightsEnabled = prefs[Keys.NOTIFICATIONS_LIGHTS_ENABLED] ?: true,
-                maxPerCheck = prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] ?: 10,
-                libraryConfigs = try {
-                    prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS]?.let {
-                        json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
-                    } ?: emptyMap()
-                } catch (_: Exception) { emptyMap() },
-            )
-            val updated = transform(current)
-            prefs[Keys.NOTIFICATIONS_ENABLED] = updated.enabled
-            prefs[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = updated.checkFrequency.name
-            prefs[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = updated.quietHoursEnabled
-            prefs[Keys.NOTIFICATIONS_QUIET_HOURS_START] = updated.quietHoursStart
-            prefs[Keys.NOTIFICATIONS_QUIET_HOURS_END] = updated.quietHoursEnd
-            prefs[Keys.NOTIFICATIONS_SOUND_ENABLED] = updated.soundEnabled
-            prefs[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = updated.vibrateEnabled
-            prefs[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = updated.lightsEnabled
-            prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] = updated.maxPerCheck
-            prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(
-                kotlinx.serialization.serializer<Map<String, LibraryNotificationConfig>>(),
-                updated.libraryConfigs,
-            )
-        }
+        // Forwarded to NotificationStore: the 10-key atomic read-modify-write
+        // (decode aggregate → apply transform → re-encode) has a single owner
+        // there.
+        notificationStore.updateNotificationPreferences(transform)
     }
 
     val recentDlnaDevices: Flow<List<DlnaDeviceRef>>
@@ -2313,59 +1824,59 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setDataSaverEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.DATA_SAVER_ENABLED] = enabled }
+        networkOfflineStore.setDataSaverEnabled(enabled)
     }
 
     suspend fun setVerboseNetworkLogging(enabled: Boolean) {
-        dataStore.edit { it[Keys.VERBOSE_NETWORK_LOGGING] = enabled }
+        networkOfflineStore.setVerboseNetworkLogging(enabled)
     }
 
     suspend fun setNetworkTimeoutPreset(preset: NetworkTimeoutPreset) {
-        dataStore.edit { it[Keys.NETWORK_TIMEOUT_PRESET] = preset.name }
+        networkOfflineStore.setNetworkTimeoutPreset(preset)
     }
 
     suspend fun setReduceMotionEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.REDUCE_MOTION_ENABLED] = enabled }
+        appearanceStore.setReduceMotionEnabled(enabled)
     }
 
     suspend fun setPreferAudioDescription(enabled: Boolean) {
-        dataStore.edit { it[Keys.PREFER_AUDIO_DESCRIPTION] = enabled }
+        subtitleLanguageStore.setPreferAudioDescription(enabled)
     }
 
     suspend fun setHighContrastSubtitles(enabled: Boolean) {
-        dataStore.edit { it[Keys.HIGH_CONTRAST_SUBTITLES] = enabled }
+        subtitleLanguageStore.setHighContrastSubtitles(enabled)
     }
 
     suspend fun setHideSearchHistory(enabled: Boolean) {
-        dataStore.edit { it[Keys.HIDE_SEARCH_HISTORY] = enabled }
+        experimentalStore.setHideSearchHistory(enabled)
     }
 
     suspend fun setBlueLightFilterEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_ENABLED] = enabled }
+        appearanceStore.setBlueLightFilterEnabled(enabled)
     }
 
     suspend fun setBlueLightFilterStrength(strength: Float) {
-        dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = strength }
+        appearanceStore.setBlueLightFilterStrength(strength)
     }
 
     suspend fun setTvZoomModePercent(percent: Float) {
-        dataStore.edit { it[Keys.TV_ZOOM_MODE_PERCENT] = percent }
+        videoPlayerStore.setTvZoomModePercent(percent)
     }
 
     suspend fun setMaxDownloadStorageGb(gb: Int) {
-        dataStore.edit { it[Keys.MAX_DOWNLOAD_STORAGE_GB] = gb }
+        downloadsStore.setMaxDownloadStorageGb(gb)
     }
 
     suspend fun setDownloadStorageLocation(location: String) {
-        dataStore.edit { it[Keys.DOWNLOAD_STORAGE_LOCATION] = location }
+        downloadsStore.setDownloadStorageLocation(location)
     }
 
     suspend fun setAndroidTvWatchNextEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = enabled }
+        playbackStore.setAndroidTvWatchNextEnabled(enabled)
     }
 
     suspend fun setUserDataSyncEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.USER_DATA_SYNC_ENABLED] = enabled }
+        playbackStore.setUserDataSyncEnabled(enabled)
     }
 
     suspend fun setSynthwaveMode(enabled: Boolean) {

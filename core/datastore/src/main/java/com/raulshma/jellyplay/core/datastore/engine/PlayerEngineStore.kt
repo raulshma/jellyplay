@@ -274,6 +274,53 @@ class PlayerEngineStore @Inject constructor(
             )
         }
     }
+
+    /**
+     * Bulk-restores the two per-item recall maps from a decoded backup,
+     * applying the same neutral-entry stripping and 100-entry LRU eviction as
+     * [setMediaStreamSelection] / [setVideoEffectsForItem] so the cap has a
+     * single owner. Previously the facade wrote these blobs directly, which
+     * bypassed the bound and let a restore grow storage unbounded.
+     *
+     * `MediaStreamSelection` entries with both indices `null` and neutral
+     * `VideoEffectsConfig` entries are dropped, matching the per-item setters'
+     * clear-on-neutral semantics. Eviction preserves the most-recently-written
+     * entries (map insertion order), matching the per-item eviction.
+     */
+    internal suspend fun restorePerItemMaps(
+        mediaStreamSelections: Map<String, MediaStreamSelection>,
+        videoEffectsByItem: Map<String, VideoEffectsConfig>,
+    ) {
+        dataStore.edit { prefs ->
+            val streams = mediaStreamSelections
+                .filter { (_, v) -> v.audioStreamIndex != null || v.subtitleStreamIndex != null }
+                .let { capMap(it) }
+            prefs[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, MediaStreamSelection>>(), streams,
+            )
+
+            val effects = videoEffectsByItem
+                .filter { (_, v) -> !v.isNeutral }
+                .let { capMap(it) }
+            prefs[Keys.VIDEO_EFFECTS_SELECTIONS] = json.encodeToString(
+                kotlinx.serialization.serializer<Map<String, VideoEffectsConfig>>(), effects,
+            )
+        }
+    }
+
+    /**
+     * Evicts the oldest entries beyond the 100-entry cap, mirroring the
+     * `current.size > 100` eviction in the per-item setters (map iteration is
+     * insertion-ordered in Kotlin's `LinkedHashMap`, so `entries.drop(n)`
+     * removes the n oldest keys, matching `current.keys.take(excess)` eviction).
+     */
+    private fun <K, V> capMap(map: Map<K, V>): Map<K, V> {
+        if (map.size <= 100) return map
+        val keep = map.entries.drop(map.size - 100)
+        return LinkedHashMap<K, V>(keep.size).apply {
+            keep.forEach { put(it.key, it.value) }
+        }
+    }
 }
 
 /**
