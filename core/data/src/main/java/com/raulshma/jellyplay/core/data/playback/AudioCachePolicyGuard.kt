@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheSlice
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
@@ -28,7 +29,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class AudioCachePolicyGuard @Inject constructor(
-    private val preferencesStore: UserPreferencesStore,
+    private val audioCacheStore: AudioCacheStore,
     private val networkMonitor: NetworkMonitor,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
@@ -37,7 +38,7 @@ class AudioCachePolicyGuard @Inject constructor(
     private val cellularMonthEpoch = MutableStateFlow(currentMonthEpoch())
 
     val isPrefetchAllowed: StateFlow<Boolean> = combine(
-        preferencesStore.preferences,
+        audioCacheStore.audioCache,
         networkMonitor.networkStatus,
         networkMonitor.isMetered,
         cellularBytesThisMonth,
@@ -59,7 +60,7 @@ class AudioCachePolicyGuard @Inject constructor(
     )
 
     private fun evaluate(
-        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+        prefs: AudioCacheSlice,
         network: NetworkStatus,
         metered: Boolean,
         cellularBytes: Long,

@@ -78,6 +78,7 @@ class DetailViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
     private val preferencesStore: UserPreferencesStore,
+    private val preferencesAggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator,
     private val experimentalStore: ExperimentalStore,
     private val downloadsStore: DownloadsStore,
     private val appRuntimeStateStore: AppRuntimeStateStore,
@@ -92,7 +93,7 @@ class DetailViewModel @Inject constructor(
     private val arrRepository: ArrRepository,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
+    val preferences: StateFlow<UserPreferences> = preferencesAggregator.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
     // Single source of truth for detail-screen state. All mutations

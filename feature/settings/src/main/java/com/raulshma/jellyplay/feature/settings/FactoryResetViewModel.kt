@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -21,7 +20,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class FactoryResetViewModel @Inject constructor(
-    private val store: UserPreferencesStore,
+    private val preferencesAggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator,
     private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {
 
@@ -33,7 +32,7 @@ class FactoryResetViewModel @Inject constructor(
 
     init {
         launch {
-            store.preferences.collect { prefs ->
+            preferencesAggregator.preferences.collect { prefs ->
                 preferences = prefs
             }
         }

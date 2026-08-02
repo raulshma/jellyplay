@@ -202,6 +202,9 @@ class VideoPlayerViewModel @Inject constructor(
     private val subtitleStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
     private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore,
     private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
+    private val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
+    private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
     private val sessionManager: PlaybackSessionManager,
     private val castManager: CastManager,
     private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
@@ -581,7 +584,7 @@ class VideoPlayerViewModel @Inject constructor(
      *    user via [userMessageBus] instead of happening invisibly.
      */
     private fun handleSmartDownloadCleanup(itemId: String) {
-        if (!preferencesStore.preferences.value.smartDownloadsEnabled) return
+        if (!downloadsStore.downloads.value.smartDownloadsEnabled) return
         if (_uiState.value.duration < MIN_DURATION_FOR_SMART_DELETE_MS) return
         launch {
             if (!offlinePlaybackFacade.deleteDownload(itemId)) return@launch
@@ -593,7 +596,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    val hapticsEnabled: Boolean get() = preferencesStore.preferences.value.hapticsEnabled
+    val hapticsEnabled: Boolean get() = appearanceStore.appearance.value.hapticsEnabled
 
     // Declared BEFORE the `init {}` block below because the engine-flow
     // collector launched from init calls `trackSelectionHelper.updateTracksFromEngine()`.
@@ -1282,7 +1285,7 @@ class VideoPlayerViewModel @Inject constructor(
                 tvZoomModePercent = agg.videoPlayer.tvZoomModePercent,
                 keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo,
                 streamingQuality = agg.playback.streamingQuality,
-                adaptiveBitrateEnabled = preferencesStore.preferences.value.adaptiveBitrateEnabled,
+                adaptiveBitrateEnabled = networkOfflineStore.networkOffline.value.adaptiveBitrateEnabled,
                 playbackMode = agg.playback.playbackMode,
                 videoAutoplayNext = agg.videoPlayer.videoAutoplayNext,
                 autoPlayCountdownSec = agg.playback.autoPlayCountdownSec,

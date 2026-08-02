@@ -39,12 +39,12 @@ private const val TAG = "SeerrDetailVM"
 class SeerrDetailViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
-    private val preferencesStore: UserPreferencesStore,
+    private val preferencesAggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val mediaRepository: MediaRepository,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
+    val preferences: StateFlow<UserPreferences> = preferencesAggregator.preferences
         .stateIn(
             scope = scope,
             started = SharingStarted.WhileSubscribed(5_000),
