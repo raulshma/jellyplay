@@ -29,13 +29,7 @@ class UserPreferencesStoreResetCoverageTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val dataStore = TestDataStoreProvider.get(context)
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        val store = UserPreferencesStore(
-            scope,
-            dataStore,
-            com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore(dataStore, scope),
-            com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore(dataStore, scope),
-            com.raulshma.jellyplay.core.datastore.security.PinRateLimiter(dataStore, scope),
-        )
+        val store = createUserPreferencesStore(scope, dataStore)
 
         val uncovered = store.uncoveredResetKeys()
 

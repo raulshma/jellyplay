@@ -108,6 +108,16 @@ class UserPreferencesStore @Inject constructor(
     private val widgetDataStore: com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore,
     private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore,
     private val pinRateLimiter: com.raulshma.jellyplay.core.datastore.security.PinRateLimiter,
+    // Domain stores: the facade forwards invariant-bearing setters to these so
+    // the cross-key mutex / coerce / LRU / migration logic has a single owner.
+    // All stores share the same `"user_prefs"` DataStore, so writes are
+    // consistent regardless of which entry point a consumer uses.
+    private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
+    private val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore,
+    private val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
+    private val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore,
+    private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
 ) {
     private val scope = externalScope
 
@@ -441,24 +451,6 @@ class UserPreferencesStore @Inject constructor(
     private fun readLong(prefs: Preferences, key: Preferences.Key<Long>, name: String, default: Long): Long =
         PreferenceCodec.readLong(prefs, key, name, default)
 
-    private fun readMediaStreamSelections(prefs: Preferences): Map<String, MediaStreamSelection> {
-        val raw = prefs[Keys.MEDIA_STREAM_SELECTIONS] ?: return emptyMap()
-        return try {
-            json.decodeFromString<Map<String, MediaStreamSelection>>(raw)
-        } catch (_: Exception) {
-            emptyMap()
-        }
-    }
-
-    private fun readVideoEffectsByItem(prefs: Preferences): Map<String, VideoEffectsConfig> {
-        val raw = prefs[Keys.VIDEO_EFFECTS_SELECTIONS] ?: return emptyMap()
-        return try {
-            json.decodeFromString<Map<String, VideoEffectsConfig>>(raw)
-        } catch (_: Exception) {
-            emptyMap()
-        }
-    }
-
     private fun readSegmentBehaviors(prefs: Preferences): Map<MediaSegmentType, SegmentBehavior> {
         val raw = prefs[Keys.SEGMENT_BEHAVIORS]
         if (raw != null) {
@@ -498,29 +490,6 @@ class UserPreferencesStore @Inject constructor(
         return SegmentBehavior.DEFAULT_BEHAVIORS + migrated
     }
 
-    private suspend fun writeMediaStreamSelections(
-        itemId: String,
-        audioStreamIndex: Int? = null,
-        subtitleStreamIndex: Int? = null,
-    ) {
-        dataStore.edit { prefs ->
-            val current = readMediaStreamSelections(prefs).toMutableMap()
-            if (audioStreamIndex == null && subtitleStreamIndex == null) {
-                current.remove(itemId)
-            } else {
-                current[itemId] = MediaStreamSelection(
-                    audioStreamIndex = audioStreamIndex,
-                    subtitleStreamIndex = subtitleStreamIndex,
-                )
-            }
-            if (current.size > 100) {
-                val excess = current.size - 100
-                current.keys.take(excess).forEach { current.remove(it) }
-            }
-            prefs[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(current)
-        }
-    }
-
     /**
      * Last-watched live TV channel id, used by `:feature:player:live` to
      * reopen the player on the same channel across launches. `null` when no
@@ -538,23 +507,6 @@ class UserPreferencesStore @Inject constructor(
             } else {
                 prefs[Keys.LIVE_TV_LAST_CHANNEL_ID] = channelId
             }
-        }
-    }
-
-    private suspend fun writeVideoEffectsForItem(itemId: String, effects: VideoEffectsConfig) {
-        dataStore.edit { prefs ->
-            val current = readVideoEffectsByItem(prefs).toMutableMap()
-            if (effects.isNeutral) {
-                current.remove(itemId)
-            } else {
-                current[itemId] = effects
-            }
-            // Match the MediaStreamSelection LRU cap so per-item state stays bounded.
-            if (current.size > 100) {
-                val excess = current.size - 100
-                current.keys.take(excess).forEach { current.remove(it) }
-            }
-            prefs[Keys.VIDEO_EFFECTS_SELECTIONS] = json.encodeToString(current)
         }
     }
 
@@ -1432,7 +1384,9 @@ class UserPreferencesStore @Inject constructor(
         audioStreamIndex: Int? = null,
         subtitleStreamIndex: Int? = null,
     ) {
-        writeMediaStreamSelections(
+        // Forwarded to PlayerEngineStore: the per-item 100-entry LRU cap has a
+        // single owner there.
+        engineStore.setMediaStreamSelection(
             itemId = itemId,
             audioStreamIndex = audioStreamIndex,
             subtitleStreamIndex = subtitleStreamIndex,
@@ -1444,7 +1398,7 @@ class UserPreferencesStore @Inject constructor(
      * (all defaults) clears the entry so storage does not grow unbounded.
      */
     suspend fun setVideoEffectsForItem(itemId: String, effects: VideoEffectsConfig) {
-        writeVideoEffectsForItem(itemId, effects)
+        engineStore.setVideoEffectsForItem(itemId, effects)
     }
 
     suspend fun setDynamicTheming(enabled: Boolean) {
@@ -1725,7 +1679,9 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setNextUpMaxDays(days: Int) {
-        dataStore.edit { it[Keys.NEXT_UP_MAX_DAYS] = days.coerceAtLeast(0) }
+        // Forwarded to HomeDiscoveryStore: the coerceAtLeast(0) invariant has a
+        // single owner there.
+        homeDiscoveryStore.setNextUpMaxDays(days)
     }
 
     suspend fun setNextUpRewatching(enabled: Boolean) {
@@ -2002,25 +1958,14 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setFrameRateMatching(enabled: Boolean) {
-        // Keep the legacy boolean in sync with the new mode so both the old
-        // toggle and the new picker reflect the same state. `true` maps to the
-        // least-surprising frame-rate-only mode (the old single-resolution
-        // behaviour); the picker can then upgrade it to include resolution.
-        dataStore.edit {
-            it[Keys.FRAME_RATE_MATCHING] = enabled
-            if (enabled && it[Keys.REFRESH_RATE_MODE] == null) {
-                it[Keys.REFRESH_RATE_MODE] = com.raulshma.jellyplay.core.model.RefreshRateMode.FRAME_RATE_ONLY.name
-            } else if (!enabled) {
-                it[Keys.REFRESH_RATE_MODE] = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF.name
-            }
-        }
+        // Forwarded to PlaybackStore: the frame-rate↔refresh-rate mutex has a
+        // single owner there, so callers going through the facade and callers
+        // injecting PlaybackStore directly cannot diverge.
+        playbackStore.setFrameRateMatching(enabled)
     }
 
     suspend fun setRefreshRateMode(mode: com.raulshma.jellyplay.core.model.RefreshRateMode) {
-        dataStore.edit {
-            it[Keys.REFRESH_RATE_MODE] = mode.name
-            it[Keys.FRAME_RATE_MATCHING] = mode != com.raulshma.jellyplay.core.model.RefreshRateMode.OFF
-        }
+        playbackStore.setRefreshRateMode(mode)
     }
 
     suspend fun setNightModeEnabled(enabled: Boolean) {
@@ -2052,11 +1997,15 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setVideoSkipBackOnResumeMs(ms: Long) {
-        dataStore.edit { it[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = ms.coerceAtLeast(0L) }
+        // Forwarded to VideoPlayerStore: the coerceAtLeast(0L) invariant has a
+        // single owner there.
+        videoPlayerStore.setVideoSkipBackOnResumeMs(ms)
     }
 
     suspend fun setVideoPassOutProtectionHours(hours: Int) {
-        dataStore.edit { it[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = hours.coerceAtLeast(0) }
+        // Forwarded to VideoPlayerStore: the coerceAtLeast(0) invariant has a
+        // single owner there.
+        videoPlayerStore.setVideoPassOutProtectionHours(hours)
     }
 
     suspend fun setVideoHoldSpeedEnabled(enabled: Boolean) {
@@ -2160,13 +2109,9 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setSegmentBehavior(type: MediaSegmentType, behavior: SegmentBehavior) {
-        dataStore.edit { prefs ->
-            val current = readSegmentBehaviors(prefs).toMutableMap()
-            current[type] = behavior
-            prefs[Keys.SEGMENT_BEHAVIORS] = json.encodeToString(
-                current.mapKeys { it.key.name }.mapValues { it.value.name }
-            )
-        }
+        // Forwarded to VideoPlayerStore: the segment-behavior legacy migration
+        // + read-modify-write has a single owner there.
+        videoPlayerStore.setSegmentBehavior(type, behavior)
     }
 
     suspend fun setVideoEpisodeBrowserEnabled(enabled: Boolean) {
@@ -2310,7 +2255,9 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setMaxConcurrentDownloads(count: Int) {
-        dataStore.edit { it[Keys.MAX_CONCURRENT_DOWNLOADS] = count.coerceIn(1, 6) }
+        // Forwarded to DownloadsStore: the coerceIn(1, 6) invariant has a single
+        // owner there.
+        downloadsStore.setMaxConcurrentDownloads(count)
     }
 
     suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) {
@@ -2853,41 +2800,25 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun setSynthwaveMode(enabled: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[Keys.SYNTHWAVE_MODE] = enabled
-            if (enabled) {
-                prefs[Keys.SOOTHING_MODE] = false
-                prefs[Keys.MONOCHROME_MODE] = false
-            }
-        }
+        // Forwarded to AppearanceStore: the synthwave/soothing/monochrome 3-way
+        // mutex has a single owner there.
+        appearanceStore.setSynthwaveMode(enabled)
     }
 
     suspend fun setSynthwaveAccent(accent: String) {
-        dataStore.edit { it[Keys.SYNTHWAVE_ACCENT] = accent }
+        appearanceStore.setSynthwaveAccent(accent)
     }
 
     suspend fun setSoothingMode(enabled: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[Keys.SOOTHING_MODE] = enabled
-            if (enabled) {
-                prefs[Keys.SYNTHWAVE_MODE] = false
-                prefs[Keys.MONOCHROME_MODE] = false
-            }
-        }
+        appearanceStore.setSoothingMode(enabled)
     }
 
     suspend fun setSoothingAccent(accent: String) {
-        dataStore.edit { it[Keys.SOOTHING_ACCENT] = accent }
+        appearanceStore.setSoothingAccent(accent)
     }
 
     suspend fun setMonochromeMode(enabled: Boolean) {
-        dataStore.edit { prefs ->
-            prefs[Keys.MONOCHROME_MODE] = enabled
-            if (enabled) {
-                prefs[Keys.SYNTHWAVE_MODE] = false
-                prefs[Keys.SOOTHING_MODE] = false
-            }
-        }
+        appearanceStore.setMonochromeMode(enabled)
     }
 
     /**

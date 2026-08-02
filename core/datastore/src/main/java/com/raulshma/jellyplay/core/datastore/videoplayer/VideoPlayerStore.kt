@@ -376,6 +376,22 @@ class VideoPlayerStore @Inject constructor(
     }
 
     /**
+     * Updates a single segment type's behaviour, read-modify-writing the stored
+     * map (merged over the defaults + legacy fallback) so callers don't have to
+     * reconstruct the whole map. Preserves the 100-entry behaviour of the other
+     * per-item maps is N/A here (segment types are a bounded enum set).
+     */
+    suspend fun setSegmentBehavior(type: MediaSegmentType, behavior: SegmentBehavior) {
+        dataStore.edit { prefs ->
+            val current = readSegmentBehaviors(prefs).toMutableMap()
+            current[type] = behavior
+            prefs[Keys.SEGMENT_BEHAVIORS] = PreferenceCodec.json.encodeToString(
+                current.mapKeys { it.key.name }.mapValues { it.value.name },
+            )
+        }
+    }
+
+    /**
      * Keys owned by this store, for factory-reset participation. Aggregated by
      * the facade's reset-coverage guard (Phase C).
      */
