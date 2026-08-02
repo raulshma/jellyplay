@@ -213,7 +213,6 @@ fun SeerrMediaCard(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .clip(ShapeCache.smooth12)
                         .background(shimmerBrush)
                 )
             }
