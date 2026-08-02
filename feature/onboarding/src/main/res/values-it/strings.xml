@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!--
-      TODO(i18n): these strings are the first ones extracted from hardcoded UI
-      text (analysis F-37). Continue extracting the rest of onboarding/auth,
-      then seed translations to re-enable the language picker (analysis F-19).
-    -->
+    <!-- Extracted hardcoded UI text (analysis F-37); translations seeded (F-19). -->
+
+    <string name="onboarding_skip">Salta</string>
+    <string name="onboarding_next">Avanti</string>
+    <string name="onboarding_completion_title">Tutto pronto!</string>
+    <string name="onboarding_completion_subtitle">Il tuo JellyPlay è configurato e pronto all\'uso. Puoi sempre modificare queste impostazioni in seguito.</string>
+    <string name="onboarding_completion_start_watching">Inizia a guardare</string>
+    <string name="onboarding_seerr_connection">Connessione</string>
+    <string name="onboarding_seerr_connected">Connesso</string>
+    <string name="onboarding_seerr_features">Funzioni</string>
+    <string name="onboarding_seerr_regions">Regioni</string>
+
     <string name="onboarding_welcome_title">Benvenuto in\nJellyPlay</string>
     <string name="onboarding_welcome_subtitle">Il tuo client Jellyfin personale. Configuriamo alcune cose per iniziare.</string>
     <string name="onboarding_feature_stream">Riproduci film e serie TV</string>
@@ -111,4 +118,7 @@
     <string name="onboarding_performance_description">Riduce animazioni, transizioni e qualità delle immagini per prestazioni più fluide su dispositivi di fascia bassa. Puoi sempre modificarlo in seguito nelle Impostazioni.</string>
     <string name="onboarding_performance_enable">Attiva modalità prestazioni</string>
     <string name="onboarding_performance_enable_subtitle">Ottimizzazione per dispositivi di fascia bassa</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="onboarding_feature_syncplay">SyncPlay — guarda insieme</string>
 </resources>

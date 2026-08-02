@@ -1,9 +1,12 @@
 package com.raulshma.jellyplay.core.data.download
 
+import android.content.Context
+import com.raulshma.jellyplay.core.data.R
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.model.MediaDetail
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -64,6 +67,7 @@ interface DownloadIntake {
 
 @Singleton
 class DownloadIntakeImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val delegate: DownloadDelegate,
     private val downloadRepository: DownloadRepository,
 ) : DownloadIntake {
@@ -74,7 +78,7 @@ class DownloadIntakeImpl @Inject constructor(
         return delegate.startOne(detail, maxBitrate)
             ?: DownloadResult(
                 downloadItem = null,
-                error = "No media source available for download",
+                error = context.getString(R.string.data_no_media_source_download),
             )
     }
 

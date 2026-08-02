@@ -104,6 +104,13 @@ sealed class Route : NavKey {
      */
     @Serializable data class ArrSettings(val highlightSettingId: String? = null) : Route()
 
+    /**
+     * Direct subtitle-provider integration settings — API keys + enable toggles
+     * for Wyzie Subs and OpenSubtitles, used by the in-player + edit-metadata
+     * subtitle search. Mirrors [ArrSettings] / [SeerrSettings].
+     */
+    @Serializable data class SubtitleProviderSettings(val highlightSettingId: String? = null) : Route()
+
     @Serializable data object Artists : Route()
     @Serializable data object Albums : Route()
     @Serializable data object Tracks : Route()
@@ -264,6 +271,7 @@ val Route.isModal: Boolean
         Route.SeerrSettings,
         Route.Integrations,
         Route.ArrSettings,
+        Route.SubtitleProviderSettings,
         Route.AdminDashboard,
         Route.ScheduledTasks,
         Route.Devices,

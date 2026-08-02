@@ -78,10 +78,13 @@ internal object PlaybackSyncNotificationHelper {
         pendingCount: Int,
         indeterminate: Boolean,
     ): Notification {
-        val intent = Intent().apply {
-            setClassName(context.packageName, "com.raulshma.jellyplay.MainActivity")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
+        // Explicit target: pinned to MainActivity in our own package. `setClassName`
+        // is applied on the intent directly (not inside an `Intent().apply { }`
+        // block) so CodeQL recognizes the intent as explicit and the PendingIntent
+        // is not flagged as implicit.
+        val intent = Intent()
+            .setClassName(context.packageName, "com.raulshma.jellyplay.MainActivity")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val pendingIntent = PendingIntent.getActivity(
             context,
             0,

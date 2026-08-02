@@ -245,4 +245,65 @@
         <item quantity="one">%1$d participante</item>
         <item quantity="other">%1$d participantes</item>
     </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">Reproduccion</string>
+    <string name="player_video_stats_network">Red</string>
+    <string name="player_video_stats_performance">Rendimiento</string>
+    <string name="player_video_stats_engine">Motor</string>
+    <string name="player_video_stats_state">Estado</string>
+    <string name="player_video_stats_playing">Reproduciendo</string>
+    <string name="player_video_stats_position">Posicion</string>
+    <string name="player_video_stats_progress">Progreso</string>
+    <string name="player_video_stats_buffer_health">Salud del buffer</string>
+    <string name="player_video_stats_buffered">En buffer</string>
+    <string name="player_video_stats_clock">Reloj</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">Rango de color</string>
+    <string name="player_video_stats_color_depth">Profundidad de color</string>
+    <string name="player_video_stats_sample_rate">Frecuencia de muestreo</string>
+    <string name="player_video_stats_session_id">ID de sesion</string>
+    <string name="player_video_stats_quality">Calidad</string>
+    <string name="player_video_stats_est_bandwidth">Ancho de banda est.</string>
+    <string name="player_video_stats_stream_bitrate">Tasa de bits del stream</string>
+    <string name="player_video_stats_dropped_frames">Fotogramas perdidos</string>
+    <string name="player_video_stats_total_frames">Fotogramas totales</string>
+    <string name="player_video_stats_drop_rate">Tasa de perdida</string>
+    <string name="player_video_stats_buffer_size">Tamano del buffer</string>
+    <string name="player_video_stats_vo_dropped_frames">Fotogramas VO perdidos</string>
+    <string name="player_video_stats_vo_delay">Retardo VO</string>
+    <string name="player_video_stats_display_rate">Frecuencia de pantalla</string>
+    <string name="player_video_stats_player">Reproductor</string>
+    <string name="player_video_cast_connecting">Conectando</string>
+    <string name="player_video_casting">Transmitiendo</string>
+    <string name="player_video_season_n">Temporada %1$d</string>
+    <string name="player_video_no_episodes_available">No hay episodios disponibles</string>
+    <string name="player_video_watched">Visto</string>
+    <string name="player_video_time_left">Quedan %1$s</string>
+    <string name="player_video_now_playing">Reproduciendo ahora</string>
+    <string name="player_video_quality_title">Calidad</string>
+    <string name="player_video_quality_description">Los cambios se aplican inmediatamente para transmisiones adaptativas. Para reproduccion directa, esto establece la tasa de bits maxima de reproduccion.</string>
+    <string name="player_video_adaptive_bitrate_cap">Limite de bitrate adaptativo</string>
+    <string name="player_video_adaptive_bitrate_on">Limita la calidad en redes medidas</string>
+    <string name="player_video_adaptive_bitrate_off">Desactivado - calidad completa (reproduccion directa)</string>
+    <string name="player_video_skip_intro">Omitir intro</string>
+    <string name="player_video_overview_tab">Resumen</string>
+    <string name="player_video_lyrics_subtitles_tab">Letras / Subtitulos</string>
+    <string name="player_video_synopsis">Sinopsis</string>
+    <string name="player_video_cast_and_crew">Reparto y equipo</string>
+    <string name="player_video_audio_stream">Transmision de audio</string>
+    <string name="player_video_episode_title">E%1$d: %2$s</string>
+    <string name="player_video_seek_backward_10s">-10s</string>
+    <string name="player_video_seek_forward_30s">+30s</string>
+    <string name="player_video_cast_connecting_device">Conectando al dispositivo...</string>
+    <string name="player_video_cast_connected_streaming">Conectado / Transmitiendo</string>
+    <string name="player_video_companion">JellyPlay Companion</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">El archivo seleccionado no es una fuente .ttf u .otf.</string>
+
+    <string name="player_video_subtitle_provider_all">Todos</string>
+    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
+    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
+    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 </resources>

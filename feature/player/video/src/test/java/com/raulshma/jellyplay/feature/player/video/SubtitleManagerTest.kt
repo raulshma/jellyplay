@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -33,10 +34,8 @@ import org.junit.Test
 
 /**
  * Unit tests for [SubtitleManager] — the in-player subtitle download / search /
- * upload / cultures workflow extracted from [VideoPlayerViewModel].
- *
- * Mirrors the harness style of [TrackSelectionHelperTest]: a real
- * [MutableStateFlow]<[VideoPlayerUiState]> wired to the collaborator's
+ * stream-management state machine. Tests verify state transitions, interaction
+ * with [PlaybackRepository] / [MediaRepository], flow updates emitted to
  * `getUiState` / `updateUiState` lambdas, an [UnconfinedTestDispatcher] scope so
  * the collaborator's `scope.launch` blocks run to completion synchronously, and
  * mockk for the repositories. The media-detail refresh coupling is captured via
@@ -47,6 +46,7 @@ class SubtitleManagerTest {
 
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var subtitleProviderRepository: SubtitleProviderRepository
     private lateinit var userMessageBus: UserMessageBus
     private lateinit var state: MutableStateFlow<VideoPlayerUiState>
     private lateinit var addedSubtitles: MutableList<SubtitleSource>
@@ -61,6 +61,7 @@ class SubtitleManagerTest {
     fun setUp() {
         playbackRepository = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
+        subtitleProviderRepository = mockk(relaxed = true)
         userMessageBus = mockk(relaxed = true)
         state = MutableStateFlow(VideoPlayerUiState())
         addedSubtitles = mutableListOf()
@@ -70,6 +71,7 @@ class SubtitleManagerTest {
             context = mockk(relaxed = true),
             playbackRepository = playbackRepository,
             mediaRepository = mediaRepository,
+            subtitleProviderRepository = subtitleProviderRepository,
             userMessageBus = userMessageBus,
             scope = scope,
             addExternalSubtitle = { addedSubtitles += it },
@@ -306,6 +308,7 @@ class SubtitleManagerTest {
         context = mockk(relaxed = true),
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
+        subtitleProviderRepository = subtitleProviderRepository,
         userMessageBus = userMessageBus,
         scope = scope,
         addExternalSubtitle = { addedSubtitles += it },
@@ -324,6 +327,7 @@ class SubtitleManagerTest {
         context = mockk(relaxed = true),
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
+        subtitleProviderRepository = subtitleProviderRepository,
         userMessageBus = userMessageBus,
         scope = testScope,
         addExternalSubtitle = { addedSubtitles += it },

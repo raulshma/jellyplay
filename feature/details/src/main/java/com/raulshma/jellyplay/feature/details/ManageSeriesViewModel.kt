@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import android.content.Context
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -7,6 +8,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +33,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ManageSeriesViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val arrRepository: ArrRepository,
 ) : JellyPlayViewModel() {
@@ -54,14 +57,14 @@ class ManageSeriesViewModel @Inject constructor(
             val detail = detailResult.getOrNull()
             if (detailResult.isFailure || detail == null) {
                 _uiState.update {
-                    it.copy(isLoading = false, error = "Couldn't load series from Jellyfin.")
+                    it.copy(isLoading = false, error = context.getString(R.string.detail_manage_series_load_error))
                 }
                 return@launch
             }
             val resolvedTvdb = detail.providerIds["tvdb"]?.toIntOrNull()
             if (resolvedTvdb == null) {
                 _uiState.update {
-                    it.copy(isLoading = false, error = "This series has no tvdb id; Sonarr can't look it up.")
+                    it.copy(isLoading = false, error = context.getString(R.string.detail_manage_series_no_tvdb))
                 }
                 return@launch
             }
@@ -74,7 +77,7 @@ class ManageSeriesViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        error = "No Sonarr server tracks this series. Add the series in Sonarr first.",
+                        error = context.getString(R.string.detail_manage_series_not_tracked),
                     )
                 }
                 return@launch

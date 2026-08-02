@@ -62,4 +62,9 @@
     <string name="livetv_watch">Visionner</string>
     <string name="livetv_recording_status">Enregistrement</string>
     <string name="livetv_recording_now">● Enregistrement en cours</string>
+
+    <!-- EPG grid & live pill labels (batch) -->
+    <string name="livetv_will_be_recorded">"%1$s" sera enregistré.</string>
+    <string name="livetv_channel">Chaîne</string>
+    <string name="livetv_live">DIRECT</string>
 </resources>

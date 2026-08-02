@@ -9,7 +9,9 @@ package com.raulshma.jellyplay.core.ui.settingssearch
  * returned nothing. This matcher scores each [SettingsSearchItem] against the query and returns
  * results sorted by relevance, dropping anything below [MIN_SCORE].
  *
- * Matching is pure and dependency-free so it can be unit-tested on the JVM without Compose/Android.
+ * Matching is pure and dependency-free so it can be unit-tested on the JVM without Compose/Android;
+ * callers resolve [SettingsSearchRegistry.items] to [ResolvedSettingsItem] (locale-aware text)
+ * before invoking [search].
  */
 object SettingsSearchMatcher {
 
@@ -30,8 +32,11 @@ object SettingsSearchMatcher {
      * least one candidate field, otherwise the whole item scores 0. This keeps multi-word queries
      * precise (e.g. "audio delay" must match both "audio" and "delay"). The final score is the
      * average of the best per-token scores, boosted by which field matched.
+     *
+     * Matching runs against the locale-resolved [ResolvedSettingsItem] text, so queries typed in
+     * the user's language hit the translated titles/subtitles/categories.
      */
-    fun scoreItem(query: String, item: SettingsSearchItem): Double {
+    fun scoreItem(query: String, item: ResolvedSettingsItem): Double {
         val tokens = tokenize(query)
         if (tokens.isEmpty()) return 0.0
 
@@ -39,7 +44,7 @@ object SettingsSearchMatcher {
         val candidates: List<Pair<String, Double>> = buildList {
             add(item.title to 1.5)
             add(item.subtitle to 1.0)
-            item.keywords.forEach { add(it to 1.1) }
+            item.item.keywords.forEach { add(it to 1.1) }
             add(item.category to 0.6)
         }
 
@@ -58,7 +63,7 @@ object SettingsSearchMatcher {
      * Return all [items] matching [query], sorted best-first. Ties preserve registry order via a
      * stable sort, so the curated ordering still acts as a tiebreaker.
      */
-    fun search(query: String, items: List<SettingsSearchItem>): List<SettingsSearchItem> {
+    fun search(query: String, items: List<ResolvedSettingsItem>): List<ResolvedSettingsItem> {
         if (query.isBlank()) return emptyList()
         return items.asSequence()
             .map { it to scoreItem(query, it) }

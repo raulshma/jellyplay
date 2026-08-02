@@ -143,4 +143,19 @@
     <string name="play_on_title">播放到</string>
     <string name="play_on_no_clients">未找到 Jellyfin 客户端。在其他设备上打开 JellyPlay 或 Jellyfin，它就会出现在这里。</string>
     <string name="play_on_jellyfin_session">Jellyfin 会话</string>
+
+    <!-- auto-localized: previously translatable="false" (10) -->
+    <string name="widget_open_to_play">点按打开 JellyPlay</string>
+    <string name="widget_library_recommendations_description">基于你的观看记录，从 Jellyfin 媒体库中精选的个性化推荐。</string>
+    <string name="widget_library_recommendations_empty_subtitle">打开 JellyPlay 开始探索你的媒体库</string>
+    <string name="widget_seerr_recommendations_label">Seerr 精选</string>
+    <string name="widget_seerr_recommendations_title">Seerr 精选</string>
+    <string name="widget_seerr_recommendations_description">来自你的 Seerr（Jellyseerr / Overseerr）服务器的热门与即将上映的电影和剧集。</string>
+    <string name="widget_seerr_recommendations_empty">Seerr 未连接</string>
+    <string name="widget_seerr_recommendations_empty_subtitle">在 JellyPlay 设置中配置 Seerr 以查看推荐</string>
+    <string name="update_up_to_date_body">JellyPlay 已是最新版本。</string>
+    <string name="floating_player_notification_title">JellyPlay 悬浮播放器</string>
+
+    <!-- Now-playing snackbar -->
+    <string name="snackbar_now_playing">正在播放：%1$s</string>
 </resources>

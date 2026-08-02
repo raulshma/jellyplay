@@ -245,4 +245,65 @@
         <item quantity="one">%1$d participant</item>
         <item quantity="other">%1$d participants</item>
     </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">Lecture</string>
+    <string name="player_video_stats_network">Reseau</string>
+    <string name="player_video_stats_performance">Performances</string>
+    <string name="player_video_stats_engine">Moteur</string>
+    <string name="player_video_stats_state">Etat</string>
+    <string name="player_video_stats_playing">Lecture</string>
+    <string name="player_video_stats_position">Position</string>
+    <string name="player_video_stats_progress">Progression</string>
+    <string name="player_video_stats_buffer_health">Memoire tampon</string>
+    <string name="player_video_stats_buffered">Mis en memoire tampon</string>
+    <string name="player_video_stats_clock">Horloge</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">Plage de couleurs</string>
+    <string name="player_video_stats_color_depth">Profondeur de couleur</string>
+    <string name="player_video_stats_sample_rate">Taux d echantillonnage</string>
+    <string name="player_video_stats_session_id">ID de session</string>
+    <string name="player_video_stats_quality">Qualite</string>
+    <string name="player_video_stats_est_bandwidth">Bande passante est.</string>
+    <string name="player_video_stats_stream_bitrate">Debit du flux</string>
+    <string name="player_video_stats_dropped_frames">Images perdues</string>
+    <string name="player_video_stats_total_frames">Images totales</string>
+    <string name="player_video_stats_drop_rate">Taux de perte</string>
+    <string name="player_video_stats_buffer_size">Taille memoire tampon</string>
+    <string name="player_video_stats_vo_dropped_frames">Images VO perdues</string>
+    <string name="player_video_stats_vo_delay">Delai VO</string>
+    <string name="player_video_stats_display_rate">Frequence d affichage</string>
+    <string name="player_video_stats_player">Lecteur</string>
+    <string name="player_video_cast_connecting">Connexion</string>
+    <string name="player_video_casting">Diffusion</string>
+    <string name="player_video_season_n">Saison %1$d</string>
+    <string name="player_video_no_episodes_available">Aucun episode disponible</string>
+    <string name="player_video_watched">Vu</string>
+    <string name="player_video_time_left">%1$s restantes</string>
+    <string name="player_video_now_playing">En cours de lecture</string>
+    <string name="player_video_quality_title">Qualite</string>
+    <string name="player_video_quality_description">Les modifications s appliquent immediatement pour les flux adaptatifs. Pour la lecture directe, cela definit le debit binaire maximal de lecture.</string>
+    <string name="player_video_adaptive_bitrate_cap">Plafond de debit adaptatif</string>
+    <string name="player_video_adaptive_bitrate_on">Limite la qualite sur les reseaux limites</string>
+    <string name="player_video_adaptive_bitrate_off">Desactive - qualite maximale (lecture directe)</string>
+    <string name="player_video_skip_intro">Passer l intro</string>
+    <string name="player_video_overview_tab">Apercu</string>
+    <string name="player_video_lyrics_subtitles_tab">Paroles / Sous-titres</string>
+    <string name="player_video_synopsis">Synopsis</string>
+    <string name="player_video_cast_and_crew">Distribution et equipe</string>
+    <string name="player_video_audio_stream">Flux audio</string>
+    <string name="player_video_episode_title">Ep. %1$d : %2$s</string>
+    <string name="player_video_seek_backward_10s">-10s</string>
+    <string name="player_video_seek_forward_30s">+30s</string>
+    <string name="player_video_cast_connecting_device">Connexion a l appareil...</string>
+    <string name="player_video_cast_connected_streaming">Connecte / Diffusion</string>
+    <string name="player_video_companion">JellyPlay Companion</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">Le fichier sélectionné n\'est pas une police .ttf ou .otf.</string>
+
+    <string name="player_video_subtitle_provider_all">Tout</string>
+    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
+    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
+    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 </resources>

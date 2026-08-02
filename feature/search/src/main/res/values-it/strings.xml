@@ -49,4 +49,8 @@
     <string name="search_filter_any">Qualsiasi</string>
     <string name="search_filter_rating_plus">%1$.1f+</string>
     <string name="search_apply_filters">Applica filtri</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="search_request_via_seerr">Richiedi tramite Seerr</string>
+    <string name="search_seerr_search_failed">Ricerca Seerr non riuscita</string>
 </resources>

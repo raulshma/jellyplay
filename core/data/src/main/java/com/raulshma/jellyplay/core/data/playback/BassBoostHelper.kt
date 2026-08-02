@@ -31,7 +31,10 @@ class BassBoostHelper : AudioFxHelper<BassBoost>(TAG) {
     }
 
     override fun create(audioSessionId: Int): BassBoost? =
-        BassBoost(0, audioSessionId).apply { setStrength(strengthValue) }
+        // Construct first, then configure inside createSafely so a throw during
+        // setStrength still releases the native BassBoost handle — otherwise
+        // the object never reaches `fx` and detach()/releaseFx() can't free it.
+        createSafely(audioSessionId, { BassBoost(0, it) }) { it.setStrength(strengthValue) }
 
     companion object {
         private const val TAG = "BassBoostHelper"

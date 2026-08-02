@@ -94,7 +94,7 @@ fun SeerrStep(
             onNext = {},
         ) {
             Text(
-                text = "Connection",
+                text = stringResource(R.string.onboarding_seerr_connection),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -248,7 +248,7 @@ fun SeerrStep(
                         modifier = Modifier.size(20.dp),
                     )
                     Text(
-                        text = "Connected",
+                        text = stringResource(R.string.onboarding_seerr_connected),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.primary,
@@ -279,7 +279,7 @@ fun SeerrStep(
             if (isConnected) {
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    text = "Features",
+                    text = stringResource(R.string.onboarding_seerr_features),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -322,7 +322,7 @@ fun SeerrStep(
 
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    text = "Regions",
+                    text = stringResource(R.string.onboarding_seerr_regions),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,

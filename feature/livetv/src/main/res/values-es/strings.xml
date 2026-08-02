@@ -62,4 +62,9 @@
     <string name="livetv_watch">Ver</string>
     <string name="livetv_recording_status">Grabación</string>
     <string name="livetv_recording_now">● Grabando ahora</string>
+
+    <!-- EPG grid & live pill labels (batch) -->
+    <string name="livetv_will_be_recorded">"%1$s" se grabará.</string>
+    <string name="livetv_channel">Canal</string>
+    <string name="livetv_live">EN VIVO</string>
 </resources>

@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!--
-      TODO(i18n): these strings are the first ones extracted from hardcoded UI
-      text (analysis F-37). Continue extracting the rest of onboarding/auth,
-      then seed translations to re-enable the language picker (analysis F-19).
-    -->
+    <!-- Extracted hardcoded UI text (analysis F-37); translations seeded (F-19). -->
+
+    <string name="onboarding_skip">スキップ</string>
+    <string name="onboarding_next">次へ</string>
+    <string name="onboarding_completion_title">設定完了！</string>
+    <string name="onboarding_completion_subtitle">JellyPlayの設定が完了し、利用できる状態になりました。これらの設定は後からいつでも変更できます。</string>
+    <string name="onboarding_completion_start_watching">視聴を開始</string>
+    <string name="onboarding_seerr_connection">接続</string>
+    <string name="onboarding_seerr_connected">接続済み</string>
+    <string name="onboarding_seerr_features">機能</string>
+    <string name="onboarding_seerr_regions">地域</string>
+
     <string name="onboarding_welcome_title">JellyPlay\nへようこそ</string>
     <string name="onboarding_welcome_subtitle">あなた専用のJellyfinクライアント。初期設定を済ませて使い始めましょう。</string>
     <string name="onboarding_feature_stream">映画やテレビ番組をストリーミング</string>
@@ -111,4 +118,7 @@
     <string name="onboarding_performance_description">低スペック端末での動作を滑らかにするため、アニメーション、トランジション、画質を下げます。これは後で設定でいつでも変更できます。</string>
     <string name="onboarding_performance_enable">パフォーマンスモードを有効化</string>
     <string name="onboarding_performance_enable_subtitle">低スペック端末の最適化</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="onboarding_feature_syncplay">SyncPlay — 一緒に視聴</string>
 </resources>

@@ -88,6 +88,11 @@
     <string name="home_move_up">Sposta su</string>
     <string name="home_move_down">Sposta giù</string>
 
-    <!-- Newsletter banner dismiss (batch) -->
+    <!-- Newsletter banner (batch) -->
+    <string name="home_newsletter_ready">Newsletter pronta</string>
+    <string name="home_newsletter_subtitle">Il tuo riepilogo settimanale è qui. Tocca per esplorare.</string>
     <string name="home_dismiss">Ignora</string>
+
+    <!-- Localized error messages -->
+    <string name="home_error_load_content">Impossibile caricare i contenuti. Controlla la connessione e riprova.</string>
 </resources>

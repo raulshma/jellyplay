@@ -62,4 +62,9 @@
     <string name="livetv_watch">시청</string>
     <string name="livetv_recording_status">녹화 중</string>
     <string name="livetv_recording_now">● 녹화 중</string>
+
+    <!-- EPG grid & live pill labels (batch) -->
+    <string name="livetv_will_be_recorded">"%1$s"이(가) 녹화됩니다.</string>
+    <string name="livetv_channel">채널</string>
+    <string name="livetv_live">LIVE</string>
 </resources>

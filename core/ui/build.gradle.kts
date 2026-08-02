@@ -43,6 +43,8 @@ dependencies {
     implementation(libs.tabler.icons.filled)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.multiplatform.markdown.renderer)
+    implementation(libs.multiplatform.markdown.renderer.m3)
     implementation(libs.palette.ktx)
     implementation(libs.paging.compose)
 

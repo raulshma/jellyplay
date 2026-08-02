@@ -43,7 +43,7 @@ fun HomeLayoutStep(
             onNext = {},
         ) {
             Text(
-                text = "Home Mode",
+                text = stringResource(R.string.onboarding_home_layout_home_mode),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -80,7 +80,7 @@ fun HomeLayoutStep(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Home Sections",
+                text = stringResource(R.string.onboarding_home_layout_home_sections),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,

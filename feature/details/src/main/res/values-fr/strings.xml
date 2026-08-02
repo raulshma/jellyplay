@@ -202,6 +202,11 @@
     <string name="detail_manage_cd_toggle_monitor_episode">Activer/désactiver la surveillance de l\'épisode</string>
     <string name="detail_manage_cd_episode_menu">Options de l\'épisode</string>
 
+    <!-- Localized error messages -->
+    <string name="detail_manage_series_load_error">Impossible de charger les séries depuis Jellyfin.</string>
+    <string name="detail_manage_series_no_tvdb">Cette série n\'a pas d\'identifiant TVDb ; Sonarr ne peut pas la trouver.</string>
+    <string name="detail_manage_series_not_tracked">Aucun serveur Sonarr ne suit cette série. Ajoutez d\'abord la série dans Sonarr.</string>
+
     <!-- ── Seerr request / status buttons ──────────────────────────────── -->
     <string name="detail_available">Disponible</string>
     <string name="detail_request">Demander</string>
@@ -229,4 +234,28 @@
     <string name="detail_media_info_title_subtitles">Sous-titres</string>
     <string name="detail_media_info_no_info">Aucune information sur le média</string>
     <string name="detail_media_info_no_info_description">Les informations techniques ne sont pas disponibles pour cet élément</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="detail_section_seerr_recommendations">Recommandations Seerr</string>
+    <string name="detail_section_seerr_similar">Similaires selon Seerr</string>
+
+    <!-- Localized UI text extracted from SeerrDetailScreen -->
+    <string name="detail_seerr_unknown_error">Erreur inconnue</string>
+    <string name="detail_seerr_overview">Aperçu</string>
+    <string name="detail_seerr_episodes_count">%1$d épisodes</string>
+    <string name="detail_seerr_season_n">Saison %1$d</string>
+    <string name="detail_seerr_director_format">Réalisateur : %1$s</string>
+    <string name="detail_seerr_show_more">Afficher plus</string>
+    <string name="detail_seerr_video">Vidéo</string>
+    <string name="detail_seerr_information">Informations</string>
+    <string name="detail_seerr_status">Statut</string>
+    <string name="detail_seerr_unknown">Inconnu</string>
+    <string name="detail_seerr_release_date">Date de sortie</string>
+    <string name="detail_seerr_revenue">Revenus</string>
+    <string name="detail_seerr_budget">Budget</string>
+    <string name="detail_seerr_language">Langue</string>
+    <string name="detail_seerr_country">Pays</string>
+    <string name="detail_seerr_studios">Studios</string>
+    <string name="detail_seerr_currently_streaming_on">Actuellement en streaming sur</string>
+
 </resources>

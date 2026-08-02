@@ -78,4 +78,7 @@
     <string name="auth_remove_user">사용자 제거</string>
     <string name="auth_remove_user_title">사용자를 제거하시겠어요?</string>
     <string name="auth_remove_user_message">이 서버에서 \"%1$s\"을(를) 제거하시겠어요? 사용하려면 다시 로그인해야 합니다.</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="auth_quick_connect">빠른 연결</string>
 </resources>

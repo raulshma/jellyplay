@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,6 +32,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
@@ -54,6 +56,10 @@ class CastManager @Inject constructor(
 ) {
     companion object {
         private const val TAG = "CastManager"
+        // How often the cast ticker re-checks whether playback resumed while
+        // paused. Mirrors the playback engines' POSITION_PAUSED_RECHECK_MS
+        // (internal to :feature:player:video, so redeclared here).
+        private const val CAST_PAUSED_RECHECK_MS = 2_500L
         const val STRATEGY_GOOGLE = "google"
         const val STRATEGY_LIBVLC = "libvlc"
         const val STRATEGY_DLNA = "dlna"
@@ -208,6 +214,15 @@ class CastManager @Inject constructor(
             val interval = if (isDlna || isJellyfin) 1000L else 500L
             tickerJob = coroutineScope.launch {
                 while (isActive) {
+                    // While paused, stop polling and wait for playback to resume
+                    // (bounded so a DLNA/Jellyfin strategy flip is still picked
+                    // up). Mirrors EnginePositionTicker's bounded paused-wait so
+                    // a paused cast session no longer wakes the CPU at 1–2 Hz.
+                    if (!_castIsPlaying.value) {
+                        withTimeoutOrNull(CAST_PAUSED_RECHECK_MS) {
+                            _castIsPlaying.first { it }
+                        }
+                    }
                     delay(interval)
                     updateCastState()
                 }

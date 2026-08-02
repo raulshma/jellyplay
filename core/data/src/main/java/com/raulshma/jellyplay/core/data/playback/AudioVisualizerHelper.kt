@@ -45,14 +45,20 @@ class AudioVisualizerHelper {
                             samplingRate: Int,
                         ) {
                             if (waveform != null) {
+                                // Throttle FIRST: the Visualizer fires callbacks
+                                // at maxCaptureRate/4 (tens of times per second),
+                                // so gating on the cheap elapsed-time check
+                                // before the byte-by-byte contentEquals avoids
+                                // an O(n) array compare on every audio-thread
+                                // callback. Only when enough time has elapsed do
+                                // we spend the cycles to confirm the frame
+                                // actually changed.
                                 val now = SystemClock.elapsedRealtime()
-                                if (now - lastWaveformUpdateTime >= 33 &&
-                                    !waveform.contentEquals(lastWaveform)
-                                ) {
-                                    lastWaveformUpdateTime = now
-                                    lastWaveform = waveform
-                                    _waveformData.value = waveform
-                                }
+                                if (now - lastWaveformUpdateTime < 33) return
+                                if (waveform.contentEquals(lastWaveform)) return
+                                lastWaveformUpdateTime = now
+                                lastWaveform = waveform
+                                _waveformData.value = waveform
                             }
                         }
 
@@ -61,13 +67,17 @@ class AudioVisualizerHelper {
                             fft: ByteArray?,
                             samplingRate: Int,
                         ) {
-                            if (fft != null && !fft.contentEquals(lastFft)) {
-                                lastFft = fft
+                            if (fft != null) {
+                                // Throttle FIRST (same rationale as waveform):
+                                // previously contentEquals ran on every callback
+                                // before the time check, doing a full byte
+                                // comparison on the audio thread each fire.
                                 val now = SystemClock.elapsedRealtime()
-                                if (now - lastFftUpdateTime >= 33) {
-                                    lastFftUpdateTime = now
-                                    _fftData.value = fft
-                                }
+                                if (now - lastFftUpdateTime < 33) return
+                                if (fft.contentEquals(lastFft)) return
+                                lastFftUpdateTime = now
+                                lastFft = fft
+                                _fftData.value = fft
                             }
                         }
                     },

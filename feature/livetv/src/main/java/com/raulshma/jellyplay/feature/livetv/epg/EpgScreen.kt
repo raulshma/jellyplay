@@ -196,7 +196,7 @@ private fun RecordDialog(
         is RecordDialogState.Success -> AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text(stringResource(R.string.livetv_record_success)) },
-            text = { Text("\"${state.programName}\" will be recorded.") },
+            text = { Text(stringResource(R.string.livetv_will_be_recorded, state.programName)) },
             confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_done)) } },
         )
         is RecordDialogState.Error -> AlertDialog(
@@ -321,7 +321,7 @@ private fun TimeHeaderRow(
             contentAlignment = Alignment.CenterStart,
         ) {
             Text(
-                text = "Channel",
+                text = stringResource(R.string.livetv_channel),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold,
@@ -510,7 +510,7 @@ private fun ProgramCell(
                             .background(MaterialTheme.colorScheme.primary),
                     )
                     Text(
-                        text = "LIVE",
+                        text = stringResource(R.string.livetv_live),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,

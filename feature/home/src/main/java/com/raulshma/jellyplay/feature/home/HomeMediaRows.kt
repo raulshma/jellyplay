@@ -96,12 +96,20 @@ private fun HorizontalMediaScroller(
     // carousel branch below.
     val carouselState = rememberCarouselState { itemCount }
     if (clippingEnabled) {
+        // The carousel implements contentPadding by SHRINKING every item's mask
+        // (Strategy.createShiftedKeylineListForContentPadding divides the padding
+        // across all non-anchor keylines) instead of adding real space. At scroll
+        // rest this masks the leading card(s) below itemWidth on BOTH sides, so
+        // even with enough room the first/next cards look clipped. Move the
+        // horizontal inset to the container Modifier so it's real padding, and
+        // pass zero contentPadding — then no shrink step is generated and the
+        // first card renders full at the start inset.
         HorizontalUncontainedCarousel(
             state = carouselState,
             itemWidth = itemWidth,
             itemSpacing = spacing,
-            contentPadding = PaddingValues(horizontal = contentPad),
-            modifier = modifier,
+            contentPadding = PaddingValues(0.dp),
+            modifier = modifier.padding(horizontal = contentPad),
         ) { index -> itemContent(index) }
     } else {
         LazyRow(

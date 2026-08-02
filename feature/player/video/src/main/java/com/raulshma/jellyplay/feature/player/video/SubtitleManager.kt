@@ -4,9 +4,14 @@ import android.content.Context
 import android.net.Uri
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderIds
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import kotlinx.coroutines.CoroutineScope
@@ -15,8 +20,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Owns the in-player "Subtitle Manager" workflow: downloading server-default
@@ -45,6 +52,7 @@ internal class SubtitleManager(
     private val context: Context,
     private val playbackRepository: PlaybackRepository,
     private val mediaRepository: MediaRepository,
+    private val subtitleProviderRepository: SubtitleProviderRepository,
     private val userMessageBus: UserMessageBus,
     private val scope: CoroutineScope,
     private val addExternalSubtitle: (SubtitleSource) -> Unit,
@@ -262,6 +270,8 @@ internal class SubtitleManager(
         // write status back into the freshly-cleared sheet state for a new item.
         downloadJobs.values.forEach { it.cancel() }
         downloadJobs.clear()
+        searchJob?.cancel()
+        providerSearchJob?.cancel()
         updateUiState {
             it.copy(
                 searchedSubtitles = emptyList(),
@@ -270,6 +280,8 @@ internal class SubtitleManager(
                 subtitleSearchError = null,
                 subtitleCultures = emptyList(),
                 downloadingSubtitles = emptyMap(),
+                providerSearchResults = emptyList(),
+                providerSearchErrors = emptyMap(),
             )
         }
     }
@@ -326,6 +338,223 @@ internal class SubtitleManager(
             )
         }
     }
+
+    // region Multi-provider search (Jellyfin + Wyzie + OpenSubtitles)
+
+    /**
+     * Loads the user's configured providers into UiState so the Search tab can
+     * decide whether to show provider filter chips. Called when the
+     * SubtitleManager sheet opens. Jellyfin is always present.
+     */
+    fun loadConfiguredProviders() {
+        scope.launch {
+            val configured = subtitleProviderRepository.configuredProviders().first()
+            updateUiState { it.copy(configuredSubtitleProviders = configured) }
+        }
+    }
+
+    /**
+     * Concurrent cross-provider search: Jellyfin (server-scoped by itemId +
+     * language) + every configured external provider (Wyzie/OpenSubtitles,
+     * searched by TMDB/IMDb/title from the item's provider ids). Results are
+     * merged into [VideoPlayerUiState.providerSearchResults] with per-provider
+     * error chips in [VideoPlayerUiState.providerSearchErrors] — one bad key
+     * never blanks the others.
+     *
+     * A separate job from [searchJob] so the two search paths (legacy
+     * Jellyfin-only vs. multi-provider) can't cancel each other.
+     */
+    private var providerSearchJob: Job? = null
+
+    fun searchAllProviders(language: String) {
+        val itemId = getCurrentItemId() ?: return
+        providerSearchJob?.cancel()
+        updateUiState {
+            it.copy(
+                isSearchingSubtitles = true,
+                hasSearchedSubtitles = false,
+                providerSearchResults = emptyList(),
+                providerSearchErrors = emptyMap(),
+            )
+        }
+        providerSearchJob = scope.launch {
+            val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
+            if (detail == null) {
+                updateUiState {
+                    it.copy(
+                        isSearchingSubtitles = false,
+                        hasSearchedSubtitles = true,
+                        providerSearchErrors = mapOf(SubtitleProviderKind.JELLYFIN to "Could not load item details"),
+                    )
+                }
+                return@launch
+            }
+            val query = SubtitleProviderIds.buildQuery(detail).copy(languages = listOf(language))
+
+            // Centralized Jellyfin + external merge + sort.
+            val merged = subtitleProviderRepository.searchAll(query, itemId, language)
+            updateUiState {
+                it.copy(
+                    isSearchingSubtitles = false,
+                    hasSearchedSubtitles = true,
+                    providerSearchResults = merged.results,
+                    providerSearchErrors = merged.errors,
+                )
+            }
+        }
+    }
+
+    /**
+     * Downloads a subtitle from a [SubtitleSearchResult]. Routes by provider:
+     *
+     * - [SubtitleProviderKind.JELLYFIN]: delegates to the existing server-side
+     *   [downloadSubtitle] path (POST + media-detail poll) using the preserved
+     *   [RemoteSubtitleInfo] in [SubtitleSearchResult.jellyfinInfo].
+     * - External providers: fetches the bytes via the repository, side-loads
+     *   them into the live engine for immediate use, **and uploads them to the
+     *   Jellyfin server** so the subtitle persists as a `MediaStream` (survives
+     *   player close/reopen). The upload mirrors the editor's provider path and
+     *   the Jellyfin download path; without it the bytes lived only in a
+     *   disposable cache file plus a one-shot side-load, so the subtitle
+     *   vanished the next time the media was played. After the upload lands the
+     *   detail cache is invalidated and re-fetched so the new stream surfaces in
+     *   `mediaStreams` (and thus in `buildExternalSubtitles` on the next
+     *   playback) and in the track picker right away. Per-id status mirrors the
+     *   Jellyfin download flow.
+     */
+    fun downloadProviderSubtitle(result: SubtitleSearchResult) {
+        val itemId = getCurrentItemId() ?: return
+        val statusKey = "${result.provider}:${result.id}"
+        when (result.provider) {
+            SubtitleProviderKind.JELLYFIN -> {
+                val jellyfinInfo = result.jellyfinInfo ?: return
+                downloadSubtitle(jellyfinInfo)
+            }
+            else -> {
+                downloadJobs.remove(statusKey)?.cancel()
+                markProviderDownloadStatus(statusKey, SubtitleDownloadState.DOWNLOADING)
+                downloadJobs[statusKey] = scope.launch {
+                    val fileResult = subtitleProviderRepository.downloadExternal(result)
+                    ensureActive()
+                    fileResult.fold(
+                        onSuccess = { file ->
+                            // Side-load immediately so the subtitle is usable in
+                            // this playback session without waiting for the server
+                            // round-trip (kept from the original flow).
+                            val saved = persistSubtitle(itemId, result, file)
+                            val codec = codecForFormat(file.format)
+                            val source = SubtitleSource(
+                                url = saved.toURI().toString(),
+                                label = result.displayName,
+                                language = result.language,
+                                mimeType = mimeForCodec(codec),
+                                codec = codec,
+                                isDefault = false,
+                                isForced = result.isForced,
+                                id = "provider:$statusKey",
+                            )
+                            addExternalSubtitle(source)
+
+                            // Upload to the Jellyfin server so the subtitle is
+                            // persisted as a MediaStream — otherwise it only
+                            // exists in the disposable cache file / one-shot
+                            // side-load above and disappears on replay. Matches
+                            // the editor's provider-download path.
+                            val base64 = android.util.Base64.encodeToString(file.bytes, android.util.Base64.NO_WRAP)
+                            val uploadResult = playbackRepository.uploadSubtitle(
+                                itemId = itemId,
+                                data = base64,
+                                fileName = file.fileName,
+                                language = file.language ?: result.language,
+                                isForced = result.isForced,
+                                isHearingImpaired = result.isHearingImpaired,
+                            )
+                            ensureActive()
+                            uploadResult.fold(
+                                onSuccess = {
+                                    // Invalidate the detail cache and re-fetch so the
+                                    // freshly attached stream lands in the cached
+                                    // media detail (and thus in buildExternalSubtitles
+                                    // on the next playback) and in the track picker
+                                    // now — getMediaDetail is a single-flight cached
+                                    // read, so without invalidation it would keep
+                                    // returning the pre-upload snapshot.
+                                    mediaRepository.invalidateDetailCache(itemId)
+                                    mediaRepository.getMediaDetail(itemId).getOrNull()?.let { detail ->
+                                        onMediaDetailRefreshed(detail)
+                                    }
+                                    userMessageBus.info("Subtitle added")
+                                    markProviderDownloadStatus(statusKey, SubtitleDownloadState.DOWNLOADED)
+                                },
+                                onFailure = { e ->
+                                    val msg = e.message ?: "Save failed"
+                                    userMessageBus.error("Subtitle save failed: $msg")
+                                    markProviderDownloadStatus(statusKey, SubtitleDownloadState.FAILED, msg)
+                                },
+                            )
+                        },
+                        onFailure = { e ->
+                            val msg = e.message ?: "Download failed"
+                            userMessageBus.error("Subtitle download failed: $msg")
+                            markProviderDownloadStatus(statusKey, SubtitleDownloadState.FAILED, msg)
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Writes the downloaded subtitle bytes to a per-item cache file under the
+     * app cache dir. Using cache (not files) because the only durable copy is
+     * the one uploaded to the Jellyfin server (see [downloadProviderSubtitle]);
+     * this file is just the source for the immediate in-session side-load.
+     * Naming mirrors the offline-subtitle convention.
+     */
+    private suspend fun persistSubtitle(
+        itemId: String,
+        result: SubtitleSearchResult,
+        file: com.raulshma.jellyplay.core.model.subtitle.SubtitleFile,
+    ): File = withContext(Dispatchers.IO) {
+        val ext = file.format?.takeIf { it.isNotBlank() }
+            ?: result.format
+            ?: result.fileName?.substringAfterLast('.', "")
+            ?: "srt"
+        val dir = File(context.cacheDir, "subtitles/providers/$itemId").apply { mkdirs() }
+        val safeId = "${result.provider.name.lowercase()}_${result.id}".replace(Regex("[^A-Za-z0-9_-]"), "")
+        File(dir, "$safeId.$ext").apply { writeBytes(file.bytes) }
+    }
+
+    private fun codecForFormat(format: String?): String? = when (format?.lowercase()) {
+        "srt", "subrip" -> "srt"
+        "ass", "ssa" -> "ass"
+        "vtt", "webvtt" -> "vtt"
+        "ttml", "dfxp" -> "ttml"
+        else -> null
+    }
+
+    private fun mimeForCodec(codec: String?): String? = when (codec) {
+        "srt" -> "application/x-subrip"
+        "ass" -> "text/x-ssa"
+        "vtt" -> "text/vtt"
+        "ttml" -> "application/ttml+xml"
+        else -> null
+    }
+
+    /** Sets a provider-subtitle (composite-keyed) download status on UiState. */
+    private fun markProviderDownloadStatus(
+        statusKey: String,
+        state: SubtitleDownloadState,
+        errorMessage: String? = null,
+    ) {
+        updateUiState {
+            it.copy(
+                downloadingSubtitles = it.downloadingSubtitles + (statusKey to SubtitleDownloadStatus(statusKey, state, errorMessage)),
+            )
+        }
+    }
+
+    // endregion
 
     /**
      * Uploads a local subtitle file to the current item, then reloads the

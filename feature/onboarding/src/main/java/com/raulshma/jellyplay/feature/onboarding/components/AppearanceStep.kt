@@ -79,7 +79,7 @@ fun AppearanceStep(
             onNext = {},
         ) {
             Text(
-                text = "Theme",
+                text = stringResource(R.string.onboarding_appearance_theme),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -93,10 +93,10 @@ fun AppearanceStep(
                     val selected = mode == themeMode
                     OnboardingOptionCard(
                         label = when (mode) {
-                            ThemeMode.SYSTEM -> "System"
-                            ThemeMode.LIGHT -> "Light"
-                            ThemeMode.DARK -> "Dark"
-                            ThemeMode.SCHEDULED -> "Scheduled"
+                            ThemeMode.SYSTEM -> stringResource(R.string.onboarding_appearance_theme_system)
+                            ThemeMode.LIGHT -> stringResource(R.string.onboarding_appearance_theme_light)
+                            ThemeMode.DARK -> stringResource(R.string.onboarding_appearance_theme_dark)
+                            ThemeMode.SCHEDULED -> stringResource(R.string.onboarding_appearance_theme_scheduled)
                         },
                         icon = when (mode) {
                             ThemeMode.SYSTEM -> Tabler.Outline.BrightnessHalf
@@ -114,7 +114,7 @@ fun AppearanceStep(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Contrast",
+                text = stringResource(R.string.onboarding_appearance_contrast),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,

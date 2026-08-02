@@ -63,6 +63,34 @@ abstract class AudioFxHelper<T : android.media.audiofx.AudioEffect>(protected va
     }
 
     /**
+     * Construct-then-configure scaffold for [create] implementations.
+     *
+     * The three `audiofx` subclasses ([BassBoostHelper], [ReverbHelper],
+     * [VirtualizerHelper]) all need the same shape: build the native object,
+     * apply initial state, and — if applying throws — release the native
+     * handle so it doesn't leak (these objects aren't GC'd until `release()`).
+     * This collapses that try/configure/catch-release-rethrow boilerplate
+     * into one call.
+     *
+     * @param construct builds the effect for [audioSessionId] (must not configure it).
+     * @param configure applies the subclass's initial state; a throw here releases [effect].
+     */
+    protected inline fun createSafely(
+        audioSessionId: Int,
+        construct: (Int) -> T,
+        configure: (T) -> Unit,
+    ): T {
+        val effect = construct(audioSessionId)
+        return try {
+            configure(effect)
+            effect
+        } catch (e: Exception) {
+            runCatching { releaseFx(effect) }
+            throw e
+        }
+    }
+
+    /**
      * Open the effect for [audioSessionId]. No-op for `UNSET`; idempotent if
      * already attached to the same session. Releases any prior instance first
      * so we never hold two effects for overlapping sessions.

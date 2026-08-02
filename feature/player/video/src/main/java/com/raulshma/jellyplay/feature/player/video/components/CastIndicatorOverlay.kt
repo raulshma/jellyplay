@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +33,7 @@ import com.composables.icons.tabler.outline.Cast
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
+import com.raulshma.jellyplay.feature.player.video.R
 
 @Composable
 fun CastIndicatorOverlay(
@@ -70,7 +72,7 @@ fun CastIndicatorOverlay(
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(
-                text = "Connecting…",
+                text = stringResource(R.string.player_video_cast_connecting),
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -96,7 +98,7 @@ fun CastIndicatorOverlay(
                     .background(CastColors.indicator, shape = CircleShape),
             )
             Text(
-                text = "Casting",
+                text = stringResource(R.string.player_video_casting),
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,

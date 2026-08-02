@@ -245,4 +245,65 @@
         <item quantity="one">%1$d Teilnehmer</item>
         <item quantity="other">%1$d Teilnehmer</item>
     </plurals>
+
+    <!-- Localized UI text extracted from player/video components -->
+    <string name="player_video_stats_playback">Wiedergabe</string>
+    <string name="player_video_stats_network">Netzwerk</string>
+    <string name="player_video_stats_performance">Leistung</string>
+    <string name="player_video_stats_engine">Engine</string>
+    <string name="player_video_stats_state">Status</string>
+    <string name="player_video_stats_playing">Wiedergabe</string>
+    <string name="player_video_stats_position">Position</string>
+    <string name="player_video_stats_progress">Fortschritt</string>
+    <string name="player_video_stats_buffer_health">Pufferstand</string>
+    <string name="player_video_stats_buffered">Gepuffert</string>
+    <string name="player_video_stats_clock">Uhr</string>
+    <string name="player_video_stats_hdr">HDR</string>
+    <string name="player_video_stats_color_range">Farbbereich</string>
+    <string name="player_video_stats_color_depth">Farbtiefe</string>
+    <string name="player_video_stats_sample_rate">Abtastrate</string>
+    <string name="player_video_stats_session_id">Sitzungs-ID</string>
+    <string name="player_video_stats_quality">Qualitat</string>
+    <string name="player_video_stats_est_bandwidth">Geschaetzte Bandbreite</string>
+    <string name="player_video_stats_stream_bitrate">Stream-Bitrate</string>
+    <string name="player_video_stats_dropped_frames">Verlorene Frames</string>
+    <string name="player_video_stats_total_frames">Frames gesamt</string>
+    <string name="player_video_stats_drop_rate">Verlustrate</string>
+    <string name="player_video_stats_buffer_size">Puffergroesse</string>
+    <string name="player_video_stats_vo_dropped_frames">VO verworfene Frames</string>
+    <string name="player_video_stats_vo_delay">VO-Verzoegerung</string>
+    <string name="player_video_stats_display_rate">Bildrate</string>
+    <string name="player_video_stats_player">Player</string>
+    <string name="player_video_cast_connecting">Verbinden</string>
+    <string name="player_video_casting">Casting</string>
+    <string name="player_video_season_n">Staffel %1$d</string>
+    <string name="player_video_no_episodes_available">Keine Episoden verfuegbar</string>
+    <string name="player_video_watched">Angesehen</string>
+    <string name="player_video_time_left">Noch %1$s</string>
+    <string name="player_video_now_playing">Laeuft gerade</string>
+    <string name="player_video_quality_title">Qualitaet</string>
+    <string name="player_video_quality_description">Aenderungen gelten sofort fuer adaptive Streams. Bei Direct Play wird die maximale Wiedergabe-Bitrate festgelegt.</string>
+    <string name="player_video_adaptive_bitrate_cap">Adaptive Bitrate-Obergrenze</string>
+    <string name="player_video_adaptive_bitrate_on">Begrenzt Qualitaet in getakteten Netzwerken</string>
+    <string name="player_video_adaptive_bitrate_off">Aus - volle Qualitaet (Direct Play)</string>
+    <string name="player_video_skip_intro">Intro ueberspringen</string>
+    <string name="player_video_overview_tab">Uebersicht</string>
+    <string name="player_video_lyrics_subtitles_tab">Songtexte / Untertitel</string>
+    <string name="player_video_synopsis">Handlung</string>
+    <string name="player_video_cast_and_crew">Besetzung &amp; Crew</string>
+    <string name="player_video_audio_stream">Audio-Stream</string>
+    <string name="player_video_episode_title">E%1$d: %2$s</string>
+    <string name="player_video_seek_backward_10s">-10s</string>
+    <string name="player_video_seek_forward_30s">+30s</string>
+    <string name="player_video_cast_connecting_device">Verbinde mit Geraet...</string>
+    <string name="player_video_cast_connected_streaming">Verbunden / Streaming</string>
+    <string name="player_video_companion">JellyPlay Companion</string>
+
+    <!-- Localized error messages -->
+    <string name="player_video_font_invalid_format">Ausgewählte Datei ist keine .ttf- oder .otf-Schriftart.</string>
+
+    <string name="player_video_subtitle_provider_all">Alle</string>
+    <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
+    <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
+    <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
 </resources>

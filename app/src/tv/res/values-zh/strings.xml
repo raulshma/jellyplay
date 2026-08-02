@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="search_hint">搜索电影、剧集、音乐…</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="search_settings_description">搜索你的 Jellyfin 媒体库</string>
 </resources>

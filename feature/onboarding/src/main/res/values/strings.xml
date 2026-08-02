@@ -1,16 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      TODO(i18n): these strings are the first ones extracted from hardcoded UI
-      text (analysis F-37). Continue extracting the rest of onboarding/auth,
-      then seed translations to re-enable the language picker (analysis F-19).
+      Strings extracted from hardcoded UI text (analysis F-37).
+      Translations seeded across all supported locales (analysis F-19).
     -->
+
+    <!-- OnboardingScreen bottom bar -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+
+    <!-- CompletionStep -->
+    <string name="onboarding_completion_title">All Set!</string>
+    <string name="onboarding_completion_subtitle">Your JellyPlay is configured and ready to go. You can always change these settings later.</string>
+    <string name="onboarding_completion_start_watching">Start Watching</string>
+
+    <!-- SeerrStep status/section labels -->
+    <string name="onboarding_seerr_connection">Connection</string>
+    <string name="onboarding_seerr_connected">Connected</string>
+    <string name="onboarding_seerr_features">Features</string>
+    <string name="onboarding_seerr_regions">Regions</string>
+
     <string name="onboarding_welcome_title">Welcome to\nJellyPlay</string>
     <string name="onboarding_welcome_subtitle">Your personal Jellyfin client. Let\'s set up a few things to get you started.</string>
     <string name="onboarding_feature_stream">Stream movies &amp; TV shows</string>
     <string name="onboarding_feature_music">Music player with advanced audio effects</string>
     <string name="onboarding_feature_download">Download for offline playback</string>
-    <string name="onboarding_feature_syncplay" translatable="false">SyncPlay — watch together</string>
+    <string name="onboarding_feature_syncplay">SyncPlay — watch together</string>
 
     <!-- SubtitlesStep (shared preview also consumes these) -->
     <string name="onboarding_subtitles_title">Subtitles</string>

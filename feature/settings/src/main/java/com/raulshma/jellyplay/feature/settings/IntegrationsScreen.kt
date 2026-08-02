@@ -44,6 +44,7 @@ fun IntegrationsScreen(
     onBack: () -> Unit,
     onSeerrSettings: () -> Unit,
     onArrSettings: () -> Unit,
+    onSubtitleProviderSettings: () -> Unit,
     highlightSettingId: String? = null,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -109,7 +110,7 @@ fun IntegrationsScreen(
                     initiallyExpanded = true,
                     modifier = Modifier.padding(vertical = 4.dp),
                 ) {
-                    val count = 2
+                    val count = 3
                     SettingListItem(
                         icon = Tabler.Outline.Puzzle,
                         title = stringResource(R.string.settings_seerr_integration),
@@ -127,6 +128,15 @@ fun IntegrationsScreen(
                         count = count,
                         highlighted = highlightSettingId == "arr_settings",
                         onClick = onArrSettings,
+                    )
+                    SettingListItem(
+                        icon = Tabler.Outline.Subtitles,
+                        title = stringResource(R.string.settings_integrations_subtitles),
+                        subtitle = stringResource(R.string.settings_integrations_subtitles_subtitle),
+                        index = 2,
+                        count = count,
+                        highlighted = highlightSettingId == "subtitle_provider_settings",
+                        onClick = onSubtitleProviderSettings,
                     )
                 }
             }

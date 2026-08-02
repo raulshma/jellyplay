@@ -79,18 +79,29 @@ fun LiveChannelListSheet(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(items = channels, key = { it.id }) { channel ->
+                // FocusRequester must always be produced unconditionally so
+                // positional memoization holds for the whole items() block;
+                // pick the shared requester for the current channel, otherwise
+                // a per-channel one remembered by id.
+                val rowFocusRequester = remember(channel.id) { FocusRequester() }
+                // Memoize per-channel so the click lambdas aren't rebuilt on
+                // every recomposition, keeping ChannelRow skippable.
+                val onClick = remember(channel.id) {
+                    {
+                        onChannelSelected(channel.id)
+                        onDismiss()
+                    }
+                }
+                val onToggleFavorite = remember(channel.id) { { onToggleFavorite(channel.id) } }
                 ChannelRow(
                     channel = channel,
                     logoUrl = logoUrlFor(channel),
                     isCurrent = channel.id == currentChannelId,
                     isFavorite = channel.id in favorites,
                     focusRequester = if (channel.id == currentChannelId) currentRequester
-                    else remember { FocusRequester() },
-                    onClick = {
-                        onChannelSelected(channel.id)
-                        onDismiss()
-                    },
-                    onToggleFavorite = { onToggleFavorite(channel.id) },
+                    else rowFocusRequester,
+                    onClick = onClick,
+                    onToggleFavorite = onToggleFavorite,
                 )
             }
         }

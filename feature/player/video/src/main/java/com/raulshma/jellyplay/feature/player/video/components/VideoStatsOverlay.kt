@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -29,6 +30,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.extendedColors
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.formatFixed
+import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -62,7 +64,7 @@ fun VideoStatsOverlay(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
-            text = "Stats for Nerds",
+            text = stringResource(R.string.player_video_stats_for_nerds),
             style = MaterialTheme.typography.labelMedium.copy(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp,
@@ -70,84 +72,84 @@ fun VideoStatsOverlay(
             color = playerOnScrim(),
         )
 
-        StatsSection("Playback") {
-            StatsRow("State", if (isPlaying) "Playing" else playbackState)
-            StatsRow("Position", formatDurationMsLocal(currentPositionMs))
-            StatsRow("Duration", formatDurationMsLocal(durationMs))
+        StatsSection(stringResource(R.string.player_video_stats_playback)) {
+            StatsRow(stringResource(R.string.player_video_stats_state), if (isPlaying) stringResource(R.string.player_video_stats_playing) else playbackState)
+            StatsRow(stringResource(R.string.player_video_stats_position), formatDurationMsLocal(currentPositionMs))
+            StatsRow(stringResource(R.string.player_video_duration), formatDurationMsLocal(durationMs))
             if (durationMs > 0) {
                 val progress = (currentPositionMs.toFloat() / durationMs.toFloat() * 100f)
-                StatsRow("Progress", "${formatFixed(progress.toDouble(), 1)}%")
+                StatsRow(stringResource(R.string.player_video_stats_progress), "${formatFixed(progress.toDouble(), 1)}%")
             }
-            StatsRow("Speed", "${playbackSpeed}x")
+            StatsRow(stringResource(R.string.player_video_speed), "${playbackSpeed}x")
             val bufferHealthMs = (stats.bufferedPositionMs - currentPositionMs).coerceAtLeast(0L)
-            StatsRow("Buffer Health", formatDurationMsLocal(bufferHealthMs))
-            StatsRow("Buffered", formatDurationMsLocal(stats.bufferedPositionMs))
-            StatsRow("Clock", rememberCurrentTimeString())
+            StatsRow(stringResource(R.string.player_video_stats_buffer_health), formatDurationMsLocal(bufferHealthMs))
+            StatsRow(stringResource(R.string.player_video_stats_buffered), formatDurationMsLocal(stats.bufferedPositionMs))
+            StatsRow(stringResource(R.string.player_video_stats_clock), rememberCurrentTimeString())
         }
 
         if (stats.videoCodec != null || stats.videoResolution != null) {
-            StatsSection("Video") {
-                stats.videoCodec?.let { StatsRow("Codec", it.uppercase()) }
-                stats.videoDecoder?.let { StatsRow("Decoder", it) }
-                stats.videoResolution?.let { StatsRow("Resolution", it) }
-                stats.videoFrameRate?.let { StatsRow("Frame Rate", "${formatFixed(it.toDouble(), 2)} fps") }
-                stats.videoBitrate?.let { StatsRow("Bitrate", formatBitrate(it)) }
-                stats.videoHdrType?.let { StatsRow("HDR", it) }
-                stats.videoColorRange?.let { StatsRow("Color Range", it) }
-                stats.videoColorDepth?.let { StatsRow("Color Depth", it) }
+            StatsSection(stringResource(R.string.player_video_video)) {
+                stats.videoCodec?.let { StatsRow(stringResource(R.string.player_video_codec), it.uppercase()) }
+                stats.videoDecoder?.let { StatsRow(stringResource(R.string.player_video_decoder), it) }
+                stats.videoResolution?.let { StatsRow(stringResource(R.string.player_video_resolution), it) }
+                stats.videoFrameRate?.let { StatsRow(stringResource(R.string.player_video_frame_rate), "${formatFixed(it.toDouble(), 2)} fps") }
+                stats.videoBitrate?.let { StatsRow(stringResource(R.string.player_video_bitrate), formatBitrate(it)) }
+                stats.videoHdrType?.let { StatsRow(stringResource(R.string.player_video_stats_hdr), it) }
+                stats.videoColorRange?.let { StatsRow(stringResource(R.string.player_video_stats_color_range), it) }
+                stats.videoColorDepth?.let { StatsRow(stringResource(R.string.player_video_stats_color_depth), it) }
             }
         }
 
         if (stats.audioCodec != null || stats.audioChannels != null) {
-            StatsSection("Audio") {
-                stats.audioCodec?.let { StatsRow("Codec", it.uppercase()) }
-                stats.audioSampleRate?.let { StatsRow("Sample Rate", "${it} Hz") }
-                stats.audioChannels?.let { ch -> StatsRow("Channels", formatChannels(ch)) }
-                stats.audioBitrate?.let { StatsRow("Bitrate", formatBitrate(it)) }
+            StatsSection(stringResource(R.string.player_video_audio)) {
+                stats.audioCodec?.let { StatsRow(stringResource(R.string.player_video_codec), it.uppercase()) }
+                stats.audioSampleRate?.let { StatsRow(stringResource(R.string.player_video_stats_sample_rate), "${it} Hz") }
+                stats.audioChannels?.let { ch -> StatsRow(stringResource(R.string.player_video_channels), formatChannels(ch)) }
+                stats.audioBitrate?.let { StatsRow(stringResource(R.string.player_video_bitrate), formatBitrate(it)) }
                 if (audioSessionId != 0) {
-                    StatsRow("Session ID", "$audioSessionId")
+                    StatsRow(stringResource(R.string.player_video_stats_session_id), "$audioSessionId")
                 }
             }
         }
 
-        StatsSection("Network") {
-            StatsRow("Play Method", playMethod)
-            StatsRow("Quality", streamingQuality)
+        StatsSection(stringResource(R.string.player_video_stats_network)) {
+            StatsRow(stringResource(R.string.player_video_play_method), playMethod)
+            StatsRow(stringResource(R.string.player_video_stats_quality), streamingQuality)
             if (stats.estimatedBandwidthBps > 0) {
-                StatsRow("Est. Bandwidth", formatBandwidth(stats.estimatedBandwidthBps))
+                StatsRow(stringResource(R.string.player_video_stats_est_bandwidth), formatBandwidth(stats.estimatedBandwidthBps))
             }
-            StatsRow("Stream Bitrate", formatBitrate(
+            StatsRow(stringResource(R.string.player_video_stats_stream_bitrate), formatBitrate(
                 stats.videoBitrate ?: (stats.audioBitrate ?: 0)
             ))
         }
 
-        StatsSection("Performance") {
-            StatsRow("Dropped Frames", "${stats.droppedFrames}")
+        StatsSection(stringResource(R.string.player_video_stats_performance)) {
+            StatsRow(stringResource(R.string.player_video_stats_dropped_frames), "${stats.droppedFrames}")
             // Only show total rendered frames when the engine actually
             // reports them (ExoPlayer via DecoderCounters, MPV via
             // displayed-frame-count); otherwise the row is hidden rather
             // than stuck on a misleading 0.
             if (stats.totalVideoFrames > 0) {
-                StatsRow("Total Frames", "${stats.totalVideoFrames}")
+                StatsRow(stringResource(R.string.player_video_stats_total_frames), "${stats.totalVideoFrames}")
                 val dropPct = if (stats.totalVideoFrames > 0) {
                     stats.droppedFrames.toFloat() /
                         (stats.droppedFrames + stats.totalVideoFrames) * 100f
                 } else 0f
-                StatsRow("Drop Rate", "${formatFixed(dropPct.toDouble(), 2)}%")
+                StatsRow(stringResource(R.string.player_video_stats_drop_rate), "${formatFixed(dropPct.toDouble(), 2)}%")
             }
             if (stats.bufferSizeBytes > 0) {
-                StatsRow("Buffer Size", formatBytes(stats.bufferSizeBytes))
+                StatsRow(stringResource(R.string.player_video_stats_buffer_size), formatBytes(stats.bufferSizeBytes))
             }
             // Sync / display diagnostics — null-safe: rows hidden when absent.
-            stats.voFrameDropCount?.let { StatsRow("VO Dropped Frames", "$it") }
-            stats.avsyncMs?.let { StatsRow("A/V Sync", "${formatFixed(it.toDouble(), 1)} ms") }
-            stats.voDelayedMs?.let { StatsRow("VO Delay", "${formatFixed(it.toDouble(), 1)} ms") }
-            stats.displayFps?.let { StatsRow("Display Rate", "${formatFixed(it.toDouble(), 2)} Hz") }
+            stats.voFrameDropCount?.let { StatsRow(stringResource(R.string.player_video_stats_vo_dropped_frames), "$it") }
+            stats.avsyncMs?.let { StatsRow(stringResource(R.string.player_video_av_sync), "${formatFixed(it.toDouble(), 1)} ms") }
+            stats.voDelayedMs?.let { StatsRow(stringResource(R.string.player_video_stats_vo_delay), "${formatFixed(it.toDouble(), 1)} ms") }
+            stats.displayFps?.let { StatsRow(stringResource(R.string.player_video_stats_display_rate), "${formatFixed(it.toDouble(), 2)} Hz") }
         }
 
-        StatsSection("Engine") {
-            StatsRow("Player", playerType)
-            StatsRow("Decoder Mode", decoderMode)
+        StatsSection(stringResource(R.string.player_video_stats_engine)) {
+            StatsRow(stringResource(R.string.player_video_stats_player), playerType)
+            StatsRow(stringResource(R.string.player_video_decoder_mode), decoderMode)
         }
     }
 }

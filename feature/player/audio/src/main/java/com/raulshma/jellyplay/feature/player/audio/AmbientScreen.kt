@@ -43,11 +43,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.raulshma.jellyplay.core.designsystem.theme.AmbientColors
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.rememberArtworkColors
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
+import com.raulshma.jellyplay.core.ui.components.rememberBlobStops
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -93,7 +93,11 @@ private fun AmbientScreenContent(
     onSkipPrevious: () -> Unit,
 ) {
     val artworkColors = rememberArtworkColors(imageUrl)
-    val colors = extractAmbientColors(artworkColors)
+    // Memoize the resolved blob palette: extractAmbientColors builds a fresh
+    // listOfNotNull{}.map{} each call, and the list is structurally identical
+    // for a given palette. Recomposition here is gated by rememberArtworkColors
+    // but still churns the allocation whenever it re-emits.
+    val colors = remember(artworkColors) { extractAmbientColors(artworkColors) }
 
     val isTv = LocalTvMode.current
     val controlsFocusRequester = remember { FocusRequester() }
@@ -219,6 +223,12 @@ private fun AmbientBackground(colors: List<Color>) {
         List(blobCount) { Animatable(initialValue = 0f) }
     }
 
+    // Resolve the blob palette + per-blob 3-stop gradient stops ONCE (keyed on
+    // the palette). Shared with AmbientColorBackdrop via rememberBlobStops so
+    // the palette → stops projection isn't duplicated. Center/radius still
+    // vary per frame.
+    val blobStops = rememberBlobStops(colors, blobCount)
+
     // Four concurrent infinite animations driving a full-screen Canvas redraw.
     // This is the most expensive decorative surface in the app and it stays
     // visible for the whole listening session. In performance mode freeze the
@@ -246,16 +256,7 @@ private fun AmbientBackground(colors: List<Color>) {
         val width = size.width
         val height = size.height
 
-        val blobColors = colors.ifEmpty {
-            listOf(
-                AmbientColors.deepIndigo,
-                AmbientColors.deepPurple,
-                AmbientColors.deepTeal,
-                AmbientColors.deepRed,
-            )
-        }
-
-        blobColors.take(blobCount).forEachIndexed { index, color ->
+        blobStops.forEachIndexed { index, stops ->
             val progress = animatables[index].value
             val x = width * (0.2f + 0.6f * kotlin.math.sin(progress * 2 * Math.PI + index).toFloat())
             val y = height * (0.2f + 0.6f * kotlin.math.cos(progress * 2 * Math.PI + index * 1.5f).toFloat())
@@ -263,11 +264,7 @@ private fun AmbientBackground(colors: List<Color>) {
 
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(
-                        color.copy(alpha = 0.6f),
-                        color.copy(alpha = 0.2f),
-                        Color.Transparent,
-                    ),
+                    colors = stops,
                     center = Offset(x, y),
                     radius = radius,
                 ),
