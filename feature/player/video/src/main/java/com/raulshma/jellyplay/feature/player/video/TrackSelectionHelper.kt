@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.RememberedTrack
@@ -25,7 +26,8 @@ import kotlinx.coroutines.launch
  * has a first-class, unit-tested home. See [TrackSelectionPolicy].
  */
 internal class TrackSelectionHelper(
-    private val preferencesStore: UserPreferencesStore,
+    private val engineStore: PlayerEngineStore,
+    private val subtitleStore: SubtitleLanguageStore,
     private val trackSelectionPolicy: TrackSelectionPolicy = TrackSelectionPolicy(),
     private val getEngine: () -> MediaEngine?,
     private val getUiState: () -> VideoPlayerUiState,
@@ -357,10 +359,11 @@ internal class TrackSelectionHelper(
             // returned null → the next emission dropped audio back to default.
             val itemId = getCurrentItemId()
             if (itemId != null) {
-                val currentPrefs = preferencesStore.preferences.value
-                val stored = currentPrefs.mediaStreamSelections[itemId]
+                val engine = engineStore.playerEngine.value
+                val sub = subtitleStore.subtitle.value
+                val stored = engine.mediaStreamSelections[itemId]
                 val audioIdx = stored?.audioStreamIndex
-                val prefAudioLang = currentPrefs.preferredAudioLanguage ?: "eng"
+                val prefAudioLang = sub.preferredAudioLanguage ?: "eng"
                 if (audioIdx != null) {
                     if (audioIdx == -1) {
                         audioTracks.firstOrNull { it.index < 0 }?.let { selectAudioTrack(it, isUserOverride = false) }
@@ -395,7 +398,7 @@ internal class TrackSelectionHelper(
                             tracks = audioTracks,
                             streams = streams,
                             resolvedLang = resolvedAudioLang,
-                            preferAudioDescription = currentPrefs.preferAudioDescription,
+                            preferAudioDescription = sub.preferAudioDescription,
                             remembered = rememberedAudioTrack,
                         ),
                     )
@@ -438,10 +441,11 @@ internal class TrackSelectionHelper(
             // override the user just set. Guarding it keeps the held selection.
             val itemId = getCurrentItemId()
             if (itemId != null) {
-                val currentPrefs = preferencesStore.preferences.value
-                val stored = currentPrefs.mediaStreamSelections[itemId]
+                val engine = engineStore.playerEngine.value
+                val sub = subtitleStore.subtitle.value
+                val stored = engine.mediaStreamSelections[itemId]
                 val subIdx = stored?.subtitleStreamIndex
-                val prefSubLang = currentPrefs.preferredSubtitleLanguage ?: "eng"
+                val prefSubLang = sub.preferredSubtitleLanguage ?: "eng"
                 if (subIdx != null) {
                     if (subIdx == -1) {
                         subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
@@ -467,7 +471,7 @@ internal class TrackSelectionHelper(
                     // global preferred subtitle language when set.
                     val resolvedSubLang = playbackPreferenceResolver.resolved.value?.subtitleLanguage
                         ?: prefSubLang
-                    val forcedOnly = currentPrefs.subtitlesForcedOnly
+                    val forcedOnly = sub.subtitlesForcedOnly
                     // The full precedence ladder — G5 scoring pre-pass (non-forced
                     // only) → forced-only stream pick → tiered SubtitleTrackMatcher
                     // → null — lives in TrackSelectionPolicy now. Returns null when
@@ -501,8 +505,8 @@ internal class TrackSelectionHelper(
         selectedAudioTrackIndex = null
         audioSelectionHeld = false
         scope.launch {
-            val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
-            preferencesStore.setMediaStreamSelection(
+            val currentSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
+            engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 audioStreamIndex = null,
                 subtitleStreamIndex = currentSelection?.subtitleStreamIndex
@@ -516,8 +520,8 @@ internal class TrackSelectionHelper(
         selectedSubtitleTrackIndex = null
         subtitleSelectionHeld = false
         scope.launch {
-            val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
-            preferencesStore.setMediaStreamSelection(
+            val currentSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
+            engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 audioStreamIndex = currentSelection?.audioStreamIndex,
                 subtitleStreamIndex = null
@@ -632,7 +636,7 @@ internal class TrackSelectionHelper(
     ) {
         val itemId = getCurrentItemId() ?: return
         val streams = getUiState().mediaStreams
-        val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+        val currentSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
         val audioStreamIndex = if (audioTrackOption != null) {
             if (audioTrackOption.index < 0) -1
             else trackSelectionPolicy.resolveMediaStreamIndex(streams, StreamType.AUDIO, audioTrackOption)
@@ -646,7 +650,7 @@ internal class TrackSelectionHelper(
             currentSelection?.subtitleStreamIndex
         }
         scope.launch {
-            preferencesStore.setMediaStreamSelection(
+            engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 audioStreamIndex = audioStreamIndex,
                 subtitleStreamIndex = subtitleStreamIndex,

@@ -18,6 +18,12 @@ import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.UserPreferences
@@ -69,6 +75,12 @@ class VideoPlayerViewModelTest {
         offlinePlaybackFacade = mockk(relaxed = true)
         val itemPlaybackPreferenceRepository = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
         val preferencesStore = mockk<UserPreferencesStore>(relaxed = true)
+        val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
+        val engineStore = mockk<PlayerEngineStore>(relaxed = true)
+        val subtitleStore = mockk<SubtitleLanguageStore>(relaxed = true)
+        val securityStore = mockk<SecurityStore>(relaxed = true)
+        val syncPlayCastStore = mockk<SyncPlayCastStore>(relaxed = true)
+        val playbackStore = mockk<PlaybackStore>(relaxed = true)
         val sessionManager = mockk<PlaybackSessionManager>(relaxed = true)
         val castManager = mockk<CastManager>(relaxed = true)
         val jellyfinRemotePlayCastStrategy = mockk<com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy>(relaxed = true)
@@ -79,12 +91,30 @@ class VideoPlayerViewModelTest {
             every { isMetered } returns MutableStateFlow(false)
         }
         val activePlayerController = mockk<ActivePlayerController>(relaxed = true)
-        val playerLifecycleManager = PlayerLifecycleManager(preferencesStore)
+        val playerLifecycleManager = PlayerLifecycleManager(playbackStore)
         val pipController = com.raulshma.jellyplay.core.data.playback.PipController()
         val videoMiniPlayerState = mockk<VideoMiniPlayerState>(relaxed = true)
         val sleepTimerManager = mockk<SleepTimerManager>(relaxed = true)
 
         every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        every { aggregateStore.aggregate } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate()
+        )
+        every { engineStore.playerEngine } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice()
+        )
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice()
+        )
+        every { securityStore.security } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.security.SecuritySlice()
+        )
+        every { syncPlayCastStore.syncPlayCast } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice()
+        )
+        every { playbackStore.playback } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice()
+        )
         every { sleepTimerManager.remainingMs } returns MutableStateFlow(0L)
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
@@ -100,6 +130,11 @@ class VideoPlayerViewModelTest {
             offlinePlaybackFacade = offlinePlaybackFacade,
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
             preferencesStore = preferencesStore,
+            aggregateStore = aggregateStore,
+            engineStore = engineStore,
+            subtitleStore = subtitleStore,
+            securityStore = securityStore,
+            syncPlayCastStore = syncPlayCastStore,
             sessionManager = sessionManager,
             castManager = castManager,
             jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
