@@ -36,6 +36,8 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -195,6 +197,9 @@ class VideoPlayerViewModel @Inject constructor(
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
     private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
     private val preferencesStore: UserPreferencesStore,
+    private val aggregateStore: VideoPlayerAggregateStore,
+    private val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore,
+    private val subtitleStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
     private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore,
     private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
     private val sessionManager: PlaybackSessionManager,
@@ -279,7 +284,7 @@ class VideoPlayerViewModel @Inject constructor(
         playbackRepository = playbackRepository,
         downloadRepository = downloadRepository,
         offlineRepository = offlineRepository,
-        preferencesStore = preferencesStore,
+        aggregateStore = aggregateStore,
         playerLifecycleManager = playerLifecycleManager,
         adaptiveBitrateManager = adaptiveBitrateManager,
         playerEngineFactory = playerEngineFactory,
@@ -312,7 +317,7 @@ class VideoPlayerViewModel @Inject constructor(
     // @Volatile: written by the init collector, read off-Main (e.g. from
     // reportCurrentPlaybackStopped launched on Default).
     @Volatile
-    private var cachedPreferences: com.raulshma.jellyplay.core.model.UserPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
+    private var cachedAggregate: VideoPlayerAggregate = VideoPlayerAggregate()
 
     /**
      * Active Cinema Mode pre-roll context. Non-null only between the moment
@@ -414,7 +419,7 @@ class VideoPlayerViewModel @Inject constructor(
         },
         isMuted = { _uiState.value.isMuted },
         onRegain = {
-            val skipMs = preferencesStore.preferences.value.videoSkipBackOnResumeMs
+            val skipMs = aggregateStore.aggregate.value.videoPlayer.videoSkipBackOnResumeMs
             if (skipMs > 0L) {
                 val target = ((playerSessionManager.engine?.currentPositionMs ?: 0L) - skipMs)
                     .coerceAtLeast(0L)
@@ -485,7 +490,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun resumePlayback() {
         val engine = playerSessionManager.engine ?: return
-        val skipMs = preferencesStore.preferences.value.videoSkipBackOnResumeMs
+        val skipMs = aggregateStore.aggregate.value.videoPlayer.videoSkipBackOnResumeMs
         if (skipMs > 0L && !engine.isPlaying.value) {
             val target = (engine.currentPositionMs - skipMs).coerceAtLeast(0L)
             seekTo(target)
@@ -514,7 +519,7 @@ class VideoPlayerViewModel @Inject constructor(
         getPlaySessionId = { playerSessionManager.sessionState.value.playSessionId ?: playSessionId },
         getResolvedPlayMethod = { playerSessionManager.sessionState.value.playMethod },
         getMediaEngine = { playerSessionManager.engine },
-        getIncognitoModeEnabled = { cachedPreferences.incognitoModeEnabled },
+        getIncognitoModeEnabled = { cachedAggregate.videoPlayer.incognitoModeEnabled },
         onAutoSkip = { segment -> skipSegment(segment) },
         onPlaybackEndedNoNext = {
             if (cinemaIntroContext != null) {
@@ -576,7 +581,7 @@ class VideoPlayerViewModel @Inject constructor(
      *    user via [userMessageBus] instead of happening invisibly.
      */
     private fun handleSmartDownloadCleanup(itemId: String) {
-        if (!cachedPreferences.smartDownloadsEnabled) return
+        if (!preferencesStore.preferences.value.smartDownloadsEnabled) return
         if (_uiState.value.duration < MIN_DURATION_FOR_SMART_DELETE_MS) return
         launch {
             if (!offlinePlaybackFacade.deleteDownload(itemId)) return@launch
@@ -588,7 +593,7 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    val hapticsEnabled: Boolean get() = cachedPreferences.hapticsEnabled
+    val hapticsEnabled: Boolean get() = preferencesStore.preferences.value.hapticsEnabled
 
     // Declared BEFORE the `init {}` block below because the engine-flow
     // collector launched from init calls `trackSelectionHelper.updateTracksFromEngine()`.
@@ -603,7 +608,8 @@ class VideoPlayerViewModel @Inject constructor(
         scope = scope,
     )
     private val trackSelectionHelper = TrackSelectionHelper(
-        preferencesStore = preferencesStore,
+        engineStore = engineStore,
+        subtitleStore = subtitleStore,
         getEngine = { playerSessionManager.engine },
         getUiState = { _uiState.value },
         updateUiState = { transform -> _uiState.update(transform) },
@@ -671,25 +677,25 @@ class VideoPlayerViewModel @Inject constructor(
             }
         }
         launch {
-            preferencesStore.preferences.collect { prefs ->
-                val oldPrefs = cachedPreferences
-                cachedPreferences = prefs
+            aggregateStore.aggregate.collect { agg ->
+                val oldAggregate = cachedAggregate
+                cachedAggregate = agg
                 // Pure prefs → uiState projection (each field guarded so an
                 // unrelated pref emission does not re-emit to every collector).
-                val subtitleStyleChanged = settingsProjector.project(prefs)
+                val subtitleStyleChanged = settingsProjector.project(agg)
                 // Subtitle-style change needs an engine-config rebuild.
                 if (subtitleStyleChanged) {
                     playerSessionManager.engine?.let { updateConfigWithUiState() }
                 }
                 // Autoplay-next flip also toggles the autoplay controller.
-                if (_uiState.value.videoAutoplayNext != prefs.videoAutoplayNext) {
-                    _uiState.update { it.copy(videoAutoplayNext = prefs.videoAutoplayNext) }
-                    autoplayController.setEnabled(prefs.videoAutoplayNext)
+                if (_uiState.value.videoAutoplayNext != agg.videoPlayer.videoAutoplayNext) {
+                    _uiState.update { it.copy(videoAutoplayNext = agg.videoPlayer.videoAutoplayNext) }
+                    autoplayController.setEnabled(agg.videoPlayer.videoAutoplayNext)
                 }
-                if (oldPrefs.volumeBoostEnabled != prefs.volumeBoostEnabled ||
-                    oldPrefs.volumeBoostGain != prefs.volumeBoostGain ||
-                    oldPrefs.equalizerSettings != prefs.equalizerSettings ||
-                    oldPrefs.pauseOnAudioFocusLoss != prefs.pauseOnAudioFocusLoss) {
+                if (oldAggregate.audioEffects.volumeBoostEnabled != agg.audioEffects.volumeBoostEnabled ||
+                    oldAggregate.audioEffects.volumeBoostGain != agg.audioEffects.volumeBoostGain ||
+                    oldAggregate.audioEffects.equalizerSettings != agg.audioEffects.equalizerSettings ||
+                    oldAggregate.playback.pauseOnAudioFocusLoss != agg.playback.pauseOnAudioFocusLoss) {
                     playerSessionManager.engine?.let {
                         updateConfigWithUiState()
                     }
@@ -697,9 +703,9 @@ class VideoPlayerViewModel @Inject constructor(
                 // Duck on transient audio focus loss (phone calls). Folded into
                 // this single preferences collector (was a duplicate collector)
                 // so a pref write rebuilds the snapshot once, not twice.
-                if (prefs.duckOnTransientFocusLoss && !playerAudioLifecycle.isAudioFocusActive()) {
+                if (agg.playback.duckOnTransientFocusLoss && !playerAudioLifecycle.isAudioFocusActive()) {
                     playerAudioLifecycle.registerAudioFocus()
-                } else if (!prefs.duckOnTransientFocusLoss && playerAudioLifecycle.isAudioFocusActive()) {
+                } else if (!agg.playback.duckOnTransientFocusLoss && playerAudioLifecycle.isAudioFocusActive()) {
                     playerAudioLifecycle.unregisterAudioFocus()
                 }
             }
@@ -765,8 +771,8 @@ class VideoPlayerViewModel @Inject constructor(
             playerSessionManager.sessionState.collect { session ->
                 val itemId = session.currentItemId
                 val seriesId = session.mediaDetail?.item?.seriesId
-                val prefs = cachedPreferences
-                val stored = itemId?.let { prefs.mediaStreamSelections[it] }
+                val prefs = cachedAggregate
+                val stored = itemId?.let { prefs.engine.mediaStreamSelections[it] }
                     _uiState.update { state ->
                         state.copy(
                             title = session.title,
@@ -838,30 +844,31 @@ class VideoPlayerViewModel @Inject constructor(
                 engineCollectionJob?.cancel()
                 if (engine != null) {
                     activePlayerController.bindEngine(engine)
-                    val prefs = cachedPreferences
+                    val agg = cachedAggregate
                     _uiState.update { it.copy(
                         engineCapabilities = engine.capabilities,
-                        audioDelayMs = prefs.audioDelayMs,
-                        decoderMode = prefs.decoderMode,
-                        audioPassthrough = prefs.audioPassthrough,
-                        subtitleStyle = prefs.resolvedSubtitleStyle(
-                            isHdr = prefs.isHdrFromStreams(playerSessionManager.sessionState.value.mediaStreams),
+                        audioDelayMs = agg.audio.audioDelayMs,
+                        decoderMode = agg.playback.decoderMode,
+                        audioPassthrough = agg.playback.audioPassthrough,
+                        subtitleStyle = resolveSubtitleStyle(
+                            agg.subtitle,
+                            isHdr = isHdrFromStreams(playerSessionManager.sessionState.value.mediaStreams),
                         ),
                         // Dialogue Boost defaults to OFF until the per-item resolver
                         // applies a stored rule. It does not inherit the
                         // global default, preventing cross-item bleed.
                         dialogueBoostEnabled = false,
                         dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
-                        nightModeEnabled = prefs.nightModeEnabled,
-                        nightModeStrength = prefs.nightModeStrength,
-                        audioNormalizationMode = prefs.audioNormalizationMode,
-                        audioNormalizationEnabled = prefs.audioNormalizationEnabled,
-                        channelMixMode = prefs.channelMixMode,
-                        channelMixEnabled = prefs.channelMixEnabled,
-                        keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
+                        nightModeEnabled = agg.audioEffects.nightModeEnabled,
+                        nightModeStrength = agg.audioEffects.nightModeStrength,
+                        audioNormalizationMode = agg.audio.audioNormalizationMode,
+                        audioNormalizationEnabled = agg.audio.audioNormalizationEnabled,
+                        channelMixMode = agg.audio.channelMixMode,
+                        channelMixEnabled = agg.audio.channelMixEnabled,
+                        keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo,
                     )}
                     playerCastController.updateCastStrategyForEngine(engine)
-                    notifyUnsupportedAudioDelayIfNeeded(engine, prefs.audioDelayMs)
+                    notifyUnsupportedAudioDelayIfNeeded(engine, agg.audio.audioDelayMs)
                     engineCollectionJob = launch {
                         kotlinx.coroutines.coroutineScope {
                             launch { engine.isPlaying.collect { isPlaying ->
@@ -1222,9 +1229,9 @@ class VideoPlayerViewModel @Inject constructor(
                 } catch (_: Exception) { }
             }
 
-            val prefs = cachedPreferences
+            val agg = cachedAggregate
             val defaultAspectRatio = try {
-                when (prefs.videoDefaultAspectRatio) {
+                when (agg.videoPlayer.videoDefaultAspectRatio) {
                     "FIT" -> AspectRatio.FIT
                     "FILL" -> AspectRatio.FILL
                     "CROP" -> AspectRatio.CROP
@@ -1238,70 +1245,70 @@ class VideoPlayerViewModel @Inject constructor(
             }
 
             _uiState.update { it.copy(
-                preferredPlayerType = prefs.preferredPlayer,
-                seekDurationMs = prefs.videoSeekDurationMs,
-                defaultOrientation = prefs.videoDefaultOrientation,
-                controlsTimeoutMs = prefs.videoControlsTimeoutMs,
-                passOutProtectionHours = prefs.videoPassOutProtectionHours,
-                gesturesEnabled = prefs.videoGesturesEnabled,
-                holdSpeedEnabled = prefs.videoHoldSpeedEnabled,
-                holdSpeedMultiplier = prefs.videoHoldSpeedMultiplier,
-                defaultSpeed = prefs.videoDefaultSpeed,
-                swipeSeekMaxMs = prefs.videoSwipeSeekMaxMs,
-                rememberBrightness = prefs.videoRememberBrightness,
-                brightnessLevel = prefs.videoBrightnessLevel,
-                gestureIndicatorSide = prefs.videoGestureIndicatorSide,
-                frameRateMatching = prefs.frameRateMatching,
-                refreshRateMode = prefs.refreshRateMode,
+                preferredPlayerType = agg.playback.preferredPlayer,
+                seekDurationMs = agg.videoPlayer.videoSeekDurationMs,
+                defaultOrientation = agg.videoPlayer.videoDefaultOrientation,
+                controlsTimeoutMs = agg.videoPlayer.videoControlsTimeoutMs,
+                passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours,
+                gesturesEnabled = agg.videoPlayer.videoGesturesEnabled,
+                holdSpeedEnabled = agg.videoPlayer.videoHoldSpeedEnabled,
+                holdSpeedMultiplier = agg.videoPlayer.videoHoldSpeedMultiplier,
+                defaultSpeed = agg.videoPlayer.videoDefaultSpeed,
+                swipeSeekMaxMs = agg.videoPlayer.videoSwipeSeekMaxMs,
+                rememberBrightness = agg.videoPlayer.videoRememberBrightness,
+                brightnessLevel = agg.videoPlayer.videoBrightnessLevel,
+                gestureIndicatorSide = agg.videoPlayer.videoGestureIndicatorSide,
+                frameRateMatching = agg.playback.frameRateMatching,
+                refreshRateMode = agg.playback.refreshRateMode,
                 aspectRatio = defaultAspectRatio,
-                trickplayEnabled = prefs.trickplayEnabled,
-                trickplayOnSeekGesture = prefs.trickplayOnSeekGesture,
+                trickplayEnabled = agg.videoPlayer.trickplayEnabled,
+                trickplayOnSeekGesture = agg.videoPlayer.trickplayOnSeekGesture,
                 segmentBehaviors = run {
-                    val base = prefs.segmentBehaviors.toMutableMap()
-                    if (prefs.videoAutoSkipIntro) {
+                    val base = agg.videoPlayer.segmentBehaviors.toMutableMap()
+                    if (agg.videoPlayer.videoAutoSkipIntro) {
                         base[com.raulshma.jellyplay.core.model.MediaSegmentType.INTRO] =
                             com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
                     }
-                    if (prefs.videoAutoSkipOutro) {
+                    if (agg.videoPlayer.videoAutoSkipOutro) {
                         base[com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO] =
                             com.raulshma.jellyplay.core.model.SegmentBehavior.AUTO_SKIP
                     }
                     base.toMap()
                 },
-                videoEpisodeBrowserEnabled = prefs.videoEpisodeBrowserEnabled,
-                showPlaybackMetadata = prefs.videoShowPlaybackMetadata,
-                showClock = prefs.showClockInPlayer,
-                showTimeRemaining = prefs.showTimeRemaining,
-                tvZoomModePercent = prefs.tvZoomModePercent,
-                keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo,
-                streamingQuality = prefs.streamingQuality,
-                adaptiveBitrateEnabled = prefs.adaptiveBitrateEnabled,
-                playbackMode = prefs.playbackMode,
-                videoAutoplayNext = prefs.videoAutoplayNext,
-                autoPlayCountdownSec = prefs.autoPlayCountdownSec,
-                rememberVolume = prefs.videoRememberVolume,
-                volumeLevel = prefs.videoVolumeLevel,
+                videoEpisodeBrowserEnabled = agg.videoPlayer.videoEpisodeBrowserEnabled,
+                showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata,
+                showClock = agg.videoPlayer.showClockInPlayer,
+                showTimeRemaining = agg.videoPlayer.showTimeRemaining,
+                tvZoomModePercent = agg.videoPlayer.tvZoomModePercent,
+                keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo,
+                streamingQuality = agg.playback.streamingQuality,
+                adaptiveBitrateEnabled = preferencesStore.preferences.value.adaptiveBitrateEnabled,
+                playbackMode = agg.playback.playbackMode,
+                videoAutoplayNext = agg.videoPlayer.videoAutoplayNext,
+                autoPlayCountdownSec = agg.playback.autoPlayCountdownSec,
+                rememberVolume = agg.videoPlayer.videoRememberVolume,
+                volumeLevel = agg.videoPlayer.videoVolumeLevel,
             ) }
-            autoplayController.setEnabled(prefs.videoAutoplayNext)
+            autoplayController.setEnabled(agg.videoPlayer.videoAutoplayNext)
 
             // Reapply persisted volume/mute to the active engine when remembered.
-            if (prefs.videoRememberVolume) {
+            if (agg.videoPlayer.videoRememberVolume) {
                 val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
                 if (am != null) {
                     val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
                     am.setStreamVolume(
                         android.media.AudioManager.STREAM_MUSIC,
-                        (prefs.videoVolumeLevel * max).toInt().coerceIn(0, max),
+                        (agg.videoPlayer.videoVolumeLevel * max).toInt().coerceIn(0, max),
                         0,
                     )
                 }
             }
-            if (prefs.videoRememberMuted && prefs.videoMuted) {
+            if (agg.videoPlayer.videoRememberMuted && agg.videoPlayer.videoMuted) {
                 _uiState.update { it.copy(isMuted = true) }
                 playerSessionManager.engine?.setMuted(true)
             }
 
-            if (allowCinemaMode && shouldAttemptCinemaMode(prefs, itemId, startPositionTicks)) {
+            if (allowCinemaMode && shouldAttemptCinemaMode(agg, itemId, startPositionTicks)) {
                 val intros = mediaRepository.getIntros(itemId).getOrDefault(emptyList())
                 if (intros.isNotEmpty()) {
                     cinemaIntroContext = CinemaIntroContext(
@@ -1334,7 +1341,7 @@ class VideoPlayerViewModel @Inject constructor(
             val detail = sessionState.mediaDetail
 
             // Restore per-item persisted video filters (if any) before playback kicks off.
-            val hydratedEffects = prefs.videoEffectsByItem[itemId] ?: VideoEffectsConfig()
+            val hydratedEffects = agg.engine.videoEffectsByItem[itemId] ?: VideoEffectsConfig()
             if (_uiState.value.videoEffects != hydratedEffects) {
                 _uiState.update { it.copy(videoEffects = hydratedEffects) }
                 updateConfigWithUiStateDebounced()
@@ -1342,7 +1349,7 @@ class VideoPlayerViewModel @Inject constructor(
             // G9: restore a per-item subtitle-sync delay so a user's correction
             // for a badly-timed track survives a re-watch / resume. Falls back to
             // the global offset when no per-item value is stored.
-            prefs.subtitleDelayByItem[itemId]?.let { itemDelay ->
+            agg.subtitle.subtitleDelayByItem[itemId]?.let { itemDelay ->
                 val currentStyle = _uiState.value.subtitleStyle
                 if (currentStyle.offsetMs != itemDelay) {
                     _uiState.update { it.copy(subtitleStyle = currentStyle.copy(offsetMs = itemDelay)) }
@@ -1404,7 +1411,7 @@ class VideoPlayerViewModel @Inject constructor(
                 }
             }
 
-            if (!cachedPreferences.incognitoModeEnabled) {
+            if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
                 playbackRepository.reportPlaybackStart(
                     com.raulshma.jellyplay.core.model.PlaybackStartInfo(
                         itemId = itemId,
@@ -1979,7 +1986,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
      private fun updateConfigWithUiState() {
-        val config = EngineConfigBuilder.build(_uiState.value, equalizerEnabled, cachedPreferences)
+        val config = EngineConfigBuilder.build(_uiState.value, equalizerEnabled, cachedAggregate)
         playerSessionManager.engine?.updateConfig(config)
     }
 
@@ -2049,7 +2056,7 @@ class VideoPlayerViewModel @Inject constructor(
             // drops out of Continue Watching. This also covers the SyncPlay
             // branch below, which bypasses [initialize] and its stopped-position
             // report.
-            if (!cachedPreferences.incognitoModeEnabled) {
+            if (!cachedAggregate.videoPlayer.incognitoModeEnabled) {
                 runCatching { mediaRepository.markPlayed(currentItemId) }
             }
 
@@ -2142,13 +2149,13 @@ class VideoPlayerViewModel @Inject constructor(
      * normal playback.
      */
     private fun shouldAttemptCinemaMode(
-        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+        agg: VideoPlayerAggregate,
         itemId: String,
         startPositionTicks: Long,
     ): Boolean {
-        if (!prefs.cinemaModeEnabled) return false
+        if (!agg.videoPlayer.cinemaModeEnabled) return false
         if (startPositionTicks != 0L) return false
-        if (prefs.preferredPlayer == PlayerType.EXTERNAL) return false
+        if (agg.playback.preferredPlayer == PlayerType.EXTERNAL) return false
         if (syncPlayManager.isInSyncPlaySession) return false
         // Skip for non-video items — intros are only meaningful for movies/episodes.
         val existingDetail = mediaDetail
@@ -2493,7 +2500,7 @@ class VideoPlayerViewModel @Inject constructor(
         val nowMuted = !currentlyMuted
         engine.setMuted(nowMuted)
         _uiState.update { it.copy(isMuted = nowMuted) }
-        if (preferencesStore.preferences.value.videoRememberMuted) {
+        if (aggregateStore.aggregate.value.videoPlayer.videoRememberMuted) {
             launch { preferencesStore.setVideoMuted(nowMuted) }
         }
     }
@@ -2516,7 +2523,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     private fun reportCurrentPlaybackStopped() {
-        if (cachedPreferences.incognitoModeEnabled) return
+        if (cachedAggregate.videoPlayer.incognitoModeEnabled) return
         val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
         val sessionId = currentPlaySessionId
         if (sessionId == stopReportedForSession) return

@@ -6,8 +6,8 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.ReverbPreset
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 
@@ -25,7 +25,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
  *  - `equalizerEnabled` is passed explicitly because it lives on the ViewModel
  *    (it is not part of [VideoPlayerUiState]).
  *  - `equalizerSettings`, `volumeBoost*` and `pauseOnAudioFocusLoss` are read
- *    from the cached [UserPreferences] snapshot, preserving the prior behaviour.
+ *    from the cached [VideoPlayerAggregate] snapshot, preserving the prior behaviour.
  *
  * Use [buildFromPreferences] on the *initial-load* / engine-swap paths where the
  * config is being constructed before any UI state exists (e.g. from
@@ -40,7 +40,7 @@ internal object EngineConfigBuilder {
     fun build(
         state: VideoPlayerUiState,
         equalizerEnabled: Boolean,
-        prefs: UserPreferences,
+        agg: VideoPlayerAggregate,
     ): EngineConfig = EngineConfig(
         decoderMode = state.decoderMode,
         audioPassthrough = state.audioPassthrough,
@@ -63,52 +63,54 @@ internal object EngineConfigBuilder {
             virtualizerEnabled = state.virtualizerEnabled,
             virtualizerStrength = state.virtualizerStrength,
             reverbPreset = state.reverbPreset,
-            prefs = prefs,
+            audioSlice = agg.audio,
+            audioEffectsSlice = agg.audioEffects,
         ),
-        pauseOnAudioFocusLoss = prefs.pauseOnAudioFocusLoss,
+        pauseOnAudioFocusLoss = agg.playback.pauseOnAudioFocusLoss,
     )
 
     /**
      * Initial-load / engine-swap variant. Builds the config directly from a
-     * [UserPreferences] snapshot (the state available before the player UI has
+     * [VideoPlayerAggregate] snapshot (the state available before the player UI has
      * hydrated). [mediaStreams] drives HDR-aware subtitle styling; [itemId]
      * resolves per-item video effects; [engineSpecific] is the caller-resolved
      * typed per-engine config (or `null`).
      */
     fun buildFromPreferences(
-        prefs: UserPreferences,
+        agg: VideoPlayerAggregate,
         mediaStreams: List<MediaStream>,
         itemId: String?,
         engineSpecific: EngineSpecificConfig?,
     ): EngineConfig {
-        val isHdr = prefs.isHdrFromStreams(mediaStreams)
-        val subtitleStyle = prefs.resolvedSubtitleStyle(isHdr = isHdr)
+        val isHdr = isHdrFromStreams(mediaStreams)
+        val subtitleStyle = resolveSubtitleStyle(agg.subtitle, isHdr = isHdr)
         return EngineConfig(
-            decoderMode = prefs.decoderMode,
-            audioPassthrough = prefs.audioPassthrough,
-            audioDelayMs = prefs.audioDelayMs,
+            decoderMode = agg.playback.decoderMode,
+            audioPassthrough = agg.playback.audioPassthrough,
+            audioDelayMs = agg.audio.audioDelayMs,
             subtitleDelayMs = subtitleStyle.offsetMs,
             subtitleStyle = subtitleStyle,
-            videoEffects = itemId?.let { prefs.videoEffectsByItem[it] } ?: VideoEffectsConfig(),
+            videoEffects = itemId?.let { agg.engine.videoEffectsByItem[it] } ?: VideoEffectsConfig(),
             audioEffects = audioEffects(
-                dialogueBoostEnabled = prefs.dialogueBoostEnabled,
-                dialogueBoostStrength = prefs.dialogueBoostStrength,
-                nightModeEnabled = prefs.nightModeEnabled,
-                nightModeStrength = prefs.nightModeStrength,
-                equalizerEnabled = prefs.equalizerEnabled,
-                audioNormalizationMode = prefs.audioNormalizationMode,
-                audioNormalizationEnabled = prefs.audioNormalizationEnabled,
-                channelMixMode = prefs.channelMixMode,
-                channelMixEnabled = prefs.channelMixEnabled,
-                bassBoostEnabled = prefs.bassBoostEnabled,
-                bassBoostStrength = prefs.bassBoostStrength,
-                virtualizerEnabled = prefs.virtualizerEnabled,
-                virtualizerStrength = prefs.virtualizerStrength,
-                reverbPreset = prefs.reverbPreset,
-                prefs = prefs,
+                dialogueBoostEnabled = agg.audioEffects.dialogueBoostEnabled,
+                dialogueBoostStrength = agg.audioEffects.dialogueBoostStrength,
+                nightModeEnabled = agg.audioEffects.nightModeEnabled,
+                nightModeStrength = agg.audioEffects.nightModeStrength,
+                equalizerEnabled = agg.audioEffects.equalizerEnabled,
+                audioNormalizationMode = agg.audio.audioNormalizationMode,
+                audioNormalizationEnabled = agg.audio.audioNormalizationEnabled,
+                channelMixMode = agg.audio.channelMixMode,
+                channelMixEnabled = agg.audio.channelMixEnabled,
+                bassBoostEnabled = agg.audioEffects.bassBoostEnabled,
+                bassBoostStrength = agg.audioEffects.bassBoostStrength,
+                virtualizerEnabled = agg.audioEffects.virtualizerEnabled,
+                virtualizerStrength = agg.audioEffects.virtualizerStrength,
+                reverbPreset = agg.audioEffects.reverbPreset,
+                audioSlice = agg.audio,
+                audioEffectsSlice = agg.audioEffects,
             ),
             engineSpecific = engineSpecific,
-            pauseOnAudioFocusLoss = prefs.pauseOnAudioFocusLoss,
+            pauseOnAudioFocusLoss = agg.playback.pauseOnAudioFocusLoss,
         )
     }
 
@@ -132,15 +134,16 @@ internal object EngineConfigBuilder {
         virtualizerEnabled: Boolean,
         virtualizerStrength: Int,
         reverbPreset: ReverbPreset,
-        prefs: UserPreferences,
+        audioSlice: com.raulshma.jellyplay.core.datastore.audio.AudioSlice,
+        audioEffectsSlice: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice,
     ): AudioEffectsConfig = AudioEffectsConfig(
         dialogueBoostEnabled = dialogueBoostEnabled,
         dialogueBoostStrength = dialogueBoostStrength,
         nightModeEnabled = nightModeEnabled,
         nightModeStrength = nightModeStrength,
-        nightModeGain = prefs.audioNightModeGain,
+        nightModeGain = audioSlice.audioNightModeGain,
         equalizerEnabled = equalizerEnabled,
-        equalizerSettings = prefs.equalizerSettings,
+        equalizerSettings = audioEffectsSlice.equalizerSettings,
         audioNormalizationMode = audioNormalizationMode,
         audioNormalizationEnabled = audioNormalizationEnabled,
         channelMixMode = channelMixMode,
@@ -150,7 +153,7 @@ internal object EngineConfigBuilder {
         virtualizerEnabled = virtualizerEnabled,
         virtualizerStrength = virtualizerStrength,
         reverbPreset = reverbPreset,
-        volumeBoostEnabled = prefs.volumeBoostEnabled,
-        volumeBoostGain = prefs.volumeBoostGain,
+        volumeBoostEnabled = audioEffectsSlice.volumeBoostEnabled,
+        volumeBoostGain = audioEffectsSlice.volumeBoostGain,
     )
 }

@@ -8,7 +8,9 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -16,7 +18,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.UserPreferences
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -55,7 +56,7 @@ class PlayerSessionManagerTest {
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var offlineRepository: OfflineRepository
-    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var aggregateStore: VideoPlayerAggregateStore
     private lateinit var playerLifecycleManager: PlayerLifecycleManager
     private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
     private lateinit var sessionManager: PlayerSessionManager
@@ -63,19 +64,20 @@ class PlayerSessionManagerTest {
     @Before
     fun setUp() {
         context = mockk(relaxed = true)
+        every { context.getString(com.raulshma.jellyplay.feature.player.video.R.string.player_video_error_offline_file_missing) } returns "Error: offline file missing"
         val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         mediaRepository = mockk(relaxed = true)
         playbackRepository = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
-        preferencesStore = mockk(relaxed = true)
+        aggregateStore = mockk(relaxed = true)
         playerLifecycleManager = mockk(relaxed = true)
         val pipController = mockk<com.raulshma.jellyplay.core.data.playback.PipController>(relaxed = true)
         adaptiveBitrateManager = mockk(relaxed = true)
 
         // Default: EXTERNAL player to avoid real engine instantiation in unit tests.
-        every { preferencesStore.preferences } returns
-            MutableStateFlow(UserPreferences(preferredPlayer = PlayerType.EXTERNAL))
+        every { aggregateStore.aggregate } returns
+            MutableStateFlow(VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL)))
 
         // Default: PlaybackInfo resolution yields nothing, so loadOnline
         // falls back to the static direct-stream URL (PlayMethod.DIRECT_PLAY).
@@ -99,7 +101,7 @@ class PlayerSessionManagerTest {
             playbackRepository = playbackRepository,
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
-            preferencesStore = preferencesStore,
+            aggregateStore = aggregateStore,
             playerLifecycleManager = playerLifecycleManager,
             pipController = pipController,
             adaptiveBitrateManager = adaptiveBitrateManager,
