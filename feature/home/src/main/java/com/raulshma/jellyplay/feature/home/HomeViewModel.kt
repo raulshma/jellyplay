@@ -756,7 +756,7 @@ class HomeViewModel @Inject constructor(
      */
     fun onSettingsResultClicked(item: ResolvedSettingsItem) {
         if (item.isAdvanced) {
-            launch { preferencesEditor.edit { setShowAdvancedSettings(true) } }
+            launch { preferencesEditor.edit { appearance.setShowAdvancedSettings(true) } }
         }
     }
 
@@ -794,7 +794,7 @@ class HomeViewModel @Inject constructor(
             val removed = removeAt(index)
             add(target, removed)
         }
-        preferencesEditor.edit { setHomeSectionOrder(updated) }
+        preferencesEditor.edit { homeDiscovery.setHomeSectionOrder(updated) }
     }
 
     /**

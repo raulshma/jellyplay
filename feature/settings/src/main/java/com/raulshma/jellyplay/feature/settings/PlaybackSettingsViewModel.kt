@@ -42,111 +42,111 @@ class PlaybackSettingsViewModel @Inject constructor(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { setShowAdvancedSettings(enabled) }
+        editor.edit { appearance.setShowAdvancedSettings(enabled) }
 
     fun setVideoGesturesEnabled(enabled: Boolean) = editor.setVideoGesturesEnabled(enabled)
     fun setVideoHoldSpeedEnabled(enabled: Boolean) =
-        editor.edit { setVideoHoldSpeedEnabled(enabled) }
+        editor.edit { videoPlayer.setVideoHoldSpeedEnabled(enabled) }
     fun setVideoAutoplayNext(enabled: Boolean) = editor.setVideoAutoplayNext(enabled)
     fun setTrailerAutoplay(enabled: Boolean) =
-        editor.edit { setTrailerAutoplay(enabled) }
+        editor.edit { videoPlayer.setTrailerAutoplay(enabled) }
     fun setCinemaModeEnabled(enabled: Boolean) =
-        editor.edit { setCinemaModeEnabled(enabled) }
+        editor.edit { videoPlayer.setCinemaModeEnabled(enabled) }
     fun setAndroidTvWatchNextEnabled(enabled: Boolean) = editor.edit {
-        setAndroidTvWatchNextEnabled(enabled)
+        playback.setAndroidTvWatchNextEnabled(enabled)
         tvWatchNextScheduler.scheduleRefresh()
     }
     fun setVideoEpisodeBrowserEnabled(enabled: Boolean) =
-        editor.edit { setVideoEpisodeBrowserEnabled(enabled) }
+        editor.edit { videoPlayer.setVideoEpisodeBrowserEnabled(enabled) }
     fun setVideoShowPlaybackMetadata(enabled: Boolean) =
-        editor.edit { setVideoShowPlaybackMetadata(enabled) }
+        editor.edit { videoPlayer.setVideoShowPlaybackMetadata(enabled) }
     fun setVideoRememberBrightness(enabled: Boolean) =
-        editor.edit { setVideoRememberBrightness(enabled) }
+        editor.edit { videoPlayer.setVideoRememberBrightness(enabled) }
     fun setTrickplayEnabled(enabled: Boolean) =
-        editor.edit { setTrickplayEnabled(enabled) }
+        editor.edit { videoPlayer.setTrickplayEnabled(enabled) }
     fun setTrickplayOnSeekGesture(enabled: Boolean) =
-        editor.edit { setTrickplayOnSeekGesture(enabled) }
+        editor.edit { videoPlayer.setTrickplayOnSeekGesture(enabled) }
     fun setBackgroundVideoAudioEnabled(enabled: Boolean) =
-        editor.edit { setBackgroundVideoAudioEnabled(enabled) }
+        editor.edit { playback.setBackgroundVideoAudioEnabled(enabled) }
     fun setKeepScreenOnDuringVideo(enabled: Boolean) =
-        editor.edit { setKeepScreenOnDuringVideo(enabled) }
+        editor.edit { playback.setKeepScreenOnDuringVideo(enabled) }
     fun setIncognitoModeEnabled(enabled: Boolean) =
-        editor.edit { setIncognitoModeEnabled(enabled) }
+        editor.edit { videoPlayer.setIncognitoModeEnabled(enabled) }
     fun setShowTimeRemaining(enabled: Boolean) =
-        editor.edit { setShowTimeRemaining(enabled) }
+        editor.edit { videoPlayer.setShowTimeRemaining(enabled) }
     fun setShowClockInPlayer(enabled: Boolean) =
-        editor.edit { setShowClockInPlayer(enabled) }
+        editor.edit { videoPlayer.setShowClockInPlayer(enabled) }
     fun setPauseOnAudioFocusLoss(enabled: Boolean) =
-        editor.edit { setPauseOnAudioFocusLoss(enabled) }
+        editor.edit { playback.setPauseOnAudioFocusLoss(enabled) }
     fun setDuckOnTransientFocusLoss(enabled: Boolean) =
-        editor.edit { setDuckOnTransientFocusLoss(enabled) }
+        editor.edit { playback.setDuckOnTransientFocusLoss(enabled) }
     fun setDialogueBoostEnabled(enabled: Boolean) =
-        editor.edit { setDialogueBoostEnabled(enabled) }
+        editor.edit { audioEffects.setDialogueBoostEnabled(enabled) }
     fun setDialogueBoostStrength(strength: EffectStrength) =
-        editor.edit { setDialogueBoostStrength(strength) }
+        editor.edit { audioEffects.setDialogueBoostStrength(strength) }
     fun setDecoderMode(mode: DecoderMode) =
-        editor.edit { setDecoderMode(mode) }
+        editor.edit { playback.setDecoderMode(mode) }
     fun setAudioPassthrough(enabled: Boolean) =
-        editor.edit { setAudioPassthrough(enabled) }
+        editor.edit { playback.setAudioPassthrough(enabled) }
     fun setFrameRateMatching(enabled: Boolean) =
-        editor.edit { setFrameRateMatching(enabled) }
+        editor.edit { playback.setFrameRateMatching(enabled) }
     fun setRefreshRateMode(mode: com.raulshma.jellyplay.core.model.RefreshRateMode) =
-        editor.edit { setRefreshRateMode(mode) }
+        editor.edit { playback.setRefreshRateMode(mode) }
     fun setStreamingQuality(quality: StreamingQuality) = editor.setStreamingQuality(quality)
     fun setLiveStreamOption(option: LiveStreamOption) = editor.setLiveStreamOption(option)
     fun setMpvConfig(config: MpvEngineConfig) =
-        editor.edit { setMpvConfig(config) }
+        editor.edit { engine.setMpvConfig(config) }
     fun setLibVlcConfig(config: LibVlcEngineConfig) =
-        editor.edit { setLibVlcConfig(config) }
+        editor.edit { engine.setLibVlcConfig(config) }
     fun setExoPlayerConfig(config: ExoPlayerEngineConfig) =
-        editor.edit { setExoPlayerConfig(config) }
+        editor.edit { engine.setExoPlayerConfig(config) }
     fun setSegmentBehavior(type: MediaSegmentType, behavior: SegmentBehavior) =
-        editor.edit { setSegmentBehavior(type, behavior) }
+        editor.edit { videoPlayer.setSegmentBehavior(type, behavior) }
     fun setSyncPlayAutoAcceptInvites(enabled: Boolean) =
-        editor.edit { setSyncPlayAutoAcceptInvites(enabled) }
+        editor.edit { syncPlayCast.setSyncPlayAutoAcceptInvites(enabled) }
     fun setSyncPlayJoinBehavior(behavior: SyncPlayJoinBehavior) =
-        editor.edit { setSyncPlayJoinBehavior(behavior) }
+        editor.edit { syncPlayCast.setSyncPlayJoinBehavior(behavior) }
     fun setSyncPlayToleranceMs(ms: Long) =
-        editor.edit { setSyncPlayToleranceMs(ms) }
+        editor.edit { syncPlayCast.setSyncPlayToleranceMs(ms) }
     fun setBackgroundCastingEnabled(enabled: Boolean) =
-        editor.edit { setBackgroundCastingEnabled(enabled) }
+        editor.edit { syncPlayCast.setBackgroundCastingEnabled(enabled) }
     fun setPreferredRenderer(renderer: String?) =
-        editor.edit { setPreferredRenderer(renderer) }
+        editor.edit { syncPlayCast.setPreferredRenderer(renderer) }
     fun setDefaultCastingStrategy(strategy: CastingStrategy) =
-        editor.edit { setDefaultCastingStrategy(strategy) }
+        editor.edit { syncPlayCast.setDefaultCastingStrategy(strategy) }
     fun setDvrPrePaddingMinutes(minutes: Int) =
-        editor.edit { setDvrPrePaddingMinutes(minutes) }
+        editor.edit { syncPlayCast.setDvrPrePaddingMinutes(minutes) }
     fun setDvrPostPaddingMinutes(minutes: Int) =
-        editor.edit { setDvrPostPaddingMinutes(minutes) }
+        editor.edit { syncPlayCast.setDvrPostPaddingMinutes(minutes) }
     fun setDvrRecordingQuality(quality: String) =
-        editor.edit { setDvrRecordingQuality(quality) }
+        editor.edit { syncPlayCast.setDvrRecordingQuality(quality) }
     fun setPreferredPlayer(playerType: PlayerType) = editor.setPreferredPlayer(playerType)
     fun setVideoDefaultOrientation(mode: OrientationMode) = editor.setVideoDefaultOrientation(mode)
     fun setVideoDefaultAspectRatio(ratio: String) =
-        editor.edit { setVideoDefaultAspectRatio(ratio) }
+        editor.edit { videoPlayer.setVideoDefaultAspectRatio(ratio) }
     fun setVideoDefaultSpeed(speed: Float) =
-        editor.edit { setVideoDefaultSpeed(speed) }
+        editor.edit { videoPlayer.setVideoDefaultSpeed(speed) }
     fun setVideoHoldSpeedMultiplier(multiplier: Float) =
-        editor.edit { setVideoHoldSpeedMultiplier(multiplier) }
+        editor.edit { videoPlayer.setVideoHoldSpeedMultiplier(multiplier) }
     fun setVideoSeekDurationMs(ms: Long) = editor.setVideoSeekDurationMs(ms)
     fun setVideoControlsTimeoutMs(ms: Long) =
-        editor.edit { setVideoControlsTimeoutMs(ms) }
+        editor.edit { videoPlayer.setVideoControlsTimeoutMs(ms) }
     fun setVideoSkipBackOnResumeMs(ms: Long) =
-        editor.edit { setVideoSkipBackOnResumeMs(ms) }
+        editor.edit { videoPlayer.setVideoSkipBackOnResumeMs(ms) }
     fun setVideoPassOutProtectionHours(hours: Int) =
-        editor.edit { setVideoPassOutProtectionHours(hours) }
+        editor.edit { videoPlayer.setVideoPassOutProtectionHours(hours) }
     fun setVideoSwipeSeekMaxMs(ms: Long) =
-        editor.edit { setVideoSwipeSeekMaxMs(ms) }
+        editor.edit { videoPlayer.setVideoSwipeSeekMaxMs(ms) }
     fun setVideoPreloadBufferSize(size: PreloadBufferSize) =
-        editor.edit { setVideoPreloadBufferSize(size) }
+        editor.edit { videoPlayer.setVideoPreloadBufferSize(size) }
     fun setAudioDelayMs(ms: Long) =
-        editor.edit { setAudioDelay(ms) }
+        editor.edit { audio.setAudioDelay(ms) }
     fun setVideoBrightnessLevel(level: Float) =
-        editor.edit { setVideoBrightnessLevel(level) }
+        editor.edit { videoPlayer.setVideoBrightnessLevel(level) }
     fun setVideoGestureIndicatorSide(side: GestureIndicatorSide) =
-        editor.edit { setVideoGestureIndicatorSide(side) }
+        editor.edit { videoPlayer.setVideoGestureIndicatorSide(side) }
     fun setAutoPlayCountdownSec(sec: Int) =
-        editor.edit { setAutoPlayCountdownSec(sec) }
+        editor.edit { playback.setAutoPlayCountdownSec(sec) }
     fun setTvZoomModePercent(percent: Float) =
-        editor.edit { setTvZoomModePercent(percent) }
+        editor.edit { videoPlayer.setTvZoomModePercent(percent) }
 }

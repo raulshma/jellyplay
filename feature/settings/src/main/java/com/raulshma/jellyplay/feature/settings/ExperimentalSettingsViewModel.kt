@@ -26,11 +26,11 @@ class ExperimentalSettingsViewModel @Inject constructor(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { setShowAdvancedSettings(enabled) }
+        editor.edit { appearance.setShowAdvancedSettings(enabled) }
 
     fun setExperimentalFeatureEnabled(feature: ExperimentalFeature, enabled: Boolean) {
         val current = preferences.value.enabledExperimentalFeatures
         val updated = if (enabled) current + feature else current - feature
-        editor.edit { setEnabledExperimentalFeatures(updated) }
+        editor.edit { experimental.setEnabledExperimentalFeatures(updated) }
     }
 }

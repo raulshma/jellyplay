@@ -201,27 +201,27 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setShowAdvancedSettings(enabled: Boolean) {
-        editor.edit { setShowAdvancedSettings(enabled) }
+        editor.edit { appearance.setShowAdvancedSettings(enabled) }
     }
 
     fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
-        editor.edit { setDreamImageCategories(categories) }
+        editor.edit { screensaver.setDreamImageCategories(categories) }
     }
 
     fun setDreamSlideshowIntervalMs(ms: Long) {
-        editor.edit { setDreamSlideshowIntervalMs(ms) }
+        editor.edit { screensaver.setDreamSlideshowIntervalMs(ms) }
     }
 
     fun setDreamKenBurnsEnabled(enabled: Boolean) {
-        editor.edit { setDreamKenBurnsEnabled(enabled) }
+        editor.edit { screensaver.setDreamKenBurnsEnabled(enabled) }
     }
 
     fun setDreamTransitionStyle(style: DreamTransitionStyle) {
-        editor.edit { setDreamTransitionStyle(style) }
+        editor.edit { screensaver.setDreamTransitionStyle(style) }
     }
 
     fun setDreamShowTitle(enabled: Boolean) {
-        editor.edit { setDreamShowTitle(enabled) }
+        editor.edit { screensaver.setDreamShowTitle(enabled) }
     }
 
     /** Clears all preferences and resets to factory defaults. */
@@ -386,16 +386,16 @@ class SettingsViewModel @Inject constructor(
                 when (pending.schemaVersion) {
                     SettingsBackup.CURRENT_SCHEMA_VERSION -> {
                         val backup = json.decodeFromString(SettingsBackup.serializer(), jsonString)
-                        editor.edit { restoreV2(backup, restoreSecuritySensitive) }
+                        preferencesStore.restoreV2(backup, restoreSecuritySensitive)
                     }
                     SettingsBackup.LEGACY_AGGREGATE_SCHEMA_VERSION -> {
                         val legacy = json.decodeFromString(LegacySettingsBackup.serializer(), jsonString)
-                        editor.edit { restorePreferences(legacy.preferences, restoreSecuritySensitive) }
+                        preferencesStore.restorePreferences(legacy.preferences, restoreSecuritySensitive)
                     }
                     else -> {
                         // v0: bare, un-enveloped UserPreferences object.
                         val bare = json.decodeFromString(UserPreferences.serializer(), jsonString)
-                        editor.edit { restorePreferences(bare, restoreSecuritySensitive) }
+                        preferencesStore.restorePreferences(bare, restoreSecuritySensitive)
                     }
                 }
                 pendingImport = null

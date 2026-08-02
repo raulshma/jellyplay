@@ -71,7 +71,7 @@ class StorageSettingsViewModel @Inject constructor(
         private set
 
     fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { setShowAdvancedSettings(enabled) }
+        editor.edit { appearance.setShowAdvancedSettings(enabled) }
 
     /**
      * Recomputes the cache / downloads / image-cache sizes from disk. Four recursive FS walks are
@@ -183,75 +183,75 @@ class StorageSettingsViewModel @Inject constructor(
     }
 
     fun setWifiOnlyDownloads(enabled: Boolean) =
-        editor.edit { setWifiOnlyDownloads(enabled) }
+        editor.edit { downloads.setWifiOnlyDownloads(enabled) }
 
     fun setDownloadConnections(count: Int) =
-        editor.edit { setDownloadConnections(count) }
+        editor.edit { downloads.setDownloadConnections(count) }
 
     fun setMaxConcurrentDownloads(count: Int) =
-        editor.edit { setMaxConcurrentDownloads(count) }
+        editor.edit { downloads.setMaxConcurrentDownloads(count) }
 
     fun setMaxCacheSize(sizeMb: Int) =
-        editor.edit { setMaxCacheSize(sizeMb) }
+        editor.edit { networkOffline.setMaxCacheSize(sizeMb) }
 
     fun setAutoDeleteCache(enabled: Boolean) =
-        editor.edit { setAutoDeleteCache(enabled) }
+        editor.edit { networkOffline.setAutoDeleteCache(enabled) }
 
     fun setDownloadStorageLocation(location: String) =
-        editor.edit { setDownloadStorageLocation(location) }
+        editor.edit { downloads.setDownloadStorageLocation(location) }
 
     fun setMaxDownloadStorageGb(gb: Int) =
-        editor.edit { setMaxDownloadStorageGb(gb) }
+        editor.edit { downloads.setMaxDownloadStorageGb(gb) }
 
     fun setCellularDownloadSizeWarningMb(sizeMb: Int) =
-        editor.edit { setCellularDownloadSizeWarningMb(sizeMb) }
+        editor.edit { downloads.setCellularDownloadSizeWarningMb(sizeMb) }
 
     fun setDownloadQuality(quality: DownloadQuality) =
-        editor.edit { setDownloadQuality(quality) }
+        editor.edit { downloads.setDownloadQuality(quality) }
 
     fun setSmartDownloadsEnabled(enabled: Boolean) =
-        editor.edit { setSmartDownloadsEnabled(enabled) }
+        editor.edit { downloads.setSmartDownloadsEnabled(enabled) }
 
     fun setAutoDownloadNewEpisodes(enabled: Boolean) {
         editor.edit {
-            setAutoDownloadNewEpisodes(enabled)
+            downloads.setAutoDownloadNewEpisodes(enabled)
             autoDownloadScheduler.sync()
         }
     }
 
     fun setDownloadScheduleEnabled(enabled: Boolean) =
-        editor.edit { setDownloadScheduleEnabled(enabled) }
+        editor.edit { downloads.setDownloadScheduleEnabled(enabled) }
 
     fun setDownloadScheduleWindow(window: DownloadScheduleWindow) =
-        editor.edit { setDownloadScheduleWindow(window) }
+        editor.edit { downloads.setDownloadScheduleWindow(window) }
 
     fun setMeteredNetworkBehavior(behavior: MeteredNetworkBehavior) =
-        editor.edit { setMeteredNetworkBehavior(behavior) }
+        editor.edit { networkOffline.setMeteredNetworkBehavior(behavior) }
 
     fun setAdaptiveBitrateEnabled(enabled: Boolean) =
-        editor.edit { setAdaptiveBitrateEnabled(enabled) }
+        editor.edit { networkOffline.setAdaptiveBitrateEnabled(enabled) }
 
     fun setManualBandwidthCap(cap: Long) =
-        editor.edit { setManualBandwidthCap(cap) }
+        editor.edit { networkOffline.setManualBandwidthCap(cap) }
 
     fun setManualOffline(enabled: Boolean) =
-        editor.edit { setManualOffline(enabled) }
+        editor.edit { networkOffline.setManualOffline(enabled) }
 
     fun setAutoOfflineEnabled(enabled: Boolean) =
-        editor.edit { setAutoOfflineEnabled(enabled) }
+        editor.edit { networkOffline.setAutoOfflineEnabled(enabled) }
 
     fun setDataSaverEnabled(enabled: Boolean) =
-        editor.edit { setDataSaverEnabled(enabled) }
+        editor.edit { networkOffline.setDataSaverEnabled(enabled) }
 
     fun setVerboseNetworkLogging(enabled: Boolean) =
-        editor.edit { setVerboseNetworkLogging(enabled) }
+        editor.edit { networkOffline.setVerboseNetworkLogging(enabled) }
 
     fun setNetworkTimeoutPreset(preset: NetworkTimeoutPreset) =
-        editor.edit { setNetworkTimeoutPreset(preset) }
+        editor.edit { networkOffline.setNetworkTimeoutPreset(preset) }
 
     fun setUserDataSyncEnabled(enabled: Boolean) =
-        editor.edit { setUserDataSyncEnabled(enabled) }
+        editor.edit { playback.setUserDataSyncEnabled(enabled) }
 
     fun setCellularStreamingQuality(quality: StreamingQuality) =
-        editor.edit { setCellularStreamingQuality(quality) }
+        editor.edit { playback.setCellularStreamingQuality(quality) }
 }

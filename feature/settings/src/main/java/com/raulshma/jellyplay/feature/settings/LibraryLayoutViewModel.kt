@@ -104,15 +104,15 @@ class LibraryLayoutViewModel @Inject constructor(
         get() = store.preferences.value.pinnedHomeSections
 
     fun addPinnedHomeSection(section: PinnedHomeSection) {
-        editor.edit { addPinnedHomeSection(section) }
+        editor.edit { homeDiscovery.addPinnedHomeSection(section) }
     }
 
     fun removePinnedHomeSection(sectionId: String) {
-        editor.edit { removePinnedHomeSection(sectionId) }
+        editor.edit { homeDiscovery.removePinnedHomeSection(sectionId) }
     }
 
     fun setPinnedHomeSections(sections: List<PinnedHomeSection>) {
-        editor.edit { setPinnedHomeSections(sections) }
+        editor.edit { homeDiscovery.setPinnedHomeSections(sections) }
     }
 
     /** Moves a pinned section from [from] to [to], clamped to valid bounds. */
@@ -197,26 +197,26 @@ class LibraryLayoutViewModel @Inject constructor(
             name = name.trim().ifBlank { "Preset" },
             config = config,
         )
-        editor.edit { saveHomeLayoutPreset(preset) }
+        editor.edit { homeDiscovery.saveHomeLayoutPreset(preset) }
     }
 
     /** Applies a preset's layout to the current preferences. */
     fun applyPreset(config: HomeLayoutConfig) {
         editor.edit {
-            setEnabledHomeSectionTypes(config.enabledHomeSectionTypes)
-            setHomeSectionOrder(config.homeSectionOrder)
-            setLibraryHomeSectionOverrides(config.libraryHomeSectionOverrides)
-            setMergeContinueWatchingAndNextUp(config.mergeContinueWatchingAndNextUp)
-            setNextUpMaxDays(config.nextUpMaxDays)
-            setNextUpRewatching(config.nextUpRewatching)
-            setPinnedHomeSections(config.pinnedHomeSections)
-            setHomeHeroEnabled(config.homeHeroEnabled)
-            setContinueWatchingClickBehavior(config.continueWatchingClickBehavior)
+            homeDiscovery.setEnabledHomeSectionTypes(config.enabledHomeSectionTypes)
+            homeDiscovery.setHomeSectionOrder(config.homeSectionOrder)
+            homeDiscovery.setLibraryHomeSectionOverrides(config.libraryHomeSectionOverrides)
+            homeDiscovery.setMergeContinueWatchingAndNextUp(config.mergeContinueWatchingAndNextUp)
+            homeDiscovery.setNextUpMaxDays(config.nextUpMaxDays)
+            homeDiscovery.setNextUpRewatching(config.nextUpRewatching)
+            homeDiscovery.setPinnedHomeSections(config.pinnedHomeSections)
+            homeDiscovery.setHomeHeroEnabled(config.homeHeroEnabled)
+            homeDiscovery.setContinueWatchingClickBehavior(config.continueWatchingClickBehavior)
         }
     }
 
     fun deleteHomeLayoutPreset(presetId: String) {
-        editor.edit { deleteHomeLayoutPreset(presetId) }
+        editor.edit { homeDiscovery.deleteHomeLayoutPreset(presetId) }
     }
 
     /** Serializes a preset to a shareable pretty-printed JSON string. */
