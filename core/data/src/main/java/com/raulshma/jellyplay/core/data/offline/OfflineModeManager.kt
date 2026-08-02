@@ -7,7 +7,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,7 +27,7 @@ import javax.inject.Singleton
 class OfflineModeManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val networkMonitor: NetworkMonitor,
-    private val userPreferencesStore: UserPreferencesStore,
+    private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
 ) : DefaultLifecycleObserver {
     private val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -42,14 +43,14 @@ class OfflineModeManager @Inject constructor(
 
     init {
         scope.launch {
-            // Combine the two narrow per-key preference flows instead of the
+            // Combine the manual/auto offline slice fields instead of the
             // full ~150-field `preferences` StateFlow. A settings-screen round
             // trip elsewhere in the app previously re-awakened this collector
             // and re-derived offline mode even though neither offline flag
             // changed.
             combine(
-                userPreferencesStore.manualOfflineEnabled,
-                userPreferencesStore.autoOfflineEnabled,
+                networkOfflineStore.networkOffline.map { it.manualOfflineEnabled },
+                networkOfflineStore.networkOffline.map { it.autoOfflineEnabled },
                 networkMonitor.networkStatus,
             ) { manualOffline, autoOffline, status ->
                 Triple(manualOffline, autoOffline, status)
@@ -89,14 +90,14 @@ class OfflineModeManager @Inject constructor(
     }
 
     fun toggleManualOffline() {
-        val currentManual = userPreferencesStore.preferences.value.manualOfflineEnabled
+        val currentManual = networkOfflineStore.networkOffline.value.manualOfflineEnabled
         scope.launch {
-            userPreferencesStore.setManualOffline(!currentManual)
+            networkOfflineStore.setManualOffline(!currentManual)
         }
     }
 
     fun checkNetworkAndAutoDetect() {
-        val prefs = userPreferencesStore.preferences.value
+        val prefs = networkOfflineStore.networkOffline.value
         if (prefs.manualOfflineEnabled) {
             _offlineMode.value = OfflineMode.OFFLINE_MANUAL
             return

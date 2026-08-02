@@ -3,8 +3,8 @@ package com.raulshma.jellyplay.core.data.playback
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.test.core.app.ApplicationProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheSlice
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -31,7 +31,7 @@ class AudioStreamCacheTest {
     val tmpFolder = TemporaryFolder()
 
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-    private val preferencesStore: UserPreferencesStore = mockk(relaxed = true)
+    private val preferencesStore: AudioCacheStore = mockk(relaxed = true)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
     private lateinit var cache: AudioStreamCache
@@ -39,14 +39,14 @@ class AudioStreamCacheTest {
 
     @Before
     fun setup() {
-        every { preferencesStore.preferences } returns MutableStateFlow(
-            UserPreferences(audioCacheSizeMb = 64)
+        every { preferencesStore.audioCache } returns MutableStateFlow(
+            AudioCacheSlice(audioCacheSizeMb = 64)
         )
         testDir = tmpFolder.newFolder("audio_cache")
         cache = object : AudioStreamCache(
             context = context,
             streamingOkHttpClient = okhttp3.OkHttpClient(),
-            preferencesStore = preferencesStore,
+            audioCacheStore = preferencesStore,
             scope = scope,
         ) {
             override fun resolveCacheDir() = testDir
@@ -95,7 +95,7 @@ class AudioStreamCacheTest {
         val brokenCache = object : AudioStreamCache(
             context = context,
             streamingOkHttpClient = okhttp3.OkHttpClient(),
-            preferencesStore = preferencesStore,
+            audioCacheStore = preferencesStore,
             scope = scope,
         ) {
             override fun resolveCacheDir() = java.io.File(blockingFile, "audio_cache")

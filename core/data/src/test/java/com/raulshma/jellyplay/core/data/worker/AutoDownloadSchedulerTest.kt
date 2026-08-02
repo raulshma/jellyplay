@@ -6,8 +6,8 @@ import androidx.work.Configuration
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,9 +45,9 @@ class AutoDownloadSchedulerTest {
 
     @Test
     fun `enqueues tagged periodic work when preference enabled`() = runTest {
-        val prefsFlow = MutableStateFlow(UserPreferences(autoDownloadNewEpisodes = true))
-        val preferencesStore = mockk<UserPreferencesStore>()
-        every { preferencesStore.preferences } returns prefsFlow
+        val prefsFlow = MutableStateFlow(DownloadsSlice(autoDownloadNewEpisodes = true))
+        val preferencesStore = mockk<DownloadsStore>()
+        every { preferencesStore.downloads } returns prefsFlow
         val scheduler = AutoDownloadScheduler(context, preferencesStore, this@runTest)
 
         scheduler.sync()
@@ -60,9 +60,9 @@ class AutoDownloadSchedulerTest {
 
     @Test
     fun `cancels periodic work when preference disabled`() = runTest {
-        val prefsFlow = MutableStateFlow(UserPreferences(autoDownloadNewEpisodes = true))
-        val preferencesStore = mockk<UserPreferencesStore>()
-        every { preferencesStore.preferences } returns prefsFlow
+        val prefsFlow = MutableStateFlow(DownloadsSlice(autoDownloadNewEpisodes = true))
+        val preferencesStore = mockk<DownloadsStore>()
+        every { preferencesStore.downloads } returns prefsFlow
         val scheduler = AutoDownloadScheduler(context, preferencesStore, this@runTest)
 
         // First, enqueue while enabled.
@@ -71,7 +71,7 @@ class AutoDownloadSchedulerTest {
         assertEquals(1, workManager.getWorkInfosForUniqueWork(AutoDownloadWorker.UNIQUE_PERIODIC_NAME).get().size)
 
         // Then disable — sync() must cancel the periodic work.
-        prefsFlow.value = UserPreferences(autoDownloadNewEpisodes = false)
+        prefsFlow.value = DownloadsSlice(autoDownloadNewEpisodes = false)
         scheduler.sync()
         testScheduler.advanceUntilIdle()
 

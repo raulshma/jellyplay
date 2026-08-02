@@ -11,7 +11,7 @@ import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRecord
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatcher
@@ -35,13 +35,13 @@ class NewMediaCheckWorker @AssistedInject constructor(
     @Assisted workerParams: WorkerParameters,
     private val mediaRepository: MediaRepository,
     private val seenMediaRepository: SeenMediaRepository,
-    private val preferencesStore: UserPreferencesStore,
+    private val notificationStore: NotificationStore,
     private val dispatcher: NotificationDispatcher,
     private val scheduler: NotificationScheduler,
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        val prefs = preferencesStore.notificationPreferences.first()
+        val prefs = notificationStore.notification.first().notificationPreferences
         if (!prefs.enabled) {
             scheduler.cancel()
             return Result.success()

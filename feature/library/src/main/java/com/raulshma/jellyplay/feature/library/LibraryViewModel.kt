@@ -6,7 +6,7 @@ import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibraryViewMode
@@ -76,7 +76,7 @@ class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
-    private val preferencesStore: UserPreferencesStore,
+    private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
 ) : JellyPlayViewModel() {
 
     private val _folders = stateFlow<List<LibraryFolder>>(emptyList())
@@ -160,7 +160,7 @@ class LibraryViewModel @Inject constructor(
         // user override per-folder via the toolbar toggle.
         launch {
             combine(
-                preferencesStore.preferences
+                libraryStore.library
                     .map { ViewModePrefs(it.libraryViewMode, it.libraryViewModes) }
                     .distinctUntilChanged(),
                 _selectedFolder.flow,
@@ -178,10 +178,10 @@ class LibraryViewModel @Inject constructor(
     fun setViewMode(mode: LibraryViewMode) {
         _viewMode.set(mode)
         launch {
-            preferencesStore.setLibraryViewMode(mode)
+            libraryStore.setLibraryViewMode(mode)
             val folderId = _selectedFolder.value?.id
             if (folderId != null) {
-                preferencesStore.setLibraryViewMode(folderId, mode.name)
+                libraryStore.setLibraryViewMode(folderId, mode.name)
             }
         }
     }
@@ -244,7 +244,7 @@ class LibraryViewModel @Inject constructor(
     fun selectFolder(folder: LibraryFolder?) {
         _selectedFolder.set(folder)
         if (folder != null) {
-            val prefs = preferencesStore.preferences.value
+            val prefs = libraryStore.library.value
             val savedOrder = prefs.defaultLibrarySortOrders[folder.id]
             val savedFiltersJson = prefs.libraryFilters[folder.id]
 
@@ -288,7 +288,7 @@ class LibraryViewModel @Inject constructor(
         val folder = _selectedFolder.value
         if (folder != null) {
             launch {
-                preferencesStore.setDefaultLibrarySortOrder(folder.id, newFilters.sortBy.name)
+                libraryStore.setDefaultLibrarySortOrder(folder.id, newFilters.sortBy.name)
                 val saved = SavedLibraryFilters(
                     mediaTypes = newFilters.mediaTypes.map { it.name },
                     genres = newFilters.genres,
@@ -298,7 +298,7 @@ class LibraryViewModel @Inject constructor(
                     tags = newFilters.tags,
                     minRating = newFilters.minRating,
                 )
-                preferencesStore.setLibraryFilters(folder.id, Json.encodeToString(saved))
+                libraryStore.setLibraryFilters(folder.id, Json.encodeToString(saved))
             }
         }
     }

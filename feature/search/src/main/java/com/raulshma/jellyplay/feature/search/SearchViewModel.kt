@@ -78,7 +78,7 @@ class SearchViewModel @Inject constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val searchHistoryRepository: SearchHistoryRepository,
     private val offlineRepository: OfflineRepository,
-    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
     private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore,
 ) : JellyPlayViewModel() {
 
@@ -108,7 +108,7 @@ class SearchViewModel @Inject constructor(
     private val _searchHistory = stateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
 
-    private val hideSearchHistoryPref: StateFlow<Boolean> = preferencesStore.preferences
+    private val hideSearchHistoryPref: StateFlow<Boolean> = experimentalStore.experimental
         .map { it.hideSearchHistory }
         .stateIn(scope, SharingStarted.Lazily, false)
 

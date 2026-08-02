@@ -5,7 +5,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
@@ -46,7 +46,7 @@ class SyncPlayViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val syncPlayManager: SyncPlayManager,
-    private val preferencesStore: UserPreferencesStore,
+    private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(SyncPlayUiState())
@@ -83,7 +83,7 @@ class SyncPlayViewModel @Inject constructor(
                         }
                     }
                     if (autoJoinGroupId == null && result.isNotEmpty() && !_uiState.value.isInGroup) {
-                        val prefs = preferencesStore.preferences.value
+                        val prefs = syncPlayCastStore.syncPlayCast.value
                         if (prefs.syncPlayAutoAcceptInvites) {
                             joinGroup(result.first().groupId)
                         }
@@ -103,7 +103,7 @@ class SyncPlayViewModel @Inject constructor(
      * - [SyncPlayJoinBehavior.NEVER_JOIN] emits a notification instead of joining.
      */
     fun requestJoin(group: SyncPlayGroup) {
-        when (preferencesStore.preferences.value.syncPlayJoinBehavior) {
+        when (syncPlayCastStore.syncPlayCast.value.syncPlayJoinBehavior) {
             SyncPlayJoinBehavior.ALWAYS_JOIN -> joinGroup(group.groupId)
             SyncPlayJoinBehavior.ASK -> _uiState.update { it.copy(pendingJoin = group) }
             SyncPlayJoinBehavior.NEVER_JOIN -> _notifications.tryEmit(context.getString(R.string.syncplay_join_disabled))

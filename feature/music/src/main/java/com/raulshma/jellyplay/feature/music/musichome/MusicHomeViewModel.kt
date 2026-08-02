@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -32,7 +32,7 @@ class MusicHomeViewModel @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val audioPlaybackManager: AudioPlaybackManager,
     private val downloadRepository: DownloadRepository,
-    private val preferencesStore: UserPreferencesStore,
+    private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
     private val offlineRepository: OfflineRepository,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: UserMessageBus,
@@ -46,7 +46,7 @@ class MusicHomeViewModel @Inject constructor(
 
     init {
         launch {
-            preferencesStore.preferences.collect { prefs ->
+            homeDiscoveryStore.homeDiscovery.collect { prefs ->
                 _uiState.update { it.copy(homeMode = prefs.homeMode) }
             }
         }

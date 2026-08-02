@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheSlice
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -22,7 +22,7 @@ class AudioPrefetchEngineTest {
     private val audioStreamCache: AudioStreamCache = mockk(relaxed = true)
     private val policyGuard: AudioCachePolicyGuard = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
-    private val preferencesStore: UserPreferencesStore = mockk(relaxed = true)
+    private val preferencesStore: AudioCacheStore = mockk(relaxed = true)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
     private val queue = mutableListOf<AudioQueueItem>()
@@ -34,8 +34,8 @@ class AudioPrefetchEngineTest {
 
     @Before
     fun setup() {
-        every { preferencesStore.preferences } returns MutableStateFlow(
-            UserPreferences(audioCachingEnabled = true, audioPrefetchLookahead = 3)
+        every { preferencesStore.audioCache } returns MutableStateFlow(
+            AudioCacheSlice(audioCachingEnabled = true, audioPrefetchLookahead = 3)
         )
         every { policyGuard.isPrefetchAllowed } returns MutableStateFlow(true)
         every { audioStreamCache.getCachedBytes(any()) } returns 0L
@@ -49,7 +49,7 @@ class AudioPrefetchEngineTest {
             audioStreamCache = audioStreamCache,
             policyGuard = policyGuard,
             playbackRepository = playbackRepository,
-            preferencesStore = preferencesStore,
+            audioCacheStore = preferencesStore,
             backgroundScope = scope,
         )
         engine.bindProviders(
@@ -88,8 +88,8 @@ class AudioPrefetchEngineTest {
 
     @Test
     fun `lookahead zero never warms`() = runTest {
-        every { preferencesStore.preferences } returns MutableStateFlow(
-            UserPreferences(audioCachingEnabled = true, audioPrefetchLookahead = 0)
+        every { preferencesStore.audioCache } returns MutableStateFlow(
+            AudioCacheSlice(audioCachingEnabled = true, audioPrefetchLookahead = 0)
         )
         queue.clear()
         queue.addAll(listOf(track("t0"), track("t1")))
@@ -103,8 +103,8 @@ class AudioPrefetchEngineTest {
 
     @Test
     fun `audioCachingDisabled never warms`() = runTest {
-        every { preferencesStore.preferences } returns MutableStateFlow(
-            UserPreferences(audioCachingEnabled = false, audioPrefetchLookahead = 3)
+        every { preferencesStore.audioCache } returns MutableStateFlow(
+            AudioCacheSlice(audioCachingEnabled = false, audioPrefetchLookahead = 3)
         )
         queue.clear()
         queue.addAll(listOf(track("t0"), track("t1")))

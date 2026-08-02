@@ -12,7 +12,7 @@ import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -48,7 +48,7 @@ import kotlin.coroutines.resumeWithException
 open class AudioStreamCache @Inject constructor(
     @ApplicationContext private val context: Context,
     @Named("streaming") private val streamingOkHttpClient: OkHttpClient,
-    private val preferencesStore: UserPreferencesStore,
+    private val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
     /** Override in tests to point at a temp dir. */
@@ -65,7 +65,7 @@ open class AudioStreamCache @Inject constructor(
     private fun ensureCache(): SimpleCache? {
         cache?.let { return it }
         return try {
-            val sizeMb = preferencesStore.preferences.value.audioCacheSizeMb.coerceAtLeast(1)
+            val sizeMb = audioCacheStore.audioCache.value.audioCacheSizeMb.coerceAtLeast(1)
             val sizeBytes = sizeMb.toLong() * 1024L * 1024L
             val evictor = LeastRecentlyUsedCacheEvictor(sizeBytes)
             val dir = resolveCacheDir().apply { mkdirs() }

@@ -4,12 +4,11 @@ import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
-import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -54,7 +53,7 @@ data class ArrQueueUiState(
 class ArrQueueViewModel @Inject constructor(
     private val arrRepository: ArrRepository,
     @ApplicationContext private val context: Context,
-    userPreferencesStore: UserPreferencesStore,
+    experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(ArrQueueUiState())
@@ -67,8 +66,8 @@ class ArrQueueViewModel @Inject constructor(
      * to [loadQueue] / [refresh] reads via `.value`; mirrors the rationale in
      * `RequestsViewModel.directArrEnabled`.
      */
-    private val directArrEnabled: StateFlow<Boolean> = userPreferencesStore.preferences
-        .map { it.isExperimentalEnabled(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
+    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.experimental
+        .map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
     /** Hot stream of the combined queue, mirrored into UI state. */

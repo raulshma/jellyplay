@@ -6,8 +6,8 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -32,12 +32,12 @@ class UserDataSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val mediaRepository: MediaRepository,
-    private val preferencesStore: UserPreferencesStore,
+    private val playbackStore: PlaybackStore,
     private val serverIdentityStore: ServerIdentityStore,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val prefs = preferencesStore.preferences.firstOrNull() ?: return Result.success()
+        val prefs = playbackStore.playback.firstOrNull() ?: return Result.success()
         if (!prefs.userDataSyncEnabled) return Result.success()
         // Don't run until the user has signed in at least once.
         val activeUserId = serverIdentityStore.activeUserId.firstOrNull()

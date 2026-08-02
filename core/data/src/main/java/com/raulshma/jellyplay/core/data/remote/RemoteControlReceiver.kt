@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import com.raulshma.jellyplay.core.network.websocket.WebSocketEvent
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.remote.GeneralCommand
 import com.raulshma.jellyplay.core.model.remote.PlayRequest
@@ -42,7 +42,7 @@ class RemoteControlReceiver @Inject constructor(
     private val audioDispatcher: AudioRemoteControlDispatcher,
     private val uiDispatcher: UiRemoteControlDispatcher,
     private val activePlayerController: ActivePlayerController,
-    private val preferencesStore: UserPreferencesStore,
+    private val securityStore: SecurityStore,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -75,7 +75,7 @@ class RemoteControlReceiver @Inject constructor(
             // bail out before collecting any events. Re-checked on every
             // start() so toggling the pref + reconnecting takes effect.
             val enabled = try {
-                preferencesStore.preferences.first().remoteControlEnabled
+                securityStore.security.first().remoteControlEnabled
             } catch (_: Exception) {
                 true
             }

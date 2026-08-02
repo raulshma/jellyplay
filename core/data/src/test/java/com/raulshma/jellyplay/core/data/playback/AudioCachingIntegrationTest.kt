@@ -1,9 +1,8 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheSlice
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -22,7 +21,7 @@ class AudioCachingIntegrationTest {
     private val audioStreamCache: AudioStreamCache = mockk(relaxed = true)
     private val policyGuard: AudioCachePolicyGuard = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
-    private val preferencesStore: UserPreferencesStore = mockk(relaxed = true)
+    private val preferencesStore: AudioCacheStore = mockk(relaxed = true)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
     private val queue = mutableListOf<AudioQueueItem>()
@@ -34,11 +33,10 @@ class AudioCachingIntegrationTest {
 
     @Before
     fun setup() = runTest {
-        every { preferencesStore.preferences } returns MutableStateFlow(
-            UserPreferences(
+        every { preferencesStore.audioCache } returns MutableStateFlow(
+            AudioCacheSlice(
                 audioCachingEnabled = true,
                 audioPrefetchLookahead = 2,
-                audioCacheNetworkPolicy = AudioCacheNetworkPolicy.ANY_NETWORK,
             )
         )
         every { policyGuard.isPrefetchAllowed } returns MutableStateFlow(true)
@@ -53,7 +51,7 @@ class AudioCachingIntegrationTest {
             audioStreamCache = audioStreamCache,
             policyGuard = policyGuard,
             playbackRepository = playbackRepository,
-            preferencesStore = preferencesStore,
+            audioCacheStore = preferencesStore,
             backgroundScope = scope,
         )
         engine.bindProviders(

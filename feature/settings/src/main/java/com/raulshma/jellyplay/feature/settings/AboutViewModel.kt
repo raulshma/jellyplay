@@ -5,7 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,7 +21,7 @@ class AboutViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val apiClient: JellyfinApiClient,
     private val authRepository: AuthRepository,
-    private val preferencesStore: UserPreferencesStore,
+    private val experimentalStore: ExperimentalStore,
 ) : JellyPlayViewModel() {
 
     val appVersion: String by lazy {
@@ -57,7 +57,7 @@ class AboutViewModel @Inject constructor(
     init {
         loadServerInfo()
         launch {
-            preferencesStore.preferences.collect { prefs ->
+            experimentalStore.experimental.collect { prefs ->
                 selfUpdateCheckEnabled = prefs.selfUpdateCheckEnabled
             }
         }
@@ -92,7 +92,7 @@ class AboutViewModel @Inject constructor(
     }
 
     fun updateSelfUpdateCheckPref(enabled: Boolean) {
-        launch { preferencesStore.setSelfUpdateCheckEnabled(enabled) }
+        launch { experimentalStore.setSelfUpdateCheckEnabled(enabled) }
     }
 
     private fun collectLogs(): Uri? {

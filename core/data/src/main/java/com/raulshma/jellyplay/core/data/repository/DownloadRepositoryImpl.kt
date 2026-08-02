@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.data.worker.awaitResponse
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -61,7 +62,7 @@ class DownloadRepositoryImpl @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val httpClient: OkHttpClient,
-    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val downloadsStore: DownloadsStore,
     private val json: Json,
     /**
      * Lazy to break the Hilt construction cycle: [downloadSeries] (below)
@@ -159,7 +160,7 @@ class DownloadRepositoryImpl @Inject constructor(
             downloadDao.deleteDownloadById(existing.id)
         }
 
-        val prefs = preferencesStore.preferences.first()
+        val prefs = downloadsStore.downloads.first()
         // Storage cap (MB + GB): single owner is StoragePolicy. Previously
         // duplicated here and in downloadSeries; the two could drift.
         storagePolicy.enforce(precomputedCurrentBytes = precomputedCurrentBytes)
@@ -386,7 +387,7 @@ class DownloadRepositoryImpl @Inject constructor(
         episodeIds: Map<String, List<String>>?,
     ): Result<List<String>> = runCatching {
         withContext(Dispatchers.IO) {
-            val prefs = preferencesStore.preferences.first()
+            val prefs = downloadsStore.downloads.first()
             // The storage cap only needs to be evaluated once for the whole
             // enqueue batch: no bytes are actually downloaded here (the
             // DownloadWorker runs later), so every per-episode SUM(downloadedBytes)
