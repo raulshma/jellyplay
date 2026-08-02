@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -207,12 +208,38 @@ class DownloadsStore @Inject constructor(
             it[Keys.DOWNLOAD_STORAGE_LOCATION] = userPreferences.downloadStorageLocation
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences], plus the gap
+     * keys [restorePreferences] omits (`cellular_download_size_warning_mb`,
+     * `download_schedule_enabled`, and the schedule-window keys destructured from
+     * [DownloadsSlice.downloadScheduleWindow]).
+     */
+    suspend fun restore(slice: DownloadsSlice) {
+        dataStore.edit { it ->
+            it[Keys.WIFI_ONLY_DOWNLOADS] = slice.wifiOnlyDownloads
+            it[Keys.DOWNLOAD_CONNECTIONS] = slice.downloadConnections
+            it[Keys.MAX_CONCURRENT_DOWNLOADS] = slice.maxConcurrentDownloads
+            it[Keys.DOWNLOAD_QUALITY] = slice.downloadQuality.name
+            it[Keys.SMART_DOWNLOADS_ENABLED] = slice.smartDownloadsEnabled
+            it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = slice.autoDownloadNewEpisodes
+            it[Keys.MAX_DOWNLOAD_STORAGE_GB] = slice.maxDownloadStorageGb
+            it[Keys.DOWNLOAD_STORAGE_LOCATION] = slice.downloadStorageLocation
+            it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = slice.cellularDownloadSizeWarningMb
+            it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = slice.downloadScheduleEnabled
+            it[Keys.DOWNLOAD_SCHEDULE_START] = slice.downloadScheduleWindow.startHour
+            it[Keys.DOWNLOAD_SCHEDULE_END] = slice.downloadScheduleWindow.endHour
+            it[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] = slice.downloadScheduleWindow.wifiOnly
+        }
+    }
 }
 
 /**
  * The downloads preference slice. Plain data class. Defaults mirror the
  * projection defaults in [DownloadsStore.read].
  */
+@Serializable
 data class DownloadsSlice(
     val wifiOnlyDownloads: Boolean = true,
     val downloadConnections: Int = 4,

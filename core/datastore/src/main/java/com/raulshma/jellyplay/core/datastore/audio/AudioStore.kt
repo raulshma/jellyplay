@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -257,12 +258,41 @@ class AudioStore @Inject constructor(
             it[Keys.SLEEP_TIMER_END_OF_EPISODE] = userPreferences.sleepTimerEndOfEpisode
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences], plus the
+     * `audio_lyrics_visible` gap key that [restorePreferences] omits.
+     */
+    suspend fun restore(slice: AudioSlice) {
+        dataStore.edit { it ->
+            it[Keys.AUDIO_DEFAULT_SPEED] = slice.audioDefaultSpeed
+            it[Keys.AUDIO_NIGHT_MODE_VOLUME] = slice.audioNightModeVolume
+            it[Keys.AUDIO_NIGHT_MODE_GAIN] = slice.audioNightModeGain
+            it[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = slice.audioSkipPreviousThresholdMs
+            it[Keys.AUDIO_AUTOPLAY_NEXT] = slice.audioAutoplayNext
+            it[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = slice.audioPreloadBufferSize.name
+            it[Keys.AUDIO_NORMALIZATION_MODE] = slice.audioNormalizationMode.name
+            it[Keys.AUDIO_NORMALIZATION_ENABLED] = slice.audioNormalizationEnabled
+            it[Keys.REPLAYGAIN_PRE_AMP_DB] = slice.replayGainPreAmpDb
+            it[Keys.CHANNEL_MIX_MODE] = slice.channelMixMode.name
+            it[Keys.CHANNEL_MIX_ENABLED] = slice.channelMixEnabled
+            it[Keys.AUDIO_GAPLESS_ENABLED] = slice.audioGaplessEnabled
+            it[Keys.AUDIO_CROSSFADE_DURATION_MS] = slice.audioCrossfadeDurationMs
+            it[Keys.AUDIO_DELAY_MS] = slice.audioDelayMs
+            it[Keys.AUDIO_LYRICS_VISIBLE] = slice.audioLyricsVisible
+            it[Keys.AUDIO_VISUALIZER_ENABLED] = slice.audioVisualizerEnabled
+            it[Keys.SLEEP_TIMER_DURATION_MS] = slice.sleepTimerDurationMs
+            it[Keys.SLEEP_TIMER_END_OF_EPISODE] = slice.sleepTimerEndOfEpisode
+        }
+    }
 }
 
 /**
  * The audio-player preference slice. Plain data class.
  * Defaults mirror the projection defaults in [AudioStore.read].
  */
+@Serializable
 data class AudioSlice(
     val audioDefaultSpeed: Float = 1.0f,
     val audioNightModeVolume: Float = 0.4f,

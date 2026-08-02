@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -254,12 +255,42 @@ class SecurityStore @Inject constructor(
             prefs[Keys.AUTO_LOCK_TIMER_MS] = userPreferences.autoLockTimerMs
         }
     }
+
+    /**
+     * Slice inverse of [read] for the non-security-sensitive key: writes
+     * [Keys.REMOTE_CONTROL_ENABLED] from [slice], mirroring [restorePreferences]
+     * (the remote-control switch is independent of the lock config and restored
+     * unconditionally).
+     */
+    suspend fun restore(slice: SecuritySlice) {
+        dataStore.edit { prefs ->
+            prefs[Keys.REMOTE_CONTROL_ENABLED] = slice.remoteControlEnabled
+        }
+    }
+
+    /**
+     * Slice inverse of [read] for the security-sensitive lock config: writes the
+     * five lock keys from [slice], mirroring [restoreSecuritySensitive]
+     * (PIN lock/hash, biometric, use-PIN-for-player-lock, auto-lock timer).
+     * Kept separate so an imported backup never silently replaces the device's
+     * lock config — only when the caller explicitly opts in.
+     */
+    suspend fun restoreSecuritySensitive(slice: SecuritySlice) {
+        dataStore.edit { prefs ->
+            prefs[Keys.PIN_LOCK_ENABLED] = slice.pinLockEnabled
+            slice.pinHash?.let { prefs[Keys.PIN_HASH] = it }
+            prefs[Keys.BIOMETRIC_LOCK_ENABLED] = slice.biometricLockEnabled
+            prefs[Keys.USE_PIN_FOR_PLAYER_LOCK] = slice.usePinForPlayerLock
+            prefs[Keys.AUTO_LOCK_TIMER_MS] = slice.autoLockTimerMs
+        }
+    }
 }
 
 /**
  * The security &amp; access-control preference slice. Plain data class.
  * Defaults mirror the projection defaults in [SecurityStore.read].
  */
+@Serializable
 data class SecuritySlice(
     val pinLockEnabled: Boolean = false,
     val pinHash: String? = null,

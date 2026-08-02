@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.Serializable
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -352,6 +353,33 @@ class PlaybackStore @Inject constructor(
             it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = userPreferences.androidTvWatchNextEnabled
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences], plus the
+     * `live_stream_option` gap key that [restorePreferences] omits.
+     */
+    suspend fun restore(slice: PlaybackSlice) {
+        dataStore.edit { it ->
+            it[Keys.PREFERRED_PLAYER] = slice.preferredPlayer.name
+            it[Keys.STREAMING_QUALITY] = slice.streamingQuality.name
+            it[Keys.CELLULAR_STREAMING_QUALITY] = slice.cellularStreamingQuality.name
+            it[Keys.PLAYBACK_MODE] = slice.playbackMode.name
+            it[Keys.LIVE_STREAM_OPTION] = slice.liveStreamOption.name
+            it[Keys.DECODER_MODE] = slice.decoderMode.name
+            it[Keys.AUDIO_PASSTHROUGH] = slice.audioPassthrough
+            it[Keys.FRAME_RATE_MATCHING] = slice.frameRateMatching
+            it[Keys.REFRESH_RATE_MODE] = slice.refreshRateMode.name
+            it[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = slice.keepScreenOnDuringVideo
+            it[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = slice.pauseOnAudioFocusLoss
+            it[Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS] = slice.duckOnTransientFocusLoss
+            it[Keys.AUTO_PLAY_COUNTDOWN_SEC] = slice.autoPlayCountdownSec
+            it[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = slice.backgroundVideoAudioEnabled
+            it[Keys.PGS_SUBTITLE_DIRECT_PLAY] = slice.pgsSubtitleDirectPlay
+            it[Keys.USER_DATA_SYNC_ENABLED] = slice.userDataSyncEnabled
+            it[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = slice.androidTvWatchNextEnabled
+        }
+    }
 }
 
 /**
@@ -359,6 +387,7 @@ class PlaybackStore @Inject constructor(
  * datastore module stays framework-light. Defaults mirror the projection
  * defaults in [PlaybackStore.read].
  */
+@Serializable
 data class PlaybackSlice(
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,

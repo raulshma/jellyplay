@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import javax.inject.Inject
@@ -314,6 +315,33 @@ class NotificationStore @Inject constructor(
             it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(userPreferences.newsletterSectionOrder)
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences]. The notification
+     * sub-domain is read from [NotificationSlice.notificationPreferences];
+     * libraryConfigs / enabledNewsletterSections / newsletterSectionOrder are
+     * JSON-encoded via this store's [json] codec.
+     */
+    suspend fun restore(slice: NotificationSlice) {
+        dataStore.edit { it ->
+            it[Keys.NOTIFICATIONS_ENABLED] = slice.notificationPreferences.enabled
+            it[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = slice.notificationPreferences.checkFrequency.name
+            it[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = slice.notificationPreferences.quietHoursEnabled
+            it[Keys.NOTIFICATIONS_QUIET_HOURS_START] = slice.notificationPreferences.quietHoursStart
+            it[Keys.NOTIFICATIONS_QUIET_HOURS_END] = slice.notificationPreferences.quietHoursEnd
+            it[Keys.NOTIFICATIONS_SOUND_ENABLED] = slice.notificationPreferences.soundEnabled
+            it[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = slice.notificationPreferences.vibrateEnabled
+            it[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = slice.notificationPreferences.lightsEnabled
+            it[Keys.NOTIFICATIONS_MAX_PER_CHECK] = slice.notificationPreferences.maxPerCheck
+            it[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(slice.notificationPreferences.libraryConfigs)
+            it[Keys.NEWSLETTER_ENABLED] = slice.newsletterEnabled
+            it[Keys.NEWSLETTER_DAY_OF_WEEK] = slice.newsletterDayOfWeek
+            it[Keys.NEWSLETTER_LAST_VIEWED_MS] = slice.newsletterLastViewedMs
+            it[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(slice.enabledNewsletterSections)
+            it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(slice.newsletterSectionOrder)
+        }
+    }
 }
 
 /**
@@ -326,6 +354,7 @@ class NotificationStore @Inject constructor(
  *
  * Defaults mirror the projection defaults in [NotificationStore.read].
  */
+@Serializable
 data class NotificationSlice(
     val notificationPreferences: NotificationPreferences = NotificationPreferences(),
     val newsletterEnabled: Boolean = true,

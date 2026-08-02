@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -183,12 +184,32 @@ class SyncPlayCastStore @Inject constructor(
             prefs[Keys.DVR_RECORDING_QUALITY] = userPreferences.dvrRecordingQuality
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences] (including the
+     * nullable [Keys.PREFERRED_RENDERER] guard).
+     */
+    suspend fun restore(slice: SyncPlayCastSlice) {
+        dataStore.edit { prefs ->
+            prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = slice.syncPlayJoinBehavior.name
+            prefs[Keys.SYNC_PLAY_TOLERANCE_MS] = slice.syncPlayToleranceMs
+            prefs[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = slice.syncPlayAutoAcceptInvites
+            prefs[Keys.DEFAULT_CASTING_STRATEGY] = slice.defaultCastingStrategy.name
+            prefs[Keys.BACKGROUND_CASTING_ENABLED] = slice.backgroundCastingEnabled
+            slice.preferredRenderer?.let { prefs[Keys.PREFERRED_RENDERER] = it }
+            prefs[Keys.DVR_PRE_PADDING_MINUTES] = slice.dvrPrePaddingMinutes
+            prefs[Keys.DVR_POST_PADDING_MINUTES] = slice.dvrPostPaddingMinutes
+            prefs[Keys.DVR_RECORDING_QUALITY] = slice.dvrRecordingQuality
+        }
+    }
 }
 
 /**
  * The SyncPlay + casting + DVR preference slice. Plain data class. Defaults
  * mirror the projection defaults in [SyncPlayCastStore.read].
  */
+@Serializable
 data class SyncPlayCastSlice(
     val syncPlayJoinBehavior: SyncPlayJoinBehavior = SyncPlayJoinBehavior.ASK,
     val syncPlayToleranceMs: Long = 100L,

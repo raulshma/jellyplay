@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import javax.inject.Inject
@@ -163,6 +164,21 @@ class ScreensaverStore @Inject constructor(
             it[Keys.DREAM_SHOW_TITLE] = userPreferences.dreamShowTitle
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences] (image-category
+     * set via this store's [json] codec).
+     */
+    suspend fun restore(slice: ScreensaverSlice) {
+        dataStore.edit { it ->
+            it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(slice.dreamImageCategories)
+            it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = slice.dreamSlideshowIntervalMs
+            it[Keys.DREAM_KEN_BURNS_ENABLED] = slice.dreamKenBurnsEnabled
+            it[Keys.DREAM_TRANSITION_STYLE] = slice.dreamTransitionStyle.name
+            it[Keys.DREAM_SHOW_TITLE] = slice.dreamShowTitle
+        }
+    }
 }
 
 private val DEFAULT_DREAM_IMAGE_CATEGORIES: Set<DreamImageCategory> =
@@ -172,6 +188,7 @@ private val DEFAULT_DREAM_IMAGE_CATEGORIES: Set<DreamImageCategory> =
  * The screensaver / dream preference slice. Plain data class. Defaults mirror
  * the projection defaults in [ScreensaverStore.read].
  */
+@Serializable
 data class ScreensaverSlice(
     val dreamImageCategories: Set<DreamImageCategory> = DEFAULT_DREAM_IMAGE_CATEGORIES,
     val dreamSlideshowIntervalMs: Long = 15_000L,

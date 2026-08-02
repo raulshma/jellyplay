@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -538,6 +539,52 @@ class VideoPlayerStore @Inject constructor(
             prefs[Keys.INCOGNITO_MODE_ENABLED] = userPreferences.incognitoModeEnabled
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences] (segment
+     * behaviours re-encoded via the enum-keyed map with defaults).
+     */
+    suspend fun restore(slice: VideoPlayerSlice) {
+        dataStore.edit { prefs ->
+            prefs[Keys.VIDEO_SEEK_DURATION_MS] = slice.videoSeekDurationMs
+            prefs[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = slice.videoControlsTimeoutMs
+            prefs[Keys.VIDEO_DEFAULT_ORIENTATION] = slice.videoDefaultOrientation.name
+            prefs[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = slice.videoDefaultAspectRatio
+            prefs[Keys.VIDEO_GESTURES_ENABLED] = slice.videoGesturesEnabled
+            prefs[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = slice.videoPassOutProtectionHours
+            prefs[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = slice.videoSkipBackOnResumeMs
+            prefs[Keys.VIDEO_HOLD_SPEED_ENABLED] = slice.videoHoldSpeedEnabled
+            prefs[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = slice.videoHoldSpeedMultiplier
+            prefs[Keys.VIDEO_DEFAULT_SPEED] = slice.videoDefaultSpeed
+            prefs[Keys.VIDEO_AUTOPLAY_NEXT] = slice.videoAutoplayNext
+            prefs[Keys.TRAILER_AUTOPLAY] = slice.trailerAutoplay
+            prefs[Keys.CINEMA_MODE_ENABLED] = slice.cinemaModeEnabled
+            prefs[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = slice.videoSwipeSeekMaxMs
+            prefs[Keys.VIDEO_REMEMBER_BRIGHTNESS] = slice.videoRememberBrightness
+            prefs[Keys.VIDEO_BRIGHTNESS_LEVEL] = slice.videoBrightnessLevel
+            prefs[Keys.VIDEO_REMEMBER_VOLUME] = slice.videoRememberVolume
+            prefs[Keys.VIDEO_VOLUME_LEVEL] = slice.videoVolumeLevel
+            prefs[Keys.VIDEO_AUTO_SKIP_INTRO] = slice.videoAutoSkipIntro
+            prefs[Keys.VIDEO_AUTO_SKIP_OUTRO] = slice.videoAutoSkipOutro
+            prefs[Keys.VIDEO_REMEMBER_MUTED] = slice.videoRememberMuted
+            prefs[Keys.VIDEO_MUTED] = slice.videoMuted
+            prefs[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = slice.videoGestureIndicatorSide.name
+            prefs[Keys.TRICKPLAY_ENABLED] = slice.trickplayEnabled
+            prefs[Keys.TRICKPLAY_ON_SEEK_GESTURE] = slice.trickplayOnSeekGesture
+            prefs[Keys.SEGMENT_BEHAVIORS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<Map<MediaSegmentType, SegmentBehavior>>(),
+                slice.segmentBehaviors,
+            )
+            prefs[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = slice.videoEpisodeBrowserEnabled
+            prefs[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = slice.videoShowPlaybackMetadata
+            prefs[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = slice.videoPreloadBufferSize.name
+            prefs[Keys.SHOW_CLOCK_IN_PLAYER] = slice.showClockInPlayer
+            prefs[Keys.SHOW_TIME_REMAINING] = slice.showTimeRemaining
+            prefs[Keys.TV_ZOOM_MODE_PERCENT] = slice.tvZoomModePercent
+            prefs[Keys.INCOGNITO_MODE_ENABLED] = slice.incognitoModeEnabled
+        }
+    }
 }
 
 /**
@@ -545,6 +592,7 @@ class VideoPlayerStore @Inject constructor(
  * datastore module stays framework-light. Defaults mirror the projection
  * defaults in [VideoPlayerStore.read].
  */
+@Serializable
 data class VideoPlayerSlice(
     val videoSeekDurationMs: Long = 10_000L,
     val videoControlsTimeoutMs: Long = 5_000L,

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -343,12 +344,49 @@ class AppearanceStore @Inject constructor(
             it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = userPreferences.backdropThemeMusicEnabled
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences], plus the gap
+     * keys [restorePreferences] omits (the mutually-exclusive accent-theme
+     * toggles, haptics, date format, font scale, scheduled-theme hours, and
+     * color-blind/hand mode).
+     */
+    suspend fun restore(slice: AppearanceSlice) {
+        dataStore.edit { it ->
+            it[Keys.DYNAMIC_THEMING] = slice.dynamicTheming
+            it[Keys.THEME_MODE] = slice.themeMode.name
+            it[Keys.CONTRAST_LEVEL] = slice.contrastLevel.name
+            it[Keys.OLED_MODE] = slice.oledMode
+            it[Keys.ACCENT_COLOR_SWATCH] = slice.accentColorSwatch
+            it[Keys.COLOR_STYLE] = slice.colorStyle.name
+            it[Keys.PERFORMANCE_MODE] = slice.performanceMode
+            it[Keys.SHOW_ADVANCED_SETTINGS] = slice.showAdvancedSettings
+            it[Keys.REDUCE_MOTION_ENABLED] = slice.reduceMotionEnabled
+            it[Keys.BLUE_LIGHT_FILTER_ENABLED] = slice.blueLightFilterEnabled
+            it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = slice.blueLightFilterStrength
+            it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = slice.backdropThemeMusicEnabled
+            it[Keys.SYNTHWAVE_MODE] = slice.synthwaveMode
+            it[Keys.SYNTHWAVE_ACCENT] = slice.synthwaveAccent
+            it[Keys.SOOTHING_MODE] = slice.soothingMode
+            it[Keys.SOOTHING_ACCENT] = slice.soothingAccent
+            it[Keys.MONOCHROME_MODE] = slice.monochromeMode
+            it[Keys.HAPTICS_ENABLED] = slice.hapticsEnabled
+            it[Keys.DATE_FORMAT_PREFERENCE] = slice.dateFormatPreference.name
+            it[Keys.APP_FONT_SCALE] = slice.appFontScale.name
+            it[Keys.SCHEDULED_THEME_START_HOUR] = slice.scheduledThemeStartHour
+            it[Keys.SCHEDULED_THEME_END_HOUR] = slice.scheduledThemeEndHour
+            it[Keys.COLOR_BLIND_MODE] = slice.colorBlindMode.name
+            it[Keys.HAND_MODE] = slice.handMode.name
+        }
+    }
 }
 
 /**
  * The appearance &amp; accessibility preference slice. Plain data class.
  * Defaults mirror the projection defaults in [AppearanceStore.read].
  */
+@Serializable
 data class AppearanceSlice(
     val dynamicTheming: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,

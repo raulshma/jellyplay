@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -149,12 +150,27 @@ class NavigationStore @Inject constructor(
             it[Keys.NAV_ITEM_ORDER] = json.encodeToString(userPreferences.navItemOrder)
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences] (Set/List via
+     * this store's [json] codec).
+     */
+    suspend fun restore(slice: NavigationSlice) {
+        dataStore.edit { it ->
+            it[Keys.NAV_BAR_SHOW_LABELS] = slice.navBarShowLabels
+            it[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = slice.hideBottomNavOnScroll
+            it[Keys.HIDDEN_NAV_ITEMS] = json.encodeToString(slice.hiddenNavItems)
+            it[Keys.NAV_ITEM_ORDER] = json.encodeToString(slice.navItemOrder)
+        }
+    }
 }
 
 /**
  * The bottom-navigation customisation preference slice. Plain data class.
  * Defaults mirror the projection defaults in [NavigationStore.read].
  */
+@Serializable
 data class NavigationSlice(
     val navBarShowLabels: Boolean = true,
     val hideBottomNavOnScroll: Boolean = true,

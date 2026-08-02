@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import javax.inject.Inject
@@ -225,6 +226,28 @@ class ExperimentalStore @Inject constructor(
             it[Keys.SHOW_ADVANCED_SETTINGS] = userPreferences.showAdvancedSettings
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences] (experimental
+     * features as a name-string set via [json], appLanguage nullable). Unlike
+     * [restorePreferences] this also writes the dismissed-update one-time state
+     * ([Keys.DISMISSED_UPDATE_VERSION] / [Keys.DISMISSED_UPDATE_AT_MS]) so a
+     * restore round-trips every slice field; `SHOW_ADVANCED_SETTINGS` is not a
+     * slice field, so it is not written here.
+     */
+    suspend fun restore(slice: ExperimentalSlice) {
+        dataStore.edit { it ->
+            it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(slice.enabledExperimentalFeatures.map { feature -> feature.name }.toSet())
+            it[Keys.SELF_UPDATE_CHECK_ENABLED] = slice.selfUpdateCheckEnabled
+            slice.appLanguage?.let { language -> it[Keys.APP_LANGUAGE] = language }
+            it[Keys.SHOW_SHARE_MEDIA_OPTION] = slice.showShareMediaOption
+            it[Keys.HIDE_SEARCH_HISTORY] = slice.hideSearchHistory
+            it[Keys.PREFER_AUDIO_DESCRIPTION] = slice.preferAudioDescription
+            slice.dismissedUpdateVersion?.let { version -> it[Keys.DISMISSED_UPDATE_VERSION] = version }
+            it[Keys.DISMISSED_UPDATE_AT_MS] = slice.dismissedUpdateAtMs
+        }
+    }
 }
 
 /**
@@ -235,6 +258,7 @@ class ExperimentalStore @Inject constructor(
  * on `AppearanceSlice`. This store clears it on reset only (see
  * [ExperimentalStore.resetKeys]).
  */
+@Serializable
 data class ExperimentalSlice(
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
     val selfUpdateCheckEnabled: Boolean = true,

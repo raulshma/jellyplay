@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.Serializable
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -280,6 +281,36 @@ class SubtitleLanguageStore @Inject constructor(
             )
         }
     }
+
+    /**
+     * Faithful inverse of [read]: writes every field of [slice] back to the
+     * DataStore using the same encoding as [restorePreferences] (nullable
+     * language guards + JSON map/style round-trips with defaults).
+     */
+    suspend fun restore(slice: SubtitleSlice) {
+        dataStore.edit { prefs ->
+            slice.preferredSubtitleLanguage?.let { prefs[Keys.PREFERRED_SUBTITLE_LANG] = it }
+            prefs[Keys.SUBTITLES_FORCED_ONLY] = slice.subtitlesForcedOnly
+            slice.preferredAudioLanguage?.let { prefs[Keys.PREFERRED_AUDIO_LANG] = it }
+            prefs[Keys.SUBTITLE_DELAY_BY_ITEM] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<Map<String, Long>>(),
+                slice.subtitleDelayByItem,
+            )
+            prefs[Keys.SUBTITLE_STYLE] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<SubtitleStyle>(),
+                slice.subtitleStyle,
+            )
+            prefs[Keys.SUBTITLE_PREVIEW_IN_SETTINGS] = slice.subtitlePreviewInSettings
+            prefs[Keys.PREFER_AUDIO_DESCRIPTION] = slice.preferAudioDescription
+            prefs[Keys.HIGH_CONTRAST_SUBTITLES] = slice.highContrastSubtitles
+            slice.appLanguage?.let { prefs[Keys.APP_LANGUAGE] = it }
+            prefs[Keys.HDR_SUBTITLE_STYLE_ENABLED] = slice.hdrSubtitleStyleEnabled
+            prefs[Keys.HDR_SUBTITLE_STYLE] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<SubtitleStyle>(),
+                slice.hdrSubtitleStyle,
+            )
+        }
+    }
 }
 
 /**
@@ -287,6 +318,7 @@ class SubtitleLanguageStore @Inject constructor(
  * the datastore module stays framework-light. Defaults mirror the projection
  * defaults in [SubtitleLanguageStore.read].
  */
+@Serializable
 data class SubtitleSlice(
     val preferredSubtitleLanguage: String? = null,
     val subtitlesForcedOnly: Boolean = false,
