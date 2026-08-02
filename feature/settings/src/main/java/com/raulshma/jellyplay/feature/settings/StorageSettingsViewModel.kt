@@ -17,10 +17,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -51,15 +48,15 @@ data class StorageBreakdown(
 class StorageSettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val store: UserPreferencesStore,
+    private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val editor: PreferencesEditor,
     private val autoDownloadScheduler: AutoDownloadScheduler,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<StoragePreferences> = store.storagePreferences
+    val preferences: StateFlow<StoragePreferences> = projections.storagePreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = store.preferences
-        .map { it.showAdvancedSettings }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
 
     var cacheSizeMb by composeState(0L)
         private set
@@ -87,8 +84,7 @@ class StorageSettingsViewModel @Inject constructor(
                 val cacheAsync = async { directorySizeBytes(context.cacheDir) }
                 val extAsync = async { context.externalCacheDir?.let { directorySizeBytes(it) } ?: 0L }
                 val dlAsync = async {
-                    val prefs = store.preferences.value
-                    val location = prefs.downloadStorageLocation
+                    val location = projections.downloadPreferences.value.downloadStorageLocation
                     val downloadsDir = if (location == "EXTERNAL" && context.getExternalFilesDir(null) != null) {
                         context.getExternalFilesDir(null)!!
                     } else {

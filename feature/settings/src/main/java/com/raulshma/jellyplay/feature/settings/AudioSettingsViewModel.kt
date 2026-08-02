@@ -13,25 +13,22 @@ import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class AudioSettingsViewModel @Inject constructor(
     private val store: UserPreferencesStore,
+    private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val editor: PreferencesEditor,
     private val audioStreamCache: AudioStreamCache,
 ) : JellyPlayViewModel() {
 
     /** Audio-screen slice — recomposes this screen only on audio-field writes. */
-    val preferences: StateFlow<AudioPreferences> = store.audioPreferences
+    val preferences: StateFlow<AudioPreferences> = projections.audioPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = store.preferences
-        .map { it.showAdvancedSettings }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
 
     fun setShowAdvancedSettings(enabled: Boolean) =
         editor.edit { appearance.setShowAdvancedSettings(enabled) }

@@ -21,25 +21,22 @@ import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class PlaybackSettingsViewModel @Inject constructor(
     private val store: UserPreferencesStore,
+    private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val editor: PreferencesEditor,
     private val tvWatchNextScheduler: TvWatchNextScheduler,
 ) : JellyPlayViewModel() {
 
     /** Playback-screen slice — recomposes this screen only on playback-field writes. */
-    val preferences: StateFlow<PlaybackPreferences> = store.playbackPreferences
+    val preferences: StateFlow<PlaybackPreferences> = projections.playbackPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = store.preferences
-        .map { it.showAdvancedSettings }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
 
     fun setShowAdvancedSettings(enabled: Boolean) =
         editor.edit { appearance.setShowAdvancedSettings(enabled) }

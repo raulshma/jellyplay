@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.PreferencesJson
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.HomeLayoutConfig
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -20,6 +19,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -33,25 +34,31 @@ data class PinnableOption(
 
 @HiltViewModel
 class LibraryLayoutViewModel @Inject constructor(
-    private val store: UserPreferencesStore,
+    private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
     private val editor: PreferencesEditor,
     private val mediaRepository: MediaRepository,
 ) : JellyPlayViewModel() {
 
     /**
      * Narrow slice of just the pinned home-sections list. Collecting this (rather
-     * than the whole [com.raulshma.jellyplay.core.model.UserPreferences]) means
-     * the pinned-sections screen recomposes only when the pinned list changes.
-     * One-shot reads of other preference fields use [store].preferences.value.
+     * than the whole home-discovery slice) means the pinned-sections screen
+     * recomposes only when the pinned list changes.
      */
-    val pinnedHomeSectionsFlow: StateFlow<List<PinnedHomeSection>> = store.pinnedHomeSectionsFlow
+    val pinnedHomeSectionsFlow: StateFlow<List<PinnedHomeSection>> =
+        homeDiscoveryStore.homeDiscovery
+            .map { it.pinnedHomeSections }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * Slice of the per-library disabled-section map. The configure-libraries
      * screen recomposes only when the map changes.
      */
     val libraryHomeSectionOverridesFlow: StateFlow<Map<String, Set<HomeSectionType>>> =
-        store.libraryHomeSectionOverridesFlow
+        homeDiscoveryStore.homeDiscovery
+            .map { it.libraryHomeSectionOverrides }
+            .distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private val _libraryFolders = MutableStateFlow<List<LibraryFolder>>(emptyList())
     val libraryFolders: StateFlow<List<LibraryFolder>> = _libraryFolders.asStateFlow()
@@ -80,7 +87,7 @@ class LibraryLayoutViewModel @Inject constructor(
      * enabling removes it and drops the key when the set becomes empty.
      */
     fun setLibrarySectionEnabled(libraryId: String, type: HomeSectionType, enabled: Boolean) {
-        val current = store.preferences.value.libraryHomeSectionOverrides.toMutableMap()
+        val current = homeDiscoveryStore.homeDiscovery.value.libraryHomeSectionOverrides.toMutableMap()
         val set = current[libraryId].orEmpty().toMutableSet()
         if (enabled) set.remove(type) else set.add(type)
         if (set.isEmpty()) current.remove(libraryId) else current[libraryId] = set
@@ -101,7 +108,7 @@ class LibraryLayoutViewModel @Inject constructor(
     private var pinnedBrowseJob: Job? = null
 
     val pinnedHomeSections: List<PinnedHomeSection>
-        get() = store.preferences.value.pinnedHomeSections
+        get() = homeDiscoveryStore.homeDiscovery.value.pinnedHomeSections
 
     fun addPinnedHomeSection(section: PinnedHomeSection) {
         editor.edit { homeDiscovery.addPinnedHomeSection(section) }
@@ -117,7 +124,7 @@ class LibraryLayoutViewModel @Inject constructor(
 
     /** Moves a pinned section from [from] to [to], clamped to valid bounds. */
     fun movePinnedHomeSection(from: Int, to: Int) {
-        val current = store.preferences.value.pinnedHomeSections.toMutableList()
+        val current = homeDiscoveryStore.homeDiscovery.value.pinnedHomeSections.toMutableList()
         if (from !in current.indices || to !in current.indices) return
         val moved = current.removeAt(from)
         current.add(to, moved)
@@ -184,7 +191,7 @@ class LibraryLayoutViewModel @Inject constructor(
     // ----- Home layout presets (save / load / import / export / reset) ----
 
     val homeLayoutPresets: List<HomeLayoutPreset>
-        get() = store.preferences.value.homeLayoutPresets
+        get() = homeDiscoveryStore.homeDiscovery.value.homeLayoutPresets
 
     var presetImportError by composeState<String?>(null)
         private set
@@ -265,7 +272,7 @@ class LibraryLayoutViewModel @Inject constructor(
     }
 
     private fun currentLayoutConfig(): HomeLayoutConfig {
-        val prefs = store.preferences.value
+        val prefs = homeDiscoveryStore.homeDiscovery.value
         return HomeLayoutConfig(
             enabledHomeSectionTypes = prefs.enabledHomeSectionTypes,
             homeSectionOrder = prefs.homeSectionOrder,

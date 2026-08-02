@@ -26,7 +26,7 @@ import javax.inject.Singleton
 class DlnaCastStrategy @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val okHttpClient: OkHttpClient,
-    private val preferencesStore: UserPreferencesStore,
+    private val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
 ) : CastStrategy {
 
     companion object {
@@ -293,7 +293,7 @@ class DlnaCastStrategy @Inject constructor(
 
     private suspend fun saveRecentDevice(device: UpnpDevice) {
         try {
-            preferencesStore.addRecentDlnaDevice(
+            appRuntimeStateStore.addRecentDlnaDevice(
                 DlnaDeviceRef(
                     id = device.udn,
                     name = device.friendlyName,
