@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.util
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,14 +23,14 @@ interface ImageUrlProvider {
 @Singleton
 class ImageUrlProviderImpl @Inject constructor(
     private val playbackRepository: PlaybackRepository,
-    private val userPreferencesStore: UserPreferencesStore,
+    private val appearanceStore: AppearanceStore,
 ) : ImageUrlProvider {
 
     // True when performance mode is on. StateFlow.value is safe to read
     // synchronously on any thread once the flow has been collected; the store
     // seeds it from disk so this is never stale on the main thread.
     private val performanceMode: Boolean get() =
-        userPreferencesStore.preferences.value.performanceMode
+        appearanceStore.appearance.value.performanceMode
 
     override fun getImageUrl(itemId: String, maxWidth: Int?): String {
         // Original-resolution requests (null) bypass performance mode: callers

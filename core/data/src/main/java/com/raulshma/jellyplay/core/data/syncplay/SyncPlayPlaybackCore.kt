@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,7 +31,7 @@ interface PlaybackCoreCallbacks {
 class SyncPlayPlaybackCore @Inject constructor(
     private val timeSyncManager: TimeSyncManager,
     private val controller: SyncPlayController,
-    private val userPreferencesStore: UserPreferencesStore,
+    private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -348,7 +348,7 @@ class SyncPlayPlaybackCore @Inject constructor(
         // We need a play command to derive the server-expected position from.
         // Without one there is no reference to drift against.
         val cmd = lastCommand ?: return false
-        val toleranceMs = userPreferencesStore.preferences.value.syncPlayToleranceMs
+        val toleranceMs = syncPlayCastStore.syncPlayCast.value.syncPlayToleranceMs
         // Compare the local playback position to the server-expected position
         // (the original command's ticks advanced by real elapsed time). The
         // previous implementation subtracted a wall-clock timestamp

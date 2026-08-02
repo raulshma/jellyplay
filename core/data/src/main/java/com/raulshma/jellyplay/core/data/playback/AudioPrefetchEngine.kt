@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +34,7 @@ class AudioPrefetchEngine @Inject constructor(
     private val audioStreamCache: AudioStreamCache,
     private val policyGuard: AudioCachePolicyGuard,
     private val playbackRepository: PlaybackRepository,
-    private val preferencesStore: UserPreferencesStore,
+    private val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore,
     @ApplicationScope private val backgroundScope: CoroutineScope,
 ) {
     // Late-bound by AudioPlaybackManager.start()
@@ -66,7 +66,7 @@ class AudioPrefetchEngine @Inject constructor(
         if (watchJob?.isActive == true) return
         watchJob = backgroundScope.launch {
             combine(
-                preferencesStore.preferences,
+                audioCacheStore.audioCache,
                 policyGuard.isPrefetchAllowed,
             ) { prefs, allowed -> prefs to allowed }
                 .distinctUntilChanged()
@@ -106,7 +106,7 @@ class AudioPrefetchEngine @Inject constructor(
 
         // Back-fill pressure check: reserve bytes for recently-played tracks.
         val reservedBytes = backfill.toLong() * avgTrackBytes
-        val prefs = preferencesStore.preferences.value
+        val prefs = audioCacheStore.audioCache.value
         val maxBytes = prefs.audioCacheSizeMb.toLong() * 1024L * 1024L
         val currentSpace = audioStreamCache.cacheSpaceBytes()
         val throttleCount = if (currentSpace + (upcoming.size * avgTrackBytes) + reservedBytes > maxBytes) {

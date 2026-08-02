@@ -6,8 +6,8 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -26,7 +26,7 @@ import javax.inject.Singleton
 @Singleton
 class AutoDownloadScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val preferencesStore: UserPreferencesStore,
+    private val downloadsStore: DownloadsStore,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) {
     companion object {
@@ -45,7 +45,7 @@ class AutoDownloadScheduler @Inject constructor(
      */
     fun sync() {
         applicationScope.launch {
-            val enabled = preferencesStore.preferences.first().autoDownloadNewEpisodes
+            val enabled = downloadsStore.downloads.first().autoDownloadNewEpisodes
             if (enabled) {
                 enqueue()
             } else {

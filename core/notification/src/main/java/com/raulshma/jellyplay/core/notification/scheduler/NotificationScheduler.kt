@@ -6,7 +6,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.notification.worker.NewMediaCheckWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -17,11 +17,11 @@ import javax.inject.Singleton
 @Singleton
 class NotificationScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val preferencesStore: UserPreferencesStore,
+    private val notificationStore: NotificationStore,
 ) {
 
     suspend fun scheduleOrUpdate() {
-        val prefs = preferencesStore.notificationPreferences.first()
+        val prefs = notificationStore.notification.first().notificationPreferences
         if (prefs.enabled) {
             enqueue(prefs.checkFrequency.intervalMinutes)
         } else {

@@ -8,7 +8,7 @@ import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.firstOrNull
@@ -33,11 +33,11 @@ class AutoDownloadWorker @AssistedInject constructor(
     private val mediaRepository: MediaRepository,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
-    private val preferencesStore: UserPreferencesStore,
+    private val downloadsStore: DownloadsStore,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val prefs = preferencesStore.preferences.firstOrNull() ?: return Result.success()
+        val prefs = downloadsStore.downloads.firstOrNull() ?: return Result.success()
         if (!prefs.autoDownloadNewEpisodes) return Result.success()
 
         val seriesIds = downloadRepository.getDownloadedSeriesIds()

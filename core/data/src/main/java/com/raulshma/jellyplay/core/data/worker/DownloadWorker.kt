@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadStates
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.data.repository.DownloadFailurePolicy
 import com.raulshma.jellyplay.core.data.repository.applyAndRoute
@@ -50,7 +50,7 @@ class DownloadWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val dao: DownloadDao,
     private val userDao: UserDao,
-    private val preferencesStore: UserPreferencesStore,
+    private val downloadsStore: DownloadsStore,
     private val serverIdentityStore: ServerIdentityStore,
     private val tokenCipher: TokenCipher,
     private val concurrencyLimiter: DownloadConcurrencyLimiter,
@@ -72,8 +72,7 @@ class DownloadWorker @AssistedInject constructor(
         }
 
         // Keep the shared limiter sized to the user's preference.
-        val maxConcurrent = preferencesStore.preferences.firstOrNull()?.maxConcurrentDownloads
-            ?: DownloadConcurrencyLimiter.DEFAULT_MAX
+        val maxConcurrent = downloadsStore.downloads.value.maxConcurrentDownloads
         concurrencyLimiter.configure(maxConcurrent)
 
         val notificationId = downloadId.hashCode() and 0x7FFFFFFF
@@ -111,7 +110,7 @@ class DownloadWorker @AssistedInject constructor(
             tokenCipher.decrypt(userDao.getUserById(uid)?.accessToken)
         }
 
-        val numConnections = preferencesStore.preferences.firstOrNull()?.downloadConnections?.coerceIn(1, 8) ?: 1
+        val numConnections = downloadsStore.downloads.value.downloadConnections.coerceIn(1, 8)
 
         // Gate the actual transfer on a shared concurrency slot so at most
         // `maxConcurrentDownloads` run at once; the rest block here.
