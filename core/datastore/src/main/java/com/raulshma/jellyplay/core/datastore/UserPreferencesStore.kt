@@ -242,26 +242,6 @@ class UserPreferencesStore @Inject constructor(
     private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, name: String, default: Boolean): Boolean =
         PreferenceCodec.readBool(prefs, key, name, default)
 
-    /**
-     * Last-watched live TV channel id, used by `:feature:player:live` to
-     * reopen the player on the same channel across launches. `null` when no
-     * channel has been watched yet (or after [setLiveTvLastChannelId] is
-     * called with `null`).
-     */
-    fun observeLiveTvLastChannelId(): Flow<String?> = sharedPrefs.map { prefs ->
-        prefs[Keys.LIVE_TV_LAST_CHANNEL_ID]
-    }
-
-    suspend fun setLiveTvLastChannelId(channelId: String?) {
-        dataStore.edit { prefs ->
-            if (channelId == null) {
-                prefs.remove(Keys.LIVE_TV_LAST_CHANNEL_ID)
-            } else {
-                prefs[Keys.LIVE_TV_LAST_CHANNEL_ID] = channelId
-            }
-        }
-    }
-
     /** Facade-owned fields that no domain slice owns (see Phase C plan). */
     private data class FacadeExtras(
         val pinFailedAttempts: Int,
@@ -588,71 +568,6 @@ class UserPreferencesStore @Inject constructor(
         downloadScheduleWindow = c.downloads.downloadScheduleWindow,
         enabledExperimentalFeatures = d.experimental.enabledExperimentalFeatures,
     )
-
-    // Narrow per-key flows for hot-path consumers. Reading these avoids
-    // collecting the full ~150-field `preferences` StateFlow (rebuilt on every
-    // pref edit anywhere in the app) just to observe one or two booleans.
-    val manualOfflineEnabled: Flow<Boolean> =
-        sharedPrefs.map { it[Keys.MANUAL_OFFLINE_ENABLED] ?: false }.distinctUntilChanged()
-    val autoOfflineEnabled: Flow<Boolean> =
-        sharedPrefs.map { it[Keys.AUTO_OFFLINE_ENABLED] ?: true }.distinctUntilChanged()
-
-    // Per-domain preference slices. Each is derived from the single source-of-truth
-    // [preferences] StateFlow and de-duplicated on the slice's structural equality, so
-    // a sub-screen collecting only its slice recomposes only when that slice actually
-    // changes — not on every preference mutation app-wide. The group projections are
-    // defined in `PreferenceGroups.kt`; deriving from [preferences] (rather than
-    // re-reading the raw DataStore keys) keeps a single read path and avoids drift.
-    val videoPlayerPreferences: StateFlow<com.raulshma.jellyplay.core.model.VideoPlayerPreferences> =
-        projections.videoPlayerPreferences
-    val audioPlayerPreferences: StateFlow<com.raulshma.jellyplay.core.model.AudioPlayerPreferences> =
-        projections.audioPlayerPreferences
-    val subtitlePreferences: StateFlow<com.raulshma.jellyplay.core.model.SubtitlePreferences> =
-        projections.subtitlePreferences
-    val securityPreferences: StateFlow<com.raulshma.jellyplay.core.model.SecurityPreferences> =
-        projections.securityPreferences
-    val downloadPreferences: StateFlow<com.raulshma.jellyplay.core.model.DownloadPreferences> =
-        projections.downloadPreferences
-    val syncPlayPreferences: StateFlow<com.raulshma.jellyplay.core.model.SyncPlayPreferences> =
-        projections.syncPlayPreferences
-    val appearancePreferences: StateFlow<com.raulshma.jellyplay.core.model.AppearancePreferences> =
-        projections.appearancePreferences
-
-    // Per-screen preference slices. Each mirrors the exact fields one settings
-    // sub-screen reads (see the slice types in `PreferenceGroups.kt`), so a
-    // sub-screen collecting its slice recomposes only when one of its fields
-    // changes — not on every preference mutation app-wide. Like the per-domain
-    // slices above, these derive from the single source-of-truth [preferences]
-    // StateFlow and de-duplicate via the slice's structural equality.
-    val playbackPreferences: StateFlow<com.raulshma.jellyplay.core.model.PlaybackPreferences> =
-        projections.playbackPreferences
-    val audioPreferences: StateFlow<com.raulshma.jellyplay.core.model.AudioPreferences> =
-        projections.audioPreferences
-    val storagePreferences: StateFlow<com.raulshma.jellyplay.core.model.StoragePreferences> =
-        projections.storagePreferences
-    val appearanceScreenPreferences: StateFlow<com.raulshma.jellyplay.core.model.AppearanceScreenPreferences> =
-        projections.appearanceScreenPreferences
-    val navigationCustomizationPreferences: StateFlow<com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences> =
-        projections.navigationCustomizationPreferences
-    val languagePreferences: StateFlow<com.raulshma.jellyplay.core.model.LanguagePreferences> =
-        projections.languagePreferences
-    val experimentalPreferences: StateFlow<com.raulshma.jellyplay.core.model.ExperimentalPreferences> =
-        projections.experimentalPreferences
-
-    /** Narrow flow of the pinned home-sections list for the pinned-sections screen. */
-    val pinnedHomeSectionsFlow: StateFlow<List<com.raulshma.jellyplay.core.model.PinnedHomeSection>> =
-        preferences.map { it.pinnedHomeSections }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /**
-     * Per-library disabled home sub-sections slice. The configure-libraries
-     * screen collects this so it recomposes only when the override map changes.
-     */
-    val libraryHomeSectionOverridesFlow: StateFlow<Map<String, Set<HomeSectionType>>> =
-        preferences.map { it.libraryHomeSectionOverrides }
-            .distinctUntilChanged()
-            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     suspend fun setPreferredPlayer(playerType: PlayerType) {
         playbackStore.setPreferredPlayer(playerType)
@@ -1647,49 +1562,11 @@ class UserPreferencesStore @Inject constructor(
         return runCatching { json.decodeFromJsonElement(serializer, element) }.getOrNull()
     }
 
-    val notificationPreferences: StateFlow<NotificationPreferences> =
-        projections.notificationPreferences
-
     suspend fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
         // Forwarded to NotificationStore: the 10-key atomic read-modify-write
         // (decode aggregate → apply transform → re-encode) has a single owner
         // there.
         notificationStore.updateNotificationPreferences(transform)
-    }
-
-    val recentDlnaDevices: Flow<List<DlnaDeviceRef>>
-        get() = sharedPrefs.map { prefs ->
-            prefs[Keys.RECENT_DLNA_DEVICES]?.let {
-                try {
-                    json.decodeFromString<List<DlnaDeviceRef>>(it)
-                } catch (_: Exception) { emptyList() }
-            } ?: emptyList()
-        }
-
-    suspend fun addRecentDlnaDevice(device: DlnaDeviceRef) {
-        dataStore.edit { prefs ->
-            val current = try {
-                prefs[Keys.RECENT_DLNA_DEVICES]?.let {
-                    json.decodeFromString<List<DlnaDeviceRef>>(it)
-                } ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-
-            val updated = (listOf(device) + current.filter { it.id != device.id })
-                .distinctBy { it.id }
-                .take(5)
-            prefs[Keys.RECENT_DLNA_DEVICES] = json.encodeToString(updated)
-        }
-    }
-
-    suspend fun removeRecentDlnaDevice(deviceId: String) {
-        dataStore.edit { prefs ->
-            val current = try {
-                prefs[Keys.RECENT_DLNA_DEVICES]?.let {
-                    json.decodeFromString<List<DlnaDeviceRef>>(it)
-                } ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-            prefs[Keys.RECENT_DLNA_DEVICES] = json.encodeToString(current.filter { it.id != deviceId })
-        }
     }
 
     suspend fun setDataSaverEnabled(enabled: Boolean) {
