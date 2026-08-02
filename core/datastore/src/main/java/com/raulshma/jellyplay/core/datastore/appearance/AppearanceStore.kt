@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -290,6 +291,61 @@ class AppearanceStore @Inject constructor(
         Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
         Keys.COLOR_BLIND_MODE, Keys.HAND_MODE,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. This store's keys all sit in `APPEARANCE`, so every other
+     * category returns an empty list. The facade aggregates these lists instead
+     * of a central `when` switch.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.APPEARANCE -> listOf(
+            Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
+            Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.PERFORMANCE_MODE,
+            Keys.REDUCE_MOTION_ENABLED, Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
+            Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
+            Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.BLUE_LIGHT_FILTER_ENABLED,
+            Keys.BLUE_LIGHT_FILTER_STRENGTH, Keys.DATE_FORMAT_PREFERENCE, Keys.APP_FONT_SCALE,
+            Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
+            Keys.COLOR_BLIND_MODE, Keys.HAND_MODE,
+        )
+        PreferenceResetCategory.MISC_APP -> listOf(
+            Keys.HAPTICS_ENABLED,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the appearance keys owned by this
+     * store from a decoded [UserPreferences]. The facade calls this (and every
+     * other store's hook) instead of writing these keys itself.
+     *
+     * Mirrors the legacy facade behaviour exactly: the mutually-exclusive
+     * accent-theme toggles, font scale, date format, color-blind/hand mode and
+     * scheduled-theme keys are not written back (the projection reads them
+     * straight from their stored slots), and no security-sensitive keys are
+     * owned here, so [restoreSecuritySensitive] is accepted for contract parity
+     * but ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.DYNAMIC_THEMING] = userPreferences.dynamicTheming
+            it[Keys.THEME_MODE] = userPreferences.themeMode.name
+            it[Keys.CONTRAST_LEVEL] = userPreferences.contrastLevel.name
+            it[Keys.OLED_MODE] = userPreferences.oledMode
+            it[Keys.ACCENT_COLOR_SWATCH] = userPreferences.accentColorSwatch
+            it[Keys.COLOR_STYLE] = userPreferences.colorStyle.name
+            it[Keys.PERFORMANCE_MODE] = userPreferences.performanceMode
+            it[Keys.SHOW_ADVANCED_SETTINGS] = userPreferences.showAdvancedSettings
+            it[Keys.REDUCE_MOTION_ENABLED] = userPreferences.reduceMotionEnabled
+            it[Keys.BLUE_LIGHT_FILTER_ENABLED] = userPreferences.blueLightFilterEnabled
+            it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = userPreferences.blueLightFilterStrength
+            it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = userPreferences.backdropThemeMusicEnabled
+        }
+    }
 }
 
 /**

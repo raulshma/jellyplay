@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.datastore
 
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
@@ -38,6 +39,7 @@ import javax.inject.Singleton
 class PreferencesEditor @Inject constructor(
     @ApplicationScope private val scope: CoroutineScope,
     private val store: UserPreferencesStore,
+    private val securityStore: SecurityStore,
 ) {
     /** Fire-and-forget launch over the application scope. */
     private fun run(block: suspend () -> Unit) = scope.launch { block() }
@@ -80,13 +82,20 @@ class PreferencesEditor @Inject constructor(
     fun setSubtitleStyle(style: SubtitleStyle) = edit { setSubtitleStyle(style) }
     fun setPreferredSubtitleLanguage(language: String?) = edit { setPreferredSubtitleLanguage(language) }
     fun setSubtitlesForcedOnly(enabled: Boolean) = edit { setSubtitlesForcedOnly(enabled) }
-    fun setPinLockEnabled(enabled: Boolean) = edit { setPinLockEnabled(enabled) }
-    fun setPinHash(hash: String?) = edit { setPinHash(hash) }
-    fun setBiometricLockEnabled(enabled: Boolean) = edit { setBiometricLockEnabled(enabled) }
-    fun setUsePinForPlayerLock(enabled: Boolean) = edit { setUsePinForPlayerLock(enabled) }
+    // ----- Security / PIN: composite ops live in SecurityStore, which owns
+    // hashing + verification (PinHasher) and rate-limit escalation
+    // (PinRateLimiter) as collaborators.
+    fun setPinLockEnabled(enabled: Boolean) = run { securityStore.setPinLockEnabled(enabled) }
+    fun setPinHash(hash: String?) = run { securityStore.setPinHash(hash) }
+    fun setPin(pin: String) = run { securityStore.setPin(pin) }
+    fun clearPin() = run { securityStore.clearPin() }
+    fun setBiometricLockEnabled(enabled: Boolean) = run { securityStore.setBiometricLockEnabled(enabled) }
+    fun setUsePinForPlayerLock(enabled: Boolean) = run { securityStore.setUsePinForPlayerLock(enabled) }
     fun setDuckOnTransientFocusLoss(enabled: Boolean) = edit { setDuckOnTransientFocusLoss(enabled) }
-    fun setAutoLockTimerMs(ms: Long) = edit { setAutoLockTimerMs(ms) }
-    fun hashPin(pin: String): String = store.hashPin(pin)
+    fun setAutoLockTimerMs(ms: Long) = run { securityStore.setAutoLockTimerMs(ms) }
+    fun setRemoteControlEnabled(enabled: Boolean) = run { securityStore.setRemoteControlEnabled(enabled) }
+    fun hashPin(pin: String): String = securityStore.hashPin(pin)
+    suspend fun verifyPin(pin: String): Boolean = securityStore.verifyPinOffMainThread(pin)
 
     /** Resets all preferences in a specific category to their default values. */
     fun resetCategory(category: PreferenceResetCategory) = edit { resetCategory(category) }

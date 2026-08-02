@@ -4,14 +4,23 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
-import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.library.LibraryStore
+import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
-import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
+import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
-import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -45,26 +54,44 @@ fun createUserPreferencesStore(
     scope: CoroutineScope,
     dataStore: DataStore<Preferences>,
 ): UserPreferencesStore {
-    val widgetDataStore = WidgetDataStore(dataStore, scope)
-    val serverIdentityStore = ServerIdentityStore(dataStore, scope)
-    val pinRateLimiter = PinRateLimiter(dataStore, scope)
     val playbackStore = PlaybackStore(dataStore, scope)
     val appearanceStore = AppearanceStore(dataStore, scope)
     val videoPlayerStore = VideoPlayerStore(dataStore, scope)
     val downloadsStore = DownloadsStore(dataStore, scope)
     val engineStore = PlayerEngineStore(dataStore, scope)
     val homeDiscoveryStore = HomeDiscoveryStore(dataStore, scope)
+    val audioStore = AudioStore(dataStore, scope)
+    val audioEffectsStore = AudioEffectsStore(dataStore, scope)
+    val audioCacheStore = AudioCacheStore(dataStore, scope)
+    val libraryStore = LibraryStore(dataStore, scope)
+    val navigationStore = NavigationStore(dataStore, scope)
+    val networkOfflineStore = NetworkOfflineStore(dataStore, scope)
+    val notificationStore = NotificationStore(dataStore, scope)
+    val screensaverStore = ScreensaverStore(dataStore, scope)
+    val securityStore = SecurityStore(dataStore, scope)
+    val subtitleLanguageStore = SubtitleLanguageStore(dataStore, scope)
+    val syncPlayCastStore = SyncPlayCastStore(dataStore, scope)
+    val experimentalStore = ExperimentalStore(dataStore, scope)
     return UserPreferencesStore(
         scope,
         dataStore,
-        widgetDataStore,
-        serverIdentityStore,
-        pinRateLimiter,
         playbackStore,
         appearanceStore,
         videoPlayerStore,
         downloadsStore,
         engineStore,
         homeDiscoveryStore,
+        audioStore,
+        audioEffectsStore,
+        audioCacheStore,
+        libraryStore,
+        navigationStore,
+        networkOfflineStore,
+        notificationStore,
+        screensaverStore,
+        securityStore,
+        subtitleLanguageStore,
+        syncPlayCastStore,
+        experimentalStore,
     )
 }

@@ -16,6 +16,9 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -44,6 +47,9 @@ class MainViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val authRepository: AuthRepository,
     val preferencesStore: UserPreferencesStore,
+    val serverIdentityStore: ServerIdentityStore,
+    val pinRateLimiter: PinRateLimiter,
+    val securityStore: SecurityStore,
     val networkMonitor: NetworkMonitor,
     val syncPlayManager: com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager,
     val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,
@@ -181,7 +187,7 @@ class MainViewModel @Inject constructor(
                     val user = authRepository.currentUser.first()
                     if (server != null && user != null) {
                         serverHealthMonitor.startMonitoring(server.address)
-                        val deviceId = preferencesStore.ensureDeviceId()
+                        val deviceId = serverIdentityStore.ensureDeviceId()
                         val deviceName = buildDeviceName(user.name)
                         webSocketClient.connect(
                             serverAddress = server.address,

@@ -8,7 +8,7 @@ import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -20,7 +20,7 @@ import kotlinx.coroutines.runBlocking
 /**
  * Backs the Seerr Recommendations widget's `GridView` with a
  * [RemoteViewsFactory] that loads cached items from
- * [UserPreferencesStore.seerrWidgetItems].
+ * [WidgetDataStore.seerrWidgetItems].
  *
  * The factory runs on a worker thread provided by the platform, so the
  * synchronous [runBlocking] call is safe.
@@ -30,7 +30,7 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface WidgetEntryPoint {
-        fun userPreferencesStore(): UserPreferencesStore
+        fun widgetDataStore(): WidgetDataStore
     }
 
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
@@ -42,12 +42,12 @@ class SeerrRecommendationsWidgetService : RemoteViewsService() {
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID
         )
-        return SeerrRecommendationsFactory(applicationContext, entryPoint.userPreferencesStore(), appWidgetId)
+        return SeerrRecommendationsFactory(applicationContext, entryPoint.widgetDataStore(), appWidgetId)
     }
 
     private class SeerrRecommendationsFactory(
         private val context: Context,
-        private val store: UserPreferencesStore,
+        private val store: WidgetDataStore,
         private val appWidgetId: Int,
     ) : RemoteViewsFactory {
 

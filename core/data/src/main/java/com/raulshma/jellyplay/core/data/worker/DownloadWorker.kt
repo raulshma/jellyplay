@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -32,6 +33,7 @@ class DownloadWorker @AssistedInject constructor(
     private val dao: DownloadDao,
     private val userDao: UserDao,
     private val preferencesStore: UserPreferencesStore,
+    private val serverIdentityStore: ServerIdentityStore,
     // Pre-tuned singleton (connect=30s, read=60s, write=30s) shared across
     // all concurrent DownloadWorker invocations. Previously each doWork()
     // call cloned the base client via newBuilder().build(), multiplying the
@@ -83,7 +85,7 @@ class DownloadWorker @AssistedInject constructor(
         // can show a distinct indicator instead of a stalled DOWNLOADING row.
         dao.updateProgress(downloadId, existingBytes, DownloadStatus.QUEUED.name)
 
-        val activeUserId = preferencesStore.activeUserId.firstOrNull()
+        val activeUserId = serverIdentityStore.activeUserId.firstOrNull()
         val accessToken = activeUserId?.let { uid ->
             // Tokens are stored encrypted in Room. Decrypt before use as a Bearer-style
             // `X-Emby-Token` header value.

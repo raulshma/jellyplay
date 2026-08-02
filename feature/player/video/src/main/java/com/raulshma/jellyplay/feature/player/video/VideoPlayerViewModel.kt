@@ -195,6 +195,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
     private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
     private val preferencesStore: UserPreferencesStore,
+    private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore,
     private val sessionManager: PlaybackSessionManager,
     private val castManager: CastManager,
     private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
@@ -1484,7 +1485,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     suspend fun verifyPlayerLockPin(pin: String): Boolean {
-        return preferencesStore.verifyPinOffMainThread(pin)
+        return securityStore.verifyPinOffMainThread(pin)
     }
 
     fun setPlaybackSpeed(speed: Float) {

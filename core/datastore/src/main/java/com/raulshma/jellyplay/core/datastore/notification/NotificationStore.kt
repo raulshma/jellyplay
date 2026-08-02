@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.model.NotificationPreferences
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -253,6 +254,69 @@ class NotificationStore @Inject constructor(
         Keys.NEWSLETTER_ENABLED, Keys.NEWSLETTER_DAY_OF_WEEK,
         Keys.ENABLED_NEWSLETTER_SECTIONS, Keys.NEWSLETTER_SECTION_ORDER,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. This store owns keys in both `NOTIFICATIONS` (the whole
+     * notification aggregate) and `NEWSLETTER` (the digest settings minus the
+     * one-time [Keys.NEWSLETTER_LAST_VIEWED_MS] state).
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.NOTIFICATIONS -> listOf(
+            Keys.NOTIFICATIONS_ENABLED,
+            Keys.NOTIFICATIONS_CHECK_FREQUENCY,
+            Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED,
+            Keys.NOTIFICATIONS_QUIET_HOURS_START,
+            Keys.NOTIFICATIONS_QUIET_HOURS_END,
+            Keys.NOTIFICATIONS_SOUND_ENABLED,
+            Keys.NOTIFICATIONS_VIBRATE_ENABLED,
+            Keys.NOTIFICATIONS_LIGHTS_ENABLED,
+            Keys.NOTIFICATIONS_MAX_PER_CHECK,
+            Keys.NOTIFICATIONS_LIBRARY_CONFIGS,
+        )
+        PreferenceResetCategory.NEWSLETTER -> listOf(
+            Keys.NEWSLETTER_ENABLED,
+            Keys.NEWSLETTER_DAY_OF_WEEK,
+            Keys.ENABLED_NEWSLETTER_SECTIONS,
+            Keys.NEWSLETTER_SECTION_ORDER,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the notification + newsletter keys
+     * owned by this store from a decoded [UserPreferences]. The facade calls
+     * this (and every other store's hook) instead of writing these keys itself.
+     *
+     * Mirrors the legacy facade behaviour exactly: no security-sensitive keys
+     * are owned here, so [restoreSecuritySensitive] is accepted for contract
+     * parity but ignored. Unlike [resetKeysFor], the one-time
+     * `NEWSLETTER_LAST_VIEWED_MS` view-state IS written back, matching the
+     * legacy restore.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            val np = userPreferences.notificationPreferences
+            it[Keys.NOTIFICATIONS_ENABLED] = np.enabled
+            it[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = np.checkFrequency.name
+            it[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = np.quietHoursEnabled
+            it[Keys.NOTIFICATIONS_QUIET_HOURS_START] = np.quietHoursStart
+            it[Keys.NOTIFICATIONS_QUIET_HOURS_END] = np.quietHoursEnd
+            it[Keys.NOTIFICATIONS_SOUND_ENABLED] = np.soundEnabled
+            it[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = np.vibrateEnabled
+            it[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = np.lightsEnabled
+            it[Keys.NOTIFICATIONS_MAX_PER_CHECK] = np.maxPerCheck
+            it[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(np.libraryConfigs)
+            it[Keys.NEWSLETTER_ENABLED] = userPreferences.newsletterEnabled
+            it[Keys.NEWSLETTER_DAY_OF_WEEK] = userPreferences.newsletterDayOfWeek
+            it[Keys.NEWSLETTER_LAST_VIEWED_MS] = userPreferences.newsletterLastViewedMs
+            it[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(userPreferences.enabledNewsletterSections)
+            it[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(userPreferences.newsletterSectionOrder)
+        }
+    }
 }
 
 /**

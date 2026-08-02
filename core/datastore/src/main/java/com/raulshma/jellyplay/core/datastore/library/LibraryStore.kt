@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.LibraryViewMode
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -170,6 +171,41 @@ class LibraryStore @Inject constructor(
         Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES, Keys.LIBRARY_FILTERS,
         Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING, Keys.SKIP_SPECIALS,
     )
+
+    /**
+     * Category reset participation: all seven keys owned here sit in the legacy
+     * `HOME_DISCOVERY` bucket (the library-view/sort/filter + episode keys split
+     * out of that category).
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.HOME_DISCOVERY -> listOf(
+            Keys.LIBRARY_VIEW_MODE,
+            Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES, Keys.LIBRARY_FILTERS,
+            Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING, Keys.SKIP_SPECIALS,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the library keys owned by this store
+     * from a decoded [UserPreferences]. JSON maps are written with this store's
+     * own [json] codec. [restoreSecuritySensitive] is accepted for contract
+     * parity; no security-sensitive keys are owned here.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.LIBRARY_VIEW_MODE] = userPreferences.libraryViewMode.name
+            it[Keys.DEFAULT_LIBRARY_SORT_ORDERS] = json.encodeToString(userPreferences.defaultLibrarySortOrders)
+            it[Keys.LIBRARY_VIEW_MODES] = json.encodeToString(userPreferences.libraryViewModes)
+            it[Keys.LIBRARY_FILTERS] = json.encodeToString(userPreferences.libraryFilters)
+            it[Keys.HIDE_EPISODE_THUMBNAILS] = userPreferences.hideEpisodeThumbnails
+            it[Keys.EPISODES_DESCENDING] = userPreferences.episodesDescending
+            it[Keys.SKIP_SPECIALS] = userPreferences.skipSpecials
+        }
+    }
 }
 
 /**

@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -157,6 +158,58 @@ class DownloadsStore @Inject constructor(
         Keys.DOWNLOAD_SCHEDULE_ENABLED, Keys.DOWNLOAD_SCHEDULE_START,
         Keys.DOWNLOAD_SCHEDULE_END, Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. The download keys all sit in the legacy `DOWNLOADS_NETWORK`
+     * reset category (which the network/offline keys also share).
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.DOWNLOADS_NETWORK -> listOf(
+            Keys.WIFI_ONLY_DOWNLOADS,
+            Keys.DOWNLOAD_CONNECTIONS,
+            Keys.MAX_CONCURRENT_DOWNLOADS,
+            Keys.DOWNLOAD_QUALITY,
+            Keys.SMART_DOWNLOADS_ENABLED,
+            Keys.AUTO_DOWNLOAD_NEW_EPISODES,
+            Keys.MAX_DOWNLOAD_STORAGE_GB,
+            Keys.DOWNLOAD_STORAGE_LOCATION,
+            Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB,
+            Keys.DOWNLOAD_SCHEDULE_ENABLED,
+            Keys.DOWNLOAD_SCHEDULE_START,
+            Keys.DOWNLOAD_SCHEDULE_END,
+            Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the download keys owned by this
+     * store (that the legacy restore wrote) from a decoded [UserPreferences].
+     * The facade calls this (and every other store's hook) instead of writing
+     * these keys itself.
+     *
+     * Mirrors the legacy facade behaviour exactly: no security-sensitive keys
+     * are owned here, so [restoreSecuritySensitive] is accepted for contract
+     * parity but ignored. The legacy restore never wrote
+     * `CELLULAR_DOWNLOAD_SIZE_WARNING_MB` or the `DOWNLOAD_SCHEDULE_*` keys, so
+     * they are not written here either.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.WIFI_ONLY_DOWNLOADS] = userPreferences.wifiOnlyDownloads
+            it[Keys.DOWNLOAD_CONNECTIONS] = userPreferences.downloadConnections
+            it[Keys.MAX_CONCURRENT_DOWNLOADS] = userPreferences.maxConcurrentDownloads
+            it[Keys.DOWNLOAD_QUALITY] = userPreferences.downloadQuality.name
+            it[Keys.SMART_DOWNLOADS_ENABLED] = userPreferences.smartDownloadsEnabled
+            it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = userPreferences.autoDownloadNewEpisodes
+            it[Keys.MAX_DOWNLOAD_STORAGE_GB] = userPreferences.maxDownloadStorageGb
+            it[Keys.DOWNLOAD_STORAGE_LOCATION] = userPreferences.downloadStorageLocation
+        }
+    }
 }
 
 /**

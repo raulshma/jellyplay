@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import kotlinx.coroutines.CoroutineScope
@@ -220,6 +221,68 @@ class SubtitleLanguageStore @Inject constructor(
         Keys.APP_LANGUAGE,
         Keys.PREFER_AUDIO_DESCRIPTION,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. The subtitle/audio/track keys sit in
+     * `PreferenceResetCategory.SUBTITLES_LANGUAGE`; the in-app language and
+     * audio-description toggles are app-wide (`MISC_APP`), matching the
+     * facade's `resetCategoryKeys`.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.SUBTITLES_LANGUAGE -> listOf(
+            Keys.PREFERRED_SUBTITLE_LANG,
+            Keys.PREFERRED_AUDIO_LANG,
+            Keys.SUBTITLES_FORCED_ONLY,
+            Keys.SUBTITLE_PREVIEW_IN_SETTINGS,
+            Keys.SUBTITLE_STYLE,
+            Keys.HIGH_CONTRAST_SUBTITLES,
+            Keys.HDR_SUBTITLE_STYLE_ENABLED,
+            Keys.HDR_SUBTITLE_STYLE,
+            Keys.SUBTITLE_DELAY_BY_ITEM,
+        )
+        PreferenceResetCategory.MISC_APP -> listOf(
+            Keys.APP_LANGUAGE,
+            Keys.PREFER_AUDIO_DESCRIPTION,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the subtitle &amp; language keys owned
+     * by this store from a decoded [UserPreferences], mirroring the facade's
+     * restore body exactly (including the nullable language guards and the
+     * JSON map / style round-trips). No security-sensitive state is owned
+     * here, so [restoreSecuritySensitive] is accepted for contract parity but
+     * ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { prefs ->
+            userPreferences.preferredSubtitleLanguage?.let { prefs[Keys.PREFERRED_SUBTITLE_LANG] = it }
+            prefs[Keys.SUBTITLES_FORCED_ONLY] = userPreferences.subtitlesForcedOnly
+            userPreferences.preferredAudioLanguage?.let { prefs[Keys.PREFERRED_AUDIO_LANG] = it }
+            prefs[Keys.SUBTITLE_DELAY_BY_ITEM] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<Map<String, Long>>(),
+                userPreferences.subtitleDelayByItem,
+            )
+            prefs[Keys.SUBTITLE_STYLE] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<SubtitleStyle>(),
+                userPreferences.subtitleStyle,
+            )
+            prefs[Keys.SUBTITLE_PREVIEW_IN_SETTINGS] = userPreferences.subtitlePreviewInSettings
+            prefs[Keys.PREFER_AUDIO_DESCRIPTION] = userPreferences.preferAudioDescription
+            prefs[Keys.HIGH_CONTRAST_SUBTITLES] = userPreferences.highContrastSubtitles
+            userPreferences.appLanguage?.let { prefs[Keys.APP_LANGUAGE] = it }
+            prefs[Keys.HDR_SUBTITLE_STYLE_ENABLED] = userPreferences.hdrSubtitleStyleEnabled
+            prefs[Keys.HDR_SUBTITLE_STYLE] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<SubtitleStyle>(),
+                userPreferences.hdrSubtitleStyle,
+            )
+        }
+    }
 }
 
 /**

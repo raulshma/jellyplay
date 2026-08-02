@@ -15,6 +15,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -22,6 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.security.MessageDigest
 
 /**
  * Exercises the security &amp; access-control preference store, focusing on the
@@ -104,5 +106,74 @@ class SecurityStoreTest {
         val slice = store.security.first()
         assertTrue(slice.pinLockEnabled)
         assertTrue(slice.biometricLockEnabled)
+    }
+
+    @Test
+    fun `setPin hashes the pin and enables the lock atomically`() = runTest {
+        store.setPin("1234")
+        val slice = store.security.first()
+        assertTrue(slice.pinLockEnabled)
+        assertNotNull(slice.pinHash)
+        assertTrue(slice.pinHash!!.startsWith("v2$"))
+        assertTrue(store.verifyPinOffMainThread("1234"))
+        assertFalse(store.verifyPinOffMainThread("0000"))
+    }
+
+    @Test
+    fun `setPin ignores blank pins`() = runTest {
+        store.setPin("   ")
+        val slice = store.security.first()
+        assertFalse(slice.pinLockEnabled)
+        assertNull(slice.pinHash)
+    }
+
+    @Test
+    fun `clearPin disables the lock and removes the hash`() = runTest {
+        store.setPin("1234")
+        assertTrue(store.security.first().pinLockEnabled)
+
+        store.clearPin()
+        val slice = store.security.first()
+        assertFalse(slice.pinLockEnabled)
+        assertNull(slice.pinHash)
+        assertFalse(store.verifyPinOffMainThread("1234"))
+    }
+
+    @Test
+    fun `verifyPinOffMainThread returns false when no pin is set`() = runTest {
+        assertFalse(store.verifyPinOffMainThread("1234"))
+    }
+
+    @Test
+    fun `verifyPinOffMainThread upgrades a legacy hash on successful unlock`() = runTest {
+        val pin = "9876"
+        val legacy = MessageDigest.getInstance("SHA-256")
+            .digest(pin.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        dataStore.edit {
+            it[stringPreferencesKey("pin_hash")] = legacy
+            it[booleanPreferencesKey("pin_lock_enabled")] = true
+        }
+        assertEquals(legacy, store.security.first().pinHash)
+        assertTrue(store.pinHashNeedsMigration(legacy))
+
+        assertTrue(store.verifyPinOffMainThread(pin))
+
+        val upgraded = store.security.first().pinHash
+        assertNotNull(upgraded)
+        assertTrue(upgraded!!.startsWith("v2$"))
+        assertFalse(store.pinHashNeedsMigration(upgraded))
+        // The wrong PIN must not trigger an upgrade.
+        assertFalse(store.verifyPinOffMainThread("0000"))
+        assertEquals(upgraded, store.security.first().pinHash)
+    }
+
+    @Test
+    fun `upgradePinHashIfLegacy is a no-op for v2 hashes and blank pins`() = runTest {
+        store.setPin("1234")
+        val current = store.security.first().pinHash
+        assertFalse(store.upgradePinHashIfLegacy("1234"))
+        assertFalse(store.upgradePinHashIfLegacy(""))
+        assertEquals(current, store.security.first().pinHash)
     }
 }

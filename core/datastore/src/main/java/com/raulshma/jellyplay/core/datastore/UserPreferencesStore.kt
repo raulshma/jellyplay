@@ -78,13 +78,9 @@ import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.MeteredNetworkBehavior
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.model.DownloadQuality
-import com.raulshma.jellyplay.core.model.LibraryWidgetItem
-import com.raulshma.jellyplay.core.model.SeerrWidgetItem
-import com.raulshma.jellyplay.core.model.WidgetConfig
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -94,7 +90,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -105,19 +100,30 @@ import javax.inject.Singleton
 class UserPreferencesStore @Inject constructor(
     @ApplicationScope private val externalScope: CoroutineScope,
     @com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore private val dataStore: DataStore<Preferences>,
-    private val widgetDataStore: com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore,
-    private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore,
-    private val pinRateLimiter: com.raulshma.jellyplay.core.datastore.security.PinRateLimiter,
     // Domain stores: the facade forwards invariant-bearing setters to these so
     // the cross-key mutex / coerce / LRU / migration logic has a single owner.
     // All stores share the same `"user_prefs"` DataStore, so writes are
     // consistent regardless of which entry point a consumer uses.
+    // (The Widget / ServerIdentity / PinRateLimiter collaborators were pruned
+    // in Phase D — those consumers now inject those stores directly.)
     private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
     private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore,
     private val downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
     private val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore,
     private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
+    private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
+    private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
+    private val audioCacheStore: com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore,
+    private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
+    private val navigationStore: com.raulshma.jellyplay.core.datastore.navigation.NavigationStore,
+    private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
+    private val notificationStore: com.raulshma.jellyplay.core.datastore.notification.NotificationStore,
+    private val screensaverStore: com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore,
+    private val securityStore: com.raulshma.jellyplay.core.datastore.security.SecurityStore,
+    private val subtitleLanguageStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
+    private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
+    private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
 ) {
     private val scope = externalScope
 
@@ -1139,10 +1145,6 @@ class UserPreferencesStore @Inject constructor(
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, UserPreferences())
 
-    val activeServerId: Flow<String?> get() = serverIdentityStore.activeServerId
-    val activeUserId: Flow<String?> get() = serverIdentityStore.activeUserId
-    val deviceId: Flow<String?> get() = serverIdentityStore.deviceId
-
     // Narrow per-key flows for hot-path consumers. Reading these avoids
     // collecting the full ~150-field `preferences` StateFlow (rebuilt on every
     // pref edit anywhere in the app) just to observe one or two booleans.
@@ -1235,22 +1237,6 @@ class UserPreferencesStore @Inject constructor(
         preferences.map { it.libraryHomeSectionOverrides }
             .distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
-
-    suspend fun ensureDeviceId(): String = serverIdentityStore.ensureDeviceId()
-
-    suspend fun setActiveServer(serverId: String) = serverIdentityStore.setActiveServer(serverId)
-
-    suspend fun setActiveUser(userId: String) = serverIdentityStore.setActiveUser(userId)
-
-    /**
-     * Sets the active server and user in a single DataStore edit. Two back-to-
-     * back `setActiveServer` + `setActiveUser` calls (the previous call-site
-     * pattern) each opened their own `edit {}` → 2 disk reads + 2 atomic writes
-     * + 2 full `preferences` re-emissions. Batching them halves the I/O and the
-     * downstream re-derivation cascade.
-     */
-    suspend fun setActiveSession(serverId: String, userId: String) =
-        serverIdentityStore.setActiveSession(serverId, userId)
 
     suspend fun setPreferredPlayer(playerType: PlayerType) {
         dataStore.edit { it[Keys.PREFERRED_PLAYER] = playerType.name }
@@ -1460,109 +1446,6 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun setAutoDeleteCache(enabled: Boolean) {
         dataStore.edit { it[Keys.AUTO_DELETE_CACHE] = enabled }
-    }
-
-    suspend fun setPinLockEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.PIN_LOCK_ENABLED] = enabled }
-    }
-
-    suspend fun setPinHash(hash: String?) {
-        dataStore.edit {
-            if (hash != null) it[Keys.PIN_HASH] = hash
-            else it.remove(Keys.PIN_HASH)
-        }
-    }
-
-    /**
-     * Sets a new PIN atomically: hashes [pin] and writes both the hash and
-     * `pinLockEnabled = true` in a single DataStore transaction so a concurrent
-     * reader can never observe `pinLockEnabled = true` with the previous hash.
-     */
-    suspend fun setPin(pin: String) {
-        if (pin.isBlank()) return
-        val hash = withContext(Dispatchers.Default) { PinHasher.hash(pin) }
-        dataStore.edit { prefs ->
-            prefs[Keys.PIN_HASH] = hash
-            prefs[Keys.PIN_LOCK_ENABLED] = true
-        }
-    }
-
-    /**
-     * Clears the PIN atomically: disables the lock and removes the hash in a
-     * single DataStore transaction.
-     */
-    suspend fun clearPin() {
-        dataStore.edit { prefs ->
-            prefs[Keys.PIN_LOCK_ENABLED] = false
-            prefs.remove(Keys.PIN_HASH)
-        }
-    }
-
-    /**
-     * Silently upgrades a legacy (unsalted SHA-256) PIN hash to the v2 PBKDF2
-     * format after the user has successfully unlocked with [pin]. No-op when
-     * the stored hash is already v2 or when no PIN is set. Safe to call after
-     * every successful [verifyPin] — callers do not need to gate on
-     * [pinHashNeedsMigration] first.
-     *
-     * @return `true` if the hash was upgraded, `false` otherwise.
-     */
-    suspend fun upgradePinHashIfLegacy(pin: String): Boolean {
-        if (pin.isBlank()) return false
-        val current = preferences.value.pinHash ?: return false
-        if (!pinHashNeedsMigration(current)) return false
-        // Re-verify against the legacy hash before persisting — protects
-        // against an inadvertent upgrade with the wrong PIN if the caller
-        // invokes this without first verifying.
-        if (!PinHasher.verify(pin, current)) return false
-        val upgraded = hashPin(pin)
-        // Persist only if the user hasn't cleared the PIN concurrently.
-        dataStore.edit { prefs ->
-            if (prefs[Keys.PIN_HASH] == current) {
-                prefs[Keys.PIN_HASH] = upgraded
-            }
-        }
-        return true
-    }
-
-    // ----- PIN rate limiting -------------------------------------------------
-    //
-    // Delegated to [pinRateLimiter] — the escalation state machine lives there
-    // so the policy concentrates in one module. The PIN *storage keys*
-    // (`pin_failed_attempts`, `pin_lockout_until_ms`) remain in the shared
-    // `"user_prefs"` DataStore; both classes reach the same singleton.
-
-    fun getPinLockoutState(): com.raulshma.jellyplay.core.model.PinLockoutState =
-        pinRateLimiter.getPinLockoutState()
-
-    /** @see com.raulshma.jellyplay.core.datastore.security.PinRateLimiter.recordFailedPinAttempt */
-    suspend fun recordFailedPinAttempt(): com.raulshma.jellyplay.core.model.PinLockoutState =
-        pinRateLimiter.recordFailedPinAttempt()
-
-    /** Clears the failed-attempt counter and any active lockout. Call on successful unlock. */
-    suspend fun resetPinLockout() = pinRateLimiter.resetPinLockout()
-
-    suspend fun setBiometricLockEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BIOMETRIC_LOCK_ENABLED] = enabled }
-    }
-
-    suspend fun setUsePinForPlayerLock(enabled: Boolean) {
-        dataStore.edit { it[Keys.USE_PIN_FOR_PLAYER_LOCK] = enabled }
-    }
-
-    /**
-     * Verifies [pin] against the stored hash, running the PBKDF2 derivation on
-     * [Dispatchers.Default] so callers never block the UI thread. Returns `false`
-     * when no PIN is set. On success with a legacy hash, the hash is silently
-     * upgraded to PBKDF2 (v2).
-     */
-    suspend fun verifyPinOffMainThread(pin: String): Boolean {
-        val storedHash = preferences.value.pinHash ?: return false
-        val valid = withContext(Dispatchers.Default) { PinHasher.verify(pin, storedHash) }
-        if (valid && pinHashNeedsMigration(storedHash)) {
-            upgradePinHashIfLegacy(pin)
-        }
-        return valid
     }
 
     suspend fun setShowAdvancedSettings(enabled: Boolean) {
@@ -1899,34 +1782,6 @@ class UserPreferencesStore @Inject constructor(
 
     suspend fun clearAll() {
         dataStore.edit { it.clear() }
-    }
-
-    /**
-     * Clears only the active server/user selection, preserving the stable
-     * [DEVICE_ID], user preferences (theme, player, equalizer, onboarding, …)
-     * and everything else. Use this on logout instead of [clearAll] so the
-     * device id stays stable for Jellyfin session tracking and the user does
-     * not lose all preferences on re-login.
-     */
-    suspend fun clearSession() = serverIdentityStore.clearSession()
-
-    fun verifyPin(input: String, storedHash: String?): Boolean = PinHasher.verify(input, storedHash)
-
-    fun hashPin(pin: String): String = PinHasher.hash(pin)
-
-    /**
-     * Returns `true` when [storedHash] is in the legacy unsalted-SHA-256
-     * format and should be upgraded to PBKDF2 (v2) on the next successful
-     * unlock. Callers with write access should re-hash the user's PIN with
-     * [hashPin] after a successful [verifyPin] when this returns true.
-     */
-    fun pinHashNeedsMigration(storedHash: String?): Boolean = PinHasher.needsMigration(storedHash)
-
-    suspend fun setContinueWatching(items: List<com.raulshma.jellyplay.core.model.MediaItem>) =
-        widgetDataStore.setContinueWatching(items)
-
-    suspend fun setAutoLockTimerMs(ms: Long) {
-        dataStore.edit { it[Keys.AUTO_LOCK_TIMER_MS] = ms }
     }
 
     suspend fun setDialogueBoostEnabled(enabled: Boolean) {
@@ -2321,61 +2176,6 @@ class UserPreferencesStore @Inject constructor(
         dataStore.edit { it[Keys.PERFORMANCE_MODE] = enabled }
     }
 
-    val continueWatching: kotlinx.coroutines.flow.Flow<List<com.raulshma.jellyplay.core.model.MediaItem>>
-        get() = widgetDataStore.continueWatching
-
-    val widgetConfig: kotlinx.coroutines.flow.Flow<WidgetConfig>
-        get() = widgetDataStore.widgetConfig
-
-    val libraryWidgetItems: kotlinx.coroutines.flow.Flow<List<LibraryWidgetItem>>
-        get() = widgetDataStore.libraryWidgetItems
-
-    val libraryWidgetVersion: kotlinx.coroutines.flow.Flow<Long>
-        get() = widgetDataStore.libraryWidgetVersion
-
-    val libraryWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long>
-        get() = widgetDataStore.libraryWidgetUpdatedAtMs
-
-    val seerrWidgetItems: kotlinx.coroutines.flow.Flow<List<SeerrWidgetItem>>
-        get() = widgetDataStore.seerrWidgetItems
-
-    val seerrWidgetVersion: kotlinx.coroutines.flow.Flow<Long>
-        get() = widgetDataStore.seerrWidgetVersion
-
-    val seerrWidgetUpdatedAtMs: kotlinx.coroutines.flow.Flow<Long>
-        get() = widgetDataStore.seerrWidgetUpdatedAtMs
-
-    val widgetLastRefreshMs: kotlinx.coroutines.flow.Flow<Long>
-        get() = widgetDataStore.widgetLastRefreshMs
-
-    suspend fun setWidgetConfig(config: WidgetConfig) = widgetDataStore.setWidgetConfig(config)
-
-    fun getWidgetConfigForIdSync(appWidgetId: Int): WidgetConfig =
-        widgetDataStore.getWidgetConfigForIdSync(appWidgetId)
-
-    fun getWidgetConfigForId(appWidgetId: Int): kotlinx.coroutines.flow.Flow<WidgetConfig> =
-        widgetDataStore.getWidgetConfigForId(appWidgetId)
-
-    suspend fun setWidgetConfigForId(appWidgetId: Int, config: WidgetConfig) =
-        widgetDataStore.setWidgetConfigForId(appWidgetId, config)
-
-    suspend fun removeWidgetConfigForId(appWidgetId: Int) =
-        widgetDataStore.removeWidgetConfigForId(appWidgetId)
-
-    suspend fun setLibraryWidgetItems(
-        items: List<LibraryWidgetItem>,
-        version: Long,
-        updatedAtMs: Long,
-    ) = widgetDataStore.setLibraryWidgetItems(items, version, updatedAtMs)
-
-    suspend fun setSeerrWidgetItems(
-        items: List<SeerrWidgetItem>,
-        version: Long,
-        updatedAtMs: Long,
-    ) = widgetDataStore.setSeerrWidgetItems(items, version, updatedAtMs)
-
-    suspend fun setWidgetLastRefreshMs(ms: Long) = widgetDataStore.setWidgetLastRefreshMs(ms)
-
     suspend fun setNewsletterEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.NEWSLETTER_ENABLED] = enabled }
     }
@@ -2401,12 +2201,27 @@ class UserPreferencesStore @Inject constructor(
     }
 
     suspend fun restorePreferences(prefs: UserPreferences, restoreSecuritySensitive: Boolean = true) {
+        playbackStore.restorePreferences(prefs, restoreSecuritySensitive)
+        appearanceStore.restorePreferences(prefs, restoreSecuritySensitive)
+        videoPlayerStore.restorePreferences(prefs, restoreSecuritySensitive)
+        downloadsStore.restorePreferences(prefs, restoreSecuritySensitive)
+        engineStore.restorePreferences(prefs, restoreSecuritySensitive)
+        homeDiscoveryStore.restorePreferences(prefs, restoreSecuritySensitive)
+        audioStore.restorePreferences(prefs, restoreSecuritySensitive)
+        audioEffectsStore.restorePreferences(prefs, restoreSecuritySensitive)
+        audioCacheStore.restorePreferences(prefs, restoreSecuritySensitive)
+        libraryStore.restorePreferences(prefs, restoreSecuritySensitive)
+        navigationStore.restorePreferences(prefs, restoreSecuritySensitive)
+        networkOfflineStore.restorePreferences(prefs, restoreSecuritySensitive)
+        notificationStore.restorePreferences(prefs, restoreSecuritySensitive)
+        screensaverStore.restorePreferences(prefs, restoreSecuritySensitive)
+        securityStore.restorePreferences(prefs, restoreSecuritySensitive)
+        subtitleLanguageStore.restorePreferences(prefs, restoreSecuritySensitive)
+        syncPlayCastStore.restorePreferences(prefs, restoreSecuritySensitive)
+        experimentalStore.restorePreferences(prefs, restoreSecuritySensitive)
+
         val json = ENCODE_DEFAULTS_JSON
         dataStore.edit { settings ->
-            settings[Keys.PREFERRED_PLAYER] = prefs.preferredPlayer.name
-            prefs.preferredSubtitleLanguage?.let { settings[Keys.PREFERRED_SUBTITLE_LANG] = it }
-            settings[Keys.SUBTITLES_FORCED_ONLY] = prefs.subtitlesForcedOnly
-            prefs.preferredAudioLanguage?.let { settings[Keys.PREFERRED_AUDIO_LANG] = it }
             settings[Keys.MEDIA_STREAM_SELECTIONS] = json.encodeToString(
                 kotlinx.serialization.serializer<Map<String, com.raulshma.jellyplay.core.model.MediaStreamSelection>>(),
                 prefs.mediaStreamSelections,
@@ -2415,251 +2230,9 @@ class UserPreferencesStore @Inject constructor(
                 kotlinx.serialization.serializer<Map<String, VideoEffectsConfig>>(),
                 prefs.videoEffectsByItem,
             )
-            settings[Keys.SUBTITLE_DELAY_BY_ITEM] = json.encodeToString(
-                kotlinx.serialization.serializer<Map<String, Long>>(),
-                prefs.subtitleDelayByItem,
-            )
-            settings[Keys.DYNAMIC_THEMING] = prefs.dynamicTheming
-            settings[Keys.THEME_MODE] = prefs.themeMode.name
-            settings[Keys.CONTRAST_LEVEL] = prefs.contrastLevel.name
-            settings[Keys.OLED_MODE] = prefs.oledMode
-            settings[Keys.SUBTITLE_STYLE] = json.encodeToString(
-                kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.SubtitleStyle>(),
-                prefs.subtitleStyle,
-            )
-            settings[Keys.STREAMING_QUALITY] = prefs.streamingQuality.name
-            settings[Keys.PLAYBACK_MODE] = prefs.playbackMode.name
-            settings[Keys.MAX_CACHE_SIZE_MB] = prefs.maxCacheSizeMb
-            settings[Keys.AUTO_DELETE_CACHE] = prefs.autoDeleteCache
-            // Security-sensitive fields (PIN hash, biometric lock, player lock,
-            // auto-lock timer) are only restored when explicitly opted in. An
-            // imported backup otherwise silently replaces the device's lock
-            // config — a footgun when the backup came from another device.
-            if (restoreSecuritySensitive) {
-                settings[Keys.PIN_LOCK_ENABLED] = prefs.pinLockEnabled
-                prefs.pinHash?.let { settings[Keys.PIN_HASH] = it }
-                settings[Keys.BIOMETRIC_LOCK_ENABLED] = prefs.biometricLockEnabled
-                settings[Keys.USE_PIN_FOR_PLAYER_LOCK] = prefs.usePinForPlayerLock
-                settings[Keys.AUTO_LOCK_TIMER_MS] = prefs.autoLockTimerMs
-            }
-            settings[Keys.DIALOGUE_BOOST_ENABLED] = prefs.dialogueBoostEnabled
-            settings[Keys.DIALOGUE_BOOST_STRENGTH] = prefs.dialogueBoostStrength.name
-            settings[Keys.EQUALIZER_ENABLED] = prefs.equalizerEnabled
-            settings[Keys.EQUALIZER_SETTINGS] = json.encodeToString(
-                kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.EqualizerSettings>(),
-                prefs.equalizerSettings,
-            )
-            settings[Keys.AUDIO_DELAY_MS] = prefs.audioDelayMs
-            settings[Keys.DECODER_MODE] = prefs.decoderMode.name
-            settings[Keys.AUDIO_PASSTHROUGH] = prefs.audioPassthrough
-            settings[Keys.FRAME_RATE_MATCHING] = prefs.frameRateMatching
-            settings[Keys.REFRESH_RATE_MODE] = prefs.refreshRateMode.name
-            settings[Keys.NIGHT_MODE_ENABLED] = prefs.nightModeEnabled
-            settings[Keys.NIGHT_MODE_STRENGTH] = prefs.nightModeStrength.name
-            settings[Keys.HOME_MODE] = prefs.homeMode.name
-            settings[Keys.VIDEO_SEEK_DURATION_MS] = prefs.videoSeekDurationMs
-            settings[Keys.VIDEO_DEFAULT_ORIENTATION] = prefs.videoDefaultOrientation.name
-            settings[Keys.VIDEO_CONTROLS_TIMEOUT_MS] = prefs.videoControlsTimeoutMs
-            settings[Keys.VIDEO_GESTURES_ENABLED] = prefs.videoGesturesEnabled
-            settings[Keys.VIDEO_PASS_OUT_PROTECTION_HOURS] = prefs.videoPassOutProtectionHours
-            settings[Keys.VIDEO_SKIP_BACK_ON_RESUME_MS] = prefs.videoSkipBackOnResumeMs
-            settings[Keys.VIDEO_HOLD_SPEED_ENABLED] = prefs.videoHoldSpeedEnabled
-            settings[Keys.VIDEO_HOLD_SPEED_MULTIPLIER] = prefs.videoHoldSpeedMultiplier
-            settings[Keys.VIDEO_DEFAULT_SPEED] = prefs.videoDefaultSpeed
-            settings[Keys.VIDEO_DEFAULT_ASPECT_RATIO] = prefs.videoDefaultAspectRatio
-            settings[Keys.VIDEO_AUTOPLAY_NEXT] = prefs.videoAutoplayNext
-            settings[Keys.TRAILER_AUTOPLAY] = prefs.trailerAutoplay
-            settings[Keys.CINEMA_MODE_ENABLED] = prefs.cinemaModeEnabled
-            settings[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = prefs.videoSwipeSeekMaxMs
-            settings[Keys.VIDEO_REMEMBER_BRIGHTNESS] = prefs.videoRememberBrightness
-            settings[Keys.VIDEO_BRIGHTNESS_LEVEL] = prefs.videoBrightnessLevel
-            settings[Keys.VIDEO_REMEMBER_VOLUME] = prefs.videoRememberVolume
-            settings[Keys.VIDEO_VOLUME_LEVEL] = prefs.videoVolumeLevel
-            settings[Keys.VIDEO_AUTO_SKIP_INTRO] = prefs.videoAutoSkipIntro
-            settings[Keys.VIDEO_AUTO_SKIP_OUTRO] = prefs.videoAutoSkipOutro
-            settings[Keys.VIDEO_REMEMBER_MUTED] = prefs.videoRememberMuted
-            settings[Keys.VIDEO_MUTED] = prefs.videoMuted
-            settings[Keys.SUBTITLE_PREVIEW_IN_SETTINGS] = prefs.subtitlePreviewInSettings
-            settings[Keys.VIDEO_GESTURE_INDICATOR_SIDE] = prefs.videoGestureIndicatorSide.name
-            settings[Keys.AUDIO_DEFAULT_SPEED] = prefs.audioDefaultSpeed
-            settings[Keys.AUDIO_NIGHT_MODE_VOLUME] = prefs.audioNightModeVolume
-            settings[Keys.AUDIO_NIGHT_MODE_GAIN] = prefs.audioNightModeGain
-            settings[Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS] = prefs.audioSkipPreviousThresholdMs
-            settings[Keys.AUDIO_AUTOPLAY_NEXT] = prefs.audioAutoplayNext
-            settings[Keys.TRICKPLAY_ENABLED] = prefs.trickplayEnabled
-            settings[Keys.TRICKPLAY_ON_SEEK_GESTURE] = prefs.trickplayOnSeekGesture
-            settings[Keys.SEGMENT_BEHAVIORS] = json.encodeToString(
-                kotlinx.serialization.serializer<Map<com.raulshma.jellyplay.core.model.MediaSegmentType, com.raulshma.jellyplay.core.model.SegmentBehavior>>(),
-                prefs.segmentBehaviors,
-            )
-            settings[Keys.VIDEO_EPISODE_BROWSER_ENABLED] = prefs.videoEpisodeBrowserEnabled
-            settings[Keys.VIDEO_SHOW_PLAYBACK_METADATA] = prefs.videoShowPlaybackMetadata
-            settings[Keys.VIDEO_PRELOAD_BUFFER_SIZE] = prefs.videoPreloadBufferSize.name
-            settings[Keys.AUDIO_PRELOAD_BUFFER_SIZE] = prefs.audioPreloadBufferSize.name
-            settings[Keys.AUDIO_CACHING_ENABLED] = prefs.audioCachingEnabled
-            settings[Keys.AUDIO_CACHE_SIZE_MB] = prefs.audioCacheSizeMb
-            settings[Keys.AUDIO_PREFETCH_LOOKAHEAD] = prefs.audioPrefetchLookahead
-            settings[Keys.AUDIO_PREFETCH_BACKFILL] = prefs.audioPrefetchBackfill
-            settings[Keys.AUDIO_CACHE_NETWORK_POLICY] = prefs.audioCacheNetworkPolicy.name
-            settings[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = prefs.audioCacheCellularMonthlyCapMb
-            settings[Keys.AUDIO_NORMALIZATION_MODE] = prefs.audioNormalizationMode.name
-            settings[Keys.AUDIO_NORMALIZATION_ENABLED] = prefs.audioNormalizationEnabled
-            settings[Keys.REPLAYGAIN_PRE_AMP_DB] = prefs.replayGainPreAmpDb
-            settings[Keys.CHANNEL_MIX_MODE] = prefs.channelMixMode.name
-            settings[Keys.CHANNEL_MIX_ENABLED] = prefs.channelMixEnabled
-            settings[Keys.AUDIO_GAPLESS_ENABLED] = prefs.audioGaplessEnabled
-            settings[Keys.AUDIO_CROSSFADE_DURATION_MS] = prefs.audioCrossfadeDurationMs
-            settings[Keys.SLEEP_TIMER_DURATION_MS] = prefs.sleepTimerDurationMs
-            settings[Keys.SLEEP_TIMER_END_OF_EPISODE] = prefs.sleepTimerEndOfEpisode
-            settings[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(
-                kotlinx.serialization.serializer<Set<com.raulshma.jellyplay.core.model.DreamImageCategory>>(),
-                prefs.dreamImageCategories,
-            )
-            settings[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = prefs.dreamSlideshowIntervalMs
-            settings[Keys.DREAM_KEN_BURNS_ENABLED] = prefs.dreamKenBurnsEnabled
-            settings[Keys.DREAM_TRANSITION_STYLE] = prefs.dreamTransitionStyle.name
-            settings[Keys.DREAM_SHOW_TITLE] = prefs.dreamShowTitle
-            settings[Keys.EQUALIZER_PRESET] = prefs.equalizerPreset.name
-            settings[Keys.BASS_BOOST_ENABLED] = prefs.bassBoostEnabled
-            settings[Keys.BASS_BOOST_STRENGTH] = prefs.bassBoostStrength.name
-            settings[Keys.VIRTUALIZER_ENABLED] = prefs.virtualizerEnabled
-            settings[Keys.VIRTUALIZER_STRENGTH] = prefs.virtualizerStrength
-            settings[Keys.REVERB_PRESET] = prefs.reverbPreset.name
-            settings[Keys.LR_BALANCE] = prefs.lrBalance
-            settings[Keys.AUTO_EQ_BY_GENRE] = prefs.autoEqByGenre
-            settings[Keys.PITCH_SEMITONES] = prefs.pitchSemitones
-            settings[Keys.WIFI_ONLY_DOWNLOADS] = prefs.wifiOnlyDownloads
-            settings[Keys.DOWNLOAD_CONNECTIONS] = prefs.downloadConnections
-            settings[Keys.MAX_CONCURRENT_DOWNLOADS] = prefs.maxConcurrentDownloads
-            settings[Keys.HOME_ENABLED_SECTION_TYPES] = json.encodeToString(
-                kotlinx.serialization.serializer<Set<com.raulshma.jellyplay.core.model.HomeSectionType>>(),
-                prefs.enabledHomeSectionTypes,
-            )
-            settings[Keys.HOME_SECTION_ORDER] = json.encodeToString(
-                kotlinx.serialization.serializer<List<com.raulshma.jellyplay.core.model.HomeSectionType>>(),
-                prefs.homeSectionOrder,
-            )
-            settings[Keys.HOME_LIBRARY_SECTION_OVERRIDES] = json.encodeToString(
-                kotlinx.serialization.serializer<Map<String, Set<HomeSectionType>>>(),
-                prefs.libraryHomeSectionOverrides,
-            )
-            settings[Keys.NAV_BAR_SHOW_LABELS] = prefs.navBarShowLabels
-            settings[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = prefs.hideBottomNavOnScroll
-            settings[Keys.HOME_HERO_ENABLED] = prefs.homeHeroEnabled
-            settings[Keys.HOME_BACKDROP_ENABLED] = prefs.homeBackdropEnabled
             settings[Keys.ONBOARDING_COMPLETED] = prefs.onboardingCompleted
-            settings[Keys.MPV_CONFIG] = json.encodeToString(
-                kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.MpvEngineConfig>(),
-                prefs.mpvConfig,
-            )
-            settings[Keys.LIBVLC_CONFIG] = json.encodeToString(
-                kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.LibVlcEngineConfig>(),
-                prefs.libVlcConfig,
-            )
-            settings[Keys.EXO_CONFIG] = json.encodeToString(
-                kotlinx.serialization.serializer<com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig>(),
-                prefs.exoPlayerConfig,
-            )
-            settings[Keys.PERFORMANCE_MODE] = prefs.performanceMode
-            settings[Keys.NEWSLETTER_ENABLED] = prefs.newsletterEnabled
-            settings[Keys.NEWSLETTER_DAY_OF_WEEK] = prefs.newsletterDayOfWeek
-            settings[Keys.NEWSLETTER_LAST_VIEWED_MS] = prefs.newsletterLastViewedMs
-            settings[Keys.ACCENT_COLOR_SWATCH] = prefs.accentColorSwatch
-            settings[Keys.COLOR_STYLE] = prefs.colorStyle.name
-            settings[Keys.LIBRARY_VIEW_MODE] = prefs.libraryViewMode.name
-            val np = prefs.notificationPreferences
-            settings[Keys.NOTIFICATIONS_ENABLED] = np.enabled
-            settings[Keys.NOTIFICATIONS_CHECK_FREQUENCY] = np.checkFrequency.name
-            settings[Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED] = np.quietHoursEnabled
-            settings[Keys.NOTIFICATIONS_QUIET_HOURS_START] = np.quietHoursStart
-            settings[Keys.NOTIFICATIONS_QUIET_HOURS_END] = np.quietHoursEnd
-            settings[Keys.NOTIFICATIONS_SOUND_ENABLED] = np.soundEnabled
-            settings[Keys.NOTIFICATIONS_VIBRATE_ENABLED] = np.vibrateEnabled
-            settings[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = np.lightsEnabled
-            settings[Keys.NOTIFICATIONS_MAX_PER_CHECK] = np.maxPerCheck
-            settings[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(
-                kotlinx.serialization.serializer<Map<String, LibraryNotificationConfig>>(),
-                np.libraryConfigs,
-            )
-            settings[Keys.SHOW_ADVANCED_SETTINGS] = prefs.showAdvancedSettings
-            settings[Keys.AUDIO_VISUALIZER_ENABLED] = prefs.audioVisualizerEnabled
-            settings[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(
-                kotlinx.serialization.serializer<Set<com.raulshma.jellyplay.core.model.ExperimentalFeature>>(),
-                prefs.enabledExperimentalFeatures,
-            )
-
-            settings[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = prefs.syncPlayJoinBehavior.name
-            settings[Keys.SYNC_PLAY_TOLERANCE_MS] = prefs.syncPlayToleranceMs
-            settings[Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES] = prefs.syncPlayAutoAcceptInvites
-            settings[Keys.DEFAULT_CASTING_STRATEGY] = prefs.defaultCastingStrategy.name
-            settings[Keys.BACKGROUND_CASTING_ENABLED] = prefs.backgroundCastingEnabled
-            prefs.preferredRenderer?.let { settings[Keys.PREFERRED_RENDERER] = it }
             prefs.watchLaterPlaylistId?.let { settings[Keys.WATCH_LATER_PLAYLIST_ID] = it }
-            settings[Keys.DVR_PRE_PADDING_MINUTES] = prefs.dvrPrePaddingMinutes
-            settings[Keys.DVR_POST_PADDING_MINUTES] = prefs.dvrPostPaddingMinutes
-            settings[Keys.DVR_RECORDING_QUALITY] = prefs.dvrRecordingQuality
             settings[Keys.FAVORITE_CHANNELS] = json.encodeToString(prefs.favoriteChannels)
-            settings[Keys.ENABLED_NEWSLETTER_SECTIONS] = json.encodeToString(prefs.enabledNewsletterSections)
-            settings[Keys.NEWSLETTER_SECTION_ORDER] = json.encodeToString(prefs.newsletterSectionOrder)
-            settings[Keys.MANUAL_OFFLINE_ENABLED] = prefs.manualOfflineEnabled
-            settings[Keys.AUTO_OFFLINE_ENABLED] = prefs.autoOfflineEnabled
-            settings[Keys.MANUAL_BANDWIDTH_CAP] = prefs.manualBandwidthCap
-            settings[Keys.METERED_NETWORK_BEHAVIOR] = prefs.meteredNetworkBehavior.name
-            settings[Keys.ADAPTIVE_BITRATE_ENABLED] = prefs.adaptiveBitrateEnabled
-            settings[Keys.BACKGROUND_VIDEO_AUDIO_ENABLED] = prefs.backgroundVideoAudioEnabled
-            settings[Keys.AUTO_PLAY_COUNTDOWN_SEC] = prefs.autoPlayCountdownSec
-            settings[Keys.SHOW_UNWATCHED_BADGE] = prefs.showUnwatchedBadge
-            settings[Keys.HIDE_WATCHED_ITEMS] = prefs.hideWatchedItems
-            settings[Keys.MERGE_CONTINUE_WATCHING_NEXT_UP] = prefs.mergeContinueWatchingAndNextUp
-            settings[Keys.NEXT_UP_MAX_DAYS] = prefs.nextUpMaxDays
-            settings[Keys.NEXT_UP_REWATCHING] = prefs.nextUpRewatching
-            settings[Keys.NEXT_UP_EXCLUDED_SERIES_IDS] = json.encodeToString(prefs.nextUpExcludedSeriesIds)
-            settings[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(prefs.hiddenCwItemIds)
-            settings[Keys.PINNED_HOME_SECTIONS] = json.encodeToString(prefs.pinnedHomeSections)
-            settings[Keys.HOME_LAYOUT_PRESETS] = json.encodeToString(prefs.homeLayoutPresets)
-            settings[Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR] = prefs.continueWatchingClickBehavior.name
-            settings[Keys.CELLULAR_STREAMING_QUALITY] = prefs.cellularStreamingQuality.name
-            settings[Keys.SHOW_WATCHED_CHECKMARK] = prefs.showWatchedCheckmark
-            settings[Keys.DEFAULT_LIBRARY_SORT_ORDERS] = json.encodeToString(prefs.defaultLibrarySortOrders)
-            settings[Keys.LIBRARY_VIEW_MODES] = json.encodeToString(prefs.libraryViewModes)
-            settings[Keys.LIBRARY_FILTERS] = json.encodeToString(prefs.libraryFilters)
-            settings[Keys.KEEP_SCREEN_ON_DURING_VIDEO] = prefs.keepScreenOnDuringVideo
-            settings[Keys.DOWNLOAD_QUALITY] = prefs.downloadQuality.name
-            settings[Keys.SMART_DOWNLOADS_ENABLED] = prefs.smartDownloadsEnabled
-            settings[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = prefs.autoDownloadNewEpisodes
-            settings[Keys.INCOGNITO_MODE_ENABLED] = prefs.incognitoModeEnabled
-            settings[Keys.SHOW_TIME_REMAINING] = prefs.showTimeRemaining
-            settings[Keys.SHOW_CLOCK_ON_HOME] = prefs.showClockOnHome
-            settings[Keys.SHOW_CLOCK_IN_PLAYER] = prefs.showClockInPlayer
-            settings[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = prefs.showSettingsInHomeSearch
-            settings[Keys.PAUSE_ON_AUDIO_FOCUS_LOSS] = prefs.pauseOnAudioFocusLoss
-            settings[Keys.VOLUME_BOOST_ENABLED] = prefs.volumeBoostEnabled
-            settings[Keys.VOLUME_BOOST_GAIN] = prefs.volumeBoostGain
-            settings[Keys.SHOW_SHARE_MEDIA_OPTION] = prefs.showShareMediaOption
-            settings[Keys.SHOW_EXTERNAL_RATINGS] = prefs.showExternalRatings
-            settings[Keys.DATA_SAVER_ENABLED] = prefs.dataSaverEnabled
-            settings[Keys.VERBOSE_NETWORK_LOGGING] = prefs.verboseNetworkLogging
-            settings[Keys.NETWORK_TIMEOUT_PRESET] = prefs.networkTimeoutPreset.name
-            settings[Keys.REDUCE_MOTION_ENABLED] = prefs.reduceMotionEnabled
-            settings[Keys.PREFER_AUDIO_DESCRIPTION] = prefs.preferAudioDescription
-            settings[Keys.HIGH_CONTRAST_SUBTITLES] = prefs.highContrastSubtitles
-            settings[Keys.HIDE_SEARCH_HISTORY] = prefs.hideSearchHistory
-            settings[Keys.BLUE_LIGHT_FILTER_ENABLED] = prefs.blueLightFilterEnabled
-            settings[Keys.BLUE_LIGHT_FILTER_STRENGTH] = prefs.blueLightFilterStrength
-            settings[Keys.TV_ZOOM_MODE_PERCENT] = prefs.tvZoomModePercent
-            settings[Keys.REMOTE_CONTROL_ENABLED] = prefs.remoteControlEnabled
-            settings[Keys.MAX_DOWNLOAD_STORAGE_GB] = prefs.maxDownloadStorageGb
-            settings[Keys.DOWNLOAD_STORAGE_LOCATION] = prefs.downloadStorageLocation
-            settings[Keys.ANDROID_TV_WATCH_NEXT_ENABLED] = prefs.androidTvWatchNextEnabled
-            settings[Keys.USER_DATA_SYNC_ENABLED] = prefs.userDataSyncEnabled
-            prefs.appLanguage?.let { settings[Keys.APP_LANGUAGE] = it }
-            settings[Keys.PGS_SUBTITLE_DIRECT_PLAY] = prefs.pgsSubtitleDirectPlay
-            settings[Keys.BACKDROP_THEME_MUSIC_ENABLED] = prefs.backdropThemeMusicEnabled
-            settings[Keys.HIDDEN_NAV_ITEMS] = json.encodeToString(prefs.hiddenNavItems)
-            settings[Keys.NAV_ITEM_ORDER] = json.encodeToString(prefs.navItemOrder)
-            settings[Keys.SELF_UPDATE_CHECK_ENABLED] = prefs.selfUpdateCheckEnabled
-            settings[Keys.HDR_SUBTITLE_STYLE_ENABLED] = prefs.hdrSubtitleStyleEnabled
-            settings[Keys.HDR_SUBTITLE_STYLE] = json.encodeToString(prefs.hdrSubtitleStyle)
         }
     }
 
@@ -2779,10 +2352,6 @@ class UserPreferencesStore @Inject constructor(
         dataStore.edit { it[Keys.TV_ZOOM_MODE_PERCENT] = percent }
     }
 
-    suspend fun setRemoteControlEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.REMOTE_CONTROL_ENABLED] = enabled }
-    }
-
     suspend fun setMaxDownloadStorageGb(gb: Int) {
         dataStore.edit { it[Keys.MAX_DOWNLOAD_STORAGE_GB] = gb }
     }
@@ -2851,147 +2420,27 @@ class UserPreferencesStore @Inject constructor(
      * [assertAllUserKeysCovered]) without touching the DataStore.
      */
     @Suppress("CyclomaticComplexMethod", "LongMethod")
-    internal fun resetCategoryKeys(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.APPEARANCE -> listOf(
-            Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
-            Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.PERFORMANCE_MODE,
-            Keys.REDUCE_MOTION_ENABLED, Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
-            Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
-            Keys.BACKDROP_THEME_MUSIC_ENABLED,
-            Keys.BLUE_LIGHT_FILTER_ENABLED, Keys.BLUE_LIGHT_FILTER_STRENGTH,
-            Keys.DATE_FORMAT_PREFERENCE, Keys.APP_FONT_SCALE,
-            Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
-            Keys.COLOR_BLIND_MODE, Keys.HAND_MODE,
-        )
-        PreferenceResetCategory.PLAYBACK -> listOf(
-            Keys.PREFERRED_PLAYER, Keys.STREAMING_QUALITY, Keys.CELLULAR_STREAMING_QUALITY,
-            Keys.FORCE_DIRECT_PLAY, Keys.PLAYBACK_MODE, Keys.DECODER_MODE,
-            Keys.AUDIO_PASSTHROUGH, Keys.FRAME_RATE_MATCHING, Keys.REFRESH_RATE_MODE,
-            Keys.VIDEO_DEFAULT_ORIENTATION, Keys.VIDEO_DEFAULT_ASPECT_RATIO,
-            Keys.VIDEO_PRELOAD_BUFFER_SIZE, Keys.VIDEO_GESTURES_ENABLED,
-            Keys.VIDEO_PASS_OUT_PROTECTION_HOURS, Keys.VIDEO_SKIP_BACK_ON_RESUME_MS,
-            Keys.VIDEO_HOLD_SPEED_ENABLED, Keys.VIDEO_HOLD_SPEED_MULTIPLIER,
-            Keys.VIDEO_DEFAULT_SPEED, Keys.VIDEO_BRIGHTNESS_LEVEL,
-            Keys.VIDEO_AUTOPLAY_NEXT, Keys.TRAILER_AUTOPLAY, Keys.CINEMA_MODE_ENABLED,
-            Keys.VIDEO_REMEMBER_BRIGHTNESS, Keys.VIDEO_REMEMBER_VOLUME,
-            Keys.VIDEO_VOLUME_LEVEL, Keys.VIDEO_AUTO_SKIP_INTRO,
-            Keys.VIDEO_AUTO_SKIP_OUTRO, Keys.VIDEO_REMEMBER_MUTED, Keys.VIDEO_MUTED,
-            Keys.VIDEO_GESTURE_INDICATOR_SIDE, Keys.VIDEO_SEEK_DURATION_MS,
-            Keys.VIDEO_CONTROLS_TIMEOUT_MS, Keys.VIDEO_SWIPE_SEEK_MAX_MS,
-            Keys.AUDIO_DELAY_MS, Keys.TRICKPLAY_ENABLED, Keys.TRICKPLAY_ON_SEEK_GESTURE,
-            Keys.VIDEO_EPISODE_BROWSER_ENABLED, Keys.VIDEO_SHOW_PLAYBACK_METADATA,
-            Keys.BACKGROUND_VIDEO_AUDIO_ENABLED, Keys.AUTO_PLAY_COUNTDOWN_SEC,
-            Keys.KEEP_SCREEN_ON_DURING_VIDEO, Keys.INCOGNITO_MODE_ENABLED,
-            Keys.SHOW_CLOCK_IN_PLAYER, Keys.SHOW_TIME_REMAINING,
-            Keys.PAUSE_ON_AUDIO_FOCUS_LOSS, Keys.DUCK_ON_TRANSIENT_FOCUS_LOSS,
-            Keys.TV_ZOOM_MODE_PERCENT,
-            Keys.SEGMENT_BEHAVIORS, Keys.SKIP_INTRO_ENABLED, Keys.SKIP_OUTRO_ENABLED,
-            Keys.AUTO_SKIP_INTRO, Keys.AUTO_SKIP_OUTRO,
-        )
-        PreferenceResetCategory.AUDIO -> listOf(
-            Keys.AUDIO_DEFAULT_SPEED, Keys.AUDIO_VISUALIZER_ENABLED,
-            Keys.AUDIO_GAPLESS_ENABLED, Keys.AUDIO_CROSSFADE_DURATION_MS,
-            Keys.AUDIO_NORMALIZATION_ENABLED, Keys.AUDIO_NORMALIZATION_MODE,
-            Keys.CHANNEL_MIX_ENABLED, Keys.CHANNEL_MIX_MODE,
-            Keys.EQUALIZER_ENABLED, Keys.EQUALIZER_SETTINGS,
-            Keys.EQUALIZER_PRESET, Keys.BASS_BOOST_ENABLED, Keys.BASS_BOOST_STRENGTH,
-            Keys.VIRTUALIZER_ENABLED, Keys.VIRTUALIZER_STRENGTH,
-            Keys.REVERB_PRESET, Keys.VOLUME_BOOST_ENABLED, Keys.VOLUME_BOOST_GAIN,
-            Keys.LR_BALANCE, Keys.AUTO_EQ_BY_GENRE, Keys.PITCH_SEMITONES,
-            Keys.AUDIO_AUTOPLAY_NEXT, Keys.AUDIO_PRELOAD_BUFFER_SIZE,
-            Keys.AUDIO_NIGHT_MODE_VOLUME, Keys.AUDIO_NIGHT_MODE_GAIN,
-            Keys.AUDIO_SKIP_PREVIOUS_THRESHOLD_MS, Keys.REPLAYGAIN_PRE_AMP_DB,
-            Keys.NIGHT_MODE_ENABLED, Keys.NIGHT_MODE_STRENGTH,
-            Keys.DIALOGUE_BOOST_ENABLED, Keys.DIALOGUE_BOOST_STRENGTH,
-            Keys.SLEEP_TIMER_DURATION_MS, Keys.SLEEP_TIMER_END_OF_EPISODE,
-            Keys.AUDIO_LYRICS_VISIBLE,
-        )
-        PreferenceResetCategory.SUBTITLES_LANGUAGE -> listOf(
-            Keys.PREFERRED_SUBTITLE_LANG, Keys.PREFERRED_AUDIO_LANG,
-            Keys.SUBTITLES_FORCED_ONLY, Keys.SUBTITLE_PREVIEW_IN_SETTINGS,
-            Keys.SUBTITLE_STYLE, Keys.HIGH_CONTRAST_SUBTITLES,
-            Keys.PGS_SUBTITLE_DIRECT_PLAY, Keys.HDR_SUBTITLE_STYLE_ENABLED,
-            Keys.HDR_SUBTITLE_STYLE, Keys.SUBTITLE_DELAY_BY_ITEM,
-        )
-        PreferenceResetCategory.DOWNLOADS_NETWORK -> listOf(
-            Keys.WIFI_ONLY_DOWNLOADS, Keys.DOWNLOAD_CONNECTIONS,
-            Keys.MAX_CONCURRENT_DOWNLOADS, Keys.DOWNLOAD_QUALITY,
-            Keys.SMART_DOWNLOADS_ENABLED, Keys.AUTO_DOWNLOAD_NEW_EPISODES,
-            Keys.MAX_DOWNLOAD_STORAGE_GB, Keys.DOWNLOAD_STORAGE_LOCATION,
-            Keys.MAX_CACHE_SIZE_MB, Keys.AUTO_DELETE_CACHE,
-            Keys.MANUAL_OFFLINE_ENABLED, Keys.AUTO_OFFLINE_ENABLED,
-            Keys.MANUAL_BANDWIDTH_CAP, Keys.METERED_NETWORK_BEHAVIOR,
-            Keys.ADAPTIVE_BITRATE_ENABLED, Keys.DATA_SAVER_ENABLED,
-            Keys.VERBOSE_NETWORK_LOGGING, Keys.NETWORK_TIMEOUT_PRESET,
-            Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB,
-            Keys.DOWNLOAD_SCHEDULE_ENABLED, Keys.DOWNLOAD_SCHEDULE_START,
-            Keys.DOWNLOAD_SCHEDULE_END, Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY,
-        )
-        PreferenceResetCategory.HOME_DISCOVERY -> listOf(
-            Keys.HOME_MODE, Keys.HOME_HERO_ENABLED, Keys.HOME_BACKDROP_ENABLED,
-            Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
-            Keys.HOME_LIBRARY_SECTION_OVERRIDES, Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS,
-            Keys.LIBRARY_VIEW_MODE, Keys.NAV_BAR_SHOW_LABELS,
-            Keys.HIDE_BOTTOM_NAV_ON_SCROLL, Keys.NAV_ITEM_ORDER, Keys.HIDDEN_NAV_ITEMS,
-            Keys.SHOW_UNWATCHED_BADGE, Keys.HIDE_WATCHED_ITEMS,
-            Keys.SHOW_WATCHED_CHECKMARK, Keys.SHOW_EXTERNAL_RATINGS,
-            Keys.MERGE_CONTINUE_WATCHING_NEXT_UP, Keys.NEXT_UP_MAX_DAYS,
-            Keys.NEXT_UP_REWATCHING, Keys.NEXT_UP_EXCLUDED_SERIES_IDS,
-            Keys.HIDDEN_CW_ITEM_IDS, Keys.PINNED_HOME_SECTIONS,
-            Keys.HOME_LAYOUT_PRESETS, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR,
-            Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES,
-            Keys.LIBRARY_FILTERS,
-            Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING,
-            Keys.SKIP_SPECIALS, Keys.SHOW_CLOCK_ON_HOME,
-            Keys.SHOW_SETTINGS_IN_HOME_SEARCH,
-        )
-        PreferenceResetCategory.AUDIO_CACHE -> listOf(
-            Keys.AUDIO_CACHING_ENABLED, Keys.AUDIO_CACHE_SIZE_MB,
-            Keys.AUDIO_PREFETCH_LOOKAHEAD, Keys.AUDIO_PREFETCH_BACKFILL,
-            Keys.AUDIO_CACHE_NETWORK_POLICY, Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB,
-        )
-        PreferenceResetCategory.SECURITY -> listOf(
-            Keys.PIN_LOCK_ENABLED, Keys.PIN_HASH, Keys.BIOMETRIC_LOCK_ENABLED,
-            Keys.USE_PIN_FOR_PLAYER_LOCK, Keys.AUTO_LOCK_TIMER_MS,
-            Keys.REMOTE_CONTROL_ENABLED,
-        )
-        PreferenceResetCategory.NOTIFICATIONS -> listOf(
-            Keys.NOTIFICATIONS_ENABLED, Keys.NOTIFICATIONS_CHECK_FREQUENCY,
-            Keys.NOTIFICATIONS_QUIET_HOURS_ENABLED,
-            Keys.NOTIFICATIONS_QUIET_HOURS_START, Keys.NOTIFICATIONS_QUIET_HOURS_END,
-            Keys.NOTIFICATIONS_SOUND_ENABLED, Keys.NOTIFICATIONS_VIBRATE_ENABLED,
-            Keys.NOTIFICATIONS_LIGHTS_ENABLED, Keys.NOTIFICATIONS_MAX_PER_CHECK,
-            Keys.NOTIFICATIONS_LIBRARY_CONFIGS,
-        )
-        PreferenceResetCategory.SCREENSAVER -> listOf(
-            Keys.DREAM_IMAGE_CATEGORIES, Keys.DREAM_TRANSITION_STYLE,
-            Keys.DREAM_KEN_BURNS_ENABLED, Keys.DREAM_SHOW_TITLE,
-            Keys.DREAM_SLIDESHOW_INTERVAL_MS,
-        )
-        PreferenceResetCategory.NEWSLETTER -> listOf(
-            Keys.NEWSLETTER_ENABLED, Keys.NEWSLETTER_DAY_OF_WEEK,
-            Keys.ENABLED_NEWSLETTER_SECTIONS, Keys.NEWSLETTER_SECTION_ORDER,
-        )
-        PreferenceResetCategory.SYNCPLAY_CASTING -> listOf(
-            Keys.SYNC_PLAY_JOIN_BEHAVIOR, Keys.SYNC_PLAY_TOLERANCE_MS,
-            Keys.SYNC_PLAY_AUTO_ACCEPT_INVITES, Keys.DEFAULT_CASTING_STRATEGY,
-            Keys.BACKGROUND_CASTING_ENABLED, Keys.PREFERRED_RENDERER,
-            Keys.DVR_PRE_PADDING_MINUTES, Keys.DVR_POST_PADDING_MINUTES,
-            Keys.DVR_RECORDING_QUALITY, Keys.LIVE_STREAM_OPTION,
-        )
-        PreferenceResetCategory.PLAYER_ENGINES -> listOf(
-            Keys.MPV_CONFIG, Keys.LIBVLC_CONFIG, Keys.EXO_CONFIG,
-        )
-        PreferenceResetCategory.EXPERIMENTAL -> listOf(
-            Keys.ENABLED_EXPERIMENTAL_FEATURES, Keys.SHOW_ADVANCED_SETTINGS,
-        )
-        PreferenceResetCategory.MISC_APP -> listOf(
-            Keys.HAPTICS_ENABLED, Keys.SELF_UPDATE_CHECK_ENABLED,
-            Keys.APP_LANGUAGE, Keys.USER_DATA_SYNC_ENABLED,
-            Keys.SHOW_SHARE_MEDIA_OPTION, Keys.HIDE_SEARCH_HISTORY,
-            Keys.ANDROID_TV_WATCH_NEXT_ENABLED, Keys.PREFER_AUDIO_DESCRIPTION,
-        )
-    }
+    internal fun resetCategoryKeys(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        listOf(
+            playbackStore.resetKeysFor(category),
+            appearanceStore.resetKeysFor(category),
+            videoPlayerStore.resetKeysFor(category),
+            downloadsStore.resetKeysFor(category),
+            engineStore.resetKeysFor(category),
+            homeDiscoveryStore.resetKeysFor(category),
+            audioStore.resetKeysFor(category),
+            audioEffectsStore.resetKeysFor(category),
+            audioCacheStore.resetKeysFor(category),
+            libraryStore.resetKeysFor(category),
+            navigationStore.resetKeysFor(category),
+            networkOfflineStore.resetKeysFor(category),
+            notificationStore.resetKeysFor(category),
+            screensaverStore.resetKeysFor(category),
+            securityStore.resetKeysFor(category),
+            subtitleLanguageStore.resetKeysFor(category),
+            syncPlayCastStore.resetKeysFor(category),
+            experimentalStore.resetKeysFor(category),
+        ).flatten()
 
     /**
      * Preference keys deliberately excluded from category reset because they are

@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -72,17 +73,17 @@ class AudioEffectsStore @Inject constructor(
     private val sharedPrefs: Flow<Preferences> = dataStore.data
         .catch { _ -> emptyPreferences() }
 
-    val audioEffects: StateFlow<AudioEffectsSlice> = sharedPrefs
-        .map { read(it) }
-        .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, AudioEffectsSlice())
-
     /**
      * Memoisation holder for the JSON-decoded [EqualizerSettings] blob, keyed on
      * the raw string so the decode is skipped when the underlying key has not
      * changed on a given `dataStore.data` emission.
      */
     private var cachedEqualizerSettings: ParsedCache<EqualizerSettings?> = ParsedCache(null, null)
+
+    val audioEffects: StateFlow<AudioEffectsSlice> = sharedPrefs
+        .map { read(it) }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, AudioEffectsSlice())
 
     internal fun read(prefs: Preferences): AudioEffectsSlice {
         val equalizerSettingsRaw = prefs[Keys.EQUALIZER_SETTINGS]
@@ -217,6 +218,63 @@ class AudioEffectsStore @Inject constructor(
         Keys.REVERB_PRESET, Keys.VOLUME_BOOST_ENABLED, Keys.VOLUME_BOOST_GAIN,
         Keys.LR_BALANCE, Keys.AUTO_EQ_BY_GENRE, Keys.PITCH_SEMITONES,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. Every audio-effects key sits in `AUDIO`, so all other
+     * categories return an empty list. The facade aggregates these lists
+     * instead of a central `when` switch.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.AUDIO -> listOf(
+            Keys.DIALOGUE_BOOST_ENABLED, Keys.DIALOGUE_BOOST_STRENGTH,
+            Keys.EQUALIZER_ENABLED, Keys.EQUALIZER_SETTINGS, Keys.EQUALIZER_PRESET,
+            Keys.NIGHT_MODE_ENABLED, Keys.NIGHT_MODE_STRENGTH,
+            Keys.BASS_BOOST_ENABLED, Keys.BASS_BOOST_STRENGTH,
+            Keys.VIRTUALIZER_ENABLED, Keys.VIRTUALIZER_STRENGTH,
+            Keys.REVERB_PRESET, Keys.VOLUME_BOOST_ENABLED, Keys.VOLUME_BOOST_GAIN,
+            Keys.LR_BALANCE, Keys.AUTO_EQ_BY_GENRE, Keys.PITCH_SEMITONES,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the audio-effects keys owned by this
+     * store from a decoded [UserPreferences]. The facade calls this (and every
+     * other store's hook) instead of writing these keys itself.
+     *
+     * Mirrors the legacy facade behaviour exactly, including the
+     * [EqualizerSettings] JSON blob written via [PreferenceCodec.encodeDefaultsJson].
+     * No security-sensitive keys are owned here, so [restoreSecuritySensitive]
+     * is accepted for contract parity but ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.DIALOGUE_BOOST_ENABLED] = userPreferences.dialogueBoostEnabled
+            it[Keys.DIALOGUE_BOOST_STRENGTH] = userPreferences.dialogueBoostStrength.name
+            it[Keys.EQUALIZER_ENABLED] = userPreferences.equalizerEnabled
+            it[Keys.EQUALIZER_SETTINGS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<EqualizerSettings>(),
+                userPreferences.equalizerSettings,
+            )
+            it[Keys.EQUALIZER_PRESET] = userPreferences.equalizerPreset.name
+            it[Keys.NIGHT_MODE_ENABLED] = userPreferences.nightModeEnabled
+            it[Keys.NIGHT_MODE_STRENGTH] = userPreferences.nightModeStrength.name
+            it[Keys.BASS_BOOST_ENABLED] = userPreferences.bassBoostEnabled
+            it[Keys.BASS_BOOST_STRENGTH] = userPreferences.bassBoostStrength.name
+            it[Keys.VIRTUALIZER_ENABLED] = userPreferences.virtualizerEnabled
+            it[Keys.VIRTUALIZER_STRENGTH] = userPreferences.virtualizerStrength
+            it[Keys.REVERB_PRESET] = userPreferences.reverbPreset.name
+            it[Keys.VOLUME_BOOST_ENABLED] = userPreferences.volumeBoostEnabled
+            it[Keys.VOLUME_BOOST_GAIN] = userPreferences.volumeBoostGain
+            it[Keys.LR_BALANCE] = userPreferences.lrBalance
+            it[Keys.AUTO_EQ_BY_GENRE] = userPreferences.autoEqByGenre
+            it[Keys.PITCH_SEMITONES] = userPreferences.pitchSemitones
+        }
+    }
 }
 
 /**

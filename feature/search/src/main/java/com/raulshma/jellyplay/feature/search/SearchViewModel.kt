@@ -79,6 +79,7 @@ class SearchViewModel @Inject constructor(
     private val searchHistoryRepository: SearchHistoryRepository,
     private val offlineRepository: OfflineRepository,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore,
 ) : JellyPlayViewModel() {
 
     private val _query = composeState("")
@@ -219,7 +220,7 @@ class SearchViewModel @Inject constructor(
 
     private fun loadSearchHistory() {
         launch {
-            preferencesStore.activeUserId
+            serverIdentityStore.activeUserId
                 .flatMapLatest { userId ->
                     if (userId != null) searchHistoryRepository.getRecent(userId)
                     else flowOf(emptyList())
@@ -240,7 +241,7 @@ class SearchViewModel @Inject constructor(
 
     fun clearHistory() {
         launch {
-            val userId = preferencesStore.activeUserId.first() ?: return@launch
+            val userId = serverIdentityStore.activeUserId.first() ?: return@launch
             searchHistoryRepository.clearAll(userId)
         }
     }
@@ -324,7 +325,7 @@ class SearchViewModel @Inject constructor(
         // Skip persistence entirely when the user has hidden search history —
         // avoids surfacing past queries the moment they re-enable the setting.
         if (hideSearchHistoryPref.value) return
-        val userId = preferencesStore.activeUserId.first() ?: return
+        val userId = serverIdentityStore.activeUserId.first() ?: return
         searchHistoryRepository.saveQuery(query, userId)
     }
 

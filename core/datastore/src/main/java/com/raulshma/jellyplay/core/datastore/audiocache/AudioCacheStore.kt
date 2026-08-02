@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
 import com.raulshma.jellyplay.core.model.AudioCacheNetworkPolicy
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -109,6 +110,44 @@ class AudioCacheStore @Inject constructor(
         Keys.AUDIO_PREFETCH_LOOKAHEAD, Keys.AUDIO_PREFETCH_BACKFILL,
         Keys.AUDIO_CACHE_NETWORK_POLICY, Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB,
     )
+
+    /**
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category]. Every audio-cache key sits in `AUDIO_CACHE`, so all other
+     * categories return an empty list. The facade aggregates these lists
+     * instead of a central `when` switch.
+     */
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
+        PreferenceResetCategory.AUDIO_CACHE -> listOf(
+            Keys.AUDIO_CACHING_ENABLED, Keys.AUDIO_CACHE_SIZE_MB,
+            Keys.AUDIO_PREFETCH_LOOKAHEAD, Keys.AUDIO_PREFETCH_BACKFILL,
+            Keys.AUDIO_CACHE_NETWORK_POLICY, Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB,
+        )
+        else -> emptyList()
+    }
+
+    /**
+     * Restore-backup participation: writes the audio-cache keys owned by this
+     * store from a decoded [UserPreferences]. The facade calls this (and every
+     * other store's hook) instead of writing these keys itself.
+     *
+     * Mirrors the legacy facade behaviour exactly. No security-sensitive keys
+     * are owned here, so [restoreSecuritySensitive] is accepted for contract
+     * parity but ignored.
+     */
+    internal suspend fun restorePreferences(
+        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        restoreSecuritySensitive: Boolean,
+    ) {
+        dataStore.edit { it ->
+            it[Keys.AUDIO_CACHING_ENABLED] = userPreferences.audioCachingEnabled
+            it[Keys.AUDIO_CACHE_SIZE_MB] = userPreferences.audioCacheSizeMb
+            it[Keys.AUDIO_PREFETCH_LOOKAHEAD] = userPreferences.audioPrefetchLookahead
+            it[Keys.AUDIO_PREFETCH_BACKFILL] = userPreferences.audioPrefetchBackfill
+            it[Keys.AUDIO_CACHE_NETWORK_POLICY] = userPreferences.audioCacheNetworkPolicy.name
+            it[Keys.AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB] = userPreferences.audioCacheCellularMonthlyCapMb
+        }
+    }
 }
 
 /**
