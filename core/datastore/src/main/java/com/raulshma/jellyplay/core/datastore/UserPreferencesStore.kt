@@ -88,6 +88,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
@@ -148,6 +149,10 @@ class UserPreferencesStore @Inject constructor(
     private val subtitleLanguageStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
     private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
     private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
+    // Owns the 5 app-runtime-state keys (favorite channels, last live-TV channel,
+    // watch-later playlist, onboarding flag, recent DLNA devices). Injected here
+    // so backup export/import can fan out to it alongside the 18 domain stores.
+    private val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
 ) {
     private val scope = externalScope
 
@@ -1539,6 +1544,107 @@ class UserPreferencesStore @Inject constructor(
             prefs.watchLaterPlaylistId?.let { settings[Keys.WATCH_LATER_PLAYLIST_ID] = it }
             settings[Keys.FAVORITE_CHANNELS] = json.encodeToString(prefs.favoriteChannels)
         }
+    }
+
+    // ----------------------------------------------------------------------
+    // Backup v2 — per-slice export / import (no aggregate round-trip)
+    // ----------------------------------------------------------------------
+
+    /**
+     * Snapshot of the live store state for export, ready to be wrapped in a
+     * [SettingsBackup]. Holding the decoded slices (rather than pre-encoded
+     * JSON) lets the caller stamp `schemaVersion` / `exportedAt` and pick the
+     * encoder (`PreferencesJson.export`, encodeDefaults) in one place.
+     */
+    data class SettingsBackupSnapshot(
+        val slices: Map<String, kotlinx.serialization.json.JsonElement>,
+        val extras: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState,
+    )
+
+    /**
+     * Builds the v2 backup payload: one [kotlinx.serialization.json.JsonElement]
+     * per domain slice (keyed by [BackupSliceKey]) plus the [ ]AppRuntimeState]
+     * extras. Reads the `.first()` of every store slice flow, so a concurrent
+     * write may produce a torn snapshot — acceptable for a user-initiated export
+     * (preferences change slowly). No `buildUserPreferences` round-trip.
+     */
+    suspend fun snapshotForBackup(): SettingsBackupSnapshot {
+        val slices = linkedMapOf<String, kotlinx.serialization.json.JsonElement>()
+        slices[BackupSliceKey.PLAYBACK] = encodeSliceElement(playbackStore.playback.first(), PlaybackSlice.serializer())
+        slices[BackupSliceKey.APPEARANCE] = encodeSliceElement(appearanceStore.appearance.first(), AppearanceSlice.serializer())
+        slices[BackupSliceKey.VIDEO_PLAYER] = encodeSliceElement(videoPlayerStore.videoPlayer.first(), VideoPlayerSlice.serializer())
+        slices[BackupSliceKey.DOWNLOADS] = encodeSliceElement(downloadsStore.downloads.first(), DownloadsSlice.serializer())
+        slices[BackupSliceKey.PLAYER_ENGINE] = encodeSliceElement(engineStore.playerEngine.first(), PlayerEngineSlice.serializer())
+        slices[BackupSliceKey.HOME_DISCOVERY] = encodeSliceElement(homeDiscoveryStore.homeDiscovery.first(), HomeDiscoverySlice.serializer())
+        slices[BackupSliceKey.AUDIO] = encodeSliceElement(audioStore.audio.first(), AudioSlice.serializer())
+        slices[BackupSliceKey.AUDIO_EFFECTS] = encodeSliceElement(audioEffectsStore.audioEffects.first(), AudioEffectsSlice.serializer())
+        slices[BackupSliceKey.AUDIO_CACHE] = encodeSliceElement(audioCacheStore.audioCache.first(), AudioCacheSlice.serializer())
+        slices[BackupSliceKey.LIBRARY] = encodeSliceElement(libraryStore.library.first(), LibrarySlice.serializer())
+        slices[BackupSliceKey.NAVIGATION] = encodeSliceElement(navigationStore.navigation.first(), NavigationSlice.serializer())
+        slices[BackupSliceKey.NETWORK_OFFLINE] = encodeSliceElement(networkOfflineStore.networkOffline.first(), NetworkOfflineSlice.serializer())
+        slices[BackupSliceKey.NOTIFICATION] = encodeSliceElement(notificationStore.notification.first(), NotificationSlice.serializer())
+        slices[BackupSliceKey.SCREENSAVER] = encodeSliceElement(screensaverStore.screensaver.first(), ScreensaverSlice.serializer())
+        slices[BackupSliceKey.SECURITY] = encodeSliceElement(securityStore.security.first(), SecuritySlice.serializer())
+        slices[BackupSliceKey.SUBTITLE] = encodeSliceElement(subtitleLanguageStore.subtitle.first(), SubtitleSlice.serializer())
+        slices[BackupSliceKey.SYNC_PLAY_CAST] = encodeSliceElement(syncPlayCastStore.syncPlayCast.first(), SyncPlayCastSlice.serializer())
+        slices[BackupSliceKey.EXPERIMENTAL] = encodeSliceElement(experimentalStore.experimental.first(), ExperimentalSlice.serializer())
+        return SettingsBackupSnapshot(slices, appRuntimeStateStore.state.first())
+    }
+
+    /**
+     * Restores a v2 backup: decodes each slice element and fans it to the
+     * owning store's `restore(slice)`, then writes the [ ]extras] to
+     * `AppRuntimeStateStore`. Missing slice keys are skipped (an older v2
+     * export that predates a slice is still importable), and unknown keys are
+     * ignored — forward-compat is handled here, not by the slice decoders.
+     *
+     * `SecurityStore` keeps its split: the non-sensitive remote-control switch
+     * restores unconditionally; the lock config only when the caller explicitly
+     * opts in via [restoreSecuritySensitive] (an imported backup never silently
+     * replaces the device's lock config).
+     */
+    suspend fun restoreV2(
+        backup: SettingsBackup,
+        restoreSecuritySensitive: Boolean = true,
+    ) {
+        val json = PreferencesJson.import
+        val slices = backup.slices
+        decodeOrNull(slices, BackupSliceKey.PLAYBACK, PlaybackSlice.serializer(), json)?.let { playbackStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.APPEARANCE, AppearanceSlice.serializer(), json)?.let { appearanceStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.VIDEO_PLAYER, VideoPlayerSlice.serializer(), json)?.let { videoPlayerStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.DOWNLOADS, DownloadsSlice.serializer(), json)?.let { downloadsStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.PLAYER_ENGINE, PlayerEngineSlice.serializer(), json)?.let { engineStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.HOME_DISCOVERY, HomeDiscoverySlice.serializer(), json)?.let { homeDiscoveryStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.AUDIO, AudioSlice.serializer(), json)?.let { audioStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.AUDIO_EFFECTS, AudioEffectsSlice.serializer(), json)?.let { audioEffectsStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.AUDIO_CACHE, AudioCacheSlice.serializer(), json)?.let { audioCacheStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.LIBRARY, LibrarySlice.serializer(), json)?.let { libraryStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.NAVIGATION, NavigationSlice.serializer(), json)?.let { navigationStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.NETWORK_OFFLINE, NetworkOfflineSlice.serializer(), json)?.let { networkOfflineStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.NOTIFICATION, NotificationSlice.serializer(), json)?.let { notificationStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.SCREENSAVER, ScreensaverSlice.serializer(), json)?.let { screensaverStore.restore(it) }
+        // Security split: remote-control switch unconditional, lock config gated.
+        decodeOrNull(slices, BackupSliceKey.SECURITY, SecuritySlice.serializer(), json)?.let { slice ->
+            securityStore.restore(slice)
+            if (restoreSecuritySensitive) securityStore.restoreSecuritySensitive(slice)
+        }
+        decodeOrNull(slices, BackupSliceKey.SUBTITLE, SubtitleSlice.serializer(), json)?.let { subtitleLanguageStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.SYNC_PLAY_CAST, SyncPlayCastSlice.serializer(), json)?.let { syncPlayCastStore.restore(it) }
+        decodeOrNull(slices, BackupSliceKey.EXPERIMENTAL, ExperimentalSlice.serializer(), json)?.let { experimentalStore.restore(it) }
+        appRuntimeStateStore.restore(backup.extras)
+    }
+
+    private fun <T> encodeSliceElement(slice: T, serializer: kotlinx.serialization.KSerializer<T>): kotlinx.serialization.json.JsonElement =
+        PreferencesJson.export.encodeToJsonElement(serializer, slice)
+
+    private fun <T> decodeOrNull(
+        slices: Map<String, kotlinx.serialization.json.JsonElement>,
+        key: String,
+        serializer: kotlinx.serialization.KSerializer<T>,
+        json: kotlinx.serialization.json.Json,
+    ): T? {
+        val element = slices[key] ?: return null
+        return runCatching { json.decodeFromJsonElement(serializer, element) }.getOrNull()
     }
 
     val notificationPreferences: StateFlow<NotificationPreferences> =
