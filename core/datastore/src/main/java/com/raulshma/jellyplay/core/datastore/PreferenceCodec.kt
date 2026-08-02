@@ -146,6 +146,28 @@ internal object PreferenceCodec {
      */
     fun MutablePreferences.legacyString(name: String): String? =
         try { this[stringPreferencesKey(name)] } catch (_: ClassCastException) { null }
+
+    // ------------------------------------------------------------------
+    // Reflective key enumeration (for the reset-coverage guard)
+    // ------------------------------------------------------------------
+
+    /**
+     * Reflectively enumerates every `Preferences.Key<*>` field declared in
+     * [keys] (an `object` holding preference keys). Uses Java reflection (no
+     * kotlin-reflect dependency) and is only invoked from debug/test coverage
+     * guards, so the reflection cost is never paid in production paths.
+     *
+     * Extracted so the facade can aggregate the keys owned by each domain
+     * store (and `PinRateLimiter`) without re-declaring them — each key has a
+     * single owner.
+     */
+    fun reflectKeys(keys: Any): List<Preferences.Key<*>> {
+        val keyType = Preferences.Key::class.java
+        return keys::class.java.declaredFields
+            .filter { keyType.isAssignableFrom(it.type) }
+            .onEach { it.isAccessible = true }
+            .mapNotNull { runCatching { it.get(keys) as? Preferences.Key<*> }.getOrNull() }
+    }
 }
 
 /**

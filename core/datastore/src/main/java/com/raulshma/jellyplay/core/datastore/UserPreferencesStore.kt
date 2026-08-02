@@ -105,6 +105,7 @@ import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
+import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
@@ -149,257 +150,38 @@ class UserPreferencesStore @Inject constructor(
     private val sharedPrefs: Flow<Preferences> = dataStore.data
         .catch { _ -> emit(emptyPreferences()) }
 
+    /**
+     * Keys the facade itself owns — runtime / per-account / one-time state that
+     * has no domain store. Every other preference key has a single owner: one
+     * of the 18 domain-store `Keys` objects or `PinRateLimiter.Keys`. Those are
+     * enumerated reflectively by [declaredKeys] (via `PreferenceCodec.reflectKeys`),
+     * so they are not re-declared here.
+     *
+     * The aliases below point at the owning store's key for the few store-owned
+     * keys the facade still reads directly (the per-item recall maps, the
+     * notification last-viewed slot, the offline-mode toggles and the PIN
+     * rate-limit counters). They keep a single declaration per key — a rename
+     * in the owner is a compile error here, not a silent drift.
+     */
     private object Keys {
-        val PREFERRED_PLAYER = stringPreferencesKey("preferred_player")
-        val PREFERRED_SUBTITLE_LANG = stringPreferencesKey("preferred_subtitle_lang")
-        val SUBTITLES_FORCED_ONLY = booleanPreferencesKey("subtitles_forced_only")
-        val PREFERRED_AUDIO_LANG = stringPreferencesKey("preferred_audio_lang")
-        val MEDIA_STREAM_SELECTIONS = stringPreferencesKey("media_stream_selections")
-        val VIDEO_EFFECTS_SELECTIONS = stringPreferencesKey("video_effects_selections")
-        val SUBTITLE_DELAY_BY_ITEM = stringPreferencesKey("subtitle_delay_by_item")
-        val THEME_MODE = stringPreferencesKey("theme_mode")
-        val CONTRAST_LEVEL = stringPreferencesKey("contrast_level")
-        val SUBTITLE_STYLE = stringPreferencesKey("subtitle_style")
-        val STREAMING_QUALITY = stringPreferencesKey("streaming_quality")
-        val FORCE_DIRECT_PLAY = booleanPreferencesKey("force_direct_play")
-        val PLAYBACK_MODE = stringPreferencesKey("playback_mode")
-        val LIVE_STREAM_OPTION = stringPreferencesKey("live_stream_option")
-        val PIN_HASH = stringPreferencesKey("pin_hash")
-        val DIALOGUE_BOOST_STRENGTH = stringPreferencesKey("dialogue_boost_strength")
-        val DECODER_MODE = stringPreferencesKey("decoder_mode")
-        val NIGHT_MODE_STRENGTH = stringPreferencesKey("night_mode_strength")
-        val HOME_MODE = stringPreferencesKey("home_mode")
-        val VIDEO_DEFAULT_ORIENTATION = stringPreferencesKey("video_default_orientation")
-        val VIDEO_DEFAULT_ASPECT_RATIO = stringPreferencesKey("video_default_aspect_ratio")
-        val VIDEO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("video_preload_buffer_size")
-        val AUDIO_PRELOAD_BUFFER_SIZE = stringPreferencesKey("audio_preload_buffer_size")
-        val AUDIO_CACHING_ENABLED = booleanPreferencesKey("audio_caching_enabled")
-        val AUDIO_CACHE_SIZE_MB = intPreferencesKey("audio_cache_size_mb")
-        val AUDIO_PREFETCH_LOOKAHEAD = intPreferencesKey("audio_prefetch_lookahead")
-        val AUDIO_PREFETCH_BACKFILL = intPreferencesKey("audio_prefetch_backfill")
-        val AUDIO_CACHE_NETWORK_POLICY = stringPreferencesKey("audio_cache_network_policy")
-        val AUDIO_CACHE_CELLULAR_MONTHLY_CAP_MB = intPreferencesKey("audio_cache_cellular_monthly_cap_mb")
-        val AUDIO_NORMALIZATION_MODE = stringPreferencesKey("audio_normalization_mode")
-        val CHANNEL_MIX_MODE = stringPreferencesKey("channel_mix_mode")
-        val DREAM_IMAGE_CATEGORIES = stringPreferencesKey("dream_image_categories")
-        val DREAM_TRANSITION_STYLE = stringPreferencesKey("dream_transition_style")
-        val EQUALIZER_PRESET = stringPreferencesKey("equalizer_preset")
-        val BASS_BOOST_STRENGTH = stringPreferencesKey("bass_boost_strength")
-        val REVERB_PRESET = stringPreferencesKey("reverb_preset")
-        val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
-        val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
-        val HOME_LIBRARY_SECTION_OVERRIDES = stringPreferencesKey("home_library_section_overrides")
-        /** Legacy all-or-nothing "hide library from home" key — kept only to migrate. */
-        val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
-        val MPV_CONFIG = stringPreferencesKey("mpv_config")
-        val LIBVLC_CONFIG = stringPreferencesKey("libvlc_config")
-        val EXO_CONFIG = stringPreferencesKey("exo_config")
-        val SEGMENT_BEHAVIORS = stringPreferencesKey("segment_behaviors")
-        val SKIP_INTRO_ENABLED = stringPreferencesKey("skip_intro_enabled")
-        val SKIP_OUTRO_ENABLED = stringPreferencesKey("skip_outro_enabled")
-        val AUTO_SKIP_INTRO = stringPreferencesKey("auto_skip_intro")
-        val AUTO_SKIP_OUTRO = stringPreferencesKey("auto_skip_outro")
-        val ACCENT_COLOR_SWATCH = stringPreferencesKey("accent_color_swatch")
-        val COLOR_STYLE = stringPreferencesKey("color_style")
-        val LIBRARY_VIEW_MODE = stringPreferencesKey("library_view_mode")
-        val EQUALIZER_SETTINGS = stringPreferencesKey("equalizer_settings")
-
-        val DYNAMIC_THEMING = booleanPreferencesKey("dynamic_theming")
-        val OLED_MODE = booleanPreferencesKey("oled_mode")
-        val AUTO_DELETE_CACHE = booleanPreferencesKey("auto_delete_cache")
-        val PIN_LOCK_ENABLED = booleanPreferencesKey("pin_lock_enabled")
-        val BIOMETRIC_LOCK_ENABLED = booleanPreferencesKey("biometric_lock_enabled")
-        val USE_PIN_FOR_PLAYER_LOCK = booleanPreferencesKey("use_pin_for_player_lock")
-        val DIALOGUE_BOOST_ENABLED = booleanPreferencesKey("dialogue_boost_enabled")
-        val EQUALIZER_ENABLED = booleanPreferencesKey("equalizer_enabled")
-        val AUDIO_PASSTHROUGH = booleanPreferencesKey("audio_passthrough")
-        val FRAME_RATE_MATCHING = booleanPreferencesKey("frame_rate_matching")
-        val REFRESH_RATE_MODE = stringPreferencesKey("refresh_rate_mode")
-        val NIGHT_MODE_ENABLED = booleanPreferencesKey("night_mode_enabled")
-        val VIDEO_GESTURES_ENABLED = booleanPreferencesKey("video_gestures_enabled")
-        val VIDEO_PASS_OUT_PROTECTION_HOURS = intPreferencesKey("video_pass_out_protection_hours")
-        val VIDEO_SKIP_BACK_ON_RESUME_MS = longPreferencesKey("video_skip_back_on_resume_ms")
-        val VIDEO_HOLD_SPEED_ENABLED = booleanPreferencesKey("video_hold_speed_enabled")
-        val VIDEO_HOLD_SPEED_MULTIPLIER = floatPreferencesKey("video_hold_speed_multiplier")
-        val VIDEO_AUTOPLAY_NEXT = booleanPreferencesKey("video_autoplay_next")
-        val TRAILER_AUTOPLAY = booleanPreferencesKey("trailer_autoplay")
-        val CINEMA_MODE_ENABLED = booleanPreferencesKey("cinema_mode_enabled")
-        val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey("video_remember_brightness")
-        val VIDEO_REMEMBER_VOLUME = booleanPreferencesKey("video_remember_volume")
-        val VIDEO_VOLUME_LEVEL = floatPreferencesKey("video_volume_level")
-        val VIDEO_AUTO_SKIP_INTRO = booleanPreferencesKey("video_auto_skip_intro")
-        val VIDEO_AUTO_SKIP_OUTRO = booleanPreferencesKey("video_auto_skip_outro")
-        val VIDEO_REMEMBER_MUTED = booleanPreferencesKey("video_remember_muted")
-        val VIDEO_MUTED = booleanPreferencesKey("video_muted")
-        val SUBTITLE_PREVIEW_IN_SETTINGS = booleanPreferencesKey("subtitle_preview_in_settings")
-        val AUDIO_AUTOPLAY_NEXT = booleanPreferencesKey("audio_autoplay_next")
-        val TRICKPLAY_ENABLED = booleanPreferencesKey("trickplay_enabled")
-        val TRICKPLAY_ON_SEEK_GESTURE = booleanPreferencesKey("trickplay_on_seek_gesture")
-        val VIDEO_EPISODE_BROWSER_ENABLED = booleanPreferencesKey("video_episode_browser_enabled")
-        val VIDEO_SHOW_PLAYBACK_METADATA = booleanPreferencesKey("video_show_playback_metadata")
-        val AUDIO_NORMALIZATION_ENABLED = booleanPreferencesKey("audio_normalization_enabled")
-        val CHANNEL_MIX_ENABLED = booleanPreferencesKey("channel_mix_enabled")
-        val AUDIO_GAPLESS_ENABLED = booleanPreferencesKey("audio_gapless_enabled")
-        val SLEEP_TIMER_END_OF_EPISODE = booleanPreferencesKey("sleep_timer_end_of_episode")
-        val DREAM_KEN_BURNS_ENABLED = booleanPreferencesKey("dream_ken_burns_enabled")
-        val DREAM_SHOW_TITLE = booleanPreferencesKey("dream_show_title")
-        val BASS_BOOST_ENABLED = booleanPreferencesKey("bass_boost_enabled")
-        val VIRTUALIZER_ENABLED = booleanPreferencesKey("virtualizer_enabled")
-        val AUTO_EQ_BY_GENRE = booleanPreferencesKey("auto_eq_by_genre")
-        val HOME_HERO_ENABLED = booleanPreferencesKey("home_hero_enabled")
-        val HOME_BACKDROP_ENABLED = booleanPreferencesKey("home_backdrop_enabled")
-        val NAV_BAR_SHOW_LABELS = booleanPreferencesKey("nav_bar_show_labels")
-        val HIDE_BOTTOM_NAV_ON_SCROLL = booleanPreferencesKey("hide_bottom_nav_on_scroll")
+        // Facade-owned: first-run / one-time / per-account runtime state.
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
-        val PERFORMANCE_MODE = booleanPreferencesKey("performance_mode")
-        val NEWSLETTER_ENABLED = booleanPreferencesKey("newsletter_enabled")
-
-        val MAX_CACHE_SIZE_MB = intPreferencesKey("max_cache_size_mb")
-        val AUDIO_NIGHT_MODE_GAIN = intPreferencesKey("audio_night_mode_gain")
-        val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey("wifi_only_downloads")
-        val DOWNLOAD_CONNECTIONS = intPreferencesKey("download_connections")
-        val MAX_CONCURRENT_DOWNLOADS = intPreferencesKey("max_concurrent_downloads")
-        val VIRTUALIZER_STRENGTH = intPreferencesKey("virtualizer_strength")
-        val NEWSLETTER_DAY_OF_WEEK = intPreferencesKey("newsletter_day_of_week")
-
-        val VIDEO_DEFAULT_SPEED = floatPreferencesKey("video_default_speed")
-        val VIDEO_BRIGHTNESS_LEVEL = floatPreferencesKey("video_brightness_level")
-        val VIDEO_GESTURE_INDICATOR_SIDE = stringPreferencesKey("video_gesture_indicator_side")
-        val AUDIO_DEFAULT_SPEED = floatPreferencesKey("audio_default_speed")
-        val AUDIO_NIGHT_MODE_VOLUME = floatPreferencesKey("audio_night_mode_volume")
-        val REPLAYGAIN_PRE_AMP_DB = floatPreferencesKey("replaygain_pre_amp_db")
-        val LR_BALANCE = floatPreferencesKey("lr_balance")
-        val PITCH_SEMITONES = floatPreferencesKey("pitch_semitones")
-
-        val AUDIO_DELAY_MS = longPreferencesKey("audio_delay_ms")
-        val AUTO_LOCK_TIMER_MS = longPreferencesKey("auto_lock_timer_ms")
-        val VIDEO_SEEK_DURATION_MS = longPreferencesKey("video_seek_duration_ms")
-        val VIDEO_CONTROLS_TIMEOUT_MS = longPreferencesKey("video_controls_timeout_ms")
-        val VIDEO_SWIPE_SEEK_MAX_MS = longPreferencesKey("video_swipe_seek_max_ms")
-        val AUDIO_SKIP_PREVIOUS_THRESHOLD_MS = longPreferencesKey("audio_skip_previous_threshold_ms")
-        val AUDIO_CROSSFADE_DURATION_MS = longPreferencesKey("audio_crossfade_duration_ms")
-        val SLEEP_TIMER_DURATION_MS = longPreferencesKey("sleep_timer_duration_ms")
-        val DREAM_SLIDESHOW_INTERVAL_MS = longPreferencesKey("dream_slideshow_interval_ms")
-        val NEWSLETTER_LAST_VIEWED_MS = longPreferencesKey("newsletter_last_viewed_ms")
-
         val TYPED_MIGRATION_DONE = PreferenceCodec.TYPED_MIGRATION_DONE
-
-        val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
-        val NOTIFICATIONS_CHECK_FREQUENCY = stringPreferencesKey("notifications_check_frequency")
-        val NOTIFICATIONS_QUIET_HOURS_ENABLED = booleanPreferencesKey("notifications_quiet_hours_enabled")
-        val NOTIFICATIONS_QUIET_HOURS_START = intPreferencesKey("notifications_quiet_hours_start")
-        val NOTIFICATIONS_QUIET_HOURS_END = intPreferencesKey("notifications_quiet_hours_end")
-        val NOTIFICATIONS_SOUND_ENABLED = booleanPreferencesKey("notifications_sound_enabled")
-        val NOTIFICATIONS_VIBRATE_ENABLED = booleanPreferencesKey("notifications_vibrate_enabled")
-        val NOTIFICATIONS_LIGHTS_ENABLED = booleanPreferencesKey("notifications_lights_enabled")
-        val NOTIFICATIONS_MAX_PER_CHECK = intPreferencesKey("notifications_max_per_check")
-        val NOTIFICATIONS_LIBRARY_CONFIGS = stringPreferencesKey("notifications_library_configs")
-
-        val RECENT_DLNA_DEVICES = stringPreferencesKey("recent_dlna_devices")
-
-        val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey("show_advanced_settings")
-        val AUDIO_VISUALIZER_ENABLED = booleanPreferencesKey("audio_visualizer_enabled")
-        val ENABLED_EXPERIMENTAL_FEATURES = stringPreferencesKey("enabled_experimental_features")
-
-        val SYNC_PLAY_JOIN_BEHAVIOR = stringPreferencesKey("sync_play_join_behavior")
-        val SYNC_PLAY_TOLERANCE_MS = longPreferencesKey("sync_play_tolerance_ms")
-        val SYNC_PLAY_AUTO_ACCEPT_INVITES = booleanPreferencesKey("sync_play_auto_accept_invites")
-        val DEFAULT_CASTING_STRATEGY = stringPreferencesKey("default_casting_strategy")
-        val BACKGROUND_CASTING_ENABLED = booleanPreferencesKey("background_casting_enabled")
-        val PREFERRED_RENDERER = stringPreferencesKey("preferred_renderer")
-        val WATCH_LATER_PLAYLIST_ID = stringPreferencesKey("watch_later_playlist_id")
-        val DVR_PRE_PADDING_MINUTES = intPreferencesKey("dvr_pre_padding_minutes")
-        val DVR_POST_PADDING_MINUTES = intPreferencesKey("dvr_post_padding_minutes")
-        val DVR_RECORDING_QUALITY = stringPreferencesKey("dvr_recording_quality")
         val FAVORITE_CHANNELS = stringPreferencesKey("favorite_channels")
         val LIVE_TV_LAST_CHANNEL_ID = stringPreferencesKey("live_tv_last_channel_id")
-        val ENABLED_NEWSLETTER_SECTIONS = stringPreferencesKey("enabled_newsletter_sections")
-        val NEWSLETTER_SECTION_ORDER = stringPreferencesKey("newsletter_section_order")
-        val MANUAL_OFFLINE_ENABLED = booleanPreferencesKey("manual_offline_enabled")
-        val AUTO_OFFLINE_ENABLED = booleanPreferencesKey("auto_offline_enabled")
-        val MANUAL_BANDWIDTH_CAP = longPreferencesKey("manual_bandwidth_cap")
-        val METERED_NETWORK_BEHAVIOR = stringPreferencesKey("metered_network_behavior")
-        val ADAPTIVE_BITRATE_ENABLED = booleanPreferencesKey("adaptive_bitrate_enabled")
-        val BACKGROUND_VIDEO_AUDIO_ENABLED = booleanPreferencesKey("background_video_audio_enabled")
-        val AUTO_PLAY_COUNTDOWN_SEC = intPreferencesKey("auto_play_countdown_sec")
-        val SHOW_UNWATCHED_BADGE = booleanPreferencesKey("show_unwatched_badge")
-        val HIDE_WATCHED_ITEMS = booleanPreferencesKey("hide_watched_items")
-        val MERGE_CONTINUE_WATCHING_NEXT_UP = booleanPreferencesKey("merge_continue_watching_next_up")
-        val NEXT_UP_MAX_DAYS = intPreferencesKey("next_up_max_days")
-        val NEXT_UP_REWATCHING = booleanPreferencesKey("next_up_rewatching")
-        val NEXT_UP_EXCLUDED_SERIES_IDS = stringPreferencesKey("next_up_excluded_series_ids")
-        val HIDDEN_CW_ITEM_IDS = stringPreferencesKey("hidden_cw_item_ids")
-        val PINNED_HOME_SECTIONS = stringPreferencesKey("pinned_home_sections")
-        val HOME_LAYOUT_PRESETS = stringPreferencesKey("home_layout_presets")
-        val CONTINUE_WATCHING_CLICK_BEHAVIOR = stringPreferencesKey("continue_watching_click_behavior")
-        val CELLULAR_STREAMING_QUALITY = stringPreferencesKey("cellular_streaming_quality")
-        val SHOW_WATCHED_CHECKMARK = booleanPreferencesKey("show_watched_checkmark")
-        val DEFAULT_LIBRARY_SORT_ORDERS = stringPreferencesKey("default_library_sort_orders")
-        val LIBRARY_VIEW_MODES = stringPreferencesKey("library_view_modes")
-        val LIBRARY_FILTERS = stringPreferencesKey("library_filters")
-        val KEEP_SCREEN_ON_DURING_VIDEO = booleanPreferencesKey("keep_screen_on_during_video")
-        val DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
-        val SMART_DOWNLOADS_ENABLED = booleanPreferencesKey("smart_downloads_enabled")
-        val AUTO_DOWNLOAD_NEW_EPISODES = booleanPreferencesKey("auto_download_new_episodes")
-        val INCOGNITO_MODE_ENABLED = booleanPreferencesKey("incognito_mode_enabled")
-        val SHOW_TIME_REMAINING = booleanPreferencesKey("show_time_remaining")
-        val SHOW_CLOCK_ON_HOME = booleanPreferencesKey("show_clock_on_home")
-        val SHOW_CLOCK_IN_PLAYER = booleanPreferencesKey("show_clock_in_player")
-        val SHOW_SETTINGS_IN_HOME_SEARCH = booleanPreferencesKey("show_settings_in_home_search")
-        val PAUSE_ON_AUDIO_FOCUS_LOSS = booleanPreferencesKey("pause_on_audio_focus_loss")
-        val DUCK_ON_TRANSIENT_FOCUS_LOSS = booleanPreferencesKey("duck_on_transient_focus_loss")
-        val VOLUME_BOOST_ENABLED = booleanPreferencesKey("volume_boost_enabled")
-        val VOLUME_BOOST_GAIN = intPreferencesKey("volume_boost_gain")
-        val AUDIO_LYRICS_VISIBLE = booleanPreferencesKey("audio_lyrics_visible")
-        val SHOW_SHARE_MEDIA_OPTION = booleanPreferencesKey("show_share_media_option")
-        val SHOW_EXTERNAL_RATINGS = booleanPreferencesKey("show_external_ratings")
-        val DATA_SAVER_ENABLED = booleanPreferencesKey("data_saver_enabled")
-        val VERBOSE_NETWORK_LOGGING = booleanPreferencesKey("verbose_network_logging")
-        val NETWORK_TIMEOUT_PRESET = stringPreferencesKey("network_timeout_preset")
-        val REDUCE_MOTION_ENABLED = booleanPreferencesKey("reduce_motion_enabled")
-        val PREFER_AUDIO_DESCRIPTION = booleanPreferencesKey("prefer_audio_description")
-        val HIGH_CONTRAST_SUBTITLES = booleanPreferencesKey("high_contrast_subtitles")
-        val HIDE_SEARCH_HISTORY = booleanPreferencesKey("hide_search_history")
-        val BLUE_LIGHT_FILTER_ENABLED = booleanPreferencesKey("blue_light_filter_enabled")
-        val BLUE_LIGHT_FILTER_STRENGTH = floatPreferencesKey("blue_light_filter_strength")
-        val TV_ZOOM_MODE_PERCENT = floatPreferencesKey("tv_zoom_mode_percent")
-        val REMOTE_CONTROL_ENABLED = booleanPreferencesKey("remote_control_enabled")
-        val MAX_DOWNLOAD_STORAGE_GB = intPreferencesKey("max_download_storage_gb")
-        val DOWNLOAD_STORAGE_LOCATION = stringPreferencesKey("download_storage_location")
-        val ANDROID_TV_WATCH_NEXT_ENABLED = booleanPreferencesKey("android_tv_watch_next_enabled")
-        val USER_DATA_SYNC_ENABLED = booleanPreferencesKey("user_data_sync_enabled")
-        val SYNTHWAVE_MODE = booleanPreferencesKey("synthwave_mode")
-        val SYNTHWAVE_ACCENT = stringPreferencesKey("synthwave_accent")
-        val SOOTHING_MODE = booleanPreferencesKey("soothing_mode")
-        val SOOTHING_ACCENT = stringPreferencesKey("soothing_accent")
-        val MONOCHROME_MODE = booleanPreferencesKey("monochrome_mode")
-        val APP_LANGUAGE = stringPreferencesKey("app_language")
-        val PGS_SUBTITLE_DIRECT_PLAY = booleanPreferencesKey("pgs_subtitle_direct_play")
-        val HDR_SUBTITLE_STYLE_ENABLED = booleanPreferencesKey("hdr_subtitle_style_enabled")
-        val HDR_SUBTITLE_STYLE = stringPreferencesKey("hdr_subtitle_style")
-        val BACKDROP_THEME_MUSIC_ENABLED = booleanPreferencesKey("backdrop_theme_music_enabled")
-        val HIDDEN_NAV_ITEMS = stringPreferencesKey("hidden_nav_items")
-        val NAV_ITEM_ORDER = stringPreferencesKey("nav_item_order")
-        val SELF_UPDATE_CHECK_ENABLED = booleanPreferencesKey("self_update_check_enabled")
+        val RECENT_DLNA_DEVICES = stringPreferencesKey("recent_dlna_devices")
+        val WATCH_LATER_PLAYLIST_ID = stringPreferencesKey("watch_later_playlist_id")
         val DISMISSED_UPDATE_VERSION = stringPreferencesKey("dismissed_update_version")
         val DISMISSED_UPDATE_AT_MS = longPreferencesKey("dismissed_update_at_ms")
-        val PIN_FAILED_ATTEMPTS = intPreferencesKey("pin_failed_attempts")
-        val PIN_LOCKOUT_UNTIL_MS = longPreferencesKey("pin_lockout_until_ms")
-        val HIDE_EPISODE_THUMBNAILS = booleanPreferencesKey("hide_episode_thumbnails")
-        val EPISODES_DESCENDING = booleanPreferencesKey("episodes_descending")
-        val SKIP_SPECIALS = booleanPreferencesKey("skip_specials")
-        val CELLULAR_DOWNLOAD_SIZE_WARNING_MB = intPreferencesKey("cellular_download_size_warning_mb")
-        val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
-        val DATE_FORMAT_PREFERENCE = stringPreferencesKey("date_format_preference")
-        val APP_FONT_SCALE = stringPreferencesKey("app_font_scale")
-        val SCHEDULED_THEME_START_HOUR = intPreferencesKey("scheduled_theme_start_hour")
-        val SCHEDULED_THEME_END_HOUR = intPreferencesKey("scheduled_theme_end_hour")
-        val COLOR_BLIND_MODE = stringPreferencesKey("color_blind_mode")
-        val HAND_MODE = stringPreferencesKey("hand_mode")
-        val DOWNLOAD_SCHEDULE_ENABLED = booleanPreferencesKey("download_schedule_enabled")
-        val DOWNLOAD_SCHEDULE_START = intPreferencesKey("download_schedule_start")
-        val DOWNLOAD_SCHEDULE_END = intPreferencesKey("download_schedule_end")
-        val DOWNLOAD_SCHEDULE_WIFI_ONLY = booleanPreferencesKey("download_schedule_wifi_only")
+
+        // Aliases for store-owned keys the facade reads directly.
+        val MEDIA_STREAM_SELECTIONS = com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore.Keys.MEDIA_STREAM_SELECTIONS
+        val VIDEO_EFFECTS_SELECTIONS = com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore.Keys.VIDEO_EFFECTS_SELECTIONS
+        val NEWSLETTER_LAST_VIEWED_MS = com.raulshma.jellyplay.core.datastore.notification.NotificationStore.Keys.NEWSLETTER_LAST_VIEWED_MS
+        val MANUAL_OFFLINE_ENABLED = com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore.Keys.MANUAL_OFFLINE_ENABLED
+        val AUTO_OFFLINE_ENABLED = com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore.Keys.AUTO_OFFLINE_ENABLED
+        val PIN_FAILED_ATTEMPTS = PinRateLimiter.Keys.PIN_FAILED_ATTEMPTS
+        val PIN_LOCKOUT_UNTIL_MS = PinRateLimiter.Keys.PIN_LOCKOUT_UNTIL_MS
     }
 
     private companion object {
@@ -1998,17 +1780,38 @@ class UserPreferencesStore @Inject constructor(
     }
 
     /**
-     * Reflectively enumerates every `Preferences.Key<*>` declared in the private
-     * [Keys] object. Uses Java reflection (no kotlin-reflect dependency) and is
-     * only invoked from the debug/test coverage guard [uncoveredResetKeys], so
-     * the reflection cost is never paid in production paths.
+     * Reflectively enumerates every `Preferences.Key<*>` declared across the
+     * facade-owned [Keys] object and each domain store's `Keys` object (and
+     * `PinRateLimiter.Keys`). Uses Java reflection (no kotlin-reflect
+     * dependency) via [PreferenceCodec.reflectKeys] and is only invoked from
+     * the debug/test coverage guard [uncoveredResetKeys], so the reflection
+     * cost is never paid in production paths.
+     *
+     * Aggregating from the stores — not a facade copy of their keys — keeps a
+     * single declaration owner per key; a store key rename cannot silently
+     * drift out of the coverage guard.
      */
-    internal fun declaredKeys(): List<Preferences.Key<*>> {
-        val keyType = androidx.datastore.preferences.core.Preferences.Key::class.java
-        return Keys::class.java.declaredFields
-            .filter { keyType.isAssignableFrom(it.type) }
-            .onEach { it.isAccessible = true }
-            .mapNotNull { runCatching { it.get(Keys) as? Preferences.Key<*> }.getOrNull() }
+    internal fun declaredKeys(): List<Preferences.Key<*>> = buildList {
+        addAll(PreferenceCodec.reflectKeys(Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.playback.PlaybackStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.audio.AudioStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.library.LibraryStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.navigation.NavigationStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.notification.NotificationStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.security.SecurityStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore.Keys))
+        addAll(PreferenceCodec.reflectKeys(PinRateLimiter.Keys))
     }
 
     /**

@@ -117,7 +117,7 @@ class PinRateLimiter @Inject constructor(
         }
     }
 
-    private object Keys {
+    internal object Keys {
         val PIN_FAILED_ATTEMPTS = intPreferencesKey("pin_failed_attempts")
         val PIN_LOCKOUT_UNTIL_MS = longPreferencesKey("pin_lockout_until_ms")
     }
