@@ -20,8 +20,15 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
@@ -91,7 +98,10 @@ class HomeViewModel @Inject constructor(
     private val playbackSyncScheduler: PlaybackSyncScheduler,
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
-    private val preferencesStore: UserPreferencesStore,
+    private val homeDiscoveryStore: HomeDiscoveryStore,
+    private val appearanceStore: AppearanceStore,
+    private val experimentalStore: ExperimentalStore,
+    private val playbackStore: PlaybackStore,
     private val preferencesEditor: PreferencesEditor,
     private val serverIdentityStore: ServerIdentityStore,
     private val widgetDataStore: WidgetDataStore,
@@ -331,47 +341,54 @@ class HomeViewModel @Inject constructor(
 
         launch {
             var hasSeenHomePreferences = false
-            preferencesStore.preferences.collect { prefs ->
+            combine(
+                homeDiscoveryStore.homeDiscovery,
+                appearanceStore.appearance,
+                experimentalStore.experimental,
+                playbackStore.playback,
+            ) { home, appearance, experimental, playback ->
+                HomePrefs(home, appearance, experimental, playback)
+            }.collect { prefs ->
                 val homeSectionPrefsChanged = hasSeenHomePreferences && (
-                    prefs.enabledHomeSectionTypes != enabledHomeSectionTypes ||
-                        prefs.homeSectionOrder != homeSectionOrder ||
-                        prefs.libraryHomeSectionOverrides != libraryHomeSectionOverrides ||
-                        prefs.mergeContinueWatchingAndNextUp != mergeContinueWatchingAndNextUp ||
-                        prefs.nextUpMaxDays != nextUpMaxDays ||
-                        prefs.nextUpRewatching != nextUpRewatching ||
-                        prefs.nextUpExcludedSeriesIds != nextUpExcludedSeriesIds ||
-                        prefs.hiddenCwItemIds != hiddenCwItemIds ||
-                        prefs.pinnedHomeSections != pinnedHomeSections
-                    )
+                    prefs.home.enabledHomeSectionTypes != enabledHomeSectionTypes ||
+                        prefs.home.homeSectionOrder != homeSectionOrder ||
+                        prefs.home.libraryHomeSectionOverrides != libraryHomeSectionOverrides ||
+                        prefs.home.mergeContinueWatchingAndNextUp != mergeContinueWatchingAndNextUp ||
+                        prefs.home.nextUpMaxDays != nextUpMaxDays ||
+                        prefs.home.nextUpRewatching != nextUpRewatching ||
+                        prefs.home.nextUpExcludedSeriesIds != nextUpExcludedSeriesIds ||
+                        prefs.home.hiddenCwItemIds != hiddenCwItemIds ||
+                        prefs.home.pinnedHomeSections != pinnedHomeSections
+                )
 
                 hasSeenHomePreferences = true
-                enabledHomeSectionTypes = prefs.enabledHomeSectionTypes
-                homeSectionOrder = prefs.homeSectionOrder
-                libraryHomeSectionOverrides = prefs.libraryHomeSectionOverrides
-                mergeContinueWatchingAndNextUp = prefs.mergeContinueWatchingAndNextUp
-                nextUpMaxDays = prefs.nextUpMaxDays
-                nextUpRewatching = prefs.nextUpRewatching
-                nextUpExcludedSeriesIds = prefs.nextUpExcludedSeriesIds
-                hiddenCwItemIds = prefs.hiddenCwItemIds
-                pinnedHomeSections = prefs.pinnedHomeSections
-                androidTvWatchNextEnabled = prefs.androidTvWatchNextEnabled
+                enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes
+                homeSectionOrder = prefs.home.homeSectionOrder
+                libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides
+                mergeContinueWatchingAndNextUp = prefs.home.mergeContinueWatchingAndNextUp
+                nextUpMaxDays = prefs.home.nextUpMaxDays
+                nextUpRewatching = prefs.home.nextUpRewatching
+                nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds
+                hiddenCwItemIds = prefs.home.hiddenCwItemIds
+                pinnedHomeSections = prefs.home.pinnedHomeSections
+                androidTvWatchNextEnabled = prefs.playback.androidTvWatchNextEnabled
                 _uiState.update { it.copy(
-                    homeMode = prefs.homeMode,
-                    dynamicTheming = prefs.dynamicTheming,
-                    oledMode = prefs.oledMode,
-                    colorStyle = prefs.colorStyle,
-                    accentColorSwatch = prefs.accentColorSwatch,
-                    homeHeroEnabled = prefs.homeHeroEnabled,
-                    homeBackdropEnabled = prefs.homeBackdropEnabled,
-                    performanceMode = prefs.performanceMode,
-                    showClock = prefs.showClockOnHome,
-                    showSettingsInHomeSearch = prefs.showSettingsInHomeSearch,
-                    continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
-                    experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.enabledExperimentalFeatures,
-                    directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.enabledExperimentalFeatures,
-                    enabledHomeSectionTypes = prefs.enabledHomeSectionTypes,
-                    homeSectionOrder = prefs.homeSectionOrder,
-                    libraryHomeSectionOverrides = prefs.libraryHomeSectionOverrides,
+                    homeMode = prefs.home.homeMode,
+                    dynamicTheming = prefs.appearance.dynamicTheming,
+                    oledMode = prefs.appearance.oledMode,
+                    colorStyle = prefs.appearance.colorStyle,
+                    accentColorSwatch = prefs.appearance.accentColorSwatch,
+                    homeHeroEnabled = prefs.home.homeHeroEnabled,
+                    homeBackdropEnabled = prefs.home.homeBackdropEnabled,
+                    performanceMode = prefs.appearance.performanceMode,
+                    showClock = prefs.home.showClockOnHome,
+                    showSettingsInHomeSearch = prefs.home.showSettingsInHomeSearch,
+                    continueWatchingClickBehavior = prefs.home.continueWatchingClickBehavior,
+                    experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.experimental.enabledExperimentalFeatures,
+                    directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures,
+                    enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
+                    homeSectionOrder = prefs.home.homeSectionOrder,
+                    libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
                 ) }
 
                 if (homeSectionPrefsChanged) {
@@ -552,6 +569,14 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+
+    /** Intermediate holder for the four home-preference slices combined above. */
+    private data class HomePrefs(
+        val home: HomeDiscoverySlice,
+        val appearance: AppearanceSlice,
+        val experimental: ExperimentalSlice,
+        val playback: PlaybackSlice,
+    )
 
     /** Intermediate holder for the five combined Seerr flows. */
     private data class SeerrRequestSlice(
@@ -737,7 +762,7 @@ class HomeViewModel @Inject constructor(
 
     fun excludeSeriesFromNextUp(seriesId: String) {
         launch {
-            preferencesStore.excludeSeriesFromNextUp(seriesId)
+            homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
         }
     }
 
