@@ -12,6 +12,10 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -74,6 +78,10 @@ class DetailViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
     private val preferencesStore: UserPreferencesStore,
+    private val experimentalStore: ExperimentalStore,
+    private val downloadsStore: DownloadsStore,
+    private val appRuntimeStateStore: AppRuntimeStateStore,
+    private val engineStore: PlayerEngineStore,
     private val offlineModeManager: OfflineModeManager,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     private val seerrRepository: SeerrRepository,
@@ -123,7 +131,7 @@ class DetailViewModel @Inject constructor(
         // equal emissions that StateFlow deduplicates.
         _uiState.map { it.detail?.item?.let { item -> ItemIdentity(item.id, item.mediaType) } },
         _uiState.map { it.detail?.providerIds?.get("tvdb") },
-        preferencesStore.preferences.map { it.isExperimentalEnabled(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
+        experimentalStore.experimental.map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
         _uiState.map { it.sonarrServersResolved },
     ) { itemIdentity, tvdbId, flagEnabled, sonarrResolved ->
         if (!flagEnabled || itemIdentity == null) false
@@ -246,7 +254,7 @@ class DetailViewModel @Inject constructor(
         _uiState.update { it.copy(selectedSubtitleIndex = index) }
         val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
-            preferencesStore.setMediaStreamSelection(
+            engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 subtitleStreamIndex = index,
                 audioStreamIndex = _uiState.value.selectedAudioIndex,
@@ -258,7 +266,7 @@ class DetailViewModel @Inject constructor(
         _uiState.update { it.copy(selectedAudioIndex = index) }
         val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
-            preferencesStore.setMediaStreamSelection(
+            engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 audioStreamIndex = index,
                 subtitleStreamIndex = _uiState.value.selectedSubtitleIndex,
@@ -323,7 +331,7 @@ class DetailViewModel @Inject constructor(
             downloadSheetFetchedSeasonIds = emptySet()
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
-                    val storedSelection = preferences.value.mediaStreamSelections[itemId]
+                    val storedSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
                     _uiState.update {
                         it.copy(
                             detail = detail,
@@ -933,7 +941,7 @@ class DetailViewModel @Inject constructor(
         // Cellular download size warning: when on a metered network and the
         // user has configured a warning threshold (MB), surface a
         // confirmation dialog instead of silently consuming data.
-        val prefs = preferencesStore.preferences.value
+        val prefs = downloadsStore.downloads.value
         val thresholdMb = prefs.cellularDownloadSizeWarningMb
         if (thresholdMb > 0 && !adaptiveBitrateManager.isUnmeteredConnection()) {
             val sizeBytes = source.size ?: 0L
@@ -976,7 +984,7 @@ class DetailViewModel @Inject constructor(
                 // The intake seam owns the full bundle (local images, trickplay,
                 // subtitles, segments, offline metadata row), so feature modules
                 // no longer re-implement the artifact-writing recipe.
-                val prefs = preferencesStore.preferences.value
+                val prefs = downloadsStore.downloads.value
                 val maxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
                 val result = downloadIntake.start(detail, maxBitrate)
                 if (result.downloadItem == null) {
@@ -1340,7 +1348,7 @@ class DetailViewModel @Inject constructor(
      */
     fun addToWatchLater() {
         val detail = _uiState.value.detail ?: return
-        val cachedId = preferencesStore.preferences.value.watchLaterPlaylistId
+        val cachedId = appRuntimeStateStore.state.value.watchLaterPlaylistId
         launch {
             _uiState.update { it.copy(isAddingToPlaylist = true) }
             val ids = resolvePlaylistItemIds(detail).getOrElse {
@@ -1378,7 +1386,7 @@ class DetailViewModel @Inject constructor(
                     itemIds = ids,
                     mediaType = playlistMediaType(detail.item.mediaType),
                 ).onSuccess { newId ->
-                    preferencesStore.setWatchLaterPlaylistId(newId)
+                    appRuntimeStateStore.setWatchLaterPlaylistId(newId)
                     _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_added_to_watch_later)))
                 }.onFailure {
                     _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))

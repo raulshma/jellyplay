@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,10 +20,12 @@ import org.junit.Test
  */
 class StoragePolicyTest {
 
-    private val preferencesStore: UserPreferencesStore = mockk()
+    private val networkOfflineStore: NetworkOfflineStore = mockk()
+    private val downloadsStore: DownloadsStore = mockk()
 
     private fun policy(returnedBytes: Long): StoragePolicy = StoragePolicy(
-        preferencesStore = preferencesStore,
+        networkOfflineStore = networkOfflineStore,
+        downloadsStore = downloadsStore,
         currentBytesProvider = { returnedBytes },
     )
 
@@ -29,11 +33,11 @@ class StoragePolicyTest {
         maxCacheSizeMb: Int = 0,
         maxDownloadStorageGb: Int = 0,
     ) {
-        every { preferencesStore.preferences } returns MutableStateFlow(
-            UserPreferences(
-                maxCacheSizeMb = maxCacheSizeMb,
-                maxDownloadStorageGb = maxDownloadStorageGb,
-            ),
+        every { networkOfflineStore.networkOffline } returns MutableStateFlow(
+            NetworkOfflineSlice(maxCacheSizeMb = maxCacheSizeMb),
+        )
+        every { downloadsStore.downloads } returns MutableStateFlow(
+            DownloadsSlice(maxDownloadStorageGb = maxDownloadStorageGb),
         )
     }
 
@@ -87,7 +91,8 @@ class StoragePolicyTest {
         prefs(maxCacheSizeMb = 500)
         val providerInvoked = booleanArrayOf(false)
         val p = StoragePolicy(
-            preferencesStore = preferencesStore,
+            networkOfflineStore = networkOfflineStore,
+            downloadsStore = downloadsStore,
             currentBytesProvider = { providerInvoked[0] = true; 0L },
         )
         p.enforce(precomputedCurrentBytes = 10L * 1024 * 1024)
@@ -99,7 +104,8 @@ class StoragePolicyTest {
         prefs(maxCacheSizeMb = 500)
         val providerInvoked = booleanArrayOf(false)
         val p = StoragePolicy(
-            preferencesStore = preferencesStore,
+            networkOfflineStore = networkOfflineStore,
+            downloadsStore = downloadsStore,
             currentBytesProvider = { providerInvoked[0] = true; 10L * 1024 * 1024 },
         )
         val result = p.enforce()
@@ -107,4 +113,3 @@ class StoragePolicyTest {
         assertEquals(10L * 1024 * 1024, result)
     }
 }
-

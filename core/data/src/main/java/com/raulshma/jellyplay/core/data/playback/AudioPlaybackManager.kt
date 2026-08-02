@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -78,6 +79,8 @@ class AudioPlaybackManager @Inject constructor(
     private val offlineRepository: OfflineRepository,
     private val sessionManager: PlaybackSessionManager,
     private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
+    private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
     private val audioSettingsStore: com.raulshma.jellyplay.core.datastore.AudioPlaybackSettingsStore,
     private val queuePersistenceHelper: QueuePersistenceHelper,
     private val bandwidthMonitor: com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor,
@@ -107,6 +110,8 @@ class AudioPlaybackManager @Inject constructor(
 
     private var exoPlayer: ExoPlayer? = null
     private var currentPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
+    private var currentAudio = com.raulshma.jellyplay.core.datastore.audio.AudioSlice()
+    private var currentEffects = com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice()
 
     private val libraryBrowser = AudioLibraryBrowser(
         scope = scope,
@@ -358,6 +363,13 @@ class AudioPlaybackManager @Inject constructor(
     init {
         scope.launch {
             preferencesStore.preferences.collect { prefs ->
+                currentPreferences = prefs
+            }
+        }
+        scope.launch {
+            combine(audioStore.audio, audioEffectsStore.audioEffects) { audio, effects ->
+                audio to effects
+            }.collect { (audio, effects) ->
                 // The preference→effect diff lives in AudioPreferencesReducer
                 // (pure, JVM-tested). This block was previously a ~77-line
                 // hand-rolled field-by-field diff tracking 14 stale `prev*`
@@ -365,8 +377,9 @@ class AudioPlaybackManager @Inject constructor(
                 // untestable without 18 mocked collaborators. Now the manager
                 // is a thin command-dispatcher: the reducer emits the ordered
                 // command list, this `when` maps each to its effect setter.
-                val commands = AudioPreferencesReducer.diff(currentPreferences, prefs)
-                currentPreferences = prefs
+                val commands = AudioPreferencesReducer.diff(currentEffects, currentAudio, effects, audio)
+                currentAudio = audio
+                currentEffects = effects
                 commands.forEach { command -> applyEffectCommand(command) }
             }
         }

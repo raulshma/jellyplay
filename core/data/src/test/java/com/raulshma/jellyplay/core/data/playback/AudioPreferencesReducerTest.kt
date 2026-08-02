@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ReverbPreset
-import com.raulshma.jellyplay.core.model.UserPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,37 +22,52 @@ class AudioPreferencesReducerTest {
 
     @Test
     fun `identical preferences produce no commands`() {
-        val prefs = UserPreferences()
-        assertTrue(AudioPreferencesReducer.diff(prefs, prefs).isEmpty())
+        val effects = AudioEffectsSlice()
+        val audio = AudioSlice()
+        assertTrue(AudioPreferencesReducer.diff(effects, audio, effects, audio).isEmpty())
     }
 
     @Test
     fun `default-then-default produces no commands`() {
         // Two distinct instances with identical fields → no commands.
-        assertTrue(AudioPreferencesReducer.diff(UserPreferences(), UserPreferences()).isEmpty())
+        assertTrue(
+            AudioPreferencesReducer.diff(
+                AudioEffectsSlice(), AudioSlice(),
+                AudioEffectsSlice(), AudioSlice(),
+            ).isEmpty(),
+        )
     }
 
     @Test
     fun `single field change emits exactly one command`() {
-        val next = UserPreferences().copy(audioVisualizerEnabled = true)
-        val commands = AudioPreferencesReducer.diff(UserPreferences(), next)
+        val prevEffects = AudioEffectsSlice()
+        val prevAudio = AudioSlice()
+        val nextEffects = AudioEffectsSlice()
+        val nextAudio = AudioSlice(audioVisualizerEnabled = true)
+        val commands = AudioPreferencesReducer.diff(prevEffects, prevAudio, nextEffects, nextAudio)
         assertEquals(1, commands.size)
         assertEquals(EffectCommand.SetVisualizerEnabled(true), commands.single())
     }
 
     @Test
     fun `equalizer preset change emits preset command`() {
-        val next = UserPreferences().copy(equalizerPreset = EqualizerPreset.ROCK)
-        val commands = AudioPreferencesReducer.diff(UserPreferences(), next)
+        val prevEffects = AudioEffectsSlice()
+        val prevAudio = AudioSlice()
+        val nextEffects = AudioEffectsSlice(equalizerPreset = EqualizerPreset.ROCK)
+        val nextAudio = AudioSlice()
+        val commands = AudioPreferencesReducer.diff(prevEffects, prevAudio, nextEffects, nextAudio)
         assertEquals(listOf(EffectCommand.SetEqualizerPreset(EqualizerPreset.ROCK)), commands)
     }
 
     @Test
     fun `lr balance change emits balance command`() {
-        val next = UserPreferences().copy(lrBalance = 0.5f)
+        val prevEffects = AudioEffectsSlice()
+        val prevAudio = AudioSlice()
+        val nextEffects = AudioEffectsSlice(lrBalance = 0.5f)
+        val nextAudio = AudioSlice()
         assertEquals(
             listOf(EffectCommand.SetLrBalance(0.5f)),
-            AudioPreferencesReducer.diff(UserPreferences(), next),
+            AudioPreferencesReducer.diff(prevEffects, prevAudio, nextEffects, nextAudio),
         )
     }
 
@@ -59,11 +75,14 @@ class AudioPreferencesReducerTest {
     fun `strength change emits strength command before enabled flag`() {
         // The load-bearing ordering invariant: strengths must precede their
         // enabled flags so the effect attaches with the right value.
-        val next = UserPreferences().copy(
+        val prevEffects = AudioEffectsSlice()
+        val prevAudio = AudioSlice()
+        val nextEffects = AudioEffectsSlice(
             bassBoostStrength = EffectStrength.HIGH,
             bassBoostEnabled = true,
         )
-        val commands = AudioPreferencesReducer.diff(UserPreferences(), next)
+        val nextAudio = AudioSlice()
+        val commands = AudioPreferencesReducer.diff(prevEffects, prevAudio, nextEffects, nextAudio)
         val strengthIdx = commands.indexOfFirst { it is EffectCommand.SetBassBoostStrength }
         val enabledIdx = commands.indexOfFirst { it is EffectCommand.SetBassBoostEnabled }
         assertTrue("strength must be emitted", strengthIdx >= 0)
@@ -76,13 +95,16 @@ class AudioPreferencesReducerTest {
 
     @Test
     fun `all four strength commands precede their enabled flags`() {
-        val next = UserPreferences().copy(
+        val prevEffects = AudioEffectsSlice()
+        val prevAudio = AudioSlice()
+        val nextEffects = AudioEffectsSlice(
             bassBoostStrength = EffectStrength.HIGH, bassBoostEnabled = true,
             virtualizerStrength = 800, virtualizerEnabled = true,
             dialogueBoostStrength = EffectStrength.HIGH, dialogueBoostEnabled = true,
             nightModeStrength = EffectStrength.HIGH, nightModeEnabled = true,
         )
-        val commands = AudioPreferencesReducer.diff(UserPreferences(), next)
+        val nextAudio = AudioSlice()
+        val commands = AudioPreferencesReducer.diff(prevEffects, prevAudio, nextEffects, nextAudio)
         val lastStrengthIdx = commands.indexOfLast {
             it is EffectCommand.SetBassBoostStrength ||
                 it is EffectCommand.SetVirtualizerStrength ||
@@ -106,11 +128,14 @@ class AudioPreferencesReducerTest {
     fun `reverb preset comes after enabled flags`() {
         // Reverb re-attaches the effect when changed, so it must run after the
         // enabled flags settle.
-        val next = UserPreferences().copy(
+        val prevEffects = AudioEffectsSlice()
+        val prevAudio = AudioSlice()
+        val nextEffects = AudioEffectsSlice(
             bassBoostEnabled = true,
             reverbPreset = ReverbPreset.LARGE_HALL,
         )
-        val commands = AudioPreferencesReducer.diff(UserPreferences(), next)
+        val nextAudio = AudioSlice()
+        val commands = AudioPreferencesReducer.diff(prevEffects, prevAudio, nextEffects, nextAudio)
         val reverbIdx = commands.indexOfFirst { it is EffectCommand.SetReverbPreset }
         val lastEnabledIdx = commands.indexOfLast {
             it is EffectCommand.SetEqualizerEnabled ||
@@ -124,12 +149,13 @@ class AudioPreferencesReducerTest {
 
     @Test
     fun `all fields changed emits all commands`() {
-        // Regression guard: a future field added to UserPreferences without a
+        // Regression guard: a future field added to the slices without a
         // matching reducer branch would silently break effects. This test
         // flips every known effect field; if the reducer forgets one, the
         // count assertion fails.
-        val next = UserPreferences().copy(
-            audioVisualizerEnabled = true,
+        val prevEffects = AudioEffectsSlice()
+        val prevAudio = AudioSlice()
+        val nextEffects = AudioEffectsSlice(
             equalizerPreset = EqualizerPreset.POP,
             lrBalance = -0.3f,
             pitchSemitones = 2f,
@@ -144,16 +170,19 @@ class AudioPreferencesReducerTest {
             nightModeEnabled = true,
             reverbPreset = ReverbPreset.MEDIUM_ROOM,
         )
-        val commands = AudioPreferencesReducer.diff(UserPreferences(), next)
+        val nextAudio = AudioSlice(audioVisualizerEnabled = true)
+        val commands = AudioPreferencesReducer.diff(prevEffects, prevAudio, nextEffects, nextAudio)
         // 4 standalone + 4 strengths + 5 enabled + 1 reverb = 14.
         assertEquals(14, commands.size)
     }
 
     @Test
     fun `command carries the new value not the old`() {
-        val prev = UserPreferences(bassBoostStrength = EffectStrength.LOW)
-        val next = UserPreferences(bassBoostStrength = EffectStrength.HIGH)
-        val commands = AudioPreferencesReducer.diff(prev, next)
+        val prevEffects = AudioEffectsSlice(bassBoostStrength = EffectStrength.LOW)
+        val prevAudio = AudioSlice()
+        val nextEffects = AudioEffectsSlice(bassBoostStrength = EffectStrength.HIGH)
+        val nextAudio = AudioSlice()
+        val commands = AudioPreferencesReducer.diff(prevEffects, prevAudio, nextEffects, nextAudio)
         assertEquals(
             EffectCommand.SetBassBoostStrength(EffectStrength.HIGH),
             commands.single(),
@@ -164,9 +193,11 @@ class AudioPreferencesReducerTest {
     fun `unchanged field does not emit a command`() {
         // Bass strength identical but bass enabled flips — only the enabled
         // command fires, not the strength command.
-        val prev = UserPreferences(bassBoostStrength = EffectStrength.HIGH, bassBoostEnabled = false)
-        val next = UserPreferences(bassBoostStrength = EffectStrength.HIGH, bassBoostEnabled = true)
-        val commands = AudioPreferencesReducer.diff(prev, next)
+        val prevEffects = AudioEffectsSlice(bassBoostStrength = EffectStrength.HIGH, bassBoostEnabled = false)
+        val prevAudio = AudioSlice()
+        val nextEffects = AudioEffectsSlice(bassBoostStrength = EffectStrength.HIGH, bassBoostEnabled = true)
+        val nextAudio = AudioSlice()
+        val commands = AudioPreferencesReducer.diff(prevEffects, prevAudio, nextEffects, nextAudio)
         assertEquals(listOf(EffectCommand.SetBassBoostEnabled(true)), commands)
     }
 }

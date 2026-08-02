@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import kotlinx.coroutines.flow.first
 
 /**
@@ -17,7 +18,8 @@ import kotlinx.coroutines.flow.first
  * the cap before a download is enqueued. No bytes are transferred here.
  */
 class StoragePolicy(
-    private val preferencesStore: UserPreferencesStore,
+    private val networkOfflineStore: NetworkOfflineStore,
+    private val downloadsStore: DownloadsStore,
     private val currentBytesProvider: suspend () -> Long,
 ) {
 
@@ -33,20 +35,21 @@ class StoragePolicy(
      *   call (used by the single-item path which already has the value).
      */
     suspend fun enforce(precomputedCurrentBytes: Long? = null): Long {
-        val prefs = preferencesStore.preferences.first()
-        val maxBytesMb = prefs.maxCacheSizeMb.toLong() * 1024L * 1024L
-        val maxBytesGb = prefs.maxDownloadStorageGb.toLong() * 1024L * 1024L * 1024L
+        val net = networkOfflineStore.networkOffline.first()
+        val dl = downloadsStore.downloads.first()
+        val maxBytesMb = net.maxCacheSizeMb.toLong() * 1024L * 1024L
+        val maxBytesGb = dl.maxDownloadStorageGb.toLong() * 1024L * 1024L * 1024L
         if (maxBytesMb <= 0L && maxBytesGb <= 0L) return -1L
 
         val currentBytes = precomputedCurrentBytes ?: currentBytesProvider()
         if (maxBytesMb > 0L && currentBytes >= maxBytesMb) {
             throw IllegalStateException(
-                "Download limit reached (${prefs.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.",
+                "Download limit reached (${net.maxCacheSizeMb} MB). Free up space in Settings › Storage or increase the limit.",
             )
         }
         if (maxBytesGb > 0L && currentBytes >= maxBytesGb) {
             throw IllegalStateException(
-                "Download storage limit reached (${prefs.maxDownloadStorageGb} GB). Free up space in Settings › Storage or increase the limit.",
+                "Download storage limit reached (${dl.maxDownloadStorageGb} GB). Free up space in Settings › Storage or increase the limit.",
             )
         }
         return currentBytes

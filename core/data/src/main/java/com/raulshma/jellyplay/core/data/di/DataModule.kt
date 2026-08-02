@@ -66,11 +66,13 @@ abstract class DataModule {
         @dagger.Provides
         @Singleton
         fun provideStoragePolicy(
-            preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+            networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
+            downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
             downloadDao: com.raulshma.jellyplay.core.database.dao.DownloadDao,
         ): com.raulshma.jellyplay.core.data.repository.StoragePolicy =
             com.raulshma.jellyplay.core.data.repository.StoragePolicy(
-                preferencesStore = preferencesStore,
+                networkOfflineStore = networkOfflineStore,
+                downloadsStore = downloadsStore,
                 currentBytesProvider = { downloadDao.getTotalDownloadedBytes() },
             )
 

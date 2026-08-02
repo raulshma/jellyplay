@@ -9,7 +9,8 @@ import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
@@ -31,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -71,7 +73,8 @@ class LiveTvPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-    private val userPreferencesStore: UserPreferencesStore,
+    private val appRuntimeStateStore: AppRuntimeStateStore,
+    private val playbackStore: PlaybackStore,
     private val lastChannelStore: LastChannelStore,
     private val engineFactory: LiveEngineFactory,
     private val imageUrlProvider: ImageUrlProvider,
@@ -116,11 +119,12 @@ class LiveTvPlayerViewModel @Inject constructor(
     private var bufferingWatchdogJob: Job? = null
 
     init {
-        userPreferencesStore.preferences
-            .onEach { prefs ->
+        combine(appRuntimeStateStore.state, playbackStore.playback) { runtime, playback ->
+            runtime.favoriteChannels to playback.liveStreamOption
+        }.onEach { (favoriteChannels, liveStreamOption) ->
                 _state.value = _state.value.copy(
-                    favorites = prefs.favoriteChannels,
-                    liveStreamOption = prefs.liveStreamOption,
+                    favorites = favoriteChannels,
+                    liveStreamOption = liveStreamOption,
                 )
             }
             .launchIn(viewModelScope)
@@ -212,9 +216,9 @@ class LiveTvPlayerViewModel @Inject constructor(
      */
     fun toggleFavorite(channelId: String) {
         viewModelScope.launch {
-            val current = userPreferencesStore.preferences.first().favoriteChannels
+            val current = appRuntimeStateStore.state.first().favoriteChannels
             val updated = if (channelId in current) current - channelId else current + channelId
-            userPreferencesStore.setFavoriteChannels(updated)
+            appRuntimeStateStore.setFavoriteChannels(updated)
         }
     }
 
@@ -268,13 +272,13 @@ class LiveTvPlayerViewModel @Inject constructor(
         audioStreamIndex: Int?,
         subtitleStreamIndex: Int?,
     ) {
-        val prefs = userPreferencesStore.preferences.first()
+        val playback = playbackStore.playback.first()
         val resolved = resolveLiveStream(
             channel = channel,
             audioStreamIndex = audioStreamIndex,
             subtitleStreamIndex = subtitleStreamIndex,
-            option = prefs.liveStreamOption,
-            playerType = prefs.preferredPlayer,
+            option = playback.liveStreamOption,
+            playerType = playback.preferredPlayer,
         ) ?: run {
             _state.value = _state.value.copy(
                 isBuffering = false,
@@ -288,8 +292,8 @@ class LiveTvPlayerViewModel @Inject constructor(
 
         Log.i(
             TAG,
-            "Playing ${channel.name}: option=${prefs.liveStreamOption}, " +
-                "player=${prefs.preferredPlayer}, method=${resolved.playMethod}, " +
+            "Playing ${channel.name}: option=${playback.liveStreamOption}, " +
+                "player=${playback.preferredPlayer}, method=${resolved.playMethod}, " +
                 "url=${resolved.streamUrl}"
         )
 
@@ -297,7 +301,7 @@ class LiveTvPlayerViewModel @Inject constructor(
         // HTTP data-source factory), not per-request — see ensureEngine.
         val livePlayMethod = resolved.playMethod.toLivePlayMethod()
         _state.value = _state.value.copy(playMethod = livePlayMethod)
-        ensureEngine(prefs.preferredPlayer)
+        ensureEngine(playback.preferredPlayer)
             .load(
                 LivePlaybackRequest(
                     url = resolved.streamUrl,
@@ -529,13 +533,13 @@ class LiveTvPlayerViewModel @Inject constructor(
     private fun onTranscodeFallback() {
         val channel = _state.value.currentChannel ?: return
         viewModelScope.launch {
-            val prefs = userPreferencesStore.preferences.first()
+            val playback = playbackStore.playback.first()
             val resolved = resolveLiveStream(
                 channel = channel,
                 audioStreamIndex = null,
                 subtitleStreamIndex = null,
                 option = LiveStreamOption.TRANSCODE,
-                playerType = prefs.preferredPlayer,
+                playerType = playback.preferredPlayer,
             ) ?: run {
                 _state.value = _state.value.copy(
                     isBuffering = false,
@@ -640,7 +644,7 @@ class LiveTvPlayerViewModel @Inject constructor(
         // selection visible during the reload instead of briefly reverting.
         _state.value = _state.value.copy(liveStreamOption = option)
         viewModelScope.launch {
-            userPreferencesStore.setLiveStreamOption(option)
+            playbackStore.setLiveStreamOption(option)
             _state.value = _state.value.copy(
                 isBuffering = true,
                 errorMessage = null,
