@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.core.datastore
 
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -9,13 +12,16 @@ import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
+import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -55,148 +61,156 @@ data class AudioPlaybackSettings(
 )
 
 /**
- * Focused facade over [UserPreferencesStore] that exposes only audio-related
- * settings. Backed by the same DataStore (no data migration) but provides a
- * cleaner, narrower API to consumers and a dedicated [StateFlow] of audio
- * settings so subscribers don't re-render on unrelated preference changes.
+ * Focused facade that exposes only audio-related settings, rebuilt by combining
+ * the [AudioStore], [AudioEffectsStore], and [PlaybackStore] domain-store slice
+ * flows. Subscribers don't re-render on unrelated preference changes.
  */
 @Singleton
 class AudioPlaybackSettingsStore @Inject constructor(
-    private val userPreferencesStore: UserPreferencesStore,
+    private val audioStore: AudioStore,
+    private val audioEffectsStore: AudioEffectsStore,
+    private val playbackStore: PlaybackStore,
     @ApplicationScope private val externalScope: CoroutineScope,
 ) {
     private val scope = externalScope
 
-    val settings: StateFlow<AudioPlaybackSettings> = userPreferencesStore.preferences
-        .map { it.toAudioSettings() }
-        .distinctUntilChanged()
+    val settings: StateFlow<AudioPlaybackSettings> = combine(
+        audioStore.audio,
+        audioEffectsStore.audioEffects,
+        playbackStore.playback,
+    ) { audio, effects, playback ->
+        toAudioSettings(audio, effects, playback)
+    }.distinctUntilChanged()
         .stateIn(scope, SharingStarted.Eagerly, AudioPlaybackSettings())
 
-    private fun com.raulshma.jellyplay.core.model.UserPreferences.toAudioSettings() =
-        AudioPlaybackSettings(
-            streamingQuality = streamingQuality,
-            audioDefaultSpeed = audioDefaultSpeed,
-            audioNightModeVolume = audioNightModeVolume,
-            audioNightModeGain = audioNightModeGain,
-            audioSkipPreviousThresholdMs = audioSkipPreviousThresholdMs,
-            audioAutoplayNext = audioAutoplayNext,
-            audioPreloadBufferSize = audioPreloadBufferSize,
-            audioNormalizationMode = audioNormalizationMode,
-            audioNormalizationEnabled = audioNormalizationEnabled,
-            replayGainPreAmpDb = replayGainPreAmpDb,
-            channelMixMode = channelMixMode,
-            channelMixEnabled = channelMixEnabled,
-            audioGaplessEnabled = audioGaplessEnabled,
-            audioCrossfadeDurationMs = audioCrossfadeDurationMs,
-            nightModeEnabled = nightModeEnabled,
-            nightModeStrength = nightModeStrength,
-            dialogueBoostEnabled = dialogueBoostEnabled,
-            dialogueBoostStrength = dialogueBoostStrength,
-            equalizerEnabled = equalizerEnabled,
-            equalizerSettings = equalizerSettings,
-            equalizerPreset = equalizerPreset,
-            bassBoostEnabled = bassBoostEnabled,
-            bassBoostStrength = bassBoostStrength,
-            virtualizerEnabled = virtualizerEnabled,
-            virtualizerStrength = virtualizerStrength,
-            reverbPreset = reverbPreset,
-            lrBalance = lrBalance,
-            autoEqByGenre = autoEqByGenre,
-            pitchSemitones = pitchSemitones,
-            audioDelayMs = audioDelayMs,
-            audioPassthrough = audioPassthrough,
-        )
+    private fun toAudioSettings(
+        audio: AudioSlice,
+        effects: AudioEffectsSlice,
+        playback: PlaybackSlice,
+    ) = AudioPlaybackSettings(
+        streamingQuality = playback.streamingQuality,
+        audioDefaultSpeed = audio.audioDefaultSpeed,
+        audioNightModeVolume = audio.audioNightModeVolume,
+        audioNightModeGain = audio.audioNightModeGain,
+        audioSkipPreviousThresholdMs = audio.audioSkipPreviousThresholdMs,
+        audioAutoplayNext = audio.audioAutoplayNext,
+        audioPreloadBufferSize = audio.audioPreloadBufferSize,
+        audioNormalizationMode = audio.audioNormalizationMode,
+        audioNormalizationEnabled = audio.audioNormalizationEnabled,
+        replayGainPreAmpDb = audio.replayGainPreAmpDb,
+        channelMixMode = audio.channelMixMode,
+        channelMixEnabled = audio.channelMixEnabled,
+        audioGaplessEnabled = audio.audioGaplessEnabled,
+        audioCrossfadeDurationMs = audio.audioCrossfadeDurationMs,
+        nightModeEnabled = effects.nightModeEnabled,
+        nightModeStrength = effects.nightModeStrength,
+        dialogueBoostEnabled = effects.dialogueBoostEnabled,
+        dialogueBoostStrength = effects.dialogueBoostStrength,
+        equalizerEnabled = effects.equalizerEnabled,
+        equalizerSettings = effects.equalizerSettings,
+        equalizerPreset = effects.equalizerPreset,
+        bassBoostEnabled = effects.bassBoostEnabled,
+        bassBoostStrength = effects.bassBoostStrength,
+        virtualizerEnabled = effects.virtualizerEnabled,
+        virtualizerStrength = effects.virtualizerStrength,
+        reverbPreset = effects.reverbPreset,
+        lrBalance = effects.lrBalance,
+        autoEqByGenre = effects.autoEqByGenre,
+        pitchSemitones = effects.pitchSemitones,
+        audioDelayMs = audio.audioDelayMs,
+        audioPassthrough = playback.audioPassthrough,
+    )
 
     suspend fun setNightModeEnabled(enabled: Boolean) =
-        userPreferencesStore.setNightModeEnabled(enabled)
+        audioEffectsStore.setNightModeEnabled(enabled)
 
     suspend fun setNightModeStrength(strength: EffectStrength) =
-        userPreferencesStore.setNightModeStrength(strength)
+        audioEffectsStore.setNightModeStrength(strength)
 
     suspend fun setDialogueBoostEnabled(enabled: Boolean) =
-        userPreferencesStore.setDialogueBoostEnabled(enabled)
+        audioEffectsStore.setDialogueBoostEnabled(enabled)
 
     suspend fun setDialogueBoostStrength(strength: EffectStrength) =
-        userPreferencesStore.setDialogueBoostStrength(strength)
+        audioEffectsStore.setDialogueBoostStrength(strength)
 
     suspend fun setEqualizerEnabled(enabled: Boolean) =
-        userPreferencesStore.setEqualizerEnabled(enabled)
+        audioEffectsStore.setEqualizerEnabled(enabled)
 
     suspend fun setEqualizerSettings(settings: EqualizerSettings) =
-        userPreferencesStore.setEqualizerSettings(settings)
+        audioEffectsStore.setEqualizerSettings(settings)
 
     suspend fun setEqualizerPreset(preset: EqualizerPreset) =
-        userPreferencesStore.setEqualizerPreset(preset)
+        audioEffectsStore.setEqualizerPreset(preset)
 
     suspend fun setBassBoostEnabled(enabled: Boolean) =
-        userPreferencesStore.setBassBoostEnabled(enabled)
+        audioEffectsStore.setBassBoostEnabled(enabled)
 
     suspend fun setBassBoostStrength(strength: EffectStrength) =
-        userPreferencesStore.setBassBoostStrength(strength)
+        audioEffectsStore.setBassBoostStrength(strength)
 
     suspend fun setVirtualizerEnabled(enabled: Boolean) =
-        userPreferencesStore.setVirtualizerEnabled(enabled)
+        audioEffectsStore.setVirtualizerEnabled(enabled)
 
     suspend fun setVirtualizerStrength(strength: Int) =
-        userPreferencesStore.setVirtualizerStrength(strength)
+        audioEffectsStore.setVirtualizerStrength(strength)
 
     suspend fun setReverbPreset(preset: ReverbPreset) =
-        userPreferencesStore.setReverbPreset(preset)
+        audioEffectsStore.setReverbPreset(preset)
 
     suspend fun setLrBalance(balance: Float) =
-        userPreferencesStore.setLrBalance(balance)
+        audioEffectsStore.setLrBalance(balance)
 
     suspend fun setAutoEqByGenre(enabled: Boolean) =
-        userPreferencesStore.setAutoEqByGenre(enabled)
+        audioEffectsStore.setAutoEqByGenre(enabled)
 
     suspend fun setPitchSemitones(semitones: Float) =
-        userPreferencesStore.setPitchSemitones(semitones)
+        audioEffectsStore.setPitchSemitones(semitones)
 
     suspend fun setAudioPassthrough(enabled: Boolean) =
-        userPreferencesStore.setAudioPassthrough(enabled)
+        playbackStore.setAudioPassthrough(enabled)
 
     suspend fun setReplayGainPreAmpDb(db: Float) =
-        userPreferencesStore.setReplayGainPreAmpDb(db)
+        audioStore.setReplayGainPreAmpDb(db)
 
     suspend fun setAudioGaplessEnabled(enabled: Boolean) =
-        userPreferencesStore.setGaplessEnabled(enabled)
+        audioStore.setAudioGaplessEnabled(enabled)
 
     suspend fun setAudioCrossfadeDurationMs(durationMs: Long) =
-        userPreferencesStore.setCrossfadeDurationMs(durationMs)
+        audioStore.setAudioCrossfadeDurationMs(durationMs)
 
     suspend fun setAudioNormalizationMode(mode: AudioNormalizationMode) =
-        userPreferencesStore.setAudioNormalizationMode(mode)
+        audioStore.setAudioNormalizationMode(mode)
 
     suspend fun setAudioNormalizationEnabled(enabled: Boolean) =
-        userPreferencesStore.setAudioNormalizationEnabled(enabled)
+        audioStore.setAudioNormalizationEnabled(enabled)
 
     suspend fun setChannelMixMode(mode: ChannelMixMode) =
-        userPreferencesStore.setChannelMixMode(mode)
+        audioStore.setChannelMixMode(mode)
 
     suspend fun setChannelMixEnabled(enabled: Boolean) =
-        userPreferencesStore.setChannelMixEnabled(enabled)
+        audioStore.setChannelMixEnabled(enabled)
 
     suspend fun setAudioDefaultSpeed(speed: Float) =
-        userPreferencesStore.setAudioDefaultSpeed(speed)
+        audioStore.setAudioDefaultSpeed(speed)
 
     suspend fun setAudioAutoplayNext(enabled: Boolean) =
-        userPreferencesStore.setAudioAutoplayNext(enabled)
+        audioStore.setAudioAutoplayNext(enabled)
 
     suspend fun setAudioPreloadBufferSize(size: PreloadBufferSize) =
-        userPreferencesStore.setAudioPreloadBufferSize(size)
+        audioStore.setAudioPreloadBufferSize(size)
 
     suspend fun setAudioNightModeVolume(volume: Float) =
-        userPreferencesStore.setAudioNightModeVolume(volume)
+        audioStore.setAudioNightModeVolume(volume)
 
     suspend fun setAudioNightModeGain(gain: Int) =
-        userPreferencesStore.setAudioNightModeGain(gain)
+        audioStore.setAudioNightModeGain(gain)
 
     suspend fun setAudioSkipPreviousThresholdMs(ms: Long) =
-        userPreferencesStore.setAudioSkipPreviousThresholdMs(ms)
+        audioStore.setAudioSkipPreviousThresholdMs(ms)
 
     suspend fun setAudioDelayMs(ms: Long) =
-        userPreferencesStore.setAudioDelay(ms)
+        audioStore.setAudioDelay(ms)
 
     suspend fun setStreamingQuality(quality: StreamingQuality) =
-        userPreferencesStore.setStreamingQuality(quality)
+        playbackStore.setStreamingQuality(quality)
 }

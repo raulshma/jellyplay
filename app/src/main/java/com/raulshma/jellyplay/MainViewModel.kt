@@ -47,6 +47,7 @@ class MainViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val authRepository: AuthRepository,
     val preferencesStore: UserPreferencesStore,
+    val preferencesAggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator,
     val serverIdentityStore: ServerIdentityStore,
     val pinRateLimiter: PinRateLimiter,
     val securityStore: SecurityStore,
@@ -119,7 +120,7 @@ class MainViewModel @Inject constructor(
      */
     private val dismissedUpdateSuppressMs = 24L * 60 * 60 * 1000
 
-    val preferences = preferencesStore.preferences
+    val preferences = preferencesAggregator.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
     private val _libraryFolders = stateFlow<List<LibraryFolder>>(emptyList())
@@ -291,7 +292,7 @@ class MainViewModel @Inject constructor(
      */
     fun checkForAppUpdate() {
         launch {
-            val prefs = preferencesStore.preferences.first()
+            val prefs = preferencesAggregator.preferences.first()
             if (!prefs.selfUpdateCheckEnabled) return@launch
             val result = appUpdateRepository.checkForUpdate(
                 supportedAbis = android.os.Build.SUPPORTED_ABIS,

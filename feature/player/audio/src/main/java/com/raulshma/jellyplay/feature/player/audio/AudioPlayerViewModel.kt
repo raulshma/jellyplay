@@ -10,7 +10,10 @@ import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.datastore.AudioPlaybackSettingsStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
@@ -35,6 +39,9 @@ import javax.inject.Inject
 class AudioPlayerViewModel @Inject constructor(
     private val audioPlaybackManager: AudioPlaybackManager,
     private val preferencesStore: UserPreferencesStore,
+    private val preferencesAggregator: UserPreferencesAggregator,
+    private val audioPlaybackSettingsStore: AudioPlaybackSettingsStore,
+    private val audioStore: AudioStore,
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
     private val downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake,
@@ -56,7 +63,7 @@ class AudioPlayerViewModel @Inject constructor(
         castManager.releaseConsumer()
     }
 
-    val preferences = preferencesStore.preferences
+    val preferences = preferencesAggregator.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
     private val _uiState = MutableStateFlow(AudioPlayerUiState())
@@ -305,8 +312,8 @@ class AudioPlayerViewModel @Inject constructor(
             }.collect {}
         }
         launch {
-            preferencesStore.preferences.collect { prefs ->
-                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(lastUsedDurationMs = prefs.sleepTimerDurationMs)) }
+            audioStore.audio.map { it.sleepTimerDurationMs }.collect { durationMs ->
+                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(lastUsedDurationMs = durationMs)) }
             }
         }
     }
@@ -315,7 +322,7 @@ class AudioPlayerViewModel @Inject constructor(
         audioPlaybackManager.play(itemId)
 
         launch {
-            val prefs = preferencesStore.preferences.first()
+            val prefs = audioPlaybackSettingsStore.settings.first()
             if (prefs.audioDefaultSpeed != 1.0f) {
                 audioPlaybackManager.changePlaybackSpeed(prefs.audioDefaultSpeed)
             }

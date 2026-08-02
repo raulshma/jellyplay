@@ -6,7 +6,6 @@ import android.util.Log
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.network.api.AdminApiClient
@@ -33,7 +32,6 @@ import javax.inject.Singleton
 class JellyfinRemotePlayCastStrategy @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val adminApiClient: AdminApiClient,
-    private val preferencesStore: UserPreferencesStore,
     private val serverIdentityStore: ServerIdentityStore,
     private val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,
     private val imageUrlProvider: ImageUrlProvider,

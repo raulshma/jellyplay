@@ -4,7 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,7 +27,7 @@ data class ChannelsUiState(
 class ChannelsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val preferencesStore: UserPreferencesStore,
+    private val appRuntimeStateStore: AppRuntimeStateStore,
     videoMiniPlayerState: VideoMiniPlayerState,
 ) : JellyPlayViewModel() {
 
@@ -37,7 +37,7 @@ class ChannelsViewModel @Inject constructor(
     private val _nowPlayingChannelId = MutableStateFlow<String?>(null)
     val nowPlayingChannelId: StateFlow<String?> = _nowPlayingChannelId.asStateFlow()
 
-    val favoriteChannelIds: StateFlow<Set<String>> = preferencesStore.preferences
+    val favoriteChannelIds: StateFlow<Set<String>> = appRuntimeStateStore.state
         .map { it.favoriteChannels }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
@@ -55,7 +55,7 @@ class ChannelsViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             mediaRepository.getLiveTvChannels(limit = 100)
                 .onSuccess { channels ->
-                    val favorites = preferencesStore.preferences.value.favoriteChannels
+                    val favorites = appRuntimeStateStore.state.value.favoriteChannels
                     val sorted = if (favorites.isEmpty()) {
                         channels
                     } else {
@@ -69,9 +69,9 @@ class ChannelsViewModel @Inject constructor(
 
     fun toggleFavorite(channelId: String) {
         launch {
-            val current = preferencesStore.preferences.value.favoriteChannels
+            val current = appRuntimeStateStore.state.value.favoriteChannels
             val updated = if (channelId in current) current - channelId else current + channelId
-            preferencesStore.setFavoriteChannels(updated)
+            appRuntimeStateStore.setFavoriteChannels(updated)
             val favorites = updated
             _uiState.update { state ->
                 val sorted = if (favorites.isEmpty()) {

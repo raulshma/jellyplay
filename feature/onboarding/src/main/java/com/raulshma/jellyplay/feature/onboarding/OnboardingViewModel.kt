@@ -14,13 +14,13 @@ import javax.inject.Inject
 
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
-    val preferencesStore: UserPreferencesStore,
+    private val preferencesAggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator,
     val seerrPreferencesStore: SeerrPreferencesStore,
     private val seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
     private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {
 
-    val preferences = preferencesStore.preferences
+    val preferences = preferencesAggregator.preferences
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
     val seerrPreferences = seerrPreferencesStore.preferences

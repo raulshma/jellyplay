@@ -34,6 +34,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val preferencesStore: UserPreferencesStore,
+    private val preferencesAggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator,
     private val authRepository: AuthRepository,
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
     private val editor: PreferencesEditor,
@@ -82,7 +83,7 @@ class SettingsViewModel @Inject constructor(
 
     init {
         launch {
-            preferencesStore.preferences.collect { prefs ->
+            preferencesAggregator.preferences.collect { prefs ->
                 preferences = prefs
             }
         }

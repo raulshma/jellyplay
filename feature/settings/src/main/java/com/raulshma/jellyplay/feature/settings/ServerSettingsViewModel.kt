@@ -1,9 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,12 +13,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ServerSettingsViewModel @Inject constructor(
-    private val store: UserPreferencesStore,
     private val authRepository: AuthRepository,
 ) : JellyPlayViewModel() {
-
-    val preferences: StateFlow<UserPreferences> = store.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
     val currentUser: StateFlow<UserInfo?> = authRepository.currentUser
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
