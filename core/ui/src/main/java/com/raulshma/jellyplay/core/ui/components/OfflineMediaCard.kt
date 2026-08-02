@@ -1,15 +1,9 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -136,12 +129,12 @@ private fun OfflineStatusChip(
     tint: Color,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .clip(ShapeCache.smooth4)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f))
-            .padding(horizontal = 6.dp, vertical = 3.dp),
+    GlassBadge(
+        modifier = modifier,
+        background = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+        shape = ShapeCache.smooth4,
+        horizontalPadding = 6.dp,
+        verticalPadding = 3.dp,
     ) {
         Icon(
             imageVector = icon,
@@ -149,7 +142,6 @@ private fun OfflineStatusChip(
             tint = tint,
             modifier = Modifier.size(12.dp),
         )
-        Spacer(Modifier.width(3.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
@@ -164,12 +156,12 @@ private fun OfflineProgressChip(
     fraction: Float,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .clip(ShapeCache.smooth4)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f))
-            .padding(horizontal = 6.dp, vertical = 3.dp),
+    GlassBadge(
+        modifier = modifier,
+        background = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+        shape = ShapeCache.smooth4,
+        horizontalPadding = 6.dp,
+        verticalPadding = 3.dp,
     ) {
         Icon(
             imageVector = Tabler.Outline.Download,
@@ -177,7 +169,6 @@ private fun OfflineProgressChip(
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(12.dp),
         )
-        Spacer(Modifier.width(3.dp))
         Text(
             text = "${(fraction * 100).toInt()}%",
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
