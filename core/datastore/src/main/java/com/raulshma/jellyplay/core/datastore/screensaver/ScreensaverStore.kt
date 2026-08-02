@@ -154,7 +154,7 @@ class ScreensaverStore @Inject constructor(
      * uses).
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(userPreferences.dreamImageCategories)

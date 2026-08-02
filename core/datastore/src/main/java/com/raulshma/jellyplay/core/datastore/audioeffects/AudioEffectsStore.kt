@@ -248,7 +248,7 @@ class AudioEffectsStore @Inject constructor(
      * [EqualizerSettings] JSON blob written via [PreferenceCodec.encodeDefaultsJson].
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.DIALOGUE_BOOST_ENABLED] = userPreferences.dialogueBoostEnabled

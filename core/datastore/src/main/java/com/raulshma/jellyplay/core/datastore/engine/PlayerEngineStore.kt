@@ -255,7 +255,7 @@ class PlayerEngineStore @Inject constructor(
      * recall maps are runtime state and are not restored here (facade rule).
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { prefs ->
             prefs[Keys.MPV_CONFIG] = PreferenceCodec.encodeDefaultsJson.encodeToString(

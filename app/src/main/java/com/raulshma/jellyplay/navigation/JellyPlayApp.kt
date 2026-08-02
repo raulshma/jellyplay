@@ -197,7 +197,7 @@ fun JellyPlayApp(
 
     LaunchedEffect(Unit) {
         if (isTv && isAuthenticated && !preferences.onboardingCompleted) {
-            viewModel.preferencesStore.setOnboardingCompleted(true)
+            viewModel.appRuntimeStateStore.setOnboardingCompleted(true)
         }
     }
 
@@ -305,7 +305,7 @@ private fun OnboardingContent(
 private fun MainContent(
     onLogout: (Boolean) -> Unit,
     viewModel: MainViewModel,
-    preferences: com.raulshma.jellyplay.core.model.UserPreferences,
+    preferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
 ) {
     val homeMode = preferences.homeMode
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
@@ -466,7 +466,7 @@ private fun MainContent(
     }
 
     val onModeChange: (HomeMode) -> Unit = { mode ->
-        scope.launch { viewModel.preferencesStore.setHomeMode(mode) }
+        scope.launch { viewModel.homeDiscoveryStore.setHomeMode(mode) }
     }
 
     val audioPlaybackManager: AudioPlaybackManager = viewModel.audioPlaybackManager

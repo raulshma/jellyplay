@@ -135,7 +135,7 @@ class AudioCacheStore @Inject constructor(
      * Mirrors the legacy facade behaviour exactly.
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.AUDIO_CACHING_ENABLED] = userPreferences.audioCachingEnabled

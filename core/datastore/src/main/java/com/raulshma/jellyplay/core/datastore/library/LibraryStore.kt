@@ -193,7 +193,7 @@ class LibraryStore @Inject constructor(
      * own [json] codec.
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.LIBRARY_VIEW_MODE] = userPreferences.libraryViewMode.name

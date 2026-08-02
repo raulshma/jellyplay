@@ -187,7 +187,7 @@ class VideoPlayerCleanupTest {
         val sleepTimerManager = mockk<SleepTimerManager>(relaxed = true)
 
         // Mock flows to prevent NPE or hang
-        every { preferencesStore.preferences } returns MutableStateFlow(com.raulshma.jellyplay.core.model.UserPreferences())
+        every { preferencesStore.preferences } returns MutableStateFlow(com.raulshma.jellyplay.core.model.legacy.UserPreferences())
         every { aggregateStore.aggregate } returns MutableStateFlow(
             com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate()
         )

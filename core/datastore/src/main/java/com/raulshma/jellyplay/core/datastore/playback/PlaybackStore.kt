@@ -332,7 +332,7 @@ class PlaybackStore @Inject constructor(
      * and the typed key takes precedence, so re-entering the enum is enough.
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.PREFERRED_PLAYER] = userPreferences.preferredPlayer.name

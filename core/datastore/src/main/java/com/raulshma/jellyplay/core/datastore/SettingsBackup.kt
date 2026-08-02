@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.datastore
 
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement

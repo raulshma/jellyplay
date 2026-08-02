@@ -486,7 +486,7 @@ class HomeDiscoveryStore @Inject constructor(
      * sets / typed lists via [json]).
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.HOME_MODE] = userPreferences.homeMode.name

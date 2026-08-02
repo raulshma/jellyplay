@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -34,7 +36,9 @@ import kotlinx.coroutines.launch
  */
 internal class VideoEffectsController(
     private val scope: CoroutineScope,
-    private val preferencesStore: UserPreferencesStore,
+    private val audioStore: AudioStore,
+    private val audioEffectsStore: AudioEffectsStore,
+    private val playbackStore: PlaybackStore,
     private val getUiState: () -> VideoPlayerUiState,
     private val updateUiState: ((VideoPlayerUiState) -> VideoPlayerUiState) -> Unit,
     private val syncConfig: () -> Unit,
@@ -43,28 +47,28 @@ internal class VideoEffectsController(
         val newVal = !getUiState().nightModeEnabled
         applyAndPersist(
             update = { it.copy(nightModeEnabled = newVal) },
-            persist = { preferencesStore.setNightModeEnabled(newVal) },
+            persist = { audioEffectsStore.setNightModeEnabled(newVal) },
         )
     }
 
     fun setNightModeStrength(strength: EffectStrength) = applyAndPersist(
         update = { it.copy(nightModeStrength = strength) },
-        persist = { preferencesStore.setNightModeStrength(strength) },
+        persist = { audioEffectsStore.setNightModeStrength(strength) },
     )
 
     fun setAudioDelay(ms: Long) = applyAndPersist(
         update = { it.copy(audioDelayMs = ms) },
-        persist = { preferencesStore.setAudioDelay(ms) },
+        persist = { audioStore.setAudioDelay(ms) },
     )
 
     fun setDecoderMode(mode: DecoderMode) = applyAndPersist(
         update = { it.copy(decoderMode = mode) },
-        persist = { preferencesStore.setDecoderMode(mode) },
+        persist = { playbackStore.setDecoderMode(mode) },
     )
 
     fun setAudioPassthrough(enabled: Boolean) = applyAndPersist(
         update = { it.copy(audioPassthrough = enabled) },
-        persist = { preferencesStore.setAudioPassthrough(enabled) },
+        persist = { playbackStore.setAudioPassthrough(enabled) },
     )
 
     fun setAudioNormalizationMode(mode: AudioNormalizationMode) {
@@ -72,8 +76,8 @@ internal class VideoEffectsController(
         applyAndPersist(
             update = { it.copy(audioNormalizationMode = mode, audioNormalizationEnabled = enabled) },
             persist = {
-                preferencesStore.setAudioNormalizationMode(mode)
-                preferencesStore.setAudioNormalizationEnabled(enabled)
+                audioStore.setAudioNormalizationMode(mode)
+                audioStore.setAudioNormalizationEnabled(enabled)
             },
         )
     }
@@ -82,7 +86,7 @@ internal class VideoEffectsController(
         val newVal = !getUiState().audioNormalizationEnabled
         applyAndPersist(
             update = { it.copy(audioNormalizationEnabled = newVal) },
-            persist = { preferencesStore.setAudioNormalizationEnabled(newVal) },
+            persist = { audioStore.setAudioNormalizationEnabled(newVal) },
         )
     }
 
@@ -91,8 +95,8 @@ internal class VideoEffectsController(
         applyAndPersist(
             update = { it.copy(channelMixMode = mode, channelMixEnabled = enabled) },
             persist = {
-                preferencesStore.setChannelMixMode(mode)
-                preferencesStore.setChannelMixEnabled(enabled)
+                audioStore.setChannelMixMode(mode)
+                audioStore.setChannelMixEnabled(enabled)
             },
         )
     }
@@ -101,7 +105,7 @@ internal class VideoEffectsController(
         val newVal = !getUiState().channelMixEnabled
         applyAndPersist(
             update = { it.copy(channelMixEnabled = newVal) },
-            persist = { preferencesStore.setChannelMixEnabled(newVal) },
+            persist = { audioStore.setChannelMixEnabled(newVal) },
         )
     }
 
@@ -109,49 +113,48 @@ internal class VideoEffectsController(
         val newVal = !getUiState().bassBoostEnabled
         applyAndPersist(
             update = { it.copy(bassBoostEnabled = newVal) },
-            persist = { preferencesStore.setBassBoostEnabled(newVal) },
+            persist = { audioEffectsStore.setBassBoostEnabled(newVal) },
         )
     }
 
     fun setBassBoostStrength(strength: EffectStrength) = applyAndPersist(
         update = { it.copy(bassBoostStrength = strength) },
-        persist = { preferencesStore.setBassBoostStrength(strength) },
+        persist = { audioEffectsStore.setBassBoostStrength(strength) },
     )
 
     fun toggleVirtualizer() {
         val newVal = !getUiState().virtualizerEnabled
         applyAndPersist(
             update = { it.copy(virtualizerEnabled = newVal) },
-            persist = { preferencesStore.setVirtualizerEnabled(newVal) },
+            persist = { audioEffectsStore.setVirtualizerEnabled(newVal) },
         )
     }
 
     fun setVirtualizerStrength(strength: Int) = applyAndPersist(
         update = { it.copy(virtualizerStrength = strength) },
-        persist = { preferencesStore.setVirtualizerStrength(strength) },
+        persist = { audioEffectsStore.setVirtualizerStrength(strength) },
     )
 
     fun setReverbPreset(preset: ReverbPreset) = applyAndPersist(
         update = { it.copy(reverbPreset = preset) },
-        persist = { preferencesStore.setReverbPreset(preset) },
+        persist = { audioEffectsStore.setReverbPreset(preset) },
     )
 
     /**
      * Shared "update uiState → sync engine config → persist pref" shape every
-     * setter above reduces to. `persist` is a suspend extension on
-     * [UserPreferencesStore] so callers pass a DataStore setter by reference;
-     * it runs inside the launched coroutine so writes stay off the main thread.
-     * `update` and `syncConfig` are synchronous so the engine sees the new
-     * value in the same frame the UI does. Modifiers: `noinline` because
-     * `update` is stored in a lambda, `crossinline` because `persist` is
-     * inlined into a nested lambda (the launched coroutine body).
+     * setter above reduces to. `persist` is a suspend block capturing one or
+     * more DataStore setters; it runs inside the launched coroutine so writes
+     * stay off the main thread. `update` and `syncConfig` are synchronous so
+     * the engine sees the new value in the same frame the UI does. Modifiers:
+     * `noinline` because `update` is stored in a lambda, `crossinline` because
+     * `persist` is inlined into a nested lambda (the launched coroutine body).
      */
     private inline fun applyAndPersist(
         noinline update: (VideoPlayerUiState) -> VideoPlayerUiState,
-        crossinline persist: suspend UserPreferencesStore.() -> Unit,
+        crossinline persist: suspend () -> Unit,
     ) {
         updateUiState(update)
         syncConfig()
-        scope.launch { preferencesStore.persist() }
+        scope.launch { persist() }
     }
 }

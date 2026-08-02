@@ -141,7 +141,7 @@ class NavigationStore @Inject constructor(
      * Mirrors the legacy facade behaviour exactly.
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.NAV_BAR_SHOW_LABELS] = userPreferences.navBarShowLabels

@@ -170,7 +170,7 @@ class SyncPlayCastStore @Inject constructor(
      * [Keys.PREFERRED_RENDERER] guard).
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { prefs ->
             prefs[Keys.SYNC_PLAY_JOIN_BEHAVIOR] = userPreferences.syncPlayJoinBehavior.name

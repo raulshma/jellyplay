@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
  */
 internal class SleepTimerController(
     private val sleepTimerManager: SleepTimerManager,
-    private val preferencesStore: UserPreferencesStore,
+    private val audioStore: AudioStore,
     private val scope: CoroutineScope,
     private val getEngine: () -> com.raulshma.jellyplay.feature.player.video.engine.MediaEngine?,
     private val isMuted: () -> Boolean,
@@ -51,8 +51,8 @@ internal class SleepTimerController(
      */
     fun startSleepTimer(durationMs: Long) {
         scope.launch {
-            preferencesStore.setSleepTimerDurationMs(durationMs)
-            preferencesStore.setSleepTimerEndOfEpisode(false)
+            audioStore.setSleepTimerDurationMs(durationMs)
+            audioStore.setSleepTimerEndOfEpisode(false)
         }
         // Capture the pre-fade volume before the fade ramp lowers it. Skip
         // capture while muted (the fade also skips writes when muted, so there
@@ -85,7 +85,7 @@ internal class SleepTimerController(
      */
     fun startSleepTimerEndOfEpisode() {
         scope.launch {
-            preferencesStore.setSleepTimerEndOfEpisode(true)
+            audioStore.setSleepTimerEndOfEpisode(true)
         }
         // End-of-episode timer has no fade, so there is no pre-fade level to
         // restore on cancel. Clear any value captured by a prior timed timer

@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.firstOrNull
 /**
  * Periodically checks for new episodes of series the user has already
  * downloaded from and auto-downloads them when the
- * [com.raulshma.jellyplay.core.model.UserPreferences.autoDownloadNewEpisodes]
+ * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.autoDownloadNewEpisodes]
  * preference is enabled. The worker respects the WiFi-only and storage-limit
  * constraints enforced inside [DownloadRepository].
  *

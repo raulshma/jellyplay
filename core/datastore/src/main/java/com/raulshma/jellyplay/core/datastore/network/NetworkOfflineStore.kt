@@ -178,7 +178,7 @@ class NetworkOfflineStore @Inject constructor(
      * Mirrors the legacy facade behaviour exactly.
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.MAX_CACHE_SIZE_MB] = userPreferences.maxCacheSizeMb

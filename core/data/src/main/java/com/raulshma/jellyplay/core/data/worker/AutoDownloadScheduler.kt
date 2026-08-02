@@ -20,7 +20,7 @@ import javax.inject.Singleton
  * Schedules the periodic background auto-download worker that fetches new
  * episodes of series the user has already downloaded. The schedule is only
  * active while the
- * [com.raulshma.jellyplay.core.model.UserPreferences.autoDownloadNewEpisodes]
+ * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.autoDownloadNewEpisodes]
  * preference is enabled; disabling it cancels the periodic work.
  */
 @Singleton

@@ -195,7 +195,7 @@ class DownloadsStore @Inject constructor(
      * they are not written here either.
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.WIFI_ONLY_DOWNLOADS] = userPreferences.wifiOnlyDownloads

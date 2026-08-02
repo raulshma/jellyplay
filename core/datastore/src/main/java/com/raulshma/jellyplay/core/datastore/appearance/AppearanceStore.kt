@@ -337,7 +337,7 @@ class AppearanceStore @Inject constructor(
      * straight from their stored slots).
      */
     internal suspend fun restorePreferences(
-        userPreferences: com.raulshma.jellyplay.core.model.UserPreferences,
+        userPreferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
     ) {
         dataStore.edit { it ->
             it[Keys.DYNAMIC_THEMING] = userPreferences.dynamicTheming

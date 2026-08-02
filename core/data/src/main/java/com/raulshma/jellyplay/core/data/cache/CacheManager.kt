@@ -20,7 +20,7 @@ internal const val AUDIO_CACHE_DIR_NAME = "audio_cache"
 
 /**
  * Manages the application's HTTP/image caches and honours the
- * [com.raulshma.jellyplay.core.model.UserPreferences.autoDeleteCache]
+ * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.autoDeleteCache]
  * preference: when enabled, caches are cleared when the app goes to the
  * background (process `ON_STOP`).
  *
