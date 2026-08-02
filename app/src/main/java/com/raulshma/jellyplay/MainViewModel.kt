@@ -190,11 +190,25 @@ class MainViewModel @Inject constructor(
                             deviceName = deviceName,
                             client = "JellyPlay",
                         )
-                        try {
-                            apiClient.postCapabilities()
-                        } catch (_: Exception) {
-                            // Ignored
-                        }
+                        // Capabilities must be posted *after* the server has a
+                        // session for this device. The Jellyfin server computes
+                        // a session's SupportsRemoteControl as:
+                        //   Capabilities?.SupportsMediaControl == true
+                        //   && an attached SessionController (the WebSocket)
+                        //      also reports SupportsMediaControl.
+                        // POST /Sessions/Capabilities/Full resolves the session
+                        // by deviceId and throws if none exists yet — which is
+                        // the case if it races ahead of the WebSocket handshake.
+                        // That exception was swallowed here, leaving Capabilities
+                        // null and the device absent from every other client's
+                        // "Play On" / cast list (incl. other JellyPlay clients).
+                        // Drive it off the WebSocket's connected state instead,
+                        // so it lands once the server session truly exists and
+                        // is re-sent on every reconnect (the controller is gone
+                        // after a socket drop and must be re-armed). The actual
+                        // (re)posting is done by the connection collector below,
+                        // which fires on every false→true transition for the
+                        // life of the auth session.
                         remoteControlReceiver.start()
                         launch {
                             widgetWorkScheduler.refreshLibraryNow()
@@ -222,6 +236,24 @@ class MainViewModel @Inject constructor(
                     remoteControlReceiver.stop()
                     _libraryFolders.set(emptyList())
                 }
+            }
+        }
+
+        launch {
+            // Re-post capabilities on every WebSocket (re)connect. The server
+            // drops the session's WebSocketController (and thus
+            // SupportsRemoteControl) when the socket closes, so after a drop
+            // the device disappears from other clients' "Play On" lists until
+            // capabilities are re-armed. Gated on isAuthenticated so a stray
+            // connect during teardown doesn't fire a stale POST.
+            var lastConnected = webSocketClient.isConnected.value
+            webSocketClient.isConnected.collect { connected ->
+                if (connected && !lastConnected && isAuthenticated.value) {
+                    launch {
+                        runCatching { apiClient.postCapabilities() }
+                    }
+                }
+                lastConnected = connected
             }
         }
 

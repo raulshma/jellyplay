@@ -132,6 +132,17 @@ data class VideoPlayerUiState(
     val downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),
     val isUploadingSubtitle: Boolean = false,
     val defaultSearchLanguage: String = "eng",
+    /** Merged cross-provider search results (Jellyfin + Wyzie + OpenSubtitles).
+     *  Populated by [SubtitleManager.searchAllProviders]; rendered in the Search
+     *  tab with provider filter chips. Kept alongside [searchedSubtitles] (the
+     *  legacy Jellyfin-only list) so the two code paths don't interfere. */
+    val providerSearchResults: List<com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult> = emptyList(),
+    /** Per-provider failure message from the last multi-provider search; surfaced
+     *  as a chip on the affected provider's filter so one bad key is visible. */
+    val providerSearchErrors: Map<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind, String> = emptyMap(),
+    /** Providers the user has configured (Jellyfin always present). Drives chip
+     *  visibility in the Search tab. */
+    val configuredSubtitleProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind> = emptySet(),
     val syncPlayGroupName: String? = null,
     val syncPlayParticipantCount: Int = 0,
     val isSyncPlaySynced: Boolean = false,
@@ -274,6 +285,9 @@ data class VideoPlayerUiState(
             isLoadingRemoteSubtitles = isLoadingRemoteSubtitles,
             defaultSearchLanguage = defaultSearchLanguage,
             downloadingSubtitles = downloadingSubtitles,
+            providerSearchResults = providerSearchResults,
+            providerSearchErrors = providerSearchErrors,
+            configuredSubtitleProviders = configuredSubtitleProviders,
         )
 
     val effects: AudioEffectsState

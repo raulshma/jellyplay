@@ -106,7 +106,11 @@ fun CompanionDashboard(
     )
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Overview", "Lyrics / Subtitles", "Episodes")
+    val tabs = listOf(
+        R.string.player_video_overview_tab,
+        R.string.player_video_lyrics_subtitles_tab,
+        R.string.player_video_episodes,
+    )
 
     Box(
         modifier = modifier
@@ -226,7 +230,7 @@ fun CompanionDashboard(
                                 onClick = { selectedTab = index },
                                 text = {
                                     Text(
-                                        name,
+                                        stringResource(name),
                                         fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
                                     )
                                 }
@@ -334,7 +338,7 @@ fun CompanionDashboard(
                             onClick = { selectedTab = index },
                             text = {
                                 Text(
-                                    name,
+                                    stringResource(name),
                                     fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
                                 )
                             }
@@ -398,7 +402,7 @@ fun OverviewTabContent(
             item {
                 Column {
                     Text(
-                        text = "Synopsis",
+                        text = stringResource(R.string.player_video_synopsis),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -418,7 +422,7 @@ fun OverviewTabContent(
             item {
                 Column {
                     Text(
-                        text = "Cast & Crew",
+                        text = stringResource(R.string.player_video_cast_and_crew),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -563,7 +567,7 @@ fun SubtitlesTabContent(
                     if (audioTracks.isNotEmpty()) {
                         item {
                             Text(
-                                "Audio Stream",
+                                stringResource(R.string.player_video_audio_stream),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -576,7 +580,7 @@ fun SubtitlesTabContent(
                     if (subtitleTracks.isNotEmpty()) {
                         item {
                             Text(
-                                "Subtitles",
+                                stringResource(R.string.player_video_subtitles),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -615,7 +619,7 @@ fun TrackSelectorGroup(
             ) {
                 Column {
                     Text(
-                        text = track.label.ifBlank { "Unknown" },
+                        text = track.label.ifBlank { stringResource(R.string.player_video_unknown) },
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = if (track.isSelected) FontWeight.Bold else FontWeight.Normal,
                         color = if (track.isSelected) MaterialTheme.colorScheme.primary else Color.White
@@ -689,7 +693,7 @@ fun EpisodesTabContent(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = "E${episode.episodeNumber ?: 0}: ${episode.name}",
+                            text = stringResource(R.string.player_video_episode_title, episode.episodeNumber ?: 0, episode.name),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White,
@@ -804,7 +808,7 @@ fun CompanionControlBar(
             ) {
                 Icon(
                     imageVector = Tabler.Outline.PlayerSkipBack,
-                    contentDescription = "-10s",
+                    contentDescription = stringResource(R.string.player_video_seek_backward_10s),
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
@@ -823,7 +827,7 @@ fun CompanionControlBar(
             ) {
                 Icon(
                     imageVector = if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    contentDescription = if (isPlaying) stringResource(R.string.player_video_pause) else stringResource(R.string.player_video_play),
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -838,7 +842,7 @@ fun CompanionControlBar(
             ) {
                 Icon(
                     imageVector = Tabler.Outline.PlayerSkipForward,
-                    contentDescription = "+30s",
+                    contentDescription = stringResource(R.string.player_video_seek_forward_30s),
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
@@ -885,12 +889,12 @@ private fun CompanionHeaderRow(
             )
             Column {
                 Text(
-                    text = if (isConnecting) "Connecting to device..." else "Connected / Streaming",
+                    text = if (isConnecting) stringResource(R.string.player_video_cast_connecting_device) else stringResource(R.string.player_video_cast_connected_streaming),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "JellyPlay Companion",
+                    text = stringResource(R.string.player_video_companion),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface

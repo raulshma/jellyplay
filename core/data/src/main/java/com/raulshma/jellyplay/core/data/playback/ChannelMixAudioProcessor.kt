@@ -68,6 +68,15 @@ class ChannelMixAudioProcessor : AudioProcessor {
     private var cachedShortBuffer: ShortBuffer? = null
     private var cachedFloatBuffer: FloatBuffer? = null
 
+    /**
+     * Reusable per-frame input sample scratch buffer. Allocated once in
+     * [configure] (sized to [inputChannelCount]) and reused across every
+     * [queueInput] call so the real-time audio thread never allocates on the
+     * per-buffer hot path — matching the cached output ShortBuffer/FloatBuffer
+     * pattern. Must be reset on flush/reset like the other cached buffers.
+     */
+    private var inFrame: FloatArray = FloatArray(0)
+
     @Synchronized
     fun setMode(mode: ChannelMixMode) {
         pendingMode = mode
@@ -104,6 +113,10 @@ class ChannelMixAudioProcessor : AudioProcessor {
 
         cachedShortBuffer = null
         cachedFloatBuffer = null
+        // Size the per-frame scratch buffer to the input channel count so
+        // queueInput can reuse it instead of allocating a FloatArray per PCM
+        // buffer (the real-time audio path pushes dozens of buffers/sec).
+        if (inFrame.size != inCh) inFrame = FloatArray(inCh)
         return outputAudioFormat
     }
 
@@ -241,7 +254,6 @@ class ChannelMixAudioProcessor : AudioProcessor {
             inputShorts.position(position / 2)
             inputShorts.limit(limit / 2)
 
-            val inFrame = FloatArray(inCh)
             for (frame in 0 until frameCount) {
                 for (ch in 0 until inCh) inFrame[ch] = inputShorts.get() / 32768f
                 for (out in 0 until outCh) {
@@ -261,7 +273,6 @@ class ChannelMixAudioProcessor : AudioProcessor {
             inputFloats.position(position / 4)
             inputFloats.limit(limit / 4)
 
-            val inFrame = FloatArray(inCh)
             for (frame in 0 until frameCount) {
                 for (ch in 0 until inCh) inFrame[ch] = inputFloats.get()
                 for (out in 0 until outCh) {
@@ -306,6 +317,7 @@ class ChannelMixAudioProcessor : AudioProcessor {
         buffer = EMPTY_BUFFER
         cachedShortBuffer = null
         cachedFloatBuffer = null
+        inFrame = FloatArray(0)
         inputAudioFormat = AudioProcessor.AudioFormat.NOT_SET
         outputAudioFormat = AudioProcessor.AudioFormat.NOT_SET
         matrix = EMPTY_MATRIX

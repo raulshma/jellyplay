@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +69,13 @@ internal fun SlideToUnlockOverlay(
     // screen is locked and how to unlock. Auto-hides after a few seconds (below) to
     // avoid obstructing the video; a tap re-reveals it.
     var uiVisible by remember { mutableStateOf(true) }
+    // A monotonic "the user just asked to see the hint again" counter. `uiVisible`
+    // alone can't restart the auto-hide `LaunchedEffect` below: a tap while the
+    // hint is already shown is a `true -> true` no-op, so Compose won't relaunch
+    // the effect and the 3s timer keeps ticking toward the original deadline.
+    // Bumping this nonce forces a relaunch and resets the deadline on every
+    // re-show (tap, drag-up, or re-engage of the lock).
+    var hintShowKey by remember { mutableIntStateOf(0) }
 
     val animatedOffset = remember { Animatable(0f) }
     val offsetSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
@@ -87,10 +95,15 @@ internal fun SlideToUnlockOverlay(
 
     LaunchedEffect(visible) {
         if (visible) {
+            uiVisible = true
+            hintShowKey++
+        }
+    }
+
+    LaunchedEffect(visible, uiVisible, isDragging, hintShowKey) {
+        if (visible && uiVisible && !isDragging) {
             // Auto-hide the unlock hint after a few seconds so it doesn't sit on the
-            // video forever. Unlike the previous behavior (which no-op'd and left the
-            // screen locked with no visible affordance), this hides the *hint* while
-            // the screen stays locked; a tap re-reveals it.
+            // video forever. Hides the hint while the screen stays locked; a tap re-reveals it.
             delay(3000L)
             uiVisible = false
         }
@@ -140,6 +153,7 @@ internal fun SlideToUnlockOverlay(
 
                                     if (!revealed && abs(dy) < tapSlopPx) {
                                         if (!uiVisible) uiVisible = true
+                                        hintShowKey++
                                     } else {
                                         revealed = true
                                         isDragging = true
@@ -155,6 +169,7 @@ internal fun SlideToUnlockOverlay(
 
                                 if (!revealed) {
                                     uiVisible = true
+                                    hintShowKey++
                                 }
                                 isDragging = false
                             }

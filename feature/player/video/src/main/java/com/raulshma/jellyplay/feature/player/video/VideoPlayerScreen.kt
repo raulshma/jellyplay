@@ -283,6 +283,7 @@ fun VideoPlayerScreen(
         }
     }
 
+    val fontInvalidFormatMessage = stringResource(R.string.player_video_font_invalid_format)
     val fontPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: android.net.Uri? ->
@@ -294,7 +295,7 @@ fun VideoPlayerScreen(
             } else {
                 scope.launch {
                     snackbarHostState.showSnackbar(
-                        message = "Selected file isn't a .ttf or .otf font.",
+                        message = fontInvalidFormatMessage,
                         duration = androidx.compose.material3.SnackbarDuration.Short,
                     )
                 }
@@ -1436,6 +1437,7 @@ fun VideoPlayerScreen(
                 viewModel.resetSubtitleManagerState()
                 viewModel.loadRemoteSubtitles()
                 viewModel.loadSubtitleCultures()
+                viewModel.loadConfiguredSubtitleProviders()
                 currentSheet = PlayerSheet.SubtitleDownload
             }) }
             val onEpisodesClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Episodes }) }
@@ -2074,6 +2076,12 @@ private fun PlayerSheetRouter(
                 // opens the subtitle track picker once a download has surfaced.
                 downloadingSubtitles = uiState.downloadingSubtitles,
                 onUseSubtitle = { onSheetChange(PlayerSheet.Subtitle) },
+                // Multi-provider search (Jellyfin + Wyzie + OpenSubtitles).
+                providerSearchResults = uiState.providerSearchResults,
+                providerSearchErrors = uiState.providerSearchErrors,
+                configuredProviders = uiState.configuredSubtitleProviders,
+                onSearchAllProviders = { viewModel.searchAllSubtitleProviders(it) },
+                onDownloadProviderSubtitle = { viewModel.downloadProviderSubtitle(it) },
                 // Upload tab
                 isUploading = uiState.isUploadingSubtitle,
                 onUpload = { uri, fileName, language, isForced, isHearingImpaired ->

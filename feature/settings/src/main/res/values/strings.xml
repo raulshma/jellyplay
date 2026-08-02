@@ -48,18 +48,18 @@
     <string name="settings_upcoming">Upcoming</string>
     <string name="settings_upcoming_subtitle">Calendar of upcoming episodes</string>
     <string name="settings_requests">Requests</string>
-    <string name="settings_requests_subtitle" translatable="false">Review Seerr/Jellyseerr requests</string>
+    <string name="settings_requests_subtitle">Review Seerr/Jellyseerr requests</string>
     <string name="settings_system">System</string>
     <string name="settings_system_subtitle">Admin and setup wizard</string>
     <string name="settings_admin_dashboard">Admin Dashboard</string>
     <string name="settings_admin_dashboard_subtitle">Server admin tools and sessions</string>
-    <string name="settings_seerr_integration" translatable="false">Seerr Integration</string>
-    <string name="settings_seerr_integration_subtitle" translatable="false">Configure Seerr/Jellyseerr</string>
+    <string name="settings_seerr_integration">Seerr Integration</string>
+    <string name="settings_seerr_integration_subtitle">Configure Seerr/Jellyseerr</string>
     <string name="settings_setup_wizard">Setup Wizard</string>
     <string name="settings_setup_wizard_subtitle">Re-run initial onboarding</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_playback">Playback</string>
-    <string name="settings_playback_subtitle" translatable="false">Player Engine: %1$s</string>
+    <string name="settings_playback_subtitle">Player Engine: %1$s</string>
     <string name="settings_audio_player">Audio Player</string>
     <string name="settings_language_subtitles">Language &amp; Subtitles</string>
     <string name="settings_language_subtitle">Audio: %1$s</string>
@@ -93,10 +93,23 @@
     <string name="settings_about">About</string>
     <string name="settings_about_subtitle">App version and licenses</string>
     <string name="settings_integrations">Integrations</string>
-    <string name="settings_integrations_subtitle" translatable="false">Seerr, Radarr &amp; Sonarr</string>
+    <string name="settings_integrations_subtitle">Seerr, Radarr &amp; Sonarr</string>
     <string name="settings_integrations_title">Integrations</string>
-    <string name="settings_integrations_arr" translatable="false">Radarr / Sonarr</string>
+    <string name="settings_integrations_arr">Radarr / Sonarr</string>
     <string name="settings_integrations_arr_subtitle">Direct server connections</string>
+    <string name="settings_integrations_subtitles">Subtitle Providers</string>
+    <string name="settings_integrations_subtitles_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
+    <string name="settings_subtitles_wyzie">Wyzie Subs</string>
+    <string name="settings_subtitles_wyzie_help">Free subtitle API (1,000 requests/day). Get a key at store.wyzie.io/redeem.</string>
+    <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
+    <string name="settings_subtitles_opensubtitles_help">API key required. Optional username/password unlocks a higher daily download quota.</string>
+    <string name="settings_subtitles_api_key">API key</string>
+    <string name="settings_subtitles_username_optional">Username (optional)</string>
+    <string name="settings_subtitles_password_optional">Password (optional)</string>
+    <string name="settings_subtitles_save">Save</string>
+    <string name="settings_subtitles_test">Test</string>
+    <string name="settings_subtitles_testing">Testing…</string>
+    <string name="settings_subtitles_connected">Connected</string>
     <string name="settings_sign_out_confirm_title_server">Sign Out from Server?</string>
     <string name="settings_sign_out_confirm_title">Sign Out?</string>
     <string name="settings_sign_out_confirm_message_server">This will revoke this device\'s session on the server. You\'ll need to sign in again to use the app.</string>
@@ -120,7 +133,7 @@
     <string name="settings_add_address_description">Enter an alternate URL for this server (e.g., a local IP address).</string>
     <string name="settings_server_address_label">Server address</string>
     <string name="settings_server_address_placeholder" translatable="false">https://192.168.1.100:8096</string>
-    <string name="settings_server_address_invalid" translatable="false">Enter a valid URL (e.g. https://host:port)</string>
+    <string name="settings_server_address_invalid">Enter a valid URL (e.g. https://host:port)</string>
 
     <!-- UserManagementScreen.kt -->
     <string name="settings_switch_user">Switch User</string>
@@ -161,7 +174,7 @@
     <string name="settings_up_to_date">Up to date (v%1$s)</string>
     <string name="settings_check_for_updates">Check for Updates</string>
     <string name="settings_acknowledgements">Acknowledgements</string>
-    <string name="settings_built_with_jellyfin" translatable="false">Built with Jellyfin SDK</string>
+    <string name="settings_built_with_jellyfin">Built with Jellyfin SDK</string>
 
     <!-- NotificationSettingsScreen.kt -->
     <string name="settings_enable_notifications">Enable Notifications</string>
@@ -261,7 +274,7 @@
     <string name="settings_factory_reset_summary_card">%1$d of %2$d settings differ from factory defaults</string>
     <string name="settings_factory_reset_category_done">Category reset to factory defaults</string>
     <string name="settings_factory_reset_all_done">All settings reset to factory defaults</string>
-    <string name="settings_factory_reset_integrations_note" translatable="false">Third-party integration settings (Seerr, Radarr/Sonarr) live separately and are not reset here — manage them under Integrations.</string>
+    <string name="settings_factory_reset_integrations_note">Third-party integration settings (Seerr, Radarr/Sonarr) live separately and are not reset here — manage them under Integrations.</string>
     <string name="factory_reset_cat_appearance">Appearance</string>
     <string name="factory_reset_cat_playback">Playback</string>
     <string name="factory_reset_cat_audio">Audio</string>
@@ -273,8 +286,8 @@
     <string name="factory_reset_cat_notifications">Notifications</string>
     <string name="factory_reset_cat_screensaver">Screensaver</string>
     <string name="factory_reset_cat_newsletter">Newsletter</string>
-    <string name="factory_reset_cat_syncplay_casting" translatable="false">SyncPlay &amp; Casting</string>
-    <string name="factory_reset_cat_player_engines" translatable="false">Player Engines</string>
+    <string name="factory_reset_cat_syncplay_casting">SyncPlay &amp; Casting</string>
+    <string name="factory_reset_cat_player_engines">Player Engines</string>
     <string name="factory_reset_cat_experimental">Experimental</string>
     <string name="factory_reset_cat_misc_app">Miscellaneous</string>
 
@@ -290,14 +303,14 @@
     <string name="settings_send">Send</string>
 
     <!-- SeerrSettingsScreen.kt -->
-    <string name="settings_seerr_settings" translatable="false">Seerr Settings</string>
+    <string name="settings_seerr_settings">Seerr Settings</string>
     <string name="settings_server_connection">Server Connection</string>
     <string name="settings_connected_to">Connected to %1$s</string>
     <string name="settings_connection_failed">Connection failed</string>
     <string name="settings_connecting">Connecting\u2026</string>
     <string name="settings_credentials_configured">Credentials configured</string>
     <string name="settings_configure_server_address">Configure server address</string>
-    <string name="settings_server_url" translatable="false">Server URL</string>
+    <string name="settings_server_url">Server URL</string>
     <string name="settings_server_url_placeholder" translatable="false">http://localhost:5055</string>
     <string name="settings_clear_cd">Clear</string>
     <string name="settings_seerr_api_key_method" translatable="false">API Key</string>
@@ -309,26 +322,26 @@
     <string name="settings_arr_test">Test</string>
     <string name="settings_arr_test_all">Test all</string>
     <string name="settings_arr_connected">Connected</string>
-    <string name="settings_arr_no_servers_hint" translatable="false">No servers detected. Enable Auto-discover via Seerr (and make sure Seerr is connected), or add a manual server below.</string>
-    <string name="settings_arr_no_admin_hint" translatable="false">Auto-discover needs a Seerr account with Admin permission (the server list comes from Seerr\'s admin-only settings). Use an API key from an admin user, then retry — or add a manual server below.</string>
+    <string name="settings_arr_no_servers_hint">No servers detected. Enable Auto-discover via Seerr (and make sure Seerr is connected), or add a manual server below.</string>
+    <string name="settings_arr_no_admin_hint">Auto-discover needs a Seerr account with Admin permission (the server list comes from Seerr\'s admin-only settings). Use an API key from an admin user, then retry — or add a manual server below.</string>
     <string name="settings_seerr_sign_in">Sign In</string>
     <string name="settings_disconnect">Disconnect</string>
     <string name="settings_integration_features">Integration Features</string>
     <string name="settings_features_active">%1$d of 4 features active</string>
-    <string name="settings_enable_seerr_integration" translatable="false">Enable Seerr Integration</string>
-    <string name="settings_enable_seerr_subtitle" translatable="false">Connect your Seerr server with JellyPlay</string>
+    <string name="settings_enable_seerr_integration">Enable Seerr Integration</string>
+    <string name="settings_enable_seerr_subtitle">Connect your Seerr server with JellyPlay</string>
     <string name="settings_search_integration">Search Integration</string>
     <string name="settings_search_integration_subtitle">Request media directly from app search</string>
     <string name="settings_recommendations_similar">Recommendations &amp; Similar</string>
-    <string name="settings_recommendations_subtitle" translatable="false">Show Seerr recommendations on media detail screens</string>
+    <string name="settings_recommendations_subtitle">Show Seerr recommendations on media detail screens</string>
     <string name="settings_advanced_discover">Advanced Discover</string>
     <string name="settings_advanced_discover_subtitle">Show Trending, Popular &amp; Upcoming content on the home screen</string>
     <string name="settings_trending">Trending</string>
     <string name="settings_trending_subtitle">Trending movies and series</string>
     <string name="settings_popular_movies">Popular Movies</string>
-    <string name="settings_popular_movies_subtitle" translatable="false">Popular movies on TMDB</string>
+    <string name="settings_popular_movies_subtitle">Popular movies on TMDB</string>
     <string name="settings_popular_series">Popular Series</string>
-    <string name="settings_popular_series_subtitle" translatable="false">Popular TV series on TMDB</string>
+    <string name="settings_popular_series_subtitle">Popular TV series on TMDB</string>
     <string name="settings_upcoming_movies">Upcoming Movies</string>
     <string name="settings_upcoming_movies_subtitle">Movies coming soon to theaters</string>
     <string name="settings_upcoming_series">Upcoming Series</string>
@@ -339,31 +352,31 @@
     <string name="settings_streaming_region_subtitle">Region used to determine available streaming providers</string>
     <string name="settings_discover_region">Discover Region</string>
     <string name="settings_discover_region_subtitle">Region used for release dates and content discovery</string>
-    <string name="settings_seerr_request_hub" translatable="false">Seerr Request Hub</string>
-    <string name="settings_seerr_header_description" translatable="false">Connect Jellyseerr or Overseerr to search, discover, and request content directly from within JellyPlay.</string>
+    <string name="settings_seerr_request_hub">Seerr Request Hub</string>
+    <string name="settings_seerr_header_description">Connect Jellyseerr or Overseerr to search, discover, and request content directly from within JellyPlay.</string>
     <string name="settings_api_key_label" translatable="false">API Key</string>
     <string name="settings_api_key_placeholder" translatable="false">Enter your Seerr API key</string>
-    <string name="settings_hide_api_key" translatable="false">Hide API key</string>
-    <string name="settings_show_api_key" translatable="false">Show API key</string>
+    <string name="settings_hide_api_key">Hide API key</string>
+    <string name="settings_show_api_key">Show API key</string>
     <string name="settings_username_label">Username</string>
-    <string name="settings_jellyfin_username_placeholder" translatable="false">Jellyfin username</string>
+    <string name="settings_jellyfin_username_placeholder">Jellyfin username</string>
     <string name="settings_password_label">Password</string>
-    <string name="settings_jellyfin_password_placeholder" translatable="false">Jellyfin password</string>
+    <string name="settings_jellyfin_password_placeholder">Jellyfin password</string>
     <string name="settings_hide_password">Hide password</string>
     <string name="settings_show_password">Show password</string>
     <string name="settings_email_label">Email</string>
-    <string name="settings_seerr_email_placeholder" translatable="false">Seerr account email</string>
-    <string name="settings_seerr_password_placeholder" translatable="false">Seerr account password</string>
+    <string name="settings_seerr_email_placeholder">Seerr account email</string>
+    <string name="settings_seerr_password_placeholder">Seerr account password</string>
     <string name="settings_connected">Connected</string>
     <string name="settings_server_reached_version">Server reached (v%1$s)</string>
-    <string name="settings_seerr_server_reached" translatable="false">Seerr server reached successfully</string>
+    <string name="settings_seerr_server_reached">Seerr server reached successfully</string>
     <string name="settings_connection_failed_title">Connection Failed</string>
 
     <!-- PlaybackSettingsScreen.kt -->
     <string name="settings_playback_title">Playback</string>
     <string name="settings_video_player">Video Player</string>
-    <string name="settings_player_engine" translatable="false">Player Engine</string>
-    <string name="settings_player_engine_subtitle" translatable="false">Choose media playback engine</string>
+    <string name="settings_player_engine">Player Engine</string>
+    <string name="settings_player_engine_subtitle">Choose media playback engine</string>
     <string name="settings_seek_duration">Seek Duration</string>
     <string name="settings_seek_duration_subtitle">Double-tap to seek</string>
     <string name="settings_orientation">Orientation</string>
@@ -531,7 +544,7 @@
     <string name="settings_font_size">Font Size</string>
     <string name="settings_font_size_subtitle">Subtitle text size</string>
     <string name="settings_open_subtitle_tester">Subtitle style tester</string>
-    <string name="settings_open_subtitle_tester_subtitle" translatable="false">Preview styles across engines</string>
+    <string name="settings_open_subtitle_tester_subtitle">Preview styles across engines</string>
     <string name="settings_forced_subtitles">Forced Subtitles Only</string>
     <string name="settings_forced_subtitles_on">Show subtitles only when forced tracks are present</string>
     <string name="settings_forced_subtitles_off">Show subtitles per preferred language</string>
@@ -539,7 +552,7 @@
     <string name="settings_high_contrast_on">Maximally legible subtitle style for accessibility</string>
     <string name="settings_high_contrast_off">Use subtitle style as configured</string>
     <string name="settings_pgs_direct_play">PGS Direct Play</string>
-    <string name="settings_pgs_direct_play_on" translatable="false">Render PGS subtitles natively (MPV only)</string>
+    <string name="settings_pgs_direct_play_on">Render PGS subtitles natively (MPV only)</string>
     <string name="settings_pgs_direct_play_off">Burn in PGS subtitles via server transcode</string>
     <string name="settings_hdr_subtitle_style">Separate HDR Subtitle Style</string>
     <string name="settings_hdr_subtitle_on">Custom subtitle style for HDR content</string>
@@ -591,6 +604,8 @@
     <!-- LicensesScreen.kt -->
     <string name="settings_open_source_licenses_title">Open Source Licenses</string>
     <string name="settings_license_text_unavailable">Full license text is not available for this library.</string>
+    <!-- Localized error messages -->
+    <string name="settings_licenses_load_error">Could not load license information</string>
 
     <!-- ExperimentalSettingsScreen.kt -->
     <string name="settings_experimental_title">Experimental</string>
@@ -630,7 +645,7 @@
     <string name="settings_preset_name">Preset name</string>
     <string name="settings_preset_name_exists">A preset with this name already exists</string>
     <string name="settings_save">Save</string>
-    <string name="settings_preset_json" translatable="false">Preset JSON</string>
+    <string name="settings_preset_json">Preset JSON</string>
     <string name="settings_import_paste_description">Paste a shared JellyPlay home layout JSON below, then apply it.</string>
     <string name="settings_apply">Apply</string>
     <string name="settings_action_load">Load</string>
@@ -707,8 +722,8 @@
     <!-- Brand-only tokens (translatable="false") -->
     <string name="settings_radarr" translatable="false">Radarr</string>
     <string name="settings_sonarr" translatable="false">Sonarr</string>
-    <string name="settings_arr_radarr_seerr" translatable="false">Radarr · Seerr</string>
-    <string name="settings_arr_sonarr_seerr" translatable="false">Sonarr · Seerr</string>
+    <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
+    <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
     <string name="settings_syncplay" translatable="false">SyncPlay</string>
     <string name="settings_engine_config">Engine Config</string>
 
@@ -1104,4 +1119,37 @@
     <string name="settings_dvr_quality_low">Transcode to Low quality (480p)</string>
 
     <!-- UserManagementScreen.kt - already mostly defined; confirm ones used inline -->
+
+    <!-- Localized UI text extracted from settings screens -->
+    <string name="settings_nav_bar_title">Navigation Bar</string>
+    <string name="settings_nav_auto_hide">Auto-hide on scroll</string>
+    <string name="settings_nav_pinned">Pinned</string>
+    <string name="settings_nav_items_summary">%1$d of %2$d items</string>
+    <string name="settings_nav_items_summary_with_scroll">%1$d of %2$d items - %3$s</string>
+    <string name="settings_nav_hide_on_scroll">Hide on Scroll</string>
+    <string name="settings_nav_hide_on_scroll_on">Bar hides when scrolling down</string>
+    <string name="settings_nav_hide_on_scroll_off">Bar stays visible</string>
+    <string name="settings_nav_item_home">Home</string>
+    <string name="settings_nav_item_home_subtitle">Home dashboard</string>
+    <string name="settings_nav_item_library">Library</string>
+    <string name="settings_nav_item_library_subtitle">Browse your media libraries</string>
+    <string name="settings_nav_item_search">Search</string>
+    <string name="settings_nav_item_search_subtitle">Find movies, shows &amp; more</string>
+    <string name="settings_nav_item_live_tv">Live TV</string>
+    <string name="settings_nav_item_live_tv_subtitle">Live channels &amp; guide</string>
+    <string name="settings_nav_item_browse">Browse</string>
+    <string name="settings_nav_item_browse_subtitle">Music libraries (music mode)</string>
+    <string name="settings_nav_item_shortcuts">Shortcuts</string>
+    <string name="settings_nav_item_shortcuts_subtitle">Quick access shortcuts</string>
+    <string name="settings_reorder_section">Reorder section</string>
+    <string name="settings_hide_advanced">Hide advanced settings</string>
+    <string name="settings_show_advanced">Show advanced settings</string>
+    <string name="settings_advanced_hidden">Advanced settings hidden</string>
+    <string name="settings_advanced_shown">Advanced settings shown</string>
+
+
+    <plurals name="settings_advanced_settings_hidden">
+        <item quantity="one">%1$d advanced setting hidden</item>
+        <item quantity="other">%1$d advanced settings hidden</item>
+    </plurals>
 </resources>

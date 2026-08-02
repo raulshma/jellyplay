@@ -37,4 +37,7 @@
     <string name="data_added_date">Added %1$s</string>
     <string name="data_added_unknown">Added unknown</string>
     <string name="data_played_date">Played %1$s</string>
+
+    <!-- Localized error messages -->
+    <string name="data_no_media_source_download">No media source available for download</string>
 </resources>

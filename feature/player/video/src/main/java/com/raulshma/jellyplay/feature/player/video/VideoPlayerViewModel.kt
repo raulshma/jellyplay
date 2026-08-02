@@ -188,6 +188,7 @@ class VideoPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val subtitleProviderRepository: com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
@@ -343,6 +344,7 @@ class VideoPlayerViewModel @Inject constructor(
         context = context,
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
+        subtitleProviderRepository = subtitleProviderRepository,
         userMessageBus = userMessageBus,
         scope = scope,
         addExternalSubtitle = { playerSessionManager.addExternalSubtitle(it) },
@@ -2337,6 +2339,24 @@ class VideoPlayerViewModel @Inject constructor(
      * implying "no subtitles exist".
      */
     fun searchRemoteSubtitles(language: String) = subtitleManager.searchRemoteSubtitles(language)
+
+    /** Loads the user's configured subtitle providers into UiState (chip visibility). */
+    fun loadConfiguredSubtitleProviders() = subtitleManager.loadConfiguredProviders()
+
+    /**
+     * Concurrent cross-provider subtitle search (Jellyfin + Wyzie +
+     * OpenSubtitles). Results merge into [VideoPlayerUiState.providerSearchResults]
+     * with per-provider error chips. See [SubtitleManager.searchAllProviders].
+     */
+    fun searchAllSubtitleProviders(language: String) = subtitleManager.searchAllProviders(language)
+
+    /**
+     * Downloads a subtitle from any provider. Jellyfin rows route through the
+     * server-side poll; external providers side-load the bytes locally. See
+     * [SubtitleManager.downloadProviderSubtitle].
+     */
+    fun downloadProviderSubtitle(result: com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) =
+        subtitleManager.downloadProviderSubtitle(result)
 
     /**
      * Uploads a local subtitle file to the current item, then reloads the

@@ -45,7 +45,7 @@ fun AudioPlayerStep(
             onNext = {},
         ) {
             Text(
-                text = "Default Speed",
+                text = stringResource(R.string.onboarding_audio_default_speed),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -91,7 +91,7 @@ fun AudioPlayerStep(
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Crossfade",
+                text = stringResource(R.string.onboarding_audio_crossfade),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -104,7 +104,7 @@ fun AudioPlayerStep(
                 listOf(0L, 2000L, 5000L, 8000L).forEach { duration ->
                     val selected = duration == crossfadeDurationMs
                     OnboardingOptionCard(
-                        label = if (duration == 0L) "Off" else "${duration / 1000}s",
+                        label = if (duration == 0L) stringResource(R.string.onboarding_audio_off) else "${duration / 1000}s",
                         selected = selected,
                         onClick = { onCrossfadeDurationChange(duration) },
                         modifier = Modifier.weight(1f),

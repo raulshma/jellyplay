@@ -169,6 +169,7 @@
     <string name="admin_security_limits">セキュリティ制限</string>
     <string name="admin_security_limits_desc">同時セッションとログイン保護。</string>
     <string name="admin_max_active_sessions">最大アクティブセッション数</string>
+    <string name="admin_zero_blank_unlimited">0 または空欄 = 無制限</string>
     <string name="admin_login_attempts">ロックアウトまでのログイン試行回数</string>
     <string name="admin_blank_no_lockout">空欄 = ロックなし</string>
     <string name="admin_identity">ID</string>

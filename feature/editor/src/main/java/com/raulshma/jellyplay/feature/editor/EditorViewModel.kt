@@ -13,6 +13,10 @@ import com.raulshma.jellyplay.core.model.RemoteImageResult
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderIds
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -21,6 +25,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -37,6 +42,14 @@ data class EditorUiState(
     val imageProviders: List<ImageProviderInfo> = emptyList(),
     val remoteImages: RemoteImageResult? = null,
     val remoteSubtitleResults: List<RemoteSubtitleInfo> = emptyList(),
+    /** Merged cross-provider subtitle search results (Jellyfin + external). */
+    val providerSubtitleResults: List<SubtitleSearchResult> = emptyList(),
+    /** Per-provider search failure messages for chips. */
+    val providerSubtitleErrors: Map<SubtitleProviderKind, String> = emptyMap(),
+    /** Providers the user has configured (drives chip visibility). */
+    val configuredSubtitleProviders: Set<SubtitleProviderKind> = emptySet(),
+    val isSearchingProviderSubtitles: Boolean = false,
+    val isDownloadingProviderSubtitle: Boolean = false,
     val error: String? = null,
     val isAdmin: Boolean = false,
 
@@ -76,6 +89,7 @@ data class EditorUiState(
 class EditorViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
     authRepository: AuthRepository,
+    private val subtitleProviderRepository: SubtitleProviderRepository,
     @ApplicationContext private val context: Context,
 ) : JellyPlayViewModel() {
 
@@ -360,6 +374,81 @@ class EditorViewModel @Inject constructor(
                 .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
         }
     }
+
+    // region Multi-provider subtitle search (Jellyfin + Wyzie + OpenSubtitles) ---
+    // Editor downloads from external providers are uploaded to the Jellyfin server
+    // (via uploadSubtitle) so they persist as media streams for all clients —
+    // matching the editor's metadata-management semantics.
+
+    /** Loads the user's configured subtitle providers into UiState (chip visibility). */
+    fun loadConfiguredSubtitleProviders() {
+        launch {
+            val configured = subtitleProviderRepository.configuredProviders().first()
+            _uiState.update { it.copy(configuredSubtitleProviders = configured) }
+        }
+    }
+
+    /**
+     * Concurrent cross-provider subtitle search. Jellyfin + external-provider
+     * results are merged centrally in the repository; per-provider errors
+     * surface as chips.
+     */
+    fun searchAllSubtitleProviders(language: String) {
+        val detail = _uiState.value.mediaDetail ?: return
+        val itemId = detail.item.id
+        launch {
+            _uiState.update {
+                it.copy(
+                    isSearchingProviderSubtitles = true,
+                    providerSubtitleResults = emptyList(),
+                    providerSubtitleErrors = emptyMap(),
+                )
+            }
+            val query = SubtitleProviderIds.buildQuery(detail).copy(languages = listOf(language))
+            val merged = subtitleProviderRepository.searchAll(query, itemId, language)
+            _uiState.update {
+                it.copy(
+                    isSearchingProviderSubtitles = false,
+                    providerSubtitleResults = merged.results,
+                    providerSubtitleErrors = merged.errors,
+                )
+            }
+        }
+    }
+
+    /**
+     * Downloads an external-provider subtitle and uploads it to the Jellyfin
+     * server so it persists as a media stream. Jellyfin rows route through the
+     * existing [downloadRemoteSubtitle] server-side path.
+     */
+    fun downloadProviderSubtitle(result: SubtitleSearchResult) {
+        val itemId = _uiState.value.mediaDetail?.item?.id ?: return
+        when (result.provider) {
+            SubtitleProviderKind.JELLYFIN -> {
+                result.jellyfinInfo?.let { downloadRemoteSubtitle(it.id) }
+            }
+            else -> launch {
+                _uiState.update { it.copy(isDownloadingProviderSubtitle = true) }
+                subtitleProviderRepository.downloadExternal(result)
+                    .onSuccess { file ->
+                        val base64 = Base64.encodeToString(file.bytes, Base64.NO_WRAP)
+                        apiClient.uploadSubtitle(
+                            itemId,
+                            base64,
+                            file.fileName,
+                            file.language,
+                            result.isForced,
+                            result.isHearingImpaired,
+                        ).onSuccess { loadEditorData(itemId) }
+                            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                    }
+                    .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                _uiState.update { it.copy(isDownloadingProviderSubtitle = false) }
+            }
+        }
+    }
+
+    // endregion
 
     fun refreshMetadata(
         mode: String = "FullRefresh",

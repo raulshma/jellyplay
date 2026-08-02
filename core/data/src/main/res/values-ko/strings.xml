@@ -36,4 +36,7 @@
     <string name="data_added_date">%1$s에 추가됨</string>
     <string name="data_added_unknown">추가일 알 수 없음</string>
     <string name="data_played_date">%1$s에 재생됨</string>
+
+    <!-- Localized error messages -->
+    <string name="data_no_media_source_download">다운로드할 수 있는 미디어 소스가 없습니다</string>
 </resources>

@@ -33,13 +33,16 @@ fun VinylRecordPeek(
         label = "vinylSlide"
     )
 
-    // The vinyl rotation is only meaningful while hovered/focused, but the
-    // infinite transition still spins a redraw coroutine. Freeze it in
-    // performance mode (rotation stays 0 — the peek still slides in).
-    val rotation = if (!reducedMotion) {
+    // The vinyl rotation is only meaningful while hovered/focused. This
+    // composable is a grid/list item, so allocating an infinite transition per
+    // card spins a redraw coroutine for every visible album — even when the
+    // card is at rest (slideFraction == 0). Gate the transition behind the
+    // hover state so cards at rest pay zero animation cost. Reduced-motion and
+    // idle cards fall back to a static 0f.
+    val rotation = if (!reducedMotion && isHoveredOrFocused) {
         rememberInfiniteTransition(label = "vinylRotationTransition").animateFloat(
             initialValue = 0f,
-            targetValue = if (isHoveredOrFocused) 360f else 0f,
+            targetValue = 360f,
             animationSpec = infiniteRepeatable(
                 animation = tween(4000, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart

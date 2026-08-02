@@ -20,6 +20,7 @@ media3 = "1.10.1"
 media3FfmpegDecoder = "1.9.0+1"
 androidDesugarJdkLibs = "2.1.5"
 coil = "3.5.0"
+multiplatformMarkdownRenderer = "0.43.0"
 room = "2.8.4"
 datastore = "1.2.1"
 paging = "3.5.0"
@@ -134,6 +135,10 @@ android-desugar-jdk = { group = "com.android.tools", name = "desugar_jdk_libs", 
 # Coil
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+
+# Markdown renderer (GitHub-flavoured; used for release notes & plugin changelogs)
+multiplatform-markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer", version.ref = "multiplatformMarkdownRenderer" }
+multiplatform-markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "multiplatformMarkdownRenderer" }
 
 # Room
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }

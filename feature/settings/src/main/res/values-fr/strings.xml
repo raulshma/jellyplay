@@ -553,6 +553,8 @@
     <!-- LicensesScreen.kt -->
     <string name="settings_open_source_licenses_title">Licences open source</string>
     <string name="settings_license_text_unavailable">Le texte complet de la licence n\'est pas disponible pour cette bibliothèque.</string>
+    <!-- Localized error messages -->
+    <string name="settings_licenses_load_error">Impossible de charger les informations de licence</string>
 
     <!-- ExperimentalSettingsScreen.kt -->
     <string name="settings_experimental_title">Expérimental</string>
@@ -1052,4 +1054,88 @@
     <string name="settings_dvr_quality_low">Transcoder en Basse qualité (480p)</string>
 
     <!-- UserManagementScreen.kt - already mostly defined; confirm ones used inline -->
+
+    <!-- auto-localized: previously translatable="false" (36) -->
+    <string name="settings_requests_subtitle">Examiner les demandes Seerr/Jellyseerr</string>
+    <string name="settings_seerr_integration">Intégration Seerr</string>
+    <string name="settings_seerr_integration_subtitle">Configurer Seerr/Jellyseerr</string>
+    <string name="settings_playback_subtitle">Moteur de lecture : %1$s</string>
+    <string name="settings_integrations_subtitle">Seerr, Radarr &amp; Sonarr</string>
+    <string name="settings_integrations_arr">Radarr / Sonarr</string>
+    <string name="settings_server_address_invalid">Saisissez une URL valide (ex. https://hôte:port)</string>
+    <string name="settings_built_with_jellyfin">Construit avec le SDK Jellyfin</string>
+    <string name="settings_factory_reset_integrations_note">Les paramètres d\'intégration tiers (Seerr, Radarr/Sonarr) sont gérés séparément et ne sont pas réinitialisés ici — gérez-les sous Intégrations.</string>
+    <string name="factory_reset_cat_syncplay_casting">SyncPlay &amp; diffusion</string>
+    <string name="factory_reset_cat_player_engines">Moteurs de lecture</string>
+    <string name="settings_seerr_settings">Paramètres Seerr</string>
+    <string name="settings_server_url">URL du serveur</string>
+    <string name="settings_arr_no_servers_hint">Aucun serveur détecté. Activez la découverte automatique via Seerr (et assurez-vous que Seerr est connecté), ou ajoutez un serveur manuel ci-dessous.</string>
+    <string name="settings_arr_no_admin_hint">La découverte automatique nécessite un compte Seerr avec autorisation d\'administrateur (la liste des serveurs provient des paramètres réservés aux administrateurs de Seerr). Utilisez une clé API d\'un utilisateur administrateur, puis réessayez — ou ajoutez un serveur manuel ci-dessous.</string>
+    <string name="settings_enable_seerr_integration">Activer l\'intégration Seerr</string>
+    <string name="settings_enable_seerr_subtitle">Connectez votre serveur Seerr à JellyPlay</string>
+    <string name="settings_recommendations_subtitle">Afficher les recommandations Seerr sur les écrans de détails des médias</string>
+    <string name="settings_popular_movies_subtitle">Films populaires sur TMDB</string>
+    <string name="settings_popular_series_subtitle">Séries populaires sur TMDB</string>
+    <string name="settings_seerr_request_hub">Centre de demandes Seerr</string>
+    <string name="settings_seerr_header_description">Connectez Jellyseerr ou Overseerr pour rechercher, découvrir et demander du contenu directement depuis JellyPlay.</string>
+    <string name="settings_hide_api_key">Masquer la clé API</string>
+    <string name="settings_show_api_key">Afficher la clé API</string>
+    <string name="settings_jellyfin_username_placeholder">Nom d\'utilisateur Jellyfin</string>
+    <string name="settings_jellyfin_password_placeholder">Mot de passe Jellyfin</string>
+    <string name="settings_seerr_email_placeholder">E-mail du compte Seerr</string>
+    <string name="settings_seerr_password_placeholder">Mot de passe du compte Seerr</string>
+    <string name="settings_seerr_server_reached">Serveur Seerr atteint avec succès</string>
+    <string name="settings_player_engine">Moteur de lecture</string>
+    <string name="settings_player_engine_subtitle">Choisir le moteur de lecture multimédia</string>
+    <string name="settings_open_subtitle_tester_subtitle">Aperçu des styles entre les moteurs</string>
+    <string name="settings_pgs_direct_play_on">Rendre les sous-titres PGS nativement (MPV uniquement)</string>
+    <string name="settings_preset_json">JSON de préréglage</string>
+    <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
+    <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
+
+    <!-- Localized UI text extracted from settings screens -->
+    <string name="settings_nav_bar_title">Barre de navigation</string>
+    <string name="settings_nav_auto_hide">Masquer au défilement</string>
+    <string name="settings_nav_pinned">Epinglé</string>
+    <string name="settings_nav_items_summary">%1$d sur %2$d elements</string>
+    <string name="settings_nav_items_summary_with_scroll">%1$d sur %2$d elements - %3$s</string>
+    <string name="settings_nav_hide_on_scroll">Masquer au défilement</string>
+    <string name="settings_nav_hide_on_scroll_on">La barre se masque en défilant vers le bas</string>
+    <string name="settings_nav_hide_on_scroll_off">La barre reste visible</string>
+    <string name="settings_nav_item_home">Accueil</string>
+    <string name="settings_nav_item_home_subtitle">Tableau de bord d accueil</string>
+    <string name="settings_nav_item_library">Bibliotheque</string>
+    <string name="settings_nav_item_library_subtitle">Parcourir vos bibliotheques multimedia</string>
+    <string name="settings_nav_item_search">Rechercher</string>
+    <string name="settings_nav_item_search_subtitle">Trouver films, series et plus</string>
+    <string name="settings_nav_item_live_tv">TV en direct</string>
+    <string name="settings_nav_item_live_tv_subtitle">Chaines en direct et guide</string>
+    <string name="settings_nav_item_browse">Parcourir</string>
+    <string name="settings_nav_item_browse_subtitle">Bibliotheques de musique (mode musique)</string>
+    <string name="settings_nav_item_shortcuts">Raccourcis</string>
+    <string name="settings_nav_item_shortcuts_subtitle">Raccourcis d acces rapide</string>
+    <string name="settings_reorder_section">Reorganiser la section</string>
+    <string name="settings_hide_advanced">Masquer les parametres avances</string>
+    <string name="settings_show_advanced">Afficher les parametres avances</string>
+    <string name="settings_advanced_hidden">Parametres avances masques</string>
+    <string name="settings_advanced_shown">Parametres avances affiches</string>
+
+
+    <plurals name="settings_advanced_settings_hidden">
+        <item quantity="one">%1$d parametre avance masque</item>
+        <item quantity="other">%1$d parametres avances masques</item>
+    </plurals>
+    <string name="settings_integrations_subtitles">Fournisseurs de sous-titres</string>
+    <string name="settings_integrations_subtitles_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
+    <string name="settings_subtitles_wyzie">Wyzie Subs</string>
+    <string name="settings_subtitles_wyzie_help">API de sous-titres gratuite (1 000 requêtes/jour). Clé disponible sur store.wyzie.io/redeem.</string>
+    <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
+    <string name="settings_subtitles_opensubtitles_help">API key requise. Nom d\'utilisateur/mot de passe facultatif pour un quota quotidien plus élevé.</string>
+    <string name="settings_subtitles_api_key">API key</string>
+    <string name="settings_subtitles_username_optional">Nom d\'utilisateur (facultatif)</string>
+    <string name="settings_subtitles_password_optional">Mot de passe (facultatif)</string>
+    <string name="settings_subtitles_save">Enregistrer</string>
+    <string name="settings_subtitles_test">Tester</string>
+    <string name="settings_subtitles_testing">Test…</string>
+    <string name="settings_subtitles_connected">Connecté</string>
 </resources>

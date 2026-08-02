@@ -69,6 +69,7 @@ import io.github.peerless2012.ass.media.type.AssRenderType
 import io.github.peerless2012.ass.media.widget.AssSubtitleView
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -1054,7 +1055,7 @@ class ExoPlayerEngine(
             ticker.cancel()
             try { p.removeListener(posListener) } catch (_: Exception) {}
         }
-    }
+    }.conflate() // only the most-recent position is meaningful; drop stale ticks
 
     private fun updateVideoStats() {
         val p = player ?: return

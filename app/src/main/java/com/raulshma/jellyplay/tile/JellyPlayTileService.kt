@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -46,6 +47,14 @@ class JellyPlayTileService : TileService() {
         super.onStopListening()
         job?.cancel()
         job = null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // TileService instances are created/destroyed by the system (listening
+        // bind/unbind, user pulling the tile); without cancelling tileScope the
+        // SupervisorJob + main-dispatcher association leak per recreate.
+        tileScope.cancel()
     }
 
     override fun onClick() {

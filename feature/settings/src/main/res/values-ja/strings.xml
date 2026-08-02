@@ -553,6 +553,8 @@
     <!-- LicensesScreen.kt -->
     <string name="settings_open_source_licenses_title">オープンソースライセンス</string>
     <string name="settings_license_text_unavailable">このライブラリの完全なライセンス文は利用できません。</string>
+    <!-- Localized error messages -->
+    <string name="settings_licenses_load_error">ライセンス情報を読み込めませんでした</string>
 
     <!-- ExperimentalSettingsScreen.kt -->
     <string name="settings_experimental_title">試験的機能</string>
@@ -1050,4 +1052,88 @@
     <string name="settings_dvr_quality_low">低品質にトランスコード（480p）</string>
 
     <!-- UserManagementScreen.kt - already mostly defined; confirm ones used inline -->
+
+    <!-- auto-localized: previously translatable="false" (36) -->
+    <string name="settings_requests_subtitle">Seerr/Jellyseerr のリクエストを確認</string>
+    <string name="settings_seerr_integration">Seerr 連携</string>
+    <string name="settings_seerr_integration_subtitle">Seerr/Jellyseerr を構成</string>
+    <string name="settings_playback_subtitle">プレーヤーエンジン: %1$s</string>
+    <string name="settings_integrations_subtitle">Seerr、Radarr、Sonarr</string>
+    <string name="settings_integrations_arr">Radarr / Sonarr</string>
+    <string name="settings_server_address_invalid">有効な URL を入力してください (例: https://host:port)</string>
+    <string name="settings_built_with_jellyfin">Jellyfin SDK で構築</string>
+    <string name="settings_factory_reset_integrations_note">サードパーティの連携設定 (Seerr、Radarr/Sonarr) は別の場所にあり、ここではリセットされません — 「連携」で管理してください。</string>
+    <string name="factory_reset_cat_syncplay_casting">SyncPlay とキャスト</string>
+    <string name="factory_reset_cat_player_engines">プレーヤーエンジン</string>
+    <string name="settings_seerr_settings">Seerr 設定</string>
+    <string name="settings_server_url">サーバー URL</string>
+    <string name="settings_arr_no_servers_hint">サーバーが検出されませんでした。Seerr 経由の自動検出を有効にし (Seerr が接続されていることを確認してください)、または下記から手動でサーバーを追加してください。</string>
+    <string name="settings_arr_no_admin_hint">自動検出には管理者権限を持つ Seerr アカウントが必要です (サーバーリストは Seerr の管理者専用設定から取得されます)。管理者ユーザーの API キーを使用して再試行するか、下記から手動でサーバーを追加してください。</string>
+    <string name="settings_enable_seerr_integration">Seerr 連携を有効化</string>
+    <string name="settings_enable_seerr_subtitle">Seerr サーバーを JellyPlay に接続</string>
+    <string name="settings_recommendations_subtitle">メディア詳細画面に Seerr のおすすめを表示</string>
+    <string name="settings_popular_movies_subtitle">TMDB の人気映画</string>
+    <string name="settings_popular_series_subtitle">TMDB の人気シリーズ</string>
+    <string name="settings_seerr_request_hub">Seerr リクエストハブ</string>
+    <string name="settings_seerr_header_description">Jellyseerr または Overseerr に接続して、JellyPlay 内から直接コンテンツを検索、発見、リクエストできます。</string>
+    <string name="settings_hide_api_key">API キーを非表示</string>
+    <string name="settings_show_api_key">API キーを表示</string>
+    <string name="settings_jellyfin_username_placeholder">Jellyfin ユーザー名</string>
+    <string name="settings_jellyfin_password_placeholder">Jellyfin パスワード</string>
+    <string name="settings_seerr_email_placeholder">Seerr アカウントのメール</string>
+    <string name="settings_seerr_password_placeholder">Seerr アカウントのパスワード</string>
+    <string name="settings_seerr_server_reached">Seerr サーバーに正常に接続しました</string>
+    <string name="settings_player_engine">プレーヤーエンジン</string>
+    <string name="settings_player_engine_subtitle">メディア再生エンジンを選択</string>
+    <string name="settings_open_subtitle_tester_subtitle">エンジン間のスタイルをプレビュー</string>
+    <string name="settings_pgs_direct_play_on">PGS 字幕をネイティブにレンダリング (MPV のみ)</string>
+    <string name="settings_preset_json">プリセット JSON</string>
+    <string name="settings_arr_radarr_seerr">Radarr · Seerr</string>
+    <string name="settings_arr_sonarr_seerr">Sonarr · Seerr</string>
+
+    <!-- Localized UI text extracted from settings screens -->
+    <string name="settings_nav_bar_title">ナビゲーションバー</string>
+    <string name="settings_nav_auto_hide">スクロール時に非表示</string>
+    <string name="settings_nav_pinned">固定</string>
+    <string name="settings_nav_items_summary">%1$d / %2$d 件</string>
+    <string name="settings_nav_items_summary_with_scroll">%1$d / %2$d 件 - %3$s</string>
+    <string name="settings_nav_hide_on_scroll">スクロール時に非表示</string>
+    <string name="settings_nav_hide_on_scroll_on">下にスクロールするとバーを非表示</string>
+    <string name="settings_nav_hide_on_scroll_off">バーは表示されたまま</string>
+    <string name="settings_nav_item_home">ホーム</string>
+    <string name="settings_nav_item_home_subtitle">ホームダッシュボード</string>
+    <string name="settings_nav_item_library">ライブラリ</string>
+    <string name="settings_nav_item_library_subtitle">メディアライブラリを閲覧</string>
+    <string name="settings_nav_item_search">検索</string>
+    <string name="settings_nav_item_search_subtitle">映画やシリーズなどを検索</string>
+    <string name="settings_nav_item_live_tv">ライブTV</string>
+    <string name="settings_nav_item_live_tv_subtitle">ライブチャンネルとガイド</string>
+    <string name="settings_nav_item_browse">ブラウズ</string>
+    <string name="settings_nav_item_browse_subtitle">音楽ライブラリ（音楽モード）</string>
+    <string name="settings_nav_item_shortcuts">ショートカット</string>
+    <string name="settings_nav_item_shortcuts_subtitle">クイックアクセスショートカット</string>
+    <string name="settings_reorder_section">セクションを並べ替え</string>
+    <string name="settings_hide_advanced">詳細設定を非表示</string>
+    <string name="settings_show_advanced">詳細設定を表示</string>
+    <string name="settings_advanced_hidden">詳細設定を非表示にしました</string>
+    <string name="settings_advanced_shown">詳細設定を表示しました</string>
+
+
+    <plurals name="settings_advanced_settings_hidden">
+        <item quantity="one">%1$d 件の詳細設定を非表示</item>
+        <item quantity="other">%1$d 件の詳細設定を非表示</item>
+    </plurals>
+    <string name="settings_integrations_subtitles">字幕プロバイダー</string>
+    <string name="settings_integrations_subtitles_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
+    <string name="settings_subtitles_wyzie">Wyzie Subs</string>
+    <string name="settings_subtitles_wyzie_help">無料の字幕API（1日1,000リクエスト）。store.wyzie.io/redeem でキーを取得。</string>
+    <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
+    <string name="settings_subtitles_opensubtitles_help">API key が必要です。ユーザー名/パスワード（任意）で1日のダウンロード枠が増えます。</string>
+    <string name="settings_subtitles_api_key">API key</string>
+    <string name="settings_subtitles_username_optional">ユーザー名（任意）</string>
+    <string name="settings_subtitles_password_optional">パスワード（任意）</string>
+    <string name="settings_subtitles_save">保存</string>
+    <string name="settings_subtitles_test">テスト</string>
+    <string name="settings_subtitles_testing">テスト中…</string>
+    <string name="settings_subtitles_connected">接続済み</string>
 </resources>

@@ -48,4 +48,8 @@
     <string name="search_filter_any">任意</string>
     <string name="search_filter_rating_plus">%1$.1f+</string>
     <string name="search_apply_filters">应用筛选</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="search_request_via_seerr">通过 Seerr 请求</string>
+    <string name="search_seerr_search_failed">Seerr 搜索失败</string>
 </resources>

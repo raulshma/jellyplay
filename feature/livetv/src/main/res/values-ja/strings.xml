@@ -62,4 +62,9 @@
     <string name="livetv_watch">視聴</string>
     <string name="livetv_recording_status">録画中</string>
     <string name="livetv_recording_now">● 録画中</string>
+
+    <!-- EPG grid & live pill labels (batch) -->
+    <string name="livetv_will_be_recorded">「%1$s」を録画します。</string>
+    <string name="livetv_channel">チャンネル</string>
+    <string name="livetv_live">ライブ</string>
 </resources>

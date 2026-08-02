@@ -273,12 +273,19 @@ private fun ManageSeriesContent(
 
             if (expanded) {
                 items(items = episodes, key = { it.id }) { episode ->
+                    // Memoize per-episode so the row stays skippable: without
+                    // this, three fresh lambdas are allocated per visible row
+                    // per recomposition, forcing EpisodeRow to recompose even
+                    // when its inputs are unchanged.
+                    val onToggleMonitored = remember(episode.id) { { onToggleEpisodeMonitored(episode) } }
+                    val onSearch = remember(episode.id) { { onSearchEpisode(episode) } }
+                    val onDelete = remember(episode.id) { { onRequestDeleteEpisode(episode) } }
                     EpisodeRow(
                         episode = episode,
                         isLoading = (state.actionTarget as? ActionTarget.Episode)?.episodeId == episode.id,
-                        onToggleMonitored = { onToggleEpisodeMonitored(episode) },
-                        onSearch = { onSearchEpisode(episode) },
-                        onDelete = { onRequestDeleteEpisode(episode) },
+                        onToggleMonitored = onToggleMonitored,
+                        onSearch = onSearch,
+                        onDelete = onDelete,
                     )
                 }
             }

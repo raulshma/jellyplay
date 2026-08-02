@@ -13,7 +13,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
-import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
+import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 
 import com.raulshma.jellyplay.core.model.UserInfo
 
@@ -87,7 +87,7 @@ data class HomeUiState(
 data class HomeSearchState(
     val jellyfinResults: List<MediaItem> = emptyList(),
     val seerrResults: List<SeerrSearchItem> = emptyList(),
-    val settingsResults: List<SettingsSearchItem> = emptyList(),
+    val settingsResults: List<ResolvedSettingsItem> = emptyList(),
     val isSearching: Boolean = false,
 ) {
     // NOTE: the live query string no longer lives here. It is the per-keystroke

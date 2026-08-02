@@ -4,6 +4,7 @@ import android.content.Context
 import com.mikepenz.aboutlibraries.Libs
 import com.mikepenz.aboutlibraries.entity.Library
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.settings.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +41,7 @@ class LicensesViewModel @Inject constructor(
                 libraries = parsed.libraries.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             } catch (_: Exception) {
                 libraries = emptyList()
-                error = "Could not load license information"
+                error = context.getString(R.string.settings_licenses_load_error)
             }
             isLoading = false
         }

@@ -199,6 +199,11 @@
     <string name="detail_manage_cd_toggle_monitor_episode">切换该集的监控状态</string>
     <string name="detail_manage_cd_episode_menu">剧集选项</string>
 
+    <!-- Localized error messages -->
+    <string name="detail_manage_series_load_error">无法从 Jellyfin 加载剧集。</string>
+    <string name="detail_manage_series_no_tvdb">此剧集没有 tvdb id；Sonarr 无法查找。</string>
+    <string name="detail_manage_series_not_tracked">没有 Sonarr 服务器跟踪此剧集。请先在 Sonarr 中添加该剧集。</string>
+
     <!-- ── Seerr request / status buttons ──────────────────────────────── -->
     <string name="detail_available">可用</string>
     <string name="detail_request">请求</string>
@@ -226,4 +231,28 @@
     <string name="detail_media_info_title_subtitles">字幕</string>
     <string name="detail_media_info_no_info">无媒体信息</string>
     <string name="detail_media_info_no_info_description">此项目没有可用的技术信息</string>
+
+    <!-- auto-localized: previously translatable="false" (2) -->
+    <string name="detail_section_seerr_recommendations">Seerr 推荐</string>
+    <string name="detail_section_seerr_similar">Seerr 相似内容</string>
+
+    <!-- Localized UI text extracted from SeerrDetailScreen -->
+    <string name="detail_seerr_unknown_error">未知错误</string>
+    <string name="detail_seerr_overview">概述</string>
+    <string name="detail_seerr_episodes_count">%1$d 集</string>
+    <string name="detail_seerr_season_n">第 %1$d 季</string>
+    <string name="detail_seerr_director_format">导演: %1$s</string>
+    <string name="detail_seerr_show_more">显示更多</string>
+    <string name="detail_seerr_video">视频</string>
+    <string name="detail_seerr_information">信息</string>
+    <string name="detail_seerr_status">状态</string>
+    <string name="detail_seerr_unknown">未知</string>
+    <string name="detail_seerr_release_date">上映日期</string>
+    <string name="detail_seerr_revenue">票房</string>
+    <string name="detail_seerr_budget">预算</string>
+    <string name="detail_seerr_language">语言</string>
+    <string name="detail_seerr_country">国家</string>
+    <string name="detail_seerr_studios">工作室</string>
+    <string name="detail_seerr_currently_streaming_on">当前可在以下平台观看</string>
+
 </resources>

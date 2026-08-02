@@ -54,14 +54,20 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // block below keeps it off the cold-start critical path. start() only
     // launches observers on its own scope, so behavior is unchanged.
     @Inject lateinit var nowPlayingWidgetUpdaterProvider: javax.inject.Provider<com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater>
-    @Inject lateinit var notificationScheduler: NotificationScheduler
-    @Inject lateinit var autoDownloadScheduler: com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
-    @Inject lateinit var userDataSyncScheduler: com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
-    @Inject lateinit var playbackSyncScheduler: com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
-    @Inject lateinit var playbackSyncReconnectListener: com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
-    @Inject lateinit var downloadReconnectListener: com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener
-    @Inject lateinit var widgetWorkScheduler: com.raulshma.jellyplay.widget.WidgetWorkScheduler
-    @Inject lateinit var downloadRecoveryInitializer: com.raulshma.jellyplay.startup.DownloadRecoveryInitializer
+    // The remaining schedulers/listeners are likewise deferred via
+    // javax.inject.Provider. A direct @Inject lateinit var forces Hilt to
+    // construct each one (and its transitive graph — several pull Room, OkHttp,
+    // repository singletons) during super.onCreate() before the first frame.
+    // Each .start()/.enqueue…()/sync() body already runs on its own scope or
+    // dispatches to IO, so construction is the only cost on the critical path.
+    @Inject lateinit var notificationSchedulerProvider: javax.inject.Provider<NotificationScheduler>
+    @Inject lateinit var autoDownloadSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler>
+    @Inject lateinit var userDataSyncSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler>
+    @Inject lateinit var playbackSyncSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler>
+    @Inject lateinit var playbackSyncReconnectListenerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener>
+    @Inject lateinit var downloadReconnectListenerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener>
+    @Inject lateinit var widgetWorkSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.widget.WidgetWorkScheduler>
+    @Inject lateinit var downloadRecoveryInitializerProvider: javax.inject.Provider<com.raulshma.jellyplay.startup.DownloadRecoveryInitializer>
 
     @Inject @ApplicationScope lateinit var applicationScope: CoroutineScope
 
@@ -75,19 +81,20 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         }
         // Background schedulers — independent enqueue calls, all KEEP-safe.
         // Run concurrently with the critical path so cold start isn't gated on
-        // audio init.
+        // audio init. Provider.get() constructs each scheduler here (off the
+        // main thread) instead of during super.onCreate().
         applicationScope.launch(Dispatchers.IO) {
-            widgetWorkScheduler.enqueuePeriodic()
-            userDataSyncScheduler.enqueuePeriodic()
-            playbackSyncScheduler.enqueuePeriodic()
-            playbackSyncReconnectListener.start()
-            downloadReconnectListener.start()
-            autoDownloadScheduler.sync()
-            notificationScheduler.scheduleOrUpdate()
+            widgetWorkSchedulerProvider.get().enqueuePeriodic()
+            userDataSyncSchedulerProvider.get().enqueuePeriodic()
+            playbackSyncSchedulerProvider.get().enqueuePeriodic()
+            playbackSyncReconnectListenerProvider.get().start()
+            downloadReconnectListenerProvider.get().start()
+            autoDownloadSchedulerProvider.get().sync()
+            notificationSchedulerProvider.get().scheduleOrUpdate()
         }
         // Best-effort download recovery — independent of the above groups.
         applicationScope.launch(Dispatchers.IO) {
-            downloadRecoveryInitializer.recover()
+            downloadRecoveryInitializerProvider.get().recover()
         }
     }
 

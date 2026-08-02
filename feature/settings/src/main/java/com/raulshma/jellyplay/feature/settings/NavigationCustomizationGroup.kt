@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -15,6 +16,7 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Apps
@@ -26,6 +28,7 @@ import com.composables.icons.tabler.outline.LayoutList
 import com.composables.icons.tabler.outline.Menu2
 import com.composables.icons.tabler.outline.Search
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.feature.settings.R
 
 /**
  * Describes a single floating-navigation-bar item for the customization UI.
@@ -36,20 +39,20 @@ import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
  */
 private data class NavItemDescriptor(
     val key: String,
-    val label: String,
+    @StringRes val labelRes: Int,
     val icon: ImageVector,
-    val subtitle: String,
+    @StringRes val subtitleRes: Int,
 )
 
 // The union of video + music top-level routes, in their default display order.
 // Mirrors VIDEO_TOP_LEVEL_ROUTES / MUSIC_TOP_LEVEL_ROUTES in core:ui.
 private val NAV_ITEMS: List<NavItemDescriptor> = listOf(
-    NavItemDescriptor("Home", "Home", Tabler.Outline.Home, "Home dashboard"),
-    NavItemDescriptor("Library", "Library", Tabler.Outline.LayoutList, "Browse your media libraries"),
-    NavItemDescriptor("Search", "Search", Tabler.Outline.Search, "Find movies, shows & more"),
-    NavItemDescriptor("LiveTv", "Live TV", Tabler.Outline.DeviceTv, "Live channels & guide"),
-    NavItemDescriptor("MusicBrowse", "Browse", Tabler.Outline.Disc, "Music libraries (music mode)"),
-    NavItemDescriptor("Shortcuts", "Shortcuts", Tabler.Outline.Apps, "Quick access shortcuts"),
+    NavItemDescriptor("Home", R.string.settings_nav_item_home, Tabler.Outline.Home, R.string.settings_nav_item_home_subtitle),
+    NavItemDescriptor("Library", R.string.settings_nav_item_library, Tabler.Outline.LayoutList, R.string.settings_nav_item_library_subtitle),
+    NavItemDescriptor("Search", R.string.settings_nav_item_search, Tabler.Outline.Search, R.string.settings_nav_item_search_subtitle),
+    NavItemDescriptor("LiveTv", R.string.settings_nav_item_live_tv, Tabler.Outline.DeviceTv, R.string.settings_nav_item_live_tv_subtitle),
+    NavItemDescriptor("MusicBrowse", R.string.settings_nav_item_browse, Tabler.Outline.Disc, R.string.settings_nav_item_browse_subtitle),
+    NavItemDescriptor("Shortcuts", R.string.settings_nav_item_shortcuts, Tabler.Outline.Apps, R.string.settings_nav_item_shortcuts_subtitle),
 )
 
 /**
@@ -69,11 +72,13 @@ fun NavigationCustomizationGroup(
 ) {
     SettingsGroup(
         icon = Tabler.Outline.Menu2,
-        title = "Navigation Bar",
+        title = stringResource(R.string.settings_nav_bar_title),
         summary = {
             val visible = NAV_ITEMS.count { it.key !in preferences.hiddenNavItems }
-            val scroll = if (preferences.hideBottomNavOnScroll) "Auto-hide on scroll" else "Pinned"
-            "$visible of ${NAV_ITEMS.size} items · $scroll"
+            val scroll = stringResource(
+                if (preferences.hideBottomNavOnScroll) R.string.settings_nav_auto_hide else R.string.settings_nav_pinned,
+            )
+            stringResource(R.string.settings_nav_items_summary_with_scroll, visible, NAV_ITEMS.size, scroll)
         },
         initiallyExpanded = true,
         modifier = modifier,
@@ -83,8 +88,10 @@ fun NavigationCustomizationGroup(
 
         SettingToggleItem(
             icon = Tabler.Outline.ArrowBarToDown,
-            title = "Hide on Scroll",
-            subtitle = if (preferences.hideBottomNavOnScroll) "Bar hides when scrolling down" else "Bar stays visible",
+            title = stringResource(R.string.settings_nav_hide_on_scroll),
+            subtitle = stringResource(
+                if (preferences.hideBottomNavOnScroll) R.string.settings_nav_hide_on_scroll_on else R.string.settings_nav_hide_on_scroll_off,
+            ),
             checked = preferences.hideBottomNavOnScroll,
             index = idx++, count = total,
             onCheckedChange = { viewModel.setHideBottomNavOnScroll(it) },
@@ -149,8 +156,8 @@ fun NavigationCustomizationGroup(
             val enabled = key !in preferences.hiddenNavItems
             SettingReorderableToggleItem(
                 icon = descriptor.icon,
-                title = descriptor.label,
-                subtitle = descriptor.subtitle,
+                title = stringResource(descriptor.labelRes),
+                subtitle = stringResource(descriptor.subtitleRes),
                 checked = enabled,
                 index = index,
                 count = navItemOrder.size,

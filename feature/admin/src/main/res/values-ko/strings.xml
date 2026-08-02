@@ -169,6 +169,7 @@
     <string name="admin_security_limits">보안 제한</string>
     <string name="admin_security_limits_desc">동시 세션 및 로그인 보호.</string>
     <string name="admin_max_active_sessions">최대 활성 세션</string>
+    <string name="admin_zero_blank_unlimited">0 또는 빈칸 = 무제한</string>
     <string name="admin_login_attempts">잠금 전 로그인 시도 횟수</string>
     <string name="admin_blank_no_lockout">비움 = 잠금 없음</string>
     <string name="admin_identity">신원</string>

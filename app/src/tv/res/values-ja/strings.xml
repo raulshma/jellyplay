@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="search_hint">映画、番組、音楽を検索…</string>
+
+    <!-- auto-localized: previously translatable="false" (1) -->
+    <string name="search_settings_description">Jellyfin メディアライブラリを検索</string>
 </resources>

@@ -32,6 +32,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +64,7 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.TooltipAnchorPosition
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
+import com.raulshma.jellyplay.feature.settings.R
 
 // `SettingListItem` / `SettingToggleItem` live canonically in
 // `core/ui/.../components/SettingItems.kt` (shared with feature/admin). Call sites in this module
@@ -167,7 +170,7 @@ internal fun SettingReorderableToggleItem(
                 ) {
                     Icon(
                         Tabler.Outline.GripVertical,
-                        contentDescription = "Reorder section",
+                        contentDescription = stringResource(R.string.settings_reorder_section),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDragging) 0.9f else 0.6f),
                         modifier = Modifier.size(18.dp),
                     )
@@ -248,10 +251,14 @@ internal fun AdvancedSettingsToggleButton(
 ) {
     val isTv = LocalTvMode.current
     val userMessageBus = LocalUserMessageBus.current
-    val tooltipText = if (showAdvanced) "Hide advanced settings" else "Show advanced settings"
+    val tooltipText = stringResource(
+        if (showAdvanced) R.string.settings_hide_advanced else R.string.settings_show_advanced,
+    )
+    val toastMessage = stringResource(
+        if (showAdvanced) R.string.settings_advanced_hidden else R.string.settings_advanced_shown,
+    )
     val onClickAction = {
         onToggle()
-        val toastMessage = if (showAdvanced) "Advanced settings hidden" else "Advanced settings shown"
         userMessageBus.info(toastMessage)
     }
 
@@ -327,7 +334,7 @@ internal fun HiddenSettingsHint(
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = "$hiddenCount advanced setting${if (hiddenCount != 1) "s" else ""} hidden",
+            text = pluralStringResource(R.plurals.settings_advanced_settings_hidden, hiddenCount, hiddenCount),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

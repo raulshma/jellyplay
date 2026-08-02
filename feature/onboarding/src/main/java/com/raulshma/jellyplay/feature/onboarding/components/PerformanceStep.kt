@@ -36,7 +36,7 @@ fun PerformanceStep(
             onNext = {},
         ) {
             Text(
-                text = "Performance Mode",
+                text = stringResource(R.string.onboarding_performance_mode),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -44,7 +44,7 @@ fun PerformanceStep(
             Spacer(Modifier.height(4.dp))
 
             Text(
-                text = "Reduces animations, transitions, and image quality for smoother performance on lower-end devices. You can always change this later in Settings.",
+                text = stringResource(R.string.onboarding_performance_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -1018,6 +1018,14 @@ private fun TvControllableSeekBar(
 
     val chapterMarkerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
 
+    // Precompute the per-segment draw color once per segment list. The seek bar
+    // Canvas redraws on every position/buffered tick (~4 Hz) and previously
+    // allocated a fresh Color(segment.type.colorLong) per segment per frame;
+    // the segment colors only change when the segment list itself changes.
+    val segmentColors = remember(segments) {
+        segments.associate { it to Color(it.type.colorLong) }
+    }
+
     val tvFocusState = rememberTvFocusState(focusedScale = 1f)
 
     val seekStep = if (isTv) 30_000f / duration else 10_000f / duration
@@ -1191,7 +1199,7 @@ private fun TvControllableSeekBar(
                         val segHeight = 6.dp.toPx()
                         val segY = (size.height / 2f) - (segHeight / 2f)
                         drawRoundRect(
-                            color = Color(segment.type.colorLong).copy(alpha = 0.4f),
+                            color = (segmentColors[segment] ?: Color.Black).copy(alpha = 0.4f),
                             topLeft = androidx.compose.ui.geometry.Offset(startFrac * trackWidth, segY),
                             size = androidx.compose.ui.geometry.Size((endFrac - startFrac) * trackWidth, segHeight),
                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(segHeight / 2f),
@@ -1324,7 +1332,7 @@ private fun EndsAtLabel(
     val realRemainingMs = if (playbackSpeed > 0f) (remainingMs / playbackSpeed).toLong() else remainingMs
     val endsAt = rememberEndsAtTime(realRemainingMs, controlsVisible)
     Text(
-        text = "Ends at $endsAt",
+        text = stringResource(R.string.player_video_ends_at, endsAt),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
     )
