@@ -29,32 +29,32 @@ class LanguageSettingsViewModel @Inject constructor(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { setShowAdvancedSettings(enabled) }
+        editor.edit { appearance.setShowAdvancedSettings(enabled) }
 
     fun setPreferredAudioLanguage(language: String?) =
-        editor.edit { setPreferredAudioLanguage(language) }
+        editor.edit { subtitle.setPreferredAudioLanguage(language) }
 
     fun setPreferredSubtitleLanguage(language: String?) = editor.setPreferredSubtitleLanguage(language)
 
     fun setSubtitleStyle(style: SubtitleStyle) = editor.setSubtitleStyle(style)
 
     fun setHighContrastSubtitles(enabled: Boolean) =
-        editor.edit { setHighContrastSubtitles(enabled) }
+        editor.edit { subtitle.setHighContrastSubtitles(enabled) }
 
     fun setSubtitlesForcedOnly(enabled: Boolean) = editor.setSubtitlesForcedOnly(enabled)
 
     fun setPgsSubtitleDirectPlay(enabled: Boolean) =
-        editor.edit { setPgsSubtitleDirectPlay(enabled) }
+        editor.edit { playback.setPgsSubtitleDirectPlay(enabled) }
 
     fun setHdrSubtitleStyleEnabled(enabled: Boolean) =
-        editor.edit { setHdrSubtitleStyleEnabled(enabled) }
+        editor.edit { subtitle.setHdrSubtitleStyleEnabled(enabled) }
 
     fun setHdrSubtitleStyle(style: SubtitleStyle) =
-        editor.edit { setHdrSubtitleStyle(style) }
+        editor.edit { subtitle.setHdrSubtitleStyle(style) }
 
     fun setAppLanguage(language: String?) {
         launch {
-            editor.edit { setAppLanguage(language) }
+            editor.edit { subtitle.setAppLanguage(language) }
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                 val localeManager = context.getSystemService(android.app.LocaleManager::class.java)
                 localeManager?.applicationLocales = if (language != null) {

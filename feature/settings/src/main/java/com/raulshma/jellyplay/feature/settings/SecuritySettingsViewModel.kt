@@ -27,7 +27,7 @@ class SecuritySettingsViewModel @Inject constructor(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { setShowAdvancedSettings(enabled) }
+        editor.edit { appearance.setShowAdvancedSettings(enabled) }
 
     fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
 

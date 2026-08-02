@@ -21,9 +21,11 @@ import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
+import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
@@ -494,7 +496,7 @@ class HomeViewModelTest {
         // Capture the edit{} block and run it against a recording store so the
         // resulting order can be asserted (edit is fire-and-forget over the app
         // scope, so the lambda is the only place the new order lives).
-        val editorBlock = slot<suspend UserPreferencesStore.() -> Unit>()
+        val editorBlock = slot<suspend PreferencesEditScope.() -> Unit>()
         every { preferencesEditor.edit(capture(editorBlock)) } returns mockk()
         viewModel = buildViewModel()
         runCurrent()
@@ -502,12 +504,14 @@ class HomeViewModelTest {
         viewModel.moveSection(HomeSectionType.NEXT_UP, up = true)
 
         assertTrue(editorBlock.isCaptured)
-        val recordingStore = mockk<UserPreferencesStore>(relaxed = true)
+        val recordingHome = mockk<HomeDiscoveryStore>(relaxed = true)
         var capturedOrder: List<HomeSectionType>? = null
-        coEvery { recordingStore.setHomeSectionOrder(any()) } answers { capturedOrder = firstArg() }
+        coEvery { recordingHome.setHomeSectionOrder(any()) } answers { capturedOrder = firstArg() }
+        val editScope = mockk<PreferencesEditScope>(relaxed = true)
+        every { editScope.homeDiscovery } returns recordingHome
         // edit's block is suspend — run it in a real coroutine to replay it
-        // against the recording store and observe the persisted order.
-        kotlinx.coroutines.runBlocking { editorBlock.captured.invoke(recordingStore) }
+        // against the recording scope and observe the persisted order.
+        kotlinx.coroutines.runBlocking { editorBlock.captured.invoke(editScope) }
         assertEquals(
             listOf(HomeSectionType.NEXT_UP, HomeSectionType.CONTINUE_WATCHING, HomeSectionType.LATEST_MEDIA),
             capturedOrder,

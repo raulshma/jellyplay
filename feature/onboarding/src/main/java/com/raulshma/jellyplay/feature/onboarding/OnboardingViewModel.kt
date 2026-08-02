@@ -46,7 +46,7 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun completeOnboarding() {
-        editor.edit { setOnboardingCompleted(true) }
+        editor.edit { appRuntimeState.setOnboardingCompleted(true) }
     }
 
     fun setThemeMode(mode: com.raulshma.jellyplay.core.model.ThemeMode) = editor.setThemeMode(mode)

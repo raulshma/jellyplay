@@ -42,7 +42,7 @@ class NotificationSettingsViewModel @Inject constructor(
     }
 
     fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { setShowAdvancedSettings(enabled) }
+        editor.edit { appearance.setShowAdvancedSettings(enabled) }
 
     /**
      * Applies a transform to the notification preferences and reschedules the
@@ -50,7 +50,7 @@ class NotificationSettingsViewModel @Inject constructor(
      */
     fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
         editor.edit {
-            updateNotificationPreferences(transform)
+            notification.updateNotificationPreferences(transform)
             notificationScheduler.scheduleOrUpdate()
         }
     }
