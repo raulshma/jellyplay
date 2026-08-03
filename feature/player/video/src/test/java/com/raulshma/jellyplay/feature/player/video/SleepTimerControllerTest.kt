@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.coVerify
 import io.mockk.every
@@ -21,7 +21,7 @@ import org.junit.Test
 class SleepTimerControllerTest {
 
     private lateinit var sleepTimerManager: SleepTimerManager
-    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var audioStore: AudioStore
     private lateinit var engine: MediaEngine
     private var uiState = VideoPlayerUiState()
     private val testDispatcher = UnconfinedTestDispatcher()
@@ -32,13 +32,13 @@ class SleepTimerControllerTest {
     @Before
     fun setUp() {
         sleepTimerManager = mockk(relaxed = true)
-        preferencesStore = mockk(relaxed = true)
+        audioStore = mockk(relaxed = true)
         engine = mockk(relaxed = true)
         every { engine.volume } returns 0.8f
 
         controller = SleepTimerController(
             sleepTimerManager = sleepTimerManager,
-            preferencesStore = preferencesStore,
+            audioStore = audioStore,
             scope = testScope,
             getEngine = { engine },
             isMuted = { false },
@@ -50,8 +50,8 @@ class SleepTimerControllerTest {
     fun startSleepTimer_capturesVolume_configuresManager_andUpdatesUiState() {
         controller.startSleepTimer(15_000L)
 
-        coVerify { preferencesStore.setSleepTimerDurationMs(15_000L) }
-        coVerify { preferencesStore.setSleepTimerEndOfEpisode(false) }
+        coVerify { audioStore.setSleepTimerDurationMs(15_000L) }
+        coVerify { audioStore.setSleepTimerEndOfEpisode(false) }
 
         verify { sleepTimerManager.start(15_000L) }
         assertTrue(uiState.sleepTimerActive)
@@ -69,7 +69,7 @@ class SleepTimerControllerTest {
     fun startSleepTimerEndOfEpisode_configuresManagerAndUpdatesState() {
         controller.startSleepTimerEndOfEpisode()
 
-        coVerify { preferencesStore.setSleepTimerEndOfEpisode(true) }
+        coVerify { audioStore.setSleepTimerEndOfEpisode(true) }
         verify { sleepTimerManager.startEndOfEpisode() }
         assertTrue(uiState.sleepTimerActive)
         assertTrue(uiState.sleepTimerEndOfEpisode)
