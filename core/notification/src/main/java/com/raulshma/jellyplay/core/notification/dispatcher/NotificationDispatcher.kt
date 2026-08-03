@@ -154,12 +154,18 @@ class NotificationDispatcher @Inject constructor(
         // NotificationActionReceiver which records the seen-media row and dismisses
         // the notification. Uses a distinct PendingIntent request code per item so
         // each notification carries its own itemId/libraryId/mediaType extras.
-        val markSeenIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionReceiver.ACTION_MARK_SEEN
-            putExtra(NotificationActionReceiver.EXTRA_ITEM_ID, item.id)
-            putExtra(NotificationActionReceiver.EXTRA_LIBRARY_ID, libraryId)
-            putExtra(NotificationActionReceiver.EXTRA_MEDIA_TYPE, item.mediaType.name)
-        }
+        //
+        // All setters are chained directly on the Intent expression (not inside
+        // an `Intent(...).apply { ... }` block) so CodeQL's implicit-PendingIntent
+        // recognition links the explicit component to the value handed to
+        // PendingIntent; the `(Context, Class)` constructor is not enough for the
+        // analysis to consider the intent explicit.
+        val markSeenIntent = Intent()
+            .setClassName(context.packageName, NotificationActionReceiver::class.java.name)
+            .setAction(NotificationActionReceiver.ACTION_MARK_SEEN)
+            .putExtra(NotificationActionReceiver.EXTRA_ITEM_ID, item.id)
+            .putExtra(NotificationActionReceiver.EXTRA_LIBRARY_ID, libraryId)
+            .putExtra(NotificationActionReceiver.EXTRA_MEDIA_TYPE, item.mediaType.name)
         val markSeenPendingIntent = PendingIntent.getBroadcast(
             context,
             notificationId,
@@ -170,10 +176,10 @@ class NotificationDispatcher @Inject constructor(
         // "Open" mirrors the content intent but goes through the action receiver's
         // ACTION_OPEN_DETAIL path for consistency (and so the action is explicit on
         // wearables / Android Auto where content taps are not always available).
-        val openIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionReceiver.ACTION_OPEN_DETAIL
-            putExtra(NotificationActionReceiver.EXTRA_ITEM_ID, item.id)
-        }
+        val openIntent = Intent()
+            .setClassName(context.packageName, NotificationActionReceiver::class.java.name)
+            .setAction(NotificationActionReceiver.ACTION_OPEN_DETAIL)
+            .putExtra(NotificationActionReceiver.EXTRA_ITEM_ID, item.id)
         val openPendingIntent = PendingIntent.getBroadcast(
             context,
             notificationId + OPEN_ACTION_REQUEST_CODE_OFFSET,

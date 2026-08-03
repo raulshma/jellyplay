@@ -207,6 +207,7 @@ fun MediaDetailScreen(
                     isDownloadingSeries = uiState.isDownloadingSeries,
                     activeDownload = activeDownload,
                     isLoading = uiState.isLoading,
+                    isRefreshing = uiState.isRefreshing,
                     error = uiState.error,
                     isAccessDenied = uiState.isAccessDenied,
                     albumTracks = uiState.albumTracks,
@@ -236,6 +237,7 @@ fun MediaDetailScreen(
                         getBackdropUrl = rememberedGetBackdropUrl,
                         getSeerrPosterUrl = rememberedGetSeerrPosterUrl,
                         onRetry = { viewModel.loadItem(itemId) },
+                        onRefresh = { viewModel.forceRefresh() },
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
                             onPlayClick(
                                 playItemId,
