@@ -1,0 +1,5 @@
+name: "CodeQL configuration"
+
+paths-ignore:
+  - "**/build/**"
+  - "**/generated/**"
