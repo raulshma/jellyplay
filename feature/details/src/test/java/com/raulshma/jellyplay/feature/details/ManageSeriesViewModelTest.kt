@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
+import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -10,6 +11,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -30,15 +32,20 @@ class ManageSeriesViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    private lateinit var context: Context
     private lateinit var mediaRepository: MediaRepository
     private lateinit var arrRepository: ArrRepository
     private lateinit var viewModel: ManageSeriesViewModel
 
     @Before
     fun setUp() {
+        context = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
-        viewModel = ManageSeriesViewModel(mediaRepository, arrRepository)
+        // The relaxed context mock returns "" for getString, which empties
+        // every localized error. Reconstruct the canonical form here.
+        every { context.getString(R.string.detail_manage_series_load_error) } returns "Couldn't load series from Jellyfin."
+        viewModel = ManageSeriesViewModel(context, mediaRepository, arrRepository)
     }
 
     private fun ep(

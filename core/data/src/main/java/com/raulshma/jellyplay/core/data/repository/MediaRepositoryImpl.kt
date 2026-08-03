@@ -109,6 +109,11 @@ class MediaRepositoryImpl @Inject constructor(
         episodesCache.remove("episodes_$seriesId")
     }
 
+    override fun invalidateCollectionItemsCache(collectionId: String) {
+        // Keys are `collection_${id}_${startIndex}_${limit}`, so evict by prefix.
+        collectionItemsCache.removeByKeyPrefix("collection_$collectionId")
+    }
+
     @Volatile
     private var cachedHomeSections: HomeSectionsResult? = null
     @Volatile

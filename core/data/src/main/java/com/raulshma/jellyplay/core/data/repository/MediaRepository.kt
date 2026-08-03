@@ -189,6 +189,13 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
     fun invalidateSeriesCache(seriesId: String)
 
     /**
+     * Drops the TTL-cached collection-items entries for the given collection so
+     * the next call re-fetches fresh data from the server. Used by the detail
+     * screen's pull-to-refresh, which must bypass every in-memory cache.
+     */
+    fun invalidateCollectionItemsCache(collectionId: String)
+
+    /**
      * Single operation for "user data for [itemId] changed" (favorite flip,
      * played/unplayed, playback position). Owns the series-resolution rule:
      * drops the item's detail cache, its album tracks, and — if the item

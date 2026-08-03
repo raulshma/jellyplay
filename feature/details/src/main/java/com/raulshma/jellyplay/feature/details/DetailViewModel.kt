@@ -373,6 +373,23 @@ class DetailViewModel @Inject constructor(
         downloadRepository.getDownloadByMediaItemIdFlow(itemId)
 
     fun loadItem(itemId: String) {
+        loadItemInternal(itemId, refresh = false)
+    }
+
+    /**
+     * Pull-to-refresh: invalidates every in-memory cache backing this detail
+     * screen (detail, similar, seasons/episodes, album tracks, collection
+     * items) and re-fetches all data fresh from the server. Unlike [loadItem]
+     * the current content stays on screen (the full-screen loading state is
+     * skipped); the pull-to-refresh indicator is driven by
+     * [DetailUiState.isRefreshing] instead.
+     */
+    fun forceRefresh() {
+        val itemId = _uiState.value.detail?.item?.id ?: return
+        loadItemInternal(itemId, refresh = true)
+    }
+
+    private fun loadItemInternal(itemId: String, refresh: Boolean) {
         // Record the item we're loading synchronously so that a stale
         // loadSeerrDataIfNeeded() call (from a freshly-composed screen still
         // observing the previous item's detail via the shared ViewModel) can be
@@ -382,11 +399,15 @@ class DetailViewModel @Inject constructor(
         loadJob = launch {
             // Single atomic reset — collapses what used to be ~14 separate
             // composeState/stateFlow mutations into one emission so observers
-            // see one recomposition, not fourteen.
+            // see one recomposition, not fourteen. On refresh the detail is
+            // kept so the content stays visible under the pull-to-refresh
+            // indicator; every subsidiary slice is still cleared so fresh data
+            // replaces it wholesale.
             _uiState.update {
                 it.copy(
-                    detail = null,
-                    isLoading = true,
+                    detail = if (refresh) it.detail else null,
+                    isLoading = !refresh,
+                    isRefreshing = refresh,
                     error = null,
                     seasons = emptyList(),
                     episodes = emptyMap(),
@@ -414,6 +435,19 @@ class DetailViewModel @Inject constructor(
             // Clear download-sheet caches too, since the same VM instance is reused.
             downloadSheetEpisodesMap.clear()
             downloadSheetFetchedSeasonIds = emptySet()
+            if (refresh) {
+                // Invalidate every cache the detail screen reads so the refetch
+                // hits the server rather than the TTL caches.
+                val item = _uiState.value.detail?.item
+                mediaRepository.invalidateDetailCache(itemId)
+                when (item?.mediaType) {
+                    MediaType.SERIES -> mediaRepository.invalidateSeriesCache(item.id)
+                    MediaType.EPISODE -> item.seriesId?.let { mediaRepository.invalidateSeriesCache(it) }
+                    MediaType.ALBUM -> mediaRepository.invalidateUserDataCaches(itemId)
+                    MediaType.COLLECTION -> mediaRepository.invalidateCollectionItemsCache(itemId)
+                    else -> Unit
+                }
+            }
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
                     val storedSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
@@ -493,7 +527,7 @@ class DetailViewModel @Inject constructor(
                     }
                     _uiState.update { it.copy(error = message, isAccessDenied = accessDenied) }
                 }
-            _uiState.update { it.copy(isLoading = false) }
+            _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
         }
     }
 

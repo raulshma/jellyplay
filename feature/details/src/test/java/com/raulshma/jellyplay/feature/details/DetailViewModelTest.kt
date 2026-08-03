@@ -13,18 +13,35 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
+import com.raulshma.jellyplay.core.datastore.library.LibraryStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +75,15 @@ class DetailViewModelTest {
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var downloadIntake: DownloadIntake
-    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var appearanceStore: AppearanceStore
+    private lateinit var videoPlayerStore: VideoPlayerStore
+    private lateinit var subtitleLanguageStore: SubtitleLanguageStore
+    private lateinit var libraryStore: LibraryStore
+    private lateinit var homeDiscoveryStore: HomeDiscoveryStore
+    private lateinit var experimentalStore: ExperimentalStore
+    private lateinit var downloadsStore: DownloadsStore
+    private lateinit var appRuntimeStateStore: AppRuntimeStateStore
+    private lateinit var engineStore: PlayerEngineStore
     private lateinit var offlineModeManager: OfflineModeManager
     private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
     private lateinit var seerrRepository: SeerrRepository
@@ -78,7 +103,15 @@ class DetailViewModelTest {
         imageUrlProvider = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
-        preferencesStore = mockk(relaxed = true)
+        appearanceStore = mockk(relaxed = true)
+        videoPlayerStore = mockk(relaxed = true)
+        subtitleLanguageStore = mockk(relaxed = true)
+        libraryStore = mockk(relaxed = true)
+        homeDiscoveryStore = mockk(relaxed = true)
+        experimentalStore = mockk(relaxed = true)
+        downloadsStore = mockk(relaxed = true)
+        appRuntimeStateStore = mockk(relaxed = true)
+        engineStore = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
         adaptiveBitrateManager = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
@@ -88,7 +121,14 @@ class DetailViewModelTest {
         tmdbApiClient = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
 
-        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        every { appearanceStore.appearance } returns MutableStateFlow(AppearanceSlice())
+        every { videoPlayerStore.videoPlayer } returns MutableStateFlow(VideoPlayerSlice())
+        every { subtitleLanguageStore.subtitle } returns MutableStateFlow(SubtitleSlice())
+        every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
+        every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
+        every { experimentalStore.experimental } returns MutableStateFlow(ExperimentalSlice())
+        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
+        every { engineStore.playerEngine } returns MutableStateFlow(PlayerEngineSlice())
         every { seerrRepository.isConnected() } returns flowOf(false)
         every { seerrRepository.isRecommendationsEnabled() } returns flowOf(false)
         // Default stub for the similar-items fetch so loadItem's concurrent
@@ -144,7 +184,15 @@ class DetailViewModelTest {
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
             downloadIntake = downloadIntake,
-            preferencesStore = preferencesStore,
+            appearanceStore = appearanceStore,
+            videoPlayerStore = videoPlayerStore,
+            subtitleLanguageStore = subtitleLanguageStore,
+            libraryStore = libraryStore,
+            homeDiscoveryStore = homeDiscoveryStore,
+            experimentalStore = experimentalStore,
+            downloadsStore = downloadsStore,
+            appRuntimeStateStore = appRuntimeStateStore,
+            engineStore = engineStore,
             offlineModeManager = offlineModeManager,
             adaptiveBitrateManager = adaptiveBitrateManager,
             seerrRepository = seerrRepository,
@@ -197,6 +245,174 @@ class DetailViewModelTest {
 
         assertNotNull(viewModel.uiState.value.detail)
         assertNull(viewModel.uiState.value.smartPlayTarget)
+    }
+
+    // ---- Pull-to-refresh ---------------------------------------------------
+
+    @Test
+    fun forceRefresh_withoutLoadedDetail_isNoOp() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { mediaRepository.invalidateDetailCache(any()) }
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        assertFalse(viewModel.uiState.value.isRefreshing)
+    }
+
+    @Test
+    fun forceRefresh_keepsContentVisibleWhileRefetching() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),
+        )
+
+        viewModel.loadItem("m1")
+        advanceUntilIdle()
+
+        // Hold the refresh's re-fetch open so the in-flight state is observable.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { mediaRepository.getMediaDetail("m1") } coAnswers {
+            gate.await()
+            Result.success(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)))
+        }
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        // Unlike loadItem, the detail must stay on screen during the refresh —
+        // no full-screen loading state, just the pull-to-refresh indicator.
+        assertNotNull(viewModel.uiState.value.detail)
+        assertTrue(viewModel.uiState.value.isRefreshing)
+        assertFalse(viewModel.uiState.value.isLoading)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isRefreshing)
+        assertEquals("m1", viewModel.uiState.value.detail?.item?.id)
+    }
+
+    @Test
+    fun forceRefresh_movie_invalidatesDetailCacheAndRefetches() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),
+        )
+
+        viewModel.loadItem("m1")
+        advanceUntilIdle()
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("m1") }
+        coVerify(exactly = 0) { mediaRepository.invalidateSeriesCache(any()) }
+        // Cache dropped, so the refetch must hit the repo again (2 calls total).
+        coVerify(exactly = 2) { mediaRepository.getMediaDetail("m1") }
+    }
+
+    @Test
+    fun forceRefresh_series_invalidatesSeriesCachesAndRefetches() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+        stubSeries("s1", season, listOf(episode("e1", 1, 1, isPlayed = false)))
+
+        viewModel.loadItem("s1")
+        advanceUntilIdle()
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("s1") }
+        coVerify(exactly = 1) { mediaRepository.invalidateSeriesCache("s1") }
+        coVerify(exactly = 0) { mediaRepository.invalidateUserDataCaches(any()) }
+        // Fresh seasons + episodes must be fetched after the cache drop.
+        coVerify(exactly = 2) { mediaRepository.getSeasons("s1") }
+        coVerify(exactly = 2) { mediaRepository.getAllEpisodesGrouped("s1") }
+    }
+
+    @Test
+    fun forceRefresh_episode_invalidatesParentSeriesCaches() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("e1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "e1", name = "Ep 1", mediaType = MediaType.EPISODE, seriesId = "s1")),
+        )
+        val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+        coEvery { mediaRepository.getSeasons("s1") } returns Result.success(listOf(season))
+        coEvery { mediaRepository.getAllEpisodesGrouped("s1") } returns Result.success(emptyMap())
+
+        viewModel.loadItem("e1")
+        advanceUntilIdle()
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("e1") }
+        // Episode belongs to a series → its seasons/episodes caches must drop.
+        coVerify(exactly = 1) { mediaRepository.invalidateSeriesCache("s1") }
+        coVerify(exactly = 0) { mediaRepository.invalidateUserDataCaches(any()) }
+    }
+
+    @Test
+    fun forceRefresh_album_invalidatesUserDataCachesForAlbumTracks() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("al1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "al1", name = "Album", mediaType = MediaType.ALBUM)),
+        )
+        coEvery { mediaRepository.getAlbumTracks("al1") } returns Result.success(emptyList())
+
+        viewModel.loadItem("al1")
+        advanceUntilIdle()
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("al1") }
+        // Album tracks have no scoped series cache — invalidateUserDataCaches
+        // drops the `tracks_$itemId` entry so the refetch is truly fresh.
+        coVerify(exactly = 1) { mediaRepository.invalidateUserDataCaches("al1") }
+        coVerify(exactly = 0) { mediaRepository.invalidateSeriesCache(any()) }
+        coVerify(exactly = 2) { mediaRepository.getAlbumTracks("al1") }
+    }
+
+    @Test
+    fun forceRefresh_collection_invalidatesCollectionItemsCache() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)),
+        )
+        coEvery { mediaRepository.getCollectionItems("c1", limit = 100) } returns Result.success(
+            com.raulshma.jellyplay.core.model.SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
+        )
+
+        viewModel.loadItem("c1")
+        advanceUntilIdle()
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("c1") }
+        coVerify(exactly = 1) { mediaRepository.invalidateCollectionItemsCache("c1") }
+        coVerify(exactly = 0) { mediaRepository.invalidateSeriesCache(any()) }
+        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", limit = 100) }
+    }
+
+    @Test
+    fun forceRefresh_refetchFailure_surfacesErrorAndClearsIndicator() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),
+        )
+        viewModel.loadItem("m1")
+        advanceUntilIdle()
+
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.failure(RuntimeException("boom"))
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isRefreshing)
+        assertEquals("boom", viewModel.uiState.value.error)
     }
 
     @Test
