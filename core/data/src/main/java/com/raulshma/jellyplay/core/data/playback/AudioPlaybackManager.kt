@@ -80,7 +80,7 @@ class AudioPlaybackManager @Inject constructor(
     private val sessionManager: PlaybackSessionManager,
     private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
     private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
-    private val audioSettingsStore: com.raulshma.jellyplay.core.datastore.AudioPlaybackSettingsStore,
+    private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
     private val queuePersistenceHelper: QueuePersistenceHelper,
     private val bandwidthMonitor: com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor,
     private val adaptiveBitrateSelector: com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector,
@@ -108,16 +108,16 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     private var exoPlayer: ExoPlayer? = null
-    private var currentSettings = com.raulshma.jellyplay.core.datastore.AudioPlaybackSettings()
     private var currentAudio = com.raulshma.jellyplay.core.datastore.audio.AudioSlice()
     private var currentEffects = com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice()
+    private var currentPlayback = com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice()
 
     private val libraryBrowser = AudioLibraryBrowser(
         scope = scope,
         mediaRepository = mediaRepository,
         downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
-        streamingQualityProvider = { currentSettings.streamingQuality },
+        streamingQualityProvider = { currentPlayback.streamingQuality },
         adaptiveBitrateSelector = adaptiveBitrateSelector,
     )
 
@@ -216,7 +216,7 @@ class AudioPlaybackManager @Inject constructor(
         onGetNextItem = { idx -> _queue.value.getOrNull(idx) },
         speedProvider = { _speed.value },
         audioBufferProvider = {
-            val buf = currentSettings.audioPreloadBufferSize
+            val buf = currentAudio.audioPreloadBufferSize
             buf.minBufferMs to buf.maxBufferMs
         },
         onCrossfadeTransition = { secondary, nextIndex, nextItem ->
@@ -361,11 +361,6 @@ class AudioPlaybackManager @Inject constructor(
 
     init {
         scope.launch {
-            audioSettingsStore.settings.collect { settings ->
-                currentSettings = settings
-            }
-        }
-        scope.launch {
             combine(audioStore.audio, audioEffectsStore.audioEffects) { audio, effects ->
                 audio to effects
             }.collect { (audio, effects) ->
@@ -381,6 +376,9 @@ class AudioPlaybackManager @Inject constructor(
                 currentEffects = effects
                 commands.forEach { command -> applyEffectCommand(command) }
             }
+        }
+        scope.launch {
+            playbackStore.playback.collect { playback -> currentPlayback = playback }
         }
         // Note: there is intentionally no `_repeatMode.collect { exoPlayer?.repeatMode = ... }`
         // here. `setRepeatMode()` sets `exoPlayer.repeatMode` inline, the player
@@ -483,8 +481,8 @@ class AudioPlaybackManager @Inject constructor(
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                currentSettings.audioPreloadBufferSize.minBufferMs,
-                currentSettings.audioPreloadBufferSize.maxBufferMs,
+                currentAudio.audioPreloadBufferSize.minBufferMs,
+                currentAudio.audioPreloadBufferSize.maxBufferMs,
                 1_000,
                 3_000
             )
