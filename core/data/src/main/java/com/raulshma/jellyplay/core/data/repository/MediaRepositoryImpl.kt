@@ -4,7 +4,9 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import android.util.Log
+import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
+import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 import com.raulshma.jellyplay.core.data.paging.FavoritesPagingSource
 import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
@@ -52,6 +54,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -65,6 +68,7 @@ class MediaRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val lrcLibApi: LrcLibApi,
     private val lyricsCacheDao: LyricsCacheDao,
+    private val homeSectionCacheDao: HomeSectionCacheDao,
     private val networkMonitor: NetworkMonitor,
     private val playedStateSync: PlayedStateSync,
 ) : MediaRepository {
@@ -185,7 +189,15 @@ class MediaRepositoryImpl @Inject constructor(
         hiddenCwItemIds: Set<String>,
         pinnedSections: List<PinnedHomeSection>,
     ): Result<HomeSectionsResult> {
-        val cacheKey = "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
+        val cacheKey = homeSectionsCacheKey(
+            enabledSections,
+            libraryHomeSectionOverrides,
+            nextUpRewatching,
+            nextUpMaxDays,
+            nextUpExcludedSeriesIds,
+            hiddenCwItemIds,
+            pinnedSections,
+        )
         val cached = cachedHomeSections
         val timestamp = cachedHomeSectionsTimestamp
         if (cached != null && cacheKey == cachedHomeSectionsKey &&
@@ -208,9 +220,72 @@ class MediaRepositoryImpl @Inject constructor(
                     cachedHomeSectionsKey = cacheKey
                     cachedHomeSectionsTimestamp = android.os.SystemClock.elapsedRealtime()
                 }
+                // Persist the snapshot for stale-while-revalidate on cold open.
+                // The in-memory cache above is lost on process death; this row lets
+                // getCachedHomeSections() render instantly next launch while a
+                // network refresh runs. Identity-keyed (serverId, userId) so a
+                // user switch never serves another user's payload — cleared in
+                // invalidateCaches() and the identity observer below.
+                persistHomeSectionsSnapshot(cacheKey, homeResult)
             }
         }
     }
+
+    override suspend fun getCachedHomeSections(
+        enabledSections: Set<HomeSectionType>,
+        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
+        nextUpRewatching: Boolean,
+        nextUpMaxDays: Int,
+        nextUpExcludedSeriesIds: Set<String>,
+        hiddenCwItemIds: Set<String>,
+        pinnedSections: List<PinnedHomeSection>,
+    ): HomeSectionsResult? {
+        // Read identity directly from the source flows rather than the volatile
+        // mirror fields: this runs from the Home VM's currentUser collector,
+        // which can fire before the repo's identity observer has written the
+        // mirror. .first() is suspend + non-blocking and guarantees the current
+        // value, so the SWR read never misses due to an observe ordering race.
+        val server = apiClient.currentServer.first() ?: return null
+        val user = apiClient.currentUser.first() ?: return null
+        val cacheKey = homeSectionsCacheKey(
+            enabledSections,
+            libraryHomeSectionOverrides,
+            nextUpRewatching,
+            nextUpMaxDays,
+            nextUpExcludedSeriesIds,
+            hiddenCwItemIds,
+            pinnedSections,
+        )
+        return homeSectionCacheDao.get(server.id, user.id, cacheKey)?.payload
+    }
+
+    private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
+        val server = apiClient.currentServer.first() ?: return
+        val user = apiClient.currentUser.first() ?: return
+        runCatching {
+            homeSectionCacheDao.upsert(
+                HomeSectionCacheEntity(
+                    serverId = server.id,
+                    userId = user.id,
+                    cacheKey = cacheKey,
+                    payloadJson = com.raulshma.jellyplay.core.database.Converters.fromHomeSectionsResult(result)
+                        ?: return@runCatching,
+                    fetchedAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+    }
+
+    private fun homeSectionsCacheKey(
+        enabledSections: Set<HomeSectionType>,
+        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
+        nextUpRewatching: Boolean,
+        nextUpMaxDays: Int,
+        nextUpExcludedSeriesIds: Set<String>,
+        hiddenCwItemIds: Set<String>,
+        pinnedSections: List<PinnedHomeSection>,
+    ): String =
+        "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> {
         libraryFoldersCache.get("folders")?.let { return Result.success(it) }
@@ -1009,6 +1084,11 @@ class MediaRepositoryImpl @Inject constructor(
         albumTracksCache.clear()
         collectionItemsCache.clear()
         photoFolderChildUrlCache.clear()
+        // Clear the persistent SWR snapshot too — invalidateCaches() runs on
+        // logout / server+user switch (see the identity observer in init {}),
+        // so this prevents another user's home payload from being served on the
+        // next cold open.
+        runCatching { homeSectionCacheDao.clearAll() }
     }
 
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =

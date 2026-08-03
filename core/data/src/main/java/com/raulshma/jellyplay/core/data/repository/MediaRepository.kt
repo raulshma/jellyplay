@@ -26,6 +26,22 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         pinnedSections: List<PinnedHomeSection> = emptyList(),
     ): Result<HomeSectionsResult>
 
+    /**
+     * Returns the last persisted home-sections snapshot for the current
+     * (server, user) + query, or null if none is cached. Room-only — no network.
+     * Used by the home screen to render instantly on cold open while
+     * [getHomeSections] revalidates in the background (stale-while-revalidate).
+     */
+    suspend fun getCachedHomeSections(
+        enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
+        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
+        nextUpRewatching: Boolean = false,
+        nextUpMaxDays: Int = 0,
+        nextUpExcludedSeriesIds: Set<String> = emptySet(),
+        hiddenCwItemIds: Set<String> = emptySet(),
+        pinnedSections: List<PinnedHomeSection> = emptyList(),
+    ): HomeSectionsResult?
+
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
 
     suspend fun getLatestMedia(

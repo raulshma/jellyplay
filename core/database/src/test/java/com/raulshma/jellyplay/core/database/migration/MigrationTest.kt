@@ -7,7 +7,13 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
+import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.database.migration.allMigrations
+import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -393,6 +399,64 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * Verifies the v40→v41 migration creates the `home_section_cache` table
+     * with the (serverId, userId, cacheKey) composite primary key + identity
+     * index, and that a typed payload round-trips through the DAO + JSON
+     * TypeConverter. This table backs the home-screen stale-while-revalidate
+     * cache, so the home screen can render instantly on cold open while a
+     * network refresh runs in the background.
+     */
+    @Test
+    fun migrateAllFromV12_addsHomeSectionCache() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+        }
+
+        val db = openWithMigrations()
+        val payload = HomeSectionsResult(
+            sections = listOf(
+                HomeSection(
+                    id = "cw",
+                    title = "Continue Watching",
+                    type = HomeSectionType.CONTINUE_WATCHING,
+                    items = listOf(
+                        MediaItem(
+                            id = "item-1",
+                            name = "Test Item",
+                            mediaType = MediaType.EPISODE,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        db.homeSectionCacheDao().upsert(
+            HomeSectionCacheEntity(
+                serverId = "srv-1",
+                userId = "u1",
+                cacheKey = "key-1",
+                payloadJson = com.raulshma.jellyplay.core.database.Converters.fromHomeSectionsResult(payload)!!,
+                fetchedAt = 1L,
+            )
+        )
+        val read = db.homeSectionCacheDao().get("srv-1", "u1", "key-1")
+        assertNotNull(read)
+        assertEquals(1L, read!!.fetchedAt)
+        val decoded = read.payload
+        assertNotNull(decoded)
+        assertEquals(1, decoded!!.sections.size)
+        assertEquals("Continue Watching", decoded.sections[0].title)
+        assertEquals("item-1", decoded.sections[0].items[0].id)
+        // Identity-scoped clear must remove the row.
+        db.homeSectionCacheDao().clearForIdentity("srv-1", "u1")
+        assertEquals(null, db.homeSectionCacheDao().get("srv-1", "u1", "key-1"))
+        db.close()
+    }
+
 
     /**
      * Verifies the v24→v25 migration encrypts plaintext access tokens stored in the
@@ -579,7 +643,7 @@ class MigrationTest {
         // and must be bumped alongside JellyPlayDatabase's version.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 40
+            ?: 41
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",

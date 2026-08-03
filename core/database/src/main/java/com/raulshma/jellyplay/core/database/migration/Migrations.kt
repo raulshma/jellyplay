@@ -671,8 +671,34 @@ val MIGRATION_39_40 = object : Migration(39, 40) {
     }
 }
 
+// Persistent stale-while-revalidate cache for home-screen sections. The home
+// screen rendered nothing until its full section set (8–20 network requests)
+// resolved on every cold open past the 60s in-memory TTL; this table holds the
+// last successful payload so Home can paint instantly while a network refresh
+// runs in the background. Keyed by (serverId, userId, cacheKey) so a user
+// switch / logout never serves another user's payload.
+val MIGRATION_40_41 = object : Migration(40, 41) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS home_section_cache (
+                serverId TEXT NOT NULL,
+                userId TEXT NOT NULL,
+                cacheKey TEXT NOT NULL,
+                payloadJson TEXT NOT NULL,
+                fetchedAt INTEGER NOT NULL,
+                PRIMARY KEY(serverId, userId, cacheKey)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_home_section_cache_serverId_userId ON home_section_cache(serverId, userId)"
+        )
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v40 migration chain, with the
+ * The complete, correctly-ordered v1→v41 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -720,4 +746,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_37_38,
         MIGRATION_38_39,
         MIGRATION_39_40,
+        MIGRATION_40_41,
     )
