@@ -20,9 +20,8 @@ import org.robolectric.RobolectricTestRunner
 
 /**
  * Verifies the audio-cache preference fields round-trip through DataStore via
- * [com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore] (the slice
- * owner) and surface in the legacy aggregate via
- * [com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator].
+ * [com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore] (the
+ * canonical slice owner).
  *
  * Uses Robolectric for the Android Context required by the DataStore delegate.
  */
@@ -32,7 +31,6 @@ class AudioCachePreferencesTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private lateinit var graph: PreferenceSliceGraph
-    private lateinit var aggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator
 
     @Before
     fun setup() {
@@ -41,14 +39,13 @@ class AudioCachePreferencesTest {
             val dataStore = TestDataStoreProvider.get(context)
             dataStore.edit { it.clear() }
             graph = createPreferenceSliceGraph(scope, dataStore)
-            aggregator = createUserPreferencesAggregator(scope, dataStore)
-            aggregator.preferences.first()
+            graph.audioCacheStore.audioCache.first()
         }
     }
 
     @Test
     fun `defaults are applied when no keys are set`() = runTest {
-        val prefs = aggregator.preferences.value
+        val prefs = graph.audioCacheStore.audioCache.value
         assertTrue(prefs.audioCachingEnabled)
         assertEquals(1024, prefs.audioCacheSizeMb)
         assertEquals(3, prefs.audioPrefetchLookahead)
@@ -60,25 +57,25 @@ class AudioCachePreferencesTest {
     @Test
     fun `setAudioCachingEnabled persists and reads back`() = runTest {
         graph.audioCacheStore.setAudioCachingEnabled(false)
-        assertFalse(aggregator.preferences.first().audioCachingEnabled)
+        assertFalse(graph.audioCacheStore.audioCache.first().audioCachingEnabled)
     }
 
     @Test
     fun `setAudioCacheSizeMb persists and reads back`() = runTest {
         graph.audioCacheStore.setAudioCacheSizeMb(4096)
-        assertEquals(4096, aggregator.preferences.first().audioCacheSizeMb)
+        assertEquals(4096, graph.audioCacheStore.audioCache.first().audioCacheSizeMb)
     }
 
     @Test
     fun `setAudioPrefetchLookahead persists and reads back`() = runTest {
         graph.audioCacheStore.setAudioPrefetchLookahead(7)
-        assertEquals(7, aggregator.preferences.first().audioPrefetchLookahead)
+        assertEquals(7, graph.audioCacheStore.audioCache.first().audioPrefetchLookahead)
     }
 
     @Test
     fun `setAudioPrefetchBackfill persists and reads back`() = runTest {
         graph.audioCacheStore.setAudioPrefetchBackfill(12)
-        assertEquals(12, aggregator.preferences.first().audioPrefetchBackfill)
+        assertEquals(12, graph.audioCacheStore.audioCache.first().audioPrefetchBackfill)
     }
 
     @Test
@@ -86,13 +83,13 @@ class AudioCachePreferencesTest {
         graph.audioCacheStore.setAudioCacheNetworkPolicy(AudioCacheNetworkPolicy.ANY_NETWORK)
         assertEquals(
             AudioCacheNetworkPolicy.ANY_NETWORK,
-            aggregator.preferences.first().audioCacheNetworkPolicy,
+            graph.audioCacheStore.audioCache.first().audioCacheNetworkPolicy,
         )
     }
 
     @Test
     fun `setAudioCacheCellularMonthlyCapMb persists and reads back`() = runTest {
         graph.audioCacheStore.setAudioCacheCellularMonthlyCapMb(2000)
-        assertEquals(2000, aggregator.preferences.first().audioCacheCellularMonthlyCapMb)
+        assertEquals(2000, graph.audioCacheStore.audioCache.first().audioCacheCellularMonthlyCapMb)
     }
 }
