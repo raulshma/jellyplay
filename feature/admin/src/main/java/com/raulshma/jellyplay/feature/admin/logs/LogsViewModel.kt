@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.admin.logs
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.LogFile
@@ -52,7 +51,6 @@ data class LogsState(
 class LogsViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val okHttpClient: OkHttpClient,
-    private val preferencesStore: UserPreferencesStore,
     private val serverIdentityStore: ServerIdentityStore,
 ) : JellyPlayViewModel() {
 

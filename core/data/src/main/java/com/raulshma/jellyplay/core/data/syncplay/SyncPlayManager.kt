@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.core.data.syncplay
 import android.os.Build
 import android.util.Log
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
@@ -39,7 +38,6 @@ class SyncPlayManager @Inject constructor(
     private val webSocketClient: JellyfinWebSocketClient,
     private val authRepository: AuthRepository,
     private val timeSyncManager: TimeSyncManager,
-    private val preferencesStore: UserPreferencesStore,
     private val serverIdentityStore: ServerIdentityStore,
     val eventHandler: SyncPlayEventHandler,
     val syncPlayController: SyncPlayController,

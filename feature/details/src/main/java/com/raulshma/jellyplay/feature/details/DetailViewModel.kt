@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
@@ -77,7 +76,6 @@ class DetailViewModel @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
-    private val preferencesStore: UserPreferencesStore,
     private val preferencesAggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator,
     private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
     private val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,

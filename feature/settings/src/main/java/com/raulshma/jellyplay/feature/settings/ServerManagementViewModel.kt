@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -11,7 +10,6 @@ import javax.inject.Inject
 @HiltViewModel
 class ServerManagementViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val preferencesStore: UserPreferencesStore,
     private val serverIdentityStore: ServerIdentityStore,
 ) : JellyPlayViewModel() {
 

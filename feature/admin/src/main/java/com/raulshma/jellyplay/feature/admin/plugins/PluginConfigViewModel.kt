@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.admin.plugins
 
 import android.content.Context
 import android.util.Log
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -30,7 +29,6 @@ class PluginConfigViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val apiClient: JellyfinApiClient,
     private val engine: JellyfinApiEngine,
-    private val preferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(PluginConfigState())

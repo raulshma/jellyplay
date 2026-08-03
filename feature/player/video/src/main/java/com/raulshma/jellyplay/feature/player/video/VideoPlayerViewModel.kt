@@ -35,7 +35,6 @@ import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -196,7 +195,6 @@ class VideoPlayerViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
     private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
-    private val preferencesStore: UserPreferencesStore,
     private val aggregateStore: VideoPlayerAggregateStore,
     private val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore,
     private val subtitleStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
