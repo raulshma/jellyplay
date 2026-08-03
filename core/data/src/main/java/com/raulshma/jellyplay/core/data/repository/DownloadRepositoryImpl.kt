@@ -449,7 +449,7 @@ class DownloadRepositoryImpl @Inject constructor(
                                     val result = episodeDetail?.let {
                                         delegate.startOne(it, qualityMaxBitrate, budgetHint)
                                     }
-                                    result?.downloadItem?.id
+                                    result?.downloadItem?.let { it.id to it.downloadPath }
                                 } catch (ce: CancellationException) {
                                     // Preserve structured concurrency: if the parent
                                     // scope (e.g. user navigated away) is cancelled,
@@ -469,7 +469,42 @@ class DownloadRepositoryImpl @Inject constructor(
                     }.awaitAll()
                 }
 
-                episodeResults.filterNotNull().forEach { downloadIds.add(it) }
+                val enqueued = episodeResults.filterNotNull()
+                enqueued.map { it.first }.forEach { downloadIds.add(it) }
+
+                // The series row was seeded above with REMOTE poster/backdrop
+                // URLs (so the per-episode saves don't each re-download the
+                // series artwork). Persist the artwork as local files now, next
+                // to the first enqueued episode, and re-upsert the series row
+                // with those paths — otherwise the offline series screen's hero
+                // and poster depend on Coil's cache and degrade to blurHash
+                // whenever the preload raced or was evicted.
+                val firstEpisodeDir = enqueued
+                    .asSequence()
+                    .mapNotNull { it.second?.takeIf { p -> p.isNotBlank() } }
+                    .mapNotNull { File(it).parentFile }
+                    .firstOrNull()
+                if (firstEpisodeDir != null) {
+                    val localSeriesPoster = downloadImageToDisk(
+                        seriesId, "Primary", 300, firstEpisodeDir,
+                        DownloadArtifacts.posterFile(seriesId),
+                    )
+                    val localSeriesBackdrop = downloadImageToDisk(
+                        seriesId, "Backdrop", 1280, firstEpisodeDir,
+                        DownloadArtifacts.backdropFile(seriesId),
+                    )
+                    if (localSeriesPoster != null || localSeriesBackdrop != null) {
+                        // Re-persist without re-preloading cast images: the
+                        // preloads already ran for the seed above. This only
+                        // swaps the artwork columns to the local files.
+                        offlineMediaDao.upsert(
+                            detail.toOfflineMediaEntity(
+                                localSeriesPoster ?: imageUrl,
+                                localSeriesBackdrop ?: backdropUrl,
+                            )
+                        )
+                    }
+                }
             }
 
             downloadIds

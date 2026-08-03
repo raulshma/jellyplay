@@ -63,7 +63,7 @@ private val THEME_HIGHLIGHT_IDS = setOf("theme_mode", "theme_scheduler")
 private val APPEARANCE_LIBRARY_GROUP_IDS = setOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings")
 private val PERFORMANCE_GROUP_IDS = setOf("performance_mode", "reduce_motion")
 private val BLUE_LIGHT_GROUP_IDS = setOf("blue_light_filter", "blue_light_strength")
-private val NEWSLETTER_GROUP_IDS = setOf("newsletter_enabled", "newsletter_delivery_day")
+private val NEWSLETTER_GROUP_IDS = setOf("newsletter_enabled", "newsletter_delivery_day", "newsletter_sections")
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable

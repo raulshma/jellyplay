@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.data.syncplay
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
@@ -24,7 +23,6 @@ class SyncPlayManagerTest {
     private val webSocketClient: JellyfinWebSocketClient = mockk(relaxed = true)
     private val authRepository: AuthRepository = mockk(relaxed = true)
     private val timeSyncManager: TimeSyncManager = mockk(relaxed = true)
-    private val preferencesStore: UserPreferencesStore = mockk(relaxed = true)
     private val serverIdentityStore: ServerIdentityStore = mockk(relaxed = true)
     private val eventHandler: SyncPlayEventHandler = mockk(relaxed = true)
     private val syncPlayController: SyncPlayController = mockk(relaxed = true)
@@ -47,7 +45,6 @@ class SyncPlayManagerTest {
             webSocketClient = webSocketClient,
             authRepository = authRepository,
             timeSyncManager = timeSyncManager,
-            preferencesStore = preferencesStore,
             serverIdentityStore = serverIdentityStore,
             eventHandler = eventHandler,
             syncPlayController = syncPlayController,

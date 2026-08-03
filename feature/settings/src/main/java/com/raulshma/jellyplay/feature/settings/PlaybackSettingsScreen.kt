@@ -108,10 +108,11 @@ private fun vlcSkipFrameLabelRes(level: Int): Int = when (level) {
     else -> R.string.settings_b_frames_level
 }
 
-private val PLAYBACK_ADVANCED_GROUP_IDS = setOf("dialogue_boost", "decoder", "audio_passthrough", "frame_rate_matching", "streaming_quality", "audio_delay")
+private val PLAYBACK_ADVANCED_GROUP_IDS = setOf("dialogue_boost", "dialogue_boost_strength", "decoder", "audio_passthrough", "frame_rate_matching", "streaming_quality", "audio_delay")
 private val PLAYBACK_ENGINE_GROUP_IDS = setOf(
     "mpv_video_output", "mpv_scaler", "mpv_debanding", "mpv_interpolation", "mpv_audio_output",
     "mpv_audio_fallback", "mpv_buffer_size", "mpv_hwdec_override", "mpv_skip_loop_filter", "mpv_frame_drop",
+    "mpv_extra_config", "reset_engine_defaults",
     "vlc_audio_output", "vlc_audio_time_stretch", "vlc_network_caching",
     "vlc_skip_loop_filter", "vlc_skip_frames", "vlc_decoder_threads", "vlc_drop_late_frames",
     "exo_video_scaling", "exo_frame_rate_strategy", "exo_skip_silence", "exo_audio_offload",
@@ -1390,6 +1391,7 @@ fun PlaybackSettingsScreen(
                         stringResource(R.string.settings_media_segments_summary, autoCount, buttonCount)
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId?.startsWith("media_segment_") == true,
                 ) {
                     val segmentTypes = com.raulshma.jellyplay.core.model.MediaSegmentType.entries
                     val totalTypes = segmentTypes.size
