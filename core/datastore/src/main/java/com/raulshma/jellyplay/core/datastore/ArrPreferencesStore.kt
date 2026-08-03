@@ -13,11 +13,14 @@ import com.raulshma.jellyplay.core.model.arr.ArrPreferences
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -60,7 +63,7 @@ class ArrPreferencesStore @Inject constructor(
      */
     private val manualServersTick = MutableStateFlow(secureCredentialsStore.getManualServers())
 
-    val preferences: Flow<ArrPreferences> = context.arrDataStore.data
+    val preferences: StateFlow<ArrPreferences> = context.arrDataStore.data
         .catch { _ -> emit(emptyPreferences()) }
         .map { prefs ->
             SimpleArrPrefs(
@@ -76,6 +79,8 @@ class ArrPreferencesStore @Inject constructor(
                 manualServers = manualServers,
             )
         }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, ArrPreferences())
 
     suspend fun setUseSeerrDiscovery(enabled: Boolean) {
         context.arrDataStore.edit { it[Keys.USE_SEERR_DISCOVERY] = enabled }

@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.Serializable
@@ -70,6 +71,7 @@ class AppRuntimeStateStore @Inject constructor(
                 recentDlnaDevices = readRecentDlnaDevices(prefs),
             )
         }
+        .distinctUntilChanged()
         .stateIn(scope, SharingStarted.Eagerly, AppRuntimeState())
 
     /**
@@ -80,10 +82,10 @@ class AppRuntimeStateStore @Inject constructor(
      */
     fun observeLiveTvLastChannelId(): Flow<String?> = sharedPrefs.map { prefs ->
         prefs[Keys.LIVE_TV_LAST_CHANNEL_ID]
-    }
+    }.distinctUntilChanged()
 
     val recentDlnaDevices: Flow<List<DlnaDeviceRef>>
-        get() = sharedPrefs.map { prefs -> readRecentDlnaDevices(prefs) }
+        get() = sharedPrefs.map { prefs -> readRecentDlnaDevices(prefs) }.distinctUntilChanged()
 
     suspend fun setLiveTvLastChannelId(channelId: String?) {
         dataStore.edit { prefs ->

@@ -83,11 +83,6 @@ class SeerrDetailViewModel @Inject constructor(
     )
 
     val seerrPreferences: StateFlow<SeerrPreferences> = seerrPreferencesStore.preferences
-        .stateIn(
-            scope = scope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = SeerrPreferences(),
-        )
 
     // Single source of truth for Seerr-detail state. All mutations funnel
     // through [_uiState.update]. Seerr request delegate state (service details,

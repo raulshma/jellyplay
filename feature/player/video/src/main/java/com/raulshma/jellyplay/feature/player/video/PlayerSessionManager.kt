@@ -30,7 +30,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -242,7 +241,7 @@ class PlayerSessionManager(
             )
         }
 
-        val agg = aggregateStore.aggregate.first()
+        val agg = aggregateStore.aggregate.value
         val playerType = agg.playback.preferredPlayer
 
         // Preserve the offline item's rich metadata (seriesId, seasonId,
@@ -303,7 +302,7 @@ class PlayerSessionManager(
         }
         val streams = source?.mediaStreams ?: emptyList()
 
-        val agg = aggregateStore.aggregate.first()
+        val agg = aggregateStore.aggregate.value
         val playerType = agg.playback.preferredPlayer
         val sourceId = source?.id ?: ""
 
@@ -454,7 +453,7 @@ class PlayerSessionManager(
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
         val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
-        val agg = aggregateStore.aggregate.first()
+        val agg = aggregateStore.aggregate.value
         val playerType = lastPlayerType ?: agg.playback.preferredPlayer
         val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality)
 
@@ -524,7 +523,7 @@ class PlayerSessionManager(
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
         val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
-        val agg = aggregateStore.aggregate.first()
+        val agg = aggregateStore.aggregate.value
         val playerType = lastPlayerType ?: agg.playback.preferredPlayer
         val maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate()
         val mode = agg.playback.playbackMode
@@ -577,7 +576,7 @@ class PlayerSessionManager(
         externalSubtitlesOverride: List<SubtitleSource>? = null,
     ) {
         val last = lastPlaybackRequest ?: return
-        val agg = aggregateStore.aggregate.first()
+        val agg = aggregateStore.aggregate.value
 
         try {
             _engine.value?.release()

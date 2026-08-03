@@ -146,7 +146,6 @@ class OnboardingViewModel @Inject constructor(
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), OnboardingPreferences())
 
     val seerrPreferences = seerrPreferencesStore.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.seerr.SeerrPreferences())
 
     private val _currentStep = stateFlow(0)
     val currentStep = _currentStep.flow
