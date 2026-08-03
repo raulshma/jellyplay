@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -40,11 +41,13 @@ class MediaRepositoryCacheInvalidationTest {
         every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         val lrcLibApi: LrcLibApi = mockk(relaxed = true)
         val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
+        val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
         val playedStateSync: PlayedStateSync = mockk(relaxed = true)
         return MediaRepositoryImpl(
             apiClient,
             lrcLibApi,
             lyricsCacheDao,
+            homeSectionCacheDao,
             networkMonitor,
             playedStateSync,
         )

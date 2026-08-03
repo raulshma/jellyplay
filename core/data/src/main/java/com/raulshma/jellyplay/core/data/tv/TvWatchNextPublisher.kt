@@ -7,6 +7,7 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.tvprovider.media.tv.TvContractCompat
 import androidx.tvprovider.media.tv.WatchNextProgram
+import com.raulshma.jellyplay.core.data.repository.HomeSectionQuery
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -42,7 +43,9 @@ class TvWatchNextPublisher(
         if (!isTv()) return@runCatching
 
         val sections = mediaRepository.getHomeSections(
-            enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
+            ),
         ).getOrThrow().sections
 
         val continueWatching = sections.firstOrNull { it.type == HomeSectionType.CONTINUE_WATCHING }?.items.orEmpty()

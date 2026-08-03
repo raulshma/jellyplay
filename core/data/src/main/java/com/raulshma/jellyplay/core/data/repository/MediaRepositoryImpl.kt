@@ -17,7 +17,6 @@ import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.TtlCache
-import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
@@ -36,7 +35,6 @@ import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
@@ -142,11 +140,13 @@ class MediaRepositoryImpl @Inject constructor(
     private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
-     * Tracks the last observed stable identity. `null` means we're in an "empty" state
-     * (logged out / restoring session). Non-null means we have a stable (serverId|userId)
+     * Tracks the last observed stable (serverId, userId) pair. `null` means we're in an
+     * "empty" state (logged out / restoring session). Non-null means we have a stable
      * identity whose replacement by a different value should trigger cache invalidation.
+     * Kept as a pair (not a flattened key) so the observer can clear the *previous*
+     * identity's persisted home-section SWR rows by identity — see [init].
      */
-    private val lastStableIdentityKey = AtomicReference<String?>(null)
+    private val lastStableIdentity = AtomicReference<Pair<String, String>?>(null)
 
     init {
         // Observe active server/user changes and self-invalidate caches. This closes a
@@ -163,41 +163,52 @@ class MediaRepositoryImpl @Inject constructor(
         //  - Empty  → Empty  : never invalidates.
         cacheScope.launch {
             combine(apiClient.currentServer, apiClient.currentUser) { server, user ->
-                if (server != null && user != null) "${server.id}|${user.id}" else null
-            }.collect { identityKey ->
-                val previous = lastStableIdentityKey.getAndSet(identityKey)
+                if (server != null && user != null) server.id to user.id else null
+            }.collect { identity ->
+                val previous = lastStableIdentity.getAndSet(identity)
                 val shouldInvalidate = when {
-                    previous == null && identityKey == null -> false
-                    previous == null && identityKey != null -> false // session restore, no prior data
-                    previous != null && identityKey == null -> true  // logout: clear for privacy
-                    previous != identityKey -> true                  // user or server switch
+                    previous == null && identity == null -> false
+                    previous == null && identity != null -> false // session restore, no prior data
+                    previous != null && identity == null -> true  // logout: clear for privacy
+                    previous != identity -> true                  // user or server switch
                     else -> false
                 }
                 if (shouldInvalidate) {
                     invalidateCaches()
+                    // Clear the PREVIOUS identity's persisted home-section SWR
+                    // rows — scoped, not wholesale, so a multi-account server
+                    // keeps the other users' snapshots for their next cold open.
+                    // Runs here (where we hold the previous identity) rather than
+                    // in invalidateCaches() (which has no identity context).
+                    previous?.let { (serverId, userId) ->
+                        clearHomeSectionsForIdentity(serverId, userId)
+                    }
                 }
             }
         }
     }
 
+    /**
+     * Clears the persisted home-section SWR snapshot for a single (server, user).
+     * Failure is logged, not swallowed: this runs on logout / identity switch and
+     * a silent failure would leave the just-logged-out user's home payload in the
+     // table, to be served to a different user on the next cold open.
+     */
+    private suspend fun clearHomeSectionsForIdentity(serverId: String, userId: String) {
+        runCatching { homeSectionCacheDao.clearForIdentity(serverId, userId) }
+            .onFailure { e ->
+                android.util.Log.w(
+                    "MediaRepo",
+                    "Failed to clear home-section SWR cache for server=$serverId user=$userId",
+                    e,
+                )
+            }
+    }
+
     override suspend fun getHomeSections(
-        enabledSections: Set<HomeSectionType>,
-        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
-        nextUpRewatching: Boolean,
-        nextUpMaxDays: Int,
-        nextUpExcludedSeriesIds: Set<String>,
-        hiddenCwItemIds: Set<String>,
-        pinnedSections: List<PinnedHomeSection>,
+        query: HomeSectionQuery,
     ): Result<HomeSectionsResult> {
-        val cacheKey = homeSectionsCacheKey(
-            enabledSections,
-            libraryHomeSectionOverrides,
-            nextUpRewatching,
-            nextUpMaxDays,
-            nextUpExcludedSeriesIds,
-            hiddenCwItemIds,
-            pinnedSections,
-        )
+        val cacheKey = query.cacheKey()
         val cached = cachedHomeSections
         val timestamp = cachedHomeSectionsTimestamp
         if (cached != null && cacheKey == cachedHomeSectionsKey &&
@@ -206,13 +217,13 @@ class MediaRepositoryImpl @Inject constructor(
             return Result.success(cached)
         }
         return apiClient.getHomeSections(
-            enabledSections,
-            libraryHomeSectionOverrides,
-            nextUpRewatching,
-            nextUpMaxDays,
-            nextUpExcludedSeriesIds,
-            hiddenCwItemIds,
-            pinnedSections,
+            enabledSections = query.enabledSections,
+            libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
+            nextUpRewatching = query.nextUpRewatching,
+            nextUpMaxDays = query.nextUpMaxDays,
+            nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
+            hiddenCwItemIds = query.hiddenCwItemIds,
+            pinnedSections = query.pinnedSections,
         ).also { result ->
             result.getOrNull()?.let { homeResult ->
                 synchronized(homeSectionsLock) {
@@ -224,21 +235,15 @@ class MediaRepositoryImpl @Inject constructor(
                 // The in-memory cache above is lost on process death; this row lets
                 // getCachedHomeSections() render instantly next launch while a
                 // network refresh runs. Identity-keyed (serverId, userId) so a
-                // user switch never serves another user's payload — cleared in
-                // invalidateCaches() and the identity observer below.
+                // user switch never serves another user's payload — cleared by
+                // clearHomeSectionsForIdentity() from the identity observer below.
                 persistHomeSectionsSnapshot(cacheKey, homeResult)
             }
         }
     }
 
     override suspend fun getCachedHomeSections(
-        enabledSections: Set<HomeSectionType>,
-        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
-        nextUpRewatching: Boolean,
-        nextUpMaxDays: Int,
-        nextUpExcludedSeriesIds: Set<String>,
-        hiddenCwItemIds: Set<String>,
-        pinnedSections: List<PinnedHomeSection>,
+        query: HomeSectionQuery,
     ): HomeSectionsResult? {
         // Read identity directly from the source flows rather than the volatile
         // mirror fields: this runs from the Home VM's currentUser collector,
@@ -247,16 +252,7 @@ class MediaRepositoryImpl @Inject constructor(
         // value, so the SWR read never misses due to an observe ordering race.
         val server = apiClient.currentServer.first() ?: return null
         val user = apiClient.currentUser.first() ?: return null
-        val cacheKey = homeSectionsCacheKey(
-            enabledSections,
-            libraryHomeSectionOverrides,
-            nextUpRewatching,
-            nextUpMaxDays,
-            nextUpExcludedSeriesIds,
-            hiddenCwItemIds,
-            pinnedSections,
-        )
-        return homeSectionCacheDao.get(server.id, user.id, cacheKey)?.payload
+        return homeSectionCacheDao.get(server.id, user.id, query.cacheKey())?.payload
     }
 
     private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
@@ -268,24 +264,17 @@ class MediaRepositoryImpl @Inject constructor(
                     serverId = server.id,
                     userId = user.id,
                     cacheKey = cacheKey,
-                    payloadJson = com.raulshma.jellyplay.core.database.Converters.fromHomeSectionsResult(result)
-                        ?: return@runCatching,
+                    payloadJson = com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(result),
+                    // Wall-clock on purpose: this value must survive a reboot to
+                    // serve the next cold open, and monotonic clocks reset on
+                    // boot. The in-memory TTL above uses SystemClock.elapsedRealtime
+                    // (monotonic) because it only compares two readings within one
+                    // process. fetchedAt isn't read for a TTL today.
                     fetchedAt = System.currentTimeMillis(),
                 ),
             )
         }
     }
-
-    private fun homeSectionsCacheKey(
-        enabledSections: Set<HomeSectionType>,
-        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
-        nextUpRewatching: Boolean,
-        nextUpMaxDays: Int,
-        nextUpExcludedSeriesIds: Set<String>,
-        hiddenCwItemIds: Set<String>,
-        pinnedSections: List<PinnedHomeSection>,
-    ): String =
-        "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> {
         libraryFoldersCache.get("folders")?.let { return Result.success(it) }
@@ -1084,11 +1073,14 @@ class MediaRepositoryImpl @Inject constructor(
         albumTracksCache.clear()
         collectionItemsCache.clear()
         photoFolderChildUrlCache.clear()
-        // Clear the persistent SWR snapshot too — invalidateCaches() runs on
-        // logout / server+user switch (see the identity observer in init {}),
-        // so this prevents another user's home payload from being served on the
-        // next cold open.
-        runCatching { homeSectionCacheDao.clearAll() }
+        // NOTE: the persistent home-section SWR snapshot is intentionally NOT
+        // cleared here. invalidateCaches() doesn't know which (server, user)
+        // it's running for — it's called both from the identity observer (which
+        // has the previous identity in hand) and from background sync workers
+        // (which have no identity context). Clearing wholesale here would wipe
+        // every user's snapshot on any sync, defeating the multi-account SWR
+        // benefit. The identity observer clears the previous identity's rows
+        // directly via clearHomeSectionsForIdentity() — see init {}.
     }
 
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =

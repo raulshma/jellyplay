@@ -83,9 +83,11 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
 
     private suspend fun fetchLatest(): List<MediaItem> {
         val sectionsResult = mediaRepository.getHomeSections(
-            enabledSections = setOf(
-                com.raulshma.jellyplay.core.model.HomeSectionType.LATEST_MEDIA,
-                com.raulshma.jellyplay.core.model.HomeSectionType.RECENTLY_ADDED,
+            com.raulshma.jellyplay.core.data.repository.HomeSectionQuery(
+                enabledSections = setOf(
+                    com.raulshma.jellyplay.core.model.HomeSectionType.LATEST_MEDIA,
+                    com.raulshma.jellyplay.core.model.HomeSectionType.RECENTLY_ADDED,
+                ),
             ),
         )
         val items = sectionsResult.getOrNull()?.sections.orEmpty()

@@ -49,15 +49,17 @@ object Converters {
     @JvmStatic
     fun fromEnum(value: Enum<*>?): String? = value?.name
 
-    // Home-screen SWR snapshot. encode/decode are public so the entity can
-    // resolve its typed payload without re-deriving the Json instance.
-    @TypeConverter
+    // Home-screen SWR snapshot. These are plain encode/decode helpers, NOT
+    // @TypeConverter methods: HomeSectionCacheEntity stores the payload as a
+    // raw String column (payloadJson) and resolves the typed value itself,
+    // so Room never needs to convert a HomeSectionsResult column. Annotating
+    // them as @TypeConverter would be cargo-cult — Room would register a
+    // converter for a type no column uses.
     @JvmStatic
-    fun fromHomeSectionsResult(value: HomeSectionsResult?): String? =
-        value?.let { json.encodeToString(it) }
+    fun encodeHomeSectionsResult(value: HomeSectionsResult): String =
+        json.encodeToString(value)
 
-    @TypeConverter
     @JvmStatic
-    fun toHomeSectionsResult(value: String?): HomeSectionsResult? =
-        value?.let { runCatching { json.decodeFromString<HomeSectionsResult>(it) }.getOrNull() }
+    fun decodeHomeSectionsResult(value: String): HomeSectionsResult? =
+        runCatching { json.decodeFromString<HomeSectionsResult>(value) }.getOrNull()
 }

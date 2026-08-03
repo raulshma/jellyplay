@@ -21,4 +21,13 @@ data class HomeSectionQuery(
     val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val hiddenCwItemIds: Set<String> = emptySet(),
     val pinnedSections: List<PinnedHomeSection> = emptyList(),
-)
+) {
+    /**
+     * Structural fingerprint of the query params, used as the `cacheKey` for both
+     * the in-memory home-sections cache and the Room-backed SWR snapshot. Lives
+     * here so a new query field only needs to be added in one place — the value
+     * object — rather than threaded through every signature that derives a key.
+     */
+    fun cacheKey(): String =
+        "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
+}

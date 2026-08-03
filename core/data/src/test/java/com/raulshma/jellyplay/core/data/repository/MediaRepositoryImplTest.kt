@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 import com.raulshma.jellyplay.core.model.LyricsLine
@@ -35,6 +36,7 @@ class MediaRepositoryImplTest {
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val lrcLibApi: LrcLibApi = mockk(relaxed = true)
     private val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
+    private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
 
@@ -47,6 +49,7 @@ class MediaRepositoryImplTest {
             apiClient,
             lrcLibApi,
             lyricsCacheDao,
+            homeSectionCacheDao,
             networkMonitor,
             playedStateSync,
         )

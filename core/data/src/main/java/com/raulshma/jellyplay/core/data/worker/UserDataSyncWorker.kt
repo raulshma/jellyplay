@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.data.repository.HomeSectionQuery
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -49,9 +50,11 @@ class UserDataSyncWorker @AssistedInject constructor(
             // Only success/failure matters here; the sections themselves are
             // consumed elsewhere from the repopulated cache.
             mediaRepository.getHomeSections(
-                enabledSections = setOf(
-                    HomeSectionType.CONTINUE_WATCHING,
-                    HomeSectionType.NEXT_UP,
+                HomeSectionQuery(
+                    enabledSections = setOf(
+                        HomeSectionType.CONTINUE_WATCHING,
+                        HomeSectionType.NEXT_UP,
+                    ),
                 ),
             ).getOrThrow()
         }.fold(
