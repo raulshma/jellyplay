@@ -98,4 +98,32 @@ class AudioStoreTest {
         store.setSleepTimerDurationMs(1_800_000L)
         assertEquals(1_800_000L, store.audio.first().sleepTimerDurationMs)
     }
+
+    @Test
+    fun `restore(slice) round-trips a fully-populated slice`() = runTest {
+        val slice = AudioSlice(
+            audioDefaultSpeed = 1.5f,
+            audioNightModeVolume = 0.7f,
+            audioNightModeGain = 2400,
+            audioSkipPreviousThresholdMs = 5_000L,
+            audioAutoplayNext = false,
+            audioPreloadBufferSize = PreloadBufferSize.HIGH,
+            audioNormalizationMode = AudioNormalizationMode.ALBUM,
+            audioNormalizationEnabled = true,
+            replayGainPreAmpDb = -3.0f,
+            channelMixMode = ChannelMixMode.MONO,
+            channelMixEnabled = true,
+            audioGaplessEnabled = false,
+            audioCrossfadeDurationMs = 4_000L,
+            audioDelayMs = 250L,
+            audioLyricsVisible = true,
+            audioVisualizerEnabled = true,
+            sleepTimerDurationMs = 1_800_000L,
+            sleepTimerEndOfEpisode = true,
+        )
+
+        store.restore(slice)
+
+        assertEquals(slice, store.audio.first())
+    }
 }

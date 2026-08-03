@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.AppearancePreferences
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.model.DownloadPreferences
+import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.ExperimentalPreferences
 import com.raulshma.jellyplay.core.model.LanguagePreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
@@ -193,5 +194,56 @@ class PreferenceProjectionsTest {
         assertEquals(navBefore, projections.navigationCustomizationPreferences.first())
         // Sanity: the appearance slice really did change.
         assertNotEquals(hapticsBefore, graph.appearanceStore.appearance.value.hapticsEnabled)
+    }
+
+    @Test
+    fun `a download write is reflected in the download projection and not the appearance projection`() = runTest {
+        val downloadBefore = projections.downloadPreferences.first()
+        val appearanceBefore = projections.appearancePreferences.first()
+
+        graph.downloadsStore.setWifiOnlyDownloads(!downloadBefore.wifiOnlyDownloads)
+
+        val downloadAfter = projections.downloadPreferences.first()
+        assertNotEquals(downloadBefore.wifiOnlyDownloads, downloadAfter.wifiOnlyDownloads)
+        // An unrelated projection stays put.
+        assertEquals(appearanceBefore, projections.appearancePreferences.first())
+    }
+
+    @Test
+    fun `a notification newsletter write is reflected in the appearance-screen projection`() = runTest {
+        // The notification store's only public setters touch the newsletter
+        // config, which the appearance-screen projection surfaces (not the
+        // notificationPreferences projection). Assert the write reaches it.
+        val before = projections.appearanceScreenPreferences.first().newsletterEnabled
+        graph.notificationStore.setNewsletterEnabled(!before)
+        val after = projections.appearanceScreenPreferences.first().newsletterEnabled
+        assertNotEquals(before, after)
+    }
+
+    @Test
+    fun `a syncplay write is reflected in the syncplay projection`() = runTest {
+        val before = projections.syncPlayPreferences.first().syncPlayAutoAcceptInvites
+        graph.syncPlayCastStore.setSyncPlayAutoAcceptInvites(!before)
+        val after = projections.syncPlayPreferences.first().syncPlayAutoAcceptInvites
+        assertNotEquals(before, after)
+    }
+
+    @Test
+    fun `an experimental-features write is reflected in the experimental projection`() = runTest {
+        val before = projections.experimentalPreferences.first().enabledExperimentalFeatures
+        graph.experimentalStore.setEnabledExperimentalFeatures(before + ExperimentalFeature.HOME_CARD_CLIPPING)
+        val after = projections.experimentalPreferences.first().enabledExperimentalFeatures
+        assertTrue(after.contains(ExperimentalFeature.HOME_CARD_CLIPPING))
+        assertNotEquals(before, after)
+    }
+
+    @Test
+    fun `a subtitle forced-only write is reflected in the language projection`() = runTest {
+        // subtitlesForcedOnly is read by the LanguageSettings projection (it is
+        // absent from the narrower SubtitlePreferences projection).
+        val before = projections.languagePreferences.first().subtitlesForcedOnly
+        graph.subtitleLanguageStore.setSubtitlesForcedOnly(!before)
+
+        assertEquals(!before, projections.languagePreferences.first().subtitlesForcedOnly)
     }
 }

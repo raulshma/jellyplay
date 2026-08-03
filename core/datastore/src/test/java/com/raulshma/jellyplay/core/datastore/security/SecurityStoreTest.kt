@@ -176,4 +176,45 @@ class SecurityStoreTest {
         assertFalse(store.upgradePinHashIfLegacy(""))
         assertEquals(current, store.security.first().pinHash)
     }
+
+    @Test
+    fun `restore(slice) round-trips remote control and leaves lock config untouched`() = runTest {
+        // Seed an existing lock config that must survive the restore.
+        store.setPin("1234")
+        val before = store.security.first()
+        assertTrue(before.pinLockEnabled)
+
+        val slice = SecuritySlice(remoteControlEnabled = false)
+        store.restore(slice)
+
+        val after = store.security.first()
+        // Only remoteControlEnabled is the slice restore's responsibility.
+        assertFalse(after.remoteControlEnabled)
+        // Lock config seeded before the restore is preserved.
+        assertTrue(after.pinLockEnabled)
+        assertEquals(before.pinHash, after.pinHash)
+    }
+
+    @Test
+    fun `restoreSecuritySensitive round-trips the full lock config`() = runTest {
+        val slice = SecuritySlice(
+            pinLockEnabled = true,
+            pinHash = "v2\$310000\$deadbeef\$cafebabe",
+            biometricLockEnabled = true,
+            usePinForPlayerLock = true,
+            autoLockTimerMs = 120_000L,
+            remoteControlEnabled = false,
+        )
+
+        store.restoreSecuritySensitive(slice)
+
+        val after = store.security.first()
+        assertEquals(true, after.pinLockEnabled)
+        assertEquals("v2\$310000\$deadbeef\$cafebabe", after.pinHash)
+        assertTrue(after.biometricLockEnabled)
+        assertTrue(after.usePinForPlayerLock)
+        assertEquals(120_000L, after.autoLockTimerMs)
+        // restoreSecuritySensitive deliberately does not touch remoteControlEnabled.
+        assertTrue(after.remoteControlEnabled)
+    }
 }
