@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.NavigationStyle
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -102,6 +103,7 @@ data class MainPreferences(
     val navItemOrder: List<String> = emptyList(),
     val hideBottomNavOnScroll: Boolean = true,
     val navBarShowLabels: Boolean = true,
+    val navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
     val onboardingCompleted: Boolean = false,
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
@@ -256,6 +258,7 @@ class MainViewModel @Inject constructor(
             navItemOrder = nav.navItemOrder,
             hideBottomNavOnScroll = nav.hideBottomNavOnScroll,
             navBarShowLabels = nav.navBarShowLabels,
+            navigationStyle = nav.navigationStyle,
             preferredPlayer = playback.preferredPlayer,
             onboardingCompleted = runtime.onboardingCompleted,
             enabledExperimentalFeatures = experimental.enabledExperimentalFeatures,

@@ -8,6 +8,7 @@
     <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
     <string name="press_back_again_to_exit">Appuyez de nouveau sur retour pour quitter</string>
 
+
     <string name="shortcut_continue_watching_short">Continuer</string>
     <string name="shortcut_continue_watching_long">Continuer à regarder</string>
     <string name="shortcut_search_short">Rechercher</string>

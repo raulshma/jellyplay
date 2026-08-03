@@ -398,6 +398,7 @@ class PreferenceProjections @Inject constructor(
                 hiddenNavItems = nav.hiddenNavItems,
                 navItemOrder = nav.navItemOrder,
                 hideBottomNavOnScroll = nav.hideBottomNavOnScroll,
+                navigationStyle = nav.navigationStyle,
             )
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), NavigationCustomizationPreferences())
