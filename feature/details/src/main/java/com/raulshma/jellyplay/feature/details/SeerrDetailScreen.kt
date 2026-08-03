@@ -364,7 +364,7 @@ private fun SeerrDetailContent(
     isLoadingEpisodes: Boolean = false,
     onSeasonClick: (Int) -> Unit = {},
     onVideoClick: (SeerrRelatedVideo) -> Unit,
-    preferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
+    preferences: SeerrDetailPreferences,
 ) {
     val listState = rememberLazyListState()
     val adaptiveInfo = LocalAdaptiveInfo.current
