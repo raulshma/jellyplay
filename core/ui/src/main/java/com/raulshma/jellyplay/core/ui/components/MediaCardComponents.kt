@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -414,14 +415,48 @@ fun PosterCard(
             }
         },
         footer = {
+            // Items with no year/runtime (e.g. freshly-added episodes) would
+            // otherwise render an empty Row (0 height), making the card shorter
+            // than its neighbours that show a meta line. Reserve one line of the
+            // footer text style so every card's image+title+footer block is the
+            // same total height.
+            val footerStyle = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall
+            val footerLineHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+                footerStyle.lineHeight.toDp()
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.heightIn(min = footerLineHeight),
             ) {
-                if (item.year != null) {
+                // For episode cards the title shows the series name (see
+                // showEpisodeSeriesBadge); carry the S# E# context into the
+                // footer too, so the reserved line shows something useful
+                // instead of an empty gap (matches WideMediaCard's subtitle).
+                if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
+                    val episodeSubtitle = remember(item.seasonNumber, item.episodeNumber) {
+                        when {
+                            item.seasonNumber != null && item.episodeNumber != null ->
+                                "S${item.seasonNumber} E${item.episodeNumber.toString().padStart(2, '0')}"
+                            item.episodeNumber != null -> "E${item.episodeNumber.toString().padStart(2, '0')}"
+                            item.seasonNumber != null -> "S${item.seasonNumber}"
+                            else -> null
+                        }
+                    }
+                    if (episodeSubtitle != null) {
+                        Text(
+                            text = episodeSubtitle,
+                            style = footerStyle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
+                } else if (item.year != null) {
                     Text(
                         text = item.year.toString(),
-                        style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+                        style = footerStyle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

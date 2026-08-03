@@ -381,6 +381,7 @@ internal fun HomeContentList(
                         clippingEnabled = state.experimentalCardClippingEnabled,
                         showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
                         onSectionLongClick = sectionLongClick,
+                        seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
                     )
                 }
             }
@@ -411,6 +412,7 @@ internal fun HomeContentList(
                         rowHorizontalPadding = state.contentPad,
                         spacing = discoverSpacing,
                         backgroundColor = state.backgroundColor,
+                        homeBackdropEnabled = state.homeBackdropEnabled,
                         clippingEnabled = state.experimentalCardClippingEnabled,
                         seerrCardLoadingState = seerrCardLoadingState,
                         seerrPrefetch = callbacks.seerrPrefetch,
@@ -444,6 +446,7 @@ internal fun HomeContentList(
                         rowHorizontalPadding = state.contentPad,
                         spacing = discoverSpacing,
                         backgroundColor = state.backgroundColor,
+                        homeBackdropEnabled = state.homeBackdropEnabled,
                         clippingEnabled = state.experimentalCardClippingEnabled,
                         seerrCardLoadingState = seerrCardLoadingState,
                         seerrPrefetch = callbacks.seerrPrefetch,
