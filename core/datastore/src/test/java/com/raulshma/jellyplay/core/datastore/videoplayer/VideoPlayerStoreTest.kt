@@ -6,7 +6,10 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
+import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.MediaSegmentType
+import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -105,6 +108,49 @@ class VideoPlayerStoreTest {
         assertFalse(store.videoPlayer.first().videoGesturesEnabled)
         store.setVideoGesturesEnabled(true)
         assertTrue(store.videoPlayer.first().videoGesturesEnabled)
+    }
+
+    @Test
+    fun `restore(slice) round-trips a fully-populated slice`() = runTest {
+        val slice = VideoPlayerSlice(
+            videoSeekDurationMs = 15_000L,
+            videoControlsTimeoutMs = 10_000L,
+            videoDefaultOrientation = OrientationMode.LOCKED_LANDSCAPE,
+            videoDefaultAspectRatio = "16:9",
+            videoGesturesEnabled = false,
+            videoPassOutProtectionHours = 24,
+            videoSkipBackOnResumeMs = 10_000L,
+            videoHoldSpeedEnabled = false,
+            videoHoldSpeedMultiplier = 3.0f,
+            videoDefaultSpeed = 1.25f,
+            videoAutoplayNext = false,
+            trailerAutoplay = false,
+            cinemaModeEnabled = true,
+            videoSwipeSeekMaxMs = 180_000L,
+            videoRememberBrightness = false,
+            videoBrightnessLevel = 0.8f,
+            videoRememberVolume = false,
+            videoVolumeLevel = 0.5f,
+            videoAutoSkipIntro = true,
+            videoAutoSkipOutro = true,
+            videoRememberMuted = false,
+            videoMuted = true,
+            videoGestureIndicatorSide = GestureIndicatorSide.SAME,
+            trickplayEnabled = false,
+            trickplayOnSeekGesture = false,
+            videoEpisodeBrowserEnabled = false,
+            videoShowPlaybackMetadata = false,
+            videoPreloadBufferSize = PreloadBufferSize.HIGH,
+            showClockInPlayer = true,
+            showTimeRemaining = true,
+            tvZoomModePercent = 110f,
+            incognitoModeEnabled = true,
+            segmentBehaviors = SegmentBehavior.DEFAULT_BEHAVIORS + (MediaSegmentType.INTRO to SegmentBehavior.IGNORE),
+        )
+
+        store.restore(slice)
+
+        assertEquals(slice, store.videoPlayer.first())
     }
 
     private fun stringLegacyKey(name: String) =

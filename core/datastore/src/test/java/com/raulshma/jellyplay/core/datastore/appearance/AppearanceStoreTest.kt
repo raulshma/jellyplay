@@ -5,7 +5,12 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
+import com.raulshma.jellyplay.core.model.AppFontScale
+import com.raulshma.jellyplay.core.model.ColorBlindMode
 import com.raulshma.jellyplay.core.model.ColorStyle
+import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.model.DateFormatPreference
+import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.ThemeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -103,5 +108,39 @@ class AppearanceStoreTest {
     fun `setThemeMode round-trips`() = runTest {
         store.setThemeMode(ThemeMode.DARK)
         assertEquals(ThemeMode.DARK, store.appearance.first().themeMode)
+    }
+
+    @Test
+    fun `restore(slice) round-trips a fully-populated slice`() = runTest {
+        val slice = AppearanceSlice(
+            dynamicTheming = false,
+            themeMode = ThemeMode.DARK,
+            contrastLevel = ContrastLevel.HIGH,
+            oledMode = true,
+            performanceMode = true,
+            accentColorSwatch = "violet",
+            colorStyle = ColorStyle.VIBRANT,
+            synthwaveMode = true,
+            synthwaveAccent = "cyan",
+            soothingMode = false,
+            soothingAccent = "forest",
+            monochromeMode = false,
+            showAdvancedSettings = true,
+            reduceMotionEnabled = true,
+            blueLightFilterEnabled = true,
+            blueLightFilterStrength = 0.6f,
+            backdropThemeMusicEnabled = true,
+            hapticsEnabled = false,
+            dateFormatPreference = DateFormatPreference.ISO,
+            appFontScale = AppFontScale.LARGE,
+            scheduledThemeStartHour = 20,
+            scheduledThemeEndHour = 6,
+            colorBlindMode = ColorBlindMode.DEUTERANOPIA,
+            handMode = HandMode.LEFT,
+        )
+
+        store.restore(slice)
+
+        assertEquals(slice, store.appearance.first())
     }
 }

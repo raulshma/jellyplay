@@ -9,6 +9,8 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
+import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RefreshRateMode
@@ -130,5 +132,32 @@ class PlaybackStoreTest {
     fun `setPlaybackMode round-trips`() = runTest {
         store.setPlaybackMode(PlaybackMode.FORCE_DIRECT_PLAY)
         assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, store.playback.first().playbackMode)
+    }
+
+    @Test
+    fun `restore(slice) round-trips a fully-populated slice`() = runTest {
+        val slice = PlaybackSlice(
+            preferredPlayer = PlayerType.MPV,
+            streamingQuality = StreamingQuality.UHD_4K,
+            cellularStreamingQuality = StreamingQuality.LOW_360P,
+            playbackMode = PlaybackMode.FORCE_DIRECT_PLAY,
+            liveStreamOption = LiveStreamOption.TRANSCODE,
+            decoderMode = DecoderMode.SW_ONLY,
+            audioPassthrough = true,
+            frameRateMatching = true,
+            refreshRateMode = RefreshRateMode.FRAME_RATE_AND_RESOLUTION,
+            keepScreenOnDuringVideo = false,
+            pauseOnAudioFocusLoss = false,
+            duckOnTransientFocusLoss = true,
+            autoPlayCountdownSec = 30,
+            backgroundVideoAudioEnabled = true,
+            pgsSubtitleDirectPlay = true,
+            userDataSyncEnabled = false,
+            androidTvWatchNextEnabled = false,
+        )
+
+        store.restore(slice)
+
+        assertEquals(slice, store.playback.first())
     }
 }
