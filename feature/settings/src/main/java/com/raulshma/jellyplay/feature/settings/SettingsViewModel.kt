@@ -11,9 +11,29 @@ import com.raulshma.jellyplay.core.datastore.LegacySettingsBackup
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
+import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
+import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
+import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
+import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
+import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
+import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.NotificationPreferences
+import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -23,6 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -30,11 +51,46 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import javax.inject.Inject
 
+/**
+ * The ~15 preference fields the settings root screen reads, projected off the
+ * owning store slices instead of the legacy aggregate. Spans appearance
+ * (advanced-settings toggle + the appearance summary set), playback, audio,
+ * subtitle, notification, security, screensaver, and experimental.
+ */
+@Immutable
+data class SettingsPreferences(
+    val showAdvancedSettings: Boolean = false,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val dynamicTheming: Boolean = true,
+    val oledMode: Boolean = false,
+    val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
+    val performanceMode: Boolean = false,
+    val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
+    val audioDefaultSpeed: Float = 1.0f,
+    val preferredAudioLanguage: String? = null,
+    val notificationPreferences: NotificationPreferences = NotificationPreferences(),
+    val pinLockEnabled: Boolean = false,
+    val biometricLockEnabled: Boolean = false,
+    val dreamImageCategories: Set<DreamImageCategory> = ScreensaverSlice().dreamImageCategories,
+    val dreamSlideshowIntervalMs: Long = 15_000L,
+    val dreamShowTitle: Boolean = true,
+    val dreamKenBurnsEnabled: Boolean = true,
+    val dreamTransitionStyle: DreamTransitionStyle = DreamTransitionStyle.CROSSFADE,
+    val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
+)
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val preferencesStore: UserPreferencesStore,
-    private val preferencesAggregator: com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator,
+    private val appearanceStore: AppearanceStore,
+    private val playbackStore: PlaybackStore,
+    private val audioStore: AudioStore,
+    private val subtitleLanguageStore: SubtitleLanguageStore,
+    private val notificationStore: NotificationStore,
+    private val securityStore: SecurityStore,
+    private val screensaverStore: ScreensaverStore,
+    private val experimentalStore: ExperimentalStore,
     private val authRepository: AuthRepository,
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
     private val editor: PreferencesEditor,
@@ -45,7 +101,55 @@ class SettingsViewModel @Inject constructor(
         const val SCHEMA_VERSION_FIELD = "schemaVersion"
     }
 
-    var preferences by composeState(UserPreferences())
+    private val preferencesFlow = combine(
+        appearanceStore.appearance,
+        playbackStore.playback,
+        audioStore.audio,
+        subtitleLanguageStore.subtitle,
+        notificationStore.notification,
+        securityStore.security,
+        screensaverStore.screensaver,
+        experimentalStore.experimental,
+    ) { slices ->
+        @Suppress("UNCHECKED_CAST")
+        val appearance = slices[0] as AppearanceSlice
+        @Suppress("UNCHECKED_CAST")
+        val playback = slices[1] as PlaybackSlice
+        @Suppress("UNCHECKED_CAST")
+        val audio = slices[2] as AudioSlice
+        @Suppress("UNCHECKED_CAST")
+        val subtitle = slices[3] as SubtitleSlice
+        @Suppress("UNCHECKED_CAST")
+        val notification = slices[4] as NotificationSlice
+        @Suppress("UNCHECKED_CAST")
+        val security = slices[5] as SecuritySlice
+        @Suppress("UNCHECKED_CAST")
+        val screensaver = slices[6] as ScreensaverSlice
+        @Suppress("UNCHECKED_CAST")
+        val experimental = slices[7] as ExperimentalSlice
+        SettingsPreferences(
+            showAdvancedSettings = appearance.showAdvancedSettings,
+            themeMode = appearance.themeMode,
+            dynamicTheming = appearance.dynamicTheming,
+            oledMode = appearance.oledMode,
+            contrastLevel = appearance.contrastLevel,
+            performanceMode = appearance.performanceMode,
+            preferredPlayer = playback.preferredPlayer,
+            audioDefaultSpeed = audio.audioDefaultSpeed,
+            preferredAudioLanguage = subtitle.preferredAudioLanguage,
+            notificationPreferences = notification.notificationPreferences,
+            pinLockEnabled = security.pinLockEnabled,
+            biometricLockEnabled = security.biometricLockEnabled,
+            dreamImageCategories = screensaver.dreamImageCategories,
+            dreamSlideshowIntervalMs = screensaver.dreamSlideshowIntervalMs,
+            dreamShowTitle = screensaver.dreamShowTitle,
+            dreamKenBurnsEnabled = screensaver.dreamKenBurnsEnabled,
+            dreamTransitionStyle = screensaver.dreamTransitionStyle,
+            enabledExperimentalFeatures = experimental.enabledExperimentalFeatures,
+        )
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SettingsPreferences())
+
+    var preferences by composeState(SettingsPreferences())
         private set
 
     var currentUserName by composeState("")
@@ -83,7 +187,7 @@ class SettingsViewModel @Inject constructor(
 
     init {
         launch {
-            preferencesAggregator.preferences.collect { prefs ->
+            preferencesFlow.collect { prefs ->
                 preferences = prefs
             }
         }
