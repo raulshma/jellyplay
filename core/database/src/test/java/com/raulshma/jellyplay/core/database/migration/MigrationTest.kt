@@ -403,9 +403,9 @@ class MigrationTest {
      * Verifies the v40→v41 migration creates the `home_section_cache` table
      * with the (serverId, userId, cacheKey) composite primary key + identity
      * index, and that a typed payload round-trips through the DAO + JSON
-     * TypeConverter. This table backs the home-screen stale-while-revalidate
-     * cache, so the home screen can render instantly on cold open while a
-     * network refresh runs in the background.
+     * encode/decode helpers. This table backs the home-screen
+     * stale-while-revalidate cache, so the home screen can render instantly on
+     * cold open while a network refresh runs in the background.
      */
     @Test
     fun migrateAllFromV12_addsHomeSectionCache() = runTest {
@@ -439,7 +439,7 @@ class MigrationTest {
                 serverId = "srv-1",
                 userId = "u1",
                 cacheKey = "key-1",
-                payloadJson = com.raulshma.jellyplay.core.database.Converters.fromHomeSectionsResult(payload)!!,
+                payloadJson = com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(payload),
                 fetchedAt = 1L,
             )
         )

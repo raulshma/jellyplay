@@ -178,7 +178,7 @@ class HomeViewModelTest {
     @Test
     fun signIn_fetchesSections_andOrdersThem() = runTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(
@@ -214,7 +214,7 @@ class HomeViewModelTest {
     fun continueWatchingChange_firesBroadcaster_andTvScheduler() = runTest {
         // CW publishing is gated on the androidTvWatchNextEnabled pref (default true).
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(
@@ -236,7 +236,7 @@ class HomeViewModelTest {
     fun continueWatchingChange_skipsTvScheduler_whenPrefDisabled() = runTest {
         prefsFlow.value = UserPreferences(androidTvWatchNextEnabled = false)
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(
@@ -257,7 +257,7 @@ class HomeViewModelTest {
     @Test
     fun signOut_clearsSections() = runTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } returns Result.success(
             HomeSectionsResult(sections = listOf(section(HomeSectionType.CONTINUE_WATCHING))),
         )
@@ -276,7 +276,7 @@ class HomeViewModelTest {
     @Test
     fun offlineToOnline_clearsIsGoingOnline_afterFetch() = runTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
         userFlow.value = userInfo("u1")
@@ -357,7 +357,7 @@ class HomeViewModelTest {
         // run on the repository's withContext(Dispatchers.Default) and block a
         // worker thread for the full timeout, leaking past test teardown.
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } coAnswers { CompletableDeferred<Result<HomeSectionsResult>>().await() }
         viewModel = buildViewModel()
         userFlow.value = userInfo("u1")
@@ -418,7 +418,7 @@ class HomeViewModelTest {
     @Test
     fun prefChange_withUnrelatedPrefs_doesNotRefetch() = runTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
         userFlow.value = userInfo("u1")
@@ -427,7 +427,7 @@ class HomeViewModelTest {
         // Reset invocation count after the sign-in fetch.
         io.mockk.clearMocks(mediaRepository, answers = false, recordedCalls = true, childMocks = false)
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
 
         // Toggle a pref that is NOT in the home-section diff set (oledMode).
@@ -435,7 +435,7 @@ class HomeViewModelTest {
         runCurrent()
 
         coVerify(exactly = 0) {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         }
         stopPeriodicRefresh()
     }
@@ -660,7 +660,7 @@ class HomeViewModelTest {
     @Test
     fun refresh_resetsScrollAndFetchesSections() = runTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
         viewModel.saveHomeScrollPosition(5, 100)
@@ -671,14 +671,14 @@ class HomeViewModelTest {
         val pos = viewModel.getHomeScrollPosition()
         assertEquals(0, pos.firstVisibleItemIndex)
         assertEquals(0, pos.firstVisibleItemScrollOffset)
-        coVerify { mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify { mediaRepository.getHomeSections(any()) }
         stopPeriodicRefresh()
     }
 
     @Test
     fun pullToRefresh_invalidatesDiscoverCache_andRefetches() = runTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
 
@@ -686,7 +686,7 @@ class HomeViewModelTest {
         runCurrent()
 
         assertFalse(viewModel.uiState.value.isRefreshing)
-        coVerify { mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify { mediaRepository.getHomeSections(any()) }
         stopPeriodicRefresh()
     }
 
@@ -733,7 +733,7 @@ class HomeViewModelTest {
     @Test
     fun fetchAndUpdateSections_onFailure_setsErrorState() = runTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any(), any(), any(), any(), any(), any())
+            mediaRepository.getHomeSections(any())
         } returns Result.failure(RuntimeException("Connection timeout"))
         viewModel = buildViewModel()
 

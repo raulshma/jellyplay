@@ -24,8 +24,4 @@ interface HomeSectionCacheDao {
     /** Clears every row for a (server, user) — used on logout / identity switch for privacy. */
     @Query("DELETE FROM home_section_cache WHERE serverId = :serverId AND userId = :userId")
     suspend fun clearForIdentity(serverId: String, userId: String)
-
-    /** Clears the whole table — used by [com.raulshma.jellyplay.core.data.repository.MediaRepository.invalidateCaches]. */
-    @Query("DELETE FROM home_section_cache")
-    suspend fun clearAll()
 }

@@ -39,5 +39,5 @@ data class HomeSectionCacheEntity(
     @ColumnInfo(name = "fetchedAt") val fetchedAt: Long = System.currentTimeMillis(),
 ) {
     val payload: HomeSectionsResult?
-        get() = com.raulshma.jellyplay.core.database.Converters.toHomeSectionsResult(payloadJson)
+        get() = com.raulshma.jellyplay.core.database.Converters.decodeHomeSectionsResult(payloadJson)
 }

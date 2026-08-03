@@ -339,7 +339,7 @@ class HomeViewModel @Inject constructor(
                     // content, show it immediately and drop isLoading; the network
                     // fetch below revalidates and overwrites. Only clear+load when
                     // there's genuinely nothing to show.
-                    val cachedSections = orderedCachedHomeSections()
+                    val cachedSections = orderedCachedHomeSections(currentHomeSectionQuery())
                     if (cachedSections != null) {
                         _uiState.update {
                             it.copy(
@@ -855,24 +855,33 @@ class HomeViewModel @Inject constructor(
      * shows the full-screen loading box (DelayedLoadingScreen) when we already
      * have stale content to display — stale-while-revalidate without the flash.
      */
-    private suspend fun orderedCachedHomeSections(): List<HomeSection>? =
-        runCatching {
-            mediaRepository.getCachedHomeSections(
-                enabledSections = enabledHomeSectionTypes,
-                libraryHomeSectionOverrides = libraryHomeSectionOverrides,
-                nextUpRewatching = nextUpRewatching,
-                nextUpMaxDays = nextUpMaxDays,
-                nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
-                hiddenCwItemIds = hiddenCwItemIds,
-                pinnedSections = pinnedHomeSections,
-            )
-        }.getOrNull()?.takeIf { it.sections.isNotEmpty() }?.let { cached ->
-            orderHomeSections(
-                sections = cached.sections,
-                order = homeSectionOrder,
-                mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
-            )
-        }
+    private fun currentHomeSectionQuery(): HomeSectionQuery = HomeSectionQuery(
+        enabledSections = enabledHomeSectionTypes,
+        libraryHomeSectionOverrides = libraryHomeSectionOverrides,
+        nextUpRewatching = nextUpRewatching,
+        nextUpMaxDays = nextUpMaxDays,
+        nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
+        hiddenCwItemIds = hiddenCwItemIds,
+        pinnedSections = pinnedHomeSections,
+    )
+
+    /**
+     * Reads the persisted SWR snapshot for [query] and orders it for display,
+     * or null if nothing is cached / the cached sections are empty. Shared by
+     * the user-switch collector (paint snapshot instead of a loading box) and
+     * the cold-open path in [fetchAndUpdateSections].
+     */
+    private suspend fun orderedCachedHomeSections(query: HomeSectionQuery): List<HomeSection>? =
+        runCatching { mediaRepository.getCachedHomeSections(query) }
+            .getOrNull()
+            ?.takeIf { it.sections.isNotEmpty() }
+            ?.let { cached ->
+                orderHomeSections(
+                    sections = cached.sections,
+                    order = homeSectionOrder,
+                    mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
+                )
+            }
 
     private suspend fun fetchAndUpdateSections() {
         // Do not drop a refresh that arrives while another request is running.
@@ -895,15 +904,7 @@ class HomeViewModel @Inject constructor(
             }
 
             lastRefreshTime = timeSource.nowEpochMillis()
-            val query = HomeSectionQuery(
-                enabledSections = enabledHomeSectionTypes,
-                libraryHomeSectionOverrides = libraryHomeSectionOverrides,
-                nextUpRewatching = nextUpRewatching,
-                nextUpMaxDays = nextUpMaxDays,
-                nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
-                hiddenCwItemIds = hiddenCwItemIds,
-                pinnedSections = pinnedHomeSections,
-            )
+            val query = currentHomeSectionQuery()
 
             // Stale-while-revalidate: on a cold open (sections still empty),
             // paint the persisted snapshot from Room instantly so the home
@@ -913,22 +914,7 @@ class HomeViewModel @Inject constructor(
             // pull-to-refresh or pref change already has sections on screen and
             // flashing stale would feel worse than the brief spinner.
             if (_uiState.value.sections.isEmpty()) {
-                runCatching {
-                    mediaRepository.getCachedHomeSections(
-                        enabledSections = query.enabledSections,
-                        libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
-                        nextUpRewatching = query.nextUpRewatching,
-                        nextUpMaxDays = query.nextUpMaxDays,
-                        nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
-                        hiddenCwItemIds = query.hiddenCwItemIds,
-                        pinnedSections = query.pinnedSections,
-                    )
-                }.getOrNull()?.takeIf { it.sections.isNotEmpty() }?.let { cached ->
-                    val cachedSections = orderHomeSections(
-                        sections = cached.sections,
-                        order = homeSectionOrder,
-                        mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
-                    )
+                orderedCachedHomeSections(query)?.let { cachedSections ->
                     _uiState.update { it.copy(sections = cachedSections) }
                 }
             }
@@ -943,15 +929,7 @@ class HomeViewModel @Inject constructor(
             // main fetch via coroutineScope's structured concurrency.
             coroutineScope {
                 val mainDeferred = async {
-                    mediaRepository.getHomeSections(
-                        enabledSections = query.enabledSections,
-                        libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
-                        nextUpRewatching = query.nextUpRewatching,
-                        nextUpMaxDays = query.nextUpMaxDays,
-                        nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
-                        hiddenCwItemIds = query.hiddenCwItemIds,
-                        pinnedSections = query.pinnedSections,
-                    )
+                    mediaRepository.getHomeSections(query)
                 }
                 val discoverDeferred = if (_uiState.value.discoverEnabled) {
                     async { runCatching { fetchDiscoverSections(seerrPreferences) } }
