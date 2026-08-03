@@ -316,6 +316,7 @@ data class NavigationCustomizationPreferences(
     val hiddenNavItems: Set<String> = emptySet(),
     val navItemOrder: List<String> = emptyList(),
     val hideBottomNavOnScroll: Boolean = true,
+    val navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
 )
 
 /** Fields read by `LanguageSettingsScreen`. */

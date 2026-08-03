@@ -42,6 +42,12 @@ object ExperimentalFeatures {
             subtitleRes = R.string.settings_exp_arr_integration_subtitle,
             icon = Tabler.Outline.Download,
         ),
+        ExperimentalFeatureInfo(
+            feature = ExperimentalFeature.EXPRESSIVE_NAVIGATION,
+            titleRes = R.string.settings_exp_expressive_nav,
+            subtitleRes = R.string.settings_exp_expressive_nav_subtitle,
+            icon = Tabler.Outline.LayoutNavbar,
+        ),
     )
 
     /**

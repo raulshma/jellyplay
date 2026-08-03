@@ -8,6 +8,7 @@
     <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
     <string name="press_back_again_to_exit">종료하려면 뒤로 가기를 다시 누르세요</string>
 
+
     <string name="shortcut_continue_watching_short">이어보기</string>
     <string name="shortcut_continue_watching_long">이어보기</string>
     <string name="shortcut_search_short">검색</string>

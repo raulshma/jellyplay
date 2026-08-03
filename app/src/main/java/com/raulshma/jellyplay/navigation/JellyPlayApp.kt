@@ -104,6 +104,8 @@ import com.raulshma.jellyplay.isExperimentalEnabled
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.NavigationStyle
+import com.raulshma.jellyplay.navigation.components.ExpressiveFloatingNavigationBar
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -816,6 +818,8 @@ private fun MainContent(
                         videoMiniItemId = videoMiniItemId,
                         animatedNavBarColor = animatedNavBarColor,
                         showNavBarLabels = preferences.navBarShowLabels,
+                        navigationStyle = preferences.navigationStyle,
+                        isExpressiveNavExperimental = preferences.isExperimentalEnabled(ExperimentalFeature.EXPRESSIVE_NAVIGATION),
                     )
                 } else {
                     FullScreenContent(
@@ -1131,6 +1135,8 @@ private fun PhoneContent(
     videoMiniItemId: String?,
     animatedNavBarColor: Color,
     showNavBarLabels: Boolean,
+    navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
+    isExpressiveNavExperimental: Boolean = false,
 ) {
     val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var isBottomNavVisible by isBottomNavVisibleState
@@ -1357,18 +1363,30 @@ private fun PhoneContent(
                     )
                 }
                 if (!isExpanded) {
-                    FloatingNavigationBar(
-                        routes = activeTopLevelRoutes,
-                        currentTopLevel = currentTopLevel,
-                        onNavigate = { navigator.navigate(it) },
-                        showLabels = showNavBarLabels,
-                        containerColor = animatedNavBarColor,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = systemNavBarBottom + 4.dp)
-                            .padding(horizontal = 16.dp)
-                            .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
-                    )
+                    val navBarModifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = systemNavBarBottom + 4.dp)
+                        .padding(horizontal = 16.dp)
+                        .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
+                    if (navigationStyle == NavigationStyle.EXPRESSIVE || isExpressiveNavExperimental) {
+                        ExpressiveFloatingNavigationBar(
+                            routes = activeTopLevelRoutes,
+                            currentTopLevel = currentTopLevel,
+                            onNavigate = { navigator.navigate(it) },
+                            showLabels = showNavBarLabels,
+                            containerColor = animatedNavBarColor,
+                            modifier = navBarModifier,
+                        )
+                    } else {
+                        FloatingNavigationBar(
+                            routes = activeTopLevelRoutes,
+                            currentTopLevel = currentTopLevel,
+                            onNavigate = { navigator.navigate(it) },
+                            showLabels = showNavBarLabels,
+                            containerColor = animatedNavBarColor,
+                            modifier = navBarModifier,
+                        )
+                    }
                 }
             }
         }
@@ -1466,7 +1484,7 @@ private fun routeToIcon(route: Route): ImageVector = when (route) {
 }
 
 @Composable
-private fun NavIcon(route: Route, label: String, selected: Boolean = false, tint: Color = androidx.compose.material3.LocalContentColor.current) {
+internal fun NavIcon(route: Route, label: String, selected: Boolean = false, tint: Color = androidx.compose.material3.LocalContentColor.current) {
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (selected) 1.15f else 1.0f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
