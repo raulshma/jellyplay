@@ -6,7 +6,6 @@ import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -40,7 +39,6 @@ class AuthRepositoryImplTest {
     private val database: JellyPlayDatabase = mockk(relaxed = true)
     private val serverDao: ServerDao = mockk(relaxed = true)
     private val userDao: UserDao = mockk(relaxed = true)
-    private val preferencesStore: UserPreferencesStore = mockk(relaxed = true)
     private val serverIdentityStore: ServerIdentityStore = mockk(relaxed = true)
     private val tokenCipher: TokenCipher = mockk(relaxed = true) {
         // Tests store plaintext tokens — make the cipher a no-op pass-through so existing
@@ -95,7 +93,6 @@ class AuthRepositoryImplTest {
             database = database,
             serverDao = serverDao,
             userDao = userDao,
-            preferencesStore = preferencesStore,
             serverIdentityStore = serverIdentityStore,
             tokenCipher = tokenCipher,
             json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
@@ -137,7 +134,6 @@ class AuthRepositoryImplTest {
         // logout must clear the active server/user selection only — NOT wipe
         // the whole DataStore (device id + all user prefs must be preserved).
         coVerify { serverIdentityStore.clearSession() }
-        coVerify(exactly = 0) { preferencesStore.clearAll() }
     }
 
     @Test

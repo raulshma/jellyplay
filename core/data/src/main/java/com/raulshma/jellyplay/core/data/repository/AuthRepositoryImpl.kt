@@ -6,7 +6,6 @@ import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
@@ -39,7 +38,6 @@ class AuthRepositoryImpl @Inject constructor(
     private val database: JellyPlayDatabase,
     private val serverDao: ServerDao,
     private val userDao: UserDao,
-    private val preferencesStore: UserPreferencesStore,
     private val serverIdentityStore: ServerIdentityStore,
     private val tokenCipher: TokenCipher,
     private val json: Json,
