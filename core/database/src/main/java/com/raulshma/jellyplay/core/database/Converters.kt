@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.database
 
 import androidx.room.TypeConverter
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import kotlinx.serialization.json.Json
 
 object Converters {
@@ -47,4 +48,16 @@ object Converters {
     @TypeConverter
     @JvmStatic
     fun fromEnum(value: Enum<*>?): String? = value?.name
+
+    // Home-screen SWR snapshot. encode/decode are public so the entity can
+    // resolve its typed payload without re-deriving the Json instance.
+    @TypeConverter
+    @JvmStatic
+    fun fromHomeSectionsResult(value: HomeSectionsResult?): String? =
+        value?.let { json.encodeToString(it) }
+
+    @TypeConverter
+    @JvmStatic
+    fun toHomeSectionsResult(value: String?): HomeSectionsResult? =
+        value?.let { runCatching { json.decodeFromString<HomeSectionsResult>(it) }.getOrNull() }
 }

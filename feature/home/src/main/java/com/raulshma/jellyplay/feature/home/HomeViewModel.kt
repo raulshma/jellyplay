@@ -41,6 +41,7 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -331,7 +332,27 @@ class HomeViewModel @Inject constructor(
                 } else if (previousUserId != userId) {
                     refreshJob?.cancel()
                     resetHomeScrollPosition()
-                    _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null, isLoading = true) }
+                    // Stale-while-revalidate: paint the persisted snapshot (if any)
+                    // instead of clearing to empty. The empty+isLoading path drives
+                    // a full-screen loading box (DelayedLoadingScreen) that looks like
+                    // the splash screen re-appearing — so when we already have cached
+                    // content, show it immediately and drop isLoading; the network
+                    // fetch below revalidates and overwrites. Only clear+load when
+                    // there's genuinely nothing to show.
+                    val cachedSections = orderedCachedHomeSections()
+                    if (cachedSections != null) {
+                        _uiState.update {
+                            it.copy(
+                                sections = cachedSections,
+                                favorites = emptyList(),
+                                discoverSections = emptyMap(),
+                                error = null,
+                                isLoading = false,
+                            )
+                        }
+                    } else {
+                        _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null, isLoading = true) }
+                    }
                     fetchAndUpdateSections()
                     startPeriodicRefresh()
                 }
@@ -827,6 +848,32 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Reads + orders the persisted home-sections snapshot for the current
+     * query, or null if none is cached. Used to paint cached content *before*
+     * clearing sections on a user/refresh transition, so the home screen never
+     * shows the full-screen loading box (DelayedLoadingScreen) when we already
+     * have stale content to display — stale-while-revalidate without the flash.
+     */
+    private suspend fun orderedCachedHomeSections(): List<HomeSection>? =
+        runCatching {
+            mediaRepository.getCachedHomeSections(
+                enabledSections = enabledHomeSectionTypes,
+                libraryHomeSectionOverrides = libraryHomeSectionOverrides,
+                nextUpRewatching = nextUpRewatching,
+                nextUpMaxDays = nextUpMaxDays,
+                nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
+                hiddenCwItemIds = hiddenCwItemIds,
+                pinnedSections = pinnedHomeSections,
+            )
+        }.getOrNull()?.takeIf { it.sections.isNotEmpty() }?.let { cached ->
+            orderHomeSections(
+                sections = cached.sections,
+                order = homeSectionOrder,
+                mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
+            )
+        }
+
     private suspend fun fetchAndUpdateSections() {
         // Do not drop a refresh that arrives while another request is running.
         // In particular, a sign-in can complete while Home's earlier request is
@@ -857,76 +904,124 @@ class HomeViewModel @Inject constructor(
                 hiddenCwItemIds = hiddenCwItemIds,
                 pinnedSections = pinnedHomeSections,
             )
-            mediaRepository.getHomeSections(
-                enabledSections = query.enabledSections,
-                libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
-                nextUpRewatching = query.nextUpRewatching,
-                nextUpMaxDays = query.nextUpMaxDays,
-                nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
-                hiddenCwItemIds = query.hiddenCwItemIds,
-                pinnedSections = query.pinnedSections,
-            )
-                .onSuccess { homeResult ->
-                    val fetchedSections = homeResult.sections
-                    // Surface a non-blocking notice only when a section type
-                    // actually failed to load (403/500/network). Sections that
-                    // returned zero items (e.g. no watch history, no Next Up) are
-                    // NOT failures — previously the size-mismatch heuristic
-                    // false-positived on new users and after merges.
-                    _uiState.update { it.copy(partialLoadError = homeResult.failedSectionTypes.isNotEmpty()) }
-                    // OrderHomeSectionsUseCase is pure and operates on a handful
-                    // of sections (sub-microsecond), so no thread offload. The
-                    // previous withContext(Dispatchers.Default) hop escaped the
-                    // test scheduler and made isRefreshing/isLoading assertions
-                    // racy under StandardTestDispatcher.
-                    val finalSections = orderHomeSections(
-                        sections = fetchedSections,
+
+            // Stale-while-revalidate: on a cold open (sections still empty),
+            // paint the persisted snapshot from Room instantly so the home
+            // screen renders before the network refresh below resolves. The
+            // fresh fetch overwrites it on success; if the network fails we keep
+            // showing stale rather than an empty screen. Only when empty — a
+            // pull-to-refresh or pref change already has sections on screen and
+            // flashing stale would feel worse than the brief spinner.
+            if (_uiState.value.sections.isEmpty()) {
+                runCatching {
+                    mediaRepository.getCachedHomeSections(
+                        enabledSections = query.enabledSections,
+                        libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
+                        nextUpRewatching = query.nextUpRewatching,
+                        nextUpMaxDays = query.nextUpMaxDays,
+                        nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
+                        hiddenCwItemIds = query.hiddenCwItemIds,
+                        pinnedSections = query.pinnedSections,
+                    )
+                }.getOrNull()?.takeIf { it.sections.isNotEmpty() }?.let { cached ->
+                    val cachedSections = orderHomeSections(
+                        sections = cached.sections,
                         order = homeSectionOrder,
                         mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
                     )
+                    _uiState.update { it.copy(sections = cachedSections) }
+                }
+            }
 
-                    _uiState.update { it.copy(sections = finalSections) }
+            // The three fetch groups write independent _uiState fields
+            // (sections / discoverSections / recentlyGrabbed), so run them
+            // concurrently rather than one after another — cold-open latency
+            // becomes the max of the three instead of their sum. The CW
+            // widget/TV-Watch-Next side-effect stays tied to the main sections
+            // result and is invoked after the mutex releases. Discover/arr are
+            // runCatching-wrapped so a failure in either can never cancel the
+            // main fetch via coroutineScope's structured concurrency.
+            coroutineScope {
+                val mainDeferred = async {
+                    mediaRepository.getHomeSections(
+                        enabledSections = query.enabledSections,
+                        libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
+                        nextUpRewatching = query.nextUpRewatching,
+                        nextUpMaxDays = query.nextUpMaxDays,
+                        nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
+                        hiddenCwItemIds = query.hiddenCwItemIds,
+                        pinnedSections = query.pinnedSections,
+                    )
+                }
+                val discoverDeferred = if (_uiState.value.discoverEnabled) {
+                    async { runCatching { fetchDiscoverSections(seerrPreferences) } }
+                } else null
+                // Direct *arr "Recently Grabbed" calendar — gated by the
+                // DIRECT_ARR_INTEGRATION flag and the same TTL gate as discover
+                // sections so it never adds extra round-trips on every refresh.
+                val arrDeferred = if (_uiState.value.directArrEnabled) {
+                    async { runCatching { fetchRecentlyGrabbed() } }
+                } else null
 
-                    val continueWatching = finalSections
-                        .find { it.type == HomeSectionType.CONTINUE_WATCHING }
-                        ?.items ?: emptyList()
-                    val currentIds = continueWatching.map { it.id }.toSet()
-                    if (currentIds != lastContinueWatchingIds) {
-                        lastContinueWatchingIds = currentIds
-                        widgetDataStore.setContinueWatching(continueWatching)
-                        // Defer the widget broadcast + TV Watch Next refresh until
-                        // after the mutex is released (see pendingCwSideEffect above).
-                        pendingCwSideEffect = {
-                            // Push the CW change to the home-screen widget. The
-                            // broadcaster owns the explicit-component broadcast so
-                            // this VM no longer needs an Android Context.
-                            continueWatchingBroadcaster.refreshContinueWatching()
-                            // Refresh the Android TV "Watch Next" OS row so the
-                            // system home stays in sync with the user's progress.
-                            // Worker is a no-op on phones and respects its preference.
-                            if (androidTvWatchNextEnabled) {
-                                tvWatchNextScheduler.scheduleRefresh()
+                mainDeferred.await()
+                    .onSuccess { homeResult ->
+                        val fetchedSections = homeResult.sections
+                        // Surface a non-blocking notice only when a section type
+                        // actually failed to load (403/500/network). Sections that
+                        // returned zero items (e.g. no watch history, no Next Up) are
+                        // NOT failures — previously the size-mismatch heuristic
+                        // false-positived on new users and after merges.
+                        _uiState.update { it.copy(partialLoadError = homeResult.failedSectionTypes.isNotEmpty()) }
+                        // OrderHomeSectionsUseCase is pure and operates on a handful
+                        // of sections (sub-microsecond), so no thread offload. The
+                        // previous withContext(Dispatchers.Default) hop escaped the
+                        // test scheduler and made isRefreshing/isLoading assertions
+                        // racy under StandardTestDispatcher.
+                        val finalSections = orderHomeSections(
+                            sections = fetchedSections,
+                            order = homeSectionOrder,
+                            mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
+                        )
+
+                        _uiState.update { it.copy(sections = finalSections) }
+
+                        val continueWatching = finalSections
+                            .find { it.type == HomeSectionType.CONTINUE_WATCHING }
+                            ?.items ?: emptyList()
+                        val currentIds = continueWatching.map { it.id }.toSet()
+                        if (currentIds != lastContinueWatchingIds) {
+                            lastContinueWatchingIds = currentIds
+                            widgetDataStore.setContinueWatching(continueWatching)
+                            // Defer the widget broadcast + TV Watch Next refresh until
+                            // after the mutex is released (see pendingCwSideEffect above).
+                            pendingCwSideEffect = {
+                                // Push the CW change to the home-screen widget. The
+                                // broadcaster owns the explicit-component broadcast so
+                                // this VM no longer needs an Android Context.
+                                continueWatchingBroadcaster.refreshContinueWatching()
+                                // Refresh the Android TV "Watch Next" OS row so the
+                                // system home stays in sync with the user's progress.
+                                // Worker is a no-op on phones and respects its preference.
+                                if (androidTvWatchNextEnabled) {
+                                    tvWatchNextScheduler.scheduleRefresh()
+                                }
                             }
                         }
+
+                        _uiState.update { it.copy(error = null) }
+                    }
+                    .onFailure { throwable ->
+                        if (_uiState.value.sections.isEmpty()) {
+                            _uiState.update { s -> s.copy(error = throwable.message ?: "${throwable::class.simpleName}") }
+                        }
+                        _uiState.update { it.copy(partialLoadError = false) }
                     }
 
-                    _uiState.update { it.copy(error = null) }
-                }
-                .onFailure { throwable ->
-                    if (_uiState.value.sections.isEmpty()) {
-                        _uiState.update { s -> s.copy(error = throwable.message ?: "${throwable::class.simpleName}") }
-                    }
-                    _uiState.update { it.copy(partialLoadError = false) }
-                }
-
-            if (_uiState.value.discoverEnabled) {
-                fetchDiscoverSections(seerrPreferences)
-            }
-            // Direct *arr "Recently Grabbed" calendar — gated by the
-            // DIRECT_ARR_INTEGRATION flag and the same TTL gate as discover
-            // sections so it never adds extra round-trips on every refresh.
-            if (_uiState.value.directArrEnabled) {
-                fetchRecentlyGrabbed()
+                // Await the optional groups so coroutineScope doesn't return
+                // before their state writes land. Errors are already swallowed
+                // by runCatching above; the results are intentionally ignored.
+                discoverDeferred?.await()
+                arrDeferred?.await()
             }
         } finally {
             // isGoingOnline is also cleared in the offlineMode collector's
