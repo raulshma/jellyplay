@@ -1,6 +1,10 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -44,7 +48,9 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.sharedElementBoundsSpec
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -75,7 +81,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
  * @param onMarkSeasonUnplayed marks every downloaded episode in a season
  *   unwatched (clears position/percentage).
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun OfflineSeasonsSection(
     seasons: List<OfflineMediaItem>,
@@ -98,6 +104,13 @@ internal fun OfflineSeasonsSection(
     // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
     val seasonFadeIn = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val seasonFadeOut = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    // Shared-element spring for the layout-switch morph — mirrors the online
+    // SeasonsSection: the compact-row thumbnail and the wide-card thumbnail are
+    // the same image, so the outgoing/incoming copies glide between their
+    // bounds while the surrounding metadata crossfades.
+    val episodeThumbBoundsTransform: BoundsTransform = { _, _ ->
+        sharedElementBoundsSpec()
+    }
 
     // Pending per-episode delete confirmation. The per-episode trash badge is a
     // small touch target overlapping the play affordance on a 16:9 thumbnail, so
@@ -182,12 +195,18 @@ internal fun OfflineSeasonsSection(
         }
 
         AnimatedContent(
-            targetState = selectedSeasonIndex to (seasons.getOrNull(selectedSeasonIndex)?.let { episodes[it.id]?.size } ?: 0),
+            targetState = Triple(
+                selectedSeasonIndex,
+                seasons.getOrNull(selectedSeasonIndex)?.let { episodes[it.id]?.size } ?: 0,
+                useCompactList,
+            ),
             transitionSpec = {
                 fadeIn(animationSpec = seasonFadeIn) togetherWith fadeOut(animationSpec = seasonFadeOut)
             },
             label = "offlineSeasonEpisodes",
-        ) { (seasonIdx, _) ->
+        ) { (seasonIdx, _, isCompact) ->
+            val sharedTransitionScope = LocalSharedTransitionScope.current
+            val animatedVisibilityScope = this
             val season = seasons.getOrNull(seasonIdx)
             val seasonEpisodes = season?.let { episodes[it.id] } ?: emptyList()
             if (seasonEpisodes.isEmpty()) {
@@ -201,7 +220,7 @@ internal fun OfflineSeasonsSection(
                     )
                 }
             } else {
-                if (useCompactList) {
+                if (isCompact) {
                     // Plain Column (not lazy): nested inside the screen's
                     // LazyColumn, so a same-direction nested lazy list is
                     // disallowed. Season episode counts are small enough that
@@ -219,6 +238,12 @@ internal fun OfflineSeasonsSection(
                                 onPlayClick = { onEpisodePlay(episode) },
                                 onDetailClick = { onEpisodeDetail(episode) },
                                 onDelete = { pendingDelete = episode },
+                                sharedThumbnailModifier = episodeThumbSharedModifier(
+                                    episodeId = episode.id,
+                                    sharedTransitionScope = sharedTransitionScope,
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = episodeThumbBoundsTransform,
+                                ),
                             )
                         }
                     }
@@ -236,6 +261,12 @@ internal fun OfflineSeasonsSection(
                             onDetailClick = { onEpisodeDetail(episode) },
                             onDelete = { pendingDelete = episode },
                             modifier = focusModifier,
+                            sharedThumbnailModifier = episodeThumbSharedModifier(
+                                episodeId = episode.id,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                boundsTransform = episodeThumbBoundsTransform,
+                            ),
                         )
                     }
                 }
@@ -261,6 +292,36 @@ internal fun OfflineSeasonsSection(
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.downloads_cancel)) }
             },
+        )
+    }
+}
+
+/**
+ * Shared-element thumbnail morph between the compact vertical rows and the
+ * horizontal cards — mirrors the online SeasonsSection helper: both layouts
+ * render the same episode thumbnail, so the outgoing/incoming copies glide
+ * between their bounds (128×72 ↔ 16:9 card width) while the rest of the card
+ * crossfades. No-op when the app-level shared transition scope is unavailable
+ * (performance mode) — the layouts then swap instantly.
+ *
+ * Keyed with an "offline_" prefix so the offline and online detail screens
+ * never pair shared elements for the same episode id within the app-wide
+ * shared transition scope.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun episodeThumbSharedModifier(
+    episodeId: String,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    boundsTransform: BoundsTransform,
+): Modifier {
+    val scope = sharedTransitionScope ?: return Modifier
+    return with(scope) {
+        Modifier.sharedElement(
+            sharedContentState = rememberSharedContentState(key = "offline_episode_thumb_$episodeId"),
+            animatedVisibilityScope = animatedVisibilityScope,
+            boundsTransform = boundsTransform,
         )
     }
 }

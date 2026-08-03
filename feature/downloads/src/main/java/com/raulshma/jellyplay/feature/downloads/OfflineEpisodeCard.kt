@@ -76,6 +76,7 @@ internal fun OfflineEpisodeCard(
     onDetailClick: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    sharedThumbnailModifier: Modifier = Modifier,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -145,7 +146,8 @@ internal fun OfflineEpisodeCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .then(sharedThumbnailModifier),
             contentAlignment = Alignment.Center,
         ) {
             val thumb = episode.backdropPath ?: episode.posterPath
@@ -345,6 +347,7 @@ internal fun OfflineCompactEpisodeRow(
     onDetailClick: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    sharedThumbnailModifier: Modifier = Modifier,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -382,7 +385,8 @@ internal fun OfflineCompactEpisodeRow(
         Box(
             modifier = Modifier
                 .size(width = 128.dp, height = 72.dp)
-                .clip(ShapeCache.smooth16),
+                .clip(ShapeCache.smooth16)
+                .then(sharedThumbnailModifier),
             contentAlignment = Alignment.Center,
         ) {
             val thumb = episode.backdropPath ?: episode.posterPath
