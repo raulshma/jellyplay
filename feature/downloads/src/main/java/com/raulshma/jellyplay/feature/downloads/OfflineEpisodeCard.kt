@@ -154,7 +154,9 @@ internal fun OfflineEpisodeCard(
                     url = thumb,
                     contentDescription = episode.name,
                     blurHash = episode.blurHashBackdrop ?: episode.blurHashPrimary,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (episode.isPlayed) Modifier.graphicsLayer { alpha = 0.65f } else Modifier),
                     contentScale = ContentScale.Crop,
                 )
             } else {
@@ -213,7 +215,7 @@ internal fun OfflineEpisodeCard(
             }
 
             // Watch-progress bar.
-            if (positionTicks != null && positionTicks > 0) {
+            if (positionTicks != null && positionTicks > 0 && !episode.isPlayed) {
                 val runtimeTicks = episode.runTimeTicks
                 val progress = if (runtimeTicks != null && runtimeTicks > 0) {
                     (positionTicks.toFloat() / runtimeTicks).coerceIn(0f, 1f)
@@ -227,15 +229,23 @@ internal fun OfflineEpisodeCard(
                         .height(4.dp)
                         .background(MaterialTheme.colorScheme.primary),
                 )
+            } else if (episode.isPlayed) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
+                )
             }
             // Watched badge (mirrors online logic).
             val cardPrefs = LocalCardDisplayPreferences.current
-            if (episode.isPlayed && (positionTicks == null || positionTicks <= 0) && cardPrefs.showWatchedCheckmark) {
+            if (episode.isPlayed && cardPrefs.showWatchedCheckmark) {
                 com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag(
                     label = stringResource(R.string.downloads_watched),
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp),
+                        .align(Alignment.BottomStart)
+                        .padding(start = 6.dp, bottom = 8.dp),
                 )
             }
         }
@@ -381,7 +391,9 @@ internal fun OfflineCompactEpisodeRow(
                     url = thumb,
                     contentDescription = episode.name,
                     blurHash = episode.blurHashBackdrop ?: episode.blurHashPrimary,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (episode.isPlayed) Modifier.graphicsLayer { alpha = 0.65f } else Modifier),
                     contentScale = ContentScale.Crop,
                 )
             } else {
@@ -411,7 +423,7 @@ internal fun OfflineCompactEpisodeRow(
             )
 
             // Watch-progress bar.
-            if (positionTicks != null && positionTicks > 0) {
+            if (positionTicks != null && positionTicks > 0 && !episode.isPlayed) {
                 val runtimeTicks = episode.runTimeTicks
                 val progress = if (runtimeTicks != null && runtimeTicks > 0) {
                     (positionTicks.toFloat() / runtimeTicks).coerceIn(0f, 1f)
@@ -425,15 +437,23 @@ internal fun OfflineCompactEpisodeRow(
                         .height(3.dp)
                         .background(MaterialTheme.colorScheme.primary),
                 )
+            } else if (episode.isPlayed) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
+                )
             }
             // Watched tag (mirrors OfflineEpisodeCard).
             val cardPrefs = LocalCardDisplayPreferences.current
-            if (episode.isPlayed && (positionTicks == null || positionTicks <= 0) && cardPrefs.showWatchedCheckmark) {
+            if (episode.isPlayed && cardPrefs.showWatchedCheckmark) {
                 com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag(
                     label = stringResource(R.string.downloads_watched),
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(4.dp),
+                        .align(Alignment.BottomStart)
+                        .padding(start = 4.dp, bottom = 6.dp),
                 )
             }
         }

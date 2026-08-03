@@ -119,45 +119,57 @@ fun WatchedBadge(
 }
 
 /**
- * Accent "Watched" tag for episode thumbnails (online detail + offline downloads).
+ * Glassmorphic "Watched" tag for episode thumbnails (online detail + offline downloads).
  *
  * Unlike the icon-only glass [WatchedBadge] used on grid cards, this pairs a check
- * icon with the localized "Watched" label on a high-contrast `primaryContainer` /
- * `onPrimaryContainer` pill. The accent fill makes the watched boundary pop at a
- * glance while quickly scrolling the episode list — the previous dim black/white
- * text pill was easy to miss.
+ * icon with the localized "Watched" label on a glassmorphic frosted-glass pill,
+ * matching the glassmorphic card badge design language across homescreen section cards.
  *
  * The [label] is passed in (rather than read from a string resource) so this
  * core-ui composable stays module-agnostic: each feature screen supplies its own
- * localized string.
+ * High-contrast "Watched" tag for episode thumbnails (online detail + offline downloads).
+ *
+ * Uses a solid primary surface with high-contrast text and a checkmark icon to ensure
+ * strong visibility over unpredictable episode artwork (dark scenes, bright frames, etc.).
  *
  * @param label localized "Watched" text (e.g. from a `stringResource`).
+ * @param accentTint optional tint color for personalized styling.
+ * @param textColor optional custom content color. Defaults to high-contrast `onPrimary` or white.
  */
 @Composable
 fun EpisodeWatchedTag(
     label: String,
     modifier: Modifier = Modifier,
+    accentTint: Color? = null,
+    textColor: Color? = null,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        modifier = modifier
-            .clip(ShapeCache.smooth4)
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+    val containerColor = accentTint ?: MaterialTheme.colorScheme.primary
+    val contentColor = textColor ?: (if (accentTint != null) Color.White else MaterialTheme.colorScheme.onPrimary)
+    androidx.compose.material3.Surface(
+        modifier = modifier,
+        color = containerColor,
+        contentColor = contentColor,
+        shape = ShapeCache.smooth8,
+        shadowElevation = 3.dp,
     ) {
-        Icon(
-            imageVector = Tabler.Outline.Check,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.size(12.dp),
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Check,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(12.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 

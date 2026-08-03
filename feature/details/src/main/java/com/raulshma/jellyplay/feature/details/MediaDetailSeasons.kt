@@ -1,6 +1,10 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -59,8 +63,10 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.sharedElementBoundsSpec
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.components.progressFraction
@@ -75,7 +81,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.details.R
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SeasonsSection(
     seriesItem: MediaItem,
@@ -311,9 +317,16 @@ internal fun SeasonsSection(
         // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
         val seasonFadeIn = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
         val seasonFadeOut = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+        // Shared-element spring for the layout-switch morph: the compact-row
+        // thumbnail and the wide-card thumbnail are the same image, so the
+        // outgoing/incoming copies glide between their bounds while the
+        // surrounding metadata crossfades.
+        val episodeThumbBoundsTransform: BoundsTransform = { _, _ ->
+            sharedElementBoundsSpec()
+        }
 
         AnimatedContent(
-            targetState = selectedSeasonIndex to (seasonEpisodes?.size ?: 0),
+            targetState = Triple(selectedSeasonIndex, seasonEpisodes?.size ?: 0, useCompactList),
             transitionSpec = {
                 fadeIn(
                     animationSpec = seasonFadeIn,
@@ -322,7 +335,9 @@ internal fun SeasonsSection(
                 )
             },
             label = "seasonEpisodes",
-        ) { (seasonIdx, episodeCount) ->
+        ) { (seasonIdx, episodeCount, isCompact) ->
+            val sharedTransitionScope = LocalSharedTransitionScope.current
+            val animatedVisibilityScope = this
             // Memoize the sort + reverse so a recomposition triggered by an
             // unrelated parent state change (e.g. sibling animation) doesn't
             // re-sort this season's episode list.
@@ -348,7 +363,7 @@ internal fun SeasonsSection(
                     }
                 }
                 currentEpisodes != null && currentEpisodes.isNotEmpty() -> {
-                    if (useCompactList) {
+                    if (isCompact) {
                         // Plain Column (not lazy): this section is already nested
                         // inside the screen's LazyColumn, so a same-direction
                         // nested lazy list is disallowed. Season episode counts are
@@ -367,6 +382,12 @@ internal fun SeasonsSection(
                                     onPlayClick = { onEpisodePlayClick(episode) },
                                     onDetailClick = { onEpisodeDetailClick(episode) },
                                     hideThumbnail = hideEpisodeThumbnails,
+                                    sharedThumbnailModifier = episodeThumbSharedModifier(
+                                        episodeId = episode.id,
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        boundsTransform = episodeThumbBoundsTransform,
+                                    ),
                                 )
                             }
                         }
@@ -386,6 +407,12 @@ internal fun SeasonsSection(
                                     onDetailClick = { onEpisodeDetailClick(episode) },
                                     modifier = focusModifier,
                                     hideThumbnail = hideEpisodeThumbnails,
+                                    sharedThumbnailModifier = episodeThumbSharedModifier(
+                                        episodeId = episode.id,
+                                        sharedTransitionScope = sharedTransitionScope,
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        boundsTransform = episodeThumbBoundsTransform,
+                                    ),
                                 )
                         }
                     }
@@ -407,6 +434,32 @@ internal fun SeasonsSection(
     }
 }
 
+/**
+ * Shared-element thumbnail morph between the compact vertical rows and the
+ * horizontal cards: both layouts render the same episode thumbnail, so the
+ * outgoing/incoming copies glide between their bounds (128×72 ↔ 16:9 card
+ * width) while the rest of the card crossfades. No-op when the app-level
+ * shared transition scope is unavailable (performance mode) — the layouts then
+ * swap instantly.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun episodeThumbSharedModifier(
+    episodeId: String,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    boundsTransform: BoundsTransform,
+): Modifier {
+    val scope = sharedTransitionScope ?: return Modifier
+    return with(scope) {
+        Modifier.sharedElement(
+            sharedContentState = rememberSharedContentState(key = "episode_thumb_$episodeId"),
+            animatedVisibilityScope = animatedVisibilityScope,
+            boundsTransform = boundsTransform,
+        )
+    }
+}
+
 @Composable
 internal fun EpisodeCard(
     episode: MediaItem,
@@ -416,6 +469,7 @@ internal fun EpisodeCard(
     onDetailClick: () -> Unit,
     modifier: Modifier = Modifier,
     hideThumbnail: Boolean = false,
+    sharedThumbnailModifier: Modifier = Modifier,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -505,7 +559,8 @@ internal fun EpisodeCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .then(sharedThumbnailModifier),
             contentAlignment = Alignment.Center,
         ) {
             if (!hideThumbnail) {
@@ -516,7 +571,9 @@ internal fun EpisodeCard(
                     // Episode thumbnails render up to ~480 dp wide × 16:9. Decode a
                     // right-sized bitmap (4–8 cards compose simultaneously).
                     size = coil3.size.Size(640, 360),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (episode.isPlayed) Modifier.graphicsLayer { alpha = 0.65f } else Modifier),
                     contentScale = ContentScale.Crop,
                 )
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
@@ -554,7 +611,7 @@ internal fun EpisodeCard(
             )
 
             val positionTicks = episode.playbackPositionTicks
-            if (positionTicks != null && positionTicks > 0) {
+            if (positionTicks != null && positionTicks > 0 && !episode.isPlayed) {
                 val progress = episode.progressFraction() ?: 0f
                 Box(
                     modifier = Modifier
@@ -563,14 +620,22 @@ internal fun EpisodeCard(
                         .height(4.dp)
                         .background(MaterialTheme.colorScheme.primary)
                 )
+            } else if (episode.isPlayed) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                )
             }
             val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
-            if (episode.isPlayed && (positionTicks == null || positionTicks <= 0) && cardPrefs.showWatchedCheckmark) {
+            if (episode.isPlayed && cardPrefs.showWatchedCheckmark) {
                 com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag(
                     label = stringResource(R.string.detail_watched_badge),
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp),
+                        .align(Alignment.BottomStart)
+                        .padding(start = 6.dp, bottom = 8.dp),
                 )
             }
         }
@@ -664,6 +729,7 @@ private fun CompactEpisodeRow(
     onDetailClick: () -> Unit,
     hideThumbnail: Boolean = false,
     modifier: Modifier = Modifier,
+    sharedThumbnailModifier: Modifier = Modifier,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -712,7 +778,8 @@ private fun CompactEpisodeRow(
         Box(
             modifier = Modifier
                 .size(width = 128.dp, height = 72.dp)
-                .clip(ShapeCache.smooth16),
+                .clip(ShapeCache.smooth16)
+                .then(sharedThumbnailModifier),
             contentAlignment = Alignment.Center,
         ) {
             if (!hideThumbnail) {
@@ -721,7 +788,9 @@ private fun CompactEpisodeRow(
                     contentDescription = episode.name,
                     blurHash = episode.blurHashes.primary,
                     size = coil3.size.Size(256, 144),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (episode.isPlayed) Modifier.graphicsLayer { alpha = 0.65f } else Modifier),
                     contentScale = ContentScale.Crop,
                 )
                 Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
@@ -756,7 +825,7 @@ private fun CompactEpisodeRow(
             )
 
             val positionTicks = episode.playbackPositionTicks
-            if (positionTicks != null && positionTicks > 0) {
+            if (positionTicks != null && positionTicks > 0 && !episode.isPlayed) {
                 val progress = episode.progressFraction() ?: 0f
                 Box(
                     modifier = Modifier
@@ -765,14 +834,22 @@ private fun CompactEpisodeRow(
                         .height(3.dp)
                         .background(MaterialTheme.colorScheme.primary)
                 )
+            } else if (episode.isPlayed) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                )
             }
             val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
-            if (episode.isPlayed && (positionTicks == null || positionTicks <= 0) && cardPrefs.showWatchedCheckmark) {
+            if (episode.isPlayed && cardPrefs.showWatchedCheckmark) {
                 com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag(
                     label = stringResource(R.string.detail_watched_badge),
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(4.dp),
+                        .align(Alignment.BottomStart)
+                        .padding(start = 4.dp, bottom = 6.dp),
                 )
             }
         }
