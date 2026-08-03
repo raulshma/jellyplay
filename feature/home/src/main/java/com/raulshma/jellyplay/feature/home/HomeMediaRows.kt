@@ -231,6 +231,10 @@ fun HomeMediaRow(
     clippingEnabled: Boolean = false,
     showEpisodeSeriesBadge: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
+    // Resolves a series' poster URL by id — used so episode cards render the
+    // show's poster instead of the episode's own primary image (a landscape
+    // scene grab). See [EpisodePosterResolver] usage below.
+    seriesPosterResolver: (String) -> String = { "" },
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -276,20 +280,27 @@ fun HomeMediaRow(
                 val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
                     item.progressFraction() ?: 0f
                 }
+                val cardImage = rememberEpisodeCardImage(
+                    item = item,
+                    imageUrlBuilder = imageUrlBuilder,
+                    fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                    seriesPosterResolver = seriesPosterResolver,
+                    showEpisodeSeriesBadge = showEpisodeSeriesBadge,
+                )
                 PosterCard(
                     item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    fallbackUrls = fallbackImageUrlBuilder(item),
+                    imageUrl = cardImage.imageUrl,
+                    fallbackUrls = cardImage.fallbackUrls,
                     onClick = memoizedClick,
                     modifier = focusModifier.width(cardWidth),
                     showProgress = item.hasPlaybackPosition,
                     progressPercent = progressPercent,
-                    blurHash = item.blurHashes.primary,
+                    blurHash = cardImage.blurHash,
                     onPlayClick = memoizedPlayClick,
                     sharedElementKey = "poster_${item.id}",
                     photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                     clipToShape = clippingEnabled,
-                    showEpisodeSeriesBadge = showEpisodeSeriesBadge,
+                    showEpisodeSeriesBadge = cardImage.showSeriesBadge,
                     gradientBrush = posterScrimBrush,
                 )
             }
@@ -311,20 +322,27 @@ fun HomeMediaRow(
                 val progressPercent = remember(item.id, item.playbackPositionTicks, item.runTimeTicks) {
                     item.progressFraction() ?: 0f
                 }
+                val cardImage = rememberEpisodeCardImage(
+                    item = item,
+                    imageUrlBuilder = imageUrlBuilder,
+                    fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                    seriesPosterResolver = seriesPosterResolver,
+                    showEpisodeSeriesBadge = showEpisodeSeriesBadge,
+                )
                 PosterCard(
                     item = item,
-                    imageUrl = imageUrlBuilder(item),
-                    fallbackUrls = fallbackImageUrlBuilder(item),
+                    imageUrl = cardImage.imageUrl,
+                    fallbackUrls = cardImage.fallbackUrls,
                     onClick = memoizedClick,
                     modifier = Modifier.width(cardWidth),
                     showProgress = item.hasPlaybackPosition,
                     progressPercent = progressPercent,
-                    blurHash = item.blurHashes.primary,
+                    blurHash = cardImage.blurHash,
                     onPlayClick = memoizedPlayClick,
                     sharedElementKey = "poster_${item.id}",
                     photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
                     clipToShape = clippingEnabled,
-                    showEpisodeSeriesBadge = showEpisodeSeriesBadge,
+                    showEpisodeSeriesBadge = cardImage.showSeriesBadge,
                     gradientBrush = posterScrimBrush,
                 )
             }
@@ -376,6 +394,77 @@ private fun HomeSectionTitle(
             else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
         )
+    }
+}
+
+/**
+ * Resolved image inputs for a [PosterCard]. See [rememberEpisodeCardImage].
+ */
+private data class PosterCardImage(
+    val imageUrl: String,
+    val fallbackUrls: List<String>,
+    val blurHash: String?,
+    val showSeriesBadge: Boolean,
+)
+
+/**
+ * Picks the image shown on a poster card in the non-Continue-Watching /
+ * non-Next-Up home rows.
+ *
+ * For episodes the item's own Jellyfin "Primary" image is a landscape scene
+ * grab (essentially a still from the episode), which reads as a backdrop in a
+ * 2:3 poster slot — Findroid and other clients instead show the parent series'
+ * poster. When [item] is an episode with a [MediaItem.seriesId], prefer the
+ * series poster resolved via [seriesPosterResolver]; the episode's own primary
+ * image is appended as a fallback so a series with no poster still renders the
+ * episode still instead of a blank. The episode's primary blurhash is dropped
+ * (it describes the landscape still, not the portrait poster we now show).
+ *
+ * The series-name title + S# E# chip ([PosterCard]'s `showEpisodeSeriesBadge`)
+ * is forced on for any episode card, since the poster now identifies the show
+ * rather than the episode.
+ */
+@Composable
+private fun rememberEpisodeCardImage(
+    item: MediaItem,
+    imageUrlBuilder: (MediaItem) -> String,
+    fallbackImageUrlBuilder: (MediaItem) -> List<String>,
+    seriesPosterResolver: (String) -> String,
+    showEpisodeSeriesBadge: Boolean,
+): PosterCardImage {
+    val itemPrimary = remember(item) { imageUrlBuilder(item) }
+    return remember(item, itemPrimary, seriesPosterResolver, showEpisodeSeriesBadge) {
+        val isEpisode = item.mediaType == MediaType.EPISODE
+        val seriesId = item.seriesId
+        val seriesPoster = if (isEpisode && !seriesId.isNullOrBlank()) {
+            seriesPosterResolver(seriesId)
+        } else ""
+        // Builder-supplied fallbacks (e.g. album art for music) survive in both
+        // paths; for episodes we additionally seed the episode still as the
+        // first fallback so a poster-less series degrades gracefully.
+        val baseFallbacks = fallbackImageUrlBuilder(item)
+        when {
+            isEpisode && seriesPoster.isNotBlank() -> PosterCardImage(
+                imageUrl = seriesPoster,
+                fallbackUrls = if (itemPrimary.isNotBlank()) listOf(itemPrimary) + baseFallbacks else baseFallbacks,
+                blurHash = null,
+                showSeriesBadge = true,
+            )
+            isEpisode -> PosterCardImage(
+                // No series poster available — keep the episode still and still
+                // badge it so the card identifies the show by name.
+                imageUrl = itemPrimary,
+                fallbackUrls = baseFallbacks,
+                blurHash = item.blurHashes.primary,
+                showSeriesBadge = true,
+            )
+            else -> PosterCardImage(
+                imageUrl = itemPrimary,
+                fallbackUrls = baseFallbacks,
+                blurHash = item.blurHashes.primary,
+                showSeriesBadge = showEpisodeSeriesBadge,
+            )
+        }
     }
 }
 

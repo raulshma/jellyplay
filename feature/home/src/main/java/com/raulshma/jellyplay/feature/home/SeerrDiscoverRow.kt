@@ -36,6 +36,9 @@ import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
  * @param rowHorizontalPadding outer horizontal padding + vertical centering pad.
  * @param spacing gap between cards.
  * @param backgroundColor row background color.
+ * @param homeBackdropEnabled when true the ambient backdrop is active, so the
+ *  row stays transparent to let it show through (mirrors the media rows); when
+ *  false the row paints the flat [backgroundColor].
  * @param clippingEnabled when true, clips items to the row bounds (experimental card clipping).
  * @param seerrCardLoadingState per-card loading state (start/stop on prefetch).
  * @param seerrPrefetch prefetches Seerr details before navigating to the request flow.
@@ -49,6 +52,7 @@ internal fun SeerrDiscoverRow(
     rowHorizontalPadding: Dp,
     spacing: Dp,
     backgroundColor: androidx.compose.ui.graphics.Color,
+    homeBackdropEnabled: Boolean,
     clippingEnabled: Boolean,
     seerrCardLoadingState: SeerrCardLoadingState,
     seerrPrefetch: (Int, String, () -> Unit) -> Unit,
@@ -86,7 +90,9 @@ internal fun SeerrDiscoverRow(
                 .focusGroup()
                 .tvFocusRestorer()
                 .then(if (clippingEnabled) Modifier.clipToBounds() else Modifier)
-                .background(backgroundColor)
+                // Stay transparent over the ambient backdrop (matches the media
+                // rows); otherwise paint the flat background colour.
+                .then(if (homeBackdropEnabled) Modifier else Modifier.background(backgroundColor))
                 .padding(horizontal = rowHorizontalPadding, vertical = spacing / 2),
             horizontalArrangement = Arrangement.spacedBy(spacing),
             userScrollEnabled = false,
