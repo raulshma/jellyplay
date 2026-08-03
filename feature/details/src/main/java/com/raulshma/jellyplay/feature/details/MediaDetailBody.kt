@@ -510,6 +510,8 @@ internal fun DetailContentBody(
                         hideEpisodeThumbnails = state.preferences.hideEpisodeThumbnails,
                         episodesDescending = state.preferences.episodesDescending,
                         onEpisodesDescendingChange = callbacks.onEpisodesDescendingChange,
+                        compactEpisodeList = state.preferences.compactEpisodeList,
+                        onCompactEpisodeListChange = callbacks.onCompactEpisodeListChange,
                         onMarkSeasonPlayed = callbacks.onMarkSeasonPlayed,
                         onMarkSeasonUnplayed = callbacks.onMarkSeasonUnplayed,
                     )

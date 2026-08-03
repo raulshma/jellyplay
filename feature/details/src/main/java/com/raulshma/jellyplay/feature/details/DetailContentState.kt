@@ -80,6 +80,7 @@ internal data class DetailContentCallbacks(
     val onNavigateToSeries: (String) -> Unit,
     val onSeasonSelected: (String) -> Unit,
     val onEpisodesDescendingChange: (Boolean) -> Unit,
+    val onCompactEpisodeListChange: (Boolean) -> Unit,
     val onBack: () -> Unit,
     val onSeerrRequest: (SeerrSearchItem) -> Unit,
     val onNavigate: (Route) -> Unit,

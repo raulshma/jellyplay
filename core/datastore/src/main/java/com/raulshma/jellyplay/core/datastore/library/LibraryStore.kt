@@ -55,6 +55,7 @@ class LibraryStore @Inject constructor(
         val HIDE_EPISODE_THUMBNAILS = booleanPreferencesKey("hide_episode_thumbnails")
         val EPISODES_DESCENDING = booleanPreferencesKey("episodes_descending")
         val SKIP_SPECIALS = booleanPreferencesKey("skip_specials")
+        val COMPACT_EPISODE_LIST = booleanPreferencesKey("compact_episode_list")
     }
 
     private var cachedDefaultLibrarySortOrders = ParsedCache<Map<String, String>>(null, emptyMap())
@@ -77,6 +78,7 @@ class LibraryStore @Inject constructor(
         hideEpisodeThumbnails = PreferenceCodec.readBool(prefs, Keys.HIDE_EPISODE_THUMBNAILS, "hide_episode_thumbnails", false),
         episodesDescending = PreferenceCodec.readBool(prefs, Keys.EPISODES_DESCENDING, "episodes_descending", true),
         skipSpecials = PreferenceCodec.readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
+        compactEpisodeList = PreferenceCodec.readBool(prefs, Keys.COMPACT_EPISODE_LIST, "compact_episode_list", false),
     )
 
     private fun readLibraryViewMode(prefs: Preferences): LibraryViewMode = try {
@@ -163,6 +165,10 @@ class LibraryStore @Inject constructor(
         dataStore.edit { it[Keys.SKIP_SPECIALS] = enabled }
     }
 
+    suspend fun setCompactEpisodeList(enabled: Boolean) {
+        dataStore.edit { it[Keys.COMPACT_EPISODE_LIST] = enabled }
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. These are the
      * library-view/sort/filter + episode keys split out of the legacy
@@ -172,6 +178,7 @@ class LibraryStore @Inject constructor(
         Keys.LIBRARY_VIEW_MODE,
         Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES, Keys.LIBRARY_FILTERS,
         Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING, Keys.SKIP_SPECIALS,
+        Keys.COMPACT_EPISODE_LIST,
     )
 
     /**
@@ -184,6 +191,7 @@ class LibraryStore @Inject constructor(
             Keys.LIBRARY_VIEW_MODE,
             Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES, Keys.LIBRARY_FILTERS,
             Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING, Keys.SKIP_SPECIALS,
+            Keys.COMPACT_EPISODE_LIST,
         )
         else -> emptyList()
     }
@@ -204,6 +212,7 @@ class LibraryStore @Inject constructor(
             it[Keys.HIDE_EPISODE_THUMBNAILS] = userPreferences.hideEpisodeThumbnails
             it[Keys.EPISODES_DESCENDING] = userPreferences.episodesDescending
             it[Keys.SKIP_SPECIALS] = userPreferences.skipSpecials
+            it[Keys.COMPACT_EPISODE_LIST] = userPreferences.compactEpisodeList
         }
     }
 
@@ -221,6 +230,7 @@ class LibraryStore @Inject constructor(
             it[Keys.HIDE_EPISODE_THUMBNAILS] = slice.hideEpisodeThumbnails
             it[Keys.EPISODES_DESCENDING] = slice.episodesDescending
             it[Keys.SKIP_SPECIALS] = slice.skipSpecials
+            it[Keys.COMPACT_EPISODE_LIST] = slice.compactEpisodeList
         }
     }
 }
@@ -239,4 +249,5 @@ data class LibrarySlice(
     val hideEpisodeThumbnails: Boolean = false,
     val episodesDescending: Boolean = true,
     val skipSpecials: Boolean = false,
+    val compactEpisodeList: Boolean = false,
 )

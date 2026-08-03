@@ -4,6 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,6 +27,8 @@ class OfflineDetailViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
     private val playbackRepository: PlaybackRepository,
     private val mediaRepository: MediaRepository,
+    private val libraryStore: LibraryStore,
+    private val editor: PreferencesEditor,
     @Suppress("unused") savedStateHandle: SavedStateHandle,
 ) : JellyPlayViewModel() {
 
@@ -69,6 +73,14 @@ class OfflineDetailViewModel @Inject constructor(
                 combine(perSeason) { pairs -> pairs.toMap() }
             }
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Compact vertical episode list preference (shared with the online detail screen). */
+    val compactEpisodeList: StateFlow<Boolean> =
+        libraryStore.library.map { it.compactEpisodeList }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setCompactEpisodeList(enabled: Boolean) =
+        editor.edit { library.setCompactEpisodeList(enabled) }
 
     /** Drives the screen's data. Called once from a LaunchedEffect(itemId). */
     fun load(itemId: String) {

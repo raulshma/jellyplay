@@ -803,6 +803,16 @@ fun AppearanceSettingsScreen(
                     )
 
                     SettingToggleItem(
+                        icon = Tabler.Outline.List,
+                        title = stringResource(R.string.settings_compact_episode_list),
+                        subtitle = stringResource(R.string.settings_compact_episode_list_subtitle),
+                        checked = preferences.compactEpisodeList,
+                        highlighted = highlightSettingId == "compact_episode_list",
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setCompactEpisodeList(it) },
+                    )
+
+                    SettingToggleItem(
                         icon = Tabler.Outline.PlayerSkipForward,
                         title = stringResource(R.string.settings_skip_special_episodes),
                         subtitle = stringResource(R.string.settings_skip_special_episodes_subtitle),

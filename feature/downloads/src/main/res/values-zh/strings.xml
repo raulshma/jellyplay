@@ -92,6 +92,8 @@
     <string name="downloads_progress">进度</string>
     <string name="downloads_watch_status">观看状态</string>
     <string name="downloads_watched">已观看</string>
+    <string name="downloads_cd_switch_to_list">切换到垂直剧集列表</string>
+    <string name="downloads_cd_switch_to_cards">切换到横向剧集卡片</string>
     <string name="downloads_watched_label">已观看</string>
     <string name="downloads_in_progress">观看中</string>
     <string name="downloads_started">已开始</string>

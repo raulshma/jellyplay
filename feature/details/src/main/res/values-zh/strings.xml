@@ -49,6 +49,8 @@
     <string name="detail_no_episodes_available">没有可用的剧集</string>
     <string name="detail_spoiler">剧透</string>
     <string name="detail_watched_badge">已观看</string>
+    <string name="detail_cd_switch_to_list">切换到垂直剧集列表</string>
+    <string name="detail_cd_switch_to_cards">切换到横向剧集卡片</string>
     <string name="detail_time_left_format">剩余 %1$s</string>
 
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->

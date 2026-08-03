@@ -95,6 +95,7 @@ fun OfflineDetailScreen(
     val children by viewModel.children.collectAsStateWithLifecycle(initialValue = emptyList())
     val seasons by viewModel.seasons.collectAsStateWithLifecycle(initialValue = emptyList())
     val episodes by viewModel.episodes.collectAsStateWithLifecycle(initialValue = emptyMap())
+    val compactEpisodeList by viewModel.compactEpisodeList.collectAsStateWithLifecycle(initialValue = false)
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
@@ -126,6 +127,8 @@ fun OfflineDetailScreen(
             onMarkSeasonUnplayed = { viewModel.markSeasonUnplayed(it) },
             onDelete = { viewModel.delete(onBack) },
             onBack = onBack,
+            compactEpisodeList = compactEpisodeList,
+            onCompactEpisodeListChange = viewModel::setCompactEpisodeList,
         )
         !loaded -> JellyPlayScreenScaffold(title = stringResource(R.string.downloads_loading), onBack = onBack) { ScreenLoadingState() }
         else -> JellyPlayScreenScaffold(title = stringResource(R.string.downloads_not_found), onBack = onBack) {
@@ -152,6 +155,8 @@ private fun OfflineDetailContent(
     onMarkSeasonUnplayed: (seasonId: String) -> Unit,
     onDelete: () -> Unit,
     onBack: () -> Unit,
+    compactEpisodeList: Boolean = false,
+    onCompactEpisodeListChange: (Boolean) -> Unit = {},
 ) {
     val isEpisode = item.mediaType == MediaType.EPISODE
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -421,6 +426,8 @@ private fun OfflineDetailContent(
                                     onEpisodeDelete = { episode -> onEpisodeDelete(episode.id) },
                                     onMarkSeasonPlayed = onMarkSeasonPlayed,
                                     onMarkSeasonUnplayed = onMarkSeasonUnplayed,
+                                    compactEpisodeList = compactEpisodeList,
+                                    onCompactEpisodeListChange = onCompactEpisodeListChange,
                                 )
                             }
                         }

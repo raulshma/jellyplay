@@ -55,11 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.Eye
-import com.composables.icons.tabler.outline.EyeOff
-import com.composables.icons.tabler.outline.PlayerPlay
-import com.composables.icons.tabler.outline.SortAscending2
-import com.composables.icons.tabler.outline.SortDescending2
+import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -96,6 +92,8 @@ internal fun SeasonsSection(
     hideEpisodeThumbnails: Boolean = false,
     episodesDescending: Boolean = true,
     onEpisodesDescendingChange: (Boolean) -> Unit = {},
+    compactEpisodeList: Boolean = false,
+    onCompactEpisodeListChange: (Boolean) -> Unit = {},
     onMarkSeasonPlayed: (seasonId: String) -> Unit = {},
     onMarkSeasonUnplayed: (seasonId: String) -> Unit = {},
 ) {
@@ -122,6 +120,17 @@ internal fun SeasonsSection(
         }
     }
 
+    // Compact vertical list is mobile-only: the toggle is offered (and the list
+    // rendered) solely on compact-width, non-TV form factors. TV keeps the
+    // horizontal D-pad focus row; tablet/expanded keeps the denser horizontal
+    // overview. Resolved once here so the header toggle and the episode branch
+    // agree.
+    val isTv = LocalTvMode.current
+    val isCompactWidth = LocalAdaptiveInfo.current.windowSizeClass ==
+        com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Compact
+    val useCompactListAvailable = !isTv && isCompactWidth
+    val useCompactList = useCompactListAvailable && compactEpisodeList
+
     Column {
         FadingItem {
             Row(
@@ -136,25 +145,56 @@ internal fun SeasonsSection(
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                val sortFocusState = rememberTvFocusState(focusedScale = 1.1f)
-                Surface(
-                    modifier = Modifier
-                        .clip(ShapeCache.smooth16)
-                        .then(sortFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
-                        .clickable { onEpisodesDescendingChange(!episodesDescending) },
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    shape = ShapeCache.smooth16,
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = if (episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
-                        contentDescription = stringResource(
-                            if (episodesDescending) R.string.detail_cd_sort_oldest_first
-                            else R.string.detail_cd_sort_newest_first
-                        ),
-                        modifier = Modifier.padding(8.dp),
-                    )
+                    // Layout switch (compact vertical list ↔ horizontal cards).
+                    // Only offered on compact/mobile widths — TV and tablet always
+                    // use the horizontal focus row.
+                    if (useCompactListAvailable) {
+                        val layoutFocusState = rememberTvFocusState(focusedScale = 1.1f)
+                        Surface(
+                            modifier = Modifier
+                                .clip(ShapeCache.smooth16)
+                                .then(layoutFocusState.focusModifier)
+                                .then(Modifier.tvFocusIndicator(layoutFocusState, ShapeCache.smooth16))
+                                .clickable { onCompactEpisodeListChange(!compactEpisodeList) },
+                            color = if (compactEpisodeList) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            shape = ShapeCache.smooth16,
+                        ) {
+                            Icon(
+                                imageVector = if (compactEpisodeList) Tabler.Outline.LayoutGrid else Tabler.Outline.List,
+                                contentDescription = stringResource(
+                                    if (compactEpisodeList) R.string.detail_cd_switch_to_cards
+                                    else R.string.detail_cd_switch_to_list
+                                ),
+                                modifier = Modifier.padding(8.dp),
+                            )
+                        }
+                    }
+                    val sortFocusState = rememberTvFocusState(focusedScale = 1.1f)
+                    Surface(
+                        modifier = Modifier
+                            .clip(ShapeCache.smooth16)
+                            .then(sortFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
+                            .clickable { onEpisodesDescendingChange(!episodesDescending) },
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shape = ShapeCache.smooth16,
+                    ) {
+                        Icon(
+                            imageVector = if (episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
+                            contentDescription = stringResource(
+                                if (episodesDescending) R.string.detail_cd_sort_oldest_first
+                                else R.string.detail_cd_sort_newest_first
+                            ),
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    }
                 }
             }
         }
@@ -308,22 +348,46 @@ internal fun SeasonsSection(
                     }
                 }
                 currentEpisodes != null && currentEpisodes.isNotEmpty() -> {
-                    TvFocusableItemRow(
-                        items = currentEpisodes,
-                        key = { "episode_${it.id}" },
-                        contentType = { _, _ -> "episode" },
-                        contentPadding = PaddingValues(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) { _, episode, focusModifier ->
-                            EpisodeCard(
-                                episode = episode,
-                                getImageUrl = getImageUrl,
-                                isCurrentEpisode = episode.id == currentItemId,
-                                onPlayClick = { onEpisodePlayClick(episode) },
-                                onDetailClick = { onEpisodeDetailClick(episode) },
-                                modifier = focusModifier,
-                                hideThumbnail = hideEpisodeThumbnails,
-                            )
+                    if (useCompactList) {
+                        // Plain Column (not lazy): this section is already nested
+                        // inside the screen's LazyColumn, so a same-direction
+                        // nested lazy list is disallowed. Season episode counts are
+                        // small enough that composing every row is cheap.
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            currentEpisodes.forEach { episode ->
+                                CompactEpisodeRow(
+                                    episode = episode,
+                                    getImageUrl = getImageUrl,
+                                    isCurrentEpisode = episode.id == currentItemId,
+                                    onPlayClick = { onEpisodePlayClick(episode) },
+                                    onDetailClick = { onEpisodeDetailClick(episode) },
+                                    hideThumbnail = hideEpisodeThumbnails,
+                                )
+                            }
+                        }
+                    } else {
+                        TvFocusableItemRow(
+                            items = currentEpisodes,
+                            key = { "episode_${it.id}" },
+                            contentType = { _, _ -> "episode" },
+                            contentPadding = PaddingValues(horizontal = 24.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) { _, episode, focusModifier ->
+                                EpisodeCard(
+                                    episode = episode,
+                                    getImageUrl = getImageUrl,
+                                    isCurrentEpisode = episode.id == currentItemId,
+                                    onPlayClick = { onEpisodePlayClick(episode) },
+                                    onDetailClick = { onEpisodeDetailClick(episode) },
+                                    modifier = focusModifier,
+                                    hideThumbnail = hideEpisodeThumbnails,
+                                )
+                        }
                     }
                 }
                 else -> {
@@ -502,20 +566,12 @@ internal fun EpisodeCard(
             }
             val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
             if (episode.isPlayed && (positionTicks == null || positionTicks <= 0) && cardPrefs.showWatchedCheckmark) {
-                Box(
+                com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag(
+                    label = stringResource(R.string.detail_watched_badge),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .clip(ShapeCache.smooth4)
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.detail_watched_badge),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.9f),
-                    )
-                }
+                        .padding(6.dp),
+                )
             }
         }
 
@@ -580,6 +636,201 @@ internal fun EpisodeCard(
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = androidx.compose.ui.unit.TextUnit(16f, androidx.compose.ui.unit.TextUnitType.Sp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Compact, mobile-first episode row for the optional vertical episode list.
+ *
+ * A single-line [Row]: a 128×72 (16:9) thumbnail with play affordance + watch
+ * progress + watched tag on the left, and a metadata column (title, runtime /
+ * "Xm left") on the right. Mirrors the [EpisodeCard] semantics — tap opens the
+ * episode detail screen, long-press peeks — but trades the wide-card horizontal
+ * scroller for vertical scrolling, which is more natural on a phone and lets the
+ * watched tag pop while quickly swiping through a season.
+ *
+ * No per-episode download/delete: online episodes have no delete action
+ * (downloading stays in `SeriesDownloadSheet`), matching [EpisodeCard].
+ */
+@Composable
+private fun CompactEpisodeRow(
+    episode: MediaItem,
+    getImageUrl: (String) -> String,
+    isCurrentEpisode: Boolean = false,
+    onPlayClick: () -> Unit,
+    onDetailClick: () -> Unit,
+    hideThumbnail: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val cardInteractionSource = remember { MutableInteractionSource() }
+    val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(
+        targetValue = if (isCardPressed) 0.98f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "compactEpisodeRowScale",
+    )
+    val playInteractionSource = remember { MutableInteractionSource() }
+    val isPlayPressed by playInteractionSource.collectIsPressedAsState()
+    val playScale by animateFloatAsState(
+        targetValue = if (isPlayPressed) 0.85f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "compactEpisodeRowPlayScale",
+    )
+
+    val episodeImageUrl = remember(episode.id) { getImageUrl(episode.id) }
+
+    // Press-and-hold "peek" preview; mirrors EpisodeCard.
+    val peek = rememberMediaPeek(
+        item = episode,
+        posterUrl = episodeImageUrl,
+        backdropUrl = episodeImageUrl,
+        blurHash = episode.blurHashes.primary,
+    )
+    rememberReleaseDismiss(isCardPressed)
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smooth16)
+            .background(
+                if (isCurrentEpisode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+            )
+            .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
+            .then(peek.boundsModifier)
+            .combinedClickable(
+                interactionSource = cardInteractionSource,
+                indication = null,
+                onClick = onDetailClick,
+                onLongClick = peek.onLongClick,
+            ),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 128.dp, height = 72.dp)
+                .clip(ShapeCache.smooth16),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!hideThumbnail) {
+                MediaImage(
+                    url = episodeImageUrl,
+                    contentDescription = episode.name,
+                    blurHash = episode.blurHashes.primary,
+                    size = coil3.size.Size(256, 144),
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(R.string.detail_spoiler),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Icon(
+                Tabler.Outline.PlayerPlay,
+                contentDescription = stringResource(R.string.detail_cd_episode_play),
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .size(32.dp)
+                    .graphicsLayer { scaleX = playScale; scaleY = playScale }
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), CircleShape)
+                    .clickable(
+                        interactionSource = playInteractionSource,
+                        indication = null,
+                        onClick = onPlayClick,
+                    )
+                    .padding(6.dp)
+            )
+
+            val positionTicks = episode.playbackPositionTicks
+            if (positionTicks != null && positionTicks > 0) {
+                val progress = episode.progressFraction() ?: 0f
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(progress)
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
+            val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
+            if (episode.isPlayed && (positionTicks == null || positionTicks <= 0) && cardPrefs.showWatchedCheckmark) {
+                com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag(
+                    label = stringResource(R.string.detail_watched_badge),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp),
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text = buildString {
+                    episode.indexNumber?.let { append("$it. ") }
+                    append(episode.name)
+                },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val runtimeTicks = episode.runTimeTicks
+            val positionTicks = episode.playbackPositionTicks
+            val hasWatchProgress = positionTicks != null && positionTicks > 0 && !episode.isPlayed
+            val remainingTime = if (hasWatchProgress && runtimeTicks != null && positionTicks != null) {
+                formatRemainingTimeFromTicks(runtimeTicks, positionTicks)
+            } else null
+            val totalTime = if (runtimeTicks != null) {
+                formatDurationFromTicks(runtimeTicks)
+            } else null
+
+            if (remainingTime != null && totalTime != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(top = 2.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.detail_time_left_format, remainingTime),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Text(
+                        text = totalTime,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else if (totalTime != null) {
+                Text(
+                    text = totalTime,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
                 )
             }
         }

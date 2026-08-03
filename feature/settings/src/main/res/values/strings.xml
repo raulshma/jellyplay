@@ -889,6 +889,8 @@
     <string name="settings_hide_watched_items_subtitle">Default-filter out watched media from libraries</string>
     <string name="settings_hide_episode_thumbnails">Hide Episode Thumbnails</string>
     <string name="settings_hide_episode_thumbnails_subtitle">Hide episode preview images to avoid spoilers</string>
+    <string name="settings_compact_episode_list">Compact Episode List</string>
+    <string name="settings_compact_episode_list_subtitle">Show episodes as a vertical list on mobile instead of a horizontal row</string>
     <string name="settings_skip_special_episodes">Skip Special Episodes</string>
     <string name="settings_skip_special_episodes_subtitle">Exclude specials/bonus episodes from episode lists</string>
     <string name="settings_haptic_feedback">Haptic Feedback</string>

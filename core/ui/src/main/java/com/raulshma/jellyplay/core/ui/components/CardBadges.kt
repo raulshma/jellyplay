@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -113,6 +114,49 @@ fun WatchedBadge(
             contentDescription = null,
             tint = iconColor,
             modifier = Modifier.size(12.dp),
+        )
+    }
+}
+
+/**
+ * Accent "Watched" tag for episode thumbnails (online detail + offline downloads).
+ *
+ * Unlike the icon-only glass [WatchedBadge] used on grid cards, this pairs a check
+ * icon with the localized "Watched" label on a high-contrast `primaryContainer` /
+ * `onPrimaryContainer` pill. The accent fill makes the watched boundary pop at a
+ * glance while quickly scrolling the episode list — the previous dim black/white
+ * text pill was easy to miss.
+ *
+ * The [label] is passed in (rather than read from a string resource) so this
+ * core-ui composable stays module-agnostic: each feature screen supplies its own
+ * localized string.
+ *
+ * @param label localized "Watched" text (e.g. from a `stringResource`).
+ */
+@Composable
+fun EpisodeWatchedTag(
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = modifier
+            .clip(ShapeCache.smooth4)
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        Icon(
+            imageVector = Tabler.Outline.Check,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.size(12.dp),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }

@@ -396,6 +396,7 @@ data class AppearanceScreenPreferences(
     val showWatchedCheckmark: Boolean = true,
     val hideEpisodeThumbnails: Boolean = false,
     val skipSpecials: Boolean = false,
+    val compactEpisodeList: Boolean = false,
     val showExternalRatings: Boolean = true,
     val showShareMediaOption: Boolean = true,
     val hideSearchHistory: Boolean = false,

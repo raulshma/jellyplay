@@ -49,6 +49,8 @@
     <string name="detail_no_episodes_available">재생 가능한 에피소드 없음</string>
     <string name="detail_spoiler">스포일러</string>
     <string name="detail_watched_badge">시청함</string>
+    <string name="detail_cd_switch_to_list">세로 에피소드 목록으로 전환</string>
+    <string name="detail_cd_switch_to_cards">가로 에피소드 카드로 전환</string>
     <string name="detail_time_left_format">%1$s 남음</string>
 
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
