@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.home
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -547,6 +548,7 @@ class HomeDiscoveryStore @Inject constructor(
  * The home discovery preference slice. Plain data class. Defaults mirror the
  * projection defaults in [HomeDiscoveryStore.read].
  */
+@Immutable
 @Serializable
 data class HomeDiscoverySlice(
     val homeMode: HomeMode = HomeMode.VIDEO,

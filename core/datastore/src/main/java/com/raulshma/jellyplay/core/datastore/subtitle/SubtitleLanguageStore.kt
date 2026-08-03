@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.subtitle
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -318,6 +319,7 @@ class SubtitleLanguageStore @Inject constructor(
  * the datastore module stays framework-light. Defaults mirror the projection
  * defaults in [SubtitleLanguageStore.read].
  */
+@Immutable
 @Serializable
 data class SubtitleSlice(
     val preferredSubtitleLanguage: String? = null,

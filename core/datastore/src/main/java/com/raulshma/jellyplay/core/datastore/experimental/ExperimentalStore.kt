@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.experimental
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -258,6 +259,7 @@ class ExperimentalStore @Inject constructor(
  * on `AppearanceSlice`. This store clears it on reset only (see
  * [ExperimentalStore.resetKeys]).
  */
+@Immutable
 @Serializable
 data class ExperimentalSlice(
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),

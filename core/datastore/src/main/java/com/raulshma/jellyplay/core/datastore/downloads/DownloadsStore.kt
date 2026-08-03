@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.downloads
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -239,6 +240,7 @@ class DownloadsStore @Inject constructor(
  * The downloads preference slice. Plain data class. Defaults mirror the
  * projection defaults in [DownloadsStore.read].
  */
+@Immutable
 @Serializable
 data class DownloadsSlice(
     val wifiOnlyDownloads: Boolean = true,

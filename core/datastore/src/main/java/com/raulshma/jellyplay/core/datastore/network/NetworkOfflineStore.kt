@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.network
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -218,6 +219,7 @@ class NetworkOfflineStore @Inject constructor(
  * The network / offline-mode preference slice. Plain data class. Defaults mirror
  * the projection defaults in [NetworkOfflineStore.read].
  */
+@Immutable
 @Serializable
 data class NetworkOfflineSlice(
     val manualOfflineEnabled: Boolean = false,

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.audio
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -292,6 +293,7 @@ class AudioStore @Inject constructor(
  * The audio-player preference slice. Plain data class.
  * Defaults mirror the projection defaults in [AudioStore.read].
  */
+@Immutable
 @Serializable
 data class AudioSlice(
     val audioDefaultSpeed: Float = 1.0f,

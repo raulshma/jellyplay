@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.audioeffects
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -309,6 +310,7 @@ class AudioEffectsStore @Inject constructor(
  * The audio-effects preference slice. Plain data class.
  * Defaults mirror the projection defaults in [AudioEffectsStore.read].
  */
+@Immutable
 @Serializable
 data class AudioEffectsSlice(
     val dialogueBoostEnabled: Boolean = false,
