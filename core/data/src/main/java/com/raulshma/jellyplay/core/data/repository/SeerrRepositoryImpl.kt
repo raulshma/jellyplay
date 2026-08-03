@@ -13,10 +13,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,14 +41,9 @@ class SeerrRepositoryImpl @Inject constructor(
     private val _pendingRequestCount = MutableStateFlow(0)
     override val pendingRequestCount: StateFlow<Int> = _pendingRequestCount
 
-    // NOTE: kept on SharingStarted.Eagerly (not WhileSubscribed) deliberately.
-    // cachedPrefs.value is read synchronously by serverUrl() below with NO
-    // .first() fallback, so it must be warm from the moment the singleton is
-    // materialised. The other two singletons
-    // (OkHttpConfigProviderImpl, FloatingPlayerState) are safe to switch to
-    // WhileSubscribed because their .value readers all have fallbacks.
-    private val cachedPrefs = seerrPreferencesStore.preferences
-        .stateIn(cacheScope, SharingStarted.Eagerly, null)
+    // SeerrPreferencesStore.preferences is itself a SharingStarted.Eagerly
+    // StateFlow, so .value is warm from the moment the singleton is
+    // materialised — no local cache layer needed here.
 
     private val CACHE_TTL_MS = 60_000L
     private val detailCache = TtlCache<Any>(ttlMs = CACHE_TTL_MS)
@@ -65,7 +57,7 @@ class SeerrRepositoryImpl @Inject constructor(
     }
 
     private suspend fun getCredentials(): SeerrCredentials? {
-        val prefs = cachedPrefs.value ?: seerrPreferencesStore.preferences.first()
+        val prefs = seerrPreferencesStore.preferences.value
         val apiKey = secureCredentialsStore.getApiKey()
         val cookie = secureCredentialsStore.getSessionCookie()
         val hash = 31 * prefs.serverUrl.hashCode() + apiKey.hashCode() + cookie.hashCode() + prefs.authMethod.hashCode()
@@ -90,7 +82,7 @@ class SeerrRepositoryImpl @Inject constructor(
     }
 
     private fun serverUrl(): String? {
-        val prefs = cachedPrefs.value ?: return null
+        val prefs = seerrPreferencesStore.preferences.value
         return prefs.serverUrl.ifBlank { null }
     }
 
