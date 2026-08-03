@@ -10,7 +10,6 @@ import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
-import com.raulshma.jellyplay.core.datastore.AudioPlaybackSettingsStore
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -38,7 +37,6 @@ import javax.inject.Inject
 class AudioPlayerViewModel @Inject constructor(
     private val audioPlaybackManager: AudioPlaybackManager,
     private val preferencesAggregator: UserPreferencesAggregator,
-    private val audioPlaybackSettingsStore: AudioPlaybackSettingsStore,
     private val audioStore: AudioStore,
     private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
@@ -321,33 +319,33 @@ class AudioPlayerViewModel @Inject constructor(
         audioPlaybackManager.play(itemId)
 
         launch {
-            val prefs = audioPlaybackSettingsStore.settings.first()
-            if (prefs.audioDefaultSpeed != 1.0f) {
-                audioPlaybackManager.changePlaybackSpeed(prefs.audioDefaultSpeed)
+            val (audio, effects) = combine(audioStore.audio, audioEffectsStore.audioEffects) { a, e -> a to e }.first()
+            if (audio.audioDefaultSpeed != 1.0f) {
+                audioPlaybackManager.changePlaybackSpeed(audio.audioDefaultSpeed)
             }
-            nightModeVolume = prefs.audioNightModeVolume
-            nightModeGain = prefs.audioNightModeGain
-            skipPreviousThresholdMs = prefs.audioSkipPreviousThresholdMs
-            audioPlaybackManager.setNightModeParams(prefs.audioNightModeVolume, prefs.audioNightModeGain)
-            audioPlaybackManager.setSkipPreviousThreshold(prefs.audioSkipPreviousThresholdMs)
-            audioPlaybackManager.setDialogueBoostStrength(prefs.dialogueBoostStrength)
-            audioPlaybackManager.setNightModeStrength(prefs.nightModeStrength)
-            audioPlaybackManager.setCrossfadeDurationMs(prefs.audioCrossfadeDurationMs)
-            audioPlaybackManager.setGaplessEnabled(prefs.audioGaplessEnabled)
-            audioPlaybackManager.setReplayGainMode(prefs.audioNormalizationMode)
-            audioPlaybackManager.setReplayGainPreAmpDb(prefs.replayGainPreAmpDb)
-            audioPlaybackManager.setBassBoostStrength(prefs.bassBoostStrength)
-            audioPlaybackManager.setVirtualizerStrength(prefs.virtualizerStrength)
-            audioPlaybackManager.setLrBalance(prefs.lrBalance)
-            audioPlaybackManager.setPitchSemitones(prefs.pitchSemitones)
-            audioPlaybackManager.setAutoEqByGenre(prefs.autoEqByGenre)
+            nightModeVolume = audio.audioNightModeVolume
+            nightModeGain = audio.audioNightModeGain
+            skipPreviousThresholdMs = audio.audioSkipPreviousThresholdMs
+            audioPlaybackManager.setNightModeParams(audio.audioNightModeVolume, audio.audioNightModeGain)
+            audioPlaybackManager.setSkipPreviousThreshold(audio.audioSkipPreviousThresholdMs)
+            audioPlaybackManager.setDialogueBoostStrength(effects.dialogueBoostStrength)
+            audioPlaybackManager.setNightModeStrength(effects.nightModeStrength)
+            audioPlaybackManager.setCrossfadeDurationMs(audio.audioCrossfadeDurationMs)
+            audioPlaybackManager.setGaplessEnabled(audio.audioGaplessEnabled)
+            audioPlaybackManager.setReplayGainMode(audio.audioNormalizationMode)
+            audioPlaybackManager.setReplayGainPreAmpDb(audio.replayGainPreAmpDb)
+            audioPlaybackManager.setBassBoostStrength(effects.bassBoostStrength)
+            audioPlaybackManager.setVirtualizerStrength(effects.virtualizerStrength)
+            audioPlaybackManager.setLrBalance(effects.lrBalance)
+            audioPlaybackManager.setPitchSemitones(effects.pitchSemitones)
+            audioPlaybackManager.setAutoEqByGenre(effects.autoEqByGenre)
             // Strength fields are not flow-exposed by the manager; seed them into uiState from prefs.
             _uiState.update {
                 it.copy(
                     effects = it.effects.copy(
-                        dialogueBoostStrength = prefs.dialogueBoostStrength,
-                        nightModeStrength = prefs.nightModeStrength,
-                        bassBoostStrength = prefs.bassBoostStrength,
+                        dialogueBoostStrength = effects.dialogueBoostStrength,
+                        nightModeStrength = effects.nightModeStrength,
+                        bassBoostStrength = effects.bassBoostStrength,
                     ),
                 )
             }
