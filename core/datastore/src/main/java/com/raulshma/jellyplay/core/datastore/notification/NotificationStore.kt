@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.notification
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -354,6 +355,7 @@ class NotificationStore @Inject constructor(
  *
  * Defaults mirror the projection defaults in [NotificationStore.read].
  */
+@Immutable
 @Serializable
 data class NotificationSlice(
     val notificationPreferences: NotificationPreferences = NotificationPreferences(),

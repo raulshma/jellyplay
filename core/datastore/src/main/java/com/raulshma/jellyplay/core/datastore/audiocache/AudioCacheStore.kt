@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.audiocache
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -167,6 +168,7 @@ class AudioCacheStore @Inject constructor(
  * The audio-cache policy preference slice. Plain data class.
  * Defaults mirror the projection defaults in [AudioCacheStore.read].
  */
+@Immutable
 @Serializable
 data class AudioCacheSlice(
     val audioCachingEnabled: Boolean = true,

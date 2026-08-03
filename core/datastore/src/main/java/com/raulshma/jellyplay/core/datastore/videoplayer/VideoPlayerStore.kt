@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.videoplayer
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -592,6 +593,7 @@ class VideoPlayerStore @Inject constructor(
  * datastore module stays framework-light. Defaults mirror the projection
  * defaults in [VideoPlayerStore.read].
  */
+@Immutable
 @Serializable
 data class VideoPlayerSlice(
     val videoSeekDurationMs: Long = 10_000L,

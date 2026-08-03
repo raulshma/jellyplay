@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.screensaver
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -188,6 +189,7 @@ private val DEFAULT_DREAM_IMAGE_CATEGORIES: Set<DreamImageCategory> =
  * The screensaver / dream preference slice. Plain data class. Defaults mirror
  * the projection defaults in [ScreensaverStore.read].
  */
+@Immutable
 @Serializable
 data class ScreensaverSlice(
     val dreamImageCategories: Set<DreamImageCategory> = DEFAULT_DREAM_IMAGE_CATEGORIES,

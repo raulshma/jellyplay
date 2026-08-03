@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.library
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -228,6 +229,7 @@ class LibraryStore @Inject constructor(
  * The library browsing preference slice. Plain data class. Defaults mirror the
  * projection defaults in [LibraryStore.read].
  */
+@Immutable
 @Serializable
 data class LibrarySlice(
     val libraryViewMode: LibraryViewMode = LibraryViewMode.GRID,

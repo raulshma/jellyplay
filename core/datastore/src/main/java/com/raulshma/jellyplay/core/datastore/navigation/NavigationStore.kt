@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.navigation
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -170,6 +171,7 @@ class NavigationStore @Inject constructor(
  * The bottom-navigation customisation preference slice. Plain data class.
  * Defaults mirror the projection defaults in [NavigationStore.read].
  */
+@Immutable
 @Serializable
 data class NavigationSlice(
     val navBarShowLabels: Boolean = true,

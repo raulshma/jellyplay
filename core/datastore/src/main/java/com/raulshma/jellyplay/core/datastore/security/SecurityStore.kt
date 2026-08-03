@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.security
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -290,6 +291,7 @@ class SecurityStore @Inject constructor(
  * The security &amp; access-control preference slice. Plain data class.
  * Defaults mirror the projection defaults in [SecurityStore.read].
  */
+@Immutable
 @Serializable
 data class SecuritySlice(
     val pinLockEnabled: Boolean = false,

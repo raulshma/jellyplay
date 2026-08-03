@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.syncplaycast
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -209,6 +210,7 @@ class SyncPlayCastStore @Inject constructor(
  * The SyncPlay + casting + DVR preference slice. Plain data class. Defaults
  * mirror the projection defaults in [SyncPlayCastStore.read].
  */
+@Immutable
 @Serializable
 data class SyncPlayCastSlice(
     val syncPlayJoinBehavior: SyncPlayJoinBehavior = SyncPlayJoinBehavior.ASK,

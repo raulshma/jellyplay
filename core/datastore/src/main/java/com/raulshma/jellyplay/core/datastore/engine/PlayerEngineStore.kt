@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.engine
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -364,6 +365,7 @@ class PlayerEngineStore @Inject constructor(
  * The player-engine configuration preference slice. Plain data class.
  * Defaults mirror the projection defaults in [PlayerEngineStore.read].
  */
+@Immutable
 @Serializable
 data class PlayerEngineSlice(
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),

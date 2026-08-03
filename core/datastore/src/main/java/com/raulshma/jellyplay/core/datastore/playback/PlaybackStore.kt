@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.playback
 
+import androidx.compose.runtime.Immutable
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -387,6 +388,7 @@ class PlaybackStore @Inject constructor(
  * datastore module stays framework-light. Defaults mirror the projection
  * defaults in [PlaybackStore.read].
  */
+@Immutable
 @Serializable
 data class PlaybackSlice(
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
