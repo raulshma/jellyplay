@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
@@ -48,13 +49,24 @@ class OfflineRepositoryImpl @Inject constructor(
             if (entity == null) {
                 flowOf(null)
             } else {
-                downloadDao.getDownloadByMediaItemIdFlow(id).map { download ->
-                    entity.toOfflineMediaItem().copy(
+                downloadDao.getDownloadByMediaItemIdFlow(id).flatMapLatest { download ->
+                    val item = entity.toOfflineMediaItem().copy(
                         downloadPath = download?.downloadPath,
                         downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
                         downloadedBytes = download?.downloadedBytes ?: 0L,
                         totalSizeBytes = download?.totalSizeBytes ?: 0L,
                     )
+                    // Episode/series rows carry no self-contained local artwork
+                    // by design (episodes use the series backdrop; the series
+                    // row resolves its images beside downloaded episodes), so
+                    // resolve the local-file fallback here. Skips everything
+                    // else (movies, albums) whose own downloads always produce
+                    // local files.
+                    if (entity.mediaType == MediaType.EPISODE.name || entity.mediaType == MediaType.SERIES.name) {
+                        flow { emit(resolveLocalArtwork(item)) }
+                    } else {
+                        flowOf(item)
+                    }
                 }
             }
         }.distinctUntilChanged()
@@ -194,6 +206,15 @@ class OfflineRepositoryImpl @Inject constructor(
             downloadDao.getDownloadsForSeriesViaOfflineMedia(seriesId)
         ).distinctBy { it.id }
         deleteArtifactsParallel(downloads)
+        // Series-scoped artwork (${seriesId}_poster.jpg / _backdrop.jpg) lives
+        // beside each downloaded episode; prune it from every episode dir now
+        // that no row references the series anymore.
+        downloads
+            .asSequence()
+            .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
+            .mapNotNull { java.io.File(it).parentFile }
+            .distinct()
+            .forEach { DownloadArtifacts.cleanupSeriesArtwork(it, seriesId) }
         database.withTransaction {
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
@@ -292,6 +313,94 @@ class OfflineRepositoryImpl @Inject constructor(
             .search(pattern = pattern, prefixPattern = prefixPattern, limit = limit)
             .map { it.toOfflineMediaItem() }
     }
+
+    /**
+     * Resolves the local-file artwork fallbacks for episode/series rows whose
+     * persisted paths are blank or remote URLs (legacy rows, or episodes that
+     * by design store no backdrop of their own).
+     *
+     * **Episode rows** — the detail-screen hero mirrors the online screen,
+     * which resolves episode backdrops to the SERIES backdrop. When the
+     * episode's persisted backdrop/poster is blank or a remote URL, it is
+     * substituted with the series' local files (from the series row, or found
+     * beside the episode's own download for legacy single-episode seeding).
+     *
+     * **Series rows** — the batch download path writes `${seriesId}_poster.jpg`
+     * / `_backdrop.jpg` beside the first enqueued episode but the pre-seeded
+     * row can hold remote URLs (legacy). The local files are resolved beside
+     * any downloaded episode.
+     *
+     * Already-local paths are kept as-is; when no local substitute exists the
+     * original value is preserved (it may still load online), so this never
+     * degrades a working row.
+     */
+    private suspend fun resolveLocalArtwork(item: OfflineMediaItem): OfflineMediaItem = when (item.mediaType) {
+        MediaType.EPISODE -> resolveEpisodeArtwork(item)
+        MediaType.SERIES -> resolveSeriesArtwork(item)
+        else -> item
+    }
+
+    private suspend fun resolveEpisodeArtwork(item: OfflineMediaItem): OfflineMediaItem {
+        if (!needsArtworkResolution(item.backdropPath) && !needsArtworkResolution(item.posterPath)) return item
+        val seriesId = item.seriesId ?: return item
+        // Legacy single-episode downloads seeded the series artwork beside the
+        // episode file itself; prefer the series row's local paths, then fall
+        // back to files found in the episode's own directory.
+        val seriesRow = offlineMediaDao.getById(seriesId)
+        val episodeDir = item.downloadPath
+            ?.takeIf { it.isNotBlank() }
+            ?.let { java.io.File(it).parentFile }
+        val seriesBackdrop = seriesRow?.backdropPath?.takeIf(::isLocalPath)
+            ?: episodeDir?.let { dir ->
+                java.io.File(dir, DownloadArtifacts.backdropFile(seriesId))
+                    .takeIf { it.exists() }?.absolutePath
+            }
+        val seriesPoster = seriesRow?.posterPath?.takeIf(::isLocalPath)
+            ?: episodeDir?.let { dir ->
+                java.io.File(dir, DownloadArtifacts.posterFile(seriesId))
+                    .takeIf { it.exists() }?.absolutePath
+            }
+        return item.copy(
+            // Local substitute wins; keep the original (remote) path only when
+            // no local file exists — it may still load while online.
+            backdropPath = if (needsArtworkResolution(item.backdropPath)) seriesBackdrop ?: item.backdropPath else item.backdropPath,
+            posterPath = if (needsArtworkResolution(item.posterPath)) seriesPoster ?: item.posterPath else item.posterPath,
+        )
+    }
+
+    private suspend fun resolveSeriesArtwork(item: OfflineMediaItem): OfflineMediaItem {
+        if (!needsArtworkResolution(item.backdropPath) && !needsArtworkResolution(item.posterPath)) return item
+        // The series has no download row of its own; its local artwork is
+        // written beside downloaded episodes, so scan their directories.
+        val seriesDir = downloadDao.getDownloadsForSeries(item.id)
+            .asSequence()
+            .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
+            .mapNotNull { java.io.File(it).parentFile }
+            .firstOrNull()
+        val backdrop = seriesDir?.let { dir ->
+            java.io.File(dir, DownloadArtifacts.backdropFile(item.id))
+                .takeIf { it.exists() }?.absolutePath
+        }
+        val poster = seriesDir?.let { dir ->
+            java.io.File(dir, DownloadArtifacts.posterFile(item.id))
+                .takeIf { it.exists() }?.absolutePath
+        }
+        return item.copy(
+            backdropPath = if (needsArtworkResolution(item.backdropPath)) backdrop ?: item.backdropPath else item.backdropPath,
+            posterPath = if (needsArtworkResolution(item.posterPath)) poster ?: item.posterPath else item.posterPath,
+        )
+    }
+
+    /** True when [path] is absent or a server URL — i.e. not a local file. */
+    private fun needsArtworkResolution(path: String?): Boolean =
+        path.isNullOrBlank() || isRemoteUrl(path)
+
+    private fun isRemoteUrl(path: String): Boolean =
+        path.startsWith("http://") || path.startsWith("https://")
+
+    /** True when [path] is an existing local file (not a server URL). */
+    private fun isLocalPath(path: String): Boolean =
+        path.isNotBlank() && !isRemoteUrl(path)
 
     private fun safeMediaTypeOf(name: String): MediaType =
         MEDIA_TYPE_BY_NAME[name] ?: MediaType.UNKNOWN

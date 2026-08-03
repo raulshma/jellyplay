@@ -53,4 +53,21 @@ internal object DownloadArtifacts {
             File(parentDir, backdropFile(itemId)).takeIf { it.exists() }?.delete()
         }
     }
+
+    /**
+     * Removes the series-scoped poster/backdrop files under [parentDir].
+     *
+     * Series artwork is written beside downloaded episodes (keyed by seriesId)
+     * when a series is queued or a lone episode seeds its parent row, so it
+     * must be pruned when the whole series is deleted — per-item cleanup only
+     * removes `${itemId}_*` files and would leave the series images orphaned
+     * on disk. Only whole-series deletion removes them; deleting individual
+     * episodes keeps the files because sibling episode rows still reference
+     * the same series artwork.
+     */
+    fun cleanupSeriesArtwork(parentDir: File?, seriesId: String) {
+        if (parentDir == null) return
+        File(parentDir, posterFile(seriesId)).takeIf { it.exists() }?.delete()
+        File(parentDir, backdropFile(seriesId)).takeIf { it.exists() }?.delete()
+    }
 }

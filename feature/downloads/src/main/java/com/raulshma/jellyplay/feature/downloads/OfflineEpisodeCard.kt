@@ -61,7 +61,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
  * badge, info column) so online and offline series episodes look identical.
  *
  * Two offline-only differences:
- *  - the image is the locally-saved [OfflineMediaItem.backdropPath] (no server URL), and
+ *  - the image is the locally-saved [OfflineMediaItem.posterPath] (the episode
+ *    Primary image, mirroring the online card), and
  *  - a trash affordance is overlaid on the thumbnail so individual episode
  *    downloads can be removed (online episodes have no delete action).
  *
@@ -150,7 +151,7 @@ internal fun OfflineEpisodeCard(
                 .then(sharedThumbnailModifier),
             contentAlignment = Alignment.Center,
         ) {
-            val thumb = episode.backdropPath ?: episode.posterPath
+            val thumb = episode.posterPath ?: episode.backdropPath
             if (!thumb.isNullOrBlank()) {
                 MediaImage(
                     url = thumb,
@@ -336,8 +337,9 @@ internal fun OfflineEpisodeCard(
  * so a whole season scrolls vertically on a phone.
  *
  * Two offline-only differences from the online compact row: the thumbnail is the
- * locally-saved [OfflineMediaItem.backdropPath] (no server URL), and a trailing
- * trash affordance lets the user remove the downloaded file.
+ * locally-saved [OfflineMediaItem.posterPath] (the episode Primary image, as on
+ * the online row), and a trailing trash affordance lets the user remove the
+ * downloaded file.
  */
 @Composable
 internal fun OfflineCompactEpisodeRow(
@@ -389,7 +391,7 @@ internal fun OfflineCompactEpisodeRow(
                 .then(sharedThumbnailModifier),
             contentAlignment = Alignment.Center,
         ) {
-            val thumb = episode.backdropPath ?: episode.posterPath
+            val thumb = episode.posterPath ?: episode.backdropPath
             if (!thumb.isNullOrBlank()) {
                 MediaImage(
                     url = thumb,

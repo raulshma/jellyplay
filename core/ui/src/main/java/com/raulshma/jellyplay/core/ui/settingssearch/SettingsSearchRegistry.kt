@@ -65,6 +65,15 @@ object SettingsSearchRegistry {
             route = Route.Settings,
             icon = Tabler.Outline.Logout
         ),
+        SettingsSearchItem(
+            id = "sign_out_from_server",
+            titleRes = R.string.ss_sign_out_from_server_title,
+            subtitleRes = R.string.ss_sign_out_from_server_subtitle,
+            categoryRes = R.string.ss_cat_account,
+            keywords = listOf("sign out", "server", "remove device", "revoke", "session", "remote", "disconnect"),
+            route = Route.Settings,
+            icon = Tabler.Outline.Logout
+        ),
         // Account / Users / Servers
         SettingsSearchItem(
             id = "server_management",
@@ -98,9 +107,19 @@ object SettingsSearchRegistry {
             titleRes = R.string.ss_integrations_title,
             subtitleRes = R.string.ss_integrations_subtitle,
             categoryRes = R.string.ss_cat_integrations,
-            keywords = listOf("integration", "seerr", "radarr", "sonarr", "arr", "server", "connection", "external"),
-            route = Route.Integrations(),
-            icon = Tabler.Outline.PlugConnected
+            keywords = listOf("integrations", "jellyseerr", "overseerr", "arr", "sonarr", "radarr", "request"),
+            route = Route.Integrations(highlightSettingId = "integrations"),
+            icon = Tabler.Outline.Plug
+        ),
+        SettingsSearchItem(
+            id = "subtitle_provider_settings",
+            titleRes = R.string.ss_subtitle_provider_settings_title,
+            subtitleRes = R.string.ss_subtitle_provider_settings_subtitle,
+            categoryRes = R.string.ss_cat_integrations,
+            keywords = listOf("subtitle", "provider", "opensubtitles", "opensubtitles.com", "tvsubs", "manager", "extensions"),
+            route = Route.Integrations(highlightSettingId = "subtitle_provider_settings"),
+            icon = Tabler.Outline.Language,
+            isAdvanced = true
         ),
 
         // Activity & Insights (migrated from the Home drawer)
@@ -168,6 +187,51 @@ object SettingsSearchRegistry {
             keywords = listOf("setup", "wizard", "onboarding", "configure", "initial"),
             route = Route.Onboarding,
             icon = Tabler.Outline.Wand
+        ),
+        SettingsSearchItem(
+            id = "screensaver_show_title",
+            titleRes = R.string.ss_screensaver_show_title_title,
+            subtitleRes = R.string.ss_screensaver_show_title_subtitle,
+            categoryRes = R.string.ss_cat_system,
+            keywords = listOf("screensaver", "dream", "title", "tv", "show", "media title", "display"),
+            route = Route.Settings,
+            icon = Tabler.Outline.Typography
+        ),
+        SettingsSearchItem(
+            id = "screensaver_categories",
+            titleRes = R.string.ss_screensaver_categories_title,
+            subtitleRes = R.string.ss_screensaver_categories_subtitle,
+            categoryRes = R.string.ss_cat_system,
+            keywords = listOf("screensaver", "dream", "categories", "tv", "movies", "music", "content"),
+            route = Route.Settings,
+            icon = Tabler.Outline.Folders
+        ),
+        SettingsSearchItem(
+            id = "screensaver_slideshow_interval",
+            titleRes = R.string.ss_screensaver_slideshow_interval_title,
+            subtitleRes = R.string.ss_screensaver_slideshow_interval_subtitle,
+            categoryRes = R.string.ss_cat_system,
+            keywords = listOf("screensaver", "dream", "slideshow", "interval", "tv", "duration", "seconds"),
+            route = Route.Settings,
+            icon = Tabler.Outline.Clock
+        ),
+        SettingsSearchItem(
+            id = "screensaver_ken_burns",
+            titleRes = R.string.ss_screensaver_ken_burns_title,
+            subtitleRes = R.string.ss_screensaver_ken_burns_subtitle,
+            categoryRes = R.string.ss_cat_system,
+            keywords = listOf("screensaver", "dream", "ken burns", "pan", "zoom", "animation", "tv"),
+            route = Route.Settings,
+            icon = Tabler.Outline.Movie
+        ),
+        SettingsSearchItem(
+            id = "screensaver_transition_style",
+            titleRes = R.string.ss_screensaver_transition_style_title,
+            subtitleRes = R.string.ss_screensaver_transition_style_subtitle,
+            categoryRes = R.string.ss_cat_system,
+            keywords = listOf("screensaver", "dream", "transition", "style", "crossfade", "slide", "tv"),
+            route = Route.Settings,
+            icon = Tabler.Outline.ArrowsHorizontal
         ),
 
         // Appearance Settings
@@ -276,6 +340,16 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.Palette
         ),
         SettingsSearchItem(
+            id = "synthwave_accent",
+            titleRes = R.string.core_ui_synthwave_accent_title,
+            subtitleRes = R.string.core_ui_synthwave_accent_subtitle,
+            categoryRes = R.string.ss_cat_appearance,
+            keywords = listOf("synthwave", "accent", "neon", "color", "swatch"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Palette,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "soothing_mode",
             titleRes = R.string.ss_soothing_mode_title,
             subtitleRes = R.string.ss_soothing_mode_subtitle,
@@ -283,6 +357,16 @@ object SettingsSearchRegistry {
             keywords = listOf("soothing", "soft", "rounded", "calm", "theme"),
             route = Route.AppearanceSettings(),
             icon = Tabler.Outline.Palette
+        ),
+        SettingsSearchItem(
+            id = "soothing_accent",
+            titleRes = R.string.core_ui_soothing_accent_title,
+            subtitleRes = R.string.core_ui_soothing_accent_subtitle,
+            categoryRes = R.string.ss_cat_appearance,
+            keywords = listOf("soothing", "accent", "color", "calm", "swatch"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Palette,
+            isAdvanced = true
         ),
         SettingsSearchItem(
             id = "dynamic_theming",
@@ -340,6 +424,16 @@ object SettingsSearchRegistry {
             keywords = listOf("hero", "banner", "featured", "home", "carousel"),
             route = Route.AppearanceSettings(),
             icon = Tabler.Outline.LayersLinked,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "home_backdrop",
+            titleRes = R.string.ss_home_backdrop_title,
+            subtitleRes = R.string.ss_home_backdrop_subtitle,
+            categoryRes = R.string.ss_cat_appearance,
+            keywords = listOf("home", "backdrop", "artwork", "background", "blur", "wallpaper"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Photo,
             isAdvanced = true
         ),
         SettingsSearchItem(
@@ -423,6 +517,24 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "nav_bar_customization",
+            titleRes = R.string.ss_nav_bar_customization_title,
+            subtitleRes = R.string.ss_nav_bar_customization_subtitle,
+            categoryRes = R.string.ss_cat_appearance,
+            keywords = listOf("navigation", "bar", "items", "bottom", "reorder", "hide", "show", "tabs", "home", "library", "search", "live tv", "browse", "shortcuts", "customize"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.LayoutGrid
+        ),
+        SettingsSearchItem(
+            id = "nav_hide_on_scroll",
+            titleRes = R.string.ss_nav_hide_on_scroll_title,
+            subtitleRes = R.string.ss_nav_hide_on_scroll_subtitle,
+            categoryRes = R.string.ss_cat_appearance,
+            keywords = listOf("navigation", "hide", "scroll", "auto hide", "bottom bar", "collapsible"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.EyeOff
+        ),
+        SettingsSearchItem(
             id = "show_unwatched_badge",
             titleRes = R.string.ss_show_unwatched_badge_title,
             subtitleRes = R.string.ss_show_unwatched_badge_subtitle,
@@ -461,6 +573,15 @@ object SettingsSearchRegistry {
             route = Route.AppearanceSettings(),
             icon = Tabler.Outline.PhotoOff,
             isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "compact_episode_list",
+            titleRes = R.string.ss_compact_episode_list_title,
+            subtitleRes = R.string.ss_compact_episode_list_subtitle,
+            categoryRes = R.string.ss_cat_appearance,
+            keywords = listOf("episode", "list", "compact", "vertical", "layout", "rows", "dense"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.List
         ),
         SettingsSearchItem(
             id = "skip_specials",
@@ -553,6 +674,24 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "accent_color",
+            titleRes = R.string.core_ui_accent_color_title,
+            subtitleRes = R.string.core_ui_accent_color_subtitle,
+            categoryRes = R.string.ss_cat_appearance,
+            keywords = listOf("accent", "color", "theme", "swatch", "palette", "customize"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Palette
+        ),
+        SettingsSearchItem(
+            id = "color_style",
+            titleRes = R.string.core_ui_color_style_title,
+            subtitleRes = R.string.core_ui_color_style_subtitle,
+            categoryRes = R.string.ss_cat_appearance,
+            keywords = listOf("color style", "palette", "vibe", "generated", "mood", "theme"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Palette
+        ),
+        SettingsSearchItem(
             id = "hide_search_history",
             titleRes = R.string.ss_hide_search_history_title,
             subtitleRes = R.string.ss_hide_search_history_subtitle,
@@ -600,6 +739,16 @@ object SettingsSearchRegistry {
             keywords = listOf("newsletter", "delivery", "day", "schedule", "weekday", "send"),
             route = Route.AppearanceSettings(),
             icon = Tabler.Outline.Calendar,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "newsletter_sections",
+            titleRes = R.string.ss_newsletter_sections_title,
+            subtitleRes = R.string.ss_newsletter_sections_subtitle,
+            categoryRes = R.string.ss_cat_appearance,
+            keywords = listOf("newsletter", "sections", "recently added", "activity log", "library stats", "continue watching", "next up", "curated picks", "content", "digest"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.Mail,
             isAdvanced = true
         ),
 
@@ -856,6 +1005,16 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "dialogue_boost_strength",
+            titleRes = R.string.ss_dialogue_boost_strength_title,
+            subtitleRes = R.string.ss_dialogue_boost_strength_subtitle,
+            categoryRes = R.string.ss_cat_playback,
+            keywords = listOf("dialogue", "boost", "strength", "level", "speech", "amplify"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Microphone2,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "decoder",
             titleRes = R.string.ss_decoder_title,
             subtitleRes = R.string.ss_decoder_subtitle,
@@ -1094,6 +1253,26 @@ object SettingsSearchRegistry {
             icon = Tabler.Outline.PhotoDown,
             isAdvanced = true
         ),
+        SettingsSearchItem(
+            id = "mpv_extra_config",
+            titleRes = R.string.ss_mpv_extra_config_title,
+            subtitleRes = R.string.ss_mpv_extra_config_subtitle,
+            categoryRes = R.string.ss_cat_playback,
+            keywords = listOf("mpv", "advanced", "config", "raw", "options", "editor", "custom"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Code,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "reset_engine_defaults",
+            titleRes = R.string.ss_reset_engine_defaults_title,
+            subtitleRes = R.string.ss_reset_engine_defaults_subtitle,
+            categoryRes = R.string.ss_cat_playback,
+            keywords = listOf("reset", "defaults", "restore", "engine", "mpv", "vlc", "exoplayer", "configuration"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.Refresh,
+            isAdvanced = true
+        ),
         // VLC Engine Config
         SettingsSearchItem(
             id = "vlc_audio_output",
@@ -1328,7 +1507,68 @@ object SettingsSearchRegistry {
             categoryRes = R.string.ss_cat_playback,
             keywords = listOf("dvr", "recording", "quality", "live tv", "resolution"),
             route = Route.PlaybackSettings(),
-            icon = Tabler.Outline.Video
+            icon = Tabler.Outline.BadgeHd,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "media_segment_intro",
+            titleRes = R.string.core_segment_intro,
+            subtitleRes = R.string.core_segment_intro_desc,
+            categoryRes = R.string.ss_cat_playback,
+            keywords = listOf("segment", "intro", "skip", "opening", "credits", "marker"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.SquareRounded,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "media_segment_outro",
+            titleRes = R.string.core_segment_outro,
+            subtitleRes = R.string.core_segment_outro_desc,
+            categoryRes = R.string.ss_cat_playback,
+            keywords = listOf("segment", "outro", "ending", "skip", "credits", "marker"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.SquareRounded,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "media_segment_preview",
+            titleRes = R.string.core_segment_preview,
+            subtitleRes = R.string.core_segment_preview_desc,
+            categoryRes = R.string.ss_cat_playback,
+            keywords = listOf("segment", "preview", "next episode", "recap", "skip", "marker"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.SquareRounded,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "media_segment_recap",
+            titleRes = R.string.core_segment_recap,
+            subtitleRes = R.string.core_segment_recap_desc,
+            categoryRes = R.string.ss_cat_playback,
+            keywords = listOf("segment", "recap", "previously on", "skip", "marker"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.SquareRounded,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "media_segment_commercial",
+            titleRes = R.string.core_segment_commercial,
+            subtitleRes = R.string.core_segment_commercial_desc,
+            categoryRes = R.string.ss_cat_playback,
+            keywords = listOf("segment", "commercial", "ad", "advertisement", "skip", "marker"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.SquareRounded,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "media_segment_unknown",
+            titleRes = R.string.core_segment_unknown,
+            subtitleRes = R.string.core_segment_unknown_desc,
+            categoryRes = R.string.ss_cat_playback,
+            keywords = listOf("segment", "unknown", "skip", "marker", "unidentified"),
+            route = Route.PlaybackSettings(),
+            icon = Tabler.Outline.SquareRounded,
+            isAdvanced = true
         ),
 
         // Audio Player Settings
@@ -1540,9 +1780,30 @@ object SettingsSearchRegistry {
             titleRes = R.string.ss_audio_prefetch_lookahead_title,
             subtitleRes = R.string.ss_audio_prefetch_lookahead_subtitle,
             categoryRes = R.string.ss_cat_audio_player,
-            keywords = listOf("audio", "prefetch", "lookahead", "buffer", "upcoming"),
+            keywords = listOf("audio", "prefetch", "lookahead", "buffering", "music", "queue"),
             route = Route.AudioSettings(),
-            icon = Tabler.Outline.ListNumbers
+            icon = Tabler.Outline.Music,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "audio_prefetch_backfill",
+            titleRes = R.string.ss_audio_prefetch_backfill_title,
+            subtitleRes = R.string.ss_audio_prefetch_backfill_subtitle,
+            categoryRes = R.string.ss_cat_audio_player,
+            keywords = listOf("audio", "prefetch", "backfill", "buffering", "music", "previous"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Music,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "audio_cache_clear",
+            titleRes = R.string.ss_audio_cache_clear_title,
+            subtitleRes = R.string.ss_audio_cache_clear_subtitle,
+            categoryRes = R.string.ss_cat_audio_player,
+            keywords = listOf("audio", "cache", "clear", "music", "storage", "wipe"),
+            route = Route.AudioSettings(),
+            icon = Tabler.Outline.Trash,
+            isAdvanced = true
         ),
         SettingsSearchItem(
             id = "audio_cache_network_policy",
@@ -1775,9 +2036,19 @@ object SettingsSearchRegistry {
             titleRes = R.string.ss_high_contrast_subtitles_title,
             subtitleRes = R.string.ss_high_contrast_subtitles_subtitle,
             categoryRes = R.string.ss_cat_language_subtitles,
-            keywords = listOf("high contrast", "subtitles", "accessibility", "legible", "captions"),
+            keywords = listOf("subtitle", "high", "contrast", "accessibility", "visibility"),
             route = Route.LanguageSettings(),
-            icon = Tabler.Outline.Eye
+            icon = Tabler.Outline.Contrast2,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "subtitle_tester",
+            titleRes = R.string.ss_subtitle_tester_title,
+            subtitleRes = R.string.ss_subtitle_tester_subtitle,
+            categoryRes = R.string.ss_cat_language_subtitles,
+            keywords = listOf("subtitle", "tester", "preview", "sample", "test", "style"),
+            route = Route.SubtitleTester,
+            icon = Tabler.Outline.EyeCheck
         ),
         SettingsSearchItem(
             id = "hdr_subtitle_font_size",
@@ -2274,9 +2545,20 @@ object SettingsSearchRegistry {
             titleRes = R.string.ss_HOME_CARD_CLIPPING_title,
             subtitleRes = R.string.ss_HOME_CARD_CLIPPING_subtitle,
             categoryRes = R.string.ss_cat_experimental,
-            keywords = listOf("clipping", "clip", "rounded", "corners", "cards", "home", "shadow", "elevation"),
+            keywords = listOf("home", "card", "clipping", "render", "experimental"),
             route = Route.ExperimentalSettings(),
-            icon = Tabler.Outline.Crop
+            icon = Tabler.Outline.Photo,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
+            id = "MEDIA_CARD_PEEK",
+            titleRes = R.string.ss_MEDIA_CARD_PEEK_title,
+            subtitleRes = R.string.ss_MEDIA_CARD_PEEK_subtitle,
+            categoryRes = R.string.ss_cat_experimental,
+            keywords = listOf("press", "hold", "peek", "preview", "media card", "long press", "experimental"),
+            route = Route.ExperimentalSettings(),
+            icon = Tabler.Outline.HandFinger,
+            isAdvanced = true
         ),
         SettingsSearchItem(
             id = "DIRECT_ARR_INTEGRATION",

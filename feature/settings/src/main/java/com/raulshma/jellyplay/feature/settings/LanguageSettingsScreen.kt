@@ -90,7 +90,7 @@ internal val appLanguages = listOf(
 private val appLanguageNameByCode: Map<String?, String> = appLanguages.associate { it.first to it.second }
 
 private val LANGUAGE_GROUP_IDS = setOf("app_language", "audio_language", "subtitle_language")
-private val SUBTITLE_GROUP_IDS = setOf("subtitle_font_size", "subtitle_forced_only", "high_contrast_subtitles", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position")
+private val SUBTITLE_GROUP_IDS = setOf("subtitle_font_size", "subtitle_forced_only", "high_contrast_subtitles", "pgs_direct_play", "hdr_subtitle_style", "hdr_subtitle_font_size", "subtitle_color", "subtitle_background", "subtitle_edge_style", "subtitle_sync_offset", "subtitle_vertical_position", "subtitle_tester")
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable

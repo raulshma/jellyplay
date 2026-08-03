@@ -147,11 +147,21 @@ class DownloadDelegate @Inject constructor(
                 if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
                     writer.enqueueDownload(downloadItem.id)
                     try {
-                        val backdropUrl = playbackRepository.getBackdropUrl(request.mediaItemId, maxWidth = 1280)
                         // Download poster + backdrop to local files so they render
                         // offline; fall back to the remote URL if a download fails.
                         // Filenames are keyed by mediaItemId so items sharing the
                         // flat downloads dir don't overwrite each other.
+                        //
+                        // Episodes persist NO backdrop of their own: Jellyfin
+                        // usually has no Backdrop image for an episode, so the
+                        // download 404s and the persisted path falls back to a
+                        // remote URL that only renders offline when Coil's cache
+                        // happens to hold it. The online detail screen resolves
+                        // episode heroes to the SERIES backdrop instead, so the
+                        // offline row leaves backdropPath null and
+                        // OfflineRepositoryImpl.getOfflineDetail substitutes the
+                        // series' local backdrop at load time (the same result
+                        // with a deterministic local file behind it).
                         val parentDir = java.io.File(downloadItem.downloadPath).parentFile
                         val localPoster = if (parentDir != null) {
                             writer.downloadOfflineImage(
@@ -161,13 +171,14 @@ class DownloadDelegate @Inject constructor(
                         } else {
                             request.imageUrl
                         }
-                        val localBackdrop = if (parentDir != null) {
+                        val localBackdrop = if (!isEpisode && parentDir != null) {
+                            val backdropUrl = playbackRepository.getBackdropUrl(request.mediaItemId, maxWidth = 1280)
                             writer.downloadOfflineImage(
                                 request.mediaItemId, "Backdrop", 1280, parentDir,
                                 com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.backdropFile(request.mediaItemId),
                             ) ?: backdropUrl
                         } else {
-                            backdropUrl
+                            null
                         }
                         // Persist full metadata when the originating MediaDetail
                         // is available (overview, cast, studios, ratings, …);
