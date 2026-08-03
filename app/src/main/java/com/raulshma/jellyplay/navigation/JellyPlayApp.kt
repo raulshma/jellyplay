@@ -99,10 +99,11 @@ import androidx.compose.ui.text.font.FontWeight
 import kotlin.math.roundToInt
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
+import com.raulshma.jellyplay.MainPreferences
+import com.raulshma.jellyplay.isExperimentalEnabled
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -305,7 +306,7 @@ private fun OnboardingContent(
 private fun MainContent(
     onLogout: (Boolean) -> Unit,
     viewModel: MainViewModel,
-    preferences: com.raulshma.jellyplay.core.model.legacy.UserPreferences,
+    preferences: MainPreferences,
 ) {
     val homeMode = preferences.homeMode
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
