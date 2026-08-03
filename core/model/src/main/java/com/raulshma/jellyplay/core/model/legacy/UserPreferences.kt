@@ -8,11 +8,11 @@ import kotlinx.serialization.Serializable
  * Legacy v0/v1 backup aggregate shape. **Decode-only — do not extend.**
  *
  * Historically this was the single ~150-field preference aggregate. The live
- * read/write path is now the 18 domain stores (`core/datastore/.../<domain>`),
- * the [com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections]
- * read-layer, and [com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator]
- * (the only runtime producer of this legacy shape, used by a handful of UI
- * screens that still consume the whole object).
+ * read/write path is now the 18 domain stores (`core/datastore/.../<domain>`)
+ * and the [com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections]
+ * read-layer. This model survives only as: (1) the v0/v1 backup decode target
+ * in `SettingsViewModel` import, and (2) the diff snapshot shape constructed
+ * one-shot by `FactoryResetViewModel.buildFromSlices`. No screen reads it live.
  *
  * This type survives solely so the v0/v1 backup-import path can decode a
  * legacy JSON blob and fan its fields back to the per-store `restorePreferences`

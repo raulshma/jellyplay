@@ -80,8 +80,8 @@ class FactoryResetViewModel @Inject constructor(
     /**
      * Builds the [UserPreferences] diff snapshot once from the 18 domain-store
      * slices + runtime/PIN extras. Each slice is read via a single `.first()`;
-     * there is no live subscription. Field mapping mirrors
-     * `UserPreferencesAggregator.buildUserPreferences` verbatim.
+     * there is no live subscription. Field mapping mirrors the former
+     * `buildUserPreferences` projection verbatim.
      */
     @Suppress("CyclomaticComplexMethod", "LongMethod")
     private suspend fun buildFromSlices(): UserPreferences {

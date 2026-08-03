@@ -79,9 +79,9 @@ data class PreferenceSliceGraph(
  * Builds the [PreferenceSliceGraph]: all 18 domain stores + [AppRuntimeStateStore]
  * + [PreferenceProjections], each sharing the same `"user_prefs"` DataStore
  * (AndroidX requires a single delegate per file per process). The single
- * construction site for the store graph — [createUserPreferencesStore],
- * [createPreferenceProjections], and [createUserPreferencesAggregator] all
- * delegate here so a new store is added in exactly one place.
+ * construction site for the store graph — [createUserPreferencesStore] and
+ * [createPreferenceProjections] both delegate here so a new store is added in
+ * exactly one place.
  */
 fun createPreferenceSliceGraph(
     scope: CoroutineScope,
@@ -145,28 +145,6 @@ fun createPreferenceProjections(
     scope: CoroutineScope,
     dataStore: DataStore<Preferences>,
 ): PreferenceProjections = createPreferenceSliceGraph(scope, dataStore).projections
-
-/**
- * Builds a [com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator]
- * over a fresh store graph sharing the given `"user_prefs"` DataStore. For tests
- * that assert the legacy aggregate is rebuilt from the store slices.
- */
-@Suppress("TestFunctionName")
-fun createUserPreferencesAggregator(
-    scope: CoroutineScope,
-    dataStore: DataStore<Preferences>,
-): com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator {
-    val g = createPreferenceSliceGraph(scope, dataStore)
-    return com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator(
-        scope, dataStore,
-        g.playbackStore, g.appearanceStore, g.videoPlayerStore, g.downloadsStore,
-        g.engineStore, g.homeDiscoveryStore, g.audioStore, g.audioEffectsStore,
-        g.audioCacheStore, g.libraryStore, g.navigationStore, g.networkOfflineStore,
-        g.notificationStore, g.screensaverStore, g.securityStore,
-        g.subtitleLanguageStore, g.syncPlayCastStore, g.experimentalStore,
-        g.appRuntimeStateStore,
-    )
-}
 
 /**
  * Builds a [UserPreferencesStore] wired to all of its domain-store collaborators,
