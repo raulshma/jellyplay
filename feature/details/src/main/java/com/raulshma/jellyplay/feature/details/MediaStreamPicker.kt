@@ -43,7 +43,6 @@ import com.composables.icons.tabler.outline.WaveSine
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.isLanguageMatch
 import com.raulshma.jellyplay.feature.details.R
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -89,7 +88,7 @@ internal fun MediaInfoSection(
     selectedSubtitleIndex: Int?,
     onAudioSelect: (Int?) -> Unit,
     onSubtitleSelect: (Int?) -> Unit,
-    preferences: UserPreferences,
+    preferences: DetailPreferences,
     horizontalPadding: androidx.compose.ui.unit.Dp = 24.dp,
 ) {
     // Single-pass extraction of (first video, all audio, all subtitle) replaces
