@@ -40,6 +40,7 @@ class SettingsBackupMigrationTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private lateinit var store: UserPreferencesStore
+    private lateinit var graph: PreferenceSliceGraph
     private lateinit var dataStore: DataStore<Preferences>
 
     @Before
@@ -48,6 +49,7 @@ class SettingsBackupMigrationTest {
             val context = ApplicationProvider.getApplicationContext<android.content.Context>()
             dataStore = TestDataStoreProvider.get(context)
             dataStore.edit { it.clear() }
+            graph = createPreferenceSliceGraph(scope, dataStore)
             store = createUserPreferencesStore(scope, dataStore)
             // Drain the Eagerly-cached slice flows so the cleared state is
             // observed before each test writes + reads.
@@ -59,8 +61,8 @@ class SettingsBackupMigrationTest {
     fun `v2 export round-trips every slice back to the same values`() = runTest {
         // Mutate one field per cluster so the round-trip is observable across
         // stores (defaults would round-trip trivially and hide decode bugs).
-        store.setPreferredPlayer(PlayerType.MPV)
-        store.setStreamingQuality(StreamingQuality.FHD_1080P)
+        graph.playbackStore.setPreferredPlayer(PlayerType.MPV)
+        graph.playbackStore.setStreamingQuality(StreamingQuality.FHD_1080P)
         drainAfterWrite()
 
         val snapshot = store.snapshotForBackup()
@@ -80,7 +82,7 @@ class SettingsBackupMigrationTest {
 
     @Test
     fun `v2 export then envelope round-trip decodes back to the same slices`() = runTest {
-        store.setPreferredPlayer(PlayerType.MPV)
+        graph.playbackStore.setPreferredPlayer(PlayerType.MPV)
         drainAfterWrite()
 
         val snapshot = store.snapshotForBackup()

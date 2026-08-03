@@ -16,8 +16,10 @@ import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
@@ -44,16 +46,47 @@ object TestDataStoreProvider {
 }
 
 /**
- * Builds a [UserPreferencesStore] wired to all of its domain-store collaborators,
- * each sharing the same `"user_prefs"` DataStore (AndroidX requires a single
- * delegate per file per process). Keeps tests in sync as new domain stores are
- * added to the facade constructor.
+ * Wired graph of the 18 domain stores + [AppRuntimeStateStore] + the
+ * [PreferenceProjections] read layer, all sharing one `"user_prefs"` DataStore
+ * (AndroidX requires a single delegate per file per process). Tests that need
+ * direct store access (writes) + a projections/aggregator read surface use this
+ * instead of [createUserPreferencesStore], which only returns the facade.
  */
-@Suppress("TestFunctionName")
-fun createUserPreferencesStore(
+data class PreferenceSliceGraph(
+    val playbackStore: PlaybackStore,
+    val appearanceStore: AppearanceStore,
+    val videoPlayerStore: VideoPlayerStore,
+    val downloadsStore: DownloadsStore,
+    val engineStore: PlayerEngineStore,
+    val homeDiscoveryStore: HomeDiscoveryStore,
+    val audioStore: AudioStore,
+    val audioEffectsStore: AudioEffectsStore,
+    val audioCacheStore: AudioCacheStore,
+    val libraryStore: LibraryStore,
+    val navigationStore: NavigationStore,
+    val networkOfflineStore: NetworkOfflineStore,
+    val notificationStore: NotificationStore,
+    val screensaverStore: ScreensaverStore,
+    val securityStore: SecurityStore,
+    val subtitleLanguageStore: SubtitleLanguageStore,
+    val syncPlayCastStore: SyncPlayCastStore,
+    val experimentalStore: ExperimentalStore,
+    val appRuntimeStateStore: AppRuntimeStateStore,
+    val projections: PreferenceProjections,
+)
+
+/**
+ * Builds the [PreferenceSliceGraph]: all 18 domain stores + [AppRuntimeStateStore]
+ * + [PreferenceProjections], each sharing the same `"user_prefs"` DataStore
+ * (AndroidX requires a single delegate per file per process). The single
+ * construction site for the store graph — [createUserPreferencesStore],
+ * [createPreferenceProjections], and [createUserPreferencesAggregator] all
+ * delegate here so a new store is added in exactly one place.
+ */
+fun createPreferenceSliceGraph(
     scope: CoroutineScope,
     dataStore: DataStore<Preferences>,
-): UserPreferencesStore {
+): PreferenceSliceGraph {
     val playbackStore = PlaybackStore(dataStore, scope)
     val appearanceStore = AppearanceStore(dataStore, scope)
     val videoPlayerStore = VideoPlayerStore(dataStore, scope)
@@ -72,8 +105,8 @@ fun createUserPreferencesStore(
     val subtitleLanguageStore = SubtitleLanguageStore(dataStore, scope)
     val syncPlayCastStore = SyncPlayCastStore(dataStore, scope)
     val experimentalStore = ExperimentalStore(dataStore, scope)
-    val appRuntimeStateStore = com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore(dataStore, scope)
-    val projections = com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections(
+    val appRuntimeStateStore = AppRuntimeStateStore(dataStore, scope)
+    val projections = PreferenceProjections(
         scope,
         playbackStore,
         videoPlayerStore,
@@ -93,28 +126,82 @@ fun createUserPreferencesStore(
         securityStore,
         experimentalStore,
     )
+    return PreferenceSliceGraph(
+        playbackStore, appearanceStore, videoPlayerStore, downloadsStore, engineStore,
+        homeDiscoveryStore, audioStore, audioEffectsStore, audioCacheStore, libraryStore,
+        navigationStore, networkOfflineStore, notificationStore, screensaverStore,
+        securityStore, subtitleLanguageStore, syncPlayCastStore, experimentalStore,
+        appRuntimeStateStore, projections,
+    )
+}
+
+/**
+ * Builds a [PreferenceProjections] read layer over a fresh store graph sharing
+ * the given `"user_prefs"` DataStore. For tests that assert projection behavior
+ * without needing the facade.
+ */
+@Suppress("TestFunctionName")
+fun createPreferenceProjections(
+    scope: CoroutineScope,
+    dataStore: DataStore<Preferences>,
+): PreferenceProjections = createPreferenceSliceGraph(scope, dataStore).projections
+
+/**
+ * Builds a [com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator]
+ * over a fresh store graph sharing the given `"user_prefs"` DataStore. For tests
+ * that assert the legacy aggregate is rebuilt from the store slices.
+ */
+@Suppress("TestFunctionName")
+fun createUserPreferencesAggregator(
+    scope: CoroutineScope,
+    dataStore: DataStore<Preferences>,
+): com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator {
+    val g = createPreferenceSliceGraph(scope, dataStore)
+    return com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator(
+        scope, dataStore,
+        g.playbackStore, g.appearanceStore, g.videoPlayerStore, g.downloadsStore,
+        g.engineStore, g.homeDiscoveryStore, g.audioStore, g.audioEffectsStore,
+        g.audioCacheStore, g.libraryStore, g.navigationStore, g.networkOfflineStore,
+        g.notificationStore, g.screensaverStore, g.securityStore,
+        g.subtitleLanguageStore, g.syncPlayCastStore, g.experimentalStore,
+        g.appRuntimeStateStore,
+    )
+}
+
+/**
+ * Builds a [UserPreferencesStore] wired to all of its domain-store collaborators,
+ * each sharing the same `"user_prefs"` DataStore (AndroidX requires a single
+ * delegate per file per process). Keeps tests in sync as new domain stores are
+ * added to the facade constructor.
+ */
+@Suppress("TestFunctionName")
+fun createUserPreferencesStore(
+    scope: CoroutineScope,
+    dataStore: DataStore<Preferences>,
+): UserPreferencesStore {
+    val g = createPreferenceSliceGraph(scope, dataStore)
     return UserPreferencesStore(
         scope,
         dataStore,
-        projections,
-        playbackStore,
-        appearanceStore,
-        videoPlayerStore,
-        downloadsStore,
-        engineStore,
-        homeDiscoveryStore,
-        audioStore,
-        audioEffectsStore,
-        audioCacheStore,
-        libraryStore,
-        navigationStore,
-        networkOfflineStore,
-        notificationStore,
-        screensaverStore,
-        securityStore,
-        subtitleLanguageStore,
-        syncPlayCastStore,
-        experimentalStore,
-        appRuntimeStateStore,
+        g.projections,
+        g.playbackStore,
+        g.appearanceStore,
+        g.videoPlayerStore,
+        g.downloadsStore,
+        g.engineStore,
+        g.homeDiscoveryStore,
+        g.audioStore,
+        g.audioEffectsStore,
+        g.audioCacheStore,
+        g.libraryStore,
+        g.navigationStore,
+        g.networkOfflineStore,
+        g.notificationStore,
+        g.screensaverStore,
+        g.securityStore,
+        g.subtitleLanguageStore,
+        g.syncPlayCastStore,
+        g.experimentalStore,
+        g.appRuntimeStateStore,
     )
 }

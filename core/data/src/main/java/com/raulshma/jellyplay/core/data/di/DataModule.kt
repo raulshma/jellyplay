@@ -39,6 +39,8 @@ import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.UserDataSyncSchedulerImpl
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncSchedulerImpl
+import com.raulshma.jellyplay.core.data.worker.DownloadTransferClient
+import com.raulshma.jellyplay.core.data.worker.OkHttpDownloadTransferClient
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import dagger.Binds
 import dagger.Module
@@ -159,6 +161,13 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPlaybackSyncScheduler(impl: PlaybackSyncSchedulerImpl): PlaybackSyncScheduler
+
+    // OkHttp adapter for the download transfer seam (DownloadTransferRunner /
+    // DownloadWorker depend on the interface; the fake in src/test backs it in
+    // unit tests). @Inject constructor on the impl, interface bound here.
+    @Binds
+    @Singleton
+    abstract fun bindDownloadTransferClient(impl: OkHttpDownloadTransferClient): DownloadTransferClient
 
     @Binds
     @Singleton
