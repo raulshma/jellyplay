@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
@@ -47,7 +46,6 @@ data class StorageBreakdown(
 @HiltViewModel
 class StorageSettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val store: UserPreferencesStore,
     private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
     private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val editor: PreferencesEditor,

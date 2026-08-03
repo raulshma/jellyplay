@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
 import com.raulshma.jellyplay.core.datastore.AudioPlaybackSettingsStore
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.legacy.UserPreferencesAggregator
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -38,7 +37,6 @@ import javax.inject.Inject
 @HiltViewModel
 class AudioPlayerViewModel @Inject constructor(
     private val audioPlaybackManager: AudioPlaybackManager,
-    private val preferencesStore: UserPreferencesStore,
     private val preferencesAggregator: UserPreferencesAggregator,
     private val audioPlaybackSettingsStore: AudioPlaybackSettingsStore,
     private val audioStore: AudioStore,

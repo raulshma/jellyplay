@@ -39,7 +39,6 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // off the cold-start path until Coil's first image request, which only
     // happens once setContent renders an image — well after onCreate returns.
     @Inject lateinit var okHttpClientProvider: javax.inject.Provider<OkHttpClient>
-    @Inject lateinit var userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore
     @Inject lateinit var networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
     // javax.inject.Provider defers Hilt construction of AudioPlaybackManager
     // (and its transitive 14-dep graph: AudioLibraryBrowser,
