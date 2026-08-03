@@ -822,6 +822,8 @@
     <string name="settings_hide_watched_items_subtitle">デフォルトでライブラリから視聴済みメディアをフィルター</string>
     <string name="settings_hide_episode_thumbnails">エピソードのサムネイルを非表示</string>
     <string name="settings_hide_episode_thumbnails_subtitle">ネタバレ防止にエピソードのプレビュー画像を非表示</string>
+    <string name="settings_compact_episode_list">コンパクトなエピソードリスト</string>
+    <string name="settings_compact_episode_list_subtitle">モバイルでは横1列の代わりに縦型リストでエピソードを表示</string>
     <string name="settings_skip_special_episodes">スペシャルエピソードをスキップ</string>
     <string name="settings_skip_special_episodes_subtitle">エピソードリストからスペシャル/ボーナスを除外</string>
     <string name="settings_haptic_feedback">触覚フィードバック</string>

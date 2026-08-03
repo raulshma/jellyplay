@@ -268,6 +268,9 @@ fun MediaDetailScreen(
                         onEpisodesDescendingChange = { descending: Boolean ->
                             viewModel.setEpisodesDescending(descending)
                         },
+                        onCompactEpisodeListChange = { enabled: Boolean ->
+                            viewModel.setCompactEpisodeList(enabled)
+                        },
                         onBack = onBack,
                         onSeerrRequest = { item: SeerrSearchItem -> seerrRequestItem = item },
                         onNavigate = onNavigate,

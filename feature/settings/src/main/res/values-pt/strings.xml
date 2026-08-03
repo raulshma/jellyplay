@@ -824,6 +824,8 @@
     <string name="settings_hide_watched_items_subtitle">Filtrar por defeito a mídia vista das bibliotecas</string>
     <string name="settings_hide_episode_thumbnails">Ocultar miniaturas de episódios</string>
     <string name="settings_hide_episode_thumbnails_subtitle">Ocultar pré-visualizações para evitar spoilers</string>
+    <string name="settings_compact_episode_list">Lista de episódios compacta</string>
+    <string name="settings_compact_episode_list_subtitle">Mostrar episódios como uma lista vertical no telemóvel em vez de uma linha horizontal</string>
     <string name="settings_skip_special_episodes">Saltar episódios especiais</string>
     <string name="settings_skip_special_episodes_subtitle">Excluir especiais/bónus das listas de episódios</string>
     <string name="settings_haptic_feedback">Feedback háptico</string>

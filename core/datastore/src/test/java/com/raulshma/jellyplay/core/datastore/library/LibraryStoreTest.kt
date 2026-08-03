@@ -53,6 +53,7 @@ class LibraryStoreTest {
         assertEquals(true, slice.episodesDescending)
         assertEquals(false, slice.hideEpisodeThumbnails)
         assertEquals(false, slice.skipSpecials)
+        assertEquals(false, slice.compactEpisodeList)
         assertEquals(emptyMap<String, String>(), slice.defaultLibrarySortOrders)
     }
 
@@ -60,6 +61,14 @@ class LibraryStoreTest {
     fun `setLibraryViewMode round-trips`() = runTest {
         store.setLibraryViewMode(LibraryViewMode.LIST)
         assertEquals(LibraryViewMode.LIST, store.library.first().libraryViewMode)
+    }
+
+    @Test
+    fun `setCompactEpisodeList round-trips`() = runTest {
+        store.setCompactEpisodeList(true)
+        assertEquals(true, store.library.first().compactEpisodeList)
+        store.setCompactEpisodeList(false)
+        assertEquals(false, store.library.first().compactEpisodeList)
     }
 
     @Test

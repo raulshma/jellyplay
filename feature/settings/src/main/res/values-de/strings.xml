@@ -824,6 +824,8 @@
     <string name="settings_hide_watched_items_subtitle">Gesehene Medien standardmäßig aus Mediatheken filtern</string>
     <string name="settings_hide_episode_thumbnails">Episoden-Vorschaubilder ausblenden</string>
     <string name="settings_hide_episode_thumbnails_subtitle">Episoden-Vorschaubilder ausblenden, um Spoiler zu vermeiden</string>
+    <string name="settings_compact_episode_list">Kompakte Episodenliste</string>
+    <string name="settings_compact_episode_list_subtitle">Episoden auf dem Smartphone als vertikale Liste statt in einer horizontalen Reihe anzeigen</string>
     <string name="settings_skip_special_episodes">Special-Episoden überspringen</string>
     <string name="settings_skip_special_episodes_subtitle">Specials/Bonus-Episoden aus Episodenlisten ausschließen</string>
     <string name="settings_haptic_feedback">Haptisches Feedback</string>

@@ -95,6 +95,7 @@ data class DetailPreferences(
     val skipSpecials: Boolean = false,
     val hideEpisodeThumbnails: Boolean = false,
     val episodesDescending: Boolean = true,
+    val compactEpisodeList: Boolean = false,
 )
 
 /**
@@ -166,6 +167,7 @@ class DetailViewModel @Inject constructor(
             skipSpecials = library.skipSpecials,
             hideEpisodeThumbnails = library.hideEpisodeThumbnails,
             episodesDescending = library.episodesDescending,
+            compactEpisodeList = library.compactEpisodeList,
         )
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailPreferences())
 
@@ -356,6 +358,15 @@ class DetailViewModel @Inject constructor(
      */
     fun setEpisodesDescending(descending: Boolean) {
         launch { libraryStore.setEpisodesDescending(descending) }
+    }
+
+    /**
+     * Toggles the compact vertical episode list preference (mobile only). Like
+     * [setEpisodesDescending], persisted app-wide so the choice carries across
+     * every series detail screen.
+     */
+    fun setCompactEpisodeList(enabled: Boolean) {
+        launch { libraryStore.setCompactEpisodeList(enabled) }
     }
 
     fun getDownloadFlow(itemId: String): Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =

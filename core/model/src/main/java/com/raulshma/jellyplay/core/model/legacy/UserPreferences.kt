@@ -280,6 +280,7 @@ data class UserPreferences(
     val hideEpisodeThumbnails: Boolean = false,
     val episodesDescending: Boolean = true,
     val skipSpecials: Boolean = false,
+    val compactEpisodeList: Boolean = false,
     val cellularDownloadSizeWarningMb: Int = 0,
     val hapticsEnabled: Boolean = true,
     val dateFormatPreference: DateFormatPreference = DateFormatPreference.SYSTEM,

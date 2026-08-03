@@ -205,6 +205,7 @@ class UserPreferencesStore @Inject constructor(
                 "virtualizer_enabled", "auto_eq_by_genre", "home_hero_enabled", "home_backdrop_enabled",
                 "nav_bar_show_labels", "onboarding_completed", "performance_mode",
                 "newsletter_enabled", "wifi_only_downloads", "monochrome_mode",
+                "compact_episode_list",
             ),
             ints = arrayOf(
                 "max_cache_size_mb", "audio_night_mode_gain", "download_connections",

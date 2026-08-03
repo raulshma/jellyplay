@@ -96,6 +96,7 @@ fun OfflineSeriesScreen(
     val episodes by viewModel.episodes.collectAsStateWithLifecycle(initialValue = emptyMap())
     val totalSizeBytes by viewModel.totalSizeBytes.collectAsStateWithLifecycle(initialValue = 0L)
     val downloadedEpisodeCount by viewModel.downloadedEpisodeCount.collectAsStateWithLifecycle(initialValue = 0)
+    val compactEpisodeList by viewModel.compactEpisodeList.collectAsStateWithLifecycle(initialValue = false)
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
@@ -228,6 +229,8 @@ fun OfflineSeriesScreen(
                                 onEpisodeDelete = { episode -> viewModel.deleteEpisode(episode.id) },
                                 onMarkSeasonPlayed = { seasonId -> viewModel.markSeasonPlayed(seasonId) },
                                 onMarkSeasonUnplayed = { seasonId -> viewModel.markSeasonUnplayed(seasonId) },
+                                compactEpisodeList = compactEpisodeList,
+                                onCompactEpisodeListChange = viewModel::setCompactEpisodeList,
                             )
                         }
                     }

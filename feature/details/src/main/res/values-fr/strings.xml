@@ -49,6 +49,8 @@
     <string name="detail_no_episodes_available">Aucun épisode disponible</string>
     <string name="detail_spoiler">Spoiler</string>
     <string name="detail_watched_badge">Vu</string>
+    <string name="detail_cd_switch_to_list">Passer à la liste d\'épisodes verticale</string>
+    <string name="detail_cd_switch_to_cards">Passer aux cartes d\'épisodes horizontales</string>
     <string name="detail_time_left_format">%1$s restantes</string>
 
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->

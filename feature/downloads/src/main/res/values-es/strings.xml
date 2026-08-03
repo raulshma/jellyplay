@@ -98,6 +98,8 @@
     <string name="downloads_progress">Progreso</string>
     <string name="downloads_watch_status">Estado de visualización</string>
     <string name="downloads_watched">Visto</string>
+    <string name="downloads_cd_switch_to_list">Cambiar a lista de episodios vertical</string>
+    <string name="downloads_cd_switch_to_cards">Cambiar a tarjetas de episodios horizontales</string>
     <string name="downloads_watched_label">Visto</string>
     <string name="downloads_in_progress">En curso</string>
     <string name="downloads_started">Iniciado</string>

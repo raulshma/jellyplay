@@ -824,6 +824,8 @@
     <string name="settings_hide_watched_items_subtitle">默认从媒体库过滤已看媒体</string>
     <string name="settings_hide_episode_thumbnails">隐藏剧集缩略图</string>
     <string name="settings_hide_episode_thumbnails_subtitle">隐藏剧集预览图以避免剧透</string>
+    <string name="settings_compact_episode_list">紧凑剧集列表</string>
+    <string name="settings_compact_episode_list_subtitle">在手机上以垂直列表而非横向一行显示剧集</string>
     <string name="settings_skip_special_episodes">跳过特别剧集</string>
     <string name="settings_skip_special_episodes_subtitle">从剧集列表排除特别篇/福利</string>
     <string name="settings_haptic_feedback">触感反馈</string>

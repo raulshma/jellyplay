@@ -49,6 +49,8 @@
     <string name="detail_no_episodes_available">視聴可能なエピソードはありません</string>
     <string name="detail_spoiler">ネタバレ</string>
     <string name="detail_watched_badge">視聴済み</string>
+    <string name="detail_cd_switch_to_list">縦型エピソードリストに切り替え</string>
+    <string name="detail_cd_switch_to_cards">横型エピソードカードに切り替え</string>
     <string name="detail_time_left_format">残り %1$s</string>
 
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->

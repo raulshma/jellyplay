@@ -822,6 +822,8 @@
     <string name="settings_hide_watched_items_subtitle">라이브러리에서 시청한 미디어 기본 필터</string>
     <string name="settings_hide_episode_thumbnails">에피소드 썸네일 숨기기</string>
     <string name="settings_hide_episode_thumbnails_subtitle">스포일러 방지를 위해 에피소드 미리보기 숨기기</string>
+    <string name="settings_compact_episode_list">간결한 에피소드 목록</string>
+    <string name="settings_compact_episode_list_subtitle">모바일에서 가로 행 대신 세로 목록으로 에피소드 표시</string>
     <string name="settings_skip_special_episodes">스페셜 에피소드 건너뛰기</string>
     <string name="settings_skip_special_episodes_subtitle">에피소드 목록에서 스페셜/보너스 제외</string>
     <string name="settings_haptic_feedback">햅틱 피드백</string>

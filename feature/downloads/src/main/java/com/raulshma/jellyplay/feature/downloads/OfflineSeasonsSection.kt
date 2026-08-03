@@ -5,10 +5,12 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,10 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.DeviceFloppy
-import com.composables.icons.tabler.outline.Eye
-import com.composables.icons.tabler.outline.EyeOff
-import com.composables.icons.tabler.outline.Trash
+import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -89,6 +88,8 @@ internal fun OfflineSeasonsSection(
     onEpisodeDelete: (OfflineMediaItem) -> Unit,
     onMarkSeasonPlayed: (seasonId: String) -> Unit = {},
     onMarkSeasonUnplayed: (seasonId: String) -> Unit = {},
+    compactEpisodeList: Boolean = false,
+    onCompactEpisodeListChange: (Boolean) -> Unit = {},
 ) {
     val initialSeasonIndex = currentSeasonId?.let { id ->
         seasons.indexOfFirst { it.id == id }.coerceAtLeast(0)
@@ -114,14 +115,52 @@ internal fun OfflineSeasonsSection(
         }
     }
 
+    // Compact vertical list is mobile-only — mirrors the online SeasonsSection:
+    // offered (and rendered) solely on compact-width, non-TV form factors.
+    val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
+    val isCompactWidth = com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo.current.windowSizeClass ==
+        com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Compact
+    val useCompactListAvailable = !isTv && isCompactWidth
+    val useCompactList = useCompactListAvailable && compactEpisodeList
+
     Column {
         if (seasons.isNotEmpty()) {
-            Text(
-                text = stringResource(R.string.downloads_seasons),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = contentPad),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = contentPad),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.downloads_seasons),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (useCompactListAvailable) {
+                    val layoutFocusState = rememberTvFocusState(focusedScale = 1.1f)
+                    androidx.compose.material3.Surface(
+                        modifier = Modifier
+                            .clip(ShapeCache.smooth16)
+                            .then(layoutFocusState.focusModifier)
+                            .tvFocusIndicator(layoutFocusState, ShapeCache.smooth16)
+                            .clickable { onCompactEpisodeListChange(!compactEpisodeList) },
+                        color = if (compactEpisodeList) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shape = ShapeCache.smooth16,
+                    ) {
+                        Icon(
+                            imageVector = if (compactEpisodeList) Tabler.Outline.LayoutGrid else Tabler.Outline.List,
+                            contentDescription = stringResource(
+                                if (compactEpisodeList) R.string.downloads_cd_switch_to_cards
+                                else R.string.downloads_cd_switch_to_list
+                            ),
+                            modifier = Modifier.padding(8.dp),
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
             TvFocusableItemRow(
                 items = seasons,
@@ -162,20 +201,43 @@ internal fun OfflineSeasonsSection(
                     )
                 }
             } else {
-                TvFocusableItemRow(
-                    items = seasonEpisodes,
-                    key = { "episode_${it.id}" },
-                    contentPadding = PaddingValues(horizontal = contentPad),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) { _, episode, focusModifier ->
-                    OfflineEpisodeCard(
-                        episode = episode,
-                        isCurrentEpisode = episode.id == currentItemId,
-                        onPlayClick = { onEpisodePlay(episode) },
-                        onDetailClick = { onEpisodeDetail(episode) },
-                        onDelete = { pendingDelete = episode },
-                        modifier = focusModifier,
-                    )
+                if (useCompactList) {
+                    // Plain Column (not lazy): nested inside the screen's
+                    // LazyColumn, so a same-direction nested lazy list is
+                    // disallowed. Season episode counts are small enough that
+                    // composing every row is cheap.
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = contentPad),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        seasonEpisodes.forEach { episode ->
+                            OfflineCompactEpisodeRow(
+                                episode = episode,
+                                isCurrentEpisode = episode.id == currentItemId,
+                                onPlayClick = { onEpisodePlay(episode) },
+                                onDetailClick = { onEpisodeDetail(episode) },
+                                onDelete = { pendingDelete = episode },
+                            )
+                        }
+                    }
+                } else {
+                    TvFocusableItemRow(
+                        items = seasonEpisodes,
+                        key = { "episode_${it.id}" },
+                        contentPadding = PaddingValues(horizontal = contentPad),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) { _, episode, focusModifier ->
+                        OfflineEpisodeCard(
+                            episode = episode,
+                            isCurrentEpisode = episode.id == currentItemId,
+                            onPlayClick = { onEpisodePlay(episode) },
+                            onDetailClick = { onEpisodeDetail(episode) },
+                            onDelete = { pendingDelete = episode },
+                            modifier = focusModifier,
+                        )
+                    }
                 }
             }
         }
