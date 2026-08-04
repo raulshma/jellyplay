@@ -42,6 +42,12 @@
     <string name="auth_error_cleartext">Les connexions HTTP ne sont pas autorisées. Utilisez HTTPS.</string>
     <string name="auth_error_connection_failed">Échec de la connexion au serveur</string>
 
+    <!-- Android 17+ local network permission -->
+    <string name="auth_error_local_network_denied">L\'accès au réseau local est bloqué. Accordez l\'autorisation de réseau local pour atteindre les serveurs sur votre Wi-Fi.</string>
+    <string name="auth_local_network_rationale_title">Accès au réseau local</string>
+    <string name="auth_local_network_rationale_body">JellyPlay a besoin de l\'accès au réseau local pour découvrir et se connecter aux serveurs Jellyfin sur votre Wi-Fi.</string>
+    <string name="auth_local_network_allow">Autoriser l\'accès</string>
+
     <!-- Quick Connect screen -->
     <string name="auth_qc_starting">Démarrage de Quick Connect…</string>
     <string name="auth_qc_enter_code">Saisissez ce code sur un autre appareil</string>

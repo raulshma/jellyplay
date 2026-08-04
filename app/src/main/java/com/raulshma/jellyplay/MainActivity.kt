@@ -74,6 +74,15 @@ class MainActivity : FragmentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { _ -> }
 
+    // Android 17+ blocks local network access (LAN Jellyfin servers + SSDP/DLNA
+    // discovery) unless ACCESS_LOCAL_NETWORK is granted. Requested once on cold
+    // start so returning users — who never see the Add Server screen — still get
+    // prompted. On grant, the self-healing WebSocket/health monitor reconnect on
+    // their own. Mirrors the notification permission launcher above.
+    private val requestLocalNetworkPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -116,6 +125,18 @@ class MainActivity : FragmentActivity() {
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+
+        // Android 17+: request local network access so LAN servers and discovery
+        // work for returning users on cold start. The session restore in
+        // MainViewModel runs concurrently; on denial, connections to LAN hosts
+        // simply fail fast (and recover once the permission is later granted).
+        if (com.raulshma.jellyplay.core.network.LocalNetworkAccess.enforced &&
+            !com.raulshma.jellyplay.core.network.LocalNetworkAccess.isGranted(this)
+        ) {
+            requestLocalNetworkPermissionLauncher.launch(
+                com.raulshma.jellyplay.core.network.LocalNetworkAccess.PERMISSION
+            )
         }
 
         handleIncomingIntent(intent)
