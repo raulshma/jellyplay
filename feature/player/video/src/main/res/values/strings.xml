@@ -227,6 +227,12 @@
     <string name="player_video_listening">Listening…</string>
     <string name="player_video_text_seen">💬 Text seen</string>
     <string name="player_video_watching">Watching…</string>
+    <!-- G10: timestamp + cue-preview subtitle-sync helper -->
+    <string name="player_video_sync_preview_title">Cue preview sync</string>
+    <string name="player_video_sync_preview_hint">Enter a timestamp to see the subtitle line there, then drag the offset to align it with the voice.</string>
+    <string name="player_video_sync_preview_timestamp">Timestamp (mm:ss.mmm)</string>
+    <string name="player_video_sync_preview_use_current">Use current position</string>
+    <string name="player_video_sync_preview_unavailable">Subtitle preview is unavailable for this track (embedded or image-based subtitles can\'t be previewed here).</string>
     <string name="player_video_picture_in_picture">Picture in Picture</string>
     <string name="player_video_play_next">Play Next</string>
     <string name="player_video_turn_on_autoplay">Turn on autoplay</string>

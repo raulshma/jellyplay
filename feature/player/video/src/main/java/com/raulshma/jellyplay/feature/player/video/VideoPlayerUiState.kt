@@ -178,6 +178,12 @@ data class VideoPlayerUiState(
     val seriesId: String? = null,
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
+    /**
+     * Parsed cue list for the active external subtitle track, for the G10
+     * subtitle-sync preview. Null when no external text track is active
+     * (embedded/image subs can't be previewed). Loaded lazily on demand.
+     */
+    val subtitlePreviewCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>? = null,
     val playerError: String? = null,
     /**
      * Structured retryability verdict paired with [playerError], propagated

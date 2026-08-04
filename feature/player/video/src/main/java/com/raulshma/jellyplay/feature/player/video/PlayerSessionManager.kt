@@ -83,6 +83,24 @@ class PlayerSessionManager(
     val engine: MediaEngine? get() = _engine.value
 
     private var lastPlaybackRequest: PlaybackRequest? = null
+
+    /**
+     * The external (side-loaded) subtitle sources for the current session, or
+     * null when no media is loaded. Exposed so features like the subtitle-sync
+     * preview can resolve and parse the active track's bytes. The backing
+     * [PlaybackRequest] is immutable — external subs are replaced wholesale
+     * (see [addExternalSubtitle]).
+     */
+    val currentExternalSubtitles: List<SubtitleSource>?
+        get() = lastPlaybackRequest?.externalSubtitles
+
+    /**
+     * The request headers (auth etc., e.g. Jellyfin `X-Emby-Token`) for the
+     * current session, or null when no media is loaded. Used to authenticate
+     * HTTP-fetched external subtitle bytes (see [SubtitlePreviewRepository]).
+     */
+    val currentPlaybackHeaders: Map<String, String>?
+        get() = lastPlaybackRequest?.headers
     private var lastPlayerType: PlayerType? = null
 
     /**

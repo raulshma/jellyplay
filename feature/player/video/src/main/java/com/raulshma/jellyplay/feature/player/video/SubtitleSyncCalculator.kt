@@ -26,7 +26,9 @@ object SubtitleSyncCalculator {
      *  the "voice heard" button was released.
      * @param textSeenMs wall-clock ms when the "text seen" button was released.
      * @return the delay delta (ms) to apply to the current subtitle delay:
-     *  positive = shift subs later, negative = shift subs earlier.
+     *  positive = shift subs later, negative = shift subs earlier. Returned
+     *  value is in **wall-clock** ms; at non-1.0 playback speed the caller must
+     *  divide by the speed to convert to media-time ms before applying.
      */
     fun computeDelayDelta(voiceHeardMs: Long, textSeenMs: Long): Long =
         voiceHeardMs - textSeenMs

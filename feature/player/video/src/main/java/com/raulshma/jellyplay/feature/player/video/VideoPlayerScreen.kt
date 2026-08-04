@@ -1703,6 +1703,17 @@ fun VideoPlayerScreen(
         }
     }
 
+    // G10: lazily parse the active external subtitle track for the cue-preview
+    // whenever the AV-sync sheet opens; clear on close so a stale cue list from
+    // a prior track doesn't render.
+    LaunchedEffect(currentSheet) {
+        if (currentSheet == PlayerSheet.AVSync) {
+            viewModel.loadActiveSubtitleCues()
+        } else if (uiState.subtitlePreviewCues != null) {
+            viewModel.clearActiveSubtitleCues()
+        }
+    }
+
     LaunchedEffect(showControls, controlsHasFocus, isSeeking, currentSheet, isOverflowMenuOpen, userInteractionCount) {
         if (showControls && !isSeeking && currentSheet == PlayerSheet.None && !isOverflowMenuOpen) {
             if (!isTv && controlsHasFocus) {
@@ -2040,6 +2051,10 @@ private fun PlayerSheetRouter(
                 onAudioDelayChange = { viewModel.setAudioDelay(it) },
                 onSubtitleDelayChange = { viewModel.setSubtitleDelay(it) },
                 onDismiss = dismissSheet,
+                playbackSpeed = uiState.playbackSpeed,
+                activeSubtitleCues = uiState.subtitlePreviewCues,
+                playbackPositionMs = { viewModel.currentPositionMs.value },
+                subtitleDelaySupported = uiState.engineCapabilities.supportsSubtitleDelay,
             )
         }
         is PlayerSheet.Decoder -> {

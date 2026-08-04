@@ -439,6 +439,14 @@ class ExoPlayerEngine(
         // otherwise the plain base factories reproduce the pre-ASS build exactly.
         // withAssMkvSupport takes the extractors factory and the BARE
         // AssSubtitleParserFactory (the concrete type), per its signature.
+        //
+        // KNOWN LIMITATION: because withAssMkvSupport requires the concrete
+        // AssSubtitleParserFactory type, embedded ASS-in-MKV extraction bypasses
+        // the OffsettingSubtitleParserFactory — the subtitle-delay slider has no
+        // effect on embedded MKV ASS tracks in this engine. This is an ass-media
+        // library signature constraint; mpv and libVLC render embedded ASS at the
+        // correct offset via sub-delay/setSpuDelay regardless. Deliberately left
+        // as-is rather than destabilizing the working ASS path.
         val (finalRenderersFactory, msf) = if (assEnabledForSession) {
             val assExtractors = extractorsFactory.withAssMkvSupport(assParserFactory!!, assHandler!!)
             val renderers = AssRenderersFactory(assHandler!!, baseRenderersFactory)
@@ -446,7 +454,13 @@ class ExoPlayerEngine(
                 .setSubtitleParserFactory(offsetFactory)
             renderers to sourceFactory
         } else {
+            // setSubtitleParserFactory on the MediaSourceFactory so that side-
+            // loaded (side-car SubtitleConfiguration) text subs are also parsed
+            // through the offset wrapper. The extractors-level factory set above
+            // only covers embedded text tracks; side-car subs are parsed by the
+            // MSF's own factory, which must be the offset factory too.
             baseRenderersFactory to DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+                .setSubtitleParserFactory(offsetFactory)
         }
 
         // DRM: attach a DrmSessionManager only when the caller supplied one via
@@ -710,6 +724,14 @@ class ExoPlayerEngine(
         // a delay adjustment takes effect for subsequent cues without a media
         // reload. (Previously the offset was snapshotted at prepare() time and
         // the delay slider appeared broken for side-loaded subtitles.)
+        //
+        // KNOWN LIMITATION: Media3 parses a progressive side-car subtitle file
+        // once and caches the cues; parse() is not re-invoked when the delay
+        // changes mid-playback, so cues already loaded keep their original
+        // timestamps until the user seeks (which re-invokes the parser). mpv and
+        // libVLC re-evaluate the delay continuously, so their offset is truly
+        // live. Forcing a re-parse on every delay change risks perf/jank, so the
+        // buffered-cue limitation is accepted; seeking refreshes the offset.
 
         if (oldConfig.audioEffects != newConfig.audioEffects) {
             applyAudioEffects()
@@ -1199,7 +1221,13 @@ class ExoPlayerEngine(
                 )
                 result.add(
                     MediaTrack(
-                        id = "${trackType.name}_${groupIndex}",
+                        // For side-loaded subtitles Media3 propagates the
+                        // MediaItem.SubtitleConfiguration id (== SubtitleSource.id)
+                        // into the track format, so prefer it over the synthetic
+                        // group index — the subtitle-sync preview resolves the
+                        // active external source by that id.
+                        id = format.id?.takeIf { it.isNotBlank() }
+                            ?: "${trackType.name}_${groupIndex}",
                         index = groupIndex,
                         label = TrackLabelFormatter.primary(info),
                         language = format.language,

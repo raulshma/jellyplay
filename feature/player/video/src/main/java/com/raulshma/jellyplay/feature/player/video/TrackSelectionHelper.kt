@@ -252,7 +252,7 @@ internal class TrackSelectionHelper(
         }
 
         val audioOptions = rawAudioTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex, t.badges)
+            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex, t.badges, id = t.id)
         }
         // Upgrade each engine audio track's label/badges with the richer server
         // MediaStream data when a match is found (by stream index, then language
@@ -295,7 +295,7 @@ internal class TrackSelectionHelper(
         }
 
         val engineSubOptions = rawSubTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex, t.badges)
+            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex, t.badges, id = t.id)
         }
         // Same server enrichment as audio — Direct-Play subtitle tracks get
         // their real title/codec/flags from the server MediaStream instead of
