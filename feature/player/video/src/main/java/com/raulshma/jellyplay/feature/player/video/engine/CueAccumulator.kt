@@ -7,6 +7,27 @@ package com.raulshma.jellyplay.feature.player.video.engine
 internal const val MAX_ACCUMULATED_CUES = 500
 
 /**
+ * Per-batch ceiling on the cues folded in by a single [mergeAccumulatedCues]
+ * call, and the threshold for [isPathologicalCueBatch]. A legitimate subtitle
+ * stream surfaces at most a handful of simultaneously-active cues per `onCues`
+ * callback (typical max ~3-4); a malformed text track (e.g. a broken SRT whose
+ * timestamp/index lines parse as simultaneous cues) hands Media3 dozens or
+ * hundreds at one presentation time. The engine uses this threshold to detect
+ * that and auto-disable the offending track before the native `SubtitleView`
+ * lays them all out (the "subtitle wall" that freezes the UI and crashes the
+ * app). 32 is comfortably above any real-world simultaneous-subtitle count.
+ */
+internal const val MAX_INCOMING_CUES_PER_BATCH = 32
+
+/**
+ * True when a single `onCues` batch carries an implausibly large number of
+ * simultaneous cues — the signature of a malformed text subtitle track that
+ * would otherwise be laid out in full by the native renderer. Extracted to a
+ * pure predicate so the detection logic is unit-testable without an engine.
+ */
+internal fun isPathologicalCueBatch(count: Int): Boolean = count > MAX_INCOMING_CUES_PER_BATCH
+
+/**
  * Folds [incoming] (cues from one onCues callback, all sharing a start time)
  * into [existing] — the running accumulated list. ExoPlayer surfaces only the
  * *currently displayed* cue(s) per callback, so the preview is built
@@ -27,8 +48,16 @@ internal fun mergeAccumulatedCues(
     existing: List<TimedCue>,
     incoming: List<TimedCue>,
 ): List<TimedCue> {
-    if (existing.isEmpty()) return incoming.distinctBy { it.text }
-    val newStart = incoming.first().startTimeUs
+    // Defense-in-depth: cap the incoming batch so even a borderline-large
+    // delivery can't blow up the per-tick merge/sort cost. The engine-level
+    // detector disables truly pathological tracks before this is reached.
+    val batched = if (incoming.size > MAX_INCOMING_CUES_PER_BATCH) {
+        incoming.take(MAX_INCOMING_CUES_PER_BATCH)
+    } else {
+        incoming
+    }
+    if (existing.isEmpty()) return batched.distinctBy { it.text }
+    val newStart = batched.first().startTimeUs
     // Close the open-ended span of any existing cue that is still "active"
     // (end == MAX) at the point the new cue begins.
     val closed = existing.map { cue ->
@@ -41,10 +70,10 @@ internal fun mergeAccumulatedCues(
     // Drop an incoming line identical to the last recorded one (ExoPlayer
     // re-emits the active cue on each rendering refresh).
     val lastText = closed.lastOrNull()?.text
-    val fresh = if (lastText != null && incoming.all { it.text.toString() == lastText.toString() }) {
+    val fresh = if (lastText != null && batched.all { it.text.toString() == lastText.toString() }) {
         emptyList()
     } else {
-        incoming.distinctBy { it.text }
+        batched.distinctBy { it.text }
     }
     return (closed + fresh)
         .sortedBy { it.startTimeUs }

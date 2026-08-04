@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -69,5 +70,26 @@ class CueAccumulatorTest {
         assertEquals(MAX_ACCUMULATED_CUES, result.size)
         assertTrue("oldest entry evicted", result.none { it.text == "line 0" })
         assertTrue("newest entry present", result.any { it.text == "new" })
+    }
+
+    @Test
+    fun `isPathologicalCueBatch is false at and under the threshold, true above`() {
+        assertFalse(isPathologicalCueBatch(0))
+        assertFalse(isPathologicalCueBatch(1))
+        assertFalse(isPathologicalCueBatch(MAX_INCOMING_CUES_PER_BATCH))
+        assertTrue(isPathologicalCueBatch(MAX_INCOMING_CUES_PER_BATCH + 1))
+        assertTrue(isPathologicalCueBatch(10_000))
+    }
+
+    @Test
+    fun `incoming batch larger than the cap is truncated by the merge`() {
+        // A pathological onCues delivery (e.g. a malformed SRT whose lines all
+        // parse as simultaneous cues) must not flood the merge/sort. The merge
+        // caps incoming at MAX_INCOMING_CUES_PER_BATCH regardless.
+        val pathological = (0..MAX_INCOMING_CUES_PER_BATCH + 50).map {
+            TimedCue(1_000_000L, Long.MAX_VALUE, "line $it")
+        }
+        val result = mergeAccumulatedCues(emptyList(), pathological)
+        assertEquals(MAX_INCOMING_CUES_PER_BATCH, result.size)
     }
 }

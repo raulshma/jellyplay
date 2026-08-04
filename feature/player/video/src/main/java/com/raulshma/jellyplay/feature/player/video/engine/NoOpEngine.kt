@@ -61,6 +61,7 @@ internal class NoOpEngine : MediaEngine {
     override val durationMs: Long = 0L
     override val positionFlow: Flow<Long> = emptyFlow()
     override val errorFlow: Flow<EngineError> = emptyFlow()
+    override val subtitleEvents: Flow<SubtitleEvent> = emptyFlow()
     override val playbackSpeed: Float = 1f
     override val audioSessionId: Int = -1
 

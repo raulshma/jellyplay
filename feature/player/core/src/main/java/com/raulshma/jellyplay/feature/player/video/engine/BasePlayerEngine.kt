@@ -57,6 +57,9 @@ abstract class BasePlayerEngine : MediaEngine {
     protected val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 1)
     override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
 
+    protected val _subtitleEvents = MutableSharedFlow<SubtitleEvent>(extraBufferCapacity = 1)
+    override val subtitleEvents: Flow<SubtitleEvent> = _subtitleEvents.asSharedFlow()
+
     protected val _bufferedPositionMs = MutableStateFlow(0L)
     override val bufferedPositionMs: StateFlow<Long> = _bufferedPositionMs.asStateFlow()
 
