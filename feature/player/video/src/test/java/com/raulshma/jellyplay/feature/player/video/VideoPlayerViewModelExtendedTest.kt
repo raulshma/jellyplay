@@ -18,7 +18,6 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
@@ -58,7 +57,6 @@ class VideoPlayerViewModelExtendedTest {
 
     private lateinit var viewModel: VideoPlayerViewModel
     private lateinit var itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository
-    private lateinit var preferencesStore: UserPreferencesStore
 
     @Before
     fun setUp() {
@@ -72,7 +70,6 @@ class VideoPlayerViewModelExtendedTest {
         val offlineRepository = mockk<OfflineRepository>(relaxed = true)
         val offlinePlaybackFacade = mockk<OfflinePlaybackFacade>(relaxed = true)
         itemPlaybackPreferenceRepository = mockk(relaxed = true)
-        preferencesStore = mockk(relaxed = true)
         val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         val engineStore = mockk<PlayerEngineStore>(relaxed = true)
         val subtitleStore = mockk<SubtitleLanguageStore>(relaxed = true)
@@ -150,7 +147,6 @@ class VideoPlayerViewModelExtendedTest {
             offlineRepository = offlineRepository,
             offlinePlaybackFacade = offlinePlaybackFacade,
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
-            preferencesStore = preferencesStore,
             aggregateStore = aggregateStore,
             engineStore = engineStore,
             subtitleStore = subtitleStore,

@@ -203,7 +203,7 @@ private fun DelayRow(
         ) {
             if (isTv) {
                 DelayStepper(icon = Tabler.Outline.Minus, description = stringResource(R.string.player_video_av_sync_decrease, label)) {
-                    val newDelay = (delayMs - 100L).coerceIn(-5000L, 5000L)
+                    val newDelay = (delayMs - 100L).coerceIn(-30000L, 30000L)
                     onValueChange(newDelay)
                 }
             }
@@ -211,17 +211,17 @@ private fun DelayRow(
             TvOrTouchSlider(
                 value = delayMs.toFloat(),
                 onValueChange = { onValueChange((it / 50f).roundToLong() * 50) },
-                valueRange = -5000f..5000f,
+                valueRange = -30000f..30000f,
                 modifier = Modifier.weight(1f),
                 isTv = isTv,
-                steps = 199,
+                steps = 1199,
                 dpadStep = 100f,
                 focusRequester = focusRequester,
             )
 
             if (isTv) {
                 DelayStepper(icon = Tabler.Outline.Plus, description = stringResource(R.string.player_video_av_sync_increase, label)) {
-                    val newDelay = (delayMs + 100L).coerceIn(-5000L, 5000L)
+                    val newDelay = (delayMs + 100L).coerceIn(-30000L, 30000L)
                     onValueChange(newDelay)
                 }
             }

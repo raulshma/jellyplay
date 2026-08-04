@@ -33,9 +33,10 @@ object SubtitleSyncCalculator {
 
     /**
      * Convenience: applies the delta to a current delay, clamped to a sane bound
-     * (±[maxAbsMs], default ±60 s) so a stray double-press can't push subs
-     * absurdly far.
+     * (±[maxAbsMs], default ±30 s) so a stray double-press can't push subs
+     * absurdly far. Matches the slider range on AVSyncSheet and
+     * SubtitleStyleControls so a computed delta is always representable.
      */
-    fun applyDelta(currentDelayMs: Long, deltaMs: Long, maxAbsMs: Long = 60_000L): Long =
+    fun applyDelta(currentDelayMs: Long, deltaMs: Long, maxAbsMs: Long = 30_000L): Long =
         (currentDelayMs + deltaMs).coerceIn(-maxAbsMs, maxAbsMs)
 }

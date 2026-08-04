@@ -25,15 +25,15 @@ class SubtitleSyncCalculatorTest {
 
     @Test
     fun `applyDelta clamps to max bound`() {
-        // Current 59s + 5s delta would exceed 60s → clamped.
-        val result = SubtitleSyncCalculator.applyDelta(currentDelayMs = 59_000, deltaMs = 5_000)
-        assertEquals(60_000L, result)
+        // Current 29s + 5s delta would exceed 30s → clamped.
+        val result = SubtitleSyncCalculator.applyDelta(currentDelayMs = 29_000, deltaMs = 5_000)
+        assertEquals(30_000L, result)
     }
 
     @Test
     fun `applyDelta clamps to min bound`() {
-        val result = SubtitleSyncCalculator.applyDelta(currentDelayMs = -59_000, deltaMs = -5_000)
-        assertEquals(-60_000L, result)
+        val result = SubtitleSyncCalculator.applyDelta(currentDelayMs = -29_000, deltaMs = -5_000)
+        assertEquals(-30_000L, result)
     }
 
     @Test

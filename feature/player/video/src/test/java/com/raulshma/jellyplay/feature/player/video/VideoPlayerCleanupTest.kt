@@ -15,7 +15,6 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
@@ -170,7 +169,6 @@ class VideoPlayerCleanupTest {
         val downloadRepository = mockk<DownloadRepository>(relaxed = true)
         val offlineRepository = mockk<OfflineRepository>(relaxed = true)
         val itemPlaybackPreferenceRepository = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
-        val preferencesStore = mockk<UserPreferencesStore>(relaxed = true)
         val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         val engineStore = mockk<PlayerEngineStore>(relaxed = true)
         val subtitleStore = mockk<SubtitleLanguageStore>(relaxed = true)
@@ -249,7 +247,6 @@ class VideoPlayerCleanupTest {
             offlineRepository = offlineRepository,
             offlinePlaybackFacade = mockk(relaxed = true),
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
-            preferencesStore = preferencesStore,
             aggregateStore = aggregateStore,
             engineStore = engineStore,
             subtitleStore = subtitleStore,
