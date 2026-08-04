@@ -43,6 +43,9 @@ class FakeMediaEngine : MediaEngine {
     val tracks = MutableStateFlow<List<MediaTrack>>(emptyList())
     override val availableTracks: StateFlow<List<MediaTrack>> get() = tracks.asStateFlow()
 
+    val currentCuesState = MutableStateFlow<List<TimedCue>>(emptyList())
+    override val currentCues: StateFlow<List<TimedCue>> get() = currentCuesState.asStateFlow()
+
     private val _pollingIntervalMs = MutableStateFlow(0L)
     override val pollingIntervalMs: StateFlow<Long> get() = _pollingIntervalMs.asStateFlow()
     private val _videoStatsEnabled = MutableStateFlow(false)

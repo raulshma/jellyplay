@@ -913,6 +913,25 @@ class VideoPlayerViewModel @Inject constructor(
                                 }
                             } }
                             launch { engine.availableTracks.collect { trackSelectionHelper.updateTracksFromEngine() } }
+                            // G10: accumulate embedded-subtitle cues from the engine
+                            // for the sync preview. Only wins when no external text
+                            // source is active — external gives the full track in
+                            // both offset directions; engine accumulation covers the
+                            // played range only.
+                            launch {
+                                engine.currentCues.collect { engineCues ->
+                                    if (_uiState.value.subtitlePreviewSource != SubtitlePreviewSource.EXTERNAL) {
+                                        _uiState.update { s ->
+                                            val cues = engineCues.takeIf { it.isNotEmpty() }
+                                            if (s.subtitlePreviewCues == cues && cues != null) s
+                                            else s.copy(
+                                                subtitlePreviewCues = cues,
+                                                subtitlePreviewSource = if (cues != null) SubtitlePreviewSource.EMBEDDED else SubtitlePreviewSource.NONE,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             launch {
                                 engine.errorFlow.collect { e ->
                                     // FORCE_DIRECT_PLAY uses "direct play all"
@@ -1775,7 +1794,9 @@ class VideoPlayerViewModel @Inject constructor(
         subtitlePreviewLoadJob = launch {
             val externalSubs = playerSessionManager.currentExternalSubtitles ?: emptyList()
             if (externalSubs.isEmpty()) {
-                _uiState.update { it.copy(subtitlePreviewCues = null) }
+                // No external source: let the engine-accumulated cues (embedded
+                // subs) take over by clearing the external-source precedence.
+                _uiState.update { it.copy(subtitlePreviewCues = null, subtitlePreviewSource = SubtitlePreviewSource.NONE) }
                 return@launch
             }
             val selected = _uiState.value.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }
@@ -1783,14 +1804,19 @@ class VideoPlayerViewModel @Inject constructor(
             if (source == null) {
                 // The selected track is embedded/image or unknown — never guess a
                 // different external track, that would preview the wrong subtitle.
-                _uiState.update { it.copy(subtitlePreviewCues = null) }
+                _uiState.update { it.copy(subtitlePreviewCues = null, subtitlePreviewSource = SubtitlePreviewSource.NONE) }
                 return@launch
             }
             // Auth headers for server-served HTTP subtitle URLs are assembled at
             // load time into the PlaybackRequest; surface them for the fetch.
             val headers = playerSessionManager.currentPlaybackHeaders ?: emptyMap()
             val cues = subtitlePreviewRepository.loadCues(source, headers)
-            _uiState.update { it.copy(subtitlePreviewCues = cues) }
+            _uiState.update {
+                it.copy(
+                    subtitlePreviewCues = cues,
+                    subtitlePreviewSource = if (cues != null) SubtitlePreviewSource.EXTERNAL else SubtitlePreviewSource.NONE,
+                )
+            }
         }
     }
 
@@ -1809,7 +1835,7 @@ class VideoPlayerViewModel @Inject constructor(
         subtitlePreviewLoadJob?.cancel()
         subtitlePreviewLoadJob = null
         subtitlePreviewRepository.clearCache()
-        _uiState.update { it.copy(subtitlePreviewCues = null) }
+        _uiState.update { it.copy(subtitlePreviewCues = null, subtitlePreviewSource = SubtitlePreviewSource.NONE) }
     }
 
     /**

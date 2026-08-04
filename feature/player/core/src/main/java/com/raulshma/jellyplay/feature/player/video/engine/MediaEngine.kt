@@ -301,6 +301,16 @@ interface MediaEngine :
     val bufferedPositionMs: StateFlow<Long>
     val videoStats: StateFlow<EngineVideoStats>
 
+    /**
+     * Accumulated subtitle cues for the active track, for the subtitle-sync
+     * preview. Populated by engines that can surface cue text as it renders
+     * (ExoPlayer via `onCues`); empty for engines with no cue-text API
+     * (libVLC) — see [EngineCapabilities.supportsCues]. These cover only the
+     * played range (no ahead-lookahead); external text subs use the full-track
+     * re-parse path in the player feature for bidirectional offset preview.
+     */
+    val currentCues: StateFlow<List<TimedCue>>
+
     val pollingIntervalMs: StateFlow<Long>
     val videoStatsEnabled: StateFlow<Boolean>
     fun setPollingIntervalMs(ms: Long)
@@ -329,8 +339,9 @@ interface MediaEngine :
     // ── Per-engine subtitle styling applied to the engine's native subtitle
     //    surface (Media3 `SubtitleView` / libass / VLC freetype). Subtitles are
     //    rendered by each engine's own native renderer; there is no in-app
-    //    Compose cue overlay (the previous `currentCues`/`MpvSubtitleOverlay`
-    //    path was reserved and never enabled, and has been removed). ──
+    //    Compose cue overlay. A *data-only* [currentCues] flow is exposed for
+    //    the subtitle-sync preview, but it is not rendered as an overlay — the
+    //    old `MpvSubtitleOverlay` Compose path remains removed. ──
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
 
     // ── Native surface creation and aspect-ratio control. ──

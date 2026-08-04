@@ -71,6 +71,7 @@ internal fun BoxScope.PlayerOverflowMenu(
     supportsDialogueBoost: Boolean,
     supportsNightMode: Boolean,
     supportsAudioDelay: Boolean,
+    supportsSubtitleDelay: Boolean,
     supportsAudioPassthrough: Boolean,
     supportsAudioNormalization: Boolean,
     supportsChannelMixing: Boolean,
@@ -391,7 +392,7 @@ internal fun BoxScope.PlayerOverflowMenu(
                     )
                 }
             }
-            if (supportsAudioDelay) {
+            if (supportsAudioDelay || supportsSubtitleDelay) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Adjustments,
                     label = stringResource(R.string.player_video_av_sync),

@@ -20,6 +20,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.text.Cue
+import androidx.media3.common.text.CueGroup
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -148,6 +150,10 @@ class ExoPlayerEngine(
     // Reflects whether the *currently selected* text track is ASS. Drives the
     // SubtitleView/AssSubtitleView visibility toggle in applySubtitleStyleToView.
     private var activeTrackIsAss: Boolean = false
+    // Cached id of the currently selected text track group, so onTracksChanged
+    // can detect a *subtitle* track switch (vs an audio-only change) and reset
+    // the accumulated cue list rather than mixing cues from two tracks.
+    private var lastSelectedTextTrackId: String? = null
     private var lastFrameW = -1
     private var lastFrameH = -1
     @Volatile
@@ -252,6 +258,18 @@ class ExoPlayerEngine(
 
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
             _availableTracks.value = buildTracks()
+            // Reset the accumulated cue list when the *selected* subtitle track
+            // changes, so cues from a prior track don't bleed into the preview.
+            // An audio-only track change leaves the text selection untouched.
+            val currentTextId = currentSelectedTextTrackId()
+            if (currentTextId != lastSelectedTextTrackId) {
+                lastSelectedTextTrackId = currentTextId
+                _currentCues.value = emptyList()
+            }
+        }
+
+        override fun onCues(cueGroup: CueGroup) {
+            accumulateCues(cueGroup)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -642,6 +660,8 @@ class ExoPlayerEngine(
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
+        _currentCues.value = emptyList()
+        lastSelectedTextTrackId = null
 
         // Drop the libass overlay + handler so the next load() rebuilds them
         // fresh. The AssSubtitleView is a child of the content frame, which was
@@ -1192,6 +1212,38 @@ class ExoPlayerEngine(
         exo.setMediaItem(mediaItem, positionMs)
         exo.prepare()
         if (wasPlaying) exo.play()
+    }
+
+    /**
+     * The id of the currently *selected* text track group, or null when none is
+     * selected. Used by [onTracksChanged] to detect a subtitle track switch and
+     * reset the accumulated cue list. Mirrors the id logic in [buildTracks].
+     */
+    private fun currentSelectedTextTrackId(): String? {
+        val p = player ?: return null
+        return p.currentTracks.groups
+            .firstOrNull { it.type == C.TRACK_TYPE_TEXT && (0 until it.length).any { i -> it.isTrackSelected(i) } }
+            ?.let { group ->
+                group.getTrackFormat(0).id?.takeIf { it.isNotBlank() }
+                    ?: "SUBTITLE_${group.mediaTrackGroup.hashCode()}"
+            }
+    }
+
+    /**
+     * Maps the cues in [cueGroup] to [TimedCue]s and folds them into the
+     * accumulated list via [mergeAccumulatedCues]. ExoPlayer surfaces only the
+     * *currently displayed* cue(s) per callback, so the preview is built
+     * incrementally as subs play — it covers the played range only (no
+     * ahead-lookahead for forward offsets).
+     */
+    private fun accumulateCues(cueGroup: CueGroup) {
+        val posUs = cueGroup.presentationTimeUs
+        val mapped = cueGroup.cues.mapNotNull { cue: Cue ->
+            val text = cue.text
+            if (text.isNullOrBlank()) null else TimedCue(posUs, Long.MAX_VALUE, text)
+        }
+        if (mapped.isEmpty()) return
+        _currentCues.value = mergeAccumulatedCues(_currentCues.value, mapped)
     }
 
     private fun buildTracks(): List<MediaTrack> {

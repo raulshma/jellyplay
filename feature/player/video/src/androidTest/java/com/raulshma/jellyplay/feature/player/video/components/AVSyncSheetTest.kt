@@ -56,7 +56,7 @@ class AVSyncSheetTest {
             }
         }
         composeTestRule.onNodeWithText("Audio Delay").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Subtitle Delay").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cue preview sync").assertIsDisplayed()
     }
 
     @Test
@@ -72,8 +72,8 @@ class AVSyncSheetTest {
                 )
             }
         }
-        // "0.0s" appears on both delay rows and the cue-preview slider label —
-        // assert at least one rendered instance.
+        // "0.0s" appears on the audio delay row and the cue-preview offset
+        // label — assert at least one rendered instance.
         composeTestRule.onAllNodesWithText("0.0s")[0].assertIsDisplayed()
     }
 
@@ -106,8 +106,7 @@ class AVSyncSheetTest {
                 )
             }
         }
-        // "-1.5s" appears on both the subtitle DelayRow and the cue-preview
-        // slider label — assert at least one rendered instance.
+        // "-1.5s" appears on the cue-preview offset label.
         composeTestRule.onAllNodesWithText("-1.5s")[0].assertIsDisplayed()
     }
 
