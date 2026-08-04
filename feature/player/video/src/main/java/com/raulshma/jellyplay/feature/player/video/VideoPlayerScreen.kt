@@ -1706,12 +1706,18 @@ fun VideoPlayerScreen(
 
     // G10: lazily parse the active external subtitle track for the cue-preview
     // whenever the AV-sync sheet opens; clear on close so a stale cue list from
-    // a prior track doesn't render.
+    // a prior track doesn't render. setPreviewSheetVisible gates the embedded-
+    // cue pump (and re-syncs on open) so onCues doesn't churn the UI state while
+    // the preview isn't on screen.
     LaunchedEffect(currentSheet) {
         if (currentSheet == PlayerSheet.AVSync) {
+            viewModel.setPreviewSheetVisible(true)
             viewModel.loadActiveSubtitleCues()
         } else if (uiState.subtitlePreviewCues != null) {
             viewModel.clearActiveSubtitleCues()
+            viewModel.setPreviewSheetVisible(false)
+        } else {
+            viewModel.setPreviewSheetVisible(false)
         }
     }
 

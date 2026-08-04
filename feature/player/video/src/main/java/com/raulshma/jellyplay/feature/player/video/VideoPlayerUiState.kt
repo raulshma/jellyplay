@@ -191,6 +191,14 @@ data class VideoPlayerUiState(
      * the right hint (external = full track; embedded = played range only).
      */
     val subtitlePreviewSource: SubtitlePreviewSource = SubtitlePreviewSource.NONE,
+    /**
+     * Whether the AV-sync sheet (the only consumer of [subtitlePreviewCues]) is
+     * open. The ViewModel uses this to gate pushing embedded-subtitle cues into
+     * `subtitlePreviewCues` — there's no point copying the wide UI state on
+     * every onCues tick when the preview isn't visible. Toggled by the screen
+     * as the sheet opens/dismisses; `loadActiveSubtitleCues` re-syncs on open.
+     */
+    val previewSheetVisible: Boolean = false,
     val playerError: String? = null,
     /**
      * Structured retryability verdict paired with [playerError], propagated

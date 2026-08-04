@@ -66,6 +66,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
+import com.raulshma.jellyplay.feature.player.video.engine.SubtitleEvent
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleMimeMapper
@@ -919,12 +920,25 @@ class VideoPlayerViewModel @Inject constructor(
                             // both offset directions; engine accumulation covers the
                             // played range only.
                             launch {
+                                // ExoPlayer fires onCues several times a second
+                                // and each emission previously copied the wide
+                                // UI state even when the preview wasn't visible.
+                                // StateFlow already conflates to the latest
+                                // value, so the remaining churn is gated out by
+                                // previewSheetVisible: nothing else renders
+                                // subtitlePreviewCues, so copying UI state on
+                                // every tick while the sheet is closed is pure
+                                // overhead. EXTERNAL source is populated on-demand
+                                // by loadActiveSubtitleCues and is exempt.
                                 engine.currentCues.collect { engineCues ->
-                                    if (_uiState.value.subtitlePreviewSource != SubtitlePreviewSource.EXTERNAL) {
-                                        _uiState.update { s ->
-                                            val cues = engineCues.takeIf { it.isNotEmpty() }
-                                            if (s.subtitlePreviewCues == cues && cues != null) s
-                                            else s.copy(
+                                    val s = _uiState.value
+                                    if (s.subtitlePreviewSource != SubtitlePreviewSource.EXTERNAL &&
+                                        s.previewSheetVisible
+                                    ) {
+                                        val cues = engineCues.takeIf { it.isNotEmpty() }
+                                        if (s.subtitlePreviewCues == cues && cues != null) return@collect
+                                        _uiState.update {
+                                            it.copy(
                                                 subtitlePreviewCues = cues,
                                                 subtitlePreviewSource = if (cues != null) SubtitlePreviewSource.EMBEDDED else SubtitlePreviewSource.NONE,
                                             )
@@ -972,6 +986,19 @@ class VideoPlayerViewModel @Inject constructor(
                                                 playerErrorRetryable = e.retryable,
                                                 showPlaybackErrorDialog = true,
                                             )
+                                        }
+                                    }
+                                }
+                            }
+                            launch {
+                                engine.subtitleEvents.collect { event ->
+                                    when (event) {
+                                        SubtitleEvent.MalformedTrackDisabled -> {
+                                            // Engine auto-disabled a malformed text
+                                            // track (the "subtitle wall" guard).
+                                            // Same toast pipeline/styling as the
+                                            // Direct-Play → transcode fallback.
+                                            userMessageBus.info("Subtitles disabled — malformed subtitle track detected")
                                         }
                                     }
                                 }
@@ -1828,6 +1855,26 @@ class VideoPlayerViewModel @Inject constructor(
         val byId = selected.id?.let { id -> externalSubs.firstOrNull { it.id == id } }
         if (byId != null) return byId
         return externalSubs.firstOrNull { it.label == selected.label }
+    }
+
+    /**
+     * Toggles [VideoPlayerUiState.previewSheetVisible]. Called by the screen as
+     * the AV-sync sheet opens/dismisses. On open, immediately re-syncs the
+     * embedded cue preview from the engine's current cue list so the preview
+     * isn't blank until the next onCues tick (the embedded cue pump is gated on
+     * this flag, so without re-syncing the first render after open is stale).
+     */
+    fun setPreviewSheetVisible(visible: Boolean) {
+        _uiState.update { it.copy(previewSheetVisible = visible) }
+        if (visible && _uiState.value.subtitlePreviewSource != SubtitlePreviewSource.EXTERNAL) {
+            val engineCues = playerSessionManager.engine?.currentCues?.value?.takeIf { it.isNotEmpty() }
+            _uiState.update {
+                it.copy(
+                    subtitlePreviewCues = engineCues,
+                    subtitlePreviewSource = if (engineCues != null) SubtitlePreviewSource.EMBEDDED else SubtitlePreviewSource.NONE,
+                )
+            }
+        }
     }
 
     /** Clears the cue preview (e.g. when the active subtitle track changes). */

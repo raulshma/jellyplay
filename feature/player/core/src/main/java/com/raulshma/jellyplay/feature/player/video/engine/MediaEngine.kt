@@ -298,6 +298,14 @@ interface MediaEngine :
      * [EngineError.Unknown] and the retry / switch-engine paths never fired.
      */
     val errorFlow: Flow<EngineError>
+
+    /**
+     * One-shot subtitle events (e.g. a malformed track being auto-disabled).
+     * Hot flow; collectors should treat each value as transient. Engines that
+     * never produce subtitle events expose an empty flow.
+     */
+    val subtitleEvents: Flow<SubtitleEvent>
+
     val bufferedPositionMs: StateFlow<Long>
     val videoStats: StateFlow<EngineVideoStats>
 

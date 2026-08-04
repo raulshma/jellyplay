@@ -154,6 +154,11 @@ class ExoPlayerEngine(
     // can detect a *subtitle* track switch (vs an audio-only change) and reset
     // the accumulated cue list rather than mixing cues from two tracks.
     private var lastSelectedTextTrackId: String? = null
+    // Latched once a malformed text track has been auto-disabled so further
+    // onCues callbacks are ignored until the user selects a different subtitle
+    // track (which clears this in onTracksChanged). Prevents a bad track from
+    // re-triggering the disable / re-enabling itself on the next render tick.
+    private var subtitleTrackAutoDisabled: Boolean = false
     private var lastFrameW = -1
     private var lastFrameH = -1
     @Volatile
@@ -265,6 +270,16 @@ class ExoPlayerEngine(
             if (currentTextId != lastSelectedTextTrackId) {
                 lastSelectedTextTrackId = currentTextId
                 _currentCues.value = emptyList()
+                // Clear the malformed-track latch only when a subtitle track
+                // becomes *selected* (null → non-null). The auto-disable path
+                // sets TRACK_TYPE_TEXT disabled, which itself fires this
+                // callback with the text id going non-null → null; clearing on
+                // that transition would self-clear the guard it just set. Only
+                // a fresh selection (user re-enabling / picking a track, or the
+                // first auto-select on load) should clear the latch.
+                if (currentTextId != null) {
+                    subtitleTrackAutoDisabled = false
+                }
             }
         }
 
@@ -662,6 +677,7 @@ class ExoPlayerEngine(
         _videoStats.value = EngineVideoStats()
         _currentCues.value = emptyList()
         lastSelectedTextTrackId = null
+        subtitleTrackAutoDisabled = false
 
         // Drop the libass overlay + handler so the next load() rebuilds them
         // fresh. The AssSubtitleView is a child of the content frame, which was
@@ -1237,6 +1253,19 @@ class ExoPlayerEngine(
      * ahead-lookahead for forward offsets).
      */
     private fun accumulateCues(cueGroup: CueGroup) {
+        // Malformed-text-track guard: a single onCues batch carrying an
+        // implausibly large number of simultaneous cues is the signature of a
+        // broken SRT/VTT (e.g. timestamp/index lines parsed as simultaneous
+        // cues). Media3 would hand all of them to SubtitleView, which lays
+        // them out every frame — the "subtitle wall" that freezes the UI and
+        // crashes the app. Disable the text track at source and notify.
+        if (isPathologicalCueBatch(cueGroup.cues.size)) {
+            disableTextTrackForMalformedCues()
+            return
+        }
+        // Once disabled, ignore further callbacks until the user selects a
+        // different subtitle track (onTracksChanged clears the latch).
+        if (subtitleTrackAutoDisabled) return
         val posUs = cueGroup.presentationTimeUs
         val mapped = cueGroup.cues.mapNotNull { cue: Cue ->
             val text = cue.text
@@ -1244,6 +1273,29 @@ class ExoPlayerEngine(
         }
         if (mapped.isEmpty()) return
         _currentCues.value = mergeAccumulatedCues(_currentCues.value, mapped)
+    }
+
+    /**
+     * Disables the text renderer (mirroring the `selectTrack(SUBTITLE, -1)`
+     * disable path), clears the accumulated cue list, latches the auto-disable
+     * guard, and emits a [SubtitleEvent.MalformedTrackDisabled] so the UI can
+     * tell the user subs were turned off. Called from [accumulateCues] when a
+     * pathological cue batch is detected. Runs on the player thread (onCues).
+     */
+    private fun disableTextTrackForMalformedCues() {
+        val selector = trackSelector ?: return
+        android.util.Log.w(TAG, "Disabling subtitle track: malformed cue batch detected (${">"}$MAX_INCOMING_CUES_PER_BATCH simultaneous cues)")
+        subtitleTrackAutoDisabled = true
+        _currentCues.value = emptyList()
+        try {
+            val params = selector.buildUponParameters()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            selector.setParameters(params)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Failed to disable malformed subtitle track", e)
+        }
+        _subtitleEvents.tryEmit(SubtitleEvent.MalformedTrackDisabled)
     }
 
     private fun buildTracks(): List<MediaTrack> {
