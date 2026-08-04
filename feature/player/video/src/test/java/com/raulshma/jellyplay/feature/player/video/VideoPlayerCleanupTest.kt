@@ -279,6 +279,7 @@ class VideoPlayerCleanupTest {
             ),
             fontProvider = mockk(relaxed = true),
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
+            subtitlePreviewRepository = mockk(relaxed = true),
         )
 
         // Set some media-specific states to verify they are cleared on release

@@ -56,6 +56,10 @@ fun AVSyncSheet(
     onAudioDelayChange: (Long) -> Unit,
     onSubtitleDelayChange: (Long) -> Unit,
     onDismiss: () -> Unit,
+    playbackSpeed: Float = 1f,
+    activeSubtitleCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>? = null,
+    playbackPositionMs: () -> Long = { 0L },
+    subtitleDelaySupported: Boolean = true,
 ) {
     var audioDelayMs by remember { mutableLongStateOf(currentAudioDelayMs) }
     var subtitleDelayMs by remember { mutableLongStateOf(currentSubtitleDelayMs) }
@@ -109,14 +113,32 @@ fun AVSyncSheet(
             // G6: press-and-hold sync measurer. Hold "Voice heard" the instant a
             // line is spoken, then "Text seen" when its subtitle appears; the gap
             // auto-computes the delay delta (modelled on mpvKt's SubtitleDelayPanel).
+            // The measurer stamps wall-clock ms; at speed != 1.0 the wall-clock gap
+            // differs from media time by the speed factor, so scale the delta back
+            // to media-time ms before applying it to the (media-time) delay.
             SubtitleSyncMeasurer(
                 onDelayComputed = { delta ->
+                    val mediaDelta = if (playbackSpeed > 0f) (delta / playbackSpeed).toLong() else delta
                     val applied = com.raulshma.jellyplay.feature.player.video.SubtitleSyncCalculator
-                        .applyDelta(subtitleDelayMs, delta)
+                        .applyDelta(subtitleDelayMs, mediaDelta)
                     subtitleDelayMs = applied
                     onSubtitleDelayChange(applied)
                 },
             )
+
+            // G10: timestamp + cue-preview sync helper. Shows the subtitle line
+            // active at a chosen timestamp with its previous/next neighbours, and
+            // a live offset slider that recomputes the active cue as it drags.
+            if (subtitleDelaySupported) {
+                Spacer(Modifier.height(20.dp))
+                SubtitleSyncPreview(
+                    positionMs = playbackPositionMs,
+                    currentOffsetMs = subtitleDelayMs,
+                    cues = activeSubtitleCues,
+                    isTv = isTv,
+                    onOffsetChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
+                )
+            }
 
             Spacer(Modifier.height(20.dp))
 
@@ -163,6 +185,20 @@ fun AVSyncSheet(
     }
 }
 
+/**
+ * Formats a delay/offset in ms as a signed seconds label ("0.0s", "+1.5s",
+ * "-0.5s"). Shared by the delay rows and the cue-preview slider so both show
+ * the same label for the same value.
+ */
+internal fun formatDelayLabel(delayMs: Long): String {
+    val delaySec = delayMs / 1000.0
+    return when {
+        delayMs == 0L -> "0.0s"
+        delayMs > 0 -> "+${"%.1f".format(delaySec)}s"
+        else -> "${"%.1f".format(delaySec)}s"
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DelayRow(
@@ -180,12 +216,7 @@ private fun DelayRow(
         )
         Spacer(Modifier.height(8.dp))
 
-        val delaySec = delayMs / 1000.0
-        val valueLabel = when {
-            delayMs == 0L -> "0.0s"
-            delayMs > 0 -> "+${"%.1f".format(delaySec)}s"
-            else -> "${"%.1f".format(delaySec)}s"
-        }
+        val valueLabel = formatDelayLabel(delayMs)
         Text(
             valueLabel,
             style = MaterialTheme.typography.titleMedium.copy(

@@ -26,4 +26,14 @@ data class TrackOption(
      * picker. Mirrors [com.raulshma.jellyplay.feature.player.video.engine.MediaTrack.badges].
      */
     val badges: List<TrackBadge> = emptyList(),
+    /**
+     * The engine track's identifier, when one aligns with a
+     * [com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource.id]
+     * (ExoPlayer propagates the side-loaded subtitle's id into the track
+     * format). Used by the subtitle-sync preview to resolve the active external
+     * source exactly instead of guessing by label. Null for server-origin
+     * (pre-reload) and side-loaded mpv/libVLC tracks — those fall back to label
+     * matching.
+     */
+    val id: String? = null,
 )

@@ -223,10 +223,14 @@ class VideoPlayerViewModel @Inject constructor(
     private val playerEngineFactory: com.raulshma.jellyplay.feature.player.video.engine.PlayerEngineFactory,
     private val fontProvider: FontProvider,
     private val savedStateHandle: SavedStateHandle,
+    private val subtitlePreviewRepository: com.raulshma.jellyplay.feature.player.video.subtitle.SubtitlePreviewRepository,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(VideoPlayerUiState())
     val uiState: StateFlow<VideoPlayerUiState> = _uiState.flow
+
+    /** In-flight subtitle-preview cue load; cancelled on track change / sheet close. */
+    private var subtitlePreviewLoadJob: Job? = null
 
     // --- High-frequency playback streams ---------------------------------------
     // currentPosition / bufferedPosition / videoStats (and duration) update at
@@ -1355,11 +1359,16 @@ class VideoPlayerViewModel @Inject constructor(
             }
             // G9: restore a per-item subtitle-sync delay so a user's correction
             // for a badly-timed track survives a re-watch / resume. Falls back to
-            // the global offset when no per-item value is stored.
+            // the global offset when no per-item value is stored. Push the
+            // resolved delay to the engine immediately — without this the engine
+            // keeps the global offset until the user touches any setting that
+            // triggers a config push, leaving the AV-sync slider display out of
+            // sync with what is actually rendered on resume.
             agg.subtitle.subtitleDelayByItem[itemId]?.let { itemDelay ->
                 val currentStyle = _uiState.value.subtitleStyle
                 if (currentStyle.offsetMs != itemDelay) {
                     _uiState.update { it.copy(subtitleStyle = currentStyle.copy(offsetMs = itemDelay)) }
+                    updateConfigWithUiStateDebounced()
                 }
             }
 
@@ -1532,6 +1541,10 @@ class VideoPlayerViewModel @Inject constructor(
 
     fun selectSubtitleTrack(option: TrackOption) {
         trackSelectionHelper.selectSubtitleTrack(option)
+        // G10: the active subtitle track changed — refresh the cue preview
+        // eagerly so the AV-sync sheet (if open) shows the newly selected
+        // track's cues without a reopen.
+        loadActiveSubtitleCues()
     }
 
     /**
@@ -1745,6 +1758,58 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.sessionState.value.currentItemId?.let { itemId ->
             launch { subtitleStore.setSubtitleDelayForItem(itemId, ms) }
         }
+    }
+
+    /**
+     * G10: loads the parsed cue list for the active external subtitle track so
+     * the AV-sync sheet's cue-preview can render prev/active/next lines. Resolves
+     * the active track by intersecting the selected subtitle [TrackOption] with
+     * the session's [external subtitles][PlayerSessionManager.currentExternalSubtitles]:
+     * exact id match first (ExoPlayer side-loaded tracks carry the source id),
+     * label match as fallback. Clears the preview (null) when the active track
+     * has no parseable external source (embedded/image subs during DIRECT_PLAY).
+     * Cancels any in-flight load so a stale result can't overwrite a newer one.
+     */
+    fun loadActiveSubtitleCues() {
+        subtitlePreviewLoadJob?.cancel()
+        subtitlePreviewLoadJob = launch {
+            val externalSubs = playerSessionManager.currentExternalSubtitles ?: emptyList()
+            if (externalSubs.isEmpty()) {
+                _uiState.update { it.copy(subtitlePreviewCues = null) }
+                return@launch
+            }
+            val selected = _uiState.value.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }
+            val source = resolveActivePreviewSource(externalSubs, selected)
+            if (source == null) {
+                // The selected track is embedded/image or unknown — never guess a
+                // different external track, that would preview the wrong subtitle.
+                _uiState.update { it.copy(subtitlePreviewCues = null) }
+                return@launch
+            }
+            // Auth headers for server-served HTTP subtitle URLs are assembled at
+            // load time into the PlaybackRequest; surface them for the fetch.
+            val headers = playerSessionManager.currentPlaybackHeaders ?: emptyMap()
+            val cues = subtitlePreviewRepository.loadCues(source, headers)
+            _uiState.update { it.copy(subtitlePreviewCues = cues) }
+        }
+    }
+
+    private fun resolveActivePreviewSource(
+        externalSubs: List<SubtitleSource>,
+        selected: TrackOption?,
+    ): SubtitleSource? {
+        if (selected == null) return null
+        val byId = selected.id?.let { id -> externalSubs.firstOrNull { it.id == id } }
+        if (byId != null) return byId
+        return externalSubs.firstOrNull { it.label == selected.label }
+    }
+
+    /** Clears the cue preview (e.g. when the active subtitle track changes). */
+    fun clearActiveSubtitleCues() {
+        subtitlePreviewLoadJob?.cancel()
+        subtitlePreviewLoadJob = null
+        subtitlePreviewRepository.clearCache()
+        _uiState.update { it.copy(subtitlePreviewCues = null) }
     }
 
     /**
