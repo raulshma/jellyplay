@@ -4,6 +4,7 @@ import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import com.raulshma.jellyplay.core.model.ServerInfo
+import com.raulshma.jellyplay.core.network.LocalNetworkAccess
 import com.raulshma.jellyplay.core.network.ServerDiscoveryService
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
@@ -110,7 +111,7 @@ class AddServerViewModel @Inject constructor(
                 onResult(result)
             }.onFailure { throwable ->
                 _uiState.update {
-                    it.copy(connectError = getConnectionErrorMessage(appContext, throwable))
+                    it.copy(connectError = getConnectionErrorMessage(appContext, address.trim(), throwable))
                 }
                 onResult(result)
             }
@@ -133,8 +134,22 @@ private fun getRootCause(throwable: Throwable): Throwable {
     return cause
 }
 
-private fun getConnectionErrorMessage(context: Context, throwable: Throwable): String {
+private fun getConnectionErrorMessage(context: Context, address: String, throwable: Throwable): String {
     val root = getRootCause(throwable)
+    // Android 17+: when local network access is denied, attempts to reach a
+    // LAN host fail as a timeout / connect error / unresolved host. Surface a
+    // single actionable message instead of a cryptic generic failure, but only
+    // when the target is actually local (public hosts are unaffected by the
+    // permission, so blaming it there would be misleading).
+    if (LocalNetworkAccess.enforced &&
+        !LocalNetworkAccess.isGranted(context) &&
+        LocalNetworkAccess.isLocalAddress(address) &&
+        (root is java.net.UnknownHostException ||
+            root is java.net.ConnectException ||
+            root is java.net.SocketTimeoutException)
+    ) {
+        return context.getString(R.string.auth_error_local_network_denied)
+    }
     return when {
         root is java.net.UnknownHostException -> context.getString(R.string.auth_error_resolve_address)
         root is java.net.ConnectException -> context.getString(R.string.auth_error_could_not_connect)
