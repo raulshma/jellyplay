@@ -169,7 +169,7 @@ class LibraryApiClientImpl @Inject constructor(
                                     HomeSectionType.LATEST_MEDIA !in disabledForFolder
                                 if (latest.isNotEmpty() && latestEnabledForFolder) {
                                     val sectionId = "latest_${folder.id}"
-                                    sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest, libraryId = folder.id))
+                                    sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest, libraryId = folder.id, collectionType = folder.collectionType))
                                 }
                             }.onFailure {
                                 // A per-folder Latest Media 403 (e.g. a stale
@@ -412,9 +412,9 @@ class LibraryApiClientImpl @Inject constructor(
         tags: List<String>?,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
         minRating: Float?,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Result<SearchResult> = engine.apiResultWithRetry {
-        val sortByEnum = ItemSortBy.entries
-            .find { it.serialName.equals(sortBy, ignoreCase = true) }
+        val sortByEnums = parseItemSortList(sortBy)
         val sortOrderEnum = SortOrder.entries
             .find { it.serialName.equals(sortOrder, ignoreCase = true) }
             ?: SortOrder.ASCENDING
@@ -428,18 +428,25 @@ class LibraryApiClientImpl @Inject constructor(
                 else -> {}
             }
         }
+        // includeItemTypes / excludeItemTypes: resolve the requested kinds once,
+        // then drop SEASON/EPISODE from the exclude list when they were
+        // explicitly included. Jellyfin would otherwise receive contradictory
+        // include+exclude for the same kind (e.g. section mode for a TV library
+        // includes EPISODE to match /Items/Latest) and return an empty result.
+        val includeKinds = mediaTypes?.mapNotNull { it.toBaseItemKind() }.orEmpty()
+        val excludeKinds = buildList {
+            if (BaseItemKind.SEASON !in includeKinds) add(BaseItemKind.SEASON)
+            if (!kindFilter.includeEpisodes && BaseItemKind.EPISODE !in includeKinds) add(BaseItemKind.EPISODE)
+        }
         val response = engine.requireApi().itemsApi.getItems(
             parentId = parentId?.let { it.toUUID() },
-            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
-            excludeItemTypes = listOf(
-                BaseItemKind.SEASON,
-                BaseItemKind.EPISODE,
-            ),
+            includeItemTypes = includeKinds.takeIf { it.isNotEmpty() },
+            excludeItemTypes = excludeKinds,
             genres = genres,
             years = years,
             studioIds = studioIds?.mapNotNull { it.toUUID() },
             tags = tags,
-            sortBy = listOfNotNull(sortByEnum),
+            sortBy = sortByEnums.takeIf { it.isNotEmpty() },
             sortOrder = listOf(sortOrderEnum),
             startIndex = startIndex,
             limit = limit,
@@ -453,9 +460,25 @@ class LibraryApiClientImpl @Inject constructor(
                 ItemFields.GENRES,
             ),
         ).content
+        val rawItems = if (response.items.isEmpty() && parentId != null && searchTerm.isNullOrBlank()) {
+            runCatching {
+                engine.requireApi().userLibraryApi.getLatestMedia(
+                    parentId = parentId.toUUID(),
+                    limit = if (limit > 0) limit else 50,
+                    fields = listOf(
+                        ItemFields.OVERVIEW,
+                        ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                        ItemFields.GENRES,
+                    ),
+                ).content
+            }.getOrNull() ?: emptyList()
+        } else {
+            response.items
+        }
+        val totalCount = if (response.items.isEmpty() && rawItems.isNotEmpty()) rawItems.size else response.totalRecordCount
         SearchResult(
-            items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
-            totalRecordCount = response.totalRecordCount,
+            items = engine.run { rawItems.map { it.toMediaItem() }.filterByParentalRating() },
+            totalRecordCount = totalCount,
             startIndex = startIndex,
         )
     }

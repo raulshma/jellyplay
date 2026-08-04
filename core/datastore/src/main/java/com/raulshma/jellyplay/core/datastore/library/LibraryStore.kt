@@ -6,11 +6,13 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
+import com.raulshma.jellyplay.core.model.GroupBy
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +58,8 @@ class LibraryStore @Inject constructor(
         val EPISODES_DESCENDING = booleanPreferencesKey("episodes_descending")
         val SKIP_SPECIALS = booleanPreferencesKey("skip_specials")
         val COMPACT_EPISODE_LIST = booleanPreferencesKey("compact_episode_list")
+        val LIBRARY_POSTER_SIZE = floatPreferencesKey("library_poster_size")
+        val LIBRARY_GROUP_BY = stringPreferencesKey("library_group_by")
     }
 
     private var cachedDefaultLibrarySortOrders = ParsedCache<Map<String, String>>(null, emptyMap())
@@ -79,11 +83,17 @@ class LibraryStore @Inject constructor(
         episodesDescending = PreferenceCodec.readBool(prefs, Keys.EPISODES_DESCENDING, "episodes_descending", true),
         skipSpecials = PreferenceCodec.readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
         compactEpisodeList = PreferenceCodec.readBool(prefs, Keys.COMPACT_EPISODE_LIST, "compact_episode_list", false),
+        libraryPosterSize = prefs[Keys.LIBRARY_POSTER_SIZE] ?: DEFAULT_POSTER_SIZE,
+        libraryGroupBy = readGroupBy(prefs),
     )
 
     private fun readLibraryViewMode(prefs: Preferences): LibraryViewMode = try {
         LibraryViewMode.valueOf(prefs[Keys.LIBRARY_VIEW_MODE] ?: LibraryViewMode.GRID.name)
     } catch (_: Exception) { LibraryViewMode.GRID }
+
+    private fun readGroupBy(prefs: Preferences): GroupBy = try {
+        GroupBy.valueOf(prefs[Keys.LIBRARY_GROUP_BY] ?: GroupBy.NONE.name)
+    } catch (_: Exception) { GroupBy.NONE }
 
     private fun readDefaultLibrarySortOrders(prefs: Preferences): Map<String, String> {
         val raw = prefs[Keys.DEFAULT_LIBRARY_SORT_ORDERS]
@@ -169,6 +179,14 @@ class LibraryStore @Inject constructor(
         dataStore.edit { it[Keys.COMPACT_EPISODE_LIST] = enabled }
     }
 
+    suspend fun setLibraryPosterSize(size: Float) {
+        dataStore.edit { it[Keys.LIBRARY_POSTER_SIZE] = size.coerceIn(POSTER_SIZE_MIN, POSTER_SIZE_MAX) }
+    }
+
+    suspend fun setLibraryGroupBy(groupBy: GroupBy) {
+        dataStore.edit { it[Keys.LIBRARY_GROUP_BY] = groupBy.name }
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. These are the
      * library-view/sort/filter + episode keys split out of the legacy
@@ -179,6 +197,7 @@ class LibraryStore @Inject constructor(
         Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES, Keys.LIBRARY_FILTERS,
         Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING, Keys.SKIP_SPECIALS,
         Keys.COMPACT_EPISODE_LIST,
+        Keys.LIBRARY_POSTER_SIZE, Keys.LIBRARY_GROUP_BY,
     )
 
     /**
@@ -192,6 +211,7 @@ class LibraryStore @Inject constructor(
             Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES, Keys.LIBRARY_FILTERS,
             Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING, Keys.SKIP_SPECIALS,
             Keys.COMPACT_EPISODE_LIST,
+            Keys.LIBRARY_POSTER_SIZE, Keys.LIBRARY_GROUP_BY,
         )
         else -> emptyList()
     }
@@ -231,9 +251,20 @@ class LibraryStore @Inject constructor(
             it[Keys.EPISODES_DESCENDING] = slice.episodesDescending
             it[Keys.SKIP_SPECIALS] = slice.skipSpecials
             it[Keys.COMPACT_EPISODE_LIST] = slice.compactEpisodeList
+            it[Keys.LIBRARY_POSTER_SIZE] = slice.libraryPosterSize
+            it[Keys.LIBRARY_GROUP_BY] = slice.libraryGroupBy.name
         }
     }
 }
+
+/**
+ * Poster-size multiplier bounds. 1.0 = the adaptive default cell size; higher =
+ * larger posters (fewer columns), lower = smaller posters (more columns).
+ * Matches the slider range exposed in the Library toolbar.
+ */
+internal const val DEFAULT_POSTER_SIZE = 1.0f
+internal const val POSTER_SIZE_MIN = 0.7f
+internal const val POSTER_SIZE_MAX = 1.4f
 
 /**
  * The library browsing preference slice. Plain data class. Defaults mirror the
@@ -250,4 +281,6 @@ data class LibrarySlice(
     val episodesDescending: Boolean = true,
     val skipSpecials: Boolean = false,
     val compactEpisodeList: Boolean = false,
+    val libraryPosterSize: Float = DEFAULT_POSTER_SIZE,
+    val libraryGroupBy: GroupBy = GroupBy.NONE,
 )

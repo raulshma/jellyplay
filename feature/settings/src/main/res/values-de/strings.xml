@@ -400,6 +400,7 @@
     <string name="settings_library_view_grid">Einträge in einer Rasteransicht anzeigen</string>
     <string name="settings_library_view_list">Einträge in einer Listenansicht anzeigen</string>
     <string name="settings_library_view_thumb">Einträge als Querformat-Vorschaubilder anzeigen</string>
+    <string name="settings_library_view_masonry">Einträge in einem Masonry-Layout anzeigen</string>
     <string name="settings_home_mode">Startmodus</string>
     <string name="settings_home_mode_video">Video-fokussierter Startbildschirm</string>
     <string name="settings_home_mode_music">Musik-fokussierter Startbildschirm</string>

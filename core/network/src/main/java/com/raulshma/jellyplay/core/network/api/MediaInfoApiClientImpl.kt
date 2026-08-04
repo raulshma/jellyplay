@@ -237,13 +237,13 @@ class MediaInfoApiClientImpl @Inject constructor(
     ): Result<Pair<Int, List<MediaItem>>> = engine.apiResultWithRetry {
         val api = engine.requireApi()
         val types = includeItemTypes?.mapNotNull { parseItemKind(it) } ?: emptyList()
-        val sort = parseItemSortBy(sortBy)
+        val sortList = parseItemSortList(sortBy)
         val order = if (sortOrder == "Descending") SortOrder.DESCENDING else SortOrder.ASCENDING
         val response = api.itemsApi.getItems(
             userId = java.util.UUID.fromString(userId),
             isPlayed = isPlayed,
             includeItemTypes = types,
-            sortBy = if (sort != null) listOf(sort) else emptyList(),
+            sortBy = sortList.takeIf { it.isNotEmpty() },
             sortOrder = listOf(order),
             startIndex = startIndex,
             limit = limit,

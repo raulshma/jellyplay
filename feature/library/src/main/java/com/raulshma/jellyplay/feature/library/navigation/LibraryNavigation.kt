@@ -1,7 +1,11 @@
 package com.raulshma.jellyplay.feature.library.navigation
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
+import com.raulshma.jellyplay.core.model.LibrarySectionContext
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.navigatePhotoAware
@@ -25,6 +29,32 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
 
     entry<Route.LibraryBrowse> {
         LibraryScreen(
+            onItemClick = { itemId, mediaType, parentId, itemName ->
+                navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
+            },
+            onSmartPlaylistsClick = { navigator.navigate(Route.SmartPlaylists) },
+            onMoodPlaylistsClick = { navigator.navigate(Route.MoodPlaylists) },
+            onPlaylistsClick = { navigator.navigate(Route.Playlists) },
+        )
+    }
+
+    entry<Route.LibrarySection> { key ->
+        // Decode the route's stringly-typed mediaTypes into the domain enum once,
+        // at the navigation boundary, so the VM only sees the typed context.
+        val sectionContext = remember(key) {
+            LibrarySectionContext(
+                title = key.title,
+                parentId = key.parentId,
+                collectionType = key.collectionType,
+                sortBy = key.sortBy,
+                mediaTypes = key.mediaTypes.mapNotNull { name ->
+                    runCatching { MediaType.valueOf(name) }.getOrNull()
+                },
+            )
+        }
+        LibraryScreen(
+            sectionContext = sectionContext,
+            onBack = { navigator.goBack() },
             onItemClick = { itemId, mediaType, parentId, itemName ->
                 navigator.navigatePhotoAware(itemId, mediaType, parentId, itemName)
             },

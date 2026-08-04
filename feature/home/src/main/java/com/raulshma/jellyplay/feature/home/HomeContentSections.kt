@@ -114,6 +114,8 @@ internal data class HomeContentCallbacks(
     val onConfigureHomeLayout: () -> Unit,
     /** Deep-link into Settings → Configure Libraries (per-library overrides). */
     val onConfigureLibraries: () -> Unit,
+    /** Open the full library screen for a home-section "See All" action. */
+    val onSeeAllClick: (sectionType: HomeSectionType, libraryId: String?, collectionType: String?, title: String) -> Unit = { _, _, _, _ -> },
 )
 
 /**
@@ -381,6 +383,11 @@ internal fun HomeContentList(
                         clippingEnabled = state.experimentalCardClippingEnabled,
                         showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
                         onSectionLongClick = sectionLongClick,
+                        onSeeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
+                            if (section.type == HomeSectionType.RECENTLY_ADDED || section.type == HomeSectionType.LATEST_MEDIA) {
+                                { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
+                            } else null
+                        },
                         seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
                     )
                 }

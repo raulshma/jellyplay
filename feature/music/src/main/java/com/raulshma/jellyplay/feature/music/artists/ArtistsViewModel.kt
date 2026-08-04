@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -14,11 +15,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import javax.inject.Inject
 
-enum class ArtistSortOption(val label: String, val sortBy: String) {
-    NAME("Name", "SortName"),
-    DATE_ADDED("Date Added", "DateCreated"),
-    DATE_PLAYED("Date Played", "DatePlayed"),
-    RANDOM("Random", "Random"),
+enum class ArtistSortOption(val option: SortOption, val label: String) {
+    NAME(SortOption.SORT_NAME, "Name"),
+    DATE_ADDED(SortOption.DATE_ADDED, "Date Added"),
+    DATE_PLAYED(SortOption.DATE_PLAYED, "Date Played"),
+    RANDOM(SortOption.RANDOM, "Random"),
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -36,7 +37,8 @@ class ArtistsViewModel @Inject constructor(
     val artists: Flow<PagingData<MediaItem>> = sortFlow.flatMapLatest { sort ->
         mediaRepository.getMediaItemsPaged(
             mediaTypes = listOf(MediaType.ARTIST),
-            sortBy = sort.sortBy,
+            sortBy = sort.option.apiValue,
+            sortOrder = sort.option.sortOrder,
         )
     }.cachedIn(scope)
 

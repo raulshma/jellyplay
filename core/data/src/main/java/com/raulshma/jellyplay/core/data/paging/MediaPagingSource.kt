@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.paging
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 
@@ -18,6 +19,7 @@ class MediaPagingSource(
     private val tags: List<String>? = null,
     private val playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
     private val minRating: Float? = null,
+    private val kindFilter: ItemKindFilter = ItemKindFilter.TOP_LEVEL,
 ) : PagingSource<Int, MediaItem>() {
 
     override fun getRefreshKey(state: PagingState<Int, MediaItem>): Int? {
@@ -45,6 +47,7 @@ class MediaPagingSource(
                 tags = tags,
                 playedStatus = playedStatus,
                 minRating = minRating,
+                kindFilter = kindFilter,
             )
 
             result.fold(

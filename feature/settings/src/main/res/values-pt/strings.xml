@@ -400,6 +400,7 @@
     <string name="settings_library_view_grid">Mostrar itens em disposição de grelha</string>
     <string name="settings_library_view_list">Mostrar itens em disposição de lista</string>
     <string name="settings_library_view_thumb">Mostrar itens como miniaturas horizontais</string>
+    <string name="settings_library_view_masonry">Mostrar itens em disposição de alvenaria</string>
     <string name="settings_home_mode">Modo do início</string>
     <string name="settings_home_mode_video">Ecrã inicial focado em vídeo</string>
     <string name="settings_home_mode_music">Ecrã inicial focado em música</string>

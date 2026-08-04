@@ -1,11 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,28 +18,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.hasPlaybackPosition
@@ -55,14 +50,18 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
+import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
 import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.WideMediaCard
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.ChevronRight
 
 /**
  * Horizontal scroller for a home media row on touch devices. When [clippingEnabled]
@@ -231,6 +230,7 @@ fun HomeMediaRow(
     clippingEnabled: Boolean = false,
     showEpisodeSeriesBadge: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
+    onSeeAllClick: (() -> Unit)? = null,
     // Resolves a series' poster URL by id — used so episode cards render the
     // show's poster instead of the episode's own primary image (a landscape
     // scene grab). See [EpisodePosterResolver] usage below.
@@ -262,6 +262,7 @@ fun HomeMediaRow(
             title = title,
             contentPad = contentPad,
             onLongClick = onSectionLongClick,
+            onSeeAllClick = onSeeAllClick,
         )
         if (isTv) {
             TvFocusableItemRow(
@@ -282,8 +283,8 @@ fun HomeMediaRow(
                 }
                 val cardImage = rememberEpisodeCardImage(
                     item = item,
-                    imageUrlBuilder = imageUrlBuilder,
-                    fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                    itemImageUrl = remember(item) { imageUrlBuilder(item) },
+                    fallbackImageUrls = fallbackImageUrlBuilder(item),
                     seriesPosterResolver = seriesPosterResolver,
                     showEpisodeSeriesBadge = showEpisodeSeriesBadge,
                 )
@@ -324,8 +325,8 @@ fun HomeMediaRow(
                 }
                 val cardImage = rememberEpisodeCardImage(
                     item = item,
-                    imageUrlBuilder = imageUrlBuilder,
-                    fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+                    itemImageUrl = remember(item) { imageUrlBuilder(item) },
+                    fallbackImageUrls = fallbackImageUrlBuilder(item),
                     seriesPosterResolver = seriesPosterResolver,
                     showEpisodeSeriesBadge = showEpisodeSeriesBadge,
                 )
@@ -351,24 +352,24 @@ fun HomeMediaRow(
 }
 
 /**
- * The row title for a home section. Renders the same heading typography the
- * rows always used, but adds an optional long-press affordance so the user can
- * configure the section (toggle visibility / reorder / open Home Layout
- * settings) directly from home — the same operations available under
- * Settings → Home Screen Layout.
+ * The row title for a home section. Renders the heading typography and:
+ *  - an optional long-press affordance ([onLongClick]) to configure the section
+ *    (toggle visibility / reorder / open Home Layout settings), and
+ *  - an optional "See All" affordance ([onSeeAllClick]) that opens the full
+ *    library screen for that section with pre-applied filters.
  *
- * On touch, a trailing vertical-dots icon signals the affordance only when
- * [onLongClick] is non-null (i.e. for configurable section types). On TV the
- * hint is hidden (D-pad focus is the cue) and the long-press maps to the
- * select-and-hold key. The click handler is a no-op: the title is not a
- * navigation target, we only intercept long-press so the row's own horizontal
- * scroll and item clicks are unaffected.
+ * On touch, the title surface still only intercepts long-press so the row's own
+ * horizontal scroll and item clicks are unaffected; "See All" is a separate
+ * trailing pill so it can be tapped without intercepting the title. On TV the
+ * "See All" pill is focusable (D-pad), and the long-press maps to the
+ * select-and-hold key.
  */
 @Composable
 private fun HomeSectionTitle(
     title: String,
     contentPad: androidx.compose.ui.unit.Dp,
     onLongClick: (() -> Unit)?,
+    onSeeAllClick: (() -> Unit)? = null,
 ) {
     val isTv = LocalTvMode.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -393,78 +394,39 @@ private fun HomeSectionTitle(
             style = if (isTv) MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold)
             else MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
+        if (onSeeAllClick != null) {
+            Spacer(modifier = Modifier.width(12.dp))
+            SeeAllPill(onClick = onSeeAllClick)
+        }
     }
 }
 
 /**
- * Resolved image inputs for a [PosterCard]. See [rememberEpisodeCardImage].
- */
-private data class PosterCardImage(
-    val imageUrl: String,
-    val fallbackUrls: List<String>,
-    val blurHash: String?,
-    val showSeriesBadge: Boolean,
-)
-
-/**
- * Picks the image shown on a poster card in the non-Continue-Watching /
- * non-Next-Up home rows.
- *
- * For episodes the item's own Jellyfin "Primary" image is a landscape scene
- * grab (essentially a still from the episode), which reads as a backdrop in a
- * 2:3 poster slot — Findroid and other clients instead show the parent series'
- * poster. When [item] is an episode with a [MediaItem.seriesId], prefer the
- * series poster resolved via [seriesPosterResolver]; the episode's own primary
- * image is appended as a fallback so a series with no poster still renders the
- * episode still instead of a blank. The episode's primary blurhash is dropped
- * (it describes the landscape still, not the portrait poster we now show).
- *
- * The series-name title + S# E# chip ([PosterCard]'s `showEpisodeSeriesBadge`)
- * is forced on for any episode card, since the poster now identifies the show
- * rather than the episode.
+ * The trailing "See All ›" affordance on a home section title. A compact glass
+ * pill matching the [GlassPill] / GlassFilterChip idiom (shape morph + press
+ * scale + TV focus, via [ExpressiveChipContainer]), with a trailing chevron so
+ * it reads as navigational.
  */
 @Composable
-private fun rememberEpisodeCardImage(
-    item: MediaItem,
-    imageUrlBuilder: (MediaItem) -> String,
-    fallbackImageUrlBuilder: (MediaItem) -> List<String>,
-    seriesPosterResolver: (String) -> String,
-    showEpisodeSeriesBadge: Boolean,
-): PosterCardImage {
-    val itemPrimary = remember(item) { imageUrlBuilder(item) }
-    return remember(item, itemPrimary, seriesPosterResolver, showEpisodeSeriesBadge) {
-        val isEpisode = item.mediaType == MediaType.EPISODE
-        val seriesId = item.seriesId
-        val seriesPoster = if (isEpisode && !seriesId.isNullOrBlank()) {
-            seriesPosterResolver(seriesId)
-        } else ""
-        // Builder-supplied fallbacks (e.g. album art for music) survive in both
-        // paths; for episodes we additionally seed the episode still as the
-        // first fallback so a poster-less series degrades gracefully.
-        val baseFallbacks = fallbackImageUrlBuilder(item)
-        when {
-            isEpisode && seriesPoster.isNotBlank() -> PosterCardImage(
-                imageUrl = seriesPoster,
-                fallbackUrls = if (itemPrimary.isNotBlank()) listOf(itemPrimary) + baseFallbacks else baseFallbacks,
-                blurHash = null,
-                showSeriesBadge = true,
-            )
-            isEpisode -> PosterCardImage(
-                // No series poster available — keep the episode still and still
-                // badge it so the card identifies the show by name.
-                imageUrl = itemPrimary,
-                fallbackUrls = baseFallbacks,
-                blurHash = item.blurHashes.primary,
-                showSeriesBadge = true,
-            )
-            else -> PosterCardImage(
-                imageUrl = itemPrimary,
-                fallbackUrls = baseFallbacks,
-                blurHash = item.blurHashes.primary,
-                showSeriesBadge = showEpisodeSeriesBadge,
-            )
-        }
+private fun SeeAllPill(onClick: () -> Unit) {
+    val isLight = LocalIsLightTheme.current
+    val bgColor = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    ExpressiveChipContainer(
+        onClick = onClick,
+        containerColor = bgColor,
+        contentPadding = PaddingValues(6.dp),
+    ) {
+        Icon(
+            imageVector = Tabler.Outline.ChevronRight,
+            contentDescription = stringResource(com.raulshma.jellyplay.feature.home.R.string.home_see_all),
+            modifier = Modifier.size(18.dp),
+            tint = contentColor,
+        )
     }
 }
 

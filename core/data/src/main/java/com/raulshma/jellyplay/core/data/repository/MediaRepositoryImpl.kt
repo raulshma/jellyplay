@@ -307,6 +307,7 @@ class MediaRepositoryImpl @Inject constructor(
         tags: List<String>?,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
         minRating: Float?,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Result<SearchResult> = apiClient.getMediaItems(
         parentId = parentId,
         mediaTypes = mediaTypes,
@@ -320,6 +321,7 @@ class MediaRepositoryImpl @Inject constructor(
         tags = tags,
         playedStatus = playedStatus,
         minRating = minRating,
+        kindFilter = kindFilter,
     )
 
     // Single-flight dedup for getMediaDetail: the detail screen is reachable
@@ -462,6 +464,7 @@ class MediaRepositoryImpl @Inject constructor(
         tags: List<String>?,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
         minRating: Float?,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Flow<PagingData<MediaItem>> = Pager(
         config = PagingConfig(
             pageSize = PAGE_SIZE,
@@ -481,6 +484,7 @@ class MediaRepositoryImpl @Inject constructor(
                 tags = tags,
                 playedStatus = playedStatus,
                 minRating = minRating,
+                kindFilter = kindFilter,
             )
         },
     ).flow

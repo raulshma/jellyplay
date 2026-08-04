@@ -400,6 +400,7 @@
     <string name="settings_library_view_grid">Afficher les éléments en grille</string>
     <string name="settings_library_view_list">Afficher les éléments en liste</string>
     <string name="settings_library_view_thumb">Afficher les éléments en miniatures paysage</string>
+    <string name="settings_library_view_masonry">Afficher les éléments en disposition en maçonnerie</string>
     <string name="settings_home_mode">Mode d\'accueil</string>
     <string name="settings_home_mode_video">Écran d\'accueil axé sur la vidéo</string>
     <string name="settings_home_mode_music">Écran d\'accueil axé sur la musique</string>

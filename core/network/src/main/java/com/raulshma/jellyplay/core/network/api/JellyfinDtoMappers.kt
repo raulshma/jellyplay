@@ -514,16 +514,29 @@ internal fun parseItemKind(type: String): BaseItemKind? = when (type) {
     else -> null
 }
 
-internal fun parseItemSortBy(sortBy: String): org.jellyfin.sdk.model.api.ItemSortBy? = when (sortBy) {
-    "SortName" -> org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME
-    "DatePlayed" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_PLAYED
-    "DateCreated" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED
-    "PlayCount" -> org.jellyfin.sdk.model.api.ItemSortBy.PLAY_COUNT
-    "Random" -> org.jellyfin.sdk.model.api.ItemSortBy.RANDOM
-    "PremiereDate" -> org.jellyfin.sdk.model.api.ItemSortBy.PREMIERE_DATE
-    "ProductionYear" -> org.jellyfin.sdk.model.api.ItemSortBy.PRODUCTION_YEAR
-    else -> null
+internal fun parseItemSortList(sortBy: String): List<org.jellyfin.sdk.model.api.ItemSortBy> {
+    if (sortBy.isBlank()) return emptyList()
+    return sortBy.split(",").mapNotNull { token ->
+        val trimmed = token.trim()
+        when (trimmed) {
+            "SortName" -> org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME
+            "DatePlayed" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_PLAYED
+            "DateCreated" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED
+            "DateLastContentAdded" -> org.jellyfin.sdk.model.api.ItemSortBy.DATE_LAST_CONTENT_ADDED
+            "PlayCount" -> org.jellyfin.sdk.model.api.ItemSortBy.PLAY_COUNT
+            "Random" -> org.jellyfin.sdk.model.api.ItemSortBy.RANDOM
+            "PremiereDate" -> org.jellyfin.sdk.model.api.ItemSortBy.PREMIERE_DATE
+            "ProductionYear" -> org.jellyfin.sdk.model.api.ItemSortBy.PRODUCTION_YEAR
+            "CommunityRating" -> org.jellyfin.sdk.model.api.ItemSortBy.COMMUNITY_RATING
+            else -> org.jellyfin.sdk.model.api.ItemSortBy.entries.find {
+                it.serialName.equals(trimmed, ignoreCase = true) || it.name.equals(trimmed, ignoreCase = true)
+            }
+        }
+    }
 }
+
+internal fun parseItemSortBy(sortBy: String): org.jellyfin.sdk.model.api.ItemSortBy? =
+    parseItemSortList(sortBy).firstOrNull()
 
 internal fun org.jellyfin.sdk.model.api.UserDto.toManagedUser() = ManagedUser(
     id = id.toString(),

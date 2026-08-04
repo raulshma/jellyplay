@@ -26,11 +26,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,6 +40,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -90,8 +94,8 @@ import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
+import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
@@ -104,10 +108,21 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.model.GroupBy
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
+import com.raulshma.jellyplay.feature.library.components.GroupedLibraryContent
+import com.raulshma.jellyplay.feature.library.components.LibraryFilterChipRow
+import com.raulshma.jellyplay.feature.library.components.LibraryActionChipRow
+import com.raulshma.jellyplay.feature.library.components.FilterSheetKind
+import com.raulshma.jellyplay.feature.library.components.SortFilterSheet
+import com.raulshma.jellyplay.feature.library.components.MediaTypeFilterSheet
+import com.raulshma.jellyplay.feature.library.components.StatusFilterSheet
+import com.raulshma.jellyplay.feature.library.components.GenreFilterSheet
+import com.raulshma.jellyplay.feature.library.components.TagFilterSheet
+import com.raulshma.jellyplay.feature.library.components.YearRangeFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.feature.library.components.ThumbCard
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
@@ -131,6 +146,8 @@ fun LibraryScreen(
     onSmartPlaylistsClick: () -> Unit = {},
     onMoodPlaylistsClick: () -> Unit = {},
     onPlaylistsClick: () -> Unit = {},
+    sectionContext: com.raulshma.jellyplay.core.model.LibrarySectionContext? = null,
+    onBack: (() -> Unit)? = null,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val folders by viewModel.folders.collectAsStateWithLifecycle()
@@ -142,6 +159,16 @@ fun LibraryScreen(
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
+    val sectionTitle by viewModel.title.collectAsStateWithLifecycle()
+    val posterSize by viewModel.posterSize.collectAsStateWithLifecycle()
+    val groupBy by viewModel.groupBy.collectAsStateWithLifecycle()
+
+    // Section mode: configure the VM once with the injected context. Idempotent
+    // (configureSection early-returns on an equal context) so recomposition is
+    // safe. Skipped in tab mode (sectionContext == null).
+    LaunchedEffect(sectionContext) {
+        sectionContext?.let { viewModel.configureSection(it) }
+    }
 
     val pagedItems = viewModel.pagedItems.collectAsLazyPagingItems()
 
@@ -170,6 +197,12 @@ fun LibraryScreen(
         cacheWindow = com.raulshma.jellyplay.core.ui.tv.TvGridCacheWindow,
     )
     val listState = rememberLazyListState()
+    val inSectionMode = sectionContext != null
+    // Which (if any) per-filter sheet is open. Null = none. Hoisted here so the
+    // chips toggle it and the matching sheet renders at the screen root.
+    var openFilterSheet by remember { mutableStateOf<FilterSheetKind?>(null) }
+    var showPosterSizeSheet by remember { mutableStateOf(false) }
+    var showGroupBySheet by remember { mutableStateOf(false) }
     val hasActiveFilters by remember {
         derivedStateOf {
             filters.mediaTypes.isNotEmpty() ||
@@ -177,23 +210,21 @@ fun LibraryScreen(
                 filters.playedStatus != PlayedStatus.ALL
         }
     }
+    val isAnySheetOpen = openFilterSheet != null || showPosterSizeSheet || showGroupBySheet
+    val backHandlerEnabled = showFilters || isAnySheetOpen || (!inSectionMode && hasActiveFilters)
 
-    BackHandler(enabled = showFilters || hasActiveFilters) {
+    BackHandler(enabled = backHandlerEnabled) {
         when {
             showFilters -> viewModel.toggleShowFilters() // closes when open
-            hasActiveFilters -> viewModel.clearFilters()
+            openFilterSheet != null -> openFilterSheet = null
+            showPosterSizeSheet -> showPosterSizeSheet = false
+            showGroupBySheet -> showGroupBySheet = false
+            !inSectionMode && hasActiveFilters -> viewModel.clearFilters()
         }
     }
 
     val backgroundColor = MaterialTheme.colorScheme.background
 
-    val isScrolled by remember {
-        derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 50 }
-    }
-    var toolbarExpanded by remember { mutableStateOf(true) }
-    LaunchedEffect(isScrolled) {
-        toolbarExpanded = !isScrolled
-    }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -208,11 +239,11 @@ fun LibraryScreen(
         bottom = bottomPad,
     )
 
-    val gridCellSize = adaptiveInfo.gridCellSize(isTv)
+    val gridCellSize = adaptiveInfo.gridCellSize(isTv) / posterSize
     // Landscape thumbnails are wider than they are tall (16:9), so the THUMB
     // grid needs a larger min cell width than the poster (2:3) grid to avoid
     // rendering tiny cards. Scaled from the same adaptive baseline.
-    val thumbCellSize = adaptiveInfo.gridCellSize(isTv) * (16f / 9f) * (3f / 4f)
+    val thumbCellSize = adaptiveInfo.gridCellSize(isTv) / posterSize * (16f / 9f) * (3f / 4f)
 
     Box(
         modifier = Modifier
@@ -238,7 +269,7 @@ fun LibraryScreen(
                             )
                         )
                         .statusBarsPadding()
-                        .padding(top = 16.dp),
+                        .padding(top = 4.dp),
                 ) {
                     AnimatedVisibility(
                         visible = true,
@@ -252,75 +283,40 @@ fun LibraryScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 24.dp, end = 16.dp),
+                                .padding(start = if (onBack != null) 8.dp else 24.dp, end = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            if (onBack != null) {
+                                CircleBgBackButton(
+                                    onClick = onBack,
+                                    iconColor = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
                             Text(
-                                text = stringResource(R.string.library_title),
-                                style = MaterialTheme.typography.headlineLarge.copy(
-                                    fontWeight = FontWeight.Bold,
+                                text = sectionTitle ?: stringResource(R.string.library_title),
+                                // Matches MediaDetail's DetailTopBar title treatment
+                                // (titleLarge / SemiBold) rather than the old
+                                // headlineLarge / Bold — keeps the library header
+                                // visually consistent with the detail screen.
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.SemiBold,
                                 ),
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
                             )
                             ErrorAwareStatusIndicator(
                                 status = headerStatus,
                                 errorMessage = error,
-                                modifier = Modifier.padding(start = 12.dp),
+                                modifier = Modifier.padding(start = 8.dp),
                             )
-                            if (isTv) {
-                                Spacer(modifier = Modifier.weight(1f))
-                                val filterFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                                val filterInteractionSource = remember { MutableInteractionSource() }
-                                val isFilterPressed by filterInteractionSource.collectIsPressedAsState()
-                                val filterScale by animateFloatAsState(
-                                    targetValue = if (isFilterPressed) 0.95f else 1f,
-                                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                                    label = "filterPressedScale"
-                                )
-                                val filterShape = ShapeCache.smooth12
-                                val isLight = LocalIsLightTheme.current
-                                val filterBg = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
-                                
-                                Row(
-                                    modifier = Modifier
-                                        .graphicsLayer {
-                                            scaleX = filterScale * filterFocusState.scale
-                                            scaleY = filterScale * filterFocusState.scale
-                                        }
-                                        .clip(filterShape)
-                                        .background(filterBg)
-                                        .then(filterFocusState.focusModifier)
-                                        .tvFocusIndicator(filterFocusState, filterShape)
-                                        .clickable(
-                                            interactionSource = filterInteractionSource,
-                                            indication = null,
-                                            onClick = { viewModel.toggleShowFilters() }
-                                        )
-                                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        Tabler.Outline.Filter,
-                                        contentDescription = stringResource(R.string.library_filters),
-                                        modifier = Modifier.size(18.dp),
-                                        tint = MaterialTheme.colorScheme.onBackground
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.library_filters),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.onBackground,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
-
                     AnimatedVisibility(
-                        visible = folders.size > 1,
+                        visible = !inSectionMode && folders.size > 1,
                         enter = fadeIn(
                             MaterialTheme.motionScheme.defaultEffectsSpec()
                         ) + slideInVertically(
@@ -328,33 +324,69 @@ fun LibraryScreen(
                             initialOffsetY = { 40 },
                         ),
                     ) {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 24.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier
-                                .focusGroup()
-                                .tvFocusRestorer(),
-                        ) {
-                            item {
-                                GlassPill(
-                                    label = stringResource(R.string.library_all),
-                                    selected = selectedFolder == null,
-                                    onClick = { viewModel.selectFolder(null) },
-                                )
-                            }
-                            items(folders.size, key = { folders[it].id }, contentType = { "folder" }) { index ->
-                                val folder = folders[index]
-                                val placementSpec = lazyItemPlacementSpec()
-                                Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                        Column {
+                            Spacer(Modifier.height(8.dp))
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 24.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier
+                                    .focusGroup()
+                                    .tvFocusRestorer(),
+                            ) {
+                                item {
                                     GlassPill(
-                                        label = folder.name,
-                                        selected = selectedFolder?.id == folder.id,
-                                        onClick = { viewModel.selectFolder(folder) },
+                                        label = stringResource(R.string.library_all),
+                                        selected = selectedFolder == null,
+                                        onClick = { viewModel.selectFolder(null) },
                                     )
+                                }
+                                items(folders.size, key = { folders[it].id }, contentType = { "folder" }) { index ->
+                                    val folder = folders[index]
+                                    val placementSpec = lazyItemPlacementSpec()
+                                    Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                                        GlassPill(
+                                            label = folder.name,
+                                            selected = selectedFolder?.id == folder.id,
+                                            onClick = { viewModel.selectFolder(folder) },
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    // Pinned filter chip row. Each chip opens a
+                    // dedicated selection sheet (immediate-apply); "All Filters"
+                    // falls back to the legacy full sheet.
+                    LibraryFilterChipRow(
+                        filters = filters,
+                        genres = genres,
+                        availableTags = tags,
+                        onOpenSheet = { openFilterSheet = it },
+                    )
+
+                    // Labeled action row (View / Size / Group) — replaces the old
+                    // unlabeled floating toolbar. Sits directly under the filter
+                    // chip row so all the screen's controls are grouped and
+                    // discoverable, each carrying an icon + label.
+                    LibraryActionChipRow(
+                        viewMode = viewMode,
+                        groupByLabel = if (groupBy == GroupBy.NONE) {
+                            stringResource(R.string.library_action_group)
+                        } else {
+                            groupByLabel(groupBy)
+                        },
+                        onViewCycle = {
+                            // Cycle GRID → THUMB → LIST → MASONRY → GRID so each
+                            // tap advances to the next layout mode (same order as
+                            // the former floating-toolbar toggle).
+                            viewModel.setViewMode(viewMode.next)
+                        },
+                        onSizeClick = { showPosterSizeSheet = true },
+                        onGroupClick = { showGroupBySheet = true },
+                    )
 
                     AnimatedVisibility(
                         visible = hasActiveFilters,
@@ -529,7 +561,21 @@ fun LibraryScreen(
                                     }
                                 }
                             } else {
-                                when (viewMode) {
+                                if (groupBy != GroupBy.NONE) {
+                                    // Client-side grouped rendering (see GroupedLibraryContent):
+                                    // non-sticky translucent headers per group, recomputed over the
+                                    // loaded snapshot. Skips the TV-focus-managed grid path.
+                                    GroupedLibraryContent(
+                                        pagedItems = pagedItems,
+                                        viewMode = viewMode,
+                                        groupBy = groupBy,
+                                        gridCellSize = gridCellSize,
+                                        spacing = spacing,
+                                        gridPadding = gridPadding,
+                                        onItemClick = onItemClick,
+                                        getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
+                                    )
+                                } else when (viewMode) {
                                     LibraryViewMode.LIST -> {
                                         LazyColumn(
                                             state = listState,
@@ -601,15 +647,17 @@ fun LibraryScreen(
                                                 val itemProgress = item.progressFraction()
                                                 ThumbCard(
                                                     item = item,
-                                                    imageUrl = remember(item.id) {
-                                                        // Prefer the backdrop for landscape cards; fall back
-                                                        // to the poster so items without a backdrop still render.
-                                                        viewModel.getBackdropUrl(item.id)
+                                                    imageUrl = remember(item.id, item.blurHashes.backdrop) {
+                                                        if (item.blurHashes.backdrop != null) {
+                                                            viewModel.getBackdropUrl(item.id)
+                                                        } else {
+                                                            viewModel.getImageUrl(item.id)
+                                                        }
                                                     },
                                                     onClick = memoizedClick,
                                                     showProgress = itemProgress != null && itemProgress > 0f,
                                                     progressPercent = itemProgress ?: 0f,
-                                                    blurHash = item.blurHashes.backdrop,
+                                                    blurHash = item.blurHashes.backdrop ?: item.blurHashes.primary,
                                                     modifier = itemModifier,
                                                 )
                                             }
@@ -640,17 +688,75 @@ fun LibraryScreen(
                                                 } else {
                                                     androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
                                                 }
+                                                // Resolve the episode's parent-series poster (and badge)
+                                                // the same way the home Latest row does, so episodes
+                                                // render as series posters instead of landscape scene
+                                                // grabs. See rememberEpisodeCardImage.
+                                                val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
+                                                    item = item,
+                                                    itemImageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                    seriesPosterResolver = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
+                                                )
                                                 PosterCard(
                                                     item = item,
-                                                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                    imageUrl = cardImage.imageUrl,
+                                                    fallbackUrls = cardImage.fallbackUrls,
                                                     onClick = memoizedClick,
                                                     showProgress = itemProgress != null && itemProgress > 0f,
                                                     progressPercent = itemProgress ?: 0f,
-                                                    blurHash = item.blurHashes.primary,
+                                                    blurHash = cardImage.blurHash,
                                                     sharedElementKey = "poster_${item.id}",
                                                     photoFolderChildImageUrls = photoFolderChildImageUrls,
+                                                    showEpisodeSeriesBadge = cardImage.showSeriesBadge,
                                                     modifier = itemModifier,
                                                 )
+                                            }
+                                        }
+                                    }
+                                    LibraryViewMode.MASONRY -> {
+                                        // Staggered grid — posters keep their own aspect ratio and
+                                        // pack like a masonry wall. Most useful in mixed-type
+                                        // libraries; in a pure poster library it reads like the
+                                        // regular grid (posters are uniform 2:3). Not TV-focus
+                                        // managed (no TvFocusableGrid staggered analogue) so it's a
+                                        // touch-first mode.
+                                        val staggeredState = rememberLazyStaggeredGridState()
+                                        LazyVerticalStaggeredGrid(
+                                            columns = StaggeredGridCells.Adaptive(gridCellSize),
+                                            state = staggeredState,
+                                            contentPadding = gridPadding,
+                                            verticalItemSpacing = spacing,
+                                            horizontalArrangement = Arrangement.spacedBy(spacing),
+                                            modifier = Modifier.fillMaxSize(),
+                                        ) {
+                                            items(
+                                                count = pagedItems.itemCount,
+                                                key = pagedItems.safeItemKey { it.id },
+                                                contentType = { "mediaItem" },
+                                            ) { index ->
+                                                val item = pagedItems[index]
+                                                if (item != null) {
+                                                    val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
+                                                        { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
+                                                    }
+                                                    val itemProgress = item.progressFraction()
+                                                    val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
+                                                        item = item,
+                                                        itemImageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                        seriesPosterResolver = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
+                                                    )
+                                                    PosterCard(
+                                                        item = item,
+                                                        imageUrl = cardImage.imageUrl,
+                                                        fallbackUrls = cardImage.fallbackUrls,
+                                                        onClick = memoizedClick,
+                                                        showProgress = itemProgress != null && itemProgress > 0f,
+                                                        progressPercent = itemProgress ?: 0f,
+                                                        blurHash = cardImage.blurHash,
+                                                        sharedElementKey = "poster_${item.id}",
+                                                        showEpisodeSeriesBadge = cardImage.showSeriesBadge,
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -700,9 +806,13 @@ fun LibraryScreen(
                         )
                     }
 
+                    // Floating toolbar — Smart / Mood / Playlists / Shuffle.
+                    // These are infrequent navigation actions (not view/layout
+                    // controls, which live in the labeled action chip row). Kept
+                    // in the floating toolbar so the app bar stays clean.
                     if (!isTv && pagedItems.itemCount > 0) {
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = toolbarExpanded,
+                            visible = true,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .clearFloatingNav(extraBottom = 0.dp),
@@ -722,7 +832,11 @@ fun LibraryScreen(
                             HorizontalFloatingToolbar(
                                 expanded = true,
                                 modifier = Modifier.padding(horizontal = 24.dp),
-                                colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+                                // standardFloatingToolbarColors() derives from the
+                                // active colorScheme (surface/onSurface) so the
+                                // toolbar matches the app theme rather than the
+                                // high-contrast vibrant variant.
+                                colors = FloatingToolbarDefaults.standardFloatingToolbarColors(),
                                 floatingActionButton = {
                                     FloatingToolbarDefaults.VibrantFloatingActionButton(
                                         onClick = { viewModel.toggleShowFilters() },
@@ -734,32 +848,6 @@ fun LibraryScreen(
                                     }
                                 },
                             ) {
-                                IconButton(
-                                    onClick = {
-                                        // Cycle GRID → THUMB → LIST → GRID so each tap
-                                        // advances to the next layout mode.
-                                        viewModel.setViewMode(
-                                            when (viewMode) {
-                                                LibraryViewMode.GRID -> LibraryViewMode.THUMB
-                                                LibraryViewMode.THUMB -> LibraryViewMode.LIST
-                                                LibraryViewMode.LIST -> LibraryViewMode.GRID
-                                            }
-                                        )
-                                    },
-                                    shapes = IconButtonDefaults.shapes(),
-                                ) {
-                                    // Icon shows the mode a tap will switch *to*.
-                                    val (nextIcon, nextDesc) = when (viewMode) {
-                                        LibraryViewMode.GRID -> Tabler.Outline.Stack2 to R.string.library_thumb_view
-                                        LibraryViewMode.THUMB -> Tabler.Outline.List to R.string.library_list_view
-                                        LibraryViewMode.LIST -> Tabler.Outline.LayoutGrid to R.string.library_grid_view
-                                    }
-                                    Icon(
-                                        nextIcon,
-                                        contentDescription = stringResource(nextDesc),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
                                 IconButton(
                                     onClick = onSmartPlaylistsClick,
                                     shapes = IconButtonDefaults.shapes(),
@@ -857,6 +945,88 @@ fun LibraryScreen(
             },
             onDismiss = { viewModel.toggleShowFilters() },
         )
+    }
+
+    // Per-filter sheets (immediate-apply).
+    when (openFilterSheet) {
+        FilterSheetKind.SORT -> SortFilterSheet(
+            current = filters.sortBy,
+            onApply = { viewModel.updateFilters(filters.copy(sortBy = it)) },
+            onDismiss = { openFilterSheet = null },
+        )
+        FilterSheetKind.TYPE -> MediaTypeFilterSheet(
+            current = filters.mediaTypes,
+            onToggle = { type ->
+                viewModel.updateFilters(filters.copy(mediaTypes = filters.mediaTypes.toggled(type)))
+            },
+            onDismiss = { openFilterSheet = null },
+        )
+        FilterSheetKind.STATUS -> StatusFilterSheet(
+            current = filters.playedStatus,
+            onApply = { viewModel.updateFilters(filters.copy(playedStatus = it)) },
+            onDismiss = { openFilterSheet = null },
+        )
+        FilterSheetKind.GENRES -> GenreFilterSheet(
+            current = filters.genres,
+            genres = genres,
+            onToggle = { genre ->
+                viewModel.updateFilters(filters.copy(genres = filters.genres.toggled(genre)))
+            },
+            onDismiss = { openFilterSheet = null },
+        )
+        FilterSheetKind.TAGS -> TagFilterSheet(
+            current = filters.tags,
+            tags = tags,
+            onToggle = { tag ->
+                viewModel.updateFilters(filters.copy(tags = filters.tags.toggled(tag)))
+            },
+            onDismiss = { openFilterSheet = null },
+        )
+        FilterSheetKind.YEARS -> YearRangeFilterSheet(
+            current = filters.years.toSet(),
+            onApply = { viewModel.updateFilters(filters.copy(years = it.toList())) },
+            onDismiss = { openFilterSheet = null },
+        )
+        FilterSheetKind.ALL -> {
+            openFilterSheet = null
+            viewModel.toggleShowFilters()
+        }
+        null -> {}
+    }
+
+    if (showPosterSizeSheet) {
+        com.raulshma.jellyplay.feature.library.components.FilterSelectionSheet(
+            title = stringResource(R.string.library_poster_size),
+            onDismiss = { showPosterSizeSheet = false },
+        ) {
+            androidx.compose.foundation.layout.Column {
+                androidx.compose.material3.Slider(
+                    value = posterSize,
+                    onValueChange = { viewModel.setPosterSize(it) },
+                    valueRange = 0.7f..1.4f,
+                )
+            }
+        }
+    }
+
+    if (showGroupBySheet) {
+        com.raulshma.jellyplay.feature.library.components.FilterSelectionSheet(
+            title = stringResource(R.string.library_group_by),
+            onDismiss = { showGroupBySheet = false },
+        ) {
+            androidx.compose.foundation.layout.FlowRow {
+                GroupBy.entries.forEach { option ->
+                    com.raulshma.jellyplay.core.ui.components.GlassFilterChip(
+                        label = groupByLabel(option),
+                        selected = option == groupBy,
+                        onClick = {
+                            viewModel.setGroupBy(option)
+                            showGroupBySheet = false
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1042,5 +1212,19 @@ private fun AlphabetJumpRail(
             }
         }
     }
+}
+
+/** Returns a new list with [value] removed if present, appended otherwise. */
+private fun <T> List<T>.toggled(value: T): List<T> =
+    if (value in this) this - value else this + value
+
+/** Display label for a group-by mode. */
+@Composable
+private fun groupByLabel(groupBy: GroupBy): String = when (groupBy) {
+    GroupBy.NONE -> stringResource(R.string.library_group_by_none)
+    GroupBy.NAME -> stringResource(R.string.library_group_by_name)
+    GroupBy.TYPE -> stringResource(R.string.library_group_by_type)
+    GroupBy.GENRE -> stringResource(R.string.library_group_by_genre)
+    GroupBy.YEAR -> stringResource(R.string.library_group_by_year)
 }
 

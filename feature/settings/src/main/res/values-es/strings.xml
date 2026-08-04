@@ -400,6 +400,7 @@
     <string name="settings_library_view_grid">Mostrar los elementos en una cuadrícula</string>
     <string name="settings_library_view_list">Mostrar los elementos en una lista</string>
     <string name="settings_library_view_thumb">Mostrar los elementos como miniaturas apaisadas</string>
+    <string name="settings_library_view_masonry">Mostrar los elementos en una disposición de mampostería</string>
     <string name="settings_home_mode">Modo de inicio</string>
     <string name="settings_home_mode_video">Pantalla de inicio centrada en el vídeo</string>
     <string name="settings_home_mode_music">Pantalla de inicio centrada en la música</string>

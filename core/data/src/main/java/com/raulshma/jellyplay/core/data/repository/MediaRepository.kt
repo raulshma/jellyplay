@@ -48,6 +48,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         tags: List<String>? = null,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
         minRating: Float? = null,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
@@ -96,6 +97,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         tags: List<String>? = null,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
         minRating: Float? = null,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
     ): Flow<PagingData<MediaItem>>
 
     fun searchPaged(
