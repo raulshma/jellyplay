@@ -109,6 +109,9 @@ class MpvPlayerEngine(
     @Volatile private var cachedPositionMs: Long = 0L
     @Volatile private var cachedDurationMs: Long = 0L
     @Volatile private var cachedBufferedPositionMs: Long = 0L
+    // Most recent sub-start (media-time seconds) reported by mpv; pairs with
+    // the next sub-text emission to stamp a TimedCue start. -1 = no current sub.
+    @Volatile private var cachedSubStartSec: Double = -1.0
     // Server-reported total runtime, used as a fallback when the mpv demuxer
     // cannot resolve a duration for HLS/transcoded streams (where `duration`
     // is frequently 0/partial). Set from PlaybackRequest in load().
@@ -206,6 +209,7 @@ class MpvPlayerEngine(
             override fun eventProperty(property: String, value: Double) {
                 when (property) {
                     "duration" -> cachedDurationMs = (value * 1000L).toLong().coerceAtLeast(0L)
+                    "sub-start" -> cachedSubStartSec = value
                     "demuxer-cache-duration" -> {
                         // demuxer-cache-duration is relative to the current
                         // position; the ticker folds it into a downstream
@@ -242,7 +246,14 @@ class MpvPlayerEngine(
             override fun eventProperty(property: String, value: String) {
                 if (property == "sid" || property == "aid") {
                     Log.d(TAG, "MPV $property changed to ${redactSensitive(value)}")
+                    if (property == "sid") {
+                        // Subtitle track switch: reset accumulated cues so lines
+                        // from the prior track don't bleed into the preview.
+                        _currentCues.value = emptyList()
+                    }
                     refreshTracks("property:$property")
+                } else if (property == "sub-text") {
+                    accumulateMpvSubText(value)
                 }
             }
             override fun eventProperty(property: String, value: MPVNode) {
@@ -481,6 +492,11 @@ class MpvPlayerEngine(
             mpv.observeProperty("aid", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("track-list", MPV.mpvFormat.MPV_FORMAT_NODE)
             mpv.observeProperty("sub-visibility", MPV.mpvFormat.MPV_FORMAT_FLAG)
+            // G10: subtitle-sync preview for embedded subs. sub-text fires on
+            // each displayed-line change; sub-start gives its media-time start.
+            // Both together let us accumulate a TimedCue list as subs play.
+            mpv.observeProperty("sub-text", MPV.mpvFormat.MPV_FORMAT_STRING)
+            mpv.observeProperty("sub-start", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             assignAudioSessionId(mpv)
         }
 
@@ -549,6 +565,8 @@ class MpvPlayerEngine(
         cachedPositionMs = request.startPositionMs
         cachedDurationMs = 0L
         cachedBufferedPositionMs = 0L
+        cachedSubStartSec = -1.0
+        _currentCues.value = emptyList()
         Log.d(
             TAG,
             "MPV load requested: uri=${redactSensitive(request.uri)}, start=${request.startPositionMs}ms, " +
@@ -613,9 +631,11 @@ class MpvPlayerEngine(
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
+        _currentCues.value = emptyList()
         cachedPositionMs = 0L
         cachedDurationMs = 0L
         cachedBufferedPositionMs = 0L
+        cachedSubStartSec = -1.0
         serverDurationMs = 0L
         // Recreate the scope so a re-used engine stays usable without waiting
         // for the next load(). A cancelled scope silently swallows new
@@ -1037,6 +1057,24 @@ class MpvPlayerEngine(
 
     override val currentPositionMs: Long
         get() = cachedPositionMs
+
+    /**
+     * G10: folds a newly-displayed subtitle line (mpv `sub-text`) into the
+     * accumulated cue list via [mergeAccumulatedCues], so the subtitle-sync
+     * preview can render prev/active/next for embedded subs without re-fetching
+     * bytes. The start time comes from mpv's `sub-start` (cached on each
+     * `sub-start` emission); when mpv hasn't reported one yet we fall back to
+     * the current playback position. mpv fires `sub-text` only on a line
+     * *change*, and may emit an empty string when the line clears — ignored.
+     * Covers the played range only (no ahead-lookahead for forward offsets).
+     */
+    private fun accumulateMpvSubText(text: String) {
+        if (text.isBlank()) return
+        val startSec = if (cachedSubStartSec >= 0) cachedSubStartSec else cachedPositionMs / 1000.0
+        val startUs = (startSec * 1_000_000L).toLong()
+        val incoming = listOf(TimedCue(startUs, Long.MAX_VALUE, text))
+        _currentCues.value = mergeAccumulatedCues(_currentCues.value, incoming)
+    }
 
     override val durationMs: Long
         get() {

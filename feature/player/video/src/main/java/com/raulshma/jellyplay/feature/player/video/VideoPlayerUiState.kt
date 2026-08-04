@@ -179,11 +179,18 @@ data class VideoPlayerUiState(
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
     /**
-     * Parsed cue list for the active external subtitle track, for the G10
-     * subtitle-sync preview. Null when no external text track is active
-     * (embedded/image subs can't be previewed). Loaded lazily on demand.
+     * Parsed cue list for the active subtitle track, for the G10 subtitle-sync
+     * preview. Sourced from either an external text track (full track, all
+     * engines, bidirectional) or, as a fallback for embedded subs, the engine's
+     * live `currentCues` accumulation (played range only). Null when neither
+     * source has cues (image subs, unsupported engines).
      */
     val subtitlePreviewCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>? = null,
+    /**
+     * Which source populated [subtitlePreviewCues], so the preview UI can show
+     * the right hint (external = full track; embedded = played range only).
+     */
+    val subtitlePreviewSource: SubtitlePreviewSource = SubtitlePreviewSource.NONE,
     val playerError: String? = null,
     /**
      * Structured retryability verdict paired with [playerError], propagated
@@ -463,4 +470,15 @@ data class VideoPlayerUiState(
 
     val videoFrameRate: Float?
         get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.realFrameRate
+}
+
+/**
+ * Origin of the subtitle-sync preview's cue list. [EXTERNAL] is the full parsed
+ * track (bidirectional offset preview); [EMBEDDED] is the engine's live
+ * accumulation (played range only); [NONE] means no cues are available.
+ */
+enum class SubtitlePreviewSource {
+    NONE,
+    EXTERNAL,
+    EMBEDDED,
 }

@@ -51,6 +51,9 @@ abstract class BasePlayerEngine : MediaEngine {
     protected val _availableTracks = MutableStateFlow<List<MediaTrack>>(emptyList())
     override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
 
+    protected val _currentCues = MutableStateFlow<List<TimedCue>>(emptyList())
+    override val currentCues: StateFlow<List<TimedCue>> = _currentCues.asStateFlow()
+
     protected val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 1)
     override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
 

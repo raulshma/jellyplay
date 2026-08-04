@@ -7,12 +7,12 @@ import androidx.media3.extractor.text.CuesWithTiming
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleParser
 
-@UnstableApi
-data class TimedCue(
-    val startTimeUs: Long,
-    val endTimeUs: Long,
-    val text: CharSequence,
-)
+// Source-compatibility alias: TimedCue's canonical home moved to
+// `:feature:player:core` (engine package) so MediaEngine can expose it as
+// `currentCues`. Existing imports of `subtitle.TimedCue` keep compiling.
+// (@UnstableApi is not applicable to typealiases; the underlying class is
+// already annotated, and @OptIn propagates through the alias.)
+typealias TimedCue = com.raulshma.jellyplay.feature.player.video.engine.TimedCue
 
 /**
  * The active subtitle cue at a position, bracketed by its immediate neighbours.

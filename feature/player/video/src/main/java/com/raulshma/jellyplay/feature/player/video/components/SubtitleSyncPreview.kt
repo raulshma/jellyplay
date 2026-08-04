@@ -1,13 +1,16 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
@@ -25,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -34,10 +38,13 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ClockPlay
+import com.composables.icons.tabler.outline.Minus
+import com.composables.icons.tabler.outline.Plus
 import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleParserHelper
 import com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue
+import com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource
 import androidx.compose.ui.res.stringResource
 import kotlin.math.roundToLong
 
@@ -64,8 +71,11 @@ internal fun SubtitleSyncPreview(
     positionMs: () -> Long,
     currentOffsetMs: Long,
     cues: List<TimedCue>?,
+    source: SubtitlePreviewSource,
     isTv: Boolean,
+    focusRequester: FocusRequester?,
     onOffsetChange: (Long) -> Unit,
+    onReset: () -> Unit,
 ) {
     // Local slider value, initialised from the persisted offset. Keyed on
     // currentOffsetMs so an external change (DelayRow drag, measurer result,
@@ -82,9 +92,26 @@ internal fun SubtitleSyncPreview(
 
     val positionUs = remember(timestampText) { parseTimestampMs(timestampText) * 1000L }
 
-    val context = remember(cues, positionUs, offsetMs) {
+    val context = remember(cues, positionUs, offsetMs, source) {
         if (cues.isNullOrEmpty()) null
-        else SubtitleParserHelper.findAdjacentCues(cues, positionUs, offsetMs * 1000L)
+        else {
+            val resolved = SubtitleParserHelper.findAdjacentCues(cues, positionUs, offsetMs * 1000L)
+            // For embedded (accumulated) cues, the timestamp/offset often lands
+            // past the last accumulated line (only the played range is known) or
+            // in a gap. Rather than show an empty active row, fall back to the
+            // most recent accumulated cue as the active line so the user always
+            // sees something they can sync against.
+            if (source == SubtitlePreviewSource.EMBEDDED && resolved.active == null && cues.isNotEmpty()) {
+                val lastIndex = cues.lastIndex
+                resolved.copy(
+                    previous = cues.getOrNull(lastIndex - 1),
+                    active = cues.getOrNull(lastIndex),
+                    next = null,
+                )
+            } else {
+                resolved
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -147,28 +174,98 @@ internal fun SubtitleSyncPreview(
                 active = context.active,
                 next = context.next,
             )
+            // For embedded subs the cue list is accumulated from playback only,
+            // so the cue stack covers just the played range (no ahead-lookahead
+            // for forward offsets). Surface that constraint whenever embedded
+            // subs are previewed — the active-line fallback above guarantees a
+            // non-null active row, so this can't gate on `active == null`.
+            if (source == SubtitlePreviewSource.EMBEDDED) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    stringResource(R.string.player_video_sync_preview_embedded_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
 
         // Offset slider — live-recomputes the active cue above as it drags.
-        Text(
-            stringResource(R.string.player_video_subtitle_offset, formatDelayLabel(offsetMs)),
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-        )
-        Spacer(Modifier.height(4.dp))
-        TvOrTouchSlider(
-            value = offsetMs.toFloat(),
-            onValueChange = { offsetMs = (it / 50f).roundToLong() * 50 },
-            onValueChangeFinished = { onOffsetChange(offsetMs) },
-            valueRange = -30000f..30000f,
-            modifier = Modifier.fillMaxWidth().testTag("preview_offset_slider"),
-            isTv = isTv,
-            steps = 1199,
-            dpadStep = 100f,
-        )
+        // Flanked by ±50 ms fine-tune steppers (TV shows them always; touch
+        // shows them too so a precise nudge is possible without dragging). A
+        // reset chip zeroes the offset and persists it via onReset.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            DelayStepper(
+                icon = Tabler.Outline.Minus,
+                description = stringResource(R.string.player_video_av_sync_decrease, offsetStepLabel),
+                onClick = {
+                    offsetMs = (offsetMs - OFFSET_STEP_MS).coerceIn(OFFSET_MIN_MS, OFFSET_MAX_MS)
+                    onOffsetChange(offsetMs)
+                },
+            )
+            TvOrTouchSlider(
+                value = offsetMs.toFloat(),
+                onValueChange = { offsetMs = (it / 50f).roundToLong() * 50 },
+                onValueChangeFinished = { onOffsetChange(offsetMs) },
+                valueRange = OFFSET_MIN_MS.toFloat()..OFFSET_MAX_MS.toFloat(),
+                modifier = Modifier.weight(1f).testTag("preview_offset_slider"),
+                isTv = isTv,
+                steps = 1199,
+                dpadStep = 100f,
+                focusRequester = focusRequester,
+            )
+            DelayStepper(
+                icon = Tabler.Outline.Plus,
+                description = stringResource(R.string.player_video_av_sync_increase, offsetStepLabel),
+                onClick = {
+                    offsetMs = (offsetMs + OFFSET_STEP_MS).coerceIn(OFFSET_MIN_MS, OFFSET_MAX_MS)
+                    onOffsetChange(offsetMs)
+                },
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                stringResource(R.string.player_video_subtitle_offset, formatDelayLabel(offsetMs)),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                modifier = Modifier.weight(1f),
+            )
+            if (offsetMs != 0L) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                        .clickable {
+                            offsetMs = 0L
+                            onReset()
+                        }
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        stringResource(R.string.player_video_sync_preview_reset),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
     }
 }
+
+private const val OFFSET_STEP_MS = 50L
+private const val OFFSET_MIN_MS = -30000L
+private const val OFFSET_MAX_MS = 30000L
+private const val offsetStepLabel = "subtitle offset"
 
 /**
  * Renders the previous (↑, dimmed) / active (highlighted) / next (↓, dimmed)

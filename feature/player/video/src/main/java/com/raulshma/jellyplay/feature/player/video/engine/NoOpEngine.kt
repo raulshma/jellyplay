@@ -49,6 +49,8 @@ internal class NoOpEngine : MediaEngine {
     private val _availableTracks = MutableStateFlow(emptyList<MediaTrack>())
     override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
 
+    override val currentCues: StateFlow<List<TimedCue>> = MutableStateFlow(emptyList())
+
     private val _pollingIntervalMs = MutableStateFlow(0L)
     override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
 

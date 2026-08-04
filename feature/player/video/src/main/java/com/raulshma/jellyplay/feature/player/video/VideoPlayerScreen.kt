@@ -1535,6 +1535,7 @@ fun VideoPlayerScreen(
                 supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
                 supportsNightMode = uiState.engineCapabilities.supportsNightMode,
                 supportsAudioDelay = uiState.engineCapabilities.supportsAudioDelay,
+                supportsSubtitleDelay = uiState.engineCapabilities.supportsSubtitleDelay,
                 supportsAudioPassthrough = uiState.engineCapabilities.supportsAudioPassthrough,
                 hasEpisodes = hasEpisodes,
                 episodeBrowserEnabled = episodeBrowserEnabled,
@@ -2051,9 +2052,10 @@ private fun PlayerSheetRouter(
                 onAudioDelayChange = { viewModel.setAudioDelay(it) },
                 onSubtitleDelayChange = { viewModel.setSubtitleDelay(it) },
                 onDismiss = dismissSheet,
-                playbackSpeed = uiState.playbackSpeed,
                 activeSubtitleCues = uiState.subtitlePreviewCues,
+                subtitlePreviewSource = uiState.subtitlePreviewSource,
                 playbackPositionMs = { viewModel.currentPositionMs.value },
+                audioDelaySupported = uiState.engineCapabilities.supportsAudioDelay,
                 subtitleDelaySupported = uiState.engineCapabilities.supportsSubtitleDelay,
             )
         }
