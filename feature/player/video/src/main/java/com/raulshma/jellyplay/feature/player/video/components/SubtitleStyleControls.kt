@@ -545,10 +545,10 @@ fun SubtitleStyleControls(
                 value = offsetMs.toFloat(),
                 onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
                 onValueChangeFinished = { onStyleChange(currentStyle.copy(offsetMs = offsetMs)) },
-                valueRange = -10000f..10000f,
+                valueRange = -30000f..30000f,
                 modifier = Modifier.fillMaxWidth(),
                 isTv = isTv,
-                steps = 199,
+                steps = 599,
                 dpadStep = 500f,
             )
         }
