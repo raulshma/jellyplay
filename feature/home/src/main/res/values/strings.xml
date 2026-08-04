@@ -28,6 +28,7 @@
     <string name="home_search">Search</string>
     <string name="home_clear_search">Clear search</string>
     <string name="home_search_placeholder">Search movies, shows, music…</string>
+    <string name="home_see_all">See All</string>
 
     <!-- Home floating action button menu. -->
     <string name="home_close_menu">Close menu</string>

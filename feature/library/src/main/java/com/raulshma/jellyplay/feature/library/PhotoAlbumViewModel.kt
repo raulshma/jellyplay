@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -14,10 +15,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import javax.inject.Inject
 
-enum class PhotoSortOption(val displayName: String, val apiValue: String) {
-    DATE_ADDED("Recently Added", "DateCreated,SortName"),
-    NAME("Name", "SortName"),
-    DATE_TAKEN("Date Taken", "PremiereDate,SortName"),
+enum class PhotoSortOption(val option: SortOption, val displayName: String) {
+    DATE_ADDED(SortOption.DATE_ADDED, "Recently Added"),
+    NAME(SortOption.SORT_NAME, "Name"),
+    DATE_TAKEN(SortOption.PREMIERE_DATE, "Date Taken"),
 }
 
 @HiltViewModel
@@ -43,7 +44,8 @@ class PhotoAlbumViewModel @Inject constructor(
         mediaRepository.getMediaItemsPaged(
             parentId = parentId,
             mediaTypes = listOf(MediaType.PHOTO),
-            sortBy = sort.apiValue,
+            sortBy = sort.option.apiValue,
+            sortOrder = sort.option.sortOrder,
         )
     }.cachedIn(scope)
 

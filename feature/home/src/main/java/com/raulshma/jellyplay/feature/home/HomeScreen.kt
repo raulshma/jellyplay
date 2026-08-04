@@ -102,6 +102,11 @@ data class HomeCallbacks(
      *  overrides). Reached from the inline section-config sheet when a
      *  per-library (LATEST_MEDIA) row is being configured. */
     val onConfigureLibraries: () -> Unit = {},
+    /** Open the full library screen for a home-section "See All" action.
+     *  Carries the section [HomeSectionType], the optional per-library id (non-null
+     *  only for LATEST_MEDIA), the optional per-library [collectionType] (used to
+     *  reproduce the home row's leaf item type + sort), and the resolved title. */
+    val onSeeAllClick: (sectionType: HomeSectionType, libraryId: String?, collectionType: String?, title: String) -> Unit = { _, _, _, _ -> },
 )
 
 @Composable
@@ -413,6 +418,7 @@ private fun MainHomeContent(
                                 onConfigureSection = onConfigureSection,
                                 onConfigureHomeLayout = onConfigureHomeLayout,
                                 onConfigureLibraries = onConfigureLibraries,
+                                onSeeAllClick = remember(callbacks) { { type, libraryId, collectionType, title -> callbacks.onSeeAllClick(type, libraryId, collectionType, title) } },
                             ),
                             listState = listState,
                             density = density,

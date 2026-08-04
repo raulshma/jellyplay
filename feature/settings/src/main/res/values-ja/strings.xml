@@ -400,6 +400,7 @@
     <string name="settings_library_view_grid">アイテムをグリッドで表示</string>
     <string name="settings_library_view_list">アイテムをリストで表示</string>
     <string name="settings_library_view_thumb">アイテムを横長のサムネイルで表示</string>
+    <string name="settings_library_view_masonry">アイテムをメイソンリーレイアウトで表示</string>
     <string name="settings_home_mode">ホームモード</string>
     <string name="settings_home_mode_video">動画重視のホーム画面</string>
     <string name="settings_home_mode_music">音楽重視のホーム画面</string>

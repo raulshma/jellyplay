@@ -46,6 +46,15 @@ interface LibraryApiClient {
         tags: List<String>? = null,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
         minRating: Float? = null,
+        /**
+         * Controls which nested media kinds the query excludes. Library browsing
+         * uses the default (seasons and episodes both excluded). Section mode
+         * ("See All" from a home Latest row) passes [com.raulshma.jellyplay.core.model.ItemKindFilter.LEAF_ITEMS]
+         * so the result matches what the home `/Items/Latest` row showed —
+         * episodes included — while seasons are still excluded so season cards
+         * don't leak in.
+         */
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>

@@ -18,11 +18,36 @@
     <string name="library_list_view">List view</string>
     <string name="library_grid_view">Grid view</string>
     <string name="library_thumb_view">Thumbnail view</string>
+    <string name="library_masonry_view">Masonry view</string>
     <string name="library_smart_playlists">Smart Playlists</string>
     <string name="library_mood_playlists">Mood Playlists</string>
     <string name="library_playlists">Playlists</string>
     <string name="library_shuffle">Shuffle</string>
     <string name="library_jump_to_letter">Jump to letter</string>
+    <string name="library_see_all">See All</string>
+    <string name="library_back">Back</string>
+
+    <!-- Filter chip row -->
+    <string name="library_all_filters">All Filters</string>
+    <string name="library_sort">Sort</string>
+    <string name="library_type">Type</string>
+    <string name="library_any">Any</string>
+
+    <!-- Group by -->
+    <string name="library_group_by">Group by</string>
+    <string name="library_group_by_none">None</string>
+    <string name="library_group_by_name">Name</string>
+    <string name="library_group_by_type">Type</string>
+    <string name="library_group_by_genre">Genre</string>
+    <string name="library_group_by_year">Year</string>
+
+    <!-- Poster size -->
+    <string name="library_poster_size">Poster size</string>
+
+    <!-- Action chip row (labeled toolbar replacements) -->
+    <string name="library_action_view">View</string>
+    <string name="library_action_size">Size</string>
+    <string name="library_action_group">Group</string>
 
     <!-- LibraryFilterSheet -->
     <string name="library_reset">Reset</string>

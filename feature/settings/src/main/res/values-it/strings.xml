@@ -400,6 +400,7 @@
     <string name="settings_library_view_grid">Mostra gli elementi in una griglia</string>
     <string name="settings_library_view_list">Mostra gli elementi in un elenco</string>
     <string name="settings_library_view_thumb">Mostra gli elementi come miniature in paesaggio</string>
+    <string name="settings_library_view_masonry">Mostra gli elementi in una disposizione a muratura</string>
     <string name="settings_home_mode">Modalità home</string>
     <string name="settings_home_mode_video">Schermata home orientata ai video</string>
     <string name="settings_home_mode_music">Schermata home orientata alla musica</string>

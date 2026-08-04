@@ -400,6 +400,7 @@
     <string name="settings_library_view_grid">以网格布局显示项目</string>
     <string name="settings_library_view_list">以列表布局显示项目</string>
     <string name="settings_library_view_thumb">以横向缩略图显示项目</string>
+    <string name="settings_library_view_masonry">以瀑布流布局显示项目</string>
     <string name="settings_home_mode">主页模式</string>
     <string name="settings_home_mode_video">以视频为主的主页</string>
     <string name="settings_home_mode_music">以音乐为主的主页</string>
