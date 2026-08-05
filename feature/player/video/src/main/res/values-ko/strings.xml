@@ -230,6 +230,7 @@
     <string name="player_video_duration">지속 시간</string>
     <string name="player_video_remember_audio_language">이 시리즈의 오디오 언어 기억</string>
     <string name="player_video_remember_subtitle_language">이 시리즈의 자막 언어 기억</string>
+    <string name="player_video_remember_subtitles_off">이 시리즈의 자막 계속 끄기</string>
     <string name="player_video_error_offline_file_missing">오류: 오프라인 파일 없음</string>
     <string name="player_video_error_loading_media">미디어 로드 오류</string>
     <string name="player_video_trickplay_thumbnail">트릭플레이 썸네일</string>

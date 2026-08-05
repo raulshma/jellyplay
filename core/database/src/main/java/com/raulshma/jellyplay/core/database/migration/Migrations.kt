@@ -697,8 +697,20 @@ val MIGRATION_40_41 = object : Migration(40, 41) {
     }
 }
 
+// Per-series / per-item "subtitles off" intent. Lets a user disable subtitles
+// for a whole series so every episode loads with subs off (instead of the
+// resolver auto-picking the global-language match). Nullable: NULL means
+// "inherit" (resolve normally), so existing rows are unaffected. Mutually
+// exclusive with subtitleLanguage — the repository keeps them consistent, but
+// the column itself has no DB-level constraint.
+val MIGRATION_41_42 = object : Migration(41, 42) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN subtitleDisabled INTEGER")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v41 migration chain, with the
+ * The complete, correctly-ordered v1→v42 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -747,4 +759,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_38_39,
         MIGRATION_39_40,
         MIGRATION_40_41,
+        MIGRATION_41_42,
     )

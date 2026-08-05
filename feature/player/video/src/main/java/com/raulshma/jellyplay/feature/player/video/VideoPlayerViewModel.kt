@@ -830,7 +830,9 @@ class VideoPlayerViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         hasSeriesAudioPref = pref?.scope == PlaybackPrefScope.SERIES && pref.audioLanguage != null,
-                        hasSeriesSubtitlePref = pref?.scope == PlaybackPrefScope.SERIES && pref.subtitleLanguage != null,
+                        hasSeriesSubtitlePref = pref?.scope == PlaybackPrefScope.SERIES &&
+                            (pref.subtitleLanguage != null || pref.subtitleDisabled == true),
+                        hasSeriesSubtitleOffPref = pref?.scope == PlaybackPrefScope.SERIES && pref.subtitleDisabled == true,
                         hasSeriesDialogueBoostPref = pref?.scope == PlaybackPrefScope.SERIES && pref.dialogueBoostStrength != null,
                         dialogueBoostStrength = resolvedBoost,
                         dialogueBoostEnabled = resolvedBoost != com.raulshma.jellyplay.core.model.EffectStrength.NONE,
@@ -844,7 +846,8 @@ class VideoPlayerViewModel @Inject constructor(
                 // re-running here, the preference never gets applied for that
                 // load. Only re-run when a language preference actually exists so
                 // we don't churn on null resolutions (no engine yet ⇒ no-op).
-                val hasLangPref = pref?.audioLanguage != null || pref?.subtitleLanguage != null
+                val hasLangPref = pref?.audioLanguage != null || pref?.subtitleLanguage != null ||
+                    pref?.subtitleDisabled == true
                 if (hasLangPref) {
                     trackSelectionHelper.updateTracksFromEngine()
                 }
@@ -1679,6 +1682,22 @@ class VideoPlayerViewModel @Inject constructor(
                     subtitleHearingImpaired = hearingImpaired,
                 )
             }
+            trackSelectionHelper.refreshPlaybackPreferences()
+        }
+    }
+
+    /**
+     * Saves/clears a per-series "subtitles off" intent. When [disabled] is true
+     * every episode of the series loads with subtitles off (the resolver skips
+     * the language matcher and forces Off); when false the intent is forgotten
+     * so the global/per-item rules take effect again. No-op when the current
+     * item has no series. Mutually exclusive with [setSeriesSubtitlePreference]:
+     * enabling one clears the other's row fields.
+     */
+    fun setSeriesSubtitleDisabled(disabled: Boolean) {
+        val seriesId = playerSessionManager.sessionState.value.mediaDetail?.item?.seriesId ?: return
+        launch {
+            itemPlaybackPreferenceRepository.setSubtitleDisabled(PlaybackPrefScope.SERIES, seriesId, disabled)
             trackSelectionHelper.refreshPlaybackPreferences()
         }
     }

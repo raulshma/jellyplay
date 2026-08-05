@@ -55,6 +55,15 @@ interface ItemPlaybackPreferenceRepository {
      */
     suspend fun clearSubtitleLanguage(scope: PlaybackPrefScope, key: String)
 
+    /**
+     * Sets or clears the "subtitles off" intent for [scope]/[key]. When [disabled]
+     * is true the resolver forces subtitles off (no language match); when false the
+     * intent is cleared. Saving `disabled = true` also clears any pinned subtitle
+     * language/role on the same row (they are mutually exclusive), and saving a
+     * subtitle language via [save] clears a previously-set disabled intent.
+     */
+    suspend fun setSubtitleDisabled(scope: PlaybackPrefScope, key: String, disabled: Boolean)
+
     /** Clears the dialogue-boost field for [scope]/[key] (other fields are preserved). */
     suspend fun clearDialogueBoostStrength(scope: PlaybackPrefScope, key: String)
 

@@ -230,6 +230,7 @@
     <string name="player_video_duration">Durée</string>
     <string name="player_video_remember_audio_language">Mémoriser la langue audio pour cette série</string>
     <string name="player_video_remember_subtitle_language">Mémoriser la langue des sous-titres pour cette série</string>
+    <string name="player_video_remember_subtitles_off">Garder les sous-titres désactivés pour cette série</string>
     <string name="player_video_error_offline_file_missing">Erreur : fichier hors ligne manquant</string>
     <string name="player_video_error_loading_media">Erreur lors du chargement du média</string>
     <string name="player_video_trickplay_thumbnail">Vignette trickplay</string>

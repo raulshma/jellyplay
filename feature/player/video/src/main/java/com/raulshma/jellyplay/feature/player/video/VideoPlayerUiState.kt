@@ -90,8 +90,10 @@ data class VideoPlayerUiState(
     val hasSubtitleOverride: Boolean = false,
     /** A per-series audio-language preference exists for the current series. */
     val hasSeriesAudioPref: Boolean = false,
-    /** A per-series subtitle-language preference exists for the current series. */
+    /** A per-series subtitle preference (language or "off") exists for the current series. */
     val hasSeriesSubtitlePref: Boolean = false,
+    /** A per-series "subtitles off" preference exists for the current series. */
+    val hasSeriesSubtitleOffPref: Boolean = false,
     /** A per-series dialogue-boost preference exists for the current series. */
     val hasSeriesDialogueBoostPref: Boolean = false,
     val overview: String = "",
@@ -292,6 +294,7 @@ data class VideoPlayerUiState(
             hasAudioOverride = hasAudioOverride, hasSubtitleOverride = hasSubtitleOverride,
             hasSeriesAudioPref = hasSeriesAudioPref,
             hasSeriesSubtitlePref = hasSeriesSubtitlePref,
+            hasSeriesSubtitleOffPref = hasSeriesSubtitleOffPref,
             hasSeriesDialogueBoostPref = hasSeriesDialogueBoostPref,
         )
 

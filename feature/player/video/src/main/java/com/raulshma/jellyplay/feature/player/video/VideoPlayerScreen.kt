@@ -2051,29 +2051,44 @@ private fun PlayerSheetRouter(
                 onDismiss = dismissSheet,
                 footer = if (uiState.seriesId != null) {
                     {
-                        // Per-series subtitle preference toggle. Saves the
-                        // currently-selected track's language AND its role
-                        // (forced / SDH) so every episode restores the right
-                        // same-language track; toggling off forgets it.
+                        // Per-series subtitle preference toggle. With a real track
+                        // selected it saves that track's language + role so every
+                        // episode restores the right same-language track; with the
+                        // "Off" row selected it saves a "subtitles off" intent so
+                        // every episode loads with subs off. Toggling off forgets
+                        // whichever intent was saved.
+                        val selectedOff = uiState.subtitleTracks
+                            .firstOrNull { it.isSelected && it.index < 0 } != null
+                        val label = if (selectedOff || uiState.hasSeriesSubtitleOffPref) {
+                            stringResource(R.string.player_video_remember_subtitles_off)
+                        } else {
+                            stringResource(R.string.player_video_remember_subtitle_language)
+                        }
                         RememberPreferenceToggle(
-                            label = stringResource(R.string.player_video_remember_subtitle_language),
+                            label = label,
                             checked = uiState.hasSeriesSubtitlePref,
                             onToggle = { remember ->
-                                val sel = if (remember) {
-                                    uiState.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }
+                                val sel = uiState.subtitleTracks.firstOrNull { it.isSelected }
+                                if (sel != null && sel.index < 0) {
+                                    // Off row selected: toggle the "subtitles off"
+                                    // intent rather than a language.
+                                    viewModel.setSeriesSubtitleDisabled(remember)
+                                } else if (remember) {
+                                    viewModel.setSeriesSubtitlePreference(
+                                        language = sel?.language,
+                                        // A role is only pinned when present: selecting a
+                                        // plain track passes null ("don't care") so the
+                                        // restore matcher relaxes to any same-language
+                                        // track instead of strictly excluding forced/SDH
+                                        // tracks whose badges vary episode-to-episode.
+                                        forced = sel?.badges?.contains(TrackBadge.FORCED)?.takeIf { it },
+                                        hearingImpaired = sel?.badges?.contains(TrackBadge.SDH)?.takeIf { it },
+                                    )
                                 } else {
-                                    null
+                                    // A real track was selected and the user turned
+                                    // the toggle off: forget the language preference.
+                                    viewModel.setSeriesSubtitlePreference(language = null)
                                 }
-                                viewModel.setSeriesSubtitlePreference(
-                                    language = sel?.language,
-                                    // A role is only pinned when present: selecting a
-                                    // plain track passes null ("don't care") so the
-                                    // restore matcher relaxes to any same-language
-                                    // track instead of strictly excluding forced/SDH
-                                    // tracks whose badges vary episode-to-episode.
-                                    forced = sel?.badges?.contains(TrackBadge.FORCED)?.takeIf { it },
-                                    hearingImpaired = sel?.badges?.contains(TrackBadge.SDH)?.takeIf { it },
-                                )
                             },
                         )
                     }
