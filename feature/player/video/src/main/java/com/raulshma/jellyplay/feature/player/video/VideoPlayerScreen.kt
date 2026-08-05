@@ -1722,7 +1722,6 @@ fun VideoPlayerScreen(
     LaunchedEffect(Unit) {
         snapshotFlow { seekState.timestamp to seekState.direction }
             .filter { (_, direction) -> direction != 0 }
-            .drop(1) // ignore the initial replay (no seek yet)
             .collectLatest {
                 delay(GESTURE_SEEK_LINGER_MS)
                 seekState.reset()
