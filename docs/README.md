@@ -11,12 +11,12 @@ built with Kotlin and Jetpack Compose.
 | ----- | ----------- |
 | [Setup](./setup.md) | Install JellyPlay on Android phone, Android TV, and Fire TV |
 | [Android TV & Fire TV setup](./android-tv-setup.md) | Sideload and configure JellyPlay on the big screen |
-| [Seerr integration](./seerr-integration.md) | Request movies & shows from inside the app |
+| [Jellyseerr integration](./jellyseerr-integration.md) | Request movies & shows from inside the app |
 | [SyncPlay watch parties](./syncplay-guide.md) | Synchronized group playback with friends |
 | [Offline downloads](./offline-downloads.md) | Download media for travel and low-connectivity |
 | [Music player & synced lyrics](./lyrics-music-player.md) | Get the most out of your music library |
-| [JellyPlay vs Plex vs Emby vs Kodi](./why-jellyplay-vs-plex-emby.md) | How JellyPlay compares to other self-hosted stacks |
-| [Music engine selection](./player-engines.md) | Choose between ExoPlayer, libmpv, and LibVLC |
+| [Player engines comparison](./player-engines.md) | Choose between ExoPlayer, libmpv, and LibVLC |
+| [Playback progress sync](./playback-progress-sync.md) | How watch progress is reported and synced |
 
 ## What is JellyPlay?
 
