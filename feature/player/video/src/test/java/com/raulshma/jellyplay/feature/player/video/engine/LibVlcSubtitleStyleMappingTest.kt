@@ -13,7 +13,7 @@ class LibVlcSubtitleStyleMappingTest {
     @Test
     fun typefaceOptions_honorBothTogglesAndBundledFallback() {
         val options = LibVlcSubtitleStyleMapping.typefaceOptions(
-            SubtitleStyle(bold = true, italic = true),
+            SubtitleStyle(applyCustomStyle = true, bold = true, italic = true),
             bundledFallbackPath = "/fonts/subfont.ttf",
         )
 
@@ -30,7 +30,7 @@ class LibVlcSubtitleStyleMappingTest {
     @Test
     fun typefaceOptions_useSelectedFontAndCanDisableBothToggles() {
         val options = LibVlcSubtitleStyleMapping.typefaceOptions(
-            SubtitleStyle(fontFamilyPath = "/fonts/custom.ttf"),
+            SubtitleStyle(applyCustomStyle = true, fontFamilyPath = "/fonts/custom.ttf"),
             bundledFallbackPath = "/fonts/subfont.ttf",
         )
 
@@ -39,6 +39,23 @@ class LibVlcSubtitleStyleMappingTest {
                 ":freetype-bold=false",
                 ":freetype-italic=false",
                 ":freetype-font=/fonts/custom.ttf",
+            ),
+            options,
+        )
+    }
+
+    @Test
+    fun typefaceOptions_resetsToDefaultsWhenApplyCustomStyleIsFalse() {
+        val options = LibVlcSubtitleStyleMapping.typefaceOptions(
+            SubtitleStyle(applyCustomStyle = false, bold = true, italic = true, fontFamilyPath = "/fonts/custom.ttf"),
+            bundledFallbackPath = "/fonts/subfont.ttf",
+        )
+
+        assertEquals(
+            listOf(
+                ":freetype-bold=false",
+                ":freetype-italic=false",
+                ":freetype-font=/fonts/subfont.ttf",
             ),
             options,
         )

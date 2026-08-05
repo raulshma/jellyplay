@@ -1044,6 +1044,7 @@ class MpvPlayerEngine(
         try {
             val m = mpvView?.mpv ?: return
             applySubtitleStyleProperties(m, style)
+            runCatching { m.command("sub-reload") }
             logSubtitleRenderState("style")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to apply MPV subtitle style", e)
@@ -1615,13 +1616,17 @@ class MpvPlayerEngine(
         val values = subtitleStyleValues(style)
         if (style.applyCustomStyle) {
             customSubtitleStyleEntries(style, values).forEach { (k, v) -> mpv.safeSetOption(k, v) }
+            mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / 24.0).toString())
         } else {
             mpv.safeSetOption("sub-ass-override", "no")
+            mpv.safeSetOption("sub-bold", "no")
+            mpv.safeSetOption("sub-italic", "no")
+            mpv.safeSetOption("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetOption("sub-scale", "1.0")
         }
 
-        mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
         mpv.safeSetOption("sub-font-size", "55")
-        mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / 24.0).toString())
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
         mpv.safeSetOption("sub-pos", subPosValue.toString())
         mpv.safeSetOption("sub-margin-y", values.marginY.toString())
@@ -1638,6 +1643,8 @@ class MpvPlayerEngine(
             // deprecated aliases that silently no-op on some libass versions.
             mpv.safeSetPropertyDouble("sub-border-size", values.outlineSize)
             mpv.safeSetPropertyDouble("sub-shadow-offset", values.shadowOffset)
+            mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / 24.0)
         } else {
             // Reset to defaults
             mpv.safeSetPropertyString("sub-color", "#FFFFFFFF")
@@ -1647,13 +1654,15 @@ class MpvPlayerEngine(
             mpv.safeSetPropertyString("sub-border-style", "outline-and-shadow")
             mpv.safeSetPropertyString("sub-ass-override", "no")
             mpv.safeSetPropertyBoolean("sub-ass-justify", false)
+            mpv.safeSetPropertyString("sub-bold", "no")
+            mpv.safeSetPropertyString("sub-italic", "no")
+            mpv.safeSetPropertyString("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
             mpv.safeSetPropertyDouble("sub-border-size", 3.0)
             mpv.safeSetPropertyDouble("sub-shadow-offset", 0.0)
+            mpv.safeSetPropertyDouble("sub-scale", 1.0)
         }
 
-        mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
         mpv.safeSetPropertyDouble("sub-font-size", 55.0)
-        mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / 24.0)
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
         mpv.safeSetPropertyInt("sub-pos", subPosValue)
         mpv.safeSetPropertyInt("sub-margin-y", values.marginY)

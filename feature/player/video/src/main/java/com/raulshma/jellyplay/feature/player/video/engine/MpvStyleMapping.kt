@@ -71,9 +71,9 @@ internal object MpvStyleMapping {
         add("sub-ass-justify" to "yes")
         add("sub-bold" to if (style.bold) "yes" else "no")
         add("sub-italic" to if (style.italic) "yes" else "no")
-        // sub-font is owned by the engine (set unconditionally below the
-        // customStyleEntries loop) so the user font family is honored even when
-        // applyCustomStyle is false. It is intentionally NOT emitted here.
+        // sub-font is owned by the engine (set conditionally depending on
+        // applyCustomStyle) so the user font family is honored only when
+        // applyCustomStyle is true. It is intentionally NOT emitted here.
     }
 
     private fun colorToMpvHex(color: Int, opacity: Float): String {
