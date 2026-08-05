@@ -280,14 +280,14 @@ class MainActivity : FragmentActivity() {
 
             JellyPlayTheme(
                 darkTheme = darkTheme,
-                dynamicColor = preferences.dynamicTheming,
-                oledMode = preferences.oledMode,
+                dynamicColor = preferences.theme.dynamicTheming,
+                oledMode = preferences.theme.oledMode,
                 contrastLevel = preferences.contrastLevel,
                 isTv = isTv(),
                 performanceMode = preferences.performanceMode,
                 reduceMotion = preferences.reduceMotionEnabled,
-                accentColorSwatch = preferences.accentColorSwatch,
-                colorStyle = preferences.colorStyle,
+                accentColorSwatch = preferences.theme.accentColorSwatch,
+                colorStyle = preferences.theme.colorStyle,
                 synthwaveMode = preferences.synthwaveMode,
                 synthwaveAccent = preferences.synthwaveAccent,
                 soothingMode = preferences.soothingMode,

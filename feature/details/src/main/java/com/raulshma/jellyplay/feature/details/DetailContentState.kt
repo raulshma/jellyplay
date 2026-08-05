@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo

@@ -26,10 +26,8 @@ import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
-import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
-import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -75,9 +73,7 @@ class DetailViewModelTest {
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var downloadIntake: DownloadIntake
-    private lateinit var appearanceStore: AppearanceStore
-    private lateinit var videoPlayerStore: VideoPlayerStore
-    private lateinit var subtitleLanguageStore: SubtitleLanguageStore
+    private lateinit var projections: PreferenceProjections
     private lateinit var libraryStore: LibraryStore
     private lateinit var homeDiscoveryStore: HomeDiscoveryStore
     private lateinit var experimentalStore: ExperimentalStore
@@ -103,9 +99,7 @@ class DetailViewModelTest {
         imageUrlProvider = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
-        appearanceStore = mockk(relaxed = true)
-        videoPlayerStore = mockk(relaxed = true)
-        subtitleLanguageStore = mockk(relaxed = true)
+        projections = mockk(relaxed = true)
         libraryStore = mockk(relaxed = true)
         homeDiscoveryStore = mockk(relaxed = true)
         experimentalStore = mockk(relaxed = true)
@@ -121,9 +115,7 @@ class DetailViewModelTest {
         tmdbApiClient = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
 
-        every { appearanceStore.appearance } returns MutableStateFlow(AppearanceSlice())
-        every { videoPlayerStore.videoPlayer } returns MutableStateFlow(VideoPlayerSlice())
-        every { subtitleLanguageStore.subtitle } returns MutableStateFlow(SubtitleSlice())
+        every { projections.detailPreferences } returns MutableStateFlow(DetailPreferences())
         every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
         every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
         every { experimentalStore.experimental } returns MutableStateFlow(ExperimentalSlice())
@@ -184,9 +176,7 @@ class DetailViewModelTest {
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
             downloadIntake = downloadIntake,
-            appearanceStore = appearanceStore,
-            videoPlayerStore = videoPlayerStore,
-            subtitleLanguageStore = subtitleLanguageStore,
+            projections = projections,
             libraryStore = libraryStore,
             homeDiscoveryStore = homeDiscoveryStore,
             experimentalStore = experimentalStore,

@@ -11,21 +11,14 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
-import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
-import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
-import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
-import com.raulshma.jellyplay.core.model.ColorStyle
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -72,33 +65,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 /**
- * The 14 preference fields the media-detail content tree reads (4 theme fields
- * for `ArtworkThemeWrapper`, trailerAutoplay for the backdrop, language + stream
- * picks, the share/external-ratings flags, library skip/sort behaviour, and the
- * next-up / hidden-CW id sets), projected off the owning store slices instead
- * of the legacy aggregate. Bundled into the `@Immutable` [DetailContentState]
- * so child composables stay skippable.
- */
-@Immutable
-data class DetailPreferences(
-    val dynamicTheming: Boolean = true,
-    val oledMode: Boolean = false,
-    val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
-    val accentColorSwatch: String = "dynamic",
-    val trailerAutoplay: Boolean = true,
-    val preferredAudioLanguage: String? = null,
-    val preferredSubtitleLanguage: String? = null,
-    val showShareMediaOption: Boolean = true,
-    val showExternalRatings: Boolean = true,
-    val nextUpExcludedSeriesIds: Set<String> = emptySet(),
-    val hiddenCwItemIds: Set<String> = emptySet(),
-    val skipSpecials: Boolean = false,
-    val hideEpisodeThumbnails: Boolean = false,
-    val episodesDescending: Boolean = true,
-    val compactEpisodeList: Boolean = false,
-)
-
-/**
  * Ceiling on the number of season-episode fetches that may run concurrently
  * for the download-sheet path (which still fetches per-season on demand).
  */
@@ -113,9 +79,7 @@ class DetailViewModel @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
-    private val appearanceStore: AppearanceStore,
-    private val videoPlayerStore: VideoPlayerStore,
-    private val subtitleLanguageStore: SubtitleLanguageStore,
+    private val projections: PreferenceProjections,
     private val libraryStore: LibraryStore,
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val experimentalStore: ExperimentalStore,
@@ -132,44 +96,8 @@ class DetailViewModel @Inject constructor(
     private val arrRepository: ArrRepository,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<DetailPreferences> = combine(
-        appearanceStore.appearance,
-        videoPlayerStore.videoPlayer,
-        subtitleLanguageStore.subtitle,
-        experimentalStore.experimental,
-        homeDiscoveryStore.homeDiscovery,
-        libraryStore.library,
-    ) { slices ->
-        @Suppress("UNCHECKED_CAST")
-        val appearance = slices[0] as AppearanceSlice
-        @Suppress("UNCHECKED_CAST")
-        val videoPlayer = slices[1] as VideoPlayerSlice
-        @Suppress("UNCHECKED_CAST")
-        val subtitle = slices[2] as SubtitleSlice
-        @Suppress("UNCHECKED_CAST")
-        val experimental = slices[3] as com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
-        @Suppress("UNCHECKED_CAST")
-        val home = slices[4] as HomeDiscoverySlice
-        @Suppress("UNCHECKED_CAST")
-        val library = slices[5] as LibrarySlice
-        DetailPreferences(
-            dynamicTheming = appearance.dynamicTheming,
-            oledMode = appearance.oledMode,
-            colorStyle = appearance.colorStyle,
-            accentColorSwatch = appearance.accentColorSwatch,
-            trailerAutoplay = videoPlayer.trailerAutoplay,
-            preferredAudioLanguage = subtitle.preferredAudioLanguage,
-            preferredSubtitleLanguage = subtitle.preferredSubtitleLanguage,
-            showShareMediaOption = experimental.showShareMediaOption,
-            showExternalRatings = home.showExternalRatings,
-            nextUpExcludedSeriesIds = home.nextUpExcludedSeriesIds,
-            hiddenCwItemIds = home.hiddenCwItemIds,
-            skipSpecials = library.skipSpecials,
-            hideEpisodeThumbnails = library.hideEpisodeThumbnails,
-            episodesDescending = library.episodesDescending,
-            compactEpisodeList = library.compactEpisodeList,
-        )
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailPreferences())
+    /** Media-detail preference fields, projected centrally off the store slices. */
+    val preferences: StateFlow<DetailPreferences> = projections.detailPreferences
 
     // Single source of truth for detail-screen state. All mutations
     // funnel through [_uiState.update]; the [uiState] aggregator additionally

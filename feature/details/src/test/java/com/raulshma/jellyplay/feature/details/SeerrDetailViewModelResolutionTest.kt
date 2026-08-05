@@ -4,10 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrExternalIds
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
@@ -39,8 +37,7 @@ class SeerrDetailViewModelResolutionTest {
 
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
-    private lateinit var appearanceStore: AppearanceStore
-    private lateinit var videoPlayerStore: VideoPlayerStore
+    private lateinit var projections: PreferenceProjections
     private lateinit var seerrPreferencesStore: SeerrPreferencesStore
     private lateinit var mediaRepository: MediaRepository
 
@@ -50,13 +47,11 @@ class SeerrDetailViewModelResolutionTest {
     fun setUp() {
         seerrRepository = mockk(relaxed = true)
         seerrRequestDelegate = mockk(relaxed = true)
-        appearanceStore = mockk(relaxed = true)
-        videoPlayerStore = mockk(relaxed = true)
+        projections = mockk(relaxed = true)
         seerrPreferencesStore = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
 
-        every { appearanceStore.appearance } returns MutableStateFlow(AppearanceSlice())
-        every { videoPlayerStore.videoPlayer } returns MutableStateFlow(VideoPlayerSlice())
+        every { projections.seerrDetailPreferences } returns MutableStateFlow(SeerrDetailPreferences())
         every { seerrPreferencesStore.preferences } returns MutableStateFlow(SeerrPreferences())
         every { seerrRepository.isConnected() } returns flowOf(false)
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
@@ -69,7 +64,7 @@ class SeerrDetailViewModelResolutionTest {
         )
 
         viewModel = SeerrDetailViewModel(
-            seerrRepository, seerrRequestDelegate, appearanceStore, videoPlayerStore, seerrPreferencesStore, mediaRepository
+            seerrRepository, seerrRequestDelegate, projections, seerrPreferencesStore, mediaRepository
         )
     }
 

@@ -153,32 +153,35 @@ data class EngineCapabilities(
      * this so it is hidden for engines that cannot capture.
      */
     val supportsScreenshot: Boolean = false,
-    /**
-     * Engine can reparent its native subtitle `View`(s) into an app-supplied
-     * host that is pinned to the screen (a sibling of the zoomed video surface,
-     * outside the pinch/crop transform). ExoPlayer only — its Media3
-     * `SubtitleView` and libass `AssSubtitleView` are plain `View`s reachable by
-     * reference, so [MediaEngine.setExternalSubtitleHost] moves them out of the
-     * letterboxed `exo_content_frame`. When `false`, the engine ignores
-     * [MediaEngine.setExternalSubtitleHost] and subtitles remain parented inside
-     * the video surface (so they scale/translate with zoom). See
-     * [supportsCueSubtitleOverlay] for the mpv fallback.
-     */
-    val supportsScreenPinnedSubtitles: Boolean = false,
-    /**
-     * Engine emits the currently-displayed subtitle line as plain text via
-     * [MediaEngine.liveSubtitleCue], so the screen can render a Compose overlay
-     * pinned to the display. mpv only — its `sub-text` property (ASS override
-     * tags stripped) is already observed. Used as the zoom-safe path on engines
-     * whose subtitle rendering cannot be reparented (mpv composites libass into
-     * the GPU video surface). When `false`, [MediaEngine.liveSubtitleCue] never
-     * emits. See [supportsScreenPinnedSubtitles] for the ExoPlayer path.
-     */
-    val supportsCueSubtitleOverlay: Boolean = false,
 )
 
 enum class EnginePlaybackState {
     IDLE, BUFFERING, READY, ENDED, ERROR
+}
+
+/**
+ * How an engine keeps subtitles visible under pinch-zoom / crop. Declared by
+ * [MediaEngine.zoomSafeSubtitleStrategy]; the screen dispatches its zoom-safe
+ * subtitle rendering on this value rather than on a pair of capability booleans.
+ */
+enum class ZoomSafeSubtitleStrategy {
+    /** No zoom-safe path; captions scale/translate with the video (libVLC, External). */
+    DISABLED,
+
+    /**
+     * Engine reparents its native subtitle View into an app-supplied host
+     * ([MediaEngine.setExternalSubtitleHost]); full native fidelity, relocated
+     * outside the zoom transform (ExoPlayer).
+     */
+    NATIVE_PINNED,
+
+    /**
+     * Engine emits the live subtitle line via [MediaEngine.liveSubtitleCue] and
+     * toggles native rendering via [MediaEngine.setNativeSubtitlesVisible]; the
+     * screen renders a Compose overlay while zoomed (mpv — libass composites
+     * into the GPU surface and cannot be reparented).
+     */
+    COMPOSE_CUE,
 }
 
 data class MediaTrack(
@@ -346,10 +349,10 @@ interface MediaEngine :
      * The currently-displayed subtitle line as plain text, or `null` when no
      * line is active. Distinct from [currentCues] (which accumulates the played
      * range for the sync preview): this is the single live line the screen can
-     * render in a zoom-safe Compose overlay. Only emitted by engines that
-     * advertise [EngineCapabilities.supportsCueSubtitleOverlay] (mpv, via its
-     * `sub-text` property with ASS override tags stripped); `null` forever on
-     * every other engine.
+     * render in a zoom-safe Compose overlay. Only emitted by engines whose
+     * [zoomSafeSubtitleStrategy] is [ZoomSafeSubtitleStrategy.COMPOSE_CUE]
+     * (mpv, via its `sub-text` property with ASS override tags stripped);
+     * `null` forever on every other engine.
      */
     val liveSubtitleCue: StateFlow<CharSequence?>
 
@@ -378,12 +381,34 @@ interface MediaEngine :
      */
     fun setSecondarySubtitleTrack(index: Int) {}
 
+    // ── Zoom/crop-safe subtitle strategy ──
+    //
+    //    The engine declares HOW it keeps captions pinned to the screen under
+    //    pinch-zoom/crop; the screen renders from [zoomSafeSubtitleStrategy]
+    //    instead of reverse-engineering the strategy from a pair of capability
+    //    booleans. Each strategy carries its own mechanical contract:
+    //      · NATIVE_PINNED — the engine reparents its native subtitle View into
+    //        an app-supplied host ([setExternalSubtitleHost]); full native
+    //        fidelity, just relocated (ExoPlayer).
+    //      · COMPOSE_CUE    — the engine emits the live line via
+    //        [liveSubtitleCue] and toggles native rendering via
+    //        [setNativeSubtitlesVisible]; the screen renders a Compose overlay
+    //        while zoomed (mpv: libass composites into the GPU surface).
+    //      · DISABLED       — no zoom-safe path; captions scale/translate with
+    //        the video (libVLC, External). ──
+
+    /**
+     * How this engine keeps subtitles visible when the video is pinch-zoomed or
+     * cropped. The screen reads this once and dispatches on the strategy; a
+     * fourth engine added later defaults to [ZoomSafeSubtitleStrategy.DISABLED]
+     * instead of silently-wrong behaviour from two unset booleans.
+     */
+    val zoomSafeSubtitleStrategy: ZoomSafeSubtitleStrategy
+        get() = ZoomSafeSubtitleStrategy.DISABLED
+
     // ── Per-engine subtitle styling applied to the engine's native subtitle
-    //    surface (Media3 `SubtitleView` / libass / VLC freetype). Subtitles are
-    //    rendered by each engine's own native renderer; there is no in-app
-    //    Compose cue overlay. A *data-only* [currentCues] flow is exposed for
-    //    the subtitle-sync preview, but it is not rendered as an overlay — the
-    //    old `MpvSubtitleOverlay` Compose path remains removed. ──
+    //    surface (Media3 `SubtitleView` / libass / VLC freetype), and the
+    //    mechanical hooks the screen's zoom-safe strategies drive. ──
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
 
     /**
@@ -391,18 +416,18 @@ interface MediaEngine :
      * app-supplied [host] pinned to the screen (a sibling of the zoomed video
      * surface, outside the pinch/crop transform), so captions stay put when the
      * video is zoomed or cropped. Pass `null` to detach and revert to the
-     * engine's default in-frame parenting. Engines that cannot reparent their
-     * subtitle views (mpv, libVLC) no-op this; gate on
-     * [EngineCapabilities.supportsScreenPinnedSubtitles]. ExoPlayer only today.
+     * engine's default in-frame parenting. Only meaningful for engines that
+     * advertise [ZoomSafeSubtitleStrategy.NATIVE_PINNED] (ExoPlayer); every
+     * other engine no-ops.
      */
     fun setExternalSubtitleHost(host: ViewGroup?) {}
 
     /**
      * Toggles the engine's native subtitle rendering at runtime. Used to hide
      * native subs while the screen renders a zoom-safe Compose overlay (see
-     * [liveSubtitleCue] / [EngineCapabilities.supportsCueSubtitleOverlay]),
-     * avoiding double-drawn captions. mpv maps this to `sub-visibility`;
-     * engines without a runtime toggle no-op.
+     * [liveSubtitleCue] / [ZoomSafeSubtitleStrategy.COMPOSE_CUE]), avoiding
+     * double-drawn captions. mpv maps this to `sub-visibility`; engines without
+     * a runtime toggle no-op.
      */
     fun setNativeSubtitlesVisible(visible: Boolean) {}
 

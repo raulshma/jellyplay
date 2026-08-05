@@ -1,18 +1,14 @@
 package com.raulshma.jellyplay.feature.details
 
 import android.util.Log
-import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
-import com.raulshma.jellyplay.core.model.ColorStyle
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
@@ -33,54 +29,23 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 private const val TAG = "SeerrDetailVM"
 
-/**
- * The handful of preference fields the Seerr detail screen reads, projected
- * off the owning store slices instead of the legacy aggregate. Combines the
- * appearance theme fields (for `ArtworkThemeWrapper`) with the
- * `trailerAutoplay` flag (for the inline trailer player).
- */
-@Immutable
-data class SeerrDetailPreferences(
-    val dynamicTheming: Boolean = true,
-    val oledMode: Boolean = false,
-    val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
-    val accentColorSwatch: String = "dynamic",
-    val trailerAutoplay: Boolean = true,
-)
-
 @HiltViewModel
 class SeerrDetailViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
-    private val appearanceStore: AppearanceStore,
-    private val videoPlayerStore: VideoPlayerStore,
+    private val projections: PreferenceProjections,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val mediaRepository: MediaRepository,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<SeerrDetailPreferences> = combine(
-        appearanceStore.appearance,
-        videoPlayerStore.videoPlayer,
-    ) { appearance: AppearanceSlice, videoPlayer: VideoPlayerSlice ->
-        SeerrDetailPreferences(
-            dynamicTheming = appearance.dynamicTheming,
-            oledMode = appearance.oledMode,
-            colorStyle = appearance.colorStyle,
-            accentColorSwatch = appearance.accentColorSwatch,
-            trailerAutoplay = videoPlayer.trailerAutoplay,
-        )
-    }.stateIn(
-        scope = scope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = SeerrDetailPreferences(),
-    )
+    /** Artwork theme + inline-trailer autoplay, projected centrally off the store slices. */
+    val preferences: StateFlow<SeerrDetailPreferences> = projections.seerrDetailPreferences
 
     val seerrPreferences: StateFlow<SeerrPreferences> = seerrPreferencesStore.preferences
 

@@ -6,9 +6,9 @@ import com.raulshma.jellyplay.core.data.repository.SearchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
-import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -35,7 +35,7 @@ class SearchViewModelHistoryTest {
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
     private lateinit var searchHistoryRepository: SearchHistoryRepository
     private lateinit var offlineRepository: OfflineRepository
-    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var experimentalStore: ExperimentalStore
     private lateinit var serverIdentityStore: ServerIdentityStore
 
     private lateinit var viewModel: SearchViewModel
@@ -48,10 +48,10 @@ class SearchViewModelHistoryTest {
         seerrRequestDelegate = mockk(relaxed = true)
         searchHistoryRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
-        preferencesStore = mockk(relaxed = true)
+        experimentalStore = mockk(relaxed = true)
         serverIdentityStore = mockk(relaxed = true)
 
-        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        every { experimentalStore.experimental } returns MutableStateFlow(ExperimentalSlice())
         every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         every { seerrRepository.isConnected() } returns flowOf(false)
         every { seerrRepository.getPreferences() } returns flowOf(
@@ -74,7 +74,7 @@ class SearchViewModelHistoryTest {
             seerrRequestDelegate,
             searchHistoryRepository,
             offlineRepository,
-            preferencesStore,
+            experimentalStore,
             serverIdentityStore,
         )
     }

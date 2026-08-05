@@ -132,6 +132,7 @@ class ExoPlayerEngine(
     }
 
     override val capabilities = EngineCapabilityMatrix.EXO_PLAYER
+    override val zoomSafeSubtitleStrategy = ZoomSafeSubtitleStrategy.NATIVE_PINNED
 
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null

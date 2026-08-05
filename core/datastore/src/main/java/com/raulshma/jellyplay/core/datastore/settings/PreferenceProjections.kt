@@ -1,48 +1,39 @@
 package com.raulshma.jellyplay.core.datastore.settings
 
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
-import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
-import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheSlice
 import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
-import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
 import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
-import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
-import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
-import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
-import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
-import com.raulshma.jellyplay.core.datastore.navigation.NavigationSlice
 import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
-import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
-import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
-import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
-import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
+import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
-import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
-import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
-import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.AppearancePreferences
+import com.raulshma.jellyplay.core.model.AppearanceTheme
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.model.AudioPlayerPreferences
+import com.raulshma.jellyplay.core.model.AudioPlayerUiPreferences
 import com.raulshma.jellyplay.core.model.AudioPreferences
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadPreferences
 import com.raulshma.jellyplay.core.model.ExperimentalPreferences
 import com.raulshma.jellyplay.core.model.LanguagePreferences
+import com.raulshma.jellyplay.core.model.MainPreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.model.OnboardingPreferences
+import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
+import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.SecurityPreferences
@@ -97,6 +88,7 @@ class PreferenceProjections @Inject constructor(
     private val syncPlayCastStore: SyncPlayCastStore,
     private val securityStore: SecurityStore,
     private val experimentalStore: ExperimentalStore,
+    private val screensaverStore: ScreensaverStore,
 ) {
     // -------------------------------------------------------------------------
     // Per-domain projections.
@@ -296,7 +288,7 @@ class PreferenceProjections @Inject constructor(
                 combine(subtitleStore.subtitle, audioStore.audio) { sub, au -> sub to au },
                 engineStore.playerEngine,
             ) { playback, video, effects, (subtitle, audio), engine ->
-                PlaybackGroup1(playback, video, effects, subtitle, audio, engine)
+                PlaybackCoreBundle(playback, video, effects, subtitle, audio, engine)
             },
             syncPlayCastStore.syncPlayCast,
         ) { g1, syncPlayCast ->
@@ -442,7 +434,7 @@ class PreferenceProjections @Inject constructor(
             homeDiscoveryStore.homeDiscovery,
             libraryStore.library,
             experimentalStore.experimental,
-            ::AppearanceGroup1,
+            ::AppearanceScreenBundle,
         ),
         notificationStore.notification,
     ) { g1, notification ->
@@ -504,80 +496,230 @@ class PreferenceProjections @Inject constructor(
     }.distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), AppearanceScreenPreferences())
 
-    /** Tuple carrier for the nested playback combine (private). */
-    private data class PlaybackGroup1(
-        val playback: PlaybackSlice,
-        val video: VideoPlayerSlice,
-        val effects: AudioEffectsSlice,
-        val subtitle: SubtitleSlice,
-        val audio: AudioSlice,
-        val engine: PlayerEngineSlice,
-    ) {
-        fun toPlaybackPreferences(sp: SyncPlayCastSlice) = PlaybackPreferences(
-            preferredPlayer = playback.preferredPlayer,
-            decoderMode = playback.decoderMode,
-            audioPassthrough = playback.audioPassthrough,
-            frameRateMatching = playback.frameRateMatching,
-            refreshRateMode = playback.refreshRateMode,
-            videoSeekDurationMs = video.videoSeekDurationMs,
-            videoDefaultOrientation = video.videoDefaultOrientation,
-            videoControlsTimeoutMs = video.videoControlsTimeoutMs,
-            videoGesturesEnabled = video.videoGesturesEnabled,
-            videoHoldSpeedEnabled = video.videoHoldSpeedEnabled,
-            videoHoldSpeedMultiplier = video.videoHoldSpeedMultiplier,
-            videoDefaultSpeed = video.videoDefaultSpeed,
-            videoDefaultAspectRatio = video.videoDefaultAspectRatio,
-            videoAutoplayNext = video.videoAutoplayNext,
-            trailerAutoplay = video.trailerAutoplay,
-            cinemaModeEnabled = video.cinemaModeEnabled,
-            videoSwipeSeekMaxMs = video.videoSwipeSeekMaxMs,
-            videoRememberBrightness = video.videoRememberBrightness,
-            videoBrightnessLevel = video.videoBrightnessLevel,
-            videoGestureIndicatorSide = video.videoGestureIndicatorSide,
-            videoSkipBackOnResumeMs = video.videoSkipBackOnResumeMs,
-            videoPassOutProtectionHours = video.videoPassOutProtectionHours,
-            trickplayEnabled = video.trickplayEnabled,
-            trickplayOnSeekGesture = video.trickplayOnSeekGesture,
-            segmentBehaviors = video.segmentBehaviors,
-            videoEpisodeBrowserEnabled = video.videoEpisodeBrowserEnabled,
-            videoShowPlaybackMetadata = video.videoShowPlaybackMetadata,
-            videoPreloadBufferSize = video.videoPreloadBufferSize,
-            keepScreenOnDuringVideo = playback.keepScreenOnDuringVideo,
-            showTimeRemaining = video.showTimeRemaining,
-            pauseOnAudioFocusLoss = playback.pauseOnAudioFocusLoss,
-            duckOnTransientFocusLoss = playback.duckOnTransientFocusLoss,
-            dialogueBoostEnabled = effects.dialogueBoostEnabled,
-            dialogueBoostStrength = effects.dialogueBoostStrength,
-            audioDelayMs = audio.audioDelayMs,
-            backgroundVideoAudioEnabled = playback.backgroundVideoAudioEnabled,
-            autoPlayCountdownSec = playback.autoPlayCountdownSec,
-            incognitoModeEnabled = video.incognitoModeEnabled,
-            showClockInPlayer = video.showClockInPlayer,
-            tvZoomModePercent = video.tvZoomModePercent,
-            streamingQuality = playback.streamingQuality,
-            liveStreamOption = playback.liveStreamOption,
-            mpvConfig = engine.mpvConfig,
-            libVlcConfig = engine.libVlcConfig,
-            exoPlayerConfig = engine.exoPlayerConfig,
-            syncPlayJoinBehavior = sp.syncPlayJoinBehavior,
-            syncPlayToleranceMs = sp.syncPlayToleranceMs,
-            syncPlayAutoAcceptInvites = sp.syncPlayAutoAcceptInvites,
-            defaultCastingStrategy = sp.defaultCastingStrategy,
-            backgroundCastingEnabled = sp.backgroundCastingEnabled,
-            preferredRenderer = sp.preferredRenderer,
-            dvrPrePaddingMinutes = sp.dvrPrePaddingMinutes,
-            dvrPostPaddingMinutes = sp.dvrPostPaddingMinutes,
-            dvrRecordingQuality = sp.dvrRecordingQuality,
-            androidTvWatchNextEnabled = playback.androidTvWatchNextEnabled,
-        )
-    }
+    // -------------------------------------------------------------------------
+    // Consumer-screen projections (non-settings surfaces).
+    //
+    // These replace the bespoke `combine(...)` projections the feature
+    // ViewModels used to hand-roll (several with vararg + `UNCHECKED_CAST`).
+    // Field sets are a verbatim port of the former local shadows so the screen
+    // bodies keep reading `preferences.X`.
+    // -------------------------------------------------------------------------
 
-    /** Tuple carrier for the nested appearance-screen combine (private). */
-    private data class AppearanceGroup1(
-        val appearance: AppearanceSlice,
-        val navigation: NavigationSlice,
-        val home: HomeDiscoverySlice,
-        val library: LibrarySlice,
-        val experimental: ExperimentalSlice,
-    )
+    /** Fields read by the audio player screen (lyrics toggle + artwork theme). */
+    val audioPlayerUiPreferences: StateFlow<AudioPlayerUiPreferences> =
+        combine(audioStore.audio, appearanceStore.appearance) { audio, appearance ->
+            AudioPlayerUiPreferences(
+                audioLyricsVisible = audio.audioLyricsVisible,
+                theme = AppearanceTheme(
+                    dynamicTheming = appearance.dynamicTheming,
+                    oledMode = appearance.oledMode,
+                    colorStyle = appearance.colorStyle,
+                    accentColorSwatch = appearance.accentColorSwatch,
+                ),
+            )
+        }.distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), AudioPlayerUiPreferences())
+
+    /** Fields read by `SeerrDetailScreen` — artwork theme + inline-trailer autoplay. */
+    val seerrDetailPreferences: StateFlow<SeerrDetailPreferences> =
+        combine(appearanceStore.appearance, videoPlayerStore.videoPlayer) { appearance, video ->
+            SeerrDetailPreferences(
+                theme = AppearanceTheme(
+                    dynamicTheming = appearance.dynamicTheming,
+                    oledMode = appearance.oledMode,
+                    colorStyle = appearance.colorStyle,
+                    accentColorSwatch = appearance.accentColorSwatch,
+                ),
+                trailerAutoplay = video.trailerAutoplay,
+            )
+        }.distinctUntilChanged()
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrDetailPreferences())
+
+    /** Fields read by the media `DetailScreen`, projected across 6 stores. */
+    val detailPreferences: StateFlow<DetailPreferences> = combine(
+        combine(
+            appearanceStore.appearance,
+            videoPlayerStore.videoPlayer,
+            subtitleStore.subtitle,
+            experimentalStore.experimental,
+            ::DetailScreenBundle,
+        ),
+        homeDiscoveryStore.homeDiscovery,
+        libraryStore.library,
+    ) { g1, home, library ->
+        DetailPreferences(
+            theme = AppearanceTheme(
+                dynamicTheming = g1.appearance.dynamicTheming,
+                oledMode = g1.appearance.oledMode,
+                colorStyle = g1.appearance.colorStyle,
+                accentColorSwatch = g1.appearance.accentColorSwatch,
+            ),
+            trailerAutoplay = g1.video.trailerAutoplay,
+            preferredAudioLanguage = g1.subtitle.preferredAudioLanguage,
+            preferredSubtitleLanguage = g1.subtitle.preferredSubtitleLanguage,
+            showShareMediaOption = g1.experimental.showShareMediaOption,
+            showExternalRatings = home.showExternalRatings,
+            nextUpExcludedSeriesIds = home.nextUpExcludedSeriesIds,
+            hiddenCwItemIds = home.hiddenCwItemIds,
+            skipSpecials = library.skipSpecials,
+            hideEpisodeThumbnails = library.hideEpisodeThumbnails,
+            episodesDescending = library.episodesDescending,
+            compactEpisodeList = library.compactEpisodeList,
+        )
+    }.distinctUntilChanged()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailPreferences())
+
+    /** Fields read by `OnboardingViewModel` across the multi-step onboarding flow. */
+    val onboardingPreferences: StateFlow<OnboardingPreferences> = combine(
+        combine(
+            appearanceStore.appearance,
+            homeDiscoveryStore.homeDiscovery,
+            navigationStore.navigation,
+            playbackStore.playback,
+            ::OnboardingThemeHomeNavPlaybackBundle,
+        ),
+        combine(
+            videoPlayerStore.videoPlayer,
+            audioStore.audio,
+            subtitleStore.subtitle,
+            securityStore.security,
+            ::OnboardingPlayerAudioSubSecurityBundle,
+        ),
+    ) { g1, g2 ->
+        OnboardingPreferences(
+            themeMode = g1.appearance.themeMode,
+            theme = AppearanceTheme(
+                dynamicTheming = g1.appearance.dynamicTheming,
+                oledMode = g1.appearance.oledMode,
+                colorStyle = g1.appearance.colorStyle,
+                accentColorSwatch = g1.appearance.accentColorSwatch,
+            ),
+            contrastLevel = g1.appearance.contrastLevel,
+            homeHeroEnabled = g1.home.homeHeroEnabled,
+            performanceMode = g1.appearance.performanceMode,
+            homeMode = g1.home.homeMode,
+            navBarShowLabels = g1.navigation.navBarShowLabels,
+            enabledHomeSectionTypes = g1.home.enabledHomeSectionTypes,
+            preferredPlayer = g1.playback.preferredPlayer,
+            streamingQuality = g1.playback.streamingQuality,
+            videoSeekDurationMs = g2.video.videoSeekDurationMs,
+            videoGesturesEnabled = g2.video.videoGesturesEnabled,
+            videoDefaultOrientation = g2.video.videoDefaultOrientation,
+            videoAutoplayNext = g2.video.videoAutoplayNext,
+            audioDefaultSpeed = g2.audio.audioDefaultSpeed,
+            audioGaplessEnabled = g2.audio.audioGaplessEnabled,
+            audioCrossfadeDurationMs = g2.audio.audioCrossfadeDurationMs,
+            audioNormalizationEnabled = g2.audio.audioNormalizationEnabled,
+            audioAutoplayNext = g2.audio.audioAutoplayNext,
+            subtitleStyle = g2.subtitle.subtitleStyle,
+            pinLockEnabled = g2.security.pinLockEnabled,
+            biometricLockEnabled = g2.security.biometricLockEnabled,
+            autoLockTimerMs = g2.security.autoLockTimerMs,
+        )
+    }.distinctUntilChanged()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), OnboardingPreferences())
+
+    /** Fields read by the top-level `SettingsScreen` landing page. */
+    val settingsScreenPreferences: StateFlow<SettingsScreenPreferences> = combine(
+        combine(
+            appearanceStore.appearance,
+            playbackStore.playback,
+            audioStore.audio,
+            subtitleStore.subtitle,
+            securityStore.security,
+            ::SettingsCoreBundle,
+        ),
+        combine(
+            experimentalStore.experimental,
+            notificationStore.notification,
+            screensaverStore.screensaver,
+            ::SettingsAuxBundle,
+        ),
+    ) { g1, g2 ->
+        SettingsScreenPreferences(
+            showAdvancedSettings = g1.appearance.showAdvancedSettings,
+            themeMode = g1.appearance.themeMode,
+            dynamicTheming = g1.appearance.dynamicTheming,
+            oledMode = g1.appearance.oledMode,
+            contrastLevel = g1.appearance.contrastLevel,
+            performanceMode = g1.appearance.performanceMode,
+            preferredPlayer = g1.playback.preferredPlayer,
+            audioDefaultSpeed = g1.audio.audioDefaultSpeed,
+            preferredAudioLanguage = g1.subtitle.preferredAudioLanguage,
+            notificationPreferences = g2.notification.notificationPreferences,
+            pinLockEnabled = g1.security.pinLockEnabled,
+            biometricLockEnabled = g1.security.biometricLockEnabled,
+            dreamImageCategories = g2.screensaver.dreamImageCategories,
+            dreamSlideshowIntervalMs = g2.screensaver.dreamSlideshowIntervalMs,
+            dreamShowTitle = g2.screensaver.dreamShowTitle,
+            dreamKenBurnsEnabled = g2.screensaver.dreamKenBurnsEnabled,
+            dreamTransitionStyle = g2.screensaver.dreamTransitionStyle,
+            enabledExperimentalFeatures = g2.experimental.enabledExperimentalFeatures,
+        )
+    }.distinctUntilChanged()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SettingsScreenPreferences())
+
+    /**
+     * Slice-derived portion of `MainPreferences`. The two runtime-only fields
+     * (`pinLockoutUntilEpochMs`, `onboardingCompleted`) are merged in by
+     * `MainViewModel` via a typed combine off this projection; they are absent
+     * here because they do not live in a preference slice.
+     */
+    val mainPreferences: StateFlow<MainPreferences> = combine(
+        combine(
+            appearanceStore.appearance,
+            securityStore.security,
+            homeDiscoveryStore.homeDiscovery,
+            navigationStore.navigation,
+            experimentalStore.experimental,
+            ::MainScreenBundle,
+        ),
+        playbackStore.playback,
+    ) { g1, playback ->
+        MainPreferences(
+            themeMode = g1.appearance.themeMode,
+            theme = AppearanceTheme(
+                dynamicTheming = g1.appearance.dynamicTheming,
+                oledMode = g1.appearance.oledMode,
+                colorStyle = g1.appearance.colorStyle,
+                accentColorSwatch = g1.appearance.accentColorSwatch,
+            ),
+            contrastLevel = g1.appearance.contrastLevel,
+            performanceMode = g1.appearance.performanceMode,
+            reduceMotionEnabled = g1.appearance.reduceMotionEnabled,
+            synthwaveMode = g1.appearance.synthwaveMode,
+            synthwaveAccent = g1.appearance.synthwaveAccent,
+            soothingMode = g1.appearance.soothingMode,
+            soothingAccent = g1.appearance.soothingAccent,
+            monochromeMode = g1.appearance.monochromeMode,
+            appFontScale = g1.appearance.appFontScale,
+            scheduledThemeStartHour = g1.appearance.scheduledThemeStartHour,
+            scheduledThemeEndHour = g1.appearance.scheduledThemeEndHour,
+            blueLightFilterEnabled = g1.appearance.blueLightFilterEnabled,
+            blueLightFilterStrength = g1.appearance.blueLightFilterStrength,
+            colorBlindMode = g1.appearance.colorBlindMode,
+            handMode = g1.appearance.handMode,
+            pinLockEnabled = g1.security.pinLockEnabled,
+            biometricLockEnabled = g1.security.biometricLockEnabled,
+            pinHash = g1.security.pinHash,
+            autoLockTimerMs = g1.security.autoLockTimerMs,
+            homeMode = g1.home.homeMode,
+            showUnwatchedBadge = g1.home.showUnwatchedBadge,
+            hideWatchedItems = g1.home.hideWatchedItems,
+            showWatchedCheckmark = g1.home.showWatchedCheckmark,
+            hiddenNavItems = g1.navigation.hiddenNavItems,
+            navItemOrder = g1.navigation.navItemOrder,
+            hideBottomNavOnScroll = g1.navigation.hideBottomNavOnScroll,
+            navBarShowLabels = g1.navigation.navBarShowLabels,
+            navigationStyle = g1.navigation.navigationStyle,
+            preferredPlayer = playback.preferredPlayer,
+            enabledExperimentalFeatures = g1.experimental.enabledExperimentalFeatures,
+            appLanguage = g1.experimental.appLanguage,
+        )
+    }.distinctUntilChanged()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), MainPreferences())
+
+    // Tuple-carrier data classes for the nested combines above live in
+    // PreferenceProjectionBundles.kt — extracted so combine-shape plumbing
+    // changes separately from the projection field-sets here.
 }

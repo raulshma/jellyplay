@@ -37,6 +37,10 @@ class AuthViewModelTest {
         every { authRepository.currentServerUsers } returns MutableStateFlow(emptyList())
         val appContext = mockk<Context>()
         every { appContext.getString(any()) } returns ""
+        // The disabled + timeout assertions check the exact user-facing copy, so
+        // route those two keys to the real strings.xml values.
+        every { appContext.getString(R.string.auth_qc_error_not_enabled) } returns "Quick Connect is not enabled on this server"
+        every { appContext.getString(R.string.auth_qc_error_timeout) } returns "Quick Connect timed out. Please try again."
         viewModel = AuthViewModel(authRepository, appContext)
     }
 

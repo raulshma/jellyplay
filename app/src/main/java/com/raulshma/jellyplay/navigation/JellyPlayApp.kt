@@ -99,8 +99,8 @@ import androidx.compose.ui.text.font.FontWeight
 import kotlin.math.roundToInt
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
-import com.raulshma.jellyplay.MainPreferences
-import com.raulshma.jellyplay.isExperimentalEnabled
+import com.raulshma.jellyplay.core.model.MainPreferences
+import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode

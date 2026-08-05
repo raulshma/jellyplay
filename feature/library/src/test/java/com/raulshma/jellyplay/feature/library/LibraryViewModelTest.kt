@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.GroupBy
 import com.raulshma.jellyplay.core.model.LibrarySectionContext
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
@@ -172,6 +173,28 @@ class LibraryViewModelTest {
         advanceUntilIdle()
 
         coVerify { libraryStore.setLibraryGroupBy(GroupBy.GENRE) }
+    }
+
+    @Test
+    fun `selectFolder decodes saved filters from store`() = runTest {
+        // Persisted-blob shape the store holds — the exact JSON the deleted
+        // SavedLibraryFilters mirror used to emit (enums by .name).
+        val savedBlob = """
+            {"mediaTypes":["MOVIE"],"genres":[],"years":[],
+             "sortBy":"RATING","playedStatus":"UNPLAYED",
+             "tags":["fav"],"minRating":4.0}
+        """.trimIndent()
+        every { libraryStore.library } returns MutableStateFlow(
+            LibrarySlice(libraryFilters = mapOf("lib-1" to savedBlob)),
+        )
+
+        val vm = createViewModel()
+        vm.selectFolder(LibraryFolder(id = "lib-1", name = "Movies"))
+
+        assertEquals(listOf(MediaType.MOVIE), vm.filters.value.mediaTypes)
+        assertEquals(SortOption.RATING, vm.filters.value.sortBy)
+        assertEquals(PlayedStatus.UNPLAYED, vm.filters.value.playedStatus)
+        assertEquals(listOf("fav"), vm.filters.value.tags)
     }
 
     @Test

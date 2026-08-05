@@ -120,6 +120,7 @@ import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
+import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.MpvSubtitleOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
@@ -1027,7 +1028,6 @@ fun VideoPlayerScreen(
                 } else 1f
                 val effectiveZoom = videoZoom * tvBaselineZoom
                 val zoomed = effectiveZoom > 1f
-                val caps = uiState.engineCapabilities
                 key(currentEngine) {
                     AndroidView(
                         factory = { ctx ->
@@ -1054,59 +1054,61 @@ fun VideoPlayerScreen(
 
                     // ── Zoom/crop-safe subtitles ──
                     //
-                    // Two engine-specific paths keep captions pinned to the screen
-                    // (outside the graphicsLayer above) so they no longer scale or
-                    // translate off-screen when the user pinch-zooms or crops.
-                    //
-                    //  · ExoPlayer (supportsScreenPinnedSubtitles): a sibling
-                    //    FrameLayout host the engine reparents its native
-                    //    SubtitleView / AssSubtitleView into. Full styling/fidelity
-                    //    is preserved (native rendering, just relocated).
-                    //  · mpv (supportsCueSubtitleOverlay): libass composites into the
-                    //    GPU video surface and can't be reparented, so while zoomed
-                    //    we hide the native subs and render the live cue line
-                    //    (engine.liveSubtitleCue) in a Compose Text. At zoom == 1
-                    //    the native libass path renders with full fidelity.
-                    //
-                    // Both are siblings of the zoomed video, not children, so they
-                    // never inherit the transform. Default-false capabilities keep
-                    // libVLC/External unchanged.
-
-                    if (caps.supportsScreenPinnedSubtitles) {
-                        // Lifetime follows key(currentEngine): onRelease detaches
-                        // the host before the engine releases, so no subtitle view
-                        // orphans in a host the engine no longer feeds.
-                        AndroidView(
-                            factory = { ctx ->
-                                android.widget.FrameLayout(ctx).apply {
-                                    layoutParams = android.view.ViewGroup.LayoutParams(
-                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                                    )
-                                }.also { currentEngine.setExternalSubtitleHost(it) }
-                            },
-                            onRelease = { currentEngine.setExternalSubtitleHost(null) },
-                            // Sibling of the zoomed video — explicitly NOT in a
-                            // graphicsLayer, so it stays pinned to the screen.
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-
-                    if (caps.supportsCueSubtitleOverlay) {
-                        // Hide mpv's native subs only while zoomed to avoid
-                        // double-drawn captions; restore the moment zoom returns
-                        // to 1 so full libass fidelity is back.
-                        LaunchedEffect(zoomed) {
-                            currentEngine.setNativeSubtitlesVisible(!zoomed)
-                        }
-                        val liveCue by currentEngine.liveSubtitleCue
-                            .collectAsStateWithLifecycle()
-                        if (zoomed) {
-                            MpvSubtitleOverlay(
-                                cue = liveCue,
-                                style = uiState.subtitleStyle,
+                    // The engine declares its zoom-safe subtitle strategy via
+                    // [MediaEngine.zoomSafeSubtitleStrategy]; the screen dispatches
+                    // on that single value instead of reverse-engineering the
+                    // strategy from a pair of capability booleans. Both paths keep
+                    // captions pinned to the screen (outside the graphicsLayer
+                    // above) so they no longer scale or translate off-screen when
+                    // the user pinch-zooms or crops. Both are siblings of the
+                    // zoomed video, not children, so they never inherit the
+                    // transform. DISABLED (libVLC/External) renders nothing here.
+                    when (currentEngine.zoomSafeSubtitleStrategy) {
+                        ZoomSafeSubtitleStrategy.NATIVE_PINNED -> {
+                            // ExoPlayer: a sibling FrameLayout host the engine
+                            // reparents its native SubtitleView / AssSubtitleView
+                            // into. Full styling/fidelity is preserved (native
+                            // rendering, just relocated). Lifetime follows
+                            // key(currentEngine): onRelease detaches the host
+                            // before the engine releases, so no subtitle view
+                            // orphans in a host the engine no longer feeds.
+                            AndroidView(
+                                factory = { ctx ->
+                                    android.widget.FrameLayout(ctx).apply {
+                                        layoutParams = android.view.ViewGroup.LayoutParams(
+                                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                        )
+                                    }.also { currentEngine.setExternalSubtitleHost(it) }
+                                },
+                                onRelease = { currentEngine.setExternalSubtitleHost(null) },
+                                // Sibling of the zoomed video — explicitly NOT in a
+                                // graphicsLayer, so it stays pinned to the screen.
+                                modifier = Modifier.fillMaxSize(),
                             )
                         }
+
+                        ZoomSafeSubtitleStrategy.COMPOSE_CUE -> {
+                            // mpv: libass composites into the GPU video surface and
+                            // can't be reparented, so while zoomed we hide the
+                            // native subs and render the live cue line
+                            // (engine.liveSubtitleCue) in a Compose overlay. At
+                            // zoom == 1 the native libass path renders with full
+                            // fidelity.
+                            LaunchedEffect(zoomed) {
+                                currentEngine.setNativeSubtitlesVisible(!zoomed)
+                            }
+                            val liveCue by currentEngine.liveSubtitleCue
+                                .collectAsStateWithLifecycle()
+                            if (zoomed) {
+                                MpvSubtitleOverlay(
+                                    cue = liveCue,
+                                    style = uiState.subtitleStyle,
+                                )
+                            }
+                        }
+
+                        ZoomSafeSubtitleStrategy.DISABLED -> { /* no zoom-safe path */ }
                     }
                 }
             }

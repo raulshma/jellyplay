@@ -27,8 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.engine.MpvStyleMapping
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
-import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 
 /**
@@ -154,38 +154,27 @@ private data class EffectiveMpvSubtitleStyle(
 )
 
 private fun resolveEffectiveStyle(style: SubtitleStyle): EffectiveMpvSubtitleStyle {
-    return if (style.applyCustomStyle) {
-        EffectiveMpvSubtitleStyle(
-            rawStyle = style,
-            textColor = Color(SubtitleColorResolver.resolveTextColor(style)),
-            backgroundColor = Color(SubtitleColorResolver.resolveBackgroundColor(style)),
-            backgroundAlpha = style.backgroundOpacity.coerceIn(0f, 1f),
-            edgeColor = Color(SubtitleColorResolver.resolveEdgeColor(style)),
-            edgeType = style.edgeType,
-            borderWidth = style.borderWidth,
-            shadowOffset = style.shadowOffset,
-            fontSize = style.fontSize,
-            verticalPosition = style.verticalPosition,
-            bold = style.bold,
-            italic = style.italic,
-        )
-    } else {
-        // Native mpv default fallback when applyCustomStyle == false
-        EffectiveMpvSubtitleStyle(
-            rawStyle = style.copy(bold = false, italic = false, fontFamilyName = null, fontFamilyPath = null),
-            textColor = Color.White,
-            backgroundColor = Color.Black,
-            backgroundAlpha = 0f,
-            edgeColor = Color.Black,
-            edgeType = SubtitleEdgeType.OUTLINE,
-            borderWidth = 3.0f,
-            shadowOffset = 0.0f,
-            fontSize = SubtitleDefaults.REFERENCE_FONT_SIZE,
-            verticalPosition = style.verticalPosition,
-            bold = false,
-            italic = false,
-        )
-    }
+    // The resolved caption magnitudes (colors, edge type/width, shadow, size,
+    // bold/italic) come from MpvStyleMapping — the single source shared with the
+    // native mpv path and the style-mapping unit tests. Previously this overlay
+    // kept a third hand-mirrored copy of mpv/libass defaults; a drift here made
+    // captions visibly change on pinch-zoom. verticalPosition + typeface fields
+    // are overlay-local (Compose layout concerns, not mpv properties).
+    val resolved = MpvStyleMapping.resolveForCompose(style)
+    return EffectiveMpvSubtitleStyle(
+        rawStyle = style.copy(bold = resolved.bold, italic = resolved.italic),
+        textColor = Color(resolved.textColorArgb),
+        backgroundColor = Color(resolved.backgroundColorArgb),
+        backgroundAlpha = resolved.backgroundAlpha,
+        edgeColor = Color(resolved.edgeColorArgb),
+        edgeType = resolved.edgeType,
+        borderWidth = resolved.borderWidth,
+        shadowOffset = resolved.shadowOffset,
+        fontSize = resolved.fontSize,
+        verticalPosition = style.verticalPosition,
+        bold = resolved.bold,
+        italic = resolved.italic,
+    )
 }
 
 private fun computeShadow(style: EffectiveMpvSubtitleStyle): Shadow? {
