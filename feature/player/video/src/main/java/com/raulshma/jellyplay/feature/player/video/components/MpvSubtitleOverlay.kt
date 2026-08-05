@@ -29,6 +29,7 @@ import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 
 /**
  * Zoom-safe subtitle overlay for engines whose native rendering cannot be
@@ -77,7 +78,7 @@ internal fun MpvSubtitleOverlay(
 
         val fontSizeSp = effectiveStyle.fontSize.sp
         val bottomPaddingDp = maxHeight * effectiveStyle.verticalPosition.coerceIn(0f, 0.5f)
-        val strokeWidthDp = (effectiveStyle.borderWidth * (effectiveStyle.fontSize.toFloat() / 24.0f)).dp
+        val strokeWidthDp = (effectiveStyle.borderWidth * (effectiveStyle.fontSize.toFloat() / SubtitleDefaults.REFERENCE_FONT_SIZE.toFloat())).dp
         val strokeWidthPx = with(density) { strokeWidthDp.toPx() }
 
         val cueText = cue.toString()
@@ -179,7 +180,7 @@ private fun resolveEffectiveStyle(style: SubtitleStyle): EffectiveMpvSubtitleSty
             edgeType = SubtitleEdgeType.OUTLINE,
             borderWidth = 3.0f,
             shadowOffset = 0.0f,
-            fontSize = 24,
+            fontSize = SubtitleDefaults.REFERENCE_FONT_SIZE,
             verticalPosition = style.verticalPosition,
             bold = false,
             italic = false,

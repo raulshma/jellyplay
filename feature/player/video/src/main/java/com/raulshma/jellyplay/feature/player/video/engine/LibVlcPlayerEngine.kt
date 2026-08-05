@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
@@ -683,7 +684,7 @@ class LibVlcPlayerEngine(
             val backgroundColor = style.backgroundColor.value and 0x00FFFFFF
             val edgeColor = style.edgeColor.value and 0x00FFFFFF
 
-            addOption(":freetype-rel-fontsize=${style.fontSize}")
+            addOption(":freetype-fontsize=${style.fontSize}")
             addOption(":freetype-color=$fontColor")
             addOption(":freetype-background-color=$backgroundColor")
             addOption(":freetype-background-opacity=${(style.backgroundOpacity * 255).toInt().coerceIn(0, 255)}")
@@ -709,7 +710,10 @@ class LibVlcPlayerEngine(
             addOption(":freetype-outline-color=0") // Black
             addOption(":freetype-outline-thickness=2")
             addOption(":freetype-shadow-opacity=255")
-            addOption(":freetype-rel-fontsize=24")
+            // Absolute pixel size, matching the other engines' bundled-default
+            // reference size (24sp). :freetype-rel-fontsize would clamp/ignore
+            // 24 here — it is a relative-size enum, not a pixel value.
+            addOption(":freetype-fontsize=${SubtitleDefaults.REFERENCE_FONT_SIZE}")
         }
 
         // The freetype module accepts a font file path. Supplying the same

@@ -1259,6 +1259,13 @@ fun VideoPlayerScreen(
                                 act.window.attributes = layout
                             }
                         }
+                        // Cancel any pending dismiss job from a prior gesture so it
+                        // doesn't fire redundantly after we've already cleared the
+                        // overlays here. (The job only hides the visual indicators;
+                        // it does not persist brightness/volume, which onClearOverlays
+                        // does synchronously — so cancelling it here is safe.)
+                        overlayDismissJob?.cancel()
+                        overlayDismissJob = null
                         brightnessOverlay = -1f
                         volumeOverlay = -1f
                         volumeGestureAccumulator = 0f

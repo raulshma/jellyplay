@@ -31,7 +31,13 @@ internal object LibVlcSubtitleStyleMapping {
         options.add(":freetype-color=$fontColor")
         options.add(":freetype-background-color=$backgroundColor")
         options.add(":freetype-outline-color=$edgeColor")
-        options.add(":freetype-rel-fontsize=${style.fontSize}")
+        // freetype-fontsize is the ABSOLUTE size in pixels (non-zero overrides
+        // the relative-size enum); use it for the user's sp value. Do NOT feed
+        // sp values into :freetype-rel-fontsize — that option is a small-integer
+        // enum (Auto/Smaller/Small/Normal/Large/Larger = 0/20/18/16/12/6), so a
+        // value like 24 or style.fontSize falls outside its domain and LibVLC
+        // silently ignores it. See VLC modules/text_renderer/freetype/freetype.c.
+        options.add(":freetype-fontsize=${style.fontSize}")
 
         val bgOpacity = when (style.borderStyle) {
             SubtitleBorderStyle.OPAQUE_BOX -> 255

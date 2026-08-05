@@ -81,7 +81,8 @@ class LibVlcSubtitleStyleMappingTest {
         assertEquals((0x112233).toString(), options[":freetype-color"])
         assertEquals((0x445566).toString(), options[":freetype-background-color"])
         assertEquals((0x778899).toString(), options[":freetype-outline-color"])
-        assertEquals("32", options[":freetype-rel-fontsize"])
+        // Absolute pixel size (not the relative-size enum, which rejects 32).
+        assertEquals("32", options[":freetype-fontsize"])
     }
 
     @Test

@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
@@ -1617,7 +1618,7 @@ class MpvPlayerEngine(
         if (style.applyCustomStyle) {
             customSubtitleStyleEntries(style, values).forEach { (k, v) -> mpv.safeSetOption(k, v) }
             mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / 24.0).toString())
+            mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE).toString())
         } else {
             mpv.safeSetOption("sub-ass-override", "no")
             mpv.safeSetOption("sub-bold", "no")
@@ -1626,7 +1627,7 @@ class MpvPlayerEngine(
             mpv.safeSetOption("sub-scale", "1.0")
         }
 
-        mpv.safeSetOption("sub-font-size", "55")
+        mpv.safeSetOption("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toString())
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
         mpv.safeSetOption("sub-pos", subPosValue.toString())
         mpv.safeSetOption("sub-margin-y", values.marginY.toString())
@@ -1644,7 +1645,7 @@ class MpvPlayerEngine(
             mpv.safeSetPropertyDouble("sub-border-size", values.outlineSize)
             mpv.safeSetPropertyDouble("sub-shadow-offset", values.shadowOffset)
             mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / 24.0)
+            mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE)
         } else {
             // Reset to defaults
             mpv.safeSetPropertyString("sub-color", "#FFFFFFFF")
@@ -1662,7 +1663,7 @@ class MpvPlayerEngine(
             mpv.safeSetPropertyDouble("sub-scale", 1.0)
         }
 
-        mpv.safeSetPropertyDouble("sub-font-size", 55.0)
+        mpv.safeSetPropertyDouble("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toDouble())
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
         mpv.safeSetPropertyInt("sub-pos", subPosValue)
         mpv.safeSetPropertyInt("sub-margin-y", values.marginY)
