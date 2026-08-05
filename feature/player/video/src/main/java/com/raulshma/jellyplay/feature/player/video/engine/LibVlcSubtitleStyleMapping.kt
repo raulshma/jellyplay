@@ -8,11 +8,19 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolve
 /** Pure FreeType typography mapping, shared by LibVLC's initial and reload paths. */
 internal object LibVlcSubtitleStyleMapping {
 
-    fun typefaceOptions(style: SubtitleStyle, bundledFallbackPath: String): List<String> = listOf(
-        ":freetype-bold=${style.bold}",
-        ":freetype-italic=${style.italic}",
-        ":freetype-font=${style.fontFamilyPath ?: bundledFallbackPath}",
-    )
+    fun typefaceOptions(style: SubtitleStyle, bundledFallbackPath: String): List<String> = if (style.applyCustomStyle) {
+        listOf(
+            ":freetype-bold=${style.bold}",
+            ":freetype-italic=${style.italic}",
+            ":freetype-font=${style.fontFamilyPath ?: bundledFallbackPath}",
+        )
+    } else {
+        listOf(
+            ":freetype-bold=false",
+            ":freetype-italic=false",
+            ":freetype-font=$bundledFallbackPath",
+        )
+    }
 
     fun colorOptions(style: SubtitleStyle): List<String> {
         val options = mutableListOf<String>()

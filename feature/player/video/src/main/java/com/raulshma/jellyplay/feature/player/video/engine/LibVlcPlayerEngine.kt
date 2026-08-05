@@ -709,7 +709,7 @@ class LibVlcPlayerEngine(
             addOption(":freetype-outline-color=0") // Black
             addOption(":freetype-outline-thickness=2")
             addOption(":freetype-shadow-opacity=255")
-            addOption(":freetype-rel-fontsize=${style.fontSize}")
+            addOption(":freetype-rel-fontsize=24")
         }
 
         // The freetype module accepts a font file path. Supplying the same

@@ -171,7 +171,7 @@ private fun resolveEffectiveStyle(style: SubtitleStyle): EffectiveMpvSubtitleSty
     } else {
         // Native mpv default fallback when applyCustomStyle == false
         EffectiveMpvSubtitleStyle(
-            rawStyle = style.copy(bold = false, italic = false),
+            rawStyle = style.copy(bold = false, italic = false, fontFamilyName = null, fontFamilyPath = null),
             textColor = Color.White,
             backgroundColor = Color.Black,
             backgroundAlpha = 0f,
@@ -179,7 +179,7 @@ private fun resolveEffectiveStyle(style: SubtitleStyle): EffectiveMpvSubtitleSty
             edgeType = SubtitleEdgeType.OUTLINE,
             borderWidth = 3.0f,
             shadowOffset = 0.0f,
-            fontSize = style.fontSize,
+            fontSize = 24,
             verticalPosition = style.verticalPosition,
             bold = false,
             italic = false,
