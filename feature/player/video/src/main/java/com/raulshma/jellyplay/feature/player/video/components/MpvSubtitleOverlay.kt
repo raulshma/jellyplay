@@ -2,22 +2,32 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver
 
 /**
@@ -28,18 +38,16 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolve
  * as a bottom-aligned [Text], pinned to the screen (a sibling of the zoomed
  * video, outside the pinch/crop transform).
  *
- * Style is resolved from the user's [SubtitleStyle] via [SubtitleColorResolver]
- * so it visually matches the native captions the engine renders at zoom == 1.
- * ASS in-line positioning/styling is not representable in plain text and is
- * lost while this overlay is shown — the documented trade-off of the mpv path.
- * At zoom == 1 this composable is not composed at all (native libass renders
- * with full fidelity), so there is zero degradation in the normal case.
- *
- * Only shown for engines advertising
- * [com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities.supportsCueSubtitleOverlay]
- * (mpv). ExoPlayer uses the screen-pinned native SubtitleView host instead.
- *
- * @param cue the current subtitle line; blank -> renders nothing.
+ * Style is resolved from [SubtitleStyle] to match native mpv (libass) captions
+ * rendered at zoom == 1:
+ * - Honors [SubtitleStyle.applyCustomStyle]: when false, falls back to mpv's
+ *   default native caption style (white text, black 3.0 outline, bold=false, italic=false).
+ * - Resolves font typeface (custom user font or bundled fallback) via [FontProvider].
+ * - Scales font size proportionally to video container height (matching mpv's `sub-font-size=55`
+ *   libass 720p reference canvas ratio).
+ * - Places bottom margin at container height * [SubtitleStyle.verticalPosition] (matching `sub-pos`).
+ * - Renders crisp 360° stroke outline for [SubtitleEdgeType.OUTLINE] and wraps background
+ *   boxes tightly around text lines.
  */
 @Composable
 internal fun MpvSubtitleOverlay(
@@ -48,67 +56,163 @@ internal fun MpvSubtitleOverlay(
     modifier: Modifier = Modifier,
 ) {
     if (cue.isNullOrBlank()) return
-    // Transparent box: never intercepts the pointer events the gesture overlay
-    // beneath it needs. Only the Text is drawn.
-    Box(
+
+    val context = LocalContext.current
+    val fontProvider = remember(context) { FontProvider(context.applicationContext) }
+    val effectiveStyle = remember(style) { resolveEffectiveStyle(style) }
+
+    val typeface = remember(effectiveStyle.rawStyle, fontProvider) {
+        fontProvider.typefaceFor(effectiveStyle.rawStyle)
+    }
+    val fontFamily = remember(typeface) { FontFamily(typeface) }
+    val fontWeight = if (effectiveStyle.bold) FontWeight.Bold else FontWeight.Normal
+    val fontStyle = if (effectiveStyle.italic) FontStyle.Italic else FontStyle.Normal
+
+    // Transparent outer box: never intercepts pointer events needed by gestures.
+    BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Text(
-            // mpv's sub-text is a CharSequence (CharSequence? on the flow);
-            // Material3 Text requires String/AnnotatedString. toString() is
-            // lossless here — sub-text is already plain text (ASS override tags
-            // stripped by mpv).
-            text = cue.toString(),
-            // resolveTextColor folds the ARGB-over-enum fallback; mirror the
-            // native SubtitleView styling path (ExoPlayerEngine) exactly.
-            color = Color(SubtitleColorResolver.resolveTextColor(style)),
-            fontSize = style.fontSize.sp,
-            fontWeight = FontWeight.Normal,
-            textAlign = TextAlign.Center,
-            // Drop-shadow / outline via a TextStyle shadow, matching the native
-            // edge type for visual consistency. Compose Text has no `shadow`
-            // parameter, so the shadow rides on the style. RAISED/DEPRESSED
-            // collapse to "no shadow" since Compose has no direct equivalent.
-            style = androidx.compose.ui.text.TextStyle(shadow = shadowFor(style)),
+        val density = LocalDensity.current
+
+        val fontSizeSp = effectiveStyle.fontSize.sp
+        val bottomPaddingDp = maxHeight * effectiveStyle.verticalPosition.coerceIn(0f, 0.5f)
+        val strokeWidthDp = (effectiveStyle.borderWidth * (effectiveStyle.fontSize.toFloat() / 24.0f)).dp
+        val strokeWidthPx = with(density) { strokeWidthDp.toPx() }
+
+        val cueText = cue.toString()
+
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = 32.dp,
-                    // verticalPosition is a fraction the native renderer uses as
-                    // bottom padding; lift the overlay the same fraction off the
-                    // bottom so the two stay aligned.
-                    vertical = (style.verticalPosition * 64f).dp.coerceAtLeast(8.dp),
-                )
+                .padding(horizontal = 24.dp)
+                .padding(bottom = bottomPaddingDp.coerceAtLeast(8.dp))
                 .then(
-                    if (style.backgroundOpacity > 0f) {
-                        Modifier.background(
-                            Color(SubtitleColorResolver.resolveBackgroundColor(style))
-                                .copy(alpha = style.backgroundOpacity.coerceIn(0f, 1f))
-                        )
+                    if (effectiveStyle.backgroundAlpha > 0f) {
+                        Modifier
+                            .background(
+                                color = effectiveStyle.backgroundColor.copy(alpha = effectiveStyle.backgroundAlpha),
+                                shape = RoundedCornerShape(6.dp),
+                            )
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
                     } else {
                         Modifier
                     }
                 ),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Background stroke layer for crisp 360° outline.
+            if (effectiveStyle.edgeType == SubtitleEdgeType.OUTLINE && strokeWidthPx > 0f) {
+                Text(
+                    text = cueText,
+                    color = effectiveStyle.edgeColor,
+                    fontSize = fontSizeSp,
+                    fontFamily = fontFamily,
+                    fontWeight = fontWeight,
+                    fontStyle = fontStyle,
+                    textAlign = TextAlign.Center,
+                    style = androidx.compose.ui.text.TextStyle(
+                        drawStyle = Stroke(
+                            width = strokeWidthPx,
+                            join = StrokeJoin.Round,
+                        ),
+                    ),
+                )
+            }
+
+            // Foreground fill layer + drop shadow.
+            Text(
+                text = cueText,
+                color = effectiveStyle.textColor,
+                fontSize = fontSizeSp,
+                fontFamily = fontFamily,
+                fontWeight = fontWeight,
+                fontStyle = fontStyle,
+                textAlign = TextAlign.Center,
+                style = androidx.compose.ui.text.TextStyle(
+                    drawStyle = Fill,
+                    shadow = computeShadow(effectiveStyle),
+                ),
+            )
+        }
+    }
+}
+
+private data class EffectiveMpvSubtitleStyle(
+    val rawStyle: SubtitleStyle,
+    val textColor: Color,
+    val backgroundColor: Color,
+    val backgroundAlpha: Float,
+    val edgeColor: Color,
+    val edgeType: SubtitleEdgeType,
+    val borderWidth: Float,
+    val shadowOffset: Float,
+    val fontSize: Int,
+    val verticalPosition: Float,
+    val bold: Boolean,
+    val italic: Boolean,
+)
+
+private fun resolveEffectiveStyle(style: SubtitleStyle): EffectiveMpvSubtitleStyle {
+    return if (style.applyCustomStyle) {
+        EffectiveMpvSubtitleStyle(
+            rawStyle = style,
+            textColor = Color(SubtitleColorResolver.resolveTextColor(style)),
+            backgroundColor = Color(SubtitleColorResolver.resolveBackgroundColor(style)),
+            backgroundAlpha = style.backgroundOpacity.coerceIn(0f, 1f),
+            edgeColor = Color(SubtitleColorResolver.resolveEdgeColor(style)),
+            edgeType = style.edgeType,
+            borderWidth = style.borderWidth,
+            shadowOffset = style.shadowOffset,
+            fontSize = style.fontSize,
+            verticalPosition = style.verticalPosition,
+            bold = style.bold,
+            italic = style.italic,
+        )
+    } else {
+        // Native mpv default fallback when applyCustomStyle == false
+        EffectiveMpvSubtitleStyle(
+            rawStyle = style.copy(bold = false, italic = false),
+            textColor = Color.White,
+            backgroundColor = Color.Black,
+            backgroundAlpha = 0f,
+            edgeColor = Color.Black,
+            edgeType = SubtitleEdgeType.OUTLINE,
+            borderWidth = 3.0f,
+            shadowOffset = 0.0f,
+            fontSize = style.fontSize,
+            verticalPosition = style.verticalPosition,
+            bold = false,
+            italic = false,
         )
     }
 }
 
-/**
- * Maps the user's [SubtitleEdgeType] to a Compose text [Shadow]. OUTLINE is
- * approximated with a tight, low-offset shadow in the edge color (Compose text
- * has no stroke API); DROP_SHADOW uses a larger offset. NONE/RAISED/DEPRESSED
- * return `null` (no shadow), matching the "no edge" / unrepresentable cases.
- */
-private fun shadowFor(style: SubtitleStyle): Shadow? {
-    val edgeColor = Color(SubtitleColorResolver.resolveEdgeColor(style))
+private fun computeShadow(style: EffectiveMpvSubtitleStyle): Shadow? {
     return when (style.edgeType) {
-        SubtitleEdgeType.NONE -> null
-        SubtitleEdgeType.OUTLINE ->
-            Shadow(color = edgeColor, blurRadius = 3f, offset = Offset(1f, 1f))
-        SubtitleEdgeType.DROP_SHADOW ->
-            Shadow(color = edgeColor, blurRadius = 4f, offset = Offset(2f, 2f))
-        SubtitleEdgeType.RAISED,
-        SubtitleEdgeType.DEPRESSED -> null
+        SubtitleEdgeType.NONE,
+        SubtitleEdgeType.OUTLINE -> null
+        SubtitleEdgeType.DROP_SHADOW -> {
+            val offsetPx = style.shadowOffset * 2f
+            Shadow(
+                color = style.edgeColor,
+                offset = Offset(offsetPx, offsetPx),
+                blurRadius = 3f,
+            )
+        }
+        SubtitleEdgeType.RAISED -> {
+            Shadow(
+                color = style.edgeColor.copy(alpha = 0.8f),
+                offset = Offset(1.5f, 1.5f),
+                blurRadius = 1.5f,
+            )
+        }
+        SubtitleEdgeType.DEPRESSED -> {
+            Shadow(
+                color = style.edgeColor.copy(alpha = 0.8f),
+                offset = Offset(-1.5f, -1.5f),
+                blurRadius = 1.5f,
+            )
+        }
     }
 }
+
