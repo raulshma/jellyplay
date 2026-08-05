@@ -46,6 +46,11 @@ class FakeMediaEngine : MediaEngine {
     val currentCuesState = MutableStateFlow<List<TimedCue>>(emptyList())
     override val currentCues: StateFlow<List<TimedCue>> get() = currentCuesState.asStateFlow()
 
+    // Test double for the live-subtitle line. Defaults to null (no overlay);
+    // tests of the zoom overlay path can drive `liveSubtitleCueState.value = …`.
+    val liveSubtitleCueState = MutableStateFlow<CharSequence?>(null)
+    override val liveSubtitleCue: StateFlow<CharSequence?> get() = liveSubtitleCueState.asStateFlow()
+
     private val _pollingIntervalMs = MutableStateFlow(0L)
     override val pollingIntervalMs: StateFlow<Long> get() = _pollingIntervalMs.asStateFlow()
     private val _videoStatsEnabled = MutableStateFlow(false)

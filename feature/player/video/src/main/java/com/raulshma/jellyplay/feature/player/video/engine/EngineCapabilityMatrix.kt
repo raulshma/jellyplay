@@ -56,6 +56,11 @@ object EngineCapabilityMatrix {
         supportsBorderStyles = true,
         supportsSecondarySubtitles = false,
         supportsScreenshot = true,
+        // Native SubtitleView/AssSubtitleView are reparented into a screen-pinned
+        // host via [MediaEngine.setExternalSubtitleHost], so captions stay put
+        // under pinch-zoom and crop.
+        supportsScreenPinnedSubtitles = true,
+        supportsCueSubtitleOverlay = false,
     )
 
     /** libmpv backend. */
@@ -82,6 +87,14 @@ object EngineCapabilityMatrix {
         supportsBorderStyles = true,
         supportsSecondarySubtitles = true,
         supportsScreenshot = true,
+        // libass composites into the GPU video surface (the binding exposes a
+        // single surface), so the SubtitleView can't be reparented. Instead mpv
+        // exposes the live line via [MediaEngine.liveSubtitleCue] (sub-text);
+        // the screen renders a Compose overlay while zoomed and hides native
+        // subs via [MediaEngine.setNativeSubtitlesVisible]. Zero fidelity loss
+        // at zoom == 1 and under crop (native panscan/sub-use-margins path).
+        supportsScreenPinnedSubtitles = false,
+        supportsCueSubtitleOverlay = true,
     )
 
     /** libVLC backend. */
@@ -108,6 +121,14 @@ object EngineCapabilityMatrix {
         supportsBorderStyles = false,
         supportsSecondarySubtitles = false,
         supportsScreenshot = true,
+        // libVLC 3.7.x composites subtitles via freetype into a native-owned
+        // transparent SurfaceView and the binding exposes no text/event
+        // callback, so neither screen-pinned reparenting nor a Compose cue
+        // overlay is possible. Subtitles move with pinch-zoom (crop works via
+        // VLC's own aspect/scale handling). Only unblocked by a libvlc 4.x aar,
+        // a JNI fork, or app-side subtitle demux — all out of scope.
+        supportsScreenPinnedSubtitles = false,
+        supportsCueSubtitleOverlay = false,
     )
 
     /**
@@ -135,6 +156,8 @@ object EngineCapabilityMatrix {
         supportsFontFamily = false,
         supportsFreeFormColors = false,
         supportsBorderStyles = false,
+        supportsScreenPinnedSubtitles = false,
+        supportsCueSubtitleOverlay = false,
     )
 
     /** All declared matrices, keyed by [PlayerType]. Asserted total in tests. */

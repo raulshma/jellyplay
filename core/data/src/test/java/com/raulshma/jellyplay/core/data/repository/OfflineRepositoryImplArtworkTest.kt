@@ -88,6 +88,33 @@ class OfflineRepositoryImplArtworkTest {
         seriesId = "series-1",
     )
 
+    private fun movieEntity(
+        id: String = "movie-1",
+        backdropPath: String? = null,
+        posterPath: String? = null,
+    ) = OfflineMediaEntity(
+        id = id,
+        name = "Movie",
+        mediaType = MediaType.MOVIE.name,
+        backdropPath = backdropPath,
+        posterPath = posterPath,
+    )
+
+    private fun movieDownloadEntity(
+        mediaItemId: String,
+        dir: File,
+    ) = DownloadEntity(
+        id = "dl-$mediaItemId",
+        mediaItemId = mediaItemId,
+        name = "Movie Download",
+        mediaType = "MOVIE",
+        downloadPath = File(dir, "$mediaItemId.mkv").absolutePath,
+        downloadUrl = "https://stream",
+        totalSizeBytes = 0L,
+        downloadedBytes = 0L,
+        status = "COMPLETED",
+    )
+
     private fun stubDetail(episode: OfflineMediaEntity, download: DownloadEntity?) {
         coEvery { offlineMediaDao.getByIdFlow(episode.id) } returns flowOf(episode)
         coEvery { downloadDao.getDownloadByMediaItemIdFlow(episode.id) } returns flowOf(download)
@@ -201,5 +228,91 @@ class OfflineRepositoryImplArtworkTest {
 
         assertEquals(localPoster, item.posterPath)
         assertNull(item.backdropPath)
+    }
+
+    // ── Universal resolver: MOVIE/AUDIO own-artifact resolution ──────────────
+    // The resolver previously skipped movies/albums entirely (only EPISODE and
+    // SERIES were handled). A movie whose persisted poster is a remote URL (a
+    // legacy download, or an image-write-failure fallback at download time) now
+    // resolves the local file written beside its media on every read path.
+
+    @Test
+    fun `movie with remote poster resolves its own local poster beside the download`() = runTest {
+        val dir = tempFolder.newFolder("movieDir")
+        val localPoster = File(dir, DownloadArtifacts.posterFile("movie-1"))
+        localPoster.writeText("poster-bytes")
+        val localBackdrop = File(dir, DownloadArtifacts.backdropFile("movie-1"))
+        localBackdrop.writeText("backdrop-bytes")
+        coEvery { offlineMediaDao.getByIdFlow("movie-1") } returns flowOf(
+            movieEntity(
+                posterPath = "https://server/Items/movie-1/Images/Primary",
+                backdropPath = "https://server/Items/movie-1/Images/Backdrop",
+            ),
+        )
+        coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
+            flowOf(movieDownloadEntity("movie-1", dir))
+
+        val item = repository.getOfflineDetail("movie-1").first()!!
+
+        assertEquals(localPoster.absolutePath, item.posterPath)
+        assertEquals(localBackdrop.absolutePath, item.backdropPath)
+    }
+
+    @Test
+    fun `movie with no local artwork keeps the remote url`() = runTest {
+        val dir = tempFolder.newFolder("movieNoArt")
+        coEvery { offlineMediaDao.getByIdFlow("movie-1") } returns flowOf(
+            movieEntity(posterPath = "https://server/Items/movie-1/Images/Primary"),
+        )
+        coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
+            flowOf(movieDownloadEntity("movie-1", dir))
+
+        val item = repository.getOfflineDetail("movie-1").first()!!
+
+        // No disk file → remote URL preserved so it still loads online.
+        assertEquals("https://server/Items/movie-1/Images/Primary", item.posterPath)
+    }
+
+    // ── List-path resolution (library grid, episode lists, album tracks) ─────
+    // Local-artwork resolution now runs in every read path, not just the detail
+    // screen, so legacy/remote-URL rows render offline in grids too.
+
+    @Test
+    fun `library grid resolves a movie row with a remote poster to its local file`() = runTest {
+        val dir = tempFolder.newFolder("libMovieDir")
+        val localPoster = File(dir, DownloadArtifacts.posterFile("movie-1"))
+        localPoster.writeText("poster-bytes")
+        coEvery { offlineMediaDao.getTopLevelItems() } returns flowOf(
+            listOf(
+                movieEntity(posterPath = "https://server/Items/movie-1/Images/Primary"),
+            ),
+        )
+        coEvery { downloadDao.getDownloadsByMediaItemIdsFlow(listOf("movie-1")) } returns
+            flowOf(listOf(movieDownloadEntity("movie-1", dir)))
+
+        val items = repository.getOfflineLibrary().first()
+
+        assertEquals(localPoster.absolutePath, items.single().posterPath)
+    }
+
+    @Test
+    fun `episode list resolves a remote poster to the local file beside the download`() = runTest {
+        val dir = tempFolder.newFolder("epListDir")
+        val localPoster = File(dir, DownloadArtifacts.posterFile("ep-1"))
+        localPoster.writeText("poster-bytes")
+        coEvery { offlineMediaDao.getEpisodesForSeason("season-1") } returns flowOf(
+            listOf(
+                episodeEntity(
+                    id = "ep-1",
+                    posterPath = "https://server/Items/ep-1/Images/Primary",
+                ).copy(seasonId = "season-1"),
+            ),
+        )
+        coEvery { downloadDao.getDownloadsByMediaItemIdsFlow(listOf("ep-1")) } returns
+            flowOf(listOf(downloadEntity("ep-1", dir)))
+
+        val items = repository.getEpisodesForSeason("season-1").first()
+
+        assertEquals(localPoster.absolutePath, items.single().posterPath)
     }
 }

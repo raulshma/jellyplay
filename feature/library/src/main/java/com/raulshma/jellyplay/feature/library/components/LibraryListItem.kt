@@ -29,6 +29,7 @@ import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberSharedElementModifier
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 
 @Composable
@@ -39,6 +40,7 @@ fun LibraryListItem(
     blurHash: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    sharedElementKey: String? = null,
 ) {
     var isFocused by remember { mutableStateOf(false) }
     Row(
@@ -55,7 +57,8 @@ fun LibraryListItem(
         Box(
             modifier = Modifier
                 .size(width = 48.dp, height = 72.dp)
-                .clip(ShapeCache.smooth8),
+                .clip(ShapeCache.smooth8)
+                .then(rememberSharedElementModifier(sharedElementKey)),
         ) {
             if (imageUrl != null) {
                 MediaImage(

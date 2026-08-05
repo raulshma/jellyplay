@@ -91,6 +91,14 @@ class MpvPlayerEngine(
 
     override val capabilities = EngineCapabilityMatrix.MPV
 
+    // The currently-displayed subtitle line, exposed to the screen for the
+    // zoom-safe Compose overlay (supportsCueSubtitleOverlay). Distinct from the
+    // accumulated [currentCues] history: this is the single live line, cleared
+    // on blank/track-switch/stop. Driven by mpv's `sub-text` property (ASS
+    // override tags already stripped by mpv).
+    private val _liveSubtitleCue = MutableStateFlow<CharSequence?>(null)
+    override val liveSubtitleCue: StateFlow<CharSequence?> = _liveSubtitleCue.asStateFlow()
+
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
     @Volatile private var pendingSubtitles: List<SubtitleSource> = emptyList()
@@ -250,10 +258,18 @@ class MpvPlayerEngine(
                         // Subtitle track switch: reset accumulated cues so lines
                         // from the prior track don't bleed into the preview.
                         _currentCues.value = emptyList()
+                        // Clear the live overlay line so a stale caption from the
+                        // previous track doesn't linger while zoomed.
+                        _liveSubtitleCue.value = null
                     }
                     refreshTracks("property:$property")
                 } else if (property == "sub-text") {
                     accumulateMpvSubText(value)
+                    // Mirror the live line into the overlay flow. mpv fires
+                    // sub-text only on a line change and emits "" when the line
+                    // clears — surface both so the Compose overlay updates/clears
+                    // in lockstep with native rendering.
+                    _liveSubtitleCue.value = value.takeIf { it.isNotBlank() }
                 }
             }
             override fun eventProperty(property: String, value: MPVNode) {
@@ -567,6 +583,7 @@ class MpvPlayerEngine(
         cachedBufferedPositionMs = 0L
         cachedSubStartSec = -1.0
         _currentCues.value = emptyList()
+        _liveSubtitleCue.value = null
         Log.d(
             TAG,
             "MPV load requested: uri=${redactSensitive(request.uri)}, start=${request.startPositionMs}ms, " +
@@ -632,6 +649,7 @@ class MpvPlayerEngine(
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
         _currentCues.value = emptyList()
+        _liveSubtitleCue.value = null
         cachedPositionMs = 0L
         cachedDurationMs = 0L
         cachedBufferedPositionMs = 0L
@@ -1053,6 +1071,23 @@ class MpvPlayerEngine(
             m.setPropertyString("sub-use-margins", if (isZoom) "yes" else "no")
             m.setPropertyString("sub-ass-force-margins", if (isZoom) "yes" else "no")
         } catch (_: Exception) {}
+    }
+
+    /**
+     * Toggles mpv's native subtitle rendering via the live `sub-visibility`
+     * property. The screen hides native subs (`visible = false`) while it
+     * renders the zoom-safe Compose overlay from [liveSubtitleCue], so captions
+     * aren't double-drawn, and restores them (`visible = true`) the moment zoom
+     * returns to 1 (full libass fidelity). Cheap, reversible, and already an
+     * observed property, so the toggle is consistent with mpv's own state.
+     */
+    override fun setNativeSubtitlesVisible(visible: Boolean) {
+        val m = mpvView?.mpv ?: return
+        try {
+            m.setPropertyString("sub-visibility", if (visible) "yes" else "no")
+        } catch (e: Exception) {
+            Log.w(TAG, "setNativeSubtitlesVisible($visible) failed", e)
+        }
     }
 
     override val currentPositionMs: Long

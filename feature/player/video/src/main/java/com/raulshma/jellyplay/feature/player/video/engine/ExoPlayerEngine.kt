@@ -137,6 +137,12 @@ class ExoPlayerEngine(
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
     private var frameSizeListener: android.view.View.OnLayoutChangeListener? = null
+    // Optional screen-pinned host. When non-null, [reparentSubtitleViews]
+    // parents the SubtitleView/AssSubtitleView here (a sibling of the zoomed
+    // video surface, outside the pinch/crop transform) instead of the
+    // letterboxed `exo_content_frame`, so captions stay put under zoom/crop.
+    // Set via [setExternalSubtitleHost]; cleared on detach/release.
+    private var externalSubtitleHost: android.view.ViewGroup? = null
 
     // --- libass (ass-media) overlay state ---
     // Only one of these is populated per session: when AssSupport detects an
@@ -657,6 +663,12 @@ class ExoPlayerEngine(
         player?.removeAnalyticsListener(decoderCountersListener)
         frameSizeListener?.let { playerView?.removeOnLayoutChangeListener(it) }
         frameSizeListener = null
+        // Detach the screen-pinned host first so subtitle views are released from
+        // it before the PlayerView is torn down. Without this, reparented views
+        // (now living outside the PlayerView subtree) would orphan in a host the
+        // engine no longer feeds. The screen's onRelease normally does this, but
+        // release() must be safe to call without it.
+        externalSubtitleHost = null
         playerView?.player = null
         playerView = null
         player?.release()
@@ -680,11 +692,12 @@ class ExoPlayerEngine(
         subtitleTrackAutoDisabled = false
 
         // Drop the libass overlay + handler so the next load() rebuilds them
-        // fresh. The AssSubtitleView is a child of the content frame, which was
-        // torn down with playerView above; nulling the references avoids leaks
-        // and lets the GC reclaim the native Ass/AssRender handles the handler
-        // owns. (ass-media has no explicit release() on AssHandler; it relies on
-        // the player release propagating to the renderer it injected.)
+        // fresh. The AssSubtitleView is a child of the (now-cleared) subtitle
+        // target, which was torn down with playerView above; nulling the
+        // references avoids leaks and lets the GC reclaim the native
+        // Ass/AssRender handles the handler owns. (ass-media has no explicit
+        // release() on AssHandler; it relies on the player release propagating
+        // to the renderer it injected.)
         assOverlayView = null
         assHandler = null
         assEnabledForSession = false
@@ -880,14 +893,15 @@ class ExoPlayerEngine(
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
         }
-        pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
-        // Re-parent the SubtitleView into the (re-laid-out) content frame after
-        // every layout pass. In portrait the PlayerView letterboxes the video
-        // into the AspectRatioFrameLayout content frame; the SubtitleView must
-        // live inside that frame (not the full-screen PlayerView) so captions
-        // sit at the bottom of the *video*, and setBottomPaddingFraction /
-        // fractional text sizes compute against the video height, not the much
-        // taller screen height.
+        pv.post { reparentSubtitleViews(pv) }
+        // Re-parent the subtitle views into the (re-laid-out) target after every
+        // layout pass. By default that target is the AspectRatioFrameLayout
+        // content frame: in portrait the PlayerView letterboxes the video into
+        // it, and the SubtitleView must live inside that frame (not the
+        // full-screen PlayerView) so captions sit at the bottom of the *video*,
+        // and setBottomPaddingFraction / fractional text sizes compute against
+        // the video height. When an [externalSubtitleHost] is attached it
+        // replaces the content frame so captions pin to the screen under zoom.
         //
         // Layout passes fire frequently during playback (controls show/hide,
         // seekbar interaction, immersive transitions, video-size callbacks);
@@ -901,10 +915,10 @@ class ExoPlayerEngine(
             lastFrameW = w
             lastFrameH = h
             pv.post {
-                reparentSubtitleViewIntoVideoFrame(pv)
+                reparentSubtitleViews(pv)
                 // ASS coordinates are absolute to the video frame; the overlay
-                // is MATCH_PARENT inside the content frame so it already tracks
-                // the letterboxed geometry, but force a re-layout to be safe.
+                // is MATCH_PARENT inside the target so it already tracks the
+                // letterboxed geometry, but force a re-layout to be safe.
                 assOverlayView?.requestLayout()
             }
         }
@@ -927,16 +941,11 @@ class ExoPlayerEngine(
                 visibility = if (activeTrackIsAss) View.VISIBLE else View.GONE
             }
             assOverlayView = assView
-            pv.post {
-                val contentFrame = pv.findViewById<ViewGroup>(androidx.media3.ui.R.id.exo_content_frame)
-                contentFrame?.addView(
-                    assView,
-                    FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    ),
-                )
-            }
+            // Parent the ASS overlay via the unified reparent path so it tracks
+            // the active target (content frame, or the screen-pinned host when
+            // one is attached). Idempotent, so the initial reparent above plus
+            // this one collapse to a single add.
+            pv.post { reparentSubtitleViews(pv) }
         }
 
         applySubtitleStyleToView(pv, currentConfig.subtitleStyle)
@@ -944,32 +953,68 @@ class ExoPlayerEngine(
     }
 
     /**
-     * Moves PlayerView's SubtitleView from the full-screen PlayerView into the
-     * [AspectRatioFrameLayout] content frame (the letterboxed video rectangle).
-     * While the SubtitleView is a direct child of the PlayerView its layout
-     * fractions (bottom padding, fractional text size) are computed against the
+     * Parents both the native [SubtitleView] and the libass [AssSubtitleView]
+     * (when present) into the active subtitle target.
+     *
+     * Default target is PlayerView's `exo_content_frame` (the letterboxed video
+     * rectangle): while the SubtitleView is a direct child of the PlayerView its
+     * layout fractions (bottom padding, fractional text size) compute against the
      * whole screen height, so in portrait — where the video is letterboxed —
      * captions land in the bottom black bar instead of on the video. Inside the
      * content frame they are measured against the video dimensions, keeping them
      * correct and consistent with mpv / VLC across rotation.
+     *
+     * When an [externalSubtitleHost] is attached it replaces the content frame as
+     * the target. That host is a sibling of the zoomed video surface (outside the
+     * pinch/crop transform), so captions stay pinned to the screen under zoom and
+     * crop. Font sizes are SP (density-independent, unaffected); only
+     * `setBottomPaddingFraction` / fractional sizes then resolve against the
+     * screen height instead of the video height — the intended screen-pinned
+     * behavior. See [setExternalSubtitleHost].
+     *
+     * Idempotent: a view already parented to the active target is left alone, so
+     * repeated layout-pass calls are a cheap no-op (see `lastFrameW/H` guard in
+     * [createSurfaceView]).
      */
-    private fun reparentSubtitleViewIntoVideoFrame(pv: PlayerView) {
-        val subtitleView = pv.subtitleView ?: return
-        val contentFrame = pv.findViewById<android.view.ViewGroup>(
-            androidx.media3.ui.R.id.exo_content_frame
-        ) ?: return
-        val currentParent = subtitleView.parent as? android.view.ViewGroup
-        if (currentParent === contentFrame) return
-        currentParent?.removeView(subtitleView)
-        // Append (not index 0): the video surface is the first child of the
-        // content frame, so a 0-index insert would render captions behind it.
-        contentFrame.addView(
-            subtitleView,
+    private fun reparentSubtitleViews(pv: PlayerView) {
+        val target: android.view.ViewGroup = externalSubtitleHost
+            ?: pv.findViewById(androidx.media3.ui.R.id.exo_content_frame)
+            ?: return
+        reparentInto(pv.subtitleView, target)
+        reparentInto(assOverlayView, target)
+    }
+
+    /** Moves [view] into [target] if it isn't already there; no-op otherwise. */
+    private fun reparentInto(view: android.view.View?, target: android.view.ViewGroup) {
+        val view = view ?: return
+        val currentParent = view.parent as? android.view.ViewGroup
+        if (currentParent === target) return
+        currentParent?.removeView(view)
+        // Append (not index 0): in the content-frame target the video surface is
+        // the first child, so a 0-index insert would render captions behind it.
+        // For the screen-pinned host the host has no other children, so the index
+        // is irrelevant.
+        target.addView(
+            view,
             android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
+    }
+
+    override fun setExternalSubtitleHost(host: android.view.ViewGroup?) {
+        externalSubtitleHost = host
+        // Re-parent into the new target immediately when a surface exists. Called
+        // on the main thread by the screen's AndroidView factory/onRelease.
+        playerView?.let { pv -> pv.post { reparentSubtitleViews(pv) } }
+        // If the host is being detached (host == null) the screen's onRelease is
+        // about to tear the host down; reparent back into the content frame so
+        // the views don't orphan if the PlayerView outlives the host (it won't in
+        // practice — both share key(currentEngine) lifetime — but stay safe).
+        if (host == null) {
+            playerView?.let { pv -> pv.post { reparentSubtitleViews(pv) } }
+        }
     }
 
     override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
