@@ -230,6 +230,7 @@
     <string name="player_video_duration">時間</string>
     <string name="player_video_remember_audio_language">このシリーズの音声言語を記憶</string>
     <string name="player_video_remember_subtitle_language">このシリーズの字幕言語を記憶</string>
+    <string name="player_video_remember_subtitles_off">このシリーズの字幕をオフのままにする</string>
     <string name="player_video_error_offline_file_missing">エラー: オフラインファイルが見つかりません</string>
     <string name="player_video_error_loading_media">メディアの読み込みエラー</string>
     <string name="player_video_trickplay_thumbnail">トリックプレイのサムネイル</string>

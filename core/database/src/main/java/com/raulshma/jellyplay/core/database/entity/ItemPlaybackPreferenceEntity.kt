@@ -21,6 +21,12 @@ import androidx.room.PrimaryKey
  * remember e.g. "English SDH" and have it carry across episodes. Added in
  * migration 38→39.
  *
+ * `subtitleDisabled` stores an explicit "subtitles off" intent per item/series
+ * (nullable: null = "don't care"). When true the resolver forces subtitles off
+ * instead of resolving a language match. Mutually exclusive with
+ * `subtitleLanguage`; the repository keeps them consistent on write.
+ * Added in migration 41→42.
+ *
  * The six `rememberedAudio*` / `rememberedSubtitle*` columns persist the
  * *last-selected* audio/subtitle track's label, language, and position within
  * its language group per series — the cross-episode track-scoring memory (G5),
@@ -42,6 +48,7 @@ data class ItemPlaybackPreferenceEntity(
     val key: String,
     val audioLanguage: String?,
     val subtitleLanguage: String?,
+    val subtitleDisabled: Boolean? = null,
     val subtitleForced: Boolean? = null,
     val subtitleHearingImpaired: Boolean? = null,
     val dialogueBoostStrength: String? = null,

@@ -14,5 +14,6 @@ data class TrackState(
     val hasSubtitleOverride: Boolean = false,
     val hasSeriesAudioPref: Boolean = false,
     val hasSeriesSubtitlePref: Boolean = false,
+    val hasSeriesSubtitleOffPref: Boolean = false,
     val hasSeriesDialogueBoostPref: Boolean = false,
 )

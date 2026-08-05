@@ -230,6 +230,7 @@
     <string name="player_video_duration">时长</string>
     <string name="player_video_remember_audio_language">为此剧集记住音频语言</string>
     <string name="player_video_remember_subtitle_language">为此剧集记住字幕语言</string>
+    <string name="player_video_remember_subtitles_off">为此剧集保持字幕关闭</string>
     <string name="player_video_error_offline_file_missing">错误：离线文件缺失</string>
     <string name="player_video_error_loading_media">加载媒体出错</string>
     <string name="player_video_trickplay_thumbnail">预览缩略图</string>

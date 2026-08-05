@@ -230,6 +230,7 @@
     <string name="player_video_duration">Durata</string>
     <string name="player_video_remember_audio_language">Ricorda la lingua audio per questa serie</string>
     <string name="player_video_remember_subtitle_language">Ricorda la lingua dei sottotitoli per questa serie</string>
+    <string name="player_video_remember_subtitles_off">Mantieni sottotitoli disattivati per questa serie</string>
     <string name="player_video_error_offline_file_missing">Errore: file offline mancante</string>
     <string name="player_video_error_loading_media">Errore durante il caricamento dei contenuti</string>
     <string name="player_video_trickplay_thumbnail">Miniatura trickplay</string>

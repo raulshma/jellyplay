@@ -74,6 +74,17 @@ class TrackSelectionHelperTest {
         return ItemPlaybackPreferenceResolver(repo, { null }, { null }, scope)
     }
 
+    /** A resolver that resolves to [pref] for the series scope. The Unconfined
+     *  scope runs [ItemPlaybackPreferenceResolver.refresh] synchronously, so the
+     *  cached value is set before this returns. */
+    private fun resolverFor(pref: com.raulshma.jellyplay.core.model.ItemPlaybackPreference): ItemPlaybackPreferenceResolver {
+        val repo = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
+        coEvery { repo.get(any(), any()) } returns pref
+        val resolver = ItemPlaybackPreferenceResolver(repo, { null }, { "series1" }, scope)
+        resolver.refresh()
+        return resolver
+    }
+
     @Test
     fun updateTracksFromEngine_noEngine_returnsEarly() {
         helper = TrackSelectionHelper(
@@ -455,6 +466,44 @@ class TrackSelectionHelperTest {
             scope = scope,
         )
         noItemId.resetAudioSelection() // should not throw
+    }
+
+    @Test
+    fun updateTracksFromEngine_seriesSubtitleDisabled_forcesOffInsteadOfLanguageMatch() {
+        // A "subtitles off" series preference must short-circuit the language
+        // matcher: even though an "eng" subtitle track exists and the global
+        // preferred subtitle language is "eng", the disabled intent wins and
+        // Off is selected.
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(preferredSubtitleLanguage = "eng"),
+        )
+        helper = TrackSelectionHelper(
+            engineStore = engineStore,
+            subtitleStore = subtitleStore,
+            getEngine = { engine },
+            getUiState = { state.value },
+            updateUiState = { transform -> state.value = transform(state.value) },
+            getCurrentItemId = { "item1" },
+            getCurrentSeriesId = { "series1" },
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+            onReloadForStreamChange = { _, _ -> },
+            playbackPreferenceResolver = resolverFor(
+                com.raulshma.jellyplay.core.model.ItemPlaybackPreference(
+                    scope = com.raulshma.jellyplay.core.model.PlaybackPrefScope.SERIES,
+                    key = "series1",
+                    subtitleDisabled = true,
+                )
+            ),
+            scope = scope,
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, -1) }
+        // The English track must NOT have been selected by the matcher.
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, 0) }
     }
 
     private fun mediaTrack(

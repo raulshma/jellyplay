@@ -241,6 +241,7 @@
     <string name="player_video_duration">Duration</string>
     <string name="player_video_remember_audio_language">Remember audio language for this series</string>
     <string name="player_video_remember_subtitle_language">Remember subtitle language for this series</string>
+    <string name="player_video_remember_subtitles_off">Keep subtitles off for this series</string>
     <string name="player_video_error_offline_file_missing">Error: offline file missing</string>
     <string name="player_video_error_loading_media">Error loading media</string>
     <string name="player_video_trickplay_thumbnail">Trickplay thumbnail</string>

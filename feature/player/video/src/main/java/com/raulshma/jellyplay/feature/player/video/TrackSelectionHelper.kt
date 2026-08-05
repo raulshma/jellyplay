@@ -467,33 +467,43 @@ internal class TrackSelectionHelper(
                         }
                     }
                 } else {
-                    // Per-item then per-series language rule overrides the
-                    // global preferred subtitle language when set.
-                    val resolvedSubLang = playbackPreferenceResolver.resolved.value?.subtitleLanguage
-                        ?: prefSubLang
-                    val forcedOnly = sub.subtitlesForcedOnly
-                    // The full precedence ladder — G5 scoring pre-pass (non-forced
-                    // only) → forced-only stream pick → tiered SubtitleTrackMatcher
-                    // → null — lives in TrackSelectionPolicy now. Returns null when
-                    // no same-language track exists; we then select Off.
-                    if (!forcedOnly) {
-                        hydrateRememberedSubtitleTrack()
-                    }
-                    val match = trackSelectionPolicy.resolveSubtitle(
-                        SubtitleResolutionArgs(
-                            tracks = subtitleTracks,
-                            streams = streams,
-                            lang = resolvedSubLang,
-                            forcedOnly = forcedOnly,
-                            forced = playbackPreferenceResolver.resolved.value?.subtitleForced,
-                            hearingImpaired = playbackPreferenceResolver.resolved.value?.subtitleHearingImpaired,
-                            remembered = if (forcedOnly) null else rememberedSubtitleTrack,
-                        ),
-                    )
-                    if (match != null) {
-                        selectSubtitleTrack(match, isUserOverride = false)
+                    // Per-item then per-series preference overrides the global
+                    // preferred subtitle language when set.
+                    val resolvedPref = playbackPreferenceResolver.resolved.value
+                    // An explicit "subtitles off" intent (item scope over series)
+                    // short-circuits the matcher: force Off and skip the language
+                    // ladder entirely, mirroring how subIdx == -1 works above for
+                    // the per-item stream-index override.
+                    if (resolvedPref?.subtitleDisabled == true) {
+                        subtitleTracks.firstOrNull { it.index < 0 }
+                            ?.let { selectSubtitleTrack(it, isUserOverride = false) }
                     } else {
-                        subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
+                        val resolvedSubLang = resolvedPref?.subtitleLanguage
+                            ?: prefSubLang
+                        val forcedOnly = sub.subtitlesForcedOnly
+                        // The full precedence ladder — G5 scoring pre-pass (non-forced
+                        // only) → forced-only stream pick → tiered SubtitleTrackMatcher
+                        // → null — lives in TrackSelectionPolicy now. Returns null when
+                        // no same-language track exists; we then select Off.
+                        if (!forcedOnly) {
+                            hydrateRememberedSubtitleTrack()
+                        }
+                        val match = trackSelectionPolicy.resolveSubtitle(
+                            SubtitleResolutionArgs(
+                                tracks = subtitleTracks,
+                                streams = streams,
+                                lang = resolvedSubLang,
+                                forcedOnly = forcedOnly,
+                                forced = resolvedPref?.subtitleForced,
+                                hearingImpaired = resolvedPref?.subtitleHearingImpaired,
+                                remembered = if (forcedOnly) null else rememberedSubtitleTrack,
+                            ),
+                        )
+                        if (match != null) {
+                            selectSubtitleTrack(match, isUserOverride = false)
+                        } else {
+                            subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
+                        }
                     }
                 }
             }
