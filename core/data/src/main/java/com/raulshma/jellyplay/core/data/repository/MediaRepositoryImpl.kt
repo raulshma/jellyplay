@@ -1077,6 +1077,10 @@ class MediaRepositoryImpl @Inject constructor(
         albumTracksCache.clear()
         collectionItemsCache.clear()
         photoFolderChildUrlCache.clear()
+        // And the network-layer home hot-path caches (per-folder latest + per-seed
+        // similar) — same privacy concern: a previous user's recommendations must
+        // not surface for the next user within the TTL window.
+        apiClient.clearHomePathCaches()
         // NOTE: the persistent home-section SWR snapshot is intentionally NOT
         // cleared here. invalidateCaches() doesn't know which (server, user)
         // it's running for — it's called both from the identity observer (which

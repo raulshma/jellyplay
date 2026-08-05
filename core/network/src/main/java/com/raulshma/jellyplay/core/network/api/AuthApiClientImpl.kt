@@ -164,6 +164,9 @@ class AuthApiClientImpl @Inject constructor(
         // server so a server switch can't surface them. No behavior change in
         // normal use (the cache is eventually-consistent via API reads).
         libraryClient.clearFavoriteCache()
+        // Same defense for the home hot-path caches (per-folder latest + per-seed
+        // similar) — a previous user's recommendations must not leak through.
+        libraryClient.clearHomePathCaches()
     }
 
     override suspend fun isQuickConnectEnabled(): Result<Boolean> = engine.apiResultWithRetry {
