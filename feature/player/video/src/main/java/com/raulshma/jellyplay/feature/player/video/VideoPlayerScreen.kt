@@ -256,6 +256,7 @@ fun VideoPlayerScreen(
     var userInteractionCount by rememberSaveable { mutableIntStateOf(0) }
 
     var brightnessOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
+    var initialBrightnessOnGestureStart by rememberSaveable { mutableFloatStateOf(-1f) }
     var volumeOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
     var gestureSeekPositionMs by rememberSaveable { mutableLongStateOf(0L) }
     var gestureStartPositionMs by rememberSaveable { mutableLongStateOf(0L) }
@@ -1238,6 +1239,31 @@ fun VideoPlayerScreen(
                                 }
                             }
                         }
+                    }
+                },
+                onStartGesture = remember(activity) {
+                    {
+                        initialBrightnessOnGestureStart = activity?.window?.attributes?.screenBrightness ?: -1f
+                    }
+                },
+                onCancelOverlays = remember(activity) {
+                    {
+                        activity?.let { act ->
+                            if (!act.isDestroyed && !act.isFinishing) {
+                                val layout = act.window.attributes
+                                if (initialBrightnessOnGestureStart >= 0f) {
+                                    layout.screenBrightness = initialBrightnessOnGestureStart
+                                } else {
+                                    layout.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                                }
+                                act.window.attributes = layout
+                            }
+                        }
+                        brightnessOverlay = -1f
+                        volumeOverlay = -1f
+                        volumeGestureAccumulator = 0f
+                        isGestureSeeking = false
+                        seekState.reset()
                     }
                 },
             )
