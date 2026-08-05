@@ -16,6 +16,10 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -27,8 +31,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
@@ -71,6 +77,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -88,6 +95,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -205,6 +214,9 @@ fun LibraryScreen(
         cacheWindow = com.raulshma.jellyplay.core.ui.tv.TvGridCacheWindow,
     )
     val listState = rememberLazyListState()
+    // Hoisted (not local to the MASONRY branch) so the alphabet rail can drive
+    // the staggered grid's scroll state from the screen root.
+    val staggeredState = rememberLazyStaggeredGridState()
     val inSectionMode = sectionContext != null
     // Which (if any) per-filter sheet is open. Null = none. Hoisted here so the
     // chips toggle it and the matching sheet renders at the screen root.
@@ -758,8 +770,9 @@ fun LibraryScreen(
                                         // libraries; in a pure poster library it reads like the
                                         // regular grid (posters are uniform 2:3). Not TV-focus
                                         // managed (no TvFocusableGrid staggered analogue) so it's a
-                                        // touch-first mode.
-                                        val staggeredState = rememberLazyStaggeredGridState()
+                                        // touch-first mode. State is hoisted to the screen root so
+                                        // the alphabet rail can drive it.
+                                        val staggeredState = staggeredState
                                         LazyVerticalStaggeredGrid(
                                             columns = StaggeredGridCells.Adaptive(gridCellSize),
                                             state = staggeredState,
@@ -809,9 +822,11 @@ fun LibraryScreen(
                     // Alphabet "jump to letter" rail. Jellyfin returns library items
                     // sorted by SortName by default, so the first snapshot index where
                     // each leading letter appears is stable within the loaded pages.
-                    // Tapping a letter scrolls the active grid/list to that index — a
-                    // local-only affordance that works with the existing paging source
-                    // (no NameStartsWith server filter is plumbed through the data layer).
+                    // Tapping or dragging a letter scrolls the active grid/list to that
+                    // index — a local-only affordance that works with the existing paging
+                    // source (no NameStartsWith server filter is plumbed through the data
+                    // layer). Disabled in grouped mode because GroupedLibraryContent owns
+                    // its own internal scroll states the rail can't reach.
                     val alphabetScope = rememberCoroutineScope()
                     val jumpIndexByLetter by remember {
                         derivedStateOf {
@@ -829,14 +844,30 @@ fun LibraryScreen(
                             map
                         }
                     }
-                    if (jumpIndexByLetter.isNotEmpty()) {
+                    // First visible index from whichever scroll state backs the active
+                    // view mode — drives the rail's active-letter highlight as the user
+                    // scrolls. Reads the state delegates directly inside derivedStateOf
+                    // so it recomputes on scroll. MASONRY is excluded (no hoisted grid
+                    // state); the rail simply shows no active highlight in that mode.
+                    val activeLetter by remember {
+                        derivedStateOf {
+                            val firstVisible = when (viewMode) {
+                                LibraryViewMode.LIST -> listState.firstVisibleItemIndex
+                                else -> gridState.firstVisibleItemIndex
+                            }
+                            jumpIndexByLetter.entries.lastOrNull { it.value <= firstVisible }?.key
+                        }
+                    }
+                    if (groupBy == GroupBy.NONE && jumpIndexByLetter.isNotEmpty()) {
                         AlphabetJumpRail(
                             letters = jumpIndexByLetter.keys.toList(),
+                            activeLetter = activeLetter,
                             onJump = { letter ->
                                 val index = jumpIndexByLetter[letter] ?: return@AlphabetJumpRail
                                 alphabetScope.launch {
                                     when (viewMode) {
                                         LibraryViewMode.LIST -> listState.scrollToItem(index)
+                                        LibraryViewMode.MASONRY -> staggeredState.scrollToItem(index)
                                         else -> gridState.scrollToItem(index)
                                     }
                                 }
@@ -1190,68 +1221,298 @@ private fun GlassPill(
 /**
  * Right-edge alphabet "jump to letter" rail for large libraries. Renders the set
  * of leading letters present in the loaded items (plus `#` for non A–Z names) as
- * a compact vertical column; a tap/dpad-select scrolls the host grid/list to the
- * first item whose name starts with that letter. Local-only — see
- * [LibraryScreen] for why a NameStartsWith server filter isn't used.
+ * a compact vertical column. Input modes:
+ *  - Tap anywhere on the rail → jump to the letter at that Y-position via [onJump].
+ *  - Drag (touch) up and down the rail → fisheye lens: the letter under the finger
+ *    magnifies most, its neighbors taper smaller via a gaussian falloff, and the
+ *    whole bell-curve animates continuously with the finger. [onJump] fires as the
+ *    finger crosses each letter boundary. A magnifier bubble tracks the finger Y.
+ *  - dpad-focus a letter (TV) → press select to jump.
+ *  - The active letter (from the host's scroll position) is tinted primary so the
+ *    rail doubles as a "you are here" indicator.
+ *
+ * Touch input is handled at the rail level (not per-letter) so the user never has
+ * to hit a ~16px label — any point on the rail maps to a letter. Per-letter focus
+ * is retained for TV dpad navigation.
+ *
+ * Local-only — see [LibraryScreen] for why a NameStartsWith server filter isn't used.
  */
 @Composable
 private fun AlphabetJumpRail(
     letters: List<Char>,
     onJump: (Char) -> Unit,
     modifier: Modifier = Modifier,
+    activeLetter: Char? = null,
 ) {
+    if (letters.isEmpty()) return
     val isLight = LocalIsLightTheme.current
     val railShape = ShapeCache.smooth12
     val railBg = if (isLight) Color.Black.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.08f)
     val contentColor = MaterialTheme.colorScheme.onBackground
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val density = LocalDensity.current
 
-    Surface(
-        modifier = modifier
-            .width(24.dp)
-            .clip(railShape)
-            .background(railBg),
-        color = Color.Transparent,
-    ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(vertical = 4.dp),
+    // Continuous finger position in *letter-index space* (e.g. 3.4 = between D
+    // and E). Null at rest. Tracking fractional position (not just the integer
+    // letter under the finger) is what lets the fisheye bell-curve glide smoothly
+    // — the gaussian weight on each neighbor updates every pointer move.
+    // Backing state holders are kept as vals so they can be captured in stable
+    // provider lambdas (read in the draw phase) without breaking Compose skipping
+    // — a delegated `var` captured directly would force a new lambda every frame.
+    val touchIndexState = remember { mutableStateOf<Float?>(null) }
+    var touchIndex by touchIndexState
+    val bubbleState = remember { mutableStateOf<Char?>(null) }
+    var bubbleForJump by bubbleState
+    var dragging by remember { mutableStateOf(false) }
+    var lastBubbleLetter by remember { mutableStateOf(letters.first()) }
+    // Derived over the *integer* letter index, so the rail composition only
+    // recomputes when the finger crosses a letter boundary — not on every
+    // fractional pointer move. Without this, `touchIndex` (read in composition
+    // below) would invalidate the whole rail every drag frame.
+    val currentBubble by remember {
+        derivedStateOf {
+            val ti = touchIndexState.value
+            when {
+                dragging && ti != null -> letters[ti.toInt().coerceIn(0, letters.lastIndex)]
+                else -> bubbleState.value
+            }
+        }
+    }
+    currentBubble?.let { lastBubbleLetter = it }
+    val bubbleVisible = dragging || bubbleForJump != null
+    // A tap (no drag) shows the zoom bubble briefly so the user sees feedback,
+    // then fades it out. Drag-driven bubbles clear on drag end.
+    LaunchedEffect(bubbleForJump) {
+        if (bubbleForJump != null) {
+            kotlinx.coroutines.delay(350)
+            bubbleForJump = null
+        }
+    }
+
+    // Fixed per-letter row height — tight enough that the rail reads as a compact
+    // column (no big gaps), tall enough to tap. Determined up front (not derived
+    // from fillMaxHeight) so the row→index math is exact and stable.
+    val rowPx = with(density) { LETTER_ROW_HEIGHT.toPx() }
+
+    Box(modifier = modifier) {
+        // Rail body — wrap-content height (sum of letter rows), centered in the
+        // host. Width-only rail; the Column inside stacks rows at the fixed height.
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .width(28.dp)
+                .clip(railShape)
+                .background(railBg),
         ) {
-            items(letters.size, key = { letters[it].code }) { index ->
-                val letter = letters[index]
-                val focusState = rememberTvFocusState(focusedScale = 1.15f)
-                val interactionSource = remember { MutableInteractionSource() }
-                val isPressed by interactionSource.collectIsPressedAsState()
-                val scale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.9f else 1f,
-                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                    label = "letterPressedScale",
-                )
+            // Letters. Each row delegates to a skippable [LetterItem] that owns its
+            // own TV-focus state and fisheye draw-layer. The fisheye scale is read
+            // directly inside `graphicsLayer { }` from a snapshot-read lambda so the
+            // per-frame finger motion drives the draw phase only — no recomposition
+            // of the ~27 letter rows (and their animate*AsState coroutines) on every
+            // pointer move. Only the rail shell + 1–2 letters whose `isActive` flag
+            // flips recompose.
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // Derived to the *integer* letter under the finger so the parent
+                // composition only recomposes when the finger crosses a letter
+                // boundary (≤ letters.size times per drag) — not on every fractional
+                // pointer move. The fractional value is still consumed live in the
+                // draw phase via [LetterItem]'s fisheyeScaleProvider.
+                val touchedLetter by remember {
+                    derivedStateOf {
+                        touchIndexState.value
+                            ?.toInt()
+                            ?.coerceIn(0, letters.lastIndex)
+                            ?.let { letters[it] }
+                    }
+                }
+                letters.forEachIndexed { index, letter ->
+                    key(letter) {
+                        // Stable provider per letter: captures only `index` (a
+                        // constant) and the `touchIndexState` ref — reads `.value`
+                        // live inside the graphicsLayer draw lambda, so the same
+                        // lambda instance survives across drag frames and keeps
+                        // [LetterItem] skippable.
+                        val fisheyeScaleProvider = remember(index, touchIndexState) {
+                            { fisheyeScaleAt(index, touchIndexState.value) }
+                        }
+                        // Stable click handler per letter so the parent
+                        // recomposing (on boundary crossings) doesn't hand every
+                        // item a new lambda and force a full rail re-invoke.
+                        val onClick = remember(letter, bubbleState, onJump) {
+                            {
+                                bubbleState.value = letter
+                                onJump(letter)
+                            }
+                        }
+                        LetterItem(
+                            letter = letter,
+                            fisheyeScaleProvider = fisheyeScaleProvider,
+                            isActive = letter == activeLetter ||
+                                letter == bubbleForJump ||
+                                letter == touchedLetter,
+                            railShape = railShape,
+                            contentColor = contentColor,
+                            activeColor = primaryColor,
+                            onClick = onClick,
+                        )
+                    }
+                }
+            }
+
+            // Touch overlay — drawn ON TOP (last child) and matchParentSize. This
+            // is critical: without it the letters' clickable handlers (which sit
+            // in the Column above) intercept every pointer, so the drag never
+            // starts and the fisheye never engages. The overlay is transparent
+            // and non-focusable, so TV dpad focus still reaches the letters below.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .pointerInput(letters, rowPx) {
+                        fun indexAt(y: Float): Float =
+                            if (rowPx <= 0f) 0f
+                            else (y / rowPx).coerceIn(0f, letters.lastIndex.toFloat())
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                touchIndex = indexAt(offset.y)
+                                dragging = true
+                                onJump(letters[touchIndex!!.toInt().coerceIn(0, letters.lastIndex)])
+                            },
+                            onDrag = { change, _ ->
+                                touchIndex = indexAt(change.position.y)
+                                onJump(letters[touchIndex!!.toInt().coerceIn(0, letters.lastIndex)])
+                            },
+                            onDragEnd = { dragging = false; touchIndex = null },
+                            onDragCancel = { dragging = false; touchIndex = null },
+                        )
+                    }
+                    .pointerInput(letters, rowPx) {
+                        detectTapGestures { offset ->
+                            val idx = if (rowPx <= 0f) 0
+                            else (offset.y / rowPx).toInt().coerceIn(0, letters.lastIndex)
+                            val l = letters[idx]
+                            bubbleForJump = l
+                            onJump(l)
+                        }
+                    },
+            )
+
+            // Magnifier bubble — zoom the active/dragged letter next to the rail.
+            // Tracks the finger Y while dragging (touchIndex × rowPx); centers at
+            // rest. Uses lastBubbleLetter (not the live source!!) because content
+            // composes during the exit fade when the source is null.
+            AnimatedVisibility(
+                visible = bubbleVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.CenterStart),
+            ) {
+                val bubbleSizePx = with(density) { BUBBLE_SIZE.toPx() }
+                val centerX = with(density) { -(BUBBLE_SIZE.toPx() + 12.dp.toPx()) }
+                // Read touchIndex in the draw phase (offset lambda) so the rail
+                // composition doesn't re-subscribe to every fractional pointer move
+                // — the bubble tracks the finger smoothly with no recomposition.
                 Box(
                     modifier = Modifier
-                        .graphicsLayer {
-                            scaleX = scale * focusState.scale
-                            scaleY = scale * focusState.scale
+                        .size(BUBBLE_SIZE)
+                        .offset {
+                            val ti = touchIndexState.value
+                            val centerY = if (ti != null) {
+                                ti * rowPx - bubbleSizePx / 2f
+                            } else {
+                                0f
+                            }
+                            androidx.compose.ui.unit.IntOffset(centerX.toInt(), centerY.toInt())
                         }
-                        .then(focusState.focusModifier)
-                        .tvFocusIndicator(focusState, railShape)
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = { onJump(letter) },
-                        )
-                        .padding(vertical = 1.dp),
+                        .clip(CircleShape)
+                        .background(primaryColor),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = letter.uppercaseChar().toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = contentColor,
-                        fontWeight = FontWeight.SemiBold,
+                        text = lastBubbleLetter.uppercaseChar().toString(),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
         }
+    }
+}
+
+/** Fixed per-letter row height. Tight enough to avoid gaps, tall enough to tap. */
+private val LETTER_ROW_HEIGHT = 18.dp
+/** Magnifier bubble diameter. */
+private val BUBBLE_SIZE = 44.dp
+
+/** Peak scale of the letter directly under the finger (fisheye lens). */
+private const val FISHEYE_PEAK = 2.5f
+/** Gaussian sigma² for the fisheye falloff — smaller = tighter bell curve. */
+private const val FISHEYE_SIGMA_SQ = 1.6f
+
+/**
+ * Gaussian fisheye scale for a letter at [index] given the fractional finger
+ * position [touchIndex] (null = finger not on the rail). Pure function — safe
+ * to call from the draw phase (graphicsLayer lambda) so the bell-curve glides
+ * with the finger without invalidating composition.
+ */
+private fun fisheyeScaleAt(index: Int, touchIndex: Float?): Float {
+    if (touchIndex == null) return 1f
+    val d = index - touchIndex
+    val g = kotlin.math.exp(-(d * d) / (2 * FISHEYE_SIGMA_SQ))
+    return 1f + (FISHEYE_PEAK - 1f) * g
+}
+
+/**
+ * Single letter row in the [AlphabetJumpRail]. Skippable: all parameters are
+ * stable across drag frames except [isActive] (toggles at most a few times per
+ * drag) and [fisheyeScaleProvider], whose identity is stable — it reads live
+ * state from inside the draw phase. This keeps the per-letter [rememberTvFocusState]
+ * (which on TV spins an infinite breathing transition) and its border/glow
+ * animations alive exactly once per letter, instead of being recreated every
+ * pointer frame as the old inline `forEachIndexed` did.
+ */
+@Composable
+private fun LetterItem(
+    letter: Char,
+    isActive: Boolean,
+    fisheyeScaleProvider: () -> Float,
+    railShape: androidx.compose.ui.graphics.Shape,
+    contentColor: Color,
+    activeColor: Color,
+    onClick: () -> Unit,
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.15f)
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .height(LETTER_ROW_HEIGHT)
+            .width(LETTER_ROW_HEIGHT)
+            .graphicsLayer {
+                // Combined fisheye + TV focus scale, read in the draw phase so
+                // finger motion animates the bell-curve with zero recomposition.
+                val s = fisheyeScaleProvider() * focusState.scale
+                scaleX = s
+                scaleY = s
+            }
+            .then(focusState.focusModifier)
+            .tvFocusIndicator(focusState, railShape)
+            .focusable()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = letter.uppercaseChar().toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isActive) activeColor else contentColor,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
