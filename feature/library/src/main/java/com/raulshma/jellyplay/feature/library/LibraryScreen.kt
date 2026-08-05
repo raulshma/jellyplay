@@ -1,7 +1,10 @@
 package com.raulshma.jellyplay.feature.library
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -9,6 +12,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
@@ -63,6 +67,7 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -93,12 +98,14 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.defaultEffectsTween
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
+import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
@@ -126,6 +133,7 @@ import com.raulshma.jellyplay.feature.library.components.YearRangeFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.feature.library.components.ThumbCard
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
+import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -561,21 +569,50 @@ fun LibraryScreen(
                                     }
                                 }
                             } else {
-                                if (groupBy != GroupBy.NONE) {
-                                    // Client-side grouped rendering (see GroupedLibraryContent):
-                                    // non-sticky translucent headers per group, recomputed over the
-                                    // loaded snapshot. Skips the TV-focus-managed grid path.
-                                    GroupedLibraryContent(
-                                        pagedItems = pagedItems,
-                                        viewMode = viewMode,
-                                        groupBy = groupBy,
-                                        gridCellSize = gridCellSize,
-                                        spacing = spacing,
-                                        gridPadding = gridPadding,
-                                        onItemClick = onItemClick,
-                                        getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
-                                    )
-                                } else when (viewMode) {
+                                // Drive the view-mode swap through AnimatedContent so each
+                                // branch receives its own AnimatedVisibilityScope. That scope
+                                // is published via LocalAnimatedVisibilityScope, letting the
+                                // cards' sharedElement("poster_${id}") modifiers morph bounds
+                                // continuously between GRID/THUMB/LIST/MASONRY instead of pop.
+                                // transitionSpec is not a @Composable scope, so read the motion
+                                // tokens (reduced-motion flag + effect tween) here, then capture
+                                // them in the spec lambda.
+                                val reducedMotion = isReducedMotion()
+                                val effectSpec = defaultEffectsTween()
+                                AnimatedContent(
+                                    targetState = viewMode,
+                                    transitionSpec = {
+                                        if (reducedMotion) {
+                                            EnterTransition.None togetherWith ExitTransition.None
+                                        } else {
+                                            // A soft fade hands off the containers; the visible
+                                            // motion is the shared-element bounds transform.
+                                            fadeIn(effectSpec) togetherWith fadeOut(effectSpec)
+                                        }
+                                    },
+                                    contentKey = { it },
+                                    label = "libraryViewMode",
+                                ) { activeMode ->
+                                    // `this` is the AnimatedContentScope, which is an
+                                    // AnimatedVisibilityScope — provide it to descendants.
+                                    CompositionLocalProvider(
+                                        LocalAnimatedVisibilityScope provides this,
+                                    ) {
+                                        if (groupBy != GroupBy.NONE) {
+                                            // Client-side grouped rendering (see GroupedLibraryContent):
+                                            // non-sticky translucent headers per group, recomputed over the
+                                            // loaded snapshot. Skips the TV-focus-managed grid path.
+                                            GroupedLibraryContent(
+                                                pagedItems = pagedItems,
+                                                viewMode = activeMode,
+                                                groupBy = groupBy,
+                                                gridCellSize = gridCellSize,
+                                                spacing = spacing,
+                                                gridPadding = gridPadding,
+                                                onItemClick = onItemClick,
+                                                getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
+                                            )
+                                        } else when (activeMode) {
                                     LibraryViewMode.LIST -> {
                                         LazyColumn(
                                             state = listState,
@@ -619,6 +656,7 @@ fun LibraryScreen(
                                                         blurHash = item.blurHashes.primary,
                                                         onClick = memoizedClick,
                                                         modifier = Modifier.animateItem(placementSpec = placementSpec),
+                                                        sharedElementKey = "poster_${item.id}",
                                                     )
                                                 }
                                             }
@@ -659,6 +697,7 @@ fun LibraryScreen(
                                                     progressPercent = itemProgress ?: 0f,
                                                     blurHash = item.blurHashes.backdrop ?: item.blurHashes.primary,
                                                     modifier = itemModifier,
+                                                    sharedElementKey = "poster_${item.id}",
                                                 )
                                             }
                                         }
@@ -761,6 +800,8 @@ fun LibraryScreen(
                                         }
                                     }
                                 }
+                                } // close CompositionLocalProvider
+                                } // close AnimatedContent content lambda
                             }
                         }
                     }

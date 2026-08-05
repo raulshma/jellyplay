@@ -50,6 +50,7 @@ class EngineCapabilityMatrixTest {
             caps.supportsAssOverride, caps.supportsAssStyleOverride, caps.supportsFontFamily,
             caps.supportsFreeFormColors, caps.supportsBorderStyles,
             caps.supportsSecondarySubtitles, caps.supportsScreenshot,
+            caps.supportsScreenPinnedSubtitles, caps.supportsCueSubtitleOverlay,
         ).forEach { assertFalse("EXTERNAL must advertise no capabilities", it) }
     }
 
@@ -76,6 +77,11 @@ class EngineCapabilityMatrixTest {
         assertTrue(c.supportsLiveQualitySwitch)
         assertTrue(c.supportsBandwidthEstimate)
         assertTrue(c.supportsScreenshot)
+        // ExoPlayer reparents its native SubtitleView/AssSubtitleView into a
+        // screen-pinned host, so captions are zoom/crop-safe. It does not need
+        // the Compose cue overlay path.
+        assertTrue(c.supportsScreenPinnedSubtitles)
+        assertFalse(c.supportsCueSubtitleOverlay)
     }
 
     @Test
@@ -97,6 +103,11 @@ class EngineCapabilityMatrixTest {
         assertFalse(c.supportsLiveQualitySwitch)
         assertFalse(c.supportsBandwidthEstimate)
         assertTrue(c.supportsScreenshot)
+        // mpv composites libass into the GPU video surface (no reparentable
+        // subtitle view), but exposes the live line via sub-text, so the screen
+        // renders a Compose overlay while zoomed.
+        assertFalse(c.supportsScreenPinnedSubtitles)
+        assertTrue(c.supportsCueSubtitleOverlay)
     }
 
     @Test
@@ -121,6 +132,10 @@ class EngineCapabilityMatrixTest {
         assertFalse(c.supportsLiveQualitySwitch)
         assertFalse(c.supportsBandwidthEstimate)
         assertTrue(c.supportsScreenshot)
+        // libVLC 3.7.x composites subs into a native surface with no text/event
+        // callback, so neither zoom-safe path is available.
+        assertFalse(c.supportsScreenPinnedSubtitles)
+        assertFalse(c.supportsCueSubtitleOverlay)
     }
 
     @Test

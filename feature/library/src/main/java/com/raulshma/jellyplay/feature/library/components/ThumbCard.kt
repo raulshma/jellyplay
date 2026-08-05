@@ -35,6 +35,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberSharedElementModifier
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 
 /**
@@ -53,6 +54,7 @@ fun ThumbCard(
     showProgress: Boolean = false,
     progressPercent: Float = 0f,
     blurHash: String? = null,
+    sharedElementKey: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -90,7 +92,9 @@ fun ThumbCard(
                     url = imageUrl,
                     contentDescription = item.name,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize(),
+                    modifier = Modifier
+                        .matchParentSize()
+                        .then(rememberSharedElementModifier(sharedElementKey)),
                     blurHash = blurHash,
                     // Decode at a landscape ratio; ~160dp-wide card at 2× density.
                     size = CoilSize(320, 180),

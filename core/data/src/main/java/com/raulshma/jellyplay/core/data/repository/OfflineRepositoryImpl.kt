@@ -56,17 +56,13 @@ class OfflineRepositoryImpl @Inject constructor(
                         downloadedBytes = download?.downloadedBytes ?: 0L,
                         totalSizeBytes = download?.totalSizeBytes ?: 0L,
                     )
-                    // Episode/series rows carry no self-contained local artwork
-                    // by design (episodes use the series backdrop; the series
-                    // row resolves its images beside downloaded episodes), so
-                    // resolve the local-file fallback here. Skips everything
-                    // else (movies, albums) whose own downloads always produce
-                    // local files.
-                    if (entity.mediaType == MediaType.EPISODE.name || entity.mediaType == MediaType.SERIES.name) {
-                        flow { emit(resolveLocalArtwork(item)) }
-                    } else {
-                        flowOf(item)
-                    }
+                    // Resolve disk-backed local artwork for every media type so
+                    // the offline detail hero/poster render without network.
+                    // Covers legacy rows (remote URLs written before local-file
+                    // persistence) and image-write-failure fallbacks — the
+                    // resolver substitutes an existing local file when one is
+                    // beside the download, else preserves the original value.
+                    flow<OfflineMediaItem?> { emit(resolveItemArtwork(item)) }
                 }
             }
         }.distinctUntilChanged()
@@ -88,7 +84,7 @@ class OfflineRepositoryImpl @Inject constructor(
                             totalSizeBytes = download?.totalSizeBytes ?: 0L,
                         )
                     }
-                }
+                }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
             }
         }.distinctUntilChanged()
 
@@ -147,7 +143,7 @@ class OfflineRepositoryImpl @Inject constructor(
                             )
                         }
                     }
-                }
+                }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
             }
         }.distinctUntilChanged()
 
@@ -171,7 +167,7 @@ class OfflineRepositoryImpl @Inject constructor(
                         totalSizeBytes = download?.totalSizeBytes ?: 0L,
                     )
                 }
-            }
+            }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
         }.distinctUntilChanged()
 
     override suspend fun getOfflineItem(id: String): OfflineMediaItem? =
@@ -315,37 +311,82 @@ class OfflineRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Resolves the local-file artwork fallbacks for episode/series rows whose
-     * persisted paths are blank or remote URLs (legacy rows, or episodes that
-     * by design store no backdrop of their own).
+     * Resolves disk-backed local artwork for an item of ANY media type so it
+     * renders without a network connection.
      *
-     * **Episode rows** — the detail-screen hero mirrors the online screen,
-     * which resolves episode backdrops to the SERIES backdrop. When the
-     * episode's persisted backdrop/poster is blank or a remote URL, it is
-     * substituted with the series' local files (from the series row, or found
-     * beside the episode's own download for legacy single-episode seeding).
+     * Runs in every read path (library grid, episode lists, detail, series),
+     * not just the detail screen — otherwise rows whose persisted
+     * `posterPath`/`backdropPath` are blank or a remote URL (legacy downloads
+     * from before local-file persistence, or image-write-failure fallbacks at
+     * download time) render broken offline even when the local file sits on
+     * disk right beside the media.
      *
-     * **Series rows** — the batch download path writes `${seriesId}_poster.jpg`
-     * / `_backdrop.jpg` beside the first enqueued episode but the pre-seeded
-     * row can hold remote URLs (legacy). The local files are resolved beside
-     * any downloaded episode.
+     * Resolution order per field:
+     *  1. Keep an already-local path as-is.
+     *  2. Look for the item's own artifact beside its download
+     *     (`${itemId}_poster.jpg` / `_backdrop.jpg`) — covers MOVIE/AUDIO and
+     *     per-episode posters.
+     *  3. For episodes, fall back to the parent series' artwork (series row's
+     *     local path, then the series artifact beside the episode dir) — the
+     *     online detail hero mirrors this, and Jellyfin rarely has a backdrop
+     *     for an episode.
+     *  4. For series, fall back to the artwork written beside a downloaded
+     *     episode (the series row itself has no download path).
+     *  5. Preserve the original value (a remote URL may still load online, and
+     *     a null stays null), so this never degrades a working row.
      *
-     * Already-local paths are kept as-is; when no local substitute exists the
-     * original value is preserved (it may still load online), so this never
-     * degrades a working row.
+     * Cheap: a couple of `File.exists()` stats per item; Room only re-emits on
+     * table writes, not per recomposition.
      */
-    private suspend fun resolveLocalArtwork(item: OfflineMediaItem): OfflineMediaItem = when (item.mediaType) {
-        MediaType.EPISODE -> resolveEpisodeArtwork(item)
-        MediaType.SERIES -> resolveSeriesArtwork(item)
-        else -> item
+    private suspend fun resolveItemArtwork(item: OfflineMediaItem): OfflineMediaItem {
+        if (!needsArtworkResolution(item.posterPath) && !needsArtworkResolution(item.backdropPath)) {
+            return item
+        }
+        // First: the item's own artifact beside its media file (all types).
+        val ownDir = item.downloadPath
+            ?.takeIf { it.isNotBlank() }
+            ?.let { java.io.File(it).parentFile }
+        val ownPoster = ownDir?.let { dir ->
+            java.io.File(dir, DownloadArtifacts.posterFile(item.id))
+                .takeIf { it.exists() }?.absolutePath
+        }
+        val ownBackdrop = ownDir?.let { dir ->
+            java.io.File(dir, DownloadArtifacts.backdropFile(item.id))
+                .takeIf { it.exists() }?.absolutePath
+        }
+        val (resolvedPoster, resolvedBackdrop) = when (item.mediaType) {
+            MediaType.EPISODE -> resolveEpisodeSeriesArtwork(item, ownPoster, ownBackdrop)
+            MediaType.SERIES -> resolveSeriesArtwork(item, ownPoster, ownBackdrop)
+            else -> ownPoster to ownBackdrop
+        }
+        return item.copy(
+            posterPath = if (needsArtworkResolution(item.posterPath)) resolvedPoster ?: item.posterPath else item.posterPath,
+            backdropPath = if (needsArtworkResolution(item.backdropPath)) resolvedBackdrop ?: item.backdropPath else item.backdropPath,
+        )
     }
 
-    private suspend fun resolveEpisodeArtwork(item: OfflineMediaItem): OfflineMediaItem {
-        if (!needsArtworkResolution(item.backdropPath) && !needsArtworkResolution(item.posterPath)) return item
-        val seriesId = item.seriesId ?: return item
-        // Legacy single-episode downloads seeded the series artwork beside the
-        // episode file itself; prefer the series row's local paths, then fall
-        // back to files found in the episode's own directory.
+    /**
+     * Resolves local artwork for a list of items (library grid, episode lists,
+     * album tracks). Each item that already has a local path short-circuits
+     * with zero FS work; only rows needing resolution stat the artifact files.
+     * See [resolveItemArtwork] for the per-field policy.
+     */
+    private suspend fun resolveArtworkList(items: List<OfflineMediaItem>): List<OfflineMediaItem> =
+        if (items.isEmpty()) items else items.map { resolveItemArtwork(it) }
+
+    /**
+     * Episode fallback: prefer the series' local artwork (series row's local
+     * path, then the series artifact found beside the episode dir) since
+     * Jellyfin rarely carries a backdrop per episode and the online detail
+     * hero resolves to the series backdrop. The item's own poster/backdrop
+     * (passed in) win when present.
+     */
+    private suspend fun resolveEpisodeSeriesArtwork(
+        item: OfflineMediaItem,
+        ownPoster: String?,
+        ownBackdrop: String?,
+    ): Pair<String?, String?> {
+        val seriesId = item.seriesId ?: return ownPoster to ownBackdrop
         val seriesRow = offlineMediaDao.getById(seriesId)
         val episodeDir = item.downloadPath
             ?.takeIf { it.isNotBlank() }
@@ -360,35 +401,34 @@ class OfflineRepositoryImpl @Inject constructor(
                 java.io.File(dir, DownloadArtifacts.posterFile(seriesId))
                     .takeIf { it.exists() }?.absolutePath
             }
-        return item.copy(
-            // Local substitute wins; keep the original (remote) path only when
-            // no local file exists — it may still load while online.
-            backdropPath = if (needsArtworkResolution(item.backdropPath)) seriesBackdrop ?: item.backdropPath else item.backdropPath,
-            posterPath = if (needsArtworkResolution(item.posterPath)) seriesPoster ?: item.posterPath else item.posterPath,
-        )
+        return (ownPoster ?: seriesPoster) to (ownBackdrop ?: seriesBackdrop)
     }
 
-    private suspend fun resolveSeriesArtwork(item: OfflineMediaItem): OfflineMediaItem {
-        if (!needsArtworkResolution(item.backdropPath) && !needsArtworkResolution(item.posterPath)) return item
-        // The series has no download row of its own; its local artwork is
-        // written beside downloaded episodes, so scan their directories.
+    /**
+     * Series fallback: the series row has no download path of its own, so its
+     * local artwork (written beside the first enqueued episode) is resolved by
+     * scanning a downloaded episode's directory. The item's own artifact
+     * (passed in) wins when present.
+     */
+    private suspend fun resolveSeriesArtwork(
+        item: OfflineMediaItem,
+        ownPoster: String?,
+        ownBackdrop: String?,
+    ): Pair<String?, String?> {
         val seriesDir = downloadDao.getDownloadsForSeries(item.id)
             .asSequence()
             .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
             .mapNotNull { java.io.File(it).parentFile }
             .firstOrNull()
-        val backdrop = seriesDir?.let { dir ->
+        val seriesBackdrop = seriesDir?.let { dir ->
             java.io.File(dir, DownloadArtifacts.backdropFile(item.id))
                 .takeIf { it.exists() }?.absolutePath
         }
-        val poster = seriesDir?.let { dir ->
+        val seriesPoster = seriesDir?.let { dir ->
             java.io.File(dir, DownloadArtifacts.posterFile(item.id))
                 .takeIf { it.exists() }?.absolutePath
         }
-        return item.copy(
-            backdropPath = if (needsArtworkResolution(item.backdropPath)) backdrop ?: item.backdropPath else item.backdropPath,
-            posterPath = if (needsArtworkResolution(item.posterPath)) poster ?: item.posterPath else item.posterPath,
-        )
+        return (ownPoster ?: seriesPoster) to (ownBackdrop ?: seriesBackdrop)
     }
 
     /** True when [path] is absent or a server URL — i.e. not a local file. */

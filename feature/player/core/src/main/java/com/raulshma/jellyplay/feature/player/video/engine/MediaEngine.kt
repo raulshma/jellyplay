@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 import android.view.View
+import android.view.ViewGroup
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
@@ -152,6 +153,28 @@ data class EngineCapabilities(
      * this so it is hidden for engines that cannot capture.
      */
     val supportsScreenshot: Boolean = false,
+    /**
+     * Engine can reparent its native subtitle `View`(s) into an app-supplied
+     * host that is pinned to the screen (a sibling of the zoomed video surface,
+     * outside the pinch/crop transform). ExoPlayer only — its Media3
+     * `SubtitleView` and libass `AssSubtitleView` are plain `View`s reachable by
+     * reference, so [MediaEngine.setExternalSubtitleHost] moves them out of the
+     * letterboxed `exo_content_frame`. When `false`, the engine ignores
+     * [MediaEngine.setExternalSubtitleHost] and subtitles remain parented inside
+     * the video surface (so they scale/translate with zoom). See
+     * [supportsCueSubtitleOverlay] for the mpv fallback.
+     */
+    val supportsScreenPinnedSubtitles: Boolean = false,
+    /**
+     * Engine emits the currently-displayed subtitle line as plain text via
+     * [MediaEngine.liveSubtitleCue], so the screen can render a Compose overlay
+     * pinned to the display. mpv only — its `sub-text` property (ASS override
+     * tags stripped) is already observed. Used as the zoom-safe path on engines
+     * whose subtitle rendering cannot be reparented (mpv composites libass into
+     * the GPU video surface). When `false`, [MediaEngine.liveSubtitleCue] never
+     * emits. See [supportsScreenPinnedSubtitles] for the ExoPlayer path.
+     */
+    val supportsCueSubtitleOverlay: Boolean = false,
 )
 
 enum class EnginePlaybackState {
@@ -319,6 +342,17 @@ interface MediaEngine :
      */
     val currentCues: StateFlow<List<TimedCue>>
 
+    /**
+     * The currently-displayed subtitle line as plain text, or `null` when no
+     * line is active. Distinct from [currentCues] (which accumulates the played
+     * range for the sync preview): this is the single live line the screen can
+     * render in a zoom-safe Compose overlay. Only emitted by engines that
+     * advertise [EngineCapabilities.supportsCueSubtitleOverlay] (mpv, via its
+     * `sub-text` property with ASS override tags stripped); `null` forever on
+     * every other engine.
+     */
+    val liveSubtitleCue: StateFlow<CharSequence?>
+
     val pollingIntervalMs: StateFlow<Long>
     val videoStatsEnabled: StateFlow<Boolean>
     fun setPollingIntervalMs(ms: Long)
@@ -351,6 +385,26 @@ interface MediaEngine :
     //    the subtitle-sync preview, but it is not rendered as an overlay — the
     //    old `MpvSubtitleOverlay` Compose path remains removed. ──
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
+
+    /**
+     * Optionally reparents the engine's native subtitle `View`(s) into an
+     * app-supplied [host] pinned to the screen (a sibling of the zoomed video
+     * surface, outside the pinch/crop transform), so captions stay put when the
+     * video is zoomed or cropped. Pass `null` to detach and revert to the
+     * engine's default in-frame parenting. Engines that cannot reparent their
+     * subtitle views (mpv, libVLC) no-op this; gate on
+     * [EngineCapabilities.supportsScreenPinnedSubtitles]. ExoPlayer only today.
+     */
+    fun setExternalSubtitleHost(host: ViewGroup?) {}
+
+    /**
+     * Toggles the engine's native subtitle rendering at runtime. Used to hide
+     * native subs while the screen renders a zoom-safe Compose overlay (see
+     * [liveSubtitleCue] / [EngineCapabilities.supportsCueSubtitleOverlay]),
+     * avoiding double-drawn captions. mpv maps this to `sub-visibility`;
+     * engines without a runtime toggle no-op.
+     */
+    fun setNativeSubtitlesVisible(visible: Boolean) {}
 
     // ── Native surface creation and aspect-ratio control. ──
     fun createSurfaceView(context: Context): View

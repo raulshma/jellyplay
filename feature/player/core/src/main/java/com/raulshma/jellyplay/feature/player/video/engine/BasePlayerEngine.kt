@@ -54,6 +54,10 @@ abstract class BasePlayerEngine : MediaEngine {
     protected val _currentCues = MutableStateFlow<List<TimedCue>>(emptyList())
     override val currentCues: StateFlow<List<TimedCue>> = _currentCues.asStateFlow()
 
+    // Default no-op: only mpv overrides (its sub-text property). ExoPlayer
+    // reparents its native SubtitleView instead; libVLC has no cue source.
+    override val liveSubtitleCue: StateFlow<CharSequence?> = MutableStateFlow(null)
+
     protected val _errorFlow = MutableSharedFlow<EngineError>(extraBufferCapacity = 1)
     override val errorFlow: Flow<EngineError> = _errorFlow.asSharedFlow()
 
