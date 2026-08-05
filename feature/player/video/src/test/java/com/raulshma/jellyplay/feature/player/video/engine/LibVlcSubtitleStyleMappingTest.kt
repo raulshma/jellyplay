@@ -129,6 +129,50 @@ class LibVlcSubtitleStyleMappingTest {
     }
 
     @Test
+    fun defaultOptions_emitsMpvMatchingWhiteTransparentBlackOutline() {
+        // When applyCustomStyle is false, LibVLC ships mpv's native default
+        // caption style (white text, transparent background, black outline +
+        // shadow, 24px reference size). Previously this lived inline in the
+        // engine and bypassed the tests; now it is owned here.
+        val options = LibVlcSubtitleStyleMapping.defaultOptions().parseFreetypeOptions()
+
+        assertEquals("16777215", options[":freetype-color"]) // 0xFFFFFF white
+        assertEquals("0", options[":freetype-background-color"])
+        assertEquals("0", options[":freetype-background-opacity"]) // transparent
+        assertEquals("0", options[":freetype-outline-color"]) // black
+        assertEquals("2", options[":freetype-outline-thickness"])
+        assertEquals("255", options[":freetype-shadow-opacity"])
+        assertEquals("24", options[":freetype-fontsize"]) // SubtitleDefaults.REFERENCE_FONT_SIZE
+    }
+
+    @Test
+    fun freetypeOptions_dispatchesToCustomWhenApplyCustomStyleTrue() {
+        // Custom path resolves ARGB through SubtitleColorResolver; ARGB must win.
+        val style = SubtitleStyle(
+            applyCustomStyle = true,
+            fontColor = SubtitleColor.WHITE,
+            fontColorArgb = 0xFF112233.toInt(),
+        )
+        val options = LibVlcSubtitleStyleMapping.freetypeOptions(style).parseFreetypeOptions()
+
+        assertEquals((0x112233).toString(), options[":freetype-color"])
+    }
+
+    @Test
+    fun freetypeOptions_dispatchesToDefaultsWhenApplyCustomStyleFalse() {
+        // Non-custom path emits the mpv-matching defaults regardless of the
+        // user's color fields (mirrors the engine's pre-fold behaviour).
+        val style = SubtitleStyle(
+            applyCustomStyle = false,
+            fontColor = SubtitleColor.BLACK,
+            fontColorArgb = 0xFF000000.toInt(),
+        )
+        val options = LibVlcSubtitleStyleMapping.freetypeOptions(style).parseFreetypeOptions()
+
+        assertEquals("16777215", options[":freetype-color"]) // default white, not the user's black
+    }
+
+    @Test
     fun subMarginPixels_scalesFractionByFrameHeightAndClamps() {
         // 5% of a 1080p frame = 54px; clamped to [0, ∞).
         assertEquals(

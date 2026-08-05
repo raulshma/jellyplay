@@ -88,6 +88,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCredits
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
@@ -190,11 +191,11 @@ fun SeerrDetailScreen(
 
     ArtworkThemeWrapper(
         imageUrl = backdropUrl ?: "",
-        dynamicTheming = preferences.dynamicTheming,
+        dynamicTheming = preferences.theme.dynamicTheming,
         darkTheme = !outerIsLightTheme,
-        oledMode = preferences.oledMode,
-        colorStyle = preferences.colorStyle,
-        accentColorSwatch = preferences.accentColorSwatch,
+        oledMode = preferences.theme.oledMode,
+        colorStyle = preferences.theme.colorStyle,
+        accentColorSwatch = preferences.theme.accentColorSwatch,
     ) {
         var showRequestDialog by remember { mutableStateOf(false) }
         val seerrLoadingState = rememberSeerrCardLoadingState()

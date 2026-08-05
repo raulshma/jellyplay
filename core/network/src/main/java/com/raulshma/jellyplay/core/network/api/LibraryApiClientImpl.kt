@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
@@ -289,10 +290,11 @@ class LibraryApiClientImpl @Inject constructor(
      * [getLatestMedia] for fresh data.
      */
     private suspend fun getLatestMediaForHome(parentId: String, limit: Int): Result<List<MediaItem>> {
+        val identity = currentHomeCacheIdentity()
         val cacheKey = "${parentId}_$limit"
-        homeLatestMediaCache.get(cacheKey)?.let { return Result.success(it) }
+        homeLatestMediaCache.get(identity, cacheKey)?.let { return Result.success(it) }
         return getLatestMedia(parentId, limit).also { result ->
-            result.getOrNull()?.let { homeLatestMediaCache.put(cacheKey, it) }
+            result.getOrNull()?.let { homeLatestMediaCache.put(identity, cacheKey, it) }
         }
     }
 
@@ -304,22 +306,24 @@ class LibraryApiClientImpl @Inject constructor(
      * within the TTL window, so back-to-back refreshes skip it entirely.
      */
     private suspend fun getSimilarItemsForHome(seedId: String, limit: Int): Result<List<MediaItem>> {
+        val identity = currentHomeCacheIdentity()
         val cacheKey = "${seedId}_$limit"
-        homeSimilarCache.get(cacheKey)?.let { return Result.success(it) }
+        homeSimilarCache.get(identity, cacheKey)?.let { return Result.success(it) }
         return getSimilarItems(seedId, limit).also { result ->
-            result.getOrNull()?.let { homeSimilarCache.put(cacheKey, it) }
+            result.getOrNull()?.let { homeSimilarCache.put(identity, cacheKey, it) }
         }
     }
 
     /**
-     * Drops the home hot-path sub-call caches. Called on identity (server/user)
-     * change by MediaRepositoryImpl.invalidateCaches() so a previous user's
-     * latest-media / recommendations can't leak to the next.
+     * The current `(serverId, userId)` as a [CacheIdentity], read from the
+     * engine's [StateFlow]s. The home sub-call caches are identity-keyed so a
+     * user/server switch can't serve the previous identity's latest-media /
+     * recommendations — wrong identity misses by construction, so no parallel
+     * cross-boundary clearer is needed. Falls back to [CacheIdentity.UNKNOWN]
+     * before login / after logout; nothing cached under that key can leak.
      */
-    override fun clearHomePathCaches() {
-        homeLatestMediaCache.clear()
-        homeSimilarCache.clear()
-    }
+    private fun currentHomeCacheIdentity(): CacheIdentity =
+        CacheIdentity.ofOrNull(engine.currentServer.value?.id, engine.currentUser.value?.id)
     private suspend fun fetchPinnedSections(
         pinnedSections: List<PinnedHomeSection>,
     ): List<HomeSection> {

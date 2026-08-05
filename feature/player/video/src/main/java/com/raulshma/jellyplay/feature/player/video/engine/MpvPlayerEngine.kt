@@ -91,12 +91,13 @@ class MpvPlayerEngine(
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
 
     override val capabilities = EngineCapabilityMatrix.MPV
+    override val zoomSafeSubtitleStrategy = ZoomSafeSubtitleStrategy.COMPOSE_CUE
 
     // The currently-displayed subtitle line, exposed to the screen for the
-    // zoom-safe Compose overlay (supportsCueSubtitleOverlay). Distinct from the
-    // accumulated [currentCues] history: this is the single live line, cleared
-    // on blank/track-switch/stop. Driven by mpv's `sub-text` property (ASS
-    // override tags already stripped by mpv).
+    // zoom-safe Compose overlay (zoomSafeSubtitleStrategy = COMPOSE_CUE).
+    // Distinct from the accumulated [currentCues] history: this is the single
+    // live line, cleared on blank/track-switch/stop. Driven by mpv's `sub-text`
+    // property (ASS override tags already stripped by mpv).
     private val _liveSubtitleCue = MutableStateFlow<CharSequence?>(null)
     override val liveSubtitleCue: StateFlow<CharSequence?> = _liveSubtitleCue.asStateFlow()
 
@@ -1620,11 +1621,14 @@ class MpvPlayerEngine(
             mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
             mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE).toString())
         } else {
-            mpv.safeSetOption("sub-ass-override", "no")
-            mpv.safeSetOption("sub-bold", "no")
-            mpv.safeSetOption("sub-italic", "no")
+            // Reset to mpv native defaults — the subset mpv needs at init time
+            // (ass-override, typeface toggles, font, scale). All reset strings
+            // and the scale magnitude come from the tested MpvStyleMapping
+            // (sourced from its single DEFAULTS table via defaultInitEntries),
+            // so this branch cannot drift from DEFAULTS and is unit-covered.
+            MpvStyleMapping.defaultInitEntries().forEach { (k, v) -> mpv.safeSetOption(k, v) }
             mpv.safeSetOption("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            mpv.safeSetOption("sub-scale", "1.0")
+            mpv.safeSetOption("sub-scale", MpvStyleMapping.defaultScale.toString())
         }
 
         mpv.safeSetOption("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toString())
@@ -1647,20 +1651,19 @@ class MpvPlayerEngine(
             mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
             mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE)
         } else {
-            // Reset to defaults
-            mpv.safeSetPropertyString("sub-color", "#FFFFFFFF")
-            mpv.safeSetPropertyString("sub-back-color", "#00000000")
-            mpv.safeSetPropertyString("sub-border-color", "#FF000000")
-            mpv.safeSetPropertyString("sub-shadow-color", "#FF000000")
-            mpv.safeSetPropertyString("sub-border-style", "outline-and-shadow")
-            mpv.safeSetPropertyString("sub-ass-override", "no")
-            mpv.safeSetPropertyBoolean("sub-ass-justify", false)
-            mpv.safeSetPropertyString("sub-bold", "no")
-            mpv.safeSetPropertyString("sub-italic", "no")
+            // Reset to mpv native defaults — string pairs and numeric magnitudes
+            // both come from the tested MpvStyleMapping (sourced from its single
+            // DEFAULTS table), so this branch is unit-covered. sub-ass-justify is
+            // boolean-typed on mpv; the mapping emits it as a "no" string pair,
+            // applied here via the boolean setter.
+            MpvStyleMapping.defaultEntries().forEach { (k, v) ->
+                if (k == "sub-ass-justify") mpv.safeSetPropertyBoolean(k, false)
+                else mpv.safeSetPropertyString(k, v)
+            }
             mpv.safeSetPropertyString("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-            mpv.safeSetPropertyDouble("sub-border-size", 3.0)
-            mpv.safeSetPropertyDouble("sub-shadow-offset", 0.0)
-            mpv.safeSetPropertyDouble("sub-scale", 1.0)
+            mpv.safeSetPropertyDouble("sub-border-size", MpvStyleMapping.defaultBorderSize)
+            mpv.safeSetPropertyDouble("sub-shadow-offset", MpvStyleMapping.defaultShadowOffset)
+            mpv.safeSetPropertyDouble("sub-scale", MpvStyleMapping.defaultScale)
         }
 
         mpv.safeSetPropertyDouble("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toDouble())

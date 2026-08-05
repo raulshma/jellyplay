@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import androidx.compose.runtime.Immutable
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
@@ -16,31 +15,15 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
-import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
-import com.raulshma.jellyplay.core.datastore.navigation.NavigationSlice
-import com.raulshma.jellyplay.core.datastore.navigation.NavigationStore
-import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
-import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
-import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
-import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
-import com.raulshma.jellyplay.core.model.AppFontScale
-import com.raulshma.jellyplay.core.model.ColorBlindMode
-import com.raulshma.jellyplay.core.model.ColorStyle
-import com.raulshma.jellyplay.core.model.ContrastLevel
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
-import com.raulshma.jellyplay.core.model.HandMode
-import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.LibraryFolder
-import com.raulshma.jellyplay.core.model.NavigationStyle
-import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.MainPreferences
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -61,72 +44,14 @@ import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * The preference fields read by the app-shell composables (MainActivity +
- * JellyPlayApp), projected off the owning store slices instead of the legacy
- * aggregate. Spans 7 domains (appearance, security, home discovery, navigation,
- * playback, runtime state, experimental) combined into one holder so the two
- * composables keep their single `preferences.field` read pattern.
- */
-@Immutable
-data class MainPreferences(
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val dynamicTheming: Boolean = true,
-    val oledMode: Boolean = false,
-    val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
-    val performanceMode: Boolean = false,
-    val reduceMotionEnabled: Boolean = false,
-    val accentColorSwatch: String = "dynamic",
-    val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
-    val synthwaveMode: Boolean = false,
-    val synthwaveAccent: String = "magenta",
-    val soothingMode: Boolean = false,
-    val soothingAccent: String = "ocean",
-    val monochromeMode: Boolean = false,
-    val appFontScale: AppFontScale = AppFontScale.DEFAULT,
-    val scheduledThemeStartHour: Int = 22,
-    val scheduledThemeEndHour: Int = 7,
-    val blueLightFilterEnabled: Boolean = false,
-    val blueLightFilterStrength: Float = 0.3f,
-    val colorBlindMode: ColorBlindMode = ColorBlindMode.NONE,
-    val handMode: HandMode = HandMode.RIGHT,
-    val pinLockEnabled: Boolean = false,
-    val biometricLockEnabled: Boolean = false,
-    val pinHash: String? = null,
-    val autoLockTimerMs: Long = 30_000L,
-    val pinLockoutUntilEpochMs: Long = 0L,
-    val homeMode: HomeMode = HomeMode.VIDEO,
-    val showUnwatchedBadge: Boolean = true,
-    val hideWatchedItems: Boolean = false,
-    val showWatchedCheckmark: Boolean = true,
-    val hiddenNavItems: Set<String> = emptySet(),
-    val navItemOrder: List<String> = emptyList(),
-    val hideBottomNavOnScroll: Boolean = true,
-    val navBarShowLabels: Boolean = true,
-    val navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
-    val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
-    val onboardingCompleted: Boolean = false,
-    val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
-    val appLanguage: String? = null,
-)
-
-/**
- * Convenience helper mirroring the legacy `UserPreferences.isExperimentalEnabled`
- * extension so the JellyPlayApp call sites keep the same readable check.
- */
-fun MainPreferences.isExperimentalEnabled(feature: ExperimentalFeature): Boolean =
-    feature in enabledExperimentalFeatures
-
 @HiltViewModel
 class MainViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val authRepository: AuthRepository,
-    private val appearanceStore: AppearanceStore,
+    private val projections: PreferenceProjections,
     private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
-    val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
     val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
-    private val navigationStore: NavigationStore,
-    private val playbackStore: PlaybackStore,
+    val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
     val serverIdentityStore: ServerIdentityStore,
     val pinRateLimiter: PinRateLimiter,
     val securityStore: SecurityStore,
@@ -199,70 +124,22 @@ class MainViewModel @Inject constructor(
      */
     private val dismissedUpdateSuppressMs = 24L * 60 * 60 * 1000
 
+    /**
+     * Preferences read by the app-shell composables (MainActivity +
+     * JellyPlayApp). Built off [PreferenceProjections.mainPreferences] (which
+     * covers all slice-owned fields) with the two runtime-only fields —
+     * `pinLockoutUntilEpochMs` (from [PinRateLimiter]) and `onboardingCompleted`
+     * (from [appRuntimeStateStore]) — merged in via a typed `combine`, since
+     * neither lives in a preference slice.
+     */
     val preferences = combine(
-        appearanceStore.appearance,
-        securityStore.security,
+        projections.mainPreferences,
         pinRateLimiter.pinLockoutUntilEpochMs,
-        homeDiscoveryStore.homeDiscovery,
-        navigationStore.navigation,
-        playbackStore.playback,
         appRuntimeStateStore.state,
-        experimentalStore.experimental,
-    ) { slices ->
-        @Suppress("UNCHECKED_CAST")
-        val appearance = slices[0] as AppearanceSlice
-        @Suppress("UNCHECKED_CAST")
-        val security = slices[1] as SecuritySlice
-        val pinLockout = slices[2] as Long
-        @Suppress("UNCHECKED_CAST")
-        val home = slices[3] as HomeDiscoverySlice
-        @Suppress("UNCHECKED_CAST")
-        val nav = slices[4] as NavigationSlice
-        @Suppress("UNCHECKED_CAST")
-        val playback = slices[5] as PlaybackSlice
-        @Suppress("UNCHECKED_CAST")
-        val runtime = slices[6] as AppRuntimeState
-        @Suppress("UNCHECKED_CAST")
-        val experimental = slices[7] as ExperimentalSlice
-        MainPreferences(
-            themeMode = appearance.themeMode,
-            dynamicTheming = appearance.dynamicTheming,
-            oledMode = appearance.oledMode,
-            contrastLevel = appearance.contrastLevel,
-            performanceMode = appearance.performanceMode,
-            reduceMotionEnabled = appearance.reduceMotionEnabled,
-            accentColorSwatch = appearance.accentColorSwatch,
-            colorStyle = appearance.colorStyle,
-            synthwaveMode = appearance.synthwaveMode,
-            synthwaveAccent = appearance.synthwaveAccent,
-            soothingMode = appearance.soothingMode,
-            soothingAccent = appearance.soothingAccent,
-            monochromeMode = appearance.monochromeMode,
-            appFontScale = appearance.appFontScale,
-            scheduledThemeStartHour = appearance.scheduledThemeStartHour,
-            scheduledThemeEndHour = appearance.scheduledThemeEndHour,
-            blueLightFilterEnabled = appearance.blueLightFilterEnabled,
-            blueLightFilterStrength = appearance.blueLightFilterStrength,
-            colorBlindMode = appearance.colorBlindMode,
-            handMode = appearance.handMode,
-            pinLockEnabled = security.pinLockEnabled,
-            biometricLockEnabled = security.biometricLockEnabled,
-            pinHash = security.pinHash,
-            autoLockTimerMs = security.autoLockTimerMs,
+    ) { prefs, pinLockout, runtime ->
+        prefs.copy(
             pinLockoutUntilEpochMs = pinLockout,
-            homeMode = home.homeMode,
-            showUnwatchedBadge = home.showUnwatchedBadge,
-            hideWatchedItems = home.hideWatchedItems,
-            showWatchedCheckmark = home.showWatchedCheckmark,
-            hiddenNavItems = nav.hiddenNavItems,
-            navItemOrder = nav.navItemOrder,
-            hideBottomNavOnScroll = nav.hideBottomNavOnScroll,
-            navBarShowLabels = nav.navBarShowLabels,
-            navigationStyle = nav.navigationStyle,
-            preferredPlayer = playback.preferredPlayer,
             onboardingCompleted = runtime.onboardingCompleted,
-            enabledExperimentalFeatures = experimental.enabledExperimentalFeatures,
-            appLanguage = experimental.appLanguage,
         )
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), MainPreferences())
 

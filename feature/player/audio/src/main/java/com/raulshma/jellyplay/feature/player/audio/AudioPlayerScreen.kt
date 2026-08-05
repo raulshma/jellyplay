@@ -222,11 +222,11 @@ fun AudioPlayerScreen(
 
     ArtworkThemeWrapper(
         imageUrl = uiState.albumArtUrl.ifBlank { null },
-        dynamicTheming = preferences.dynamicTheming,
+        dynamicTheming = preferences.theme.dynamicTheming,
         darkTheme = isDarkTheme,
-        oledMode = preferences.oledMode,
-        colorStyle = preferences.colorStyle,
-        accentColorSwatch = preferences.accentColorSwatch,
+        oledMode = preferences.theme.oledMode,
+        colorStyle = preferences.theme.colorStyle,
+        accentColorSwatch = preferences.theme.accentColorSwatch,
     ) {
         @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
         val sharedContainerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {

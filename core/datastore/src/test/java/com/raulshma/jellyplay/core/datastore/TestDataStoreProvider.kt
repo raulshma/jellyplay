@@ -125,6 +125,7 @@ fun createPreferenceSliceGraph(
         syncPlayCastStore,
         securityStore,
         experimentalStore,
+        screensaverStore,
     )
     return PreferenceSliceGraph(
         playbackStore, appearanceStore, videoPlayerStore, downloadsStore, engineStore,

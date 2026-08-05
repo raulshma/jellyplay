@@ -140,11 +140,11 @@ fun MediaDetailScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         ArtworkThemeWrapper(
             imageUrl = backdropUrl,
-            dynamicTheming = preferences.dynamicTheming,
+            dynamicTheming = preferences.theme.dynamicTheming,
             darkTheme = !outerIsLightTheme,
-            oledMode = preferences.oledMode,
-            colorStyle = preferences.colorStyle,
-            accentColorSwatch = preferences.accentColorSwatch,
+            oledMode = preferences.theme.oledMode,
+            colorStyle = preferences.theme.colorStyle,
+            accentColorSwatch = preferences.theme.accentColorSwatch,
         ) {
             val downloadFlow = remember(itemId) { viewModel.getDownloadFlow(itemId) }
             val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)

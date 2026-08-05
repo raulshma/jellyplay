@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.users.detail
 
+import android.content.Context
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
@@ -8,8 +9,10 @@ import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.ParentalRatingOption
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
+import com.raulshma.jellyplay.feature.admin.R
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -36,9 +39,19 @@ class UserDetailViewModelTest {
     private val otherAdmin = ManagedUser(id = "u-other", name = "Zed", policy = ManagedUserPolicy(isAdministrator = true))
     private val libs = listOf(LibraryFolder(id = "lib-1", name = "Movies"))
 
+    private lateinit var context: Context
+
     @Before
     fun setUp() {
         apiClient = mockk(relaxed = true)
+        context = mockk(relaxed = true)
+        // Save path surfaces localized strings via context.getString. The default
+        // relaxed-mock "" would break the assertion that saveError carries an
+        // honest reload-failure message, so route the two relevant keys through
+        // the exact strings the assertions expect.
+        every { context.getString(R.string.admin_saved_reload_failed) } returns "Could not reload updated user"
+        every { context.getString(R.string.admin_could_not_reload) } returns "Could not reload updated user"
+        every { context.getString(R.string.admin_changes_saved) } returns "Changes saved"
     }
 
     private fun TestScope.loadViewModel(target: ManagedUser, allUsers: List<ManagedUser>, currentId: String = "me"): UserDetailViewModel {
@@ -46,7 +59,7 @@ class UserDetailViewModelTest {
         coEvery { apiClient.getLibraryFoldersForEditor() } returns Result.success(libs)
         coEvery { apiClient.getCurrentUserId() } returns Result.success(currentId)
         coEvery { apiClient.getManagedUsers() } returns Result.success(allUsers)
-        val vm = UserDetailViewModel(apiClient)
+        val vm = UserDetailViewModel(apiClient, context)
         vm.loadUser(target.id)
         advanceUntilIdle() // loadUser launches a coroutine; let it complete so the loaded state is ready
         return vm

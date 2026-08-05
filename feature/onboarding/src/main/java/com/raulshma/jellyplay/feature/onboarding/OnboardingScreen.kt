@@ -138,11 +138,11 @@ fun OnboardingScreen(
                         OnboardingStep.APPEARANCE -> {
                             AppearanceStep(
                                 themeMode = preferences.themeMode,
-                                dynamicTheming = preferences.dynamicTheming,
-                                oledMode = preferences.oledMode,
+                                dynamicTheming = preferences.theme.dynamicTheming,
+                                oledMode = preferences.theme.oledMode,
                                 contrastLevel = preferences.contrastLevel,
-                                accentColorSwatch = preferences.accentColorSwatch,
-                                colorStyle = preferences.colorStyle,
+                                accentColorSwatch = preferences.theme.accentColorSwatch,
+                                colorStyle = preferences.theme.colorStyle,
                                 homeHeroEnabled = preferences.homeHeroEnabled,
                                 onThemeModeChange = viewModel::setThemeMode,
                                 onDynamicThemingChange = viewModel::setDynamicTheming,

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.model
 
 import androidx.compose.runtime.Immutable
+import kotlinx.serialization.Serializable
 
 /**
  * Sort options for library / section item queries. Each [apiValue] is the
@@ -11,8 +12,13 @@ import androidx.compose.runtime.Immutable
  * Promoted here from `feature/library` so the home layer can build a
  * [LibrarySectionContext] (e.g. Recently Added → DATE_ADDED) without a
  * feature-on-feature dependency.
+ *
+ * `@Serializable` (by Kotlin enum `.name`, matching the on-disk wire format
+ * the library filter store already writes) so [LibraryFilters] can round-trip
+ * through kotlinx.serialization without a String-typed mirror.
  */
 @Immutable
+@Serializable
 enum class SortOption(
     val displayName: String,
     val apiValue: String,

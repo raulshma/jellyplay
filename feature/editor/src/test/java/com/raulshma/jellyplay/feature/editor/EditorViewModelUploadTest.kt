@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -30,6 +31,7 @@ class EditorViewModelUploadTest {
 
     private lateinit var apiClient: JellyfinApiClient
     private lateinit var authRepository: AuthRepository
+    private lateinit var subtitleProviderRepository: SubtitleProviderRepository
     private lateinit var context: Context
     private lateinit var contentResolver: ContentResolver
 
@@ -41,6 +43,7 @@ class EditorViewModelUploadTest {
     fun setUp() {
         apiClient = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
+        subtitleProviderRepository = mockk(relaxed = true)
         context = mockk(relaxed = true)
         contentResolver = mockk(relaxed = true)
 
@@ -55,7 +58,7 @@ class EditorViewModelUploadTest {
         coEvery { apiClient.getRemoteImageProviders(any()) } returns Result.success(emptyList())
         coEvery { apiClient.setItemImage(any(), any(), any()) } returns Result.success(Unit)
 
-        viewModel = EditorViewModel(apiClient, authRepository, context)
+        viewModel = EditorViewModel(apiClient, authRepository, subtitleProviderRepository, context)
     }
 
     @Test

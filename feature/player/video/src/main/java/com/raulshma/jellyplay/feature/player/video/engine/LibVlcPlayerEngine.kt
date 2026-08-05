@@ -679,42 +679,11 @@ class LibVlcPlayerEngine(
     }
 
     private fun Media.applySubtitleStyle(style: SubtitleStyle) {
-        if (style.applyCustomStyle) {
-            val fontColor = style.fontColor.value and 0x00FFFFFF
-            val backgroundColor = style.backgroundColor.value and 0x00FFFFFF
-            val edgeColor = style.edgeColor.value and 0x00FFFFFF
-
-            addOption(":freetype-fontsize=${style.fontSize}")
-            addOption(":freetype-color=$fontColor")
-            addOption(":freetype-background-color=$backgroundColor")
-            addOption(":freetype-background-opacity=${(style.backgroundOpacity * 255).toInt().coerceIn(0, 255)}")
-            addOption(":freetype-outline-color=$edgeColor")
-            when (style.edgeType) {
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.NONE -> addOption(":freetype-outline-thickness=0")
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> addOption(":freetype-outline-thickness=2")
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> {
-                    addOption(":freetype-outline-thickness=0")
-                    addOption(":freetype-shadow-opacity=255")
-                }
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED,
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> {
-                    addOption(":freetype-outline-thickness=1")
-                    addOption(":freetype-shadow-opacity=255")
-                }
-            }
-        } else {
-            // Default styling matching MPV (white text, transparent background, black outline and shadow)
-            addOption(":freetype-color=16777215") // White (0xFFFFFF)
-            addOption(":freetype-background-color=0") // Black/transparent
-            addOption(":freetype-background-opacity=0") // Transparent
-            addOption(":freetype-outline-color=0") // Black
-            addOption(":freetype-outline-thickness=2")
-            addOption(":freetype-shadow-opacity=255")
-            // Absolute pixel size, matching the other engines' bundled-default
-            // reference size (24sp). :freetype-rel-fontsize would clamp/ignore
-            // 24 here — it is a relative-size enum, not a pixel value.
-            addOption(":freetype-fontsize=${SubtitleDefaults.REFERENCE_FONT_SIZE}")
-        }
+        // All `:freetype-*` color/size/opacity options come from the tested
+        // pure mapping — this is the single source, so the shipped path is the
+        // tested path (no inline shadow). Branching on applyCustomStyle lives
+        // inside freetypeOptions; the dispatcher picks custom vs default.
+        LibVlcSubtitleStyleMapping.freetypeOptions(style).forEach(::addOption)
 
         // The freetype module accepts a font file path. Supplying the same
         // bundled fallback used by the other engines makes its synthetic
@@ -724,9 +693,11 @@ class LibVlcPlayerEngine(
             .typefaceOptions(style, fontProvider.bundledFallbackPath())
             .forEach(::addOption)
 
+        // Vertical margin in pixels from the bottom of the frame. subMarginPixels
+        // clamps verticalPosition to [0, 0.4] — the inline copy previously used
+        // an unclamped raw fraction, which could push captions off-screen.
         val screenHeight = context.resources.displayMetrics.heightPixels
-        val marginPixels = (style.verticalPosition * screenHeight).toInt()
-        addOption(":sub-margin=$marginPixels")
+        addOption(LibVlcSubtitleStyleMapping.subMarginPixels(style, screenHeight))
     }
 
     override fun setAspectRatio(mode: Int, ratio: Float?) {

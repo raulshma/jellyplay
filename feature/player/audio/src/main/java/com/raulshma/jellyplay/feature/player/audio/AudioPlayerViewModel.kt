@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.player.audio
 
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LongState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -11,12 +10,10 @@ import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
-import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
-import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
-import com.raulshma.jellyplay.core.model.ColorStyle
+import com.raulshma.jellyplay.core.model.AudioPlayerUiPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.LrcLibTrack
@@ -36,24 +33,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
-/**
- * The few preference fields the audio player screen reads (the lyrics-visibility
- * toggle + the four theme fields for `ArtworkThemeWrapper`), projected off the
- * owning store slices instead of the legacy aggregate.
- */
-@Immutable
-data class AudioPlayerPreferences(
-    val audioLyricsVisible: Boolean = true,
-    val dynamicTheming: Boolean = true,
-    val oledMode: Boolean = false,
-    val colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
-    val accentColorSwatch: String = "dynamic",
-)
-
 @HiltViewModel
 class AudioPlayerViewModel @Inject constructor(
     private val audioPlaybackManager: AudioPlaybackManager,
-    private val appearanceStore: AppearanceStore,
+    private val projections: PreferenceProjections,
     private val audioStore: AudioStore,
     private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
@@ -77,18 +60,8 @@ class AudioPlayerViewModel @Inject constructor(
         castManager.releaseConsumer()
     }
 
-    val preferences = combine(
-        audioStore.audio,
-        appearanceStore.appearance,
-    ) { audio: AudioSlice, appearance: AppearanceSlice ->
-        AudioPlayerPreferences(
-            audioLyricsVisible = audio.audioLyricsVisible,
-            dynamicTheming = appearance.dynamicTheming,
-            oledMode = appearance.oledMode,
-            colorStyle = appearance.colorStyle,
-            accentColorSwatch = appearance.accentColorSwatch,
-        )
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), AudioPlayerPreferences())
+    /** Lyrics toggle + artwork theme, projected centrally off the store slices. */
+    val preferences: StateFlow<AudioPlayerUiPreferences> = projections.audioPlayerUiPreferences
 
     private val _uiState = MutableStateFlow(AudioPlayerUiState())
     val uiState: StateFlow<AudioPlayerUiState> = _uiState.asStateFlow()

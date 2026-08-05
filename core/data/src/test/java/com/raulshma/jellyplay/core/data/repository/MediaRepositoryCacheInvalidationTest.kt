@@ -122,12 +122,20 @@ class MediaRepositoryCacheInvalidationTest {
     @Test
     fun `cache is NOT invalidated on first emission`() = runBlocking {
         val repository = buildRepository()
+
+        // Session restore: identity is established before the first fetch (the
+        // realistic ordering — DataStore restores server/user, then the UI
+        // loads). The observer must treat this as a restore, not a switch.
+        userFlow.value = userInfo("user-A")
+        serverFlow.value = serverInfo("server-1")
+        waitForCacheObserver()
+
         repository.getMediaDetail("item-1")
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
-        // First non-null emission — this is session restore, not a switch.
-        userFlow.value = userInfo("user-A")
+        // Re-emit the same identity — still a restore, no invalidation expected.
         serverFlow.value = serverInfo("server-1")
+        userFlow.value = userInfo("user-A")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")
