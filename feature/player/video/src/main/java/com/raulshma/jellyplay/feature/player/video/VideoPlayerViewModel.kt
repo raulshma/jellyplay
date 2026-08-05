@@ -992,6 +992,10 @@ class VideoPlayerViewModel @Inject constructor(
                             }
                             launch {
                                 engine.subtitleEvents.collect { event ->
+                                    // `when` over a sealed interface: Kotlin flags
+                                    // non-exhaustiveness once a second variant is
+                                    // added to SubtitleEvent, forcing this site to
+                                    // handle it instead of silently dropping it.
                                     when (event) {
                                         SubtitleEvent.MalformedTrackDisabled -> {
                                             // Engine auto-disabled a malformed text
