@@ -196,4 +196,12 @@ interface LibraryApiClient {
      * so stale flags from the previous server can't leak through.
      */
     fun clearFavoriteCache()
+
+    /**
+     * Drops the home hot-path sub-call caches (per-folder latest media +
+     * per-seed similar items). Called on identity (server/user) change so a
+     * previous user's home data can't leak to the next via the short-TTL
+     * memoisation in [LibraryApiClientImpl].
+     */
+    fun clearHomePathCaches()
 }

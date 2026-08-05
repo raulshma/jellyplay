@@ -108,6 +108,12 @@ fun HomeSearchResultsOverlay(
                 )
             }
         } else {
+            // Hoisted out of the per-item lambdas below: these three labels are
+            // constant, but were previously looked up per visible row per
+            // keystroke during search-as-you-type (N×3 string resolutions).
+            val movieLabel = stringResource(R.string.home_movie)
+            val seriesLabel = stringResource(R.string.home_tv_show)
+            val musicLabel = stringResource(R.string.home_music)
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(vertical = 8.dp),
@@ -235,9 +241,6 @@ fun HomeSearchResultsOverlay(
                         // Memoized per row on stable primitives so search-as-you-type
                         // recompositions don't re-run buildString + branches for every
                         // visible row.
-                        val movieLabel = stringResource(R.string.home_movie)
-                        val seriesLabel = stringResource(R.string.home_tv_show)
-                        val musicLabel = stringResource(R.string.home_music)
                         val subtitle = remember(item.id, item.year, item.mediaType) {
                             buildString {
                                 item.year?.let { append(it) }
@@ -305,8 +308,6 @@ fun HomeSearchResultsOverlay(
                     ) { index ->
                         val item = seerrResults[index]
                         val placementSpec = lazyItemPlacementSpec()
-                        val movieLabel = stringResource(R.string.home_movie)
-                        val seriesLabel = stringResource(R.string.home_tv_show)
                         val subtitle = remember(item.id, item.year, item.mediaType, item.voteAverage) {
                             buildString {
                                 item.year?.let { append(it) }

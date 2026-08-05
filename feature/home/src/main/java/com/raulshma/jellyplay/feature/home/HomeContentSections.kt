@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -154,7 +155,11 @@ internal fun HomeContentList(
     // Per-row focus requesters so D-pad navigation can target each content row.
     var homeFocusRow by rememberInt(-1)
     val savedRowIsValid = homeFocusRow in 0..sections.lastIndex
-    val rowFocusRequesters = remember(sections.size) { List(sections.size) { FocusRequester() } }
+    // Key on the sections list itself (part of the @Immutable HomeContentState,
+    // so structural equality is cheap) rather than on sections.size: a refresh
+    // that drops one section and adds another can produce a same-size list and
+    // reallocate these requesters, losing any attached D-pad focus.
+    val rowFocusRequesters = remember(sections) { List(sections.size) { FocusRequester() } }
     RestoreHomeRowFocus(
         listState = listState,
         savedRow = homeFocusRow,
@@ -284,14 +289,26 @@ internal fun HomeContentList(
                 // crossing (the range value changed even for items whose own
                 // visibility didn't). Reading each item's own visibility as a
                 // Boolean means only the item that entered/left recomposes.
-                val isCurrentlyVisible by remember {
+                //
+                // Keyed on sectionIndexInList: if the hero presence toggles
+                // (featuredItem becomes null, or homeHeroEnabled flips), every
+                // item's offset shifts by 1 and the captured index would
+                // otherwise track the wrong item's visibility. The key discards
+                // the stale derivedStateOf and rebuilds it for the new offset.
+                val isCurrentlyVisible by remember(sectionIndexInList) {
                     derivedStateOf {
                         listState.layoutInfo.visibleItemsInfo.any { it.index == sectionIndexInList }
                     }
                 }
 
                 var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
-                if (isCurrentlyVisible && !hasBeenVisible) hasBeenVisible = true
+                // Fold the one-shot visibility latch into a LaunchedEffect so the
+                // state write happens as a side effect, not during composition —
+                // writing to MutableState during composition triggers a redundant
+                // recomposition of this item on the next frame.
+                LaunchedEffect(isCurrentlyVisible) {
+                    if (isCurrentlyVisible && !hasBeenVisible) hasBeenVisible = true
+                }
 
                 val sectionAnimation by androidx.compose.animation.core.animateFloatAsState(
                     targetValue = if (hasBeenVisible) 1f else 0f,

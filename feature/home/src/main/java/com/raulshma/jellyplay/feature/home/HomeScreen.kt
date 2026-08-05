@@ -534,15 +534,22 @@ private fun MainHomeContent(
                 )
 
                 if (!isTv) {
+                    // Stabilize the FAB click lambdas so HomeFabMenu is skippable
+                    // — otherwise every MainHomeContent recomposition (download
+                    // count tick, sync count change, refresh flag flip, etc.)
+                    // re-runs the whole FAB tree. The sibling dock lambdas above
+                    // were already memoized; these were missed.
+                    val fabSurpriseClick = remember(heroController) { { heroController.toggleSurprise() } }
+                    val fabToggleOffline = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) } }
                     HomeFabMenu(
                         isExpanded = isFabExpanded,
                         onToggle = { isFabExpanded = it },
                         activeDownloadCount = activeDownloadCount,
                         offlineMode = state.offlineMode,
-                        onSurpriseClick = { heroController.toggleSurprise() },
+                        onSurpriseClick = fabSurpriseClick,
                         onSyncPlayClick = callbacks.onSyncPlayClick,
                         onDownloadsClick = callbacks.onDownloadsClick,
-                        onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                        onToggleOffline = fabToggleOffline,
                         isGoingOnline = state.isGoingOnline,
                         onPlayOnClick = callbacks.onPlayOnClick,
                         onSettingsClick = callbacks.onSettingsClick,
