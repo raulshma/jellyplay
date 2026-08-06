@@ -153,7 +153,8 @@ class OfflineRepositoryImpl @Inject constructor(
     override fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getSeasonsForSeries(seriesId).map { entities ->
             entities.map { it.toOfflineMediaItem() }
-        }.distinctUntilChanged()
+        }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+            .distinctUntilChanged()
 
     override fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getEpisodesForSeason(seasonId).flatMapLatest { episodes ->
@@ -174,7 +175,7 @@ class OfflineRepositoryImpl @Inject constructor(
         }.distinctUntilChanged()
 
     override suspend fun getOfflineItem(id: String): OfflineMediaItem? =
-        offlineMediaDao.getById(id)?.toOfflineMediaItem()
+        offlineMediaDao.getById(id)?.toOfflineMediaItem()?.let { resolveItemArtwork(it) }
 
     override fun getOfflineItemCount(): Flow<Int> =
         offlineMediaDao.getOfflineItemCount()
@@ -369,9 +370,6 @@ class OfflineRepositoryImpl @Inject constructor(
      * table writes, not per recomposition.
      */
     private suspend fun resolveItemArtwork(item: OfflineMediaItem): OfflineMediaItem {
-        if (!needsArtworkResolution(item.posterPath) && !needsArtworkResolution(item.backdropPath)) {
-            return item
-        }
         // First: the item's own artifact beside its media file (all types).
         val ownDir = item.downloadPath
             ?.takeIf { it.isNotBlank() }
@@ -389,10 +387,34 @@ class OfflineRepositoryImpl @Inject constructor(
             MediaType.SERIES -> resolveSeriesArtwork(item, ownPoster, ownBackdrop)
             else -> ownPoster to ownBackdrop
         }
-        return item.copy(
-            posterPath = if (needsArtworkResolution(item.posterPath)) resolvedPoster ?: item.posterPath else item.posterPath,
-            backdropPath = if (needsArtworkResolution(item.backdropPath)) resolvedBackdrop ?: item.backdropPath else item.backdropPath,
-        )
+        val posterResolved = if (needsArtworkResolution(item.posterPath)) resolvedPoster ?: item.posterPath else item.posterPath
+        val backdropResolved = if (needsArtworkResolution(item.backdropPath)) resolvedBackdrop ?: item.backdropPath else item.backdropPath
+        // Resolve cast image paths last: cast images are written beside the same
+        // parent dir as posters/backdrops (keyed by personId), so reuse whichever
+        // artifact dir was located above. Movies/standalone items use ownDir;
+        // series rows resolve their first episode's dir; episodes inherit their
+        // parent series dir. Skipped entirely when there is no cast to resolve.
+        val castDir = castDirFor(item, ownDir)
+        val resolvedCast = if (castDir != null && item.cast.isNotEmpty()) {
+            resolveCastArtwork(item.cast, castDir)
+        } else {
+            item.cast
+        }
+        // Fast path: nothing on the row needed artwork resolution (no remote
+        // poster/backdrop and no cast, or cast but no artifact dir). Avoids a
+        // copy() allocation on the hot library-grid read path.
+        return if (posterResolved == item.posterPath &&
+            backdropResolved == item.backdropPath &&
+            resolvedCast === item.cast
+        ) {
+            item
+        } else {
+            item.copy(
+                posterPath = posterResolved,
+                backdropPath = backdropResolved,
+                cast = resolvedCast,
+            )
+        }
     }
 
     /**
@@ -471,6 +493,54 @@ class OfflineRepositoryImpl @Inject constructor(
     /** True when [path] is an existing local file (not a server URL). */
     private fun isLocalPath(path: String): Boolean =
         path.isNotBlank() && !isRemoteUrl(path)
+
+    /**
+     * The directory used to locate cast-image artifacts for [item]. Cast images
+     * are written beside the item's media file (movies/standalone) or beside a
+     * downloaded episode's media file (series, which have no media file of their
+     * own). Returns null when neither is available so callers can skip cast
+     * resolution rather than stat a path that cannot exist.
+     */
+    private suspend fun castDirFor(item: OfflineMediaItem, ownDir: java.io.File?): java.io.File? {
+        if (ownDir != null) return ownDir
+        // Series row: locate any downloaded episode's dir. Mirrors
+        // resolveSeriesArtwork's scan so the cast row resolves to the same
+        // shared downloads dir the series poster/backdrop already use.
+        if (item.mediaType == MediaType.SERIES) {
+            return downloadDao.getDownloadsForSeries(item.id)
+                .asSequence()
+                .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
+                .mapNotNull { java.io.File(it).parentFile }
+                .firstOrNull()
+        }
+        return null
+    }
+
+    /**
+     * Returns [cast] with [OfflinePersonInfo.localImagePath] populated for any
+     * person whose image artifact exists beside [dir]. Persons whose file is
+     * absent keep `localImagePath = null` and the detail screen falls back to
+     * the remote URL (online) / blurHash (offline), exactly as before. Cheap:
+     * one `File.exists()` stat per cast member, only on detail reads.
+     */
+    private fun resolveCastArtwork(
+        cast: List<OfflinePersonInfo>,
+        dir: java.io.File,
+    ): List<OfflinePersonInfo> {
+        var changed = false
+        val resolved = ArrayList<OfflinePersonInfo>(cast.size)
+        for (person in cast) {
+            val localPath = java.io.File(dir, DownloadArtifacts.personImageFile(person.id))
+                .takeIf { it.exists() }?.absolutePath
+            if (localPath != null) {
+                changed = true
+                resolved.add(person.copy(localImagePath = localPath))
+            } else {
+                resolved.add(person)
+            }
+        }
+        return if (changed) resolved else cast
+    }
 
     private fun safeMediaTypeOf(name: String): MediaType =
         MEDIA_TYPE_BY_NAME[name] ?: MediaType.UNKNOWN

@@ -535,7 +535,13 @@ private fun OfflineDetailContent(
                                 ) { _, person, focusModifier ->
                                     OfflinePersonItem(
                                         person = person,
-                                        imageUrl = personImageUrl(person.id),
+                                        // Prefer the on-disk cast image (resolved
+                                        // by the repository) so the row renders
+                                        // without network even after Coil's memory
+                                        // cache evicts the entry; fall back to the
+                                        // remote URL (a blurhash placeholder if the
+                                        // fetch fails offline).
+                                        imageUrl = person.localImagePath ?: personImageUrl(person.id),
                                         modifier = focusModifier,
                                     )
                                 }
