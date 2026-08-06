@@ -217,6 +217,7 @@ interface OfflineMediaDao {
     @Query(
         """
         SELECT id, name, mediaType,
+               seriesName, seasonNumber, episodeNumber,
                CASE WHEN syncMediaChanged = 1 THEN 1 ELSE 0 END AS mediaFileChanged,
                CASE WHEN syncUpdateAvailable = 1 THEN 1 ELSE 0 END AS updateAvailable,
                CASE WHEN syncChecking = 1 THEN 1 ELSE 0 END AS checking,
@@ -296,6 +297,9 @@ data class OfflineSyncUpdateRow(
     val id: String,
     val name: String,
     val mediaType: String?,
+    val seriesName: String?,
+    val seasonNumber: Int?,
+    val episodeNumber: Int?,
     val mediaFileChanged: Int,
     val updateAvailable: Int,
     val checking: Int,

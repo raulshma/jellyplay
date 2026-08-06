@@ -147,4 +147,22 @@
     <string name="downloads_resync_batch_checking">Checking your downloads…</string>
     <string name="downloads_resync_resync_all">Sync all</string>
     <string name="downloads_resync_progress">%1$d of %2$d synced</string>
+
+    <!-- Force resync (granular item + data selection) -->
+    <string name="downloads_force_resync_action">Force resync</string>
+    <string name="downloads_force_resync_title">Force resync</string>
+    <string name="downloads_force_resync_description">Pick which downloaded items and which data to refresh from the server, regardless of whether an update was detected.</string>
+    <string name="downloads_force_resync_items_header">Items to sync</string>
+    <string name="downloads_force_resync_data_header">Data to sync</string>
+    <string name="downloads_force_resync_data_metadata">Metadata</string>
+    <string name="downloads_force_resync_data_metadata_desc">Overview, cast, ratings</string>
+    <string name="downloads_force_resync_data_poster">Poster</string>
+    <string name="downloads_force_resync_data_poster_desc">Primary artwork</string>
+    <string name="downloads_force_resync_data_backdrop">Backdrop</string>
+    <string name="downloads_force_resync_data_backdrop_desc">Background artwork</string>
+    <string name="downloads_force_resync_summary">Sync %1$d items</string>
+    <string name="downloads_force_resync_empty">No downloaded items to sync.</string>
+    <string name="downloads_force_resync_in_progress">Syncing %1$d of %2$d…</string>
+    <string name="downloads_force_resync_done">Synced %1$d of %2$d.</string>
+    <string name="downloads_force_resync_no_data">Select at least one type of data to sync.</string>
 </resources>
