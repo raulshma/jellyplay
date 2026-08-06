@@ -406,6 +406,7 @@ internal fun HomeContentList(
                             } else null
                         },
                         seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
+                        seriesBackdropResolver = remember(callbacks.getBackdropUrl) { { id: String -> callbacks.getBackdropUrl(id) } },
                     )
                 }
             }

@@ -235,6 +235,10 @@ fun HomeMediaRow(
     // show's poster instead of the episode's own primary image (a landscape
     // scene grab). See [EpisodePosterResolver] usage below.
     seriesPosterResolver: (String) -> String = { "" },
+    // Resolves a series' backdrop URL by id — middle fallback when a series has
+    // no Primary image (common for freshly-added series whose library scan has
+    // not yet generated a poster). See [EpisodePosterResolver].
+    seriesBackdropResolver: (String) -> String = { "" },
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -286,6 +290,7 @@ fun HomeMediaRow(
                     itemImageUrl = remember(item) { imageUrlBuilder(item) },
                     fallbackImageUrls = fallbackImageUrlBuilder(item),
                     seriesPosterResolver = seriesPosterResolver,
+                    seriesBackdropResolver = seriesBackdropResolver,
                     showEpisodeSeriesBadge = showEpisodeSeriesBadge,
                 )
                 PosterCard(
@@ -328,6 +333,7 @@ fun HomeMediaRow(
                     itemImageUrl = remember(item) { imageUrlBuilder(item) },
                     fallbackImageUrls = fallbackImageUrlBuilder(item),
                     seriesPosterResolver = seriesPosterResolver,
+                    seriesBackdropResolver = seriesBackdropResolver,
                     showEpisodeSeriesBadge = showEpisodeSeriesBadge,
                 )
                 PosterCard(
