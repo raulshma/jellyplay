@@ -88,6 +88,7 @@ class DetailViewModelTest {
     private lateinit var themeMusicPlayer: ThemeMusicPlayer
     private lateinit var tmdbApiClient: TmdbApiClient
     private lateinit var arrRepository: ArrRepository
+    private lateinit var episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 
     private lateinit var viewModel: DetailViewModel
 
@@ -114,6 +115,7 @@ class DetailViewModelTest {
         themeMusicPlayer = mockk(relaxed = true)
         tmdbApiClient = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
+        episodeCatalogue = mockk(relaxed = true)
 
         every { projections.detailPreferences } returns MutableStateFlow(DetailPreferences())
         every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
@@ -172,6 +174,7 @@ class DetailViewModelTest {
         viewModel = DetailViewModel(
             context = context,
             mediaRepository = mediaRepository,
+            episodeCatalogue = episodeCatalogue,
             playbackRepository = playbackRepository,
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
@@ -315,11 +318,14 @@ class DetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("s1") }
-        coVerify(exactly = 1) { mediaRepository.invalidateSeriesCache("s1") }
+        // Seasons/episodes caches now live in the catalogue; force-refresh drops
+        // them via episodeCatalogue.invalidateSeries (the load reset also drops
+        // the prior series' snapshot, so the call count is >= 1).
+        coVerify(atLeast = 1) { episodeCatalogue.invalidateSeries("s1") }
         coVerify(exactly = 0) { mediaRepository.invalidateUserDataCaches(any()) }
-        // Fresh seasons + episodes must be fetched after the cache drop.
-        coVerify(exactly = 2) { mediaRepository.getSeasons("s1") }
-        coVerify(exactly = 2) { mediaRepository.getAllEpisodesGrouped("s1") }
+        // Fresh seasons + episodes must be fetched after the cache drop — the
+        // detail screen reloads via the catalogue snapshot.
+        coVerify(atLeast = 2) { episodeCatalogue.loadSeriesEpisodes("s1", any()) }
     }
 
     @Test
@@ -329,8 +335,17 @@ class DetailViewModelTest {
             MediaDetail(item = MediaItem(id = "e1", name = "Ep 1", mediaType = MediaType.EPISODE, seriesId = "s1")),
         )
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
-        coEvery { mediaRepository.getSeasons("s1") } returns Result.success(listOf(season))
-        coEvery { mediaRepository.getAllEpisodesGrouped("s1") } returns Result.success(emptyMap())
+        // The parent series' catalogue snapshot (empty episodes suffice — this
+        // test only asserts the invalidation, not the loaded episodes).
+        val snapshot = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot(
+            seriesId = "s1",
+            seasons = listOf(season),
+            episodesBySeason = emptyMap(),
+            fetchedSeasonIds = emptySet(),
+            sortedEpisodes = emptyList(),
+            epoch = 0L,
+        )
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
 
         viewModel.loadItem("e1")
         advanceUntilIdle()
@@ -339,8 +354,9 @@ class DetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("e1") }
-        // Episode belongs to a series → its seasons/episodes caches must drop.
-        coVerify(exactly = 1) { mediaRepository.invalidateSeriesCache("s1") }
+        // Episode belongs to a series → its catalogue snapshot must drop (the
+        // load reset also drops the prior series' snapshot, so >= 1).
+        coVerify(atLeast = 1) { episodeCatalogue.invalidateSeries("s1") }
         coVerify(exactly = 0) { mediaRepository.invalidateUserDataCaches(any()) }
     }
 
@@ -606,12 +622,25 @@ class DetailViewModelTest {
             coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(
                 MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES)),
             )
-            coEvery { mediaRepository.getSeasons("s1") } returns Result.success(listOf(s1, s2))
-            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(listOf(s1e1))
-            coEvery { mediaRepository.getEpisodes("s1", "season2") } returns Result.success(listOf(s2e1))
-            coEvery { mediaRepository.getAllEpisodesGrouped("s1") } returns Result.success(
-                mapOf("season1" to listOf(s1e1), "season2" to listOf(s2e1)),
+            // Two-season catalogue snapshot stub (the detail screen reads both
+            // seasons + episodes from the consolidated snapshot now).
+            val snapshot = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot(
+                seriesId = "s1",
+                seasons = listOf(s1, s2),
+                episodesBySeason = mapOf("season1" to listOf(s1e1), "season2" to listOf(s2e1)),
+                fetchedSeasonIds = setOf("season1", "season2"),
+                sortedEpisodes = listOf(s1e1, s2e1),
+                epoch = 0L,
             )
+            coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
+            coEvery { episodeCatalogue.updateSeasonEpisodes("s1", "season1", any()) } answers {
+                val transform = thirdArg<(List<MediaItem>) -> List<MediaItem>>()
+                val rewritten = transform(listOf(s1e1))
+                snapshot.copy(
+                    episodesBySeason = snapshot.episodesBySeason + ("season1" to rewritten),
+                    sortedEpisodes = (rewritten + listOf(s2e1)),
+                )
+            }
             coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
 
             viewModel.loadItem("s1")
@@ -646,7 +675,9 @@ class DetailViewModelTest {
             advanceUntilIdle()
 
             io.mockk.coVerify(exactly = 1) { mediaRepository.markPlayed("season1") }
-            io.mockk.verify(exactly = 1) { mediaRepository.invalidateSeriesCache("s1") }
+            // markSeason drops the catalogue snapshot for re-entry (the series
+            // cache now lives in the catalogue, not the repo).
+            io.mockk.verify(exactly = 1) { episodeCatalogue.invalidateSeries("s1") }
         }
 
     // Repository failure must surface the localized snackbar and leave the
@@ -824,22 +855,28 @@ class DetailViewModelTest {
         runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
-            // Batched response groups under "" (null seasonId on the server) —
-            // does not contain a "season1" entry.
             coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(
                 MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES)),
             )
-            coEvery { mediaRepository.getSeasons("s1") } returns Result.success(listOf(season))
-            coEvery { mediaRepository.getAllEpisodesGrouped("s1") } returns Result.success(
-                mapOf("" to listOf(episode("e1", 1, 1))),
-            )
             val eps = listOf(episode("e1", 1, 1), episode("e2", 1, 2))
-            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(eps)
+            // The catalogue snapshot groups under "" (null seasonId on the
+            // server), so season1 is absent from fetchedSeasonIds — the on-demand
+            // per-season refetch must still fire and populate it.
+            val mismatchedSnapshot = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot(
+                seriesId = "s1",
+                seasons = listOf(season),
+                episodesBySeason = mapOf("" to listOf(episode("e1", 1, 1))),
+                fetchedSeasonIds = emptySet(),
+                sortedEpisodes = listOf(episode("e1", 1, 1)),
+                epoch = 0L,
+            )
+            coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(mismatchedSnapshot)
+            coEvery { episodeCatalogue.loadSeasonEpisodes("s1", "season1", any()) } returns Result.success(eps)
 
             viewModel.loadItem("s1")
             advanceUntilIdle()
 
-            // season1 was not in the batched map, so it must NOT be marked fetched.
+            // season1 was not in the snapshot, so it must NOT be marked fetched.
             assertEquals(false, viewModel.uiState.value.fetchedSeasonIds.contains("season1"))
             // On-demand load for season1 must fire the per-season refetch.
             viewModel.loadEpisodesForSeason("s1", "season1")
@@ -901,9 +938,42 @@ class DetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail(seriesId) } returns Result.success(
             MediaDetail(item = MediaItem(id = seriesId, name = "Show", mediaType = MediaType.SERIES)),
         )
-        coEvery { mediaRepository.getSeasons(seriesId) } returns Result.success(listOf(season))
-        coEvery { mediaRepository.getEpisodes(seriesId, season.id) } returns Result.success(episodes)
-        coEvery { mediaRepository.getAllEpisodesGrouped(seriesId) } returns Result.success(mapOf(season.id to episodes))
+        // The detail screen now reads seasons + episodes from the consolidated
+        // catalogue snapshot, so stub the catalogue directly. The snapshot's
+        // sortedEpisodes mirrors the canonical playback order the VM consumes.
+        val snapshot = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot(
+            seriesId = seriesId,
+            seasons = listOf(season),
+            episodesBySeason = mapOf(season.id to episodes),
+            fetchedSeasonIds = setOf(season.id),
+            sortedEpisodes = episodes.sortedWith(
+                compareBy<MediaItem>(
+                    { it.seasonNumber ?: Int.MAX_VALUE },
+                    { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE },
+                    { it.name },
+                ),
+            ),
+            epoch = 0L,
+        )
+        coEvery { episodeCatalogue.loadSeriesEpisodes(seriesId, any()) } returns Result.success(snapshot)
+        coEvery { episodeCatalogue.loadSeasonEpisodes(seriesId, season.id, any()) } returns Result.success(episodes)
+        // updateSeasonEpisodes applies the optimistic transform against the
+        // stubbed snapshot, mirroring the real catalogue's rewrite-and-rebuild
+        // so markSeasonPlayed's in-place flip + smart-play recompute resolve.
+        coEvery { episodeCatalogue.updateSeasonEpisodes(seriesId, season.id, any()) } answers {
+            val transform = thirdArg<(List<MediaItem>) -> List<MediaItem>>()
+            val rewritten = transform(episodes)
+            snapshot.copy(
+                episodesBySeason = snapshot.episodesBySeason + (season.id to rewritten),
+                sortedEpisodes = rewritten.sortedWith(
+                    compareBy<MediaItem>(
+                        { it.seasonNumber ?: Int.MAX_VALUE },
+                        { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE },
+                        { it.name },
+                    ),
+                ),
+            )
+        }
     }
 
     private fun episode(

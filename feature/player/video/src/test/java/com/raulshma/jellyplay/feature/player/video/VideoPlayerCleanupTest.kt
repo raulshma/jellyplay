@@ -246,6 +246,7 @@ class VideoPlayerCleanupTest {
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
             offlinePlaybackFacade = mockk(relaxed = true),
+            episodeCatalogue = mockk(relaxed = true),
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
             aggregateStore = aggregateStore,
             engineStore = engineStore,

@@ -195,6 +195,14 @@ class VideoPlayerViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
+    /**
+     * The consolidated series seasons/episodes snapshot. [resolveSeasons] and
+     * [resolveEpisodes] delegate here (online and offline), so the player's
+     * episode discovery shares the same single-flight + cache as the detail
+     * screen and the download paths. Offline-ness is read per-session from
+     * [playerSessionManager] and passed as a parameter.
+     */
+    private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue,
     private val itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository,
     private val aggregateStore: VideoPlayerAggregateStore,
     private val engineStore: com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore,
@@ -1528,30 +1536,33 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     /**
-     * Resolves the season list for [seriesId], branching on whether the current
-     * session is offline. Offline playback reads from the local download store
-     * so episode discovery works in airplane mode; online playback hits the
-     * server via the media repository as before.
+     * Resolves the season list for [seriesId] via the consolidated [EpisodeCatalogue]
+     * snapshot, branching on the current session's offline state. Offline reads
+     * the local download store (airplane-mode episode discovery); online hits the
+     * server. The catalogue owns single-flight + caching shared with the detail
+     * screen, so re-entry into the same series (back from a sibling season) is
+     * served from the snapshot rather than re-fetched.
      */
-    private suspend fun resolveSeasons(seriesId: String): List<JellyfinMediaItem> =
-        if (playerSessionManager.sessionState.value.isOffline) {
-            offlinePlaybackFacade.resolveSeasons(seriesId)
-        } else {
-            mediaRepository.getSeasons(seriesId).getOrDefault(emptyList())
-        }
+    private suspend fun resolveSeasons(seriesId: String): List<JellyfinMediaItem> {
+        val offline = playerSessionManager.sessionState.value.isOffline
+        return episodeCatalogue.loadSeriesEpisodes(seriesId, offline)
+            .getOrDefault(com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot.empty(seriesId))
+            .seasons
+    }
 
     /**
-     * Resolves the episode list for [seasonId] under [seriesId], branching on
-     * offline state — mirrors [resolveSeasons]. Offline episodes come from the
-     * download store (ordered by episodeNumber ASC at the DAO level), enabling
-     * next-episode discovery, the "up next" overlay, and autoplay while offline.
+     * Resolves the episode list for [seasonId] under [seriesId] via the
+     * [EpisodeCatalogue], branching on offline state — mirrors [resolveSeasons].
+     * Online serves from the shared snapshot if that season is present, else
+     * fetches the one season; offline reads the store (ordered by episodeNumber
+     * ASC at the DAO level), enabling next-episode discovery, the "up next"
+     * overlay, and autoplay while offline.
      */
-    private suspend fun resolveEpisodes(seriesId: String, seasonId: String): List<JellyfinMediaItem> =
-        if (playerSessionManager.sessionState.value.isOffline) {
-            offlinePlaybackFacade.resolveEpisodes(seasonId)
-        } else {
-            mediaRepository.getEpisodes(seriesId, seasonId).getOrDefault(emptyList())
-        }
+    private suspend fun resolveEpisodes(seriesId: String, seasonId: String): List<JellyfinMediaItem> {
+        val offline = playerSessionManager.sessionState.value.isOffline
+        return episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId, offline)
+            .getOrDefault(emptyList())
+    }
 
     fun playEpisode(episodeId: String, startPositionTicks: Long = 0L) {
         initialize(episodeId, null, startPositionTicks)

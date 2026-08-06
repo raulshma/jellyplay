@@ -5,9 +5,9 @@ import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -20,6 +20,11 @@ import kotlinx.coroutines.flow.firstOrNull
  * preference is enabled. The worker respects the WiFi-only and storage-limit
  * constraints enforced inside [DownloadRepository].
  *
+ * Seasons + episodes come from [EpisodeCatalogue.loadSeriesEpisodes] — a single
+ * consolidated snapshot per series instead of a separate `getSeasons` +
+ * per-season `getEpisodes` fan-out. This path runs online-only, so `offline`
+ * defaults to `false`.
+ *
  * Failures are observable: a per-series fetch error does not abort the run
  * (partial success is preserved via `getOrElse`), but it is recorded so the
  * worker can escalate retry → failure after [MAX_RETRIES]. Previously this
@@ -30,7 +35,7 @@ import kotlinx.coroutines.flow.firstOrNull
 class AutoDownloadWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val mediaRepository: MediaRepository,
+    private val episodeCatalogue: EpisodeCatalogue,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
     private val downloadsStore: DownloadsStore,
@@ -53,17 +58,18 @@ class AutoDownloadWorker @AssistedInject constructor(
         for (seriesId in seriesIds) {
             if (isStopped) break
             val alreadyDownloaded = downloadedEpisodeIdsBySeries[seriesId].orEmpty()
-            val seasons = mediaRepository.getSeasons(seriesId).getOrElse {
+            // One consolidated load per series: seasons + every season's episodes
+            // in a single snapshot, replacing the prior getSeasons + per-season
+            // getEpisodes fan-out. A catalogue failure is a transient error — map
+            // it to an empty snapshot so this series is skipped but the run
+            // continues and escalates retry → failure below.
+            val snapshot = episodeCatalogue.loadSeriesEpisodes(seriesId).getOrElse {
                 hadTransientFailure = true
-                emptyList()
+                continue
             }
-            for (season in seasons) {
+            for (season in snapshot.seasons) {
                 if (isStopped) break
-                val episodes = mediaRepository.getEpisodes(seriesId, season.id).getOrElse {
-                    hadTransientFailure = true
-                    emptyList()
-                }
-                val newEpisodeIds = episodes
+                val newEpisodeIds = snapshot.seasonEpisodes(season.id)
                     .filter { it.id !in alreadyDownloaded }
                     .map { it.id }
                 if (newEpisodeIds.isNotEmpty()) {
