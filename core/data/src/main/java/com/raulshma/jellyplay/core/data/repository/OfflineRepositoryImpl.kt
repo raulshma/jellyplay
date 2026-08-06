@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import com.raulshma.jellyplay.core.model.offlineSyncStateOf
+import java.io.File
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -182,17 +183,32 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override suspend fun deleteOfflineItem(id: String) {
         val download = downloadDao.getDownloadByMediaItemId(id)
+        // Capture the row + its artifact dir before the DB delete so the cast
+        // images written beside the download at fetch time can be pruned
+        // afterward. Reference counting keeps a person's shared image when
+        // another offline item still references them — a person can appear
+        // across many movies/episodes and the `personId`-keyed image serves
+        // all of them.
+        val entity = offlineMediaDao.getById(id)
+        val parentDir = download?.takeIf { it.downloadPath.isNotBlank() }
+            ?.let { File(it.downloadPath).parentFile }
         download?.let {
             if (it.downloadPath.isNotBlank()) {
-                val file = java.io.File(it.downloadPath)
+                val file = File(it.downloadPath)
                 if (file.exists()) file.delete()
-                DownloadArtifacts.cleanup(file.parentFile, it.mediaItemId)
+                DownloadArtifacts.cleanup(parentDir, it.mediaItemId)
             }
         }
         database.withTransaction {
             download?.let { downloadDao.deleteDownloadById(it.id) }
             offlineMediaDao.deleteById(id)
         }
+        // Prune cast images after the row is gone so the reference scan only
+        // counts surviving rows.
+        cleanupOrphanedCastArtwork(
+            parentDirs = listOfNotNull(parentDir),
+            candidateCastIds = entity?.let(::castIdsOf).orEmpty(),
+        )
         cleanupOrphans()
     }
 
@@ -209,17 +225,26 @@ class OfflineRepositoryImpl @Inject constructor(
         // Series-scoped artwork (${seriesId}_poster.jpg / _backdrop.jpg) lives
         // beside each downloaded episode; prune it from every episode dir now
         // that no row references the series anymore.
-        downloads
+        val episodeDirs = downloads
             .asSequence()
             .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
-            .mapNotNull { java.io.File(it).parentFile }
+            .mapNotNull { File(it).parentFile }
             .distinct()
-            .forEach { DownloadArtifacts.cleanupSeriesArtwork(it, seriesId) }
+            .toList()
+        episodeDirs.forEach { DownloadArtifacts.cleanupSeriesArtwork(it, seriesId) }
+        // Capture the deleted episodes' cast ids before the rows are removed so
+        // the cast images written beside each episode at fetch time can be
+        // pruned afterward (reference scan runs post-delete).
+        val deletedCastIds = downloads.map { offlineMediaDao.getById(it.mediaItemId) }
+            .filterNotNull()
+            .flatMap(::castIdsOf)
+            .distinct()
         database.withTransaction {
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
             offlineMediaDao.deleteBySeriesId(seriesId)
         }
+        cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
         cleanupOrphans()
     }
 
@@ -229,11 +254,26 @@ class OfflineRepositoryImpl @Inject constructor(
             downloadDao.getDownloadsForSeasonViaOfflineMedia(seasonId)
         ).distinctBy { it.id }
         deleteArtifactsParallel(downloads)
+        // Capture the season's episode dirs + cast ids before the rows are
+        // removed so the cast images can be pruned afterward. The reference
+        // scan runs post-delete and counts only surviving rows, so a person
+        // still referenced by a sibling season's row keeps their shared image.
+        val episodeDirs = downloads
+            .asSequence()
+            .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
+            .mapNotNull { File(it).parentFile }
+            .distinct()
+            .toList()
+        val deletedCastIds = downloads.map { offlineMediaDao.getById(it.mediaItemId) }
+            .filterNotNull()
+            .flatMap(::castIdsOf)
+            .distinct()
         database.withTransaction {
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
             offlineMediaDao.deleteBySeasonId(seasonId)
         }
+        cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
         cleanupOrphans()
     }
 
@@ -245,7 +285,8 @@ class OfflineRepositoryImpl @Inject constructor(
      *
      * Each download's per-item poster/backdrop are scoped by [DownloadEntity.mediaItemId]
      * so deleting one item's artifacts never clobbers another item's images in
-     * the shared flat downloads dir.
+     * the shared flat downloads dir. Cast images are pruned separately via
+     * [cleanupOrphanedCastArtwork] (they are keyed by `personId`, not `mediaItemId`).
      */
     private suspend fun deleteArtifactsParallel(downloads: List<DownloadEntity>) {
         val nonBlank = downloads.filter { it.downloadPath.isNotBlank() }
@@ -253,7 +294,7 @@ class OfflineRepositoryImpl @Inject constructor(
         coroutineScope {
             nonBlank.map { entity ->
                 async(Dispatchers.IO) {
-                    val file = java.io.File(entity.downloadPath)
+                    val file = File(entity.downloadPath)
                     if (file.exists()) file.delete()
                     DownloadArtifacts.cleanup(file.parentFile, entity.mediaItemId)
                 }
@@ -373,15 +414,9 @@ class OfflineRepositoryImpl @Inject constructor(
         // First: the item's own artifact beside its media file (all types).
         val ownDir = item.downloadPath
             ?.takeIf { it.isNotBlank() }
-            ?.let { java.io.File(it).parentFile }
-        val ownPoster = ownDir?.let { dir ->
-            java.io.File(dir, DownloadArtifacts.posterFile(item.id))
-                .takeIf { it.exists() }?.absolutePath
-        }
-        val ownBackdrop = ownDir?.let { dir ->
-            java.io.File(dir, DownloadArtifacts.backdropFile(item.id))
-                .takeIf { it.exists() }?.absolutePath
-        }
+            ?.let { File(it).parentFile }
+        val ownPoster = ownDir?.let { localArtifactOrNull(it, DownloadArtifacts.posterFile(item.id)) }
+        val ownBackdrop = ownDir?.let { localArtifactOrNull(it, DownloadArtifacts.backdropFile(item.id)) }
         val (resolvedPoster, resolvedBackdrop) = when (item.mediaType) {
             MediaType.EPISODE -> resolveEpisodeSeriesArtwork(item, ownPoster, ownBackdrop)
             MediaType.SERIES -> resolveSeriesArtwork(item, ownPoster, ownBackdrop)
@@ -442,17 +477,11 @@ class OfflineRepositoryImpl @Inject constructor(
         val seriesRow = offlineMediaDao.getById(seriesId)
         val episodeDir = item.downloadPath
             ?.takeIf { it.isNotBlank() }
-            ?.let { java.io.File(it).parentFile }
+            ?.let { File(it).parentFile }
         val seriesBackdrop = seriesRow?.backdropPath?.takeIf(::isLocalPath)
-            ?: episodeDir?.let { dir ->
-                java.io.File(dir, DownloadArtifacts.backdropFile(seriesId))
-                    .takeIf { it.exists() }?.absolutePath
-            }
+            ?: episodeDir?.let { localArtifactOrNull(it, DownloadArtifacts.backdropFile(seriesId)) }
         val seriesPoster = seriesRow?.posterPath?.takeIf(::isLocalPath)
-            ?: episodeDir?.let { dir ->
-                java.io.File(dir, DownloadArtifacts.posterFile(seriesId))
-                    .takeIf { it.exists() }?.absolutePath
-            }
+            ?: episodeDir?.let { localArtifactOrNull(it, DownloadArtifacts.posterFile(seriesId)) }
         return (ownPoster ?: seriesPoster) to (ownBackdrop ?: seriesBackdrop)
     }
 
@@ -470,16 +499,10 @@ class OfflineRepositoryImpl @Inject constructor(
         val seriesDir = downloadDao.getDownloadsForSeries(item.id)
             .asSequence()
             .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
-            .mapNotNull { java.io.File(it).parentFile }
+            .mapNotNull { File(it).parentFile }
             .firstOrNull()
-        val seriesBackdrop = seriesDir?.let { dir ->
-            java.io.File(dir, DownloadArtifacts.backdropFile(item.id))
-                .takeIf { it.exists() }?.absolutePath
-        }
-        val seriesPoster = seriesDir?.let { dir ->
-            java.io.File(dir, DownloadArtifacts.posterFile(item.id))
-                .takeIf { it.exists() }?.absolutePath
-        }
+        val seriesBackdrop = seriesDir?.let { localArtifactOrNull(it, DownloadArtifacts.backdropFile(item.id)) }
+        val seriesPoster = seriesDir?.let { localArtifactOrNull(it, DownloadArtifacts.posterFile(item.id)) }
         return (ownPoster ?: seriesPoster) to (ownBackdrop ?: seriesBackdrop)
     }
 
@@ -495,13 +518,66 @@ class OfflineRepositoryImpl @Inject constructor(
         path.isNotBlank() && !isRemoteUrl(path)
 
     /**
+     * Stats `[dir]/[filename]` and returns its absolute path when present, else
+     * null. Collapses the repeated `File(dir, …).takeIf { it.exists() }?.absolutePath`
+     * shape that poster/backdrop/cast resolution all share.
+     */
+    private fun localArtifactOrNull(dir: File, filename: String): String? =
+        File(dir, filename).takeIf { it.exists() }?.absolutePath
+
+    /**
+     * Cast ids carried by [item]'s persisted `peopleJson`, decoded via [decodeCast].
+     * Empty when the row has no cast column (older downloads) so cast cleanup is a
+     * no-op for them.
+     */
+    private fun castIdsOf(item: OfflineMediaEntity): List<String> =
+        decodeCast(item.peopleJson).map { it.id }
+
+    /**
+     * Prunes the cast-image files for [candidateCastIds] from every [parentDirs],
+     * keeping any person still referenced by a *surviving* offline row. A person
+     * can appear across many movies/episodes and the `personId`-keyed image file
+     * serves all of them, so a file is deleted only when its person is no longer
+     * referenced anywhere. **Must be called after the deleted rows are removed
+     * from the DB** so [offlineMediaDao.getAllPeopleJson] reflects only surviving
+     * references — otherwise the just-deleted rows would still count as references
+     * and nothing would be pruned.
+     */
+    private suspend fun cleanupOrphanedCastArtwork(
+        parentDirs: List<File>,
+        candidateCastIds: List<String>,
+    ) {
+        if (parentDirs.isEmpty() || candidateCastIds.isEmpty()) return
+        val stillReferenced = referencedPersonIds()
+        val orphans = candidateCastIds.filter { it !in stillReferenced }
+        if (orphans.isEmpty()) return
+        parentDirs.forEach { DownloadArtifacts.cleanupCastArtwork(it, orphans) }
+    }
+
+    /**
+     * Person ids that still appear in any surviving offline row's `peopleJson`.
+     * A coarse scan over the decoded cast is sufficient: Jellyfin person ids are
+     * stable UUIDs, so membership means the person is still referenced and their
+     * shared image file must be kept. Reflects the post-delete state because it
+     * is called after the deletion transaction commits.
+     */
+    private suspend fun referencedPersonIds(): Set<String> {
+        val rows = offlineMediaDao.getAllPeopleJson()
+        return buildSet {
+            for (row in rows) {
+                for (person in decodeCast(row.peopleJson)) add(person.id)
+            }
+        }
+    }
+
+    /**
      * The directory used to locate cast-image artifacts for [item]. Cast images
      * are written beside the item's media file (movies/standalone) or beside a
      * downloaded episode's media file (series, which have no media file of their
      * own). Returns null when neither is available so callers can skip cast
      * resolution rather than stat a path that cannot exist.
      */
-    private suspend fun castDirFor(item: OfflineMediaItem, ownDir: java.io.File?): java.io.File? {
+    private suspend fun castDirFor(item: OfflineMediaItem, ownDir: File?): File? {
         if (ownDir != null) return ownDir
         // Series row: locate any downloaded episode's dir. Mirrors
         // resolveSeriesArtwork's scan so the cast row resolves to the same
@@ -510,7 +586,7 @@ class OfflineRepositoryImpl @Inject constructor(
             return downloadDao.getDownloadsForSeries(item.id)
                 .asSequence()
                 .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
-                .mapNotNull { java.io.File(it).parentFile }
+                .mapNotNull { File(it).parentFile }
                 .firstOrNull()
         }
         return null
@@ -525,13 +601,12 @@ class OfflineRepositoryImpl @Inject constructor(
      */
     private fun resolveCastArtwork(
         cast: List<OfflinePersonInfo>,
-        dir: java.io.File,
+        dir: File,
     ): List<OfflinePersonInfo> {
         var changed = false
         val resolved = ArrayList<OfflinePersonInfo>(cast.size)
         for (person in cast) {
-            val localPath = java.io.File(dir, DownloadArtifacts.personImageFile(person.id))
-                .takeIf { it.exists() }?.absolutePath
+            val localPath = localArtifactOrNull(dir, DownloadArtifacts.personImageFile(person.id))
             if (localPath != null) {
                 changed = true
                 resolved.add(person.copy(localImagePath = localPath))

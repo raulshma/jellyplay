@@ -785,7 +785,7 @@ class DownloadRepositoryImpl @Inject constructor(
         // Preload up to 10 cast images so the offline cast row renders without
         // a network connection. Mirrors the poster/backdrop caching above.
         detail.people
-            .filter { (it.type == "Actor" || it.type == "Director") && !it.primaryImageTag.isNullOrBlank() }
+            .filter { it.hasCastImage() }
             .take(10)
             .forEach { person ->
                 preloadImageToCache(playbackRepository.getImageUrl(person.id, maxWidth = 200))

@@ -97,6 +97,8 @@ dependencies {
     // The abstract MediaEngineContractTest base lives in :feature:player:core's
     // test fixtures; the NoOp + 3-adapter specimens below extend it.
     testImplementation(testFixtures(project(":feature:player:core")))
+    // Shared stubMediaSessionPlayer() helper for the MediaSession tests here.
+    testImplementation(testFixtures(project(":core:data")))
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.compose.bom))

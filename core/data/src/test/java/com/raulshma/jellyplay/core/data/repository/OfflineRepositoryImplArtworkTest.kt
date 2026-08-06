@@ -1,19 +1,25 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import androidx.room.withTransaction
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.OfflinePeopleRow
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import io.mockk.coEvery
 import io.mockk.mockk
+import io.mockk.mockkStatic
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -44,7 +50,21 @@ class OfflineRepositoryImplArtworkTest {
 
     @Before
     fun setup() {
+        // deleteOfflineItem/Series/Season wrap their DAO deletes in a Room
+        // withTransaction block; mock the extension so the block runs inline.
+        mockkStatic("androidx.room.RoomDatabaseKt")
+        coEvery { database.withTransaction(any<suspend () -> Any?>()) } coAnswers {
+            secondArg<suspend () -> Any?>().invoke()
+        }
+        // By default no surviving rows reference anyone; each delete test
+        // overrides this when it needs a "still referenced" sibling.
+        coEvery { offlineMediaDao.getAllPeopleJson() } returns emptyList()
         repository = OfflineRepositoryImpl(offlineMediaDao, downloadDao, database)
+    }
+
+    @After
+    fun tearDown() {
+        io.mockk.unmockkStatic("androidx.room.RoomDatabaseKt")
     }
 
     private fun episodeEntity(
@@ -383,5 +403,58 @@ class OfflineRepositoryImplArtworkTest {
         val item = repository.getOfflineDetail("movie-1").first()!!
 
         assertNull(item.cast.single().localImagePath)
+    }
+
+    // ── Cast-image cleanup on delete (issue #109 follow-up) ─────────────────
+    // cleanupCastArtwork is invoked by every delete path. A person's image file
+    // (keyed by personId) is shared across items, so deleting one item must only
+    // remove the file when no surviving row still references that person —
+    // otherwise a sibling item's offline cast row loses its image.
+
+    private fun movieEntityWithCast(
+        people: List<OfflinePersonInfo>,
+        id: String = "movie-1",
+    ): OfflineMediaEntity = movieEntity(id = id).copy(
+        peopleJson = castJson(*people.toTypedArray()),
+    )
+
+    @Test
+    fun `deleteOfflineItem removes an orphaned cast image`() = runTest {
+        val dir = tempFolder.newFolder("deleteCast")
+        val actorFile = File(dir, DownloadArtifacts.personImageFile("person-1"))
+        actorFile.writeText("actor-bytes")
+        coEvery { offlineMediaDao.getById("movie-1") } returns movieEntityWithCast(
+            people = listOf(OfflinePersonInfo(id = "person-1", name = "Lead")),
+        )
+        coEvery { downloadDao.getDownloadByMediaItemId("movie-1") } returns
+            movieDownloadEntity("movie-1", dir)
+        // No surviving rows reference person-1 → file is an orphan.
+
+        repository.deleteOfflineItem("movie-1")
+
+        assertFalse("orphaned cast image must be deleted", actorFile.exists())
+    }
+
+    @Test
+    fun `deleteOfflineItem keeps a cast image still referenced by another row`() = runTest {
+        val dir = tempFolder.newFolder("keepCast")
+        val actorFile = File(dir, DownloadArtifacts.personImageFile("person-1"))
+        actorFile.writeText("actor-bytes")
+        coEvery { offlineMediaDao.getById("movie-1") } returns movieEntityWithCast(
+            people = listOf(OfflinePersonInfo(id = "person-1", name = "Lead")),
+        )
+        coEvery { downloadDao.getDownloadByMediaItemId("movie-1") } returns
+            movieDownloadEntity("movie-1", dir)
+        // A surviving sibling row still references person-1 → keep the shared file.
+        coEvery { offlineMediaDao.getAllPeopleJson() } returns listOf(
+            OfflinePeopleRow(
+                id = "movie-2",
+                peopleJson = castJson(OfflinePersonInfo(id = "person-1", name = "Lead")),
+            ),
+        )
+
+        repository.deleteOfflineItem("movie-1")
+
+        assertTrue("referenced cast image must be kept", actorFile.exists())
     }
 }

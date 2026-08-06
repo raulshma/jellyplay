@@ -1,15 +1,12 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import android.content.Context
-import android.os.Looper
-import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
-import io.mockk.every
-import io.mockk.mockk
+import com.raulshma.jellyplay.core.data.playback.stubMediaSessionPlayer
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -86,26 +83,5 @@ class MediaSessionControllerTest {
         assertTrue(sessionManager.currentSession == null)
     }
 
-    private fun stubPlayer(): Player {
-        val player = mockk<Player>(relaxed = true)
-        every { player.canAdvertiseSession() } returns true
-        every { player.applicationLooper } returns Looper.getMainLooper()
-        every { player.isPlaying } returns false
-        every { player.playbackState } returns Player.STATE_IDLE
-        every { player.currentPosition } returns 0L
-        every { player.bufferedPosition } returns 0L
-        every { player.duration } returns C.TIME_UNSET
-        every { player.contentPosition } returns 0L
-        every { player.contentBufferedPosition } returns 0L
-        every { player.contentDuration } returns C.TIME_UNSET
-        every { player.playbackParameters } returns androidx.media3.common.PlaybackParameters.DEFAULT
-        every { player.currentMediaItem } returns null
-        every { player.currentMediaItemIndex } returns 0
-        every { player.playWhenReady } returns false
-        every { player.playbackSuppressionReason } returns 0
-        every { player.playerError } returns null
-        every { player.repeatMode } returns Player.REPEAT_MODE_OFF
-        every { player.shuffleModeEnabled } returns false
-        return player
-    }
+    private fun stubPlayer(): Player = stubMediaSessionPlayer(isPlaying = false)
 }

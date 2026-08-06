@@ -70,7 +70,13 @@ class PlaybackSessionManager @Inject constructor(
                 !session.player.isPlaying) {
                 // Current session is actively playing and the challenger is idle:
                 // refuse the eviction. Release the rejected session to avoid a leak.
-                try { session.release() } catch (_: Exception) { }
+                // Log (don't swallow silently) so a rejection-time leak is diagnosable —
+                // mirrors the logging policy used by startPlaybackService below.
+                try {
+                    session.release()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to release rejected idle challenger session", e)
+                }
                 return
             }
             _currentSession = session
@@ -82,7 +88,11 @@ class PlaybackSessionManager @Inject constructor(
         // Release the old session only if it's not the same as the new one.
         // Use try-catch to guard against double-release (isReleased is package-private).
         if (oldSession != null && oldSession !== session) {
-            try { oldSession.release() } catch (_: Exception) { }
+            try {
+                oldSession.release()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to release replaced media session", e)
+            }
         }
         // Ensure the playback service is started and will pick up this session
         startPlaybackService()

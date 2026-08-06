@@ -1,12 +1,7 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import android.os.Looper
-import androidx.media3.common.C
-import androidx.media3.common.Player
 import androidx.media3.session.MediaSession
 import androidx.test.core.app.ApplicationProvider
-import io.mockk.every
-import io.mockk.mockk
 import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -110,29 +105,7 @@ class PlaybackSessionManagerPriorityTest {
     }
 
     private fun newSession(isPlaying: Boolean): MediaSession {
-        val player = mockk<Player>(relaxed = true)
-        every { player.isPlaying } returns isPlaying
-        every { player.playbackState } returns if (isPlaying) Player.STATE_READY else Player.STATE_IDLE
-        every { player.applicationLooper } returns Looper.getMainLooper()
-        // MediaSession.Builder requires the player to advertise a session.
-        every { player.canAdvertiseSession() } returns true
-        // MediaSession construction builds a PlaybackStateCompat from the
-        // player; relaxed mockk returns null for boxed return types (Long/Float),
-        // which NPEs inside Bundle. Pin the position/duration/speed getters.
-        every { player.currentPosition } returns 0L
-        every { player.bufferedPosition } returns 0L
-        every { player.duration } returns C.TIME_UNSET
-        every { player.contentPosition } returns 0L
-        every { player.contentBufferedPosition } returns 0L
-        every { player.contentDuration } returns C.TIME_UNSET
-        every { player.playbackParameters } returns androidx.media3.common.PlaybackParameters.DEFAULT
-        every { player.currentMediaItem } returns null
-        every { player.currentMediaItemIndex } returns 0
-        every { player.playWhenReady } returns isPlaying
-        every { player.playbackSuppressionReason } returns 0
-        every { player.playerError } returns null
-        every { player.repeatMode } returns Player.REPEAT_MODE_OFF
-        every { player.shuffleModeEnabled } returns false
+        val player = stubMediaSessionPlayer(isPlaying)
         val session = MediaSession.Builder(
             ApplicationProvider.getApplicationContext(),
             player,

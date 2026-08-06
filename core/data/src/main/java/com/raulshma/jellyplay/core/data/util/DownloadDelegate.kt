@@ -195,12 +195,12 @@ class DownloadDelegate @Inject constructor(
                         // the same image satisfies every item referencing that id.
                         if (detail != null && parentDir != null) {
                             detail.people
-                                .filter { (it.type == "Actor" || it.type == "Director") && !it.primaryImageTag.isNullOrBlank() }
-                                .take(10)
+                                .filter { it.hasCastImage() }
+                                .take(CAST_IMAGE_MAX_COUNT)
                                 .forEach { person ->
                                     try {
                                         writer.downloadOfflineImage(
-                                            person.id, "Primary", 200, parentDir,
+                                            person.id, "Primary", CAST_IMAGE_WIDTH, parentDir,
                                             com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.personImageFile(person.id),
                                         )
                                     } catch (_: Exception) {
@@ -256,5 +256,17 @@ class DownloadDelegate @Inject constructor(
                 DownloadResult(downloadItem = null, error = error.message ?: "Download failed")
             },
         )
+    }
+
+    private companion object {
+        // Max number of cast/person images persisted to disk per item. Caps the
+        // per-download image-fetch cost; the cast row rarely needs more than the
+        // top-billed handful, and the rest fall back to the remote URL/blurhash.
+        const val CAST_IMAGE_MAX_COUNT = 10
+
+        // Pixel width requested for each cast portrait. Cast thumbnails render
+        // small, so 200px is ample and keeps disk + bandwidth low (matches the
+        // width the online cast row requests via ImageUrlProvider).
+        const val CAST_IMAGE_WIDTH = 200
     }
 }
