@@ -243,12 +243,29 @@ interface OfflineMediaDao {
      */
     @Query("SELECT posterPath, backdropPath FROM offline_media WHERE id = :itemId")
     suspend fun getLocalImagePaths(itemId: String): OfflineImagePaths?
+
+    /**
+     * Returns `(id, peopleJson)` for every offline row. Used by cast-image
+     * cleanup after a delete to decide whether a person is still referenced by
+     * any remaining offline item before deleting their shared image file — a
+     * person can appear across multiple movies/episodes, and the
+     * `personId`-keyed image is shared by all of them. Call this *after* the
+     * deleted rows are removed so only surviving references are counted.
+     */
+    @Query("SELECT id, peopleJson FROM offline_media")
+    suspend fun getAllPeopleJson(): List<OfflinePeopleRow>
 }
 
 /** Local on-disk image path projection for resync path preservation. */
 data class OfflineImagePaths(
     val posterPath: String?,
     val backdropPath: String?,
+)
+
+/** `(id, peopleJson)` projection for cast-image reference counting on delete. */
+data class OfflinePeopleRow(
+    val id: String,
+    val peopleJson: String?,
 )
 
 /**
