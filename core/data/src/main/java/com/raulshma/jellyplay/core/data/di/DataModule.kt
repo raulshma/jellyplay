@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepositoryImpl
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -94,6 +96,14 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindMediaRepository(impl: MediaRepositoryImpl): MediaRepository
+
+    // The deep "Episode Catalogue" seam: the single owner of the series
+    // seasons/episodes snapshot. See EpisodeCatalogue kdoc — depends on
+    // JellyfinApiClient + OfflineRepository only (never MediaRepository), so
+    // MediaRepositoryImpl can take it without forming a DI cycle.
+    @Binds
+    @Singleton
+    abstract fun bindEpisodeCatalogue(impl: EpisodeCatalogueImpl): EpisodeCatalogue
 
     @Binds
     @Singleton

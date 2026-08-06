@@ -11,6 +11,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
@@ -60,6 +61,13 @@ class DownloadRepositoryImpl @Inject constructor(
     private val offlineMediaDao: OfflineMediaDao,
     private val database: JellyPlayDatabase,
     private val mediaRepository: MediaRepository,
+    /**
+     * The consolidated series seasons/episodes snapshot. [downloadSeries] uses
+     * it in place of the former `mediaRepository.getSeasons` + per-season
+     * `getEpisodes` fan-out — one load per series. Online-only path, so
+     * `offline` defaults to `false`.
+     */
+    private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue,
     private val playbackRepository: PlaybackRepository,
     private val httpClient: OkHttpClient,
     private val downloadsStore: DownloadsStore,
@@ -407,7 +415,13 @@ class DownloadRepositoryImpl @Inject constructor(
             // fetched detail so the offline series screen is as rich as online.
             saveOfflineMetadataForDetail(detail, imageUrl, backdropUrl)
 
-            val seasons = mediaRepository.getSeasons(seriesId).getOrElse { emptyList() }
+            // One consolidated seasons + episodes load (single round-trip via
+            // the catalogue) replaces the former getSeasons + per-season
+            // getEpisodes fan-out. On failure, fall back to an empty snapshot so
+            // the series metadata is still persisted and the run doesn't abort.
+            val snapshot = episodeCatalogue.loadSeriesEpisodes(seriesId)
+                .getOrElse { EpisodeCatalogueSnapshot(seriesId, emptyList(), emptyMap(), emptySet(), emptyList(), 0L) }
+            val seasons = snapshot.seasons
             val targetSeasons = if (episodeIds != null) {
                 seasons.filter { it.id in episodeIds.keys }
             } else {
@@ -430,7 +444,7 @@ class DownloadRepositoryImpl @Inject constructor(
             for (season in targetSeasons) {
                 saveOfflineMetadataForItem(season, null, null)
 
-                val allEpisodes = mediaRepository.getEpisodes(seriesId, season.id).getOrElse { emptyList() }
+                val allEpisodes = snapshot.seasonEpisodes(season.id)
                 val selectedEpisodeIds = episodeIds?.get(season.id)?.toSet()
                 val episodes = if (selectedEpisodeIds != null) {
                     allEpisodes.filter { it.id in selectedEpisodeIds }

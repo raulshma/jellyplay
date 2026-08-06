@@ -61,6 +61,12 @@ class DownloadRepositoryImplResumeTest {
     // Path-layout policy was extracted out of the repo; the resume path never
     // starts a new download, so a relaxed mock suffices.
     private val storageLayout: DownloadStorageLayout = mockk(relaxed = true)
+    // The resume path never consults the offline-sync comparator; a relaxed mock
+    // satisfies the constructor param added alongside the sync wiring.
+    private val syncComparator: com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator = mockk(relaxed = true)
+    // The resume path never loads series episodes; a relaxed mock satisfies the
+    // catalogue constructor param added alongside the seasons/episodes migration.
+    private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue = mockk(relaxed = true)
 
     private fun repository() = DownloadRepositoryImpl(
         context = context,
@@ -68,6 +74,7 @@ class DownloadRepositoryImplResumeTest {
         offlineMediaDao = offlineMediaDao,
         database = database,
         mediaRepository = mediaRepository,
+        episodeCatalogue = episodeCatalogue,
         playbackRepository = playbackRepository,
         httpClient = httpClient,
         downloadsStore = preferencesStore,
@@ -76,6 +83,7 @@ class DownloadRepositoryImplResumeTest {
         storagePolicy = storagePolicy,
         downloadEnqueuer = downloadEnqueuer,
         storageLayout = storageLayout,
+        syncComparator = syncComparator,
     )
 
     @Before

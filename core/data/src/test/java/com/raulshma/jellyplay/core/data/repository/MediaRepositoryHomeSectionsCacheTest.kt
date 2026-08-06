@@ -48,6 +48,11 @@ class MediaRepositoryHomeSectionsCacheTest {
             coEvery { get(any(), any(), any()) } returns null
         }
         val playedStateSync: PlayedStateSync = mockk(relaxed = true)
+        val offlineRepository: OfflineRepository = mockk(relaxed = true)
+        val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
+            apiClient,
+            offlineRepository,
+        )
         return MediaRepositoryImpl(
             apiClient,
             lrcLibApi,
@@ -55,6 +60,7 @@ class MediaRepositoryHomeSectionsCacheTest {
             homeSectionCacheDao,
             networkMonitor,
             playedStateSync,
+            episodeCatalogue,
         )
     }
 

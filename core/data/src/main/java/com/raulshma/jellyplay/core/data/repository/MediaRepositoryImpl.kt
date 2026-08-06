@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.model.LrcLibTrack
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
@@ -70,6 +71,15 @@ class MediaRepositoryImpl @Inject constructor(
     private val homeSectionCacheDao: HomeSectionCacheDao,
     private val networkMonitor: NetworkMonitor,
     private val playedStateSync: PlayedStateSync,
+    /**
+     * The deep "Episode Catalogue": the single owner of the series
+     * seasons/episodes snapshot. Injected (not constructed) so the repo's
+     * `getSeasons`/`getEpisodes`/`getAllEpisodesGrouped` can delegate to it.
+     * The catalogue depends on `JellyfinApiClient` + `OfflineRepository` only
+     * (never on `MediaRepository`), so this edge does NOT form a DI cycle —
+     * both live in `core:data` and Hilt resolves the direction.
+     */
+    private val episodeCatalogue: EpisodeCatalogue,
 ) : MediaRepository {
 
     private val detailCache = TtlCache<MediaDetail>(
@@ -82,13 +92,11 @@ class MediaRepositoryImpl @Inject constructor(
     private val studiosCache = TtlCache<List<Studio>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
     private val latestMediaCache = TtlCache<List<MediaItem>>(maxSize = 64, ttlMs = LATEST_CACHE_TTL_MS)
 
-    // Series-scoped caches for the detail screen's subsidiary loads. Re-entry
-    // into the same series detail (back from player, returning from background,
-    // tab switch) used to re-issue the full episode storm + seasons + similar
-    // fetches. These share the detail cache TTL so user-data mutations that
-    // invalidate one invalidate all.
-    private val seasonsCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
-    private val episodesCache = TtlCache<Map<String, List<MediaItem>>>(ttlMs = DETAIL_CACHE_TTL_MS)
+    // Series-scoped seasons/episodes caches used to live here; they've moved
+    // into [episodeCatalogue], the single owner of the series snapshot. The
+    // remaining series-adjacent caches (similar, album tracks, collection
+    // items) stay — they're not part of the catalogue's "seasons → episodes →
+    // sorted" shape.
     private val similarCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
     private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
     private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = DETAIL_CACHE_TTL_MS)
@@ -109,9 +117,9 @@ class MediaRepositoryImpl @Inject constructor(
     }
 
     override fun invalidateSeriesCache(seriesId: String) {
-        val identity = currentIdentity()
-        seasonsCache.remove(identity, "seasons_$seriesId")
-        episodesCache.remove(identity, "episodes_$seriesId")
+        // Seasons/episodes caches now live in [episodeCatalogue]; funnel the
+        // invalidation through it so the snapshot + epoch drop together.
+        episodeCatalogue.invalidateSeries(seriesId)
     }
 
     override fun invalidateCollectionItemsCache(collectionId: String) {
@@ -614,65 +622,24 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
         apiClient.getThemeSongs(itemId)
 
-    override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> {
-        val identity = currentIdentity()
-        val cacheKey = "seasons_$seriesId"
-        seasonsCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        val epochAtStart = detailCacheEpoch.get()
-        return apiClient.getSeasons(seriesId).also { result ->
-            if (detailCacheEpoch.get() == epochAtStart) {
-                result.getOrNull()?.let { seasonsCache.put(identity, cacheKey, it) }
-            }
-        }
-    }
+    override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> =
+        // Thin passthrough: the catalogue owns the seasons/episodes snapshot
+        // (grouping, single-flight, epoch guard, offline branch). Server order
+        // is preserved — the snapshot never reorders seasons.
+        episodeCatalogue.loadSeriesEpisodes(seriesId).map { it.seasons }
 
-    override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> {
-        val identity = currentIdentity()
-        // Try the series-wide cache first; if present, slice the requested
-        // season out of it so a per-season call after a batched load doesn't
-        // re-hit the network.
-        episodesCache.get(identity, "episodes_$seriesId")?.let { grouped ->
-            grouped[seasonId]?.let { return Result.success(it) }
-        }
-        val epochAtStart = detailCacheEpoch.get()
-        return apiClient.getEpisodes(seriesId, seasonId).also { result ->
-            // Skip the cache write if a user-data invalidation landed while the
-            // fetch was in flight — [invalidateSeriesCache] already removed the
-            // entry, and re-inserting this (now stale) season would pin it for
-            // the full TTL.
-            if (detailCacheEpoch.get() != epochAtStart) return@also
-            result.getOrNull()?.let { episodes ->
-                // Merge into the series-wide cache under a single critical section
-                // so the [DetailViewModel.loadAllSeasonsBatched] fan-out (up to
-                // MAX_PARALLEL_SEASON_FETCHES concurrent calls) can't lose a
-                // season: the prior get-then-put let two near-simultaneous
-                // completions read the same `current` map and clobber each other.
-                // detailInFlightMutex is reused to avoid introducing a second
-                // lock that would have to be ordered against it.
-                val cacheKey = "episodes_$seriesId"
-                detailInFlightMutex.withLock {
-                    val current = episodesCache.get(identity, cacheKey) ?: emptyMap()
-                    episodesCache.put(identity, cacheKey, current + (seasonId to episodes))
-                }
-            }
-        }
-    }
+    override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
+        // Per-season slice: serves from the shared snapshot if that season is
+        // present, else fetches the one season and merges it back (the exact
+        // "per-season fetch merges into the grouped cache" semantics the
+        // catalogue absorbed from this repository).
+        episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId)
 
-    override suspend fun getAllEpisodesGrouped(seriesId: String): Result<Map<String, List<MediaItem>>> {
-        val identity = currentIdentity()
-        val cacheKey = "episodes_$seriesId"
-        episodesCache.get(identity, cacheKey)?.let { return Result.success(it) }
-        val epochAtStart = detailCacheEpoch.get()
-        return apiClient.getAllEpisodes(seriesId).map { all ->
-            // groupBy preserves the first occurrence per key and keeps encounter
-            // order, matching the season ordering the per-season path produced.
-            all.groupBy { it.seasonId ?: "" }
-        }.also { result ->
-            if (detailCacheEpoch.get() == epochAtStart) {
-                result.getOrNull()?.let { grouped -> episodesCache.put(identity, cacheKey, grouped) }
-            }
-        }
-    }
+    override suspend fun getAllEpisodesGrouped(seriesId: String): Result<Map<String, List<MediaItem>>> =
+        // The grouped map shape is derived from the catalogue snapshot's
+        // `episodesBySeason`. groupBy-by-seasonId semantics are preserved in
+        // the catalogue (an episode whose seasonId is null groups under "").
+        episodeCatalogue.loadSeriesEpisodes(seriesId).map { it.episodesBySeason }
 
     override suspend fun getCollectionItems(
         collectionId: String,
@@ -1102,8 +1069,10 @@ class MediaRepositoryImpl @Inject constructor(
         latestMediaCache.clear()
         genresCache.clear()
         studiosCache.clear()
-        seasonsCache.clear()
-        episodesCache.clear()
+        // Seasons/episodes caches now live in [episodeCatalogue]; drop the
+        // whole catalogue (every series snapshot + the long epoch) so a
+        // wholesale invalidation behaves the same as before.
+        episodeCatalogue.invalidateAll()
         albumTracksCache.clear()
         collectionItemsCache.clear()
         photoFolderChildUrlCache.clear()

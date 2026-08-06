@@ -43,6 +43,11 @@ class MediaRepositoryCacheInvalidationTest {
         val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
         val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
         val playedStateSync: PlayedStateSync = mockk(relaxed = true)
+        val offlineRepository: OfflineRepository = mockk(relaxed = true)
+        val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
+            apiClient,
+            offlineRepository,
+        )
         return MediaRepositoryImpl(
             apiClient,
             lrcLibApi,
@@ -50,6 +55,7 @@ class MediaRepositoryCacheInvalidationTest {
             homeSectionCacheDao,
             networkMonitor,
             playedStateSync,
+            episodeCatalogue,
         )
     }
 
