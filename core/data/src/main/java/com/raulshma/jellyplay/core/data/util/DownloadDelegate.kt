@@ -185,6 +185,30 @@ class DownloadDelegate @Inject constructor(
                         // otherwise fall back to the minimal item path so we
                         // never leave the download without an offline row.
                         val detail = request.detail
+                        // Download up to 10 cast/person images to disk (keyed by
+                        // personId) so the offline detail cast row renders without
+                        // network even after Coil's memory cache evicts the entries
+                        // (memory pressure, app restart, or rows downloaded before
+                        // cast preloading existed). Best-effort: failures are
+                        // swallowed per-image and never block the download. The
+                        // shared flat downloads dir + personId-keyed filenames mean
+                        // the same image satisfies every item referencing that id.
+                        if (detail != null && parentDir != null) {
+                            detail.people
+                                .filter { (it.type == "Actor" || it.type == "Director") && !it.primaryImageTag.isNullOrBlank() }
+                                .take(10)
+                                .forEach { person ->
+                                    try {
+                                        writer.downloadOfflineImage(
+                                            person.id, "Primary", 200, parentDir,
+                                            com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.personImageFile(person.id),
+                                        )
+                                    } catch (_: Exception) {
+                                        // Best-effort: a failed cast image must not
+                                        // abort the download or other metadata writes.
+                                    }
+                                }
+                        }
                         if (detail != null) {
                             writer.saveOfflineMediaDetail(
                                 detail,

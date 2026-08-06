@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
@@ -314,5 +315,73 @@ class OfflineRepositoryImplArtworkTest {
         val items = repository.getEpisodesForSeason("season-1").first()
 
         assertEquals(localPoster.absolutePath, items.single().posterPath)
+    }
+
+    // ── Cast/person image resolution (issue #109) ───────────────────────────
+    // Cast images are persisted to disk at download time (keyed by personId) so
+    // the offline cast row survives Coil memory-cache eviction. The resolver
+    // substitutes the local path on read; persons without a disk file keep a
+    // null localImagePath and the detail screen falls back to the remote URL.
+
+    private fun castJson(vararg people: OfflinePersonInfo): String =
+        encodeCast(people.toList())
+
+    @Test
+    fun `movie detail resolves cast local images from beside the download`() = runTest {
+        val dir = tempFolder.newFolder("movieCast")
+        // Two cast members persisted; only one has a disk file (the other was
+        // never downloaded or its write failed).
+        val actor1File = File(dir, DownloadArtifacts.personImageFile("person-1"))
+        actor1File.writeText("actor1-bytes")
+        coEvery { offlineMediaDao.getByIdFlow("movie-1") } returns flowOf(
+            movieEntity().copy(
+                peopleJson = castJson(
+                    OfflinePersonInfo(id = "person-1", name = "Lead"),
+                    OfflinePersonInfo(id = "person-2", name = "Director", type = "Director"),
+                ),
+            ),
+        )
+        coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
+            flowOf(movieDownloadEntity("movie-1", dir))
+
+        val item = repository.getOfflineDetail("movie-1").first()!!
+
+        assertEquals(actor1File.absolutePath, item.cast[0].localImagePath)
+        // No disk file for person-2 → null, detail screen falls back to remote URL.
+        assertNull(item.cast[1].localImagePath)
+    }
+
+    @Test
+    fun `series detail resolves cast local images from beside a downloaded episode`() = runTest {
+        val dir = tempFolder.newFolder("seriesCast")
+        val actorFile = File(dir, DownloadArtifacts.personImageFile("person-1"))
+        actorFile.writeText("actor-bytes")
+        coEvery { offlineMediaDao.getByIdFlow("series-1") } returns flowOf(
+            seriesEntity().copy(
+                peopleJson = castJson(OfflinePersonInfo(id = "person-1", name = "Lead")),
+            ),
+        )
+        coEvery { downloadDao.getDownloadByMediaItemIdFlow("series-1") } returns flowOf(null)
+        coEvery { downloadDao.getDownloadsForSeries("series-1") } returns listOf(downloadEntity("ep-1", dir))
+
+        val item = repository.getOfflineDetail("series-1").first()!!
+
+        assertEquals(actorFile.absolutePath, item.cast.single().localImagePath)
+    }
+
+    @Test
+    fun `cast without disk files keeps null local paths`() = runTest {
+        val dir = tempFolder.newFolder("noCastArt")
+        coEvery { offlineMediaDao.getByIdFlow("movie-1") } returns flowOf(
+            movieEntity().copy(
+                peopleJson = castJson(OfflinePersonInfo(id = "person-1", name = "Lead")),
+            ),
+        )
+        coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
+            flowOf(movieDownloadEntity("movie-1", dir))
+
+        val item = repository.getOfflineDetail("movie-1").first()!!
+
+        assertNull(item.cast.single().localImagePath)
     }
 }
