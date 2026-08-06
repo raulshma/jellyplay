@@ -61,4 +61,24 @@ data class OfflineMediaEntity(
     val studios: String? = null,
     val tagline: String? = null,
     val peopleJson: String? = null,
+    // ---- Offline resync baseline + result columns (migration 42→43) ----
+    // Persisted snapshot of the server's image tags / metadata hash / media source
+    // captured at download time and after every resync. Lets a freshness check
+    // diff a fresh fetch against this baseline without an extra round-trip, and
+    // lets the UI render an "update available" badge from the DB with no network.
+    // All nullable/defaulted so existing rows degrade gracefully until first check.
+    val syncedPosterTag: String? = null,
+    val syncedBackdropTag: String? = null,
+    val syncedMetadataSignature: String? = null,
+    val syncedMediaSourceId: String? = null,
+    val syncedMediaSizeBytes: Long? = null,
+    val lastSyncedAt: Long? = null,
+    @ColumnInfo(defaultValue = "0")
+    val syncUpdateAvailable: Int = 0,
+    @ColumnInfo(defaultValue = "0")
+    val syncMediaChanged: Int = 0,
+    @ColumnInfo(defaultValue = "0")
+    val syncChecking: Int = 0,
+    @ColumnInfo(defaultValue = "0")
+    val syncError: Int = 0,
 )

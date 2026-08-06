@@ -709,8 +709,29 @@ val MIGRATION_41_42 = object : Migration(41, 42) {
     }
 }
 
+// Offline download resync: persist a freshness baseline (image tags, metadata
+// signature, media source id/size) + the last check timestamp and result flags
+// so a freshness check can diff a fresh fetch against this baseline, and the UI
+// can render an "update available" badge from the DB with zero network. All
+// columns are nullable or default to 0 so existing rows are unaffected until
+// their first check (or next download, which seeds the baseline).
+val MIGRATION_42_43 = object : Migration(42, 43) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedPosterTag TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedBackdropTag TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedMetadataSignature TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedMediaSourceId TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedMediaSizeBytes INTEGER")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN lastSyncedAt INTEGER")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncUpdateAvailable INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncMediaChanged INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncChecking INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncError INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v42 migration chain, with the
+ * The complete, correctly-ordered v1→v43 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -760,4 +781,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_39_40,
         MIGRATION_40_41,
         MIGRATION_41_42,
+        MIGRATION_42_43,
     )
