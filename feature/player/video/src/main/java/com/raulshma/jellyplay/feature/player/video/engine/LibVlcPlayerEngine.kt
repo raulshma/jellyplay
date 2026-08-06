@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -54,6 +55,7 @@ class LibVlcPlayerEngine(
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
 
     override val capabilities = EngineCapabilityMatrix.LIBVLC
+    override val displayName: String = PlayerType.LIBVLC.displayName
 
     private var libVLC: LibVLC? = null
     val libVlc: LibVLC? get() = libVLC

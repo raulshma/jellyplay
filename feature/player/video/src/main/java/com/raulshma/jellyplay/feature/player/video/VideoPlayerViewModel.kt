@@ -63,7 +63,6 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
-import com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleEvent
@@ -1828,12 +1827,7 @@ class VideoPlayerViewModel @Inject constructor(
     ) {
         if (audioDelayMs == 0L) return
         if (engine.capabilities.supportsAudioDelay) return
-        val engineName = when (engine) {
-            is com.raulshma.jellyplay.feature.player.video.engine.ExoPlayerEngine -> PlayerType.EXO_PLAYER.displayName
-            is com.raulshma.jellyplay.feature.player.video.engine.MpvPlayerEngine -> PlayerType.MPV.displayName
-            is com.raulshma.jellyplay.feature.player.video.engine.LibVlcPlayerEngine -> PlayerType.LIBVLC.displayName
-            else -> "this engine"
-        }
+        val engineName = engine.displayName
         userMessageBus.info(
             "Audio delay (${audioDelayMs}ms) isn't supported by $engineName — switching engines re-enables it",
         )

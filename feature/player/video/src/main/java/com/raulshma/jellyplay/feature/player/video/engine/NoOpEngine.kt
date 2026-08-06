@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 import android.view.View
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.emptyFlow
 internal class NoOpEngine : MediaEngine {
 
     override val capabilities = EngineCapabilityMatrix.EXTERNAL
+    override val displayName: String = PlayerType.EXTERNAL.displayName
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
     override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()

@@ -281,7 +281,9 @@ data class PlaybackMetadataSnapshot(
  *
  * Members declared directly here are either overrides of
  * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine] or
- * [PlayerLifecycleCallbacks], or special-case internal hooks.
+ * [PlayerLifecycleCallbacks], or special-case internal hooks. Identity
+ * accessors (e.g. [displayName]) live on this contract precisely so consumers
+ * never type-test a concrete adapter to recover an engine-specific value.
  */
 @Stable
 interface MediaEngine :
@@ -300,6 +302,17 @@ interface MediaEngine :
     override fun selectTrack(type: TrackType, index: Int)
     override fun setMaxVideoBitrate(bps: Int?)
     override val underlyingPlayer: androidx.media3.common.Player? get() = null
+
+    // ── Identity ──
+    /**
+     * Stable, human-readable engine name for user-facing strings (the
+     * unsupported-audio-delay toast, engine pickers, stats overlays). Every
+     * adapter returns the matching
+     * [com.raulshma.jellyplay.core.model.PlayerType.displayName]. Consumers
+     * MUST NOT type-test concrete engine classes to recover this name — read
+     * this property instead, so a new backend needs no call-site changes.
+     */
+    val displayName: String
 
     // ── Source loading & teardown ──
     fun load(request: PlaybackRequest)
