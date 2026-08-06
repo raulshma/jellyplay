@@ -48,6 +48,7 @@ class PlayerSessionManagerExtendedTest {
         val playbackRepository = mockk<PlaybackRepository>(relaxed = true)
         val downloadRepository = mockk<DownloadRepository>(relaxed = true)
         val offlineRepository = mockk<OfflineRepository>(relaxed = true)
+        val playbackSourceResolver = mockk<com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver>(relaxed = true)
         val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         val playerLifecycleManager = mockk<PlayerLifecycleManager>(relaxed = true)
         val pipController = mockk<com.raulshma.jellyplay.core.data.playback.PipController>(relaxed = true)
@@ -75,6 +76,7 @@ class PlayerSessionManagerExtendedTest {
                 okHttpClient,
                 mockk<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>(relaxed = true),
             ),
+            playbackSourceResolver = playbackSourceResolver,
         )
     }
 

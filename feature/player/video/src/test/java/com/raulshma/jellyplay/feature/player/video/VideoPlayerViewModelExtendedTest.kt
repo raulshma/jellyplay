@@ -146,6 +146,7 @@ class VideoPlayerViewModelExtendedTest {
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
             offlinePlaybackFacade = offlinePlaybackFacade,
+            playbackSourceResolver = mockk(relaxed = true),
             episodeCatalogue = mockk(relaxed = true),
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
             aggregateStore = aggregateStore,

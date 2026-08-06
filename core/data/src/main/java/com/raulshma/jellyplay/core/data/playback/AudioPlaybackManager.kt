@@ -77,6 +77,7 @@ class AudioPlaybackManager @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
+    private val playbackSourceResolver: PlaybackSourceResolver,
     private val sessionManager: PlaybackSessionManager,
     private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
     private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
@@ -117,6 +118,7 @@ class AudioPlaybackManager @Inject constructor(
         mediaRepository = mediaRepository,
         downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
+        playbackSourceResolver = playbackSourceResolver,
         streamingQualityProvider = { currentPlayback.streamingQuality },
         adaptiveBitrateSelector = adaptiveBitrateSelector,
     )
@@ -205,8 +207,8 @@ class AudioPlaybackManager @Inject constructor(
         context = context,
         effectsProcessor = effectsProcessor,
         mediaRepository = mediaRepository,
-        downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
+        playbackSourceResolver = playbackSourceResolver,
         repeatModeProvider = { _repeatMode.value },
         crossfadeDurationMsProvider = { _crossfadeDurationMs.value },
         isCrossfadingProvider = { _isCrossfading.value },
@@ -720,49 +722,50 @@ class AudioPlaybackManager @Inject constructor(
                 progressReporter.start()
             } else {
                 _playbackError.value = detailResult.exceptionOrNull()?.message ?: "Failed to load track"
-                val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
-                if (localDownload != null && localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
-                    val file = java.io.File(localDownload.downloadPath)
-                    if (file.exists()) {
-                        val offlineItem = offlineRepository.getOfflineItem(itemId)
-                        _currentPlayingItemId.value = itemId
-                        _title.value = offlineItem?.name ?: localDownload.name
-                        _artist.value = offlineItem?.seriesName ?: ""
-                        _album.value = ""
+                // Queue-only local fallback: when the server detail fetch failed
+                // but a completed download exists on disk, play the local file.
+                // resolveLocalSource performs no getMediaDetail round-trip, so the
+                // COMPLETED classification survives even though the server call
+                // failed — preserving the historical queue-only fallback.
+                val local = playbackSourceResolver.resolveLocalSource(itemId)
+                if (local != null) {
+                    _currentPlayingItemId.value = itemId
+                    _title.value = local.title
+                    _artist.value = local.offlineItem?.seriesName ?: ""
+                    _album.value = ""
 
-                        val q = _queue.value
-                        val currentIdx = _currentIndex.value
-                        val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
+                    val q = _queue.value
+                    val currentIdx = _currentIndex.value
+                    val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
 
-                        if (!isInQueue) {
-                            val queueItem = AudioQueueItem(
-                                id = itemId,
-                                name = _title.value,
-                                artist = _artist.value,
-                                album = "",
-                                imageUrl = null,
-                                mediaSourceId = localDownload.mediaSourceId,
-                            )
-                            _queue.value = _queue.value + queueItem
-                            _currentIndex.value = _queue.value.lastIndex
-                        }
-
-                        val mediaItem = MediaItem.Builder()
-                            .setMediaId(itemId)
-                            .setUri(Uri.fromFile(file).toString())
-                            .setMediaMetadata(
-                                MediaMetadata.Builder()
-                                    .setTitle(_title.value)
-                                    .setArtist(_artist.value)
-                                    .build()
-                            )
-                            .build()
-
-                        player.setMediaItem(mediaItem)
-                        player.prepare()
-                        player.playWhenReady = true
-                        startPositionTracking()
+                    if (!isInQueue) {
+                        val queueItem = AudioQueueItem(
+                            id = itemId,
+                            name = _title.value,
+                            artist = _artist.value,
+                            album = "",
+                            imageUrl = null,
+                            mediaSourceId = local.download.mediaSourceId,
+                        )
+                        _queue.value = _queue.value + queueItem
+                        _currentIndex.value = _queue.value.lastIndex
                     }
+
+                    val mediaItem = MediaItem.Builder()
+                        .setMediaId(itemId)
+                        .setUri(local.uri)
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(_title.value)
+                                .setArtist(_artist.value)
+                                .build()
+                        )
+                        .build()
+
+                    player.setMediaItem(mediaItem)
+                    player.prepare()
+                    player.playWhenReady = true
+                    startPositionTracking()
                 }
             }
             _isLoadingItemFlag = false

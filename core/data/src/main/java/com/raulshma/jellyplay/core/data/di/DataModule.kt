@@ -136,6 +136,15 @@ abstract class DataModule {
     @Singleton
     abstract fun bindOfflineRepository(impl: OfflineRepositoryImpl): OfflineRepository
 
+    // The deep "Playback Source Resolver" seam: the single owner of the
+    // download-vs-stream fork. See PlaybackSourceResolver kdoc — every caller
+    // already depends on :core:data, so this @Binds is the only wiring needed.
+    @Binds
+    @Singleton
+    abstract fun bindPlaybackSourceResolver(
+        impl: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolverImpl,
+    ): com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
+
     @Binds
     @Singleton
     abstract fun bindAdminStatisticsRepository(impl: AdminStatisticsRepositoryImpl): AdminStatisticsRepository

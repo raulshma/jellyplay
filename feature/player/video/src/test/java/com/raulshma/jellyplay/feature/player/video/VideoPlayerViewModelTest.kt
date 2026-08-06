@@ -66,6 +66,7 @@ class VideoPlayerViewModelTest {
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var offlinePlaybackFacade: com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
+    private lateinit var playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 
     @Before
     fun setUp() {
@@ -78,6 +79,7 @@ class VideoPlayerViewModelTest {
         downloadRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         offlinePlaybackFacade = mockk(relaxed = true)
+        playbackSourceResolver = mockk(relaxed = true)
         val itemPlaybackPreferenceRepository = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
         val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         val engineStore = mockk<PlayerEngineStore>(relaxed = true)
@@ -155,6 +157,7 @@ class VideoPlayerViewModelTest {
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
             offlinePlaybackFacade = offlinePlaybackFacade,
+            playbackSourceResolver = playbackSourceResolver,
             episodeCatalogue = mockk(relaxed = true),
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
             aggregateStore = aggregateStore,
@@ -343,15 +346,17 @@ class VideoPlayerViewModelTest {
     }
 
     // ── Offline resume position resolution ────────────────────────────
+    //
+    // [resolveOfflineResumeTicks] is now a thin pass-through to
+    // [PlaybackSourceResolver.resolveStartPositionTicks]; these tests pin the
+    // delegation contract. The explicit-vs-stored-vs-zero rule itself is
+    // owned by the resolver and covered by PlaybackSourceResolverTest.
 
     @Test
     fun resolveOfflineResumeTicks_completedDownloadWithProgress_returnsStoredPosition() = runBlocking {
         val itemId = "item-movie"
         val savedTicks = 5 * 60 * 1_000L * 10_000L // 5 min, in ticks
-        // The VM delegates resume-tick resolution to OfflinePlaybackFacade
-        // (extracted in the PipController refactor). Stub the facade directly;
-        // the repository wiring is covered by OfflinePlaybackFacade's own tests.
-        coEvery { offlinePlaybackFacade.getResumePositionTicks(itemId) } returns savedTicks
+        coEvery { playbackSourceResolver.resolveStartPositionTicks(itemId, 0L) } returns savedTicks
 
         val resolved = callResolveOfflineResumeTicks(itemId, startPositionTicks = 0L)
 
@@ -362,23 +367,17 @@ class VideoPlayerViewModelTest {
     fun resolveOfflineResumeTicks_withExplicitStartPosition_keepsCallerValue() = runBlocking {
         val itemId = "item-movie"
         val explicitTicks = 30 * 1_000L * 10_000L
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns downloadItem(itemId)
-        coEvery { offlineRepository.getOfflineItem(itemId) } returns
-            offlineMediaItem(itemId, 10 * 60 * 1_000L * 10_000L)
+        coEvery { playbackSourceResolver.resolveStartPositionTicks(itemId, explicitTicks) } returns explicitTicks
 
         val resolved = callResolveOfflineResumeTicks(itemId, explicitTicks)
 
         assertEquals(explicitTicks, resolved)
-        // The offline store should not even be consulted when the caller
-        // already provided a start position.
-        io.mockk.coVerify(exactly = 0) { offlineRepository.getOfflineItem(any()) }
     }
 
     @Test
     fun resolveOfflineResumeTicks_nonCompletedDownload_returnsZero() = runBlocking {
         val itemId = "item-movie"
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns
-            downloadItem(itemId, status = DownloadStatus.DOWNLOADING)
+        coEvery { playbackSourceResolver.resolveStartPositionTicks(itemId, 0L) } returns 0L
 
         val resolved = callResolveOfflineResumeTicks(itemId, startPositionTicks = 0L)
 
@@ -388,7 +387,7 @@ class VideoPlayerViewModelTest {
     @Test
     fun resolveOfflineResumeTicks_noDownload_returnsZero() = runBlocking {
         val itemId = "item-movie"
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns null
+        coEvery { playbackSourceResolver.resolveStartPositionTicks(itemId, 0L) } returns 0L
 
         val resolved = callResolveOfflineResumeTicks(itemId, startPositionTicks = 0L)
 
@@ -398,8 +397,7 @@ class VideoPlayerViewModelTest {
     @Test
     fun resolveOfflineResumeTicks_completedDownloadWithoutProgress_returnsZero() = runBlocking {
         val itemId = "item-movie"
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns downloadItem(itemId)
-        coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId, null)
+        coEvery { playbackSourceResolver.resolveStartPositionTicks(itemId, 0L) } returns 0L
 
         val resolved = callResolveOfflineResumeTicks(itemId, startPositionTicks = 0L)
 

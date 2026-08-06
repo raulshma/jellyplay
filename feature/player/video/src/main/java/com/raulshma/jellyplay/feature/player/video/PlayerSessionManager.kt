@@ -74,6 +74,7 @@ class PlayerSessionManager(
     private val pipController: com.raulshma.jellyplay.core.data.playback.PipController,
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
     private val playerEngineFactory: PlayerEngineFactory,
+    private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
 ) {
     private val _sessionState = MutableStateFlow(PlayerSessionState())
     val sessionState: StateFlow<PlayerSessionState> = _sessionState.asStateFlow()
@@ -161,6 +162,12 @@ class PlayerSessionManager(
      * on the resolved [PlaybackSource]. The [PlaybackSource.Auto] variant is
      * resolved via [PlaybackSource.Auto.resolve] using the downloads DB,
      * matching the historical auto-detection behaviour exactly.
+     *
+     * The completed-download predicate is owned by
+     * [PlaybackSourceResolver.resolveUsableDownload] (the shared core routine
+     * every call-site converges on); here it doubles as the Auto resolution
+     * input and the metadata source for [loadOffline]. `Auto.resolve` then
+     * maps a non-null download → Offline, null → Online.
      */
     suspend fun loadMedia(source: PlaybackSource, startPositionTicks: Long) {
         val itemId = source.itemId
@@ -168,8 +175,9 @@ class PlayerSessionManager(
 
         // The download lookup is needed both for Auto resolution and for
         // metadata enrichment during offline playback, so it is performed
-        // unconditionally — identical to the pre-refactor behaviour.
-        val download = downloadRepository.getDownloadByMediaItemId(itemId)
+        // unconditionally — identical to the pre-refactor behaviour. The
+        // shared resolver owns the COMPLETED + file-exists predicate.
+        val download = playbackSourceResolver.resolveUsableDownload(itemId)
 
         val resolved = when (source) {
             is PlaybackSource.Auto -> source.resolve(download)

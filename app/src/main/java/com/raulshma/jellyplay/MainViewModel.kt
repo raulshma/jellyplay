@@ -10,9 +10,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
@@ -20,7 +18,6 @@ import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
-import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MainPreferences
@@ -65,10 +62,9 @@ class MainViewModel @Inject constructor(
     val remoteControlReceiver: RemoteControlReceiver,
     val remoteNavigationBridge: RemoteNavigationBridge,
     private val deepLinkHandler: DeepLinkHandler,
-    private val downloadRepository: DownloadRepository,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-    private val offlineRepository: OfflineRepository,
+    private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
     private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
     val userMessageBus: UserMessageBus,
     private val serverHealthMonitor: com.raulshma.jellyplay.core.data.network.ServerHealthMonitor,
@@ -536,32 +532,23 @@ class MainViewModel @Inject constructor(
         mediaSourceId: String?,
         startPositionTicks: Long,
     ): ExternalPlayerLaunch? {
-        val download = downloadRepository.getDownloadByMediaItemId(itemId)
-        val localFile = download?.let {
-            java.io.File(it.downloadPath).takeIf { f -> f.exists() }
-        }
+        // The download-vs-stream fork lives once in PlaybackSourceResolver: a
+        // completed download with an existing file resolves to a `file://` URI
+        // (title from the offline item, falling back to the download name),
+        // else the resolver fetches `getMediaDetail` and builds the stream URL.
+        // The resolver silently falls back to streaming when a COMPLETED row's
+        // file vanished — the historical MainViewModel disk-staleness behaviour.
+        val resolved = playbackSourceResolver.resolvePlaybackSource(
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            startPositionTicks = startPositionTicks,
+        ) ?: return null
 
-        val url: String
-        val title: String
-
-        if (download != null && localFile != null && download.status == DownloadStatus.COMPLETED) {
-            url = Uri.fromFile(localFile).toString()
-            val offlineItem = offlineRepository.getOfflineItem(itemId)
-            title = offlineItem?.name ?: download.name
-        } else {
-            val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: return null
-            val source = if (mediaSourceId != null) {
-                detail.mediaSources.find { it.id == mediaSourceId }
-            } else {
-                detail.mediaSources.firstOrNull()
-            }
-            url = playbackRepository.getStreamUrl(
-                itemId,
-                source?.id ?: "",
-                startPositionTicks,
-            )
-            title = detail.item.name
+        val url = when (resolved) {
+            is com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource.Local -> resolved.uri
+            is com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource.Stream -> resolved.url
         }
+        val title = resolved.title
 
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(Uri.parse(url), "video/*")
