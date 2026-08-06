@@ -102,13 +102,56 @@ import javax.inject.Inject
 private const val MIN_DURATION_FOR_SMART_DELETE_MS = 5 * 60 * 1000L
 
 // SavedStateHandle keys for surviving process death. The in-stream
-// playback position, the item it belongs to, and the server session id are
-// persisted so playback resumes from the user's last seek rather than the
-// original entry point, and so the eventual stop-report matches the start.
+// playback position, the item it belongs to, the server session id, and the
+// epoch at which the position was last persisted are stored so playback
+// resumes from the user's last seek rather than the original entry point, and
+// so the eventual stop-report matches the start. The timestamp lets a restore
+// reject a position that is too old to be a trustworthy "continue from here"
+// (see STALE_POSITION_THRESHOLD_MS) — the primary defense is the nav-route
+// strip, but a stale SavedStateHandle position is the last-resort signal that
+// the player's in-memory state is gone and auto-resume would land mid-stream
+// on an episode the user moved past via auto-advance.
 private const val SAVED_KEY_ITEM_ID = "video_player.saved_item_id"
 private const val SAVED_KEY_POSITION_MS = "video_player.saved_position_ms"
 private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_id"
+private const val SAVED_KEY_POSITION_PERSISTED_AT = "video_player.saved_position_persisted_at"
 private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
+/**
+ * A persisted position older than this is treated as stale on a process-death
+ * restore and ignored: the user backgrounded the app long enough that
+ * auto-resuming mid-stream (potentially on an episode they auto-advanced past)
+ * is worse than landing on Home and continuing via the "Continue Watching" row.
+ * Matches the ~1h threshold users report as the trigger; well above any real
+ * short backgrounding (notification reply, brief app switch).
+ */
+private const val STALE_POSITION_THRESHOLD_MS = 60L * 60L * 1000L
+
+/**
+ * Pure resume-position resolver extracted from
+ * [VideoPlayerViewModel.resolveStartTicksAfterProcessDeath] so the staleness +
+ * "only advance forward" rules are unit-testable without a ViewModel.
+ *
+ * Rules:
+ *  - No persisted position (`savedPosMs <= 0`): keep the entry point.
+ *  - Persisted position too old (`persistedAtMs > 0` and older than
+ *    [staleThresholdMs]): keep the entry point. A zero/missing timestamp is
+ *    treated as fresh so a normal resume-from-background keeps working.
+ *  - Otherwise resume at the persisted position, but never below the deliberate
+ *    entry point (auto-advance may have moved the user forward of the route's
+ *    original ticks; rewinding would jump back unexpectedly).
+ */
+internal fun resolveResumeTicks(
+    savedPosMs: Long,
+    persistedAtMs: Long,
+    nowMs: Long,
+    entryPointTicks: Long,
+    staleThresholdMs: Long = STALE_POSITION_THRESHOLD_MS,
+): Long {
+    if (savedPosMs <= 0L) return entryPointTicks
+    if (persistedAtMs > 0L && nowMs - persistedAtMs > staleThresholdMs) return entryPointTicks
+    val savedTicks = savedPosMs * 10_000
+    return if (savedTicks > entryPointTicks) savedTicks else entryPointTicks
+}
 /** Debounce window for engine config syncs driven by slider drags. */
 private const val CONFIG_SYNC_DEBOUNCE_MS = 150L
 
@@ -1133,15 +1176,31 @@ class VideoPlayerViewModel @Inject constructor(
      * persisted position for [itemId] that is beyond the entry point we resume
      * from there. A fresh navigation (new entry) has an empty SavedStateHandle,
      * so this is a no-op outside the process-death-restore path.
+     *
+     * Staleness guard: a position persisted more than [STALE_POSITION_THRESHOLD_MS]
+     * ago is ignored. The primary defense against stale auto-resume is the nav-
+     * route strip in `rememberNavigationState` (a stripped route never mounts the
+     * player at all, so this method never runs). This guard covers any restore
+     * path that escapes the strip: if the player does mount from a stale route,
+     * a long-stale position is more likely to land the user on an episode they
+     * auto-advanced past than a genuine "continue here", so falling back to the
+     * entry-point ticks (or, if the strip fires, never mounting at all) is the
+     * safer choice. A missing/zero timestamp (positions persisted before this
+     * field existed, or a non-process-death re-entry) is treated as fresh so the
+     * normal resume-from-background path keeps working.
      */
     private fun resolveStartTicksAfterProcessDeath(itemId: String, startPositionTicks: Long): Long {
         val savedItemId = savedStateHandle.get<String>(SAVED_KEY_ITEM_ID) ?: return startPositionTicks
         if (savedItemId != itemId) return startPositionTicks
         val savedPosMs = savedStateHandle.get<Long>(SAVED_KEY_POSITION_MS) ?: return startPositionTicks
-        if (savedPosMs <= 0L) return startPositionTicks
-        val savedTicks = savedPosMs * 10_000
-        // Only advance forward; never rewind below a deliberate entry point.
-        return if (savedTicks > startPositionTicks) savedTicks else startPositionTicks
+        val persistedAt = savedStateHandle.get<Long>(SAVED_KEY_POSITION_PERSISTED_AT) ?: 0L
+        return resolveResumeTicks(
+            savedPosMs = savedPosMs,
+            persistedAtMs = persistedAt,
+            nowMs = System.currentTimeMillis(),
+            entryPointTicks = startPositionTicks,
+            staleThresholdMs = STALE_POSITION_THRESHOLD_MS,
+        )
     }
 
     /**
@@ -1173,6 +1232,7 @@ class VideoPlayerViewModel @Inject constructor(
         savedStateHandle[SAVED_KEY_ITEM_ID] = itemId
         savedStateHandle[SAVED_KEY_POSITION_MS] = positionMs
         savedStateHandle[SAVED_KEY_PLAY_SESSION_ID] = currentPlaySessionId
+        savedStateHandle[SAVED_KEY_POSITION_PERSISTED_AT] = System.currentTimeMillis()
         // Mirror progress into the offline store so downloads render watched /
         // resume state while offline. No-op for non-downloaded items.
         val durationMs = playerSessionManager.engine?.durationMs ?: 0L
