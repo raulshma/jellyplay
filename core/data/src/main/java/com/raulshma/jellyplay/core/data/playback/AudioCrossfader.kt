@@ -26,8 +26,8 @@ class AudioCrossfader(
     private val context: Context,
     private val effectsProcessor: AudioEffectsProcessor,
     private val mediaRepository: MediaRepository,
-    private val downloadRepository: DownloadRepository,
     private val playbackRepository: PlaybackRepository,
+    private val playbackSourceResolver: PlaybackSourceResolver,
     private val repeatModeProvider: () -> Int,
     private val crossfadeDurationMsProvider: () -> Long,
     private val isCrossfadingProvider: () -> Boolean,
@@ -163,16 +163,19 @@ class AudioCrossfader(
             val detail = mediaRepository.getMediaDetail(nextItem.id)
             detail.onSuccess { d ->
                 val source = d.mediaSources.firstOrNull()
-                val localDownload = downloadRepository.getDownloadByMediaItemId(nextItem.id)
-                val file = localDownload?.let { dl ->
-                    java.io.File(dl.downloadPath).takeIf { f -> f.exists() }
-                }
-                val url = if (localDownload != null && file != null &&
-                    localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
-                ) {
-                    Uri.fromFile(file).toString()
-                } else {
-                    playbackRepository.getStreamUrl(nextItem.id, source?.id ?: "", 0L)
+                // The download-vs-stream fork lives once in PlaybackSourceResolver:
+                // a completed download resolves to a local file URI, else the
+                // server stream URL. Falls back to streaming when no usable
+                // local file exists (disk-staleness-safe).
+                val resolved = playbackSourceResolver.resolvePlaybackSource(
+                    itemId = nextItem.id,
+                    mediaSourceId = source?.id,
+                    startPositionTicks = 0L,
+                )
+                val url = when (resolved) {
+                    is com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource.Local -> resolved.uri
+                    is com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource.Stream -> resolved.url
+                    null -> return@onSuccess
                 }
 
                 val cfPlayer = createCrossfadePlayer()

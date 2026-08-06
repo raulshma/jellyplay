@@ -196,6 +196,14 @@ class VideoPlayerViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
     private val offlinePlaybackFacade: OfflinePlaybackFacade,
     /**
+     * The deep "playback source resolver" — single owner of the
+     * completed-download predicate ([resolveOfflineResumeTicks] pivots onto
+     * [com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver.resolveStartPositionTicks]
+     * and [PlayerSessionManager] consumes
+     * [com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver.resolveUsableDownload]).
+     */
+    private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
+    /**
      * The consolidated series seasons/episodes snapshot. [resolveSeasons] and
      * [resolveEpisodes] delegate here (online and offline), so the player's
      * episode discovery shares the same single-flight + cache as the detail
@@ -307,6 +315,7 @@ class VideoPlayerViewModel @Inject constructor(
         adaptiveBitrateManager = adaptiveBitrateManager,
         playerEngineFactory = playerEngineFactory,
         pipController = pipController,
+        playbackSourceResolver = playbackSourceResolver,
     )
 
     // @Volatile: written from launched coroutines (applyMediaDetail) and read
@@ -1145,12 +1154,12 @@ class VideoPlayerViewModel @Inject constructor(
      * watching offline). Streaming keeps the caller-provided value.
      *
      * Extracted and `suspend` so it is unit-testable in isolation; in
-     * [initializeInternal] it runs inside the load coroutine.
+     * [initializeInternal] it runs inside the load coroutine. Delegates to
+     * [PlaybackSourceResolver.resolveStartPositionTicks] so the resume-position
+     * rule (explicit > 0 wins, else the offline-store ticks) lives once in core.
      */
-    internal suspend fun resolveOfflineResumeTicks(itemId: String, startPositionTicks: Long): Long {
-        if (startPositionTicks != 0L) return startPositionTicks
-        return offlinePlaybackFacade.getResumePositionTicks(itemId)
-    }
+    internal suspend fun resolveOfflineResumeTicks(itemId: String, startPositionTicks: Long): Long =
+        playbackSourceResolver.resolveStartPositionTicks(itemId, startPositionTicks)
 
     /**
      * Persists the current playback position so it survives process death.
