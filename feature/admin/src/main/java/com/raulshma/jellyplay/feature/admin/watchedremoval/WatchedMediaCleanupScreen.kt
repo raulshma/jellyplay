@@ -545,7 +545,7 @@ private fun WatchedDeleteConfirmationSheet(
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
-            shape = ShapeCache.smooth20,
+            shape = ShapeCache.smoothTop28,
             containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
             content = content,
         )
