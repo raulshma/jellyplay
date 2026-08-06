@@ -15,6 +15,9 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
+import com.raulshma.jellyplay.core.model.OfflineSyncState
+import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
+import com.raulshma.jellyplay.core.model.offlineSyncStateOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -309,6 +312,33 @@ class OfflineRepositoryImpl @Inject constructor(
             .search(pattern = pattern, prefixPattern = prefixPattern, limit = limit)
             .map { it.toOfflineMediaItem() }
     }
+
+    override fun getOfflineSyncState(id: String): Flow<OfflineSyncState?> =
+        offlineMediaDao.getByIdFlow(id).map { entity ->
+            // Project the persisted sync columns to a UI-facing state via the
+            // shared mapper (same one OfflineSyncManager uses) so the DB-driven
+            // badge and the check/resync-driven state agree. The reactive
+            // getByIdFlow re-emits on any row write, so a check/resync that flips
+            // a flag refreshes the badge on its own.
+            if (entity == null) null
+            else offlineSyncStateOf(
+                checking = entity.syncChecking,
+                error = entity.syncError,
+                mediaChanged = entity.syncMediaChanged,
+                updateAvailable = entity.syncUpdateAvailable,
+                lastSyncedAt = entity.lastSyncedAt,
+            )
+        }
+
+    override fun getUpdatesCount(): Flow<Int> = offlineMediaDao.getUpdatesCount()
+
+    override fun getItemsWithUpdates(): Flow<List<OfflineSyncUpdate>> =
+        offlineMediaDao.getItemsWithUpdates().map { rows ->
+            rows.map { OfflineSyncUpdate(it.id, it.name, it.mediaFileChanged == 1) }
+        }
+
+    override suspend fun getDownloadedItemIds(): List<String> =
+        offlineMediaDao.getDownloadedItemIds()
 
     /**
      * Resolves disk-backed local artwork for an item of ANY media type so it

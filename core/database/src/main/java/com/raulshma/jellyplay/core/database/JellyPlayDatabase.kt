@@ -56,7 +56,7 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         PlaybackOutboxEntity::class,
         HomeSectionCacheEntity::class,
     ],
-    version = 42,
+    version = 43,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

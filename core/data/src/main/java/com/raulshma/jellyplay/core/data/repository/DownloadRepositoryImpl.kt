@@ -84,6 +84,7 @@ class DownloadRepositoryImpl @Inject constructor(
     private val storagePolicy: StoragePolicy,
     private val downloadEnqueuer: DownloadEnqueuer,
     private val storageLayout: DownloadStorageLayout,
+    private val syncComparator: com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator,
 ) : DownloadRepository {
 
     // Caps the number of episodes processed concurrently when queueing a series
@@ -721,8 +722,50 @@ class DownloadRepositoryImpl @Inject constructor(
      * the cast row without network access.
      */
     private suspend fun saveOfflineMetadataForDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
-        val entity = detail.toOfflineMediaEntity(imageUrl, backdropUrl)
+        // Preserve any existing sync-baseline columns when re-persisting metadata
+        // (resync path). The upsert below uses REPLACE, which would otherwise wipe
+        // them to defaults and briefly flip the offline-detail freshness badge to
+        // UNKNOWN before the manager's updateSyncBaseline restores them. Copying
+        // them forward keeps the row coherent across the re-persist.
+        val existing = offlineMediaDao.getById(detail.item.id)
+        val entity = detail.toOfflineMediaEntity(imageUrl, backdropUrl).let { fresh ->
+            if (existing != null) fresh.copy(
+                syncedPosterTag = existing.syncedPosterTag,
+                syncedBackdropTag = existing.syncedBackdropTag,
+                syncedMetadataSignature = existing.syncedMetadataSignature,
+                syncedMediaSourceId = existing.syncedMediaSourceId,
+                syncedMediaSizeBytes = existing.syncedMediaSizeBytes,
+                lastSyncedAt = existing.lastSyncedAt,
+                syncUpdateAvailable = existing.syncUpdateAvailable,
+                syncMediaChanged = existing.syncMediaChanged,
+                syncChecking = existing.syncChecking,
+                syncError = existing.syncError,
+            ) else fresh
+        }
         offlineMediaDao.upsert(entity)
+        // Seed the freshness baseline from the detail we just persisted so the
+        // first auto-check has a reference to diff against. Without this, a fresh
+        // download enters with a null baseline and the first check treats itself
+        // as "first contact" — swallowing a real change that happened before that
+        // first check (and always reporting CURRENT for new downloads). Only seed
+        // when no baseline existed yet, so a re-download doesn't clobber a recent
+        // check's flags; a genuine re-download is itself a fresh server snapshot.
+        if (existing == null || existing.syncedMetadataSignature == null) {
+            val baseline = syncComparator.baseline(detail)
+            offlineMediaDao.updateSyncBaseline(
+                itemId = detail.item.id,
+                posterTag = baseline.posterTag,
+                backdropTag = baseline.backdropTag,
+                metadataSignature = baseline.metadataSignature,
+                mediaSourceId = baseline.mediaSourceId,
+                mediaSizeBytes = baseline.mediaSizeBytes,
+                lastSyncedAt = System.currentTimeMillis(),
+                updateAvailable = 0,
+                mediaChanged = 0,
+                checking = 0,
+                error = 0,
+            )
+        }
         preloadImageToCache(imageUrl)
         preloadImageToCache(backdropUrl)
         // Preload up to 10 cast images so the offline cast row renders without

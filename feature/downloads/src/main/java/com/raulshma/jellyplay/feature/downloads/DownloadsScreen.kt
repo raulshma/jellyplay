@@ -7,7 +7,9 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -101,12 +104,17 @@ fun DownloadsScreen(
         hasError = uiState.error != null,
         networkStatus = networkStatus,
     )
+    val updatesAvailable by viewModel.updatesAvailable.collectAsStateWithLifecycle()
+    val checking by viewModel.checking.collectAsStateWithLifecycle()
+    val updateRows by viewModel.updateRows.collectAsStateWithLifecycle(initialValue = emptyList())
+    val resyncProgress by viewModel.resyncProgress.collectAsStateWithLifecycle()
 
     // Pending delete confirmation. Deleting a completed download removes the
     // file from disk, so we confirm first — matching OfflineDetailScreen and
     // OfflineSeriesScreen within the same module.
     var pendingDelete by remember { mutableStateOf<DownloadItem?>(null) }
     var pendingBulkDelete by remember { mutableStateOf(false) }
+    var showResyncSheet by remember { mutableStateOf(false) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
@@ -152,6 +160,43 @@ fun DownloadsScreen(
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
+            // Resync action: checks every download for available updates and
+            // opens the resync sheet. The badge dot appears when any item is
+            // flagged, so the user knows updates are waiting without opening
+            // the sheet.
+            Box {
+                val syncFocus = rememberTvFocusState()
+                IconButton(
+                    onClick = {
+                        viewModel.checkAllForUpdates()
+                        showResyncSheet = true
+                    },
+                    modifier = Modifier
+                        .then(syncFocus.focusModifier)
+                        .tvFocusIndicator(syncFocus, CircleShape),
+                ) {
+                    if (checking) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            Tabler.Outline.Refresh,
+                            contentDescription = stringResource(R.string.downloads_resync_check_all_cd),
+                        )
+                    }
+                }
+                if (updatesAvailable > 0) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .align(Alignment.TopEnd)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.error),
+                    )
+                }
+            }
             com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator(
                 status = headerStatus,
                 modifier = Modifier.padding(start = 12.dp),
@@ -182,6 +227,10 @@ fun DownloadsScreen(
             val formatBytes = remember(viewModel) { { v: Long -> viewModel.formatBytes(v) } }
             val formatSpeed = remember(viewModel) { { v: Long -> viewModel.formatSpeed(v) } }
             val formatEta = remember(viewModel) { { d: Long, t: Long, s: Long -> viewModel.formatEta(d, t, s) } }
+            // Index flagged-update rows by mediaItemId so each list row can
+            // render an "update available" dot without a per-row scan. Computed
+            // in composable scope (above the LazyColumn) so `remember` is valid.
+            val updateIds = remember(updateRows) { updateRows.map { it.id }.toHashSet() }
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     modifier = Modifier
@@ -225,6 +274,8 @@ fun DownloadsScreen(
                                 formatEta = formatEta,
                                 selected = download.id in selectedIds,
                                 selectionMode = selectionMode,
+                                hasUpdate = download.status == DownloadStatus.COMPLETED &&
+                                    download.mediaItemId in updateIds,
                                 // Completed downloads open their detail page on tap
                                 // (matching the online experience) rather than auto-playing.
                                 // A distinct Play action is still available in the row.
@@ -332,6 +383,20 @@ fun DownloadsScreen(
             },
         )
     }
+
+    if (showResyncSheet) {
+        DownloadsResyncSheet(
+            updateRows = updateRows,
+            checking = checking,
+            progress = resyncProgress,
+            onResyncAll = viewModel::resyncAll,
+            onResyncOne = viewModel::resyncOne,
+            onDismiss = {
+                showResyncSheet = false
+                viewModel.clearResyncProgress()
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -343,6 +408,7 @@ private fun DownloadItemRow(
     formatEta: (Long, Long, Long) -> String,
     selected: Boolean,
     selectionMode: Boolean,
+    hasUpdate: Boolean = false,
     onOpenDetail: () -> Unit,
     onPlay: () -> Unit,
     onCancel: () -> Unit,
@@ -420,6 +486,18 @@ private fun DownloadItemRow(
                         contentDescription = null,
                         modifier = Modifier.size(28.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // "Update available" dot overlaid on the thumbnail so a flagged
+                // item is visible at a glance without opening the resync sheet.
+                if (hasUpdate) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.tertiary),
                     )
                 }
             }
@@ -767,6 +845,153 @@ private fun SelectionHintRow() {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/**
+ * Bottom sheet listing every download flagged for an update, with a per-item
+ * resync action and a batch "sync all". Renders live progress from the sync
+ * manager: each row shows its current phase (pending/working/done/error) and an
+ * aggregate progress line runs while the batch is active.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DownloadsResyncSheet(
+    updateRows: List<com.raulshma.jellyplay.core.model.OfflineSyncUpdate>,
+    checking: Boolean,
+    progress: com.raulshma.jellyplay.core.model.ResyncBatchProgress,
+    onResyncAll: (List<String>) -> Unit,
+    onResyncOne: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Tabler.Outline.Refresh, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Text(
+                    stringResource(R.string.downloads_resync_batch_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+
+            when {
+                checking -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp), strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        stringResource(R.string.downloads_resync_batch_checking),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                updateRows.isEmpty() -> Text(
+                    stringResource(R.string.downloads_resync_batch_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                else -> {
+                    if (progress.active) {
+                        val done = progress.completed
+                        Text(
+                            stringResource(R.string.downloads_resync_progress, done, progress.total),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 360.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        itemsIndexed(updateRows, key = { _, row -> row.id }) { _, row ->
+                            val itemProgress = progress.items[row.id]
+                            ResyncSheetRow(
+                                name = row.name,
+                                mediaChanged = row.mediaFileChanged,
+                                phase = itemProgress?.phase,
+                                onResync = { onResyncOne(row.id) },
+                            )
+                        }
+                    }
+                    androidx.compose.material3.Button(
+                        onClick = { onResyncAll(updateRows.map { it.id }) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !progress.active,
+                    ) {
+                        Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.downloads_resync_resync_all))
+                    }
+                }
+            }
+            androidx.compose.material3.TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.downloads_close))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResyncSheetRow(
+    name: String,
+    mediaChanged: Boolean,
+    phase: com.raulshma.jellyplay.core.model.ResyncPhase?,
+    onResync: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        when (phase) {
+            com.raulshma.jellyplay.core.model.ResyncPhase.WORKING ->
+                androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            com.raulshma.jellyplay.core.model.ResyncPhase.DONE ->
+                Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            com.raulshma.jellyplay.core.model.ResyncPhase.ERROR ->
+                Icon(Tabler.Outline.AlertTriangle, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+            else ->
+                Icon(Tabler.Outline.AlertCircle, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(18.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (mediaChanged) {
+                Text(
+                    stringResource(R.string.downloads_resync_media_changed),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+        if (phase == null || phase == com.raulshma.jellyplay.core.model.ResyncPhase.PENDING ||
+            phase == com.raulshma.jellyplay.core.model.ResyncPhase.ERROR
+        ) {
+            androidx.compose.material3.TextButton(onClick = onResync) {
+                Text(stringResource(R.string.downloads_resync_action))
+            }
         }
     }
 }

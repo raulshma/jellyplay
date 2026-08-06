@@ -121,4 +121,30 @@
     <string name="downloads_filter_all">All</string>
     <string name="downloads_filter_videos">Videos</string>
     <string name="downloads_filter_music">Music</string>
+
+    <!-- Offline download resync -->
+    <string name="downloads_resync">Resync</string>
+    <string name="downloads_resync_cd">Check for updated metadata and images</string>
+    <string name="downloads_resync_title">Sync download</string>
+    <string name="downloads_resync_checking">Checking for updates…</string>
+    <string name="downloads_resync_update_available">New information available</string>
+    <string name="downloads_resync_media_changed">Media file changed — re-download required</string>
+    <string name="downloads_resync_in_progress">Syncing latest details…</string>
+    <string name="downloads_resync_complete">Download synced with latest details</string>
+    <string name="downloads_resync_failed">Sync failed</string>
+    <string name="downloads_resync_up_to_date">This download is up to date.</string>
+    <string name="downloads_resync_description">Newer information is available on the server. Sync to refresh metadata and images.</string>
+    <string name="downloads_resync_change_metadata">Updated metadata (overview, cast, ratings)</string>
+    <string name="downloads_resync_change_images">Updated artwork (poster/backdrop)</string>
+    <string name="downloads_resync_change_media">The media file itself changed</string>
+    <string name="downloads_resync_media_explanation">A metadata sync can\'t update the media file. Delete and re-download this item to get the new file.</string>
+    <string name="downloads_resync_action">Sync now</string>
+    <string name="downloads_resync_redownload">Re-download media</string>
+    <string name="downloads_resync_check_all">Check all for updates</string>
+    <string name="downloads_resync_check_all_cd">Check every download for available updates</string>
+    <string name="downloads_resync_batch_title">Available updates</string>
+    <string name="downloads_resync_batch_empty">No downloads need updating.</string>
+    <string name="downloads_resync_batch_checking">Checking your downloads…</string>
+    <string name="downloads_resync_resync_all">Sync all</string>
+    <string name="downloads_resync_progress">%1$d of %2$d synced</string>
 </resources>

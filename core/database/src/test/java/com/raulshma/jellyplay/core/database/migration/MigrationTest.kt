@@ -633,17 +633,70 @@ class MigrationTest {
     }
 
     @Test
+    fun migrateAllFromV12_addsOfflineSyncColumns() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+            db.execSQL(
+                "INSERT INTO offline_media (id, name, mediaType) VALUES (?, ?, ?)",
+                arrayOf<Any>("item-1", "Test", "MOVIE"),
+            )
+        }
+
+        val db = openWithMigrations()
+        // The pre-existing row picks up the migration's defaults for the new
+        // sync columns: nullable baseline columns are NULL, flag columns 0.
+        val baseline = db.offlineMediaDao().getSyncBaseline("item-1")
+        assertNotNull(baseline)
+        with(baseline!!) {
+            assertEquals(null, syncedPosterTag)
+            assertEquals(null, syncedBackdropTag)
+            assertEquals(null, syncedMetadataSignature)
+            assertEquals(null, syncedMediaSourceId)
+            assertEquals(null, syncedMediaSizeBytes)
+            assertEquals(null, lastSyncedAt)
+            assertEquals(0, syncUpdateAvailable)
+            assertEquals(0, syncMediaChanged)
+            assertEquals(0, syncChecking)
+            assertEquals(0, syncError)
+        }
+        // A targeted baseline write round-trips through the new columns.
+        db.offlineMediaDao().updateSyncBaseline(
+            itemId = "item-1",
+            posterTag = "poster-1",
+            backdropTag = "backdrop-1",
+            metadataSignature = "sig",
+            mediaSourceId = "src-1",
+            mediaSizeBytes = 1000L,
+            lastSyncedAt = 123L,
+            updateAvailable = 1,
+            mediaChanged = 0,
+            checking = 0,
+            error = 0,
+        )
+        val updated = db.offlineMediaDao().getSyncBaseline("item-1")
+        assertEquals("poster-1", updated!!.syncedPosterTag)
+        assertEquals("sig", updated.syncedMetadataSignature)
+        assertEquals(123L, updated.lastSyncedAt)
+        assertEquals(1, updated.syncUpdateAvailable)
+        db.close()
+    }
+
+    @Test
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (42),
+        // One migration per step from v1 up to the current schema version (43),
         // each handing off to the next with no gaps or duplicate starts.
         // androidx.room.Database has CLASS retention, so getAnnotation() returns
         // null at runtime — the hardcoded fallback is the authoritative value
         // and must be bumped alongside JellyPlayDatabase's version.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 42
+            ?: 43
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",
