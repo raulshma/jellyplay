@@ -19,11 +19,15 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * Production code never instantiates this — it lives in `src/main` so both
  * `:feature:player:core` tests and (via the project dependency) `:feature:player:video`
- * tests can use it.
+ * tests can use it. It is the reference specimen for [MediaEngineContractTest]
+ * (the first backend the contract suite runs against), which is what keeps it
+ * from being dead code.
  */
 class FakeMediaEngine : MediaEngine {
 
     override var capabilities: EngineCapabilities = EngineCapabilities()
+
+    override val displayName: String = "FakeMediaEngine"
 
     // NOTE: `playbackState` and `bufferedPositionMs` are declared as covariant
     // overrides (MutableStateFlow <: StateFlow) so tests can drive `.value =`

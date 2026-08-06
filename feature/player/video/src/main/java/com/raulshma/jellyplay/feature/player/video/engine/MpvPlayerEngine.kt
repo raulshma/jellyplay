@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.model.MpvHwdec
 import com.raulshma.jellyplay.core.model.MpvScaler
 import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
 import com.raulshma.jellyplay.core.model.MpvVideoOutput
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -92,6 +93,7 @@ class MpvPlayerEngine(
 
     override val capabilities = EngineCapabilityMatrix.MPV
     override val zoomSafeSubtitleStrategy = ZoomSafeSubtitleStrategy.COMPOSE_CUE
+    override val displayName: String = PlayerType.MPV.displayName
 
     // The currently-displayed subtitle line, exposed to the screen for the
     // zoom-safe Compose overlay (zoomSafeSubtitleStrategy = COMPOSE_CUE).

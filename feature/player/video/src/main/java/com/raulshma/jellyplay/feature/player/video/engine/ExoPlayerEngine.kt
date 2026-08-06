@@ -57,6 +57,7 @@ import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
@@ -133,6 +134,7 @@ class ExoPlayerEngine(
 
     override val capabilities = EngineCapabilityMatrix.EXO_PLAYER
     override val zoomSafeSubtitleStrategy = ZoomSafeSubtitleStrategy.NATIVE_PINNED
+    override val displayName: String = PlayerType.EXO_PLAYER.displayName
 
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
