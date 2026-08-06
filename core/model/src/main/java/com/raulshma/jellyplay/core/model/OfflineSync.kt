@@ -60,6 +60,32 @@ data class ResyncCheckResult(
     val state: OfflineSyncState,
 )
 
+/**
+ * User-facing selection of which data categories a resync should refresh. Maps
+ * onto the optional [ResyncStep]s (metadata -> PERSIST_METADATA, poster ->
+ * DOWNLOAD_POSTER, backdrop -> DOWNLOAD_BACKDROP); FETCH_DETAIL and
+ * UPDATE_BASELINE are always-on infrastructure and therefore not selectable.
+ *
+ * Defaults to all-true so the existing "resync everything" call sites behave
+ * identically when the parameter is omitted. A user-driven force resync passes
+ * an explicit selection (e.g. metadata + poster only) to skip categories.
+ */
+@Immutable
+@Serializable
+data class ResyncOptions(
+    val metadata: Boolean = true,
+    val poster: Boolean = true,
+    val backdrop: Boolean = true,
+) {
+    /** True when no category is selected — callers should treat this as a no-op. */
+    val isEmpty: Boolean get() = !metadata && !poster && !backdrop
+
+    companion object {
+        /** Resync every category. The historical default behaviour. */
+        val ALL get() = ResyncOptions()
+    }
+}
+
 /** A single step in a resync operation, for granular progress reporting. */
 @Immutable
 @Serializable
@@ -122,6 +148,10 @@ data class ResyncBatchProgress(
  * Lightweight view of an item flagged for resync, surfaced to the downloads
  * screen's resync sheet. [mediaFileChanged] is reported separately because it
  * can't be fixed by a metadata/image resync.
+ *
+ * The episode-context fields ([mediaType], [seriesName], [seasonNumber],
+ * [episodeNumber]) let the sheet render the same SXXEXX + series line the
+ * downloads list shows, so episodes are identifiable in the flat sheet list.
  */
 @Immutable
 @Serializable
@@ -129,6 +159,10 @@ data class OfflineSyncUpdate(
     val id: String,
     val name: String,
     val mediaFileChanged: Boolean,
+    val mediaType: MediaType? = null,
+    val seriesName: String? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
 )
 
 /**

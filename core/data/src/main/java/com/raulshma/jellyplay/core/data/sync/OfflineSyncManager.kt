@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.offlineSyncStateOf
 import com.raulshma.jellyplay.core.model.ResyncCheckResult
 import com.raulshma.jellyplay.core.model.ResyncItemProgress
+import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.ResyncPhase
 import com.raulshma.jellyplay.core.model.ResyncResult
 import com.raulshma.jellyplay.core.model.ResyncStep
@@ -142,8 +143,21 @@ class OfflineSyncManager @Inject constructor(
      * clears the update-available flag (a media-source change keeps the
      * media-changed flag set so the UI can still prompt for a full re-download).
      * Reports progress via [batchProgress] and returns the step-by-step result.
+     *
+     * [options] selects which data categories to refresh. Skipped categories
+     * retain their existing baseline, so a partial sync only clears the
+     * update-available flag for the categories actually synced — the comparator
+     * is re-run against an effective baseline that blends synced-fresh values
+     * with the retained values. This recheck governs only the metadata/image
+     * axes (the selectable categories); the media-source axis is fixed
+     * separately from [mediaFileChanged] and is not part of that re-check.
+     * Defaults to [ResyncOptions.ALL] (the historical "resync everything"
+     * behaviour).
      */
-    suspend fun resyncItem(itemId: String): ResyncResult = withContext(Dispatchers.IO) {
+    suspend fun resyncItem(
+        itemId: String,
+        options: ResyncOptions = ResyncOptions.ALL,
+    ): ResyncResult = withContext(Dispatchers.IO) {
         setProgress(itemId, ResyncPhase.WORKING, ResyncStep.FETCH_DETAIL)
         val steps = mutableListOf<ResyncStepResult>()
         var mediaFileChanged = false
@@ -167,48 +181,62 @@ class OfflineSyncManager @Inject constructor(
             val freshSource = detail.mediaSources.firstOrNull()
             mediaFileChanged = baseline != null && comparator.isMediaSourceChanged(baseline, freshSource)
 
-            setProgress(itemId, ResyncPhase.WORKING, ResyncStep.PERSIST_METADATA)
-            // Preserve the existing local image paths so the re-persisted row
-            // keeps pointing at the on-disk files; only changed image bytes are
-            // overwritten below. Falls back to remote URLs if none persisted yet.
-            val paths = offlineMediaDao.getLocalImagePaths(itemId)
-            val posterPath = paths?.posterPath
-            val backdropPath = paths?.backdropPath
-            writer.saveOfflineMediaDetail(detail, posterPath, backdropPath)
-            steps += ResyncStepResult(itemId, ResyncStep.PERSIST_METADATA, success = true)
+            // Metadata: re-persist the offline detail row. Skipped when the user
+            // only asked for images — the existing metadata row is left as-is.
+            if (options.metadata) {
+                setProgress(itemId, ResyncPhase.WORKING, ResyncStep.PERSIST_METADATA)
+                // Preserve the existing local image paths so the re-persisted row
+                // keeps pointing at the on-disk files; only changed image bytes are
+                // overwritten below. Falls back to remote URLs if none persisted yet.
+                val paths = offlineMediaDao.getLocalImagePaths(itemId)
+                val posterPath = paths?.posterPath
+                val backdropPath = paths?.backdropPath
+                writer.saveOfflineMediaDetail(detail, posterPath, backdropPath)
+                steps += ResyncStepResult(itemId, ResyncStep.PERSIST_METADATA, success = true)
+            }
 
             val parentDir = downloadRepository.getDownloadByMediaItemId(itemId)?.downloadPath
                 ?.let { File(it).parentFile }
             if (parentDir != null) {
-                val posterChanged = baseline == null || comparator.isImageChanged(baseline.posterTag, detail.posterImageTag)
-                if (posterChanged) {
-                    setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_POSTER)
-                    val poster = writer.downloadOfflineImage(
-                        itemId, "Primary", 300, parentDir, DownloadArtifacts.posterFile(itemId),
-                    )
-                    steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_POSTER, success = poster != null)
+                if (options.poster) {
+                    val posterChanged = baseline == null || comparator.isImageChanged(baseline.posterTag, detail.posterImageTag)
+                    if (posterChanged) {
+                        setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_POSTER)
+                        val poster = writer.downloadOfflineImage(
+                            itemId, "Primary", 300, parentDir, DownloadArtifacts.posterFile(itemId),
+                        )
+                        steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_POSTER, success = poster != null)
+                    }
                 }
-                val backdropChanged = baseline == null || comparator.isImageChanged(baseline.backdropTag, detail.backdropImageTag)
-                if (backdropChanged) {
-                    setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_BACKDROP)
-                    val backdrop = writer.downloadOfflineImage(
-                        itemId, "Backdrop", 1280, parentDir, DownloadArtifacts.backdropFile(itemId),
-                    )
-                    steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_BACKDROP, success = backdrop != null)
+                if (options.backdrop) {
+                    val backdropChanged = baseline == null || comparator.isImageChanged(baseline.backdropTag, detail.backdropImageTag)
+                    if (backdropChanged) {
+                        setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_BACKDROP)
+                        val backdrop = writer.downloadOfflineImage(
+                            itemId, "Backdrop", 1280, parentDir, DownloadArtifacts.backdropFile(itemId),
+                        )
+                        steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_BACKDROP, success = backdrop != null)
+                    }
                 }
             }
 
             setProgress(itemId, ResyncPhase.WORKING, ResyncStep.UPDATE_BASELINE)
-            val newBaseline = comparator.baseline(detail)
+            val freshBaseline = comparator.baseline(detail)
+            // Effective baseline blends synced-fresh values with the retained
+            // (skipped-category) values from the prior baseline. Re-running the
+            // comparator against it yields an accurate update-available flag:
+            // a partial sync clears the flag only for the synced categories.
+            val effectiveBaseline = baseline.mergePartial(freshBaseline, options, baseline == null)
+            val recheck = comparator.diff(effectiveBaseline, detail, itemId)
             offlineMediaDao.updateSyncBaseline(
                 itemId = itemId,
-                posterTag = newBaseline.posterTag,
-                backdropTag = newBaseline.backdropTag,
-                metadataSignature = newBaseline.metadataSignature,
-                mediaSourceId = newBaseline.mediaSourceId,
-                mediaSizeBytes = newBaseline.mediaSizeBytes,
+                posterTag = effectiveBaseline.posterTag,
+                backdropTag = effectiveBaseline.backdropTag,
+                metadataSignature = effectiveBaseline.metadataSignature,
+                mediaSourceId = freshBaseline.mediaSourceId,
+                mediaSizeBytes = freshBaseline.mediaSizeBytes,
                 lastSyncedAt = System.currentTimeMillis(),
-                updateAvailable = 0,
+                updateAvailable = if (recheck.state.needsResync) 1 else 0,
                 mediaChanged = if (mediaFileChanged) 1 else 0,
                 checking = 0,
                 error = 0,
@@ -227,15 +255,16 @@ class OfflineSyncManager @Inject constructor(
      * Resyncs multiple items sequentially (concurrency = 1 to keep bandwidth
      * predictable and avoid competing with active downloads). Each item's
      * progress flows through [batchProgress]. Fire-and-forget on [appScope].
+     * [options] is applied to every item in the batch.
      */
-    fun resyncBatch(itemIds: List<String>) {
+    fun resyncBatch(itemIds: List<String>, options: ResyncOptions = ResyncOptions.ALL) {
         if (itemIds.isEmpty()) return
         _batchProgress.value = ResyncBatchProgress(
             items = itemIds.associateWith { ResyncItemProgress(it, ResyncPhase.PENDING) },
             total = itemIds.size,
         )
         appScope.launch {
-            for (id in itemIds) resyncItem(id)
+            for (id in itemIds) resyncItem(id, options)
         }
     }
 
@@ -320,6 +349,32 @@ private fun SyncBaselineRow.toSyncBaseline(): SyncBaseline = SyncBaseline(
     mediaSourceId = syncedMediaSourceId,
     mediaSizeBytes = syncedMediaSizeBytes,
 )
+
+/**
+ * Blends this (prior) baseline with a [fresh] one according to [options]:
+ * synced categories take the fresh value, skipped categories retain the prior
+ * value. When there was no prior baseline ([firstSync]), every category takes
+ * the fresh value regardless of selection — otherwise a partial first sync
+ * would seed an all-empty baseline and spuriously flag the skipped categories
+ * as "changed" on the next check.
+ */
+private fun SyncBaseline?.mergePartial(
+    fresh: SyncBaseline,
+    options: ResyncOptions,
+    firstSync: Boolean,
+): SyncBaseline = if (this == null || firstSync) {
+    fresh
+} else {
+    SyncBaseline(
+        posterTag = if (options.poster) fresh.posterTag else posterTag,
+        backdropTag = if (options.backdrop) fresh.backdropTag else backdropTag,
+        metadataSignature = if (options.metadata) fresh.metadataSignature else metadataSignature,
+        // Media-source id/size are always recomputed from the fresh detail
+        // (not user-selectable); they never retain a stale value.
+        mediaSourceId = fresh.mediaSourceId,
+        mediaSizeBytes = fresh.mediaSizeBytes,
+    )
+}
 
 /** True when at least the metadata signature was ever recorded (vs. pre-feature rows). */
 private fun SyncBaselineRow.hasStoredBaseline(): Boolean =

@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
+import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.formatEta
 import com.raulshma.jellyplay.core.model.formatSpeed
@@ -33,6 +34,21 @@ data class DownloadsUiState(
     /** Stable ids currently in selection mode. */
     val selectedIds: Set<String> = emptySet(),
     val selectionMode: Boolean = false,
+)
+
+/**
+ * A completed item eligible for a force resync, with enough episode context
+ * (series name + SxxExx) to render the same identification line the downloads
+ * list shows, so episodes are distinguishable in the force-resync picker.
+ */
+@Immutable
+data class ForceResyncCandidate(
+    val id: String,
+    val name: String,
+    val mediaType: com.raulshma.jellyplay.core.model.MediaType,
+    val seriesName: String? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
 )
 
 @HiltViewModel
@@ -257,6 +273,38 @@ class DownloadsViewModel @Inject constructor(
     fun clearResyncProgress() {
         syncManager.clearBatchProgress()
     }
+
+    /**
+     * Force-resyncs an explicit set of completed items, refreshing only the
+     * data categories in [options]. Unlike [resyncAll], this is user-directed
+     * (any completed item, not just flagged ones) and partial (skipped
+     * categories retain their baseline). Progress flows through [resyncProgress].
+     */
+    fun forceResync(itemIds: List<String>, options: ResyncOptions) {
+        if (itemIds.isEmpty() || options.isEmpty) return
+        syncManager.resyncBatch(itemIds, options)
+    }
+
+    /**
+     * Completed downloads available for a force resync, deduplicated by media
+     * item id. Drives the item picker in the force-resync sheet. Carries the
+     * episode context (series name + SxxExx) so episodes are identifiable in
+     * the picker, mirroring the context line on the downloads list.
+     */
+    fun forceResyncCandidates(): List<ForceResyncCandidate> =
+        _uiState.value.downloads
+            .filter { it.status == DownloadStatus.COMPLETED }
+            .distinctBy { it.mediaItemId }
+            .map {
+                ForceResyncCandidate(
+                    id = it.mediaItemId,
+                    name = it.name,
+                    mediaType = it.mediaType,
+                    seriesName = it.seriesName,
+                    seasonNumber = it.seasonNumber,
+                    episodeNumber = it.episodeNumber,
+                )
+            }
 
     fun formatBytes(bytes: Long): String = bytes.formatBytes()
 

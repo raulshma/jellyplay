@@ -376,7 +376,23 @@ class OfflineRepositoryImpl @Inject constructor(
 
     override fun getItemsWithUpdates(): Flow<List<OfflineSyncUpdate>> =
         offlineMediaDao.getItemsWithUpdates().map { rows ->
-            rows.map { OfflineSyncUpdate(it.id, it.name, it.mediaFileChanged == 1) }
+            rows.map {
+                OfflineSyncUpdate(
+                    id = it.id,
+                    name = it.name,
+                    mediaFileChanged = it.mediaFileChanged == 1,
+                    // Map the raw DB string to the typed enum at the repository
+                    // boundary so the UI never compares against a magic string.
+                    // Matches DownloadRepositoryImpl's mediaType mapping.
+                    mediaType = it.mediaType?.let { mt ->
+                        com.raulshma.jellyplay.core.model.MediaType.values()
+                            .firstOrNull { e -> e.name.equals(mt, ignoreCase = true) }
+                    },
+                    seriesName = it.seriesName,
+                    seasonNumber = it.seasonNumber,
+                    episodeNumber = it.episodeNumber,
+                )
+            }
         }
 
     override suspend fun getDownloadedItemIds(): List<String> =
