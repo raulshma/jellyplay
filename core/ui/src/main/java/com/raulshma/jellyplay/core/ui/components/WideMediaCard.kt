@@ -72,7 +72,7 @@ fun WideMediaCard(
                 crossfade = false,
             )
         },
-        title = item.name,
+        title = item.displayTitle(),
         modifier = modifier,
         aspectRatio = 16f / 9f,
         clipToShape = clipToShape,

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.library.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -263,7 +264,8 @@ fun TagFilterSheet(
     )
 }
 
-/** Year-range sheet — decade presets (multi-select toggle), reusing core/ui helpers. */
+/** Year-range sheet — decade presets (multi-select toggle) plus a custom
+ * From/To slider range, reusing core/ui helpers. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun YearRangeFilterSheet(
@@ -273,23 +275,30 @@ fun YearRangeFilterSheet(
 ) {
     val presets = remember { yearRangePresets() }
     FilterSelectionSheet(title = stringResource(R.string.library_year_range), onDismiss = onDismiss) {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            GlassFilterChip(
-                label = stringResource(R.string.library_any),
-                selected = current.isEmpty(),
-                onClick = { onApply(emptySet()) },
-            )
-            presets.forEach { preset ->
-                val selection = yearPresetSelection(preset, current)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 GlassFilterChip(
-                    label = preset.label,
-                    selected = selection == YearPresetSelection.Full,
-                    onClick = { onApply(toggleYearPreset(preset, current)) },
+                    label = stringResource(R.string.library_any),
+                    selected = current.isEmpty(),
+                    onClick = { onApply(emptySet()) },
                 )
+                presets.forEach { preset ->
+                    val selection = yearPresetSelection(preset, current)
+                    GlassFilterChip(
+                        label = preset.label,
+                        selected = selection == YearPresetSelection.Full,
+                        onClick = { onApply(toggleYearPreset(preset, current)) },
+                    )
+                }
             }
+
+            CustomYearRangeSelector(
+                current = current,
+                onRangeChange = { range -> onApply(range.toSet()) },
+            )
         }
     }
 }

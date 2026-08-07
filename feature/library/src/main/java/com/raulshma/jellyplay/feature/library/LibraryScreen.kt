@@ -64,6 +64,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
+import com.raulshma.jellyplay.core.ui.components.displayTitle
+import com.raulshma.jellyplay.core.ui.components.rememberSeriesImageFallback
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
@@ -147,6 +149,7 @@ import com.raulshma.jellyplay.feature.library.components.GenreFilterSheet
 import com.raulshma.jellyplay.feature.library.components.TagFilterSheet
 import com.raulshma.jellyplay.feature.library.components.YearRangeFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
+import com.raulshma.jellyplay.feature.library.components.LibraryResetConfirmDialog
 import com.raulshma.jellyplay.feature.library.components.ThumbCard
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
 import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
@@ -186,6 +189,7 @@ fun LibraryScreen(
     val sectionTitle by viewModel.title.collectAsStateWithLifecycle()
     val posterSize by viewModel.posterSize.collectAsStateWithLifecycle()
     val groupBy by viewModel.groupBy.collectAsStateWithLifecycle()
+    val resetDialogVisible by viewModel.resetDialogVisible.collectAsStateWithLifecycle()
 
     // Section mode: configure the VM once with the injected context. Idempotent
     // (configureSection early-returns on an equal context) so recomposition is
@@ -245,10 +249,11 @@ fun LibraryScreen(
         }
     }
     val isAnySheetOpen = openFilterSheet != null || showPosterSizeSheet || showGroupBySheet
-    val backHandlerEnabled = showFilters || isAnySheetOpen || (!inSectionMode && hasActiveFilters)
+    val backHandlerEnabled = showFilters || isAnySheetOpen || resetDialogVisible || (!inSectionMode && hasActiveFilters)
 
     BackHandler(enabled = backHandlerEnabled) {
         when {
+            resetDialogVisible -> viewModel.dismissResetDialog()
             showFilters -> viewModel.toggleShowFilters() // closes when open
             openFilterSheet != null -> openFilterSheet = null
             showPosterSizeSheet -> showPosterSizeSheet = false
@@ -369,6 +374,32 @@ fun LibraryScreen(
                                 errorMessage = error,
                                 modifier = Modifier.padding(start = 8.dp),
                             )
+                            if (!inSectionMode) {
+                                // Reset-all pill — matches the screen's chip/action
+                                // language (glass chip, press scale, TV focus glow).
+                                com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer(
+                                    onClick = { viewModel.onResetClick() },
+                                    containerColor = if (LocalIsLightTheme.current) {
+                                        Color.Black.copy(alpha = 0.06f)
+                                    } else {
+                                        Color.White.copy(alpha = 0.12f)
+                                    },
+                                    modifier = Modifier.padding(start = 4.dp),
+                                ) {
+                                    Icon(
+                                        Tabler.Outline.Restore,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.library_reset),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -694,10 +725,14 @@ fun LibraryScreen(
                                                         // grouped list path via libraryListSubtitle.
                                                         item.libraryListSubtitle()
                                                     }
+                                                    // Seasons fall back to the parent series poster when the
+                                                    // season's own artwork 404s (shared with the grouped list).
+                                                    val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
                                                     LibraryListItem(
-                                                        title = item.name,
+                                                        title = item.displayTitle(),
                                                         subtitle = subtitle,
                                                         imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                        fallbackUrls = fallbackUrls,
                                                         blurHash = item.blurHashes.primary,
                                                         onClick = memoizedClick,
                                                         modifier = Modifier.animateItem(placementSpec = placementSpec),
@@ -729,6 +764,9 @@ fun LibraryScreen(
                                                     { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
                                                 val itemProgress = item.progressFraction()
+                                                // Seasons fall back to the parent series poster when the
+                                                // season's own artwork 404s in the thumb view too.
+                                                val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
                                                 ThumbCard(
                                                     item = item,
                                                     imageUrl = remember(item.id, item.blurHashes.backdrop) {
@@ -738,6 +776,7 @@ fun LibraryScreen(
                                                             viewModel.getImageUrl(item.id)
                                                         }
                                                     },
+                                                    fallbackUrls = fallbackUrls,
                                                     onClick = memoizedClick,
                                                     showProgress = itemProgress != null && itemProgress > 0f,
                                                     progressPercent = itemProgress ?: 0f,
@@ -1042,6 +1081,13 @@ fun LibraryScreen(
         } // close CompositionLocalProvider
     }
     MediaQuickActionHost(quickActionController)
+
+    if (resetDialogVisible) {
+        LibraryResetConfirmDialog(
+            onConfirm = { dontShowAgain -> viewModel.confirmResetAll(dontShowAgain) },
+            onDismiss = { viewModel.dismissResetDialog() },
+        )
+    }
 
     if (showFilters) {
         LibraryFilterSheet(

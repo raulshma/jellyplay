@@ -301,6 +301,12 @@ fun LibraryFilterSheet(
                         )
                     }
                 }
+
+                CustomYearRangeSelector(
+                    current = selectedYears,
+                    onRangeChange = { range -> selectedYears = range.toSet() },
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
 
             // ── Tags (collapsed by default) ──

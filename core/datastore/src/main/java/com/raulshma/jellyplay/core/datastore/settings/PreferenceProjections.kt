@@ -484,6 +484,7 @@ class PreferenceProjections @Inject constructor(
             hideEpisodeThumbnails = g1.library.hideEpisodeThumbnails,
             skipSpecials = g1.library.skipSpecials,
             compactEpisodeList = g1.library.compactEpisodeList,
+            confirmLibraryReset = g1.library.confirmLibraryReset,
             showExternalRatings = g1.home.showExternalRatings,
             showShareMediaOption = g1.experimental.showShareMediaOption,
             hideSearchHistory = g1.experimental.hideSearchHistory,

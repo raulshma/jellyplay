@@ -303,12 +303,13 @@ fun PosterCard(
 
     // For episode cards in Latest Media rows, show the series name as the title
     // (the episode title alone doesn't identify the show); the season/episode
-    // chip on the image carries the S# E# context.
+    // chip on the image carries the S# E# context. Seasons use displayTitle so a
+    // flat season row shows "S01 - Series" instead of an ambiguous "Season 1".
     val titleText = remember(item, showEpisodeSeriesBadge) {
         if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
-            item.seriesName?.takeIf { it.isNotBlank() } ?: item.name
+            item.seriesName?.takeIf { it.isNotBlank() } ?: item.displayTitle()
         } else {
-            item.name
+            item.displayTitle()
         }
     }
 
