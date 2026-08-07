@@ -8,10 +8,11 @@ import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.model.GroupBy
+import com.raulshma.jellyplay.core.model.LibraryFilters
+import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibrarySectionContext
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
@@ -19,10 +20,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import com.raulshma.jellyplay.core.model.LibraryFolder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -65,6 +64,9 @@ class LibraryViewModelTest {
         libraryStore = libraryStore,
     )
 
+    /** Browser-state snapshot, the single source of truth post-refactor. */
+    private fun LibraryViewModel.state() = browserState.value
+
     @Test
     fun `configureSection scopes selectedFolder to parentId and pre-applies Date Added sort`() = runTest {
         val vm = createViewModel()
@@ -77,10 +79,10 @@ class LibraryViewModelTest {
             )
         )
 
-        val folder = vm.selectedFolder.value
-        assertEquals("lib-movies", folder?.id)
-        assertEquals("Latest Movies", vm.title.value)
-        assertEquals(SortOption.DATE_ADDED, vm.filters.value.sortBy)
+        val state = vm.state()
+        assertEquals("lib-movies", state.folder?.id)
+        assertEquals("Latest Movies", state.title)
+        assertEquals(SortOption.DATE_ADDED, state.filters.sortBy)
     }
 
     @Test
@@ -94,8 +96,9 @@ class LibraryViewModelTest {
             )
         )
 
-        assertNull(vm.selectedFolder.value)
-        assertEquals(SortOption.DATE_ADDED, vm.filters.value.sortBy)
+        val state = vm.state()
+        assertNull(state.folder)
+        assertEquals(SortOption.DATE_ADDED, state.filters.sortBy)
     }
 
     @Test
@@ -113,8 +116,9 @@ class LibraryViewModelTest {
             )
         )
 
-        assertEquals(emptyList<MediaType>(), vm.filters.value.mediaTypes)
-        assertEquals(SortOption.DATE_ADDED, vm.filters.value.sortBy)
+        val state = vm.state()
+        assertEquals(emptyList<MediaType>(), state.filters.mediaTypes)
+        assertEquals(SortOption.DATE_ADDED, state.filters.sortBy)
     }
 
     @Test
@@ -129,7 +133,7 @@ class LibraryViewModelTest {
             )
         )
 
-        assertEquals(emptyList<MediaType>(), vm.filters.value.mediaTypes)
+        assertEquals(emptyList<MediaType>(), vm.state().filters.mediaTypes)
     }
 
     @Test
@@ -144,7 +148,7 @@ class LibraryViewModelTest {
             )
         )
 
-        assertEquals(emptyList<MediaType>(), vm.filters.value.mediaTypes)
+        assertEquals(emptyList<MediaType>(), vm.state().filters.mediaTypes)
     }
 
     @Test
@@ -162,7 +166,7 @@ class LibraryViewModelTest {
             )
         )
 
-        assertEquals(listOf(MediaType.MOVIE), vm.filters.value.mediaTypes)
+        assertEquals(listOf(MediaType.MOVIE), vm.state().filters.mediaTypes)
     }
 
     @Test
@@ -179,16 +183,17 @@ class LibraryViewModelTest {
                 sortBy = SortOption.DATE_ADDED.apiValue,
             )
         )
-        assertNotNull(vm.sectionContext.value)
-        assertEquals("Latest Shows", vm.title.value)
-        assertNotNull(vm.selectedFolder.value)
+        assertNotNull(vm.state().sectionContext)
+        assertEquals("Latest Shows", vm.state().title)
+        assertNotNull(vm.state().folder)
 
         vm.clearSectionMode()
 
-        assertNull(vm.sectionContext.value)
-        assertNull(vm.title.value)
-        assertNull(vm.selectedFolder.value)
-        assertEquals(LibraryFilters(), vm.filters.value)
+        val state = vm.state()
+        assertNull(state.sectionContext)
+        assertNull(state.title)
+        assertNull(state.folder)
+        assertEquals(LibraryFilters(), state.filters)
     }
 
     @Test
@@ -196,8 +201,9 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         // Not in section mode — clearing should be a safe no-op.
         vm.clearSectionMode()
-        assertNull(vm.sectionContext.value)
-        assertEquals(LibraryFilters(), vm.filters.value)
+        val state = vm.state()
+        assertNull(state.sectionContext)
+        assertEquals(LibraryFilters(), state.filters)
     }
 
     @Test
@@ -215,7 +221,7 @@ class LibraryViewModelTest {
         // No persistence calls should fire for a synthetic (section) folder.
         coVerify(exactly = 0) { libraryStore.setLibraryFilters(any(), any()) }
         coVerify(exactly = 0) { libraryStore.setDefaultLibrarySortOrder(any(), any()) }
-        assertEquals(SortOption.RATING, vm.filters.value.sortBy)
+        assertEquals(SortOption.RATING, vm.state().filters.sortBy)
     }
 
     @Test
@@ -247,10 +253,24 @@ class LibraryViewModelTest {
         val vm = createViewModel()
         vm.selectFolder(LibraryFolder(id = "lib-1", name = "Movies"))
 
-        assertEquals(listOf(MediaType.MOVIE), vm.filters.value.mediaTypes)
-        assertEquals(SortOption.RATING, vm.filters.value.sortBy)
-        assertEquals(PlayedStatus.UNPLAYED, vm.filters.value.playedStatus)
-        assertEquals(listOf("fav"), vm.filters.value.tags)
+        val filters = vm.state().filters
+        assertEquals(listOf(MediaType.MOVIE), filters.mediaTypes)
+        assertEquals(SortOption.RATING, filters.sortBy)
+        assertEquals(com.raulshma.jellyplay.core.model.PlayedStatus.UNPLAYED, filters.playedStatus)
+        assertEquals(listOf("fav"), filters.tags)
+    }
+
+    @Test
+    fun `selectFolder applies collectionType default view mode with no saved override`() = runTest {
+        // Regression for the divergence the refactor fixes: the old sync
+        // selectFolder() path omitted defaultViewMode(), so a music folder with
+        // no saved view-mode override rendered as a grid instead of a list.
+        every { libraryStore.library } returns MutableStateFlow(
+            LibrarySlice(libraryViewMode = LibraryViewMode.GRID),
+        )
+        val vm = createViewModel()
+        vm.selectFolder(LibraryFolder(id = "lib-music", name = "Music", collectionType = "music"))
+        assertEquals(LibraryViewMode.LIST, vm.state().viewMode)
     }
 
     @Test
@@ -267,8 +287,9 @@ class LibraryViewModelTest {
     @Test
     fun `default tab mode has null title`() = runTest {
         val vm = createViewModel()
-        assertNull(vm.title.value)
-        assertNull(vm.sectionContext.value)
+        val state = vm.state()
+        assertNull(state.title)
+        assertNull(state.sectionContext)
     }
 
     @Test
@@ -289,12 +310,13 @@ class LibraryViewModelTest {
         vm.resetToDefault()
         advanceUntilIdle()
 
-        assertNull(vm.selectedFolder.value)
-        assertEquals(LibraryFilters(), vm.filters.value)
-        assertEquals(1.0f, vm.posterSize.value)
-        assertEquals(GroupBy.NONE, vm.groupBy.value)
+        val state = vm.state()
+        assertNull(state.folder)
+        assertEquals(LibraryFilters(), state.filters)
+        assertEquals(1.0f, state.posterSize)
+        assertEquals(GroupBy.NONE, state.groupBy)
         // Folder is null, so the view mode derives back to the global default.
-        assertEquals(LibraryViewMode.GRID, vm.viewMode.value)
+        assertEquals(LibraryViewMode.GRID, state.viewMode)
 
         coVerify { libraryStore.setLibraryPosterSize(1.0f) }
         coVerify { libraryStore.setLibraryGroupBy(GroupBy.NONE) }
@@ -324,7 +346,39 @@ class LibraryViewModelTest {
 
         coVerify(exactly = 0) { libraryStore.setLibraryFilters(any(), any()) }
         coVerify(exactly = 0) { libraryStore.setDefaultLibrarySortOrder(any(), any()) }
-        assertNull(vm.selectedFolder.value)
-        assertEquals(LibraryFilters(), vm.filters.value)
+        val state = vm.state()
+        assertNull(state.folder)
+        assertEquals(LibraryFilters(), state.filters)
+    }
+
+    @Test
+    fun `section view-mode mutation does not leak into real library prefs`() = runTest {
+        // Issue #113 regression: enter a section ("See All" deep-link), mutate
+        // the view mode while inside it, leave the section, and assert the real
+        // library's per-folder view-mode prefs were never written (the section's
+        // synthetic parentId must never be persisted as a library key).
+        coEvery { libraryStore.setLibraryViewMode(any()) } returns Unit
+        coEvery { libraryStore.setLibraryViewMode(any(), any()) } returns Unit
+
+        val vm = createViewModel()
+        vm.configureSection(
+            LibrarySectionContext(
+                title = "Latest Shows",
+                parentId = "lib-tv",
+                collectionType = "tvshows",
+                sortBy = SortOption.DATE_ADDED.apiValue,
+            )
+        )
+        // Mutate view mode while inside the section.
+        vm.setViewMode(LibraryViewMode.LIST)
+        advanceUntilIdle()
+
+        // The global default write is fine; the per-folder write for the
+        // section's synthetic parentId must NOT happen.
+        coVerify(exactly = 0) { libraryStore.setLibraryViewMode("lib-tv", any()) }
+
+        // Leaving the section restores the default browsing view.
+        vm.clearSectionMode()
+        assertNull(vm.state().sectionContext)
     }
 }

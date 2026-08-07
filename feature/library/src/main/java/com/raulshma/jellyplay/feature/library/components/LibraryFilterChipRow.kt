@@ -25,8 +25,8 @@ import com.raulshma.jellyplay.core.ui.components.yearRangePresets
 import com.raulshma.jellyplay.core.ui.components.toggleYearPreset
 import com.raulshma.jellyplay.core.ui.components.YearPresetSelection
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.feature.library.LibraryFilters
 import com.raulshma.jellyplay.feature.library.R
 
 /**

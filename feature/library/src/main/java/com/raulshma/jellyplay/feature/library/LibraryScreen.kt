@@ -180,15 +180,26 @@ fun LibraryScreen(
     val folders by viewModel.folders.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
-    val selectedFolder by viewModel.selectedFolder.collectAsStateWithLifecycle()
-    val filters by viewModel.filters.collectAsStateWithLifecycle()
+    // One browser-state object owns {folder, filters, viewMode, groupBy,
+    // posterSize, sectionContext, title} — replacing 13 individual
+    // collectAsStateWithLifecycle reads that re-derived presentation from
+    // scattered sources. "In section mode" now derives from the state, unifying
+    // the two drift-prone sources (screen used to trust the nav-arg, the VM
+    // trusted its own _sectionContext). The nav-arg still drives the
+    // LaunchedEffect below; it just stops being a parallel source of truth for
+    // gating.
+    val browser by viewModel.browserState.collectAsStateWithLifecycle()
+    // Destructured from the single browser subscription above (one state read,
+    // not 13). The body keeps the plain field names for readability.
+    val selectedFolder = browser.folder
+    val filters = browser.filters
+    val viewMode = browser.viewMode
+    val sectionTitle = browser.title
+    val posterSize = browser.posterSize
+    val groupBy = browser.groupBy
     val genres by viewModel.genres.collectAsStateWithLifecycle()
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
-    val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
-    val sectionTitle by viewModel.title.collectAsStateWithLifecycle()
-    val posterSize by viewModel.posterSize.collectAsStateWithLifecycle()
-    val groupBy by viewModel.groupBy.collectAsStateWithLifecycle()
     val resetDialogVisible by viewModel.resetDialogVisible.collectAsStateWithLifecycle()
 
     // Section mode: configure the VM once with the injected context. Idempotent
@@ -235,7 +246,10 @@ fun LibraryScreen(
     // Hoisted (not local to the MASONRY branch) so the alphabet rail can drive
     // the staggered grid's scroll state from the screen root.
     val staggeredState = rememberLazyStaggeredGridState()
-    val inSectionMode = sectionContext != null
+    // Derives from the browser state (the single source of truth), not the
+    // nav-arg parameter — the two used to drift. The nav-arg still drives the
+    // configureSection/clearSectionMode LaunchedEffect above.
+    val inSectionMode = browser.isSection
     // Which (if any) per-filter sheet is open. Null = none. Hoisted here so the
     // chips toggle it and the matching sheet renders at the screen root.
     var openFilterSheet by remember { mutableStateOf<FilterSheetKind?>(null) }
@@ -243,9 +257,9 @@ fun LibraryScreen(
     var showGroupBySheet by remember { mutableStateOf(false) }
     val hasActiveFilters by remember {
         derivedStateOf {
-            filters.mediaTypes.isNotEmpty() ||
-                filters.genres.isNotEmpty() ||
-                filters.playedStatus != PlayedStatus.ALL
+            browser.filters.mediaTypes.isNotEmpty() ||
+                browser.filters.genres.isNotEmpty() ||
+                browser.filters.playedStatus != PlayedStatus.ALL
         }
     }
     val isAnySheetOpen = openFilterSheet != null || showPosterSizeSheet || showGroupBySheet
@@ -294,11 +308,11 @@ fun LibraryScreen(
         bottom = bottomPad,
     )
 
-    val gridCellSize = adaptiveInfo.gridCellSize(isTv) / posterSize
+    val gridCellSize = adaptiveInfo.gridCellSize(isTv) / browser.posterSize
     // Landscape thumbnails are wider than they are tall (16:9), so the THUMB
     // grid needs a larger min cell width than the poster (2:3) grid to avoid
     // rendering tiny cards. Scaled from the same adaptive baseline.
-    val thumbCellSize = adaptiveInfo.gridCellSize(isTv) / posterSize * (16f / 9f) * (3f / 4f)
+    val thumbCellSize = adaptiveInfo.gridCellSize(isTv) / browser.posterSize * (16f / 9f) * (3f / 4f)
 
     Box(
         modifier = Modifier
@@ -356,7 +370,7 @@ fun LibraryScreen(
                                 Spacer(Modifier.width(8.dp))
                             }
                             Text(
-                                text = sectionTitle ?: stringResource(R.string.library_title),
+                                text = browser.title ?: stringResource(R.string.library_title),
                                 // Matches MediaDetail's DetailTopBar title treatment
                                 // (titleLarge / SemiBold) rather than the old
                                 // headlineLarge / Bold — keeps the library header
@@ -424,7 +438,7 @@ fun LibraryScreen(
                                 item {
                                     GlassPill(
                                         label = stringResource(R.string.library_all),
-                                        selected = selectedFolder == null,
+                                        selected = browser.folder == null,
                                         onClick = { viewModel.selectFolder(null) },
                                     )
                                 }
@@ -434,7 +448,7 @@ fun LibraryScreen(
                                     Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
                                         GlassPill(
                                             label = folder.name,
-                                            selected = selectedFolder?.id == folder.id,
+                                            selected = browser.folder?.id == folder.id,
                                             onClick = { viewModel.selectFolder(folder) },
                                         )
                                     }

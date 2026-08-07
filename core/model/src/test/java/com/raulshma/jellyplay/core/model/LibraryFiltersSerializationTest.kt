@@ -1,25 +1,21 @@
-package com.raulshma.jellyplay.feature.library
+package com.raulshma.jellyplay.core.model
 
-import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.PlayedStatus
-import com.raulshma.jellyplay.core.model.SortOption
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Round-trip + legacy-format tests for the now-directly-serializable
- * [LibraryFilters]. These pin two things:
+ * Round-trip + legacy-format tests for [LibraryFilters].
  *
- * 1. The on-disk wire format is unchanged after deleting `SavedLibraryFilters`
- *    (enums serialise by Kotlin `.name`, exactly what the String mirror stored).
- * 2. The decode resilience boundary (unknown enum → fallback) holds, since
- *    `Json { ignoreUnknownKeys = true }` does not suppress unknown enum
- *    constants — that path stays wrapped in try/catch at the call site.
+ * Moved to core/model alongside the type (the type was promoted out of the
+ * feature module so [LibraryBrowserState]/[LibraryBrowserReducer] can live in
+ * core/model). The on-disk wire format is unchanged from the legacy
+ * `SavedLibraryFilters` mirror — enums serialise by Kotlin `.name`, exactly what
+ * the String mirror stored.
  */
 class LibraryFiltersSerializationTest {
 
-    // Mirrors the private `libraryJson` in LibraryViewModel.kt — same flags.
+    // Mirrors the `libraryJson` in LibraryViewModel.kt — same flags.
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -47,8 +43,6 @@ class LibraryFiltersSerializationTest {
     fun `decodes the legacy SavedLibraryFilters wire format`() {
         // Exact JSON shape the deleted String-typed mirror used to emit:
         // enum fields stored as their .name, everything else as-is.
-        // `encodeDefaults` on the mirror guaranteed all 7 keys were present,
-        // but decode must also tolerate any subset (older backups).
         val legacy = """
             {
               "mediaTypes": ["MOVIE", "EPISODE"],
@@ -101,8 +95,6 @@ class LibraryFiltersSerializationTest {
 
     @Test
     fun `unknown object keys are ignored on decode`() {
-        // Forward-compatibility: a future field added to LibraryFilters and
-        // then removed again must not poison older decoders.
         val decoded = json.decodeFromString<LibraryFilters>(
             """{"sortBy":"RATING","futureField":42}""",
         )
