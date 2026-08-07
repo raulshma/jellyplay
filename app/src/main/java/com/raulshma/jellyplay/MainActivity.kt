@@ -12,6 +12,7 @@ import android.content.pm.PackageManager
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.graphics.Color
 import androidx.activity.SystemBarStyle
@@ -617,7 +618,14 @@ class MainActivity : FragmentActivity() {
                     PIP_ACTION_NEXT -> PipAction.NEXT
                     else -> return
                 }
-                pipController.pipTransport?.handle(action)
+                val transport = pipController.pipTransport
+                if (transport == null) {
+                    // A stale/unregistered transport silently drops PiP actions.
+                    // Log so it's diagnosable instead of dead PIP buttons.
+                    Log.w(TAG, "PiP action $action dropped: pipTransport is null")
+                } else {
+                    transport.handle(action)
+                }
                 // The play/pause toggle changes the icon — refresh immediately.
                 refreshPipActions()
             }
@@ -647,6 +655,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private companion object {
+        const val TAG = "MainActivity"
         const val PIP_ACTION_BROADCAST = "com.raulshma.jellyplay.PIP_ACTION"
         const val PIP_ACTION_EXTRA = "pip_action_id"
         const val PIP_ACTION_PLAY = 1
