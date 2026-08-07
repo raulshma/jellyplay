@@ -79,6 +79,10 @@
     <string name="widget_config_source_upcoming_movies_description">Films qui sortent bientôt</string>
     <string name="widget_config_source_upcoming_tv">Séries à venir</string>
     <string name="widget_config_source_upcoming_tv_description">Séries qui débutent bientôt</string>
+    <string name="widget_cw_item_count">Éléments à afficher</string>
+    <string name="widget_np_show_artwork">Afficher la pochette</string>
+    <string name="widget_np_show_progress">Afficher la progression</string>
+    <string name="widget_config_done">Terminé</string>
 
     <!-- In-app self-update sheet -->
     <string name="update_checking">Recherche de mises à jour\u2026</string>

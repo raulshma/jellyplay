@@ -34,7 +34,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -50,7 +52,9 @@ import com.composables.icons.tabler.outline.DeviceDesktop
 import com.composables.icons.tabler.outline.DeviceMobile
 import com.composables.icons.tabler.outline.Edit
 import com.composables.icons.tabler.outline.Refresh
+import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Trash
+import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -59,6 +63,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.SearchField
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -165,35 +170,84 @@ fun DevicesScreen(
                 }
             }
             else -> {
-                PullToRefreshBox(
-                    isRefreshing = state.isRefreshing,
-                    onRefresh = { viewModel.refresh() },
-                ) {
-                    if (state.devices.isEmpty()) {
-                        ScreenEmptyState(
-                            icon = Tabler.Outline.DeviceDesktop,
-                            title = stringResource(R.string.admin_no_devices),
-                        )
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .tvFocusRestorer()
-                                .focusRequester(listFocusRequester),
-                            contentPadding = PaddingValues(
-                                start = 16.dp,
-                                end = 16.dp,
-                                top = 8.dp,
-                                bottom = adaptiveInfo.bottomPadding(isTv),
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            itemsIndexed(items = state.devices, key = { index, device -> "${index}_${device.id}" }) { _, device ->
-                                DeviceItem(
-                                    device = device,
-                                    onEdit = { viewModel.showEditNameDialog(device) },
-                                    onDelete = { viewModel.showDeleteDialog(device) },
-                                )
+                // Search-by-name/user + grouping by last user.
+                var searchQuery by remember { mutableStateOf("") }
+                val query = searchQuery.trim()
+                val filteredDevices = remember(state.devices, query) {
+                    if (query.isEmpty()) state.devices
+                    else state.devices.filter { device ->
+                        query in device.displayName() ||
+                            query in device.appName ||
+                            query in device.lastUserName
+                    }
+                }
+                // Group by last user name so multi-user servers stay scannable.
+                // Empty user names collapse into a single "Unknown" bucket.
+                val unknownUserLabel = stringResource(R.string.admin_unknown)
+                val grouped = remember(filteredDevices, unknownUserLabel) {
+                    filteredDevices.groupBy { it.lastUserName.ifBlank { unknownUserLabel } }
+                        .toList()
+                }
+                Column(modifier = Modifier.fillMaxSize()) {
+                    SearchField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = stringResource(R.string.admin_devices_search_placeholder),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                    PullToRefreshBox(
+                        isRefreshing = state.isRefreshing,
+                        onRefresh = { viewModel.refresh() },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        if (state.devices.isEmpty()) {
+                            ScreenEmptyState(
+                                icon = Tabler.Outline.DeviceDesktop,
+                                title = stringResource(R.string.admin_no_devices),
+                            )
+                        } else if (filteredDevices.isEmpty()) {
+                            ScreenEmptyState(
+                                icon = Tabler.Outline.Search,
+                                title = query,
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .tvFocusRestorer()
+                                    .focusRequester(listFocusRequester),
+                                contentPadding = PaddingValues(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = 8.dp,
+                                    bottom = adaptiveInfo.bottomPadding(isTv),
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                grouped.forEach { (userName, devices) ->
+                                    // Section header per user (only when grouping yields >1 group).
+                                    if (grouped.size > 1) {
+                                        item(key = "header_$userName") {
+                                            Text(
+                                                userName,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+                                            )
+                                        }
+                                    }
+                                    itemsIndexed(
+                                        items = devices,
+                                        key = { index, device -> "${userName}_${index}_${device.id}" },
+                                    ) { _, device ->
+                                        DeviceItem(
+                                            device = device,
+                                            onEdit = { viewModel.showEditNameDialog(device) },
+                                            onDelete = { viewModel.showDeleteDialog(device) },
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

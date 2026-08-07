@@ -169,6 +169,8 @@
     <string name="player_video_set_a_point">A ポイントを設定</string>
     <string name="player_video_set_b_point">B ポイントを設定</string>
     <string name="player_video_clear_ab_repeat">A/B リピートをクリア</string>
+    <string name="player_audio_only">音声のみ</string>
+    <string name="player_audio_only_on">音声のみ — 動画非表示</string>
 
     <!-- Video filter sheet -->
     <string name="player_video_brightness">明るさ</string>

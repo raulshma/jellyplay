@@ -31,6 +31,10 @@
     <string name="livetv_record_series">Serie aufnehmen</string>
     <string name="livetv_cancel_recording">Aufnahme abbrechen</string>
     <string name="livetv_cancel_series">Serie abbrechen</string>
+    <string name="livetv_delete">Löschen</string>
+    <string name="livetv_delete_recording_cd">Aufnahme löschen</string>
+    <string name="livetv_delete_recording_title">Aufnahme löschen?</string>
+    <string name="livetv_delete_recording_body">„%1$s\" löschen? Dies kann nicht rückgängig gemacht werden.</string>
     <string name="livetv_record_success">Aufnahme geplant</string>
     <string name="livetv_record_failed">Aufnahme konnte nicht festgelegt werden</string>
     <string name="livetv_record_canceled">Aufnahme abgebrochen</string>

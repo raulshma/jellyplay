@@ -123,4 +123,36 @@ class PlaylistDetailViewModel @Inject constructor(
     fun clearError() {
         _error.value = null
     }
+
+    /**
+     * Reorders the playlist: moves [item] from its current position to
+     * [newIndex]. Applies the swap optimistically so the list reacts instantly,
+     * then persists it via [MediaRepository.movePlaylistItem]. On failure the
+     * list is reloaded from the server so it reflects the true order.
+     */
+    fun moveItem(item: PlaylistItem, newIndex: Int) {
+        val entryId = item.playlistItemId ?: return
+        val currentId = playlistId
+        if (currentId.isEmpty()) return
+        val current = _items.value
+        val fromIndex = current.indexOfFirst { it.playlistItemId == entryId }
+        if (fromIndex == -1 || fromIndex == newIndex) return
+        // Optimistic in-place reorder.
+        val reordered = current.toMutableList().apply {
+            val moved = removeAt(fromIndex)
+            add(newIndex.coerceIn(0, size), moved)
+        }
+        _items.value = reordered
+        launch {
+            _isMutating.value = true
+            _error.value = null
+            mediaRepository.movePlaylistItem(currentId, entryId, newIndex)
+                .onFailure {
+                    _error.value = it.message ?: "Failed to reorder playlist"
+                    // Roll back to the server's authoritative order.
+                    load(currentId, playlistName)
+                }
+            _isMutating.value = false
+        }
+    }
 }

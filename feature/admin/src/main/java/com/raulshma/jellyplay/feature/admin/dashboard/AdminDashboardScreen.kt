@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.dashboard.components.ActiveSessionsSection
+import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.feature.admin.dashboard.components.LibraryStatsRow
 import com.raulshma.jellyplay.feature.admin.dashboard.components.QuickActionsSection
 import com.raulshma.jellyplay.feature.admin.dashboard.components.RecentActivityTimeline
@@ -123,6 +124,38 @@ fun AdminDashboardScreen(
         )
     }
 
+    // Stop active playback confirm dialog. Session to stop is held in VM
+    // state so it survives recomposition; dismissed on confirm/cancel/away-tap.
+    state.pendingStopSession?.let { session ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissStopSessionDialog() },
+            title = { Text(stringResource(R.string.admin_stop_session_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.admin_stop_session_body,
+                        session.userName.ifBlank { session.deviceName },
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.stopSession() },
+                    enabled = !state.isStoppingSession,
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text(stringResource(R.string.admin_stop)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.dismissStopSessionDialog() },
+                    enabled = !state.isStoppingSession,
+                ) { Text(stringResource(R.string.admin_cancel)) }
+            },
+        )
+    }
+
     JellyPlayScreenScaffold(
         title = stringResource(R.string.admin_dashboard_title),
         onBack = onBack,
@@ -172,6 +205,7 @@ fun AdminDashboardScreen(
                     onWatchedMediaCleanup = onWatchedMediaCleanup,
                     onPlugins = onPlugins,
                     onUsers = onUsers,
+                    onStopSession = { viewModel.showStopSessionDialog(it) },
                     contentFocusRequester = contentFocusRequester,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -197,6 +231,7 @@ private fun DashboardContent(
     onWatchedMediaCleanup: () -> Unit = {},
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
+    onStopSession: (SessionInfo) -> Unit = {},
     contentFocusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
@@ -258,6 +293,7 @@ private fun DashboardContent(
                             ActiveSessionsSection(
                                 sessions = state.sessions,
                                 onViewAll = onDevices,
+                                onStop = onStopSession,
                             )
                         }
                     }
@@ -279,6 +315,7 @@ private fun DashboardContent(
                     ActiveSessionsSection(
                         sessions = state.sessions,
                         onViewAll = onDevices,
+                        onStop = onStopSession,
                     )
                 }
             }

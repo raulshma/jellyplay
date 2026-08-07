@@ -20,6 +20,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -37,23 +38,27 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.ui.animation.horizontalFadingEdges
+import com.raulshma.jellyplay.core.ui.components.SearchField
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.feature.requests.R
 
 @Composable
 fun RequestsFilterBar(
-    currentFilter: SeerrRequestFilter,
-    currentMediaType: String?,
-    currentSort: SeerrRequestSort,
-    currentSortDirection: String,
-    showMyRequestsOnly: Boolean,
+    filters: RequestsFilterState,
     isAdmin: Boolean,
     onFilterChange: (SeerrRequestFilter) -> Unit,
     onMediaTypeChange: (String?) -> Unit,
     onSortChange: (SeerrRequestSort) -> Unit,
     onSortDirectionToggle: () -> Unit,
     onMyRequestsToggle: () -> Unit,
+    onSearchChange: (String) -> Unit,
 ) {
+    val currentFilter = filters.filter
+    val currentMediaType = filters.mediaType
+    val currentSort = filters.sort
+    val currentSortDirection = filters.sortDirection
+    val showMyRequestsOnly = filters.showMyRequestsOnly
+    val searchQuery = filters.searchQuery
     val colorScheme = MaterialTheme.colorScheme
     val filterScrollState = rememberScrollState()
     val optionsScrollState = rememberScrollState()
@@ -64,6 +69,14 @@ fun RequestsFilterBar(
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // Free-text search. Debounced at the VM layer so each keystroke
+        // doesn't fire a request.
+        SearchField(
+            value = searchQuery,
+            onValueChange = onSearchChange,
+            placeholder = stringResource(R.string.requests_search_placeholder),
+        )
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()

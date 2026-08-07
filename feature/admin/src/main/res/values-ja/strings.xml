@@ -38,6 +38,9 @@
     <string name="admin_stop_live_cd">ライブを停止</string>
     <string name="admin_start_live_cd">ライブを開始</string>
     <string name="admin_stop">停止</string>
+    <string name="admin_stop_session_cd">再生を停止</string>
+    <string name="admin_stop_session_title">再生を停止しますか？</string>
+    <string name="admin_stop_session_body">「%1$s」で再生中のメディアを停止しますか？</string>
     <string name="admin_run">実行</string>
 
     <!-- Relative time -->
@@ -79,11 +82,13 @@
     <string name="admin_edit_device_name_title">デバイス名を編集</string>
     <string name="admin_custom_name">カスタム名</string>
     <string name="admin_no_devices">デバイスが見つかりません</string>
+    <string name="admin_devices_search_placeholder">名前またはユーザーで検索</string>
 
     <!-- LogsScreen -->
     <string name="admin_logs_title">ログ</string>
     <string name="admin_no_log_files">ログファイルが見つかりません</string>
     <string name="admin_no_activity_log">アクティビティログのエントリがありません</string>
+    <string name="admin_logs_search_placeholder">メッセージを絞り込み</string>
 
     <!-- Plugins -->
     <string name="admin_plugins_title">プラグイン</string>
@@ -380,5 +385,13 @@
     <!-- Audit history row labels (batch) -->
     <string name="admin_audit_by_user">から %1$s</string>
     <string name="admin_audit_items_removed">%1$d 件削除済み</string>
+
+    <!-- User statistics sort & export -->
+    <string name="user_stats_sort_plays">再生回数</string>
+    <string name="user_stats_sort_time">視聴時間</string>
+    <string name="user_stats_sort_name">名前</string>
+    <string name="user_stats_sort_cd">並び替え</string>
+    <string name="user_stats_export_cd">CSVをエクスポート</string>
+    <string name="user_stats_export_shared">エクスポートしました</string>
 
 </resources>

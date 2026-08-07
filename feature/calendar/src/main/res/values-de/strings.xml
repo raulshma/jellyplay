@@ -4,6 +4,7 @@
 
     <!-- Month nav -->
     <string name="calendar_today">Heute</string>
+    <string name="calendar_pick_date_cd">Datum wählen</string>
     <string name="calendar_prev_month_cd">Vorheriger Monat</string>
     <string name="calendar_next_month_cd">Nächster Monat</string>
     <string name="calendar_refresh_cd">Aktualisieren</string>

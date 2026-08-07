@@ -46,4 +46,6 @@
     <string name="live_option_auto_desc">サーバーに選択させる（可能な場合はダイレクトストリーム）</string>
     <string name="live_option_direct_desc">開いているチューナーを直接読み取る（最高品質）</string>
     <string name="live_option_transcode_desc">サーバーで再エンコード（帯域幅を低減）</string>
+    <string name="live_now_playing_short">再生中</string>
+    <string name="livetv_last_watched_section">最近見たチャンネル</string>
 </resources>

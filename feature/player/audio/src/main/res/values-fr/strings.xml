@@ -36,6 +36,7 @@
     <string name="audio_menu_night_mode">Mode nuit</string>
     <string name="audio_menu_night_mode_with_strength">Mode nuit · %1$s</string>
     <string name="audio_menu_ambient_mode">Mode ambiant</string>
+    <string name="audio_menu_add_to_playlist">Ajouter à la playlist</string>
     <string name="audio_menu_sleep_timer">Minuteur de veille</string>
     <string name="audio_menu_sleep_timer_active">Minuteur de veille · %1$s</string>
     <string name="audio_menu_karaoke_mode">Mode karaoké</string>
@@ -96,6 +97,13 @@
     <!-- Queue sheet -->
     <string name="audio_queue_title">File d\'attente</string>
     <string name="audio_queue_remove">Retirer de la file</string>
+    <string name="audio_queue_position">%1$d sur %2$d</string>
+
+    <!-- Add to playlist picker -->
+    <string name="audio_playlist_picker_title">Ajouter à la playlist</string>
+    <string name="audio_added_to_playlist">Ajouté à « %1$s »</string>
+    <string name="audio_no_playlists">Aucune playlist pour le moment</string>
+    <string name="audio_playlist_items_count">%1$d titres</string>
 
     <!-- Speed picker -->
     <string name="audio_speed_title">Vitesse de lecture</string>

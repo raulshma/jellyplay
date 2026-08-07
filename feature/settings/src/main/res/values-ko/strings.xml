@@ -750,6 +750,16 @@
     <string name="settings_storage_internal">내부 저장공간</string>
     <string name="settings_storage_external">외부 SD 카드</string>
 
+    <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
+    <string name="downloads_auto_delete_after_watch">시청 후 삭제</string>
+    <string name="downloads_auto_delete_after_watch_subtitle">시청을 마친 다운로드를 삭제합니다</string>
+
+    <!-- StorageSettingsScreen.kt: real storage mounts -->
+    <string name="storage_internal">내부 저장공간</string>
+    <string name="storage_sd_card">SD 카드</string>
+    <string name="storage_usb">USB 저장공간</string>
+    <string name="storage_external">외부 저장공간</string>
+
     <!-- AudioSettingsScreen.kt -->
     <string name="settings_sleep_timer_duration">취침 타이머 기간</string>
     <string name="settings_sleep_timer_15_min">15분</string>

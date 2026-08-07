@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.auth
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -35,6 +37,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -47,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
@@ -81,11 +85,17 @@ fun ServerListScreen(
 ) {
     val servers by viewModel.servers.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val serverHealth by viewModel.serverHealth.collectAsStateWithLifecycle()
 
     val isSynthwave = LocalIsSynthwave.current
     val backgroundColor = rememberScreenBackgroundColor()
 
     val navOffsetPx = LocalFloatingNavOffset.current
+
+    // One-shot reachability ping per saved server on screen entry.
+    LaunchedEffect(servers.map { it.address }) {
+        viewModel.checkServersHealth(servers.map { it.address })
+    }
 
     Scaffold(
         containerColor = backgroundColor,
@@ -144,6 +154,7 @@ fun ServerListScreen(
                         ) {
                             ServerItem(
                                 server = server,
+                                health = serverHealth[server.address],
                                 firstFocusModifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier,
                                 onClick = { onServerSelected(server) },
                                 onDelete = { viewModel.removeServer(server.id) },
@@ -181,6 +192,7 @@ fun ServerListScreen(
 @Composable
 private fun ServerItem(
     server: ServerInfo,
+    health: ServerHealth?,
     onClick: () -> Unit,
     onDelete: () -> Unit,
     firstFocusModifier: Modifier = Modifier,
@@ -241,6 +253,10 @@ private fun ServerItem(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (health != null) {
+                    Spacer(modifier = Modifier.size(6.dp))
+                    ServerHealthBadge(health = health)
+                }
             }
             val deleteFocusState = rememberTvFocusState()
             IconButton(
@@ -264,6 +280,36 @@ private fun ServerItem(
             dismissText = stringResource(R.string.auth_cancel),
             onConfirm = onDelete,
             onDismiss = { showDeleteConfirm = false },
+        )
+    }
+}
+
+@Composable
+private fun ServerHealthBadge(
+    health: ServerHealth,
+) {
+    val (dotColor, label) = when (health) {
+        is ServerHealth.Healthy -> MaterialTheme.colorScheme.tertiary to
+            stringResource(R.string.server_health_healthy)
+        is ServerHealth.Unreachable -> MaterialTheme.colorScheme.error to
+            stringResource(R.string.server_health_unreachable)
+        is ServerHealth.Checking -> MaterialTheme.colorScheme.outline to
+            stringResource(R.string.server_health_checking)
+        is ServerHealth.Unknown -> MaterialTheme.colorScheme.outline to
+            stringResource(R.string.server_health_checking)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(dotColor),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

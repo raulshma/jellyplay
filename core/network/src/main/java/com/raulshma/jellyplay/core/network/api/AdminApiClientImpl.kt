@@ -196,6 +196,14 @@ class AdminApiClientImpl @Inject constructor(
         )
     }
 
+    override suspend fun stopSession(sessionId: String): Result<Unit> = engine.apiResultWithRetry {
+        // Issue the play-state STOP command (canonical Jellyfin transport stop).
+        engine.requireApi().sessionApi.sendPlaystateCommand(
+            sessionId = sessionId,
+            command = org.jellyfin.sdk.model.api.PlaystateCommand.STOP,
+        )
+    }
+
     override suspend fun play(
         sessionId: String,
         playCommand: String,

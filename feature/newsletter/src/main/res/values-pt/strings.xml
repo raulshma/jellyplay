@@ -4,6 +4,16 @@
     <string name="newsletter_could_not_load">Não foi possível carregar o boletim</string>
     <string name="newsletter_preparing_digest">A preparar o seu resumo\u2026</string>
 
+    <!-- Newsletter send actions (admin-gated; backend route required) -->
+    <string name="newsletter_send_now">Enviar agora</string>
+    <string name="newsletter_send_test">Enviar teste</string>
+    <string name="newsletter_send_confirm_title">Enviar boletim?</string>
+    <string name="newsletter_send_confirm_body">Isto enviará o boletim a todos os subscritores.</string>
+    <string name="newsletter_send_success">Boletim enviado</string>
+    <string name="newsletter_send_failed">Falha ao enviar o boletim</string>
+    <string name="newsletter_test_sent">Boletim de teste enviado</string>
+    <string name="newsletter_send_admin_only">Apenas admin</string>
+
     <!-- Newsletter screens & sections -->
     <string name="newsletter_title">Boletim</string>
     <string name="newsletter_activity_digest">Resumo de atividade</string>

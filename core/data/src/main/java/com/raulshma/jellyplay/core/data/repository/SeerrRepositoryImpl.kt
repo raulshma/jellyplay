@@ -327,10 +327,11 @@ class SeerrRepositoryImpl @Inject constructor(
         sortDirection: String,
         requestedBy: Int?,
         mediaType: String?,
+        search: String?,
     ): Result<SeerrRequestListResponse> {
         val url = serverUrl() ?: return Result.failure(Exception("Seerr not configured"))
         val credentials = getCredentials() ?: return Result.failure(Exception("Seerr not configured"))
-        return seerrApiClient.getRequests(url, credentials, take, skip, filter, sort, sortDirection, requestedBy, mediaType)
+        return seerrApiClient.getRequests(url, credentials, take, skip, filter, sort, sortDirection, requestedBy, mediaType, search)
     }
 
     override suspend fun getRequest(id: Int): Result<SeerrRequestItem> {

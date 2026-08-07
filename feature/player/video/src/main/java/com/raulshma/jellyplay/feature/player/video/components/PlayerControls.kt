@@ -225,6 +225,8 @@ internal fun PlayerControls(
     onAbRepeatSetA: () -> Unit = {},
     onAbRepeatSetB: () -> Unit = {},
     onAbRepeatClear: () -> Unit = {},
+    audioOnly: Boolean = false,
+    onToggleAudioOnly: () -> Unit = {},
     onLockClick: () -> Unit = {},
     onControlsFocusChange: (Boolean) -> Unit = {},
     onOverflowMenuChange: (Boolean) -> Unit = {},
@@ -818,6 +820,11 @@ internal fun PlayerControls(
             onAbRepeatClear = {
                 showOverflow = false
                 onAbRepeatClear()
+            },
+            audioOnly = audioOnly,
+            onToggleAudioOnly = {
+                showOverflow = false
+                onToggleAudioOnly()
             },
         )
     }

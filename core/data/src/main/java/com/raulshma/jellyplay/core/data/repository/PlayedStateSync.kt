@@ -2,9 +2,13 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync.ComputeResult
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -91,6 +95,19 @@ class PlayedStateSyncImpl @Inject constructor(
     private val playbackOutboxRepository: PlaybackOutboxRepository,
     private val offlineModeManager: OfflineModeManager,
     private val mediaRepository: dagger.Lazy<MediaRepository>,
+    /**
+     * Auto-delete-after-watch: reads the download-lifetime pref.
+     * Injected (not constructed) and lazy-deferred so the download stack
+     * cannot form a construction cycle with this module.
+     */
+    private val downloadsStore: dagger.Lazy<DownloadsStore>,
+    /**
+     * Same concern as [downloadsStore]: looks up + deletes a finished download
+     * row when a watched flip lands. Lazy for the same cycle-safety reason
+     * (`DownloadRepositoryImpl` references only the [PlayedStateSync] companion
+     * helper, never the impl, so this edge is acyclic — Lazy keeps it defensive).
+     */
+    private val downloadRepository: dagger.Lazy<DownloadRepository>,
 ) : PlayedStateSync {
 
     override suspend fun flip(itemId: String, played: Boolean): Result<Unit> {
@@ -99,6 +116,10 @@ class PlayedStateSyncImpl @Inject constructor(
         if (offlineModeManager.isOffline) {
             runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = played) }
             runCatching { playbackOutboxRepository.enqueuePlayedState(itemId, isPlayed = played) }
+            // Auto-delete-after-watch: even offline, a watched flip removes the
+            // download (cleanup is local-only; nothing to sync). Guarded so a
+            // failure never surfaces or crashes playback.
+            if (played) maybeAutoDeleteAfterWatch(itemId)
             return Result.success(Unit)
         }
         val result = if (played) apiClient.markPlayed(itemId) else apiClient.markUnplayed(itemId)
@@ -108,14 +129,47 @@ class PlayedStateSyncImpl @Inject constructor(
             // a failure here must not surface — the server mutation already
             // succeeded and reconciliation will correct any drift.
             runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = played) }
+            // Auto-delete-after-watch: item was just marked played — if the
+            // user opted in and a finished download exists for it, remove it
+            // now. The flip already succeeded, so a cleanup failure must never
+            // bubble up to the caller.
+            if (played) maybeAutoDeleteAfterWatch(itemId)
         } else {
             // Online but the call failed (transient 5xx, auth drop). Don't lose
             // the user's intent: apply locally and enqueue for retry.
             runCatching { offlineRepository.applyPlayedState(itemId, isPlayed = played) }
             runCatching { playbackOutboxRepository.enqueuePlayedState(itemId, isPlayed = played) }
+            // The played state wasn't confirmed server-side, so don't delete
+            // the download yet — wait for a confirmed played flip.
             return Result.success(Unit)
         }
         return result
+    }
+
+    /**
+     * Auto-deleting a finished download on a watched flip is an unrequested,
+     * destructive product decision — it is off by default. Kept behind its own
+     * pref (`auto_delete_after_watch`) so it only runs when the user opts in.
+     * If the behaviour is unwanted it should be removed (pref + this call site
+     * + the store key).
+     *
+     * Behaviour: when the pref is ON and the just-flipped-played [itemId] has a
+     * completed download, delete that download (file + DB row + offline
+     * metadata). Everything is wrapped so a cleanup error is logged and
+     * swallowed — playback must never crash because we couldn't reclaim disk.
+     * Only COMPLETED downloads are removed so an in-flight/partial download is
+     * never destroyed mid-transfer.
+     */
+    private suspend fun maybeAutoDeleteAfterWatch(itemId: String) {
+        try {
+            if (!downloadsStore.get().downloads.first().autoDeleteAfterWatch) return
+            val download = downloadRepository.get().getDownloadByMediaItemId(itemId) ?: return
+            if (download.status != DownloadStatus.COMPLETED) return
+            runCatching { downloadRepository.get().deleteDownload(download.id) }
+                .onFailure { Log.w(TAG, "Auto-delete-after-watch failed for $itemId", it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Auto-delete-after-watch lookup failed for $itemId", e)
+        }
     }
 
     override suspend fun reconcileOfflineRow(itemId: String): ComputeResult? {
@@ -178,6 +232,7 @@ class PlayedStateSyncImpl @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "PlayedStateSync"
         private val ISO_OFFSET_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
         private val ISO_PARSER: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 

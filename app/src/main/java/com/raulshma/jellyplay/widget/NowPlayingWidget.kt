@@ -29,6 +29,7 @@ class NowPlayingWidget : AppWidgetProvider() {
     @InstallIn(SingletonComponent::class)
     interface WidgetEntryPoint {
         fun audioPlaybackManager(): AudioPlaybackManager
+        fun widgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
     }
 
     /**
@@ -53,6 +54,24 @@ class NowPlayingWidget : AppWidgetProvider() {
     override fun onDisabled(context: Context?) {
         super.onDisabled(context)
         refreshScope.cancel()
+    }
+
+    override fun onDeleted(context: Context?, appWidgetIds: IntArray?) {
+        super.onDeleted(context, appWidgetIds)
+        if (context == null || appWidgetIds == null) return
+        val store = try {
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                WidgetEntryPoint::class.java,
+            ).widgetDataStore()
+        } catch (_: Exception) {
+            return
+        }
+        kotlinx.coroutines.runBlocking {
+            for (id in appWidgetIds) {
+                store.removeWidgetConfigForId(id)
+            }
+        }
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -196,6 +215,14 @@ class NowPlayingWidget : AppWidgetProvider() {
         ) {
             val views = RemoteViews(context.packageName, R.layout.now_playing_widget)
             wireClickIntents(context, views)
+            val config = try {
+                EntryPointAccessors.fromApplication(
+                    context.applicationContext,
+                    WidgetEntryPoint::class.java,
+                ).widgetDataStore().getWidgetConfigForIdSync(appWidgetId)
+            } catch (_: Exception) {
+                com.raulshma.jellyplay.core.model.WidgetConfig()
+            }
             try {
                 val entryPoint = EntryPointAccessors.fromApplication(
                     context.applicationContext,
@@ -229,6 +256,15 @@ class NowPlayingWidget : AppWidgetProvider() {
                     durationMs = 0L,
                     isEmptyState = true,
                 )
+            }
+            if (!config.nowPlayingShowArtwork) {
+                views.setViewVisibility(R.id.widget_album_art, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_backdrop, android.view.View.GONE)
+            }
+            if (!config.nowPlayingShowProgress) {
+                views.setViewVisibility(R.id.widget_progress_container, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_progress, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_position, android.view.View.GONE)
             }
             applyResponsiveLayout(context, appWidgetManager, appWidgetId, views)
             appWidgetManager.updateAppWidget(appWidgetId, views)

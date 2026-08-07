@@ -28,6 +28,7 @@
     <string name="requests_sort_modified">Modified</string>
     <string name="requests_filter_mine">Mine</string>
     <string name="requests_cd_sort_direction">Sort direction</string>
+    <string name="requests_search_placeholder">Search requests</string>
 
     <!-- Item / status labels -->
     <string name="requests_status_declined">Declined</string>
@@ -44,6 +45,8 @@
     <!-- Item actions -->
     <string name="requests_action_approve">Approve</string>
     <string name="requests_action_decline">Decline</string>
+    <string name="requests_selected_count">%1$d selected</string>
+    <string name="requests_select_all">Select all</string>
     <string name="requests_action_delete">Delete</string>
     <string name="requests_action_delete_confirm">Sure?</string>
 

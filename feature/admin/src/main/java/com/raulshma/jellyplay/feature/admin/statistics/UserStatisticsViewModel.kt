@@ -1,12 +1,20 @@
 package com.raulshma.jellyplay.feature.admin.statistics
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.UserStatistics
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.feature.admin.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+
+enum class UserStatisticsSort(@StringRes val labelRes: Int) {
+    PLAYS(R.string.user_stats_sort_plays),
+    TIME(R.string.user_stats_sort_time),
+    NAME(R.string.user_stats_sort_name),
+}
 
 @Immutable
 data class UserStatisticsState(
@@ -18,6 +26,8 @@ data class UserStatisticsState(
     val activeThisWeek: Int = 0,
     val totalPlays: Int = 0,
     val pluginStatus: PlaybackReportingStatus = PlaybackReportingStatus.UNKNOWN,
+    val sort: UserStatisticsSort = UserStatisticsSort.PLAYS,
+    val shareRequested: Boolean = false,
 )
 
 @HiltViewModel
@@ -41,6 +51,20 @@ class UserStatisticsViewModel @Inject constructor(
         }
     }
 
+    private fun applySort(users: List<UserStatistics>, sort: UserStatisticsSort): List<UserStatistics> {
+        val comparator = when (sort) {
+            UserStatisticsSort.PLAYS -> compareByDescending<UserStatistics> { it.totalPlayCount }
+                .thenByDescending { it.totalWatchTimeSec }
+                .thenBy { it.userName.lowercase() }
+            UserStatisticsSort.TIME -> compareByDescending<UserStatistics> { it.totalWatchTimeSec }
+                .thenByDescending { it.totalPlayCount }
+                .thenBy { it.userName.lowercase() }
+            UserStatisticsSort.NAME -> compareBy<UserStatistics> { it.userName.lowercase() }
+                .thenByDescending { it.totalPlayCount }
+        }
+        return users.sortedWith(comparator)
+    }
+
     fun loadStatistics() {
         launch {
             _state.update { it.copy(isLoading = true, error = null) }
@@ -52,7 +76,7 @@ class UserStatisticsViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            users = users,
+                            users = applySort(users, it.sort),
                             totalUsers = users.size,
                             activeThisWeek = activeCount,
                             totalPlays = totalPlays,
@@ -81,7 +105,7 @@ class UserStatisticsViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             isRefreshing = false,
-                            users = users,
+                            users = applySort(users, it.sort),
                             totalUsers = users.size,
                             activeThisWeek = activeCount,
                             totalPlays = totalPlays,
@@ -92,5 +116,22 @@ class UserStatisticsViewModel @Inject constructor(
                     _state.update { it.copy(isRefreshing = false) }
                 }
         }
+    }
+
+    fun setSort(sort: UserStatisticsSort) {
+        _state.update {
+            it.copy(
+                sort = sort,
+                users = applySort(it.users, sort),
+            )
+        }
+    }
+
+    fun requestExport() {
+        _state.update { it.copy(shareRequested = true) }
+    }
+
+    fun consumeExportRequest() {
+        _state.update { it.copy(shareRequested = false) }
     }
 }

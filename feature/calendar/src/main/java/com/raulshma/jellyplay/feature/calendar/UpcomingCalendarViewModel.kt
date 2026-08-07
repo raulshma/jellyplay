@@ -197,6 +197,22 @@ class UpcomingCalendarViewModel @Inject constructor(
         refresh()
     }
 
+    /**
+     * Jumps the visible month to the month containing [date] (used by the
+     * tap-month → date-picker affordance). If the month is already visible
+     * this is a no-op fetch; otherwise it swaps the month + refreshes like
+     * [changeMonth]. Returns whether the month actually changed, so the
+     * caller can decide whether to request a scroll-to-day.
+     */
+    fun goToDate(date: LocalDate): Boolean {
+        val target = YearMonth.from(date)
+        if (_state.value.visibleMonth == target) return false
+        _state.value = _state.value.copy(visibleMonth = target, items = emptyList(), error = null)
+        startMonthCollector()
+        refresh()
+        return true
+    }
+
     /** Pure client-side filter switch; no network. */
     fun setFilter(filter: CalendarFilter) {
         _state.value = _state.value.copy(filter = filter)

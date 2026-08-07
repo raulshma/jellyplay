@@ -29,6 +29,8 @@ interface AdminApiClient {
     suspend fun getActivityLogEntries(startIndex: Int? = null, limit: Int? = null, minDate: String? = null, hasUserId: Boolean? = null): Result<List<ActivityLogEntry>>
     suspend fun getSessions(): Result<List<SessionInfo>>
     suspend fun sendMessageToSession(sessionId: String, header: String, text: String, timeoutMs: Long = 5000): Result<Unit>
+    /** Stops active playback on the session (Jellyfin play-state STOP command). */
+    suspend fun stopSession(sessionId: String): Result<Unit>
     suspend fun play(
         sessionId: String,
         playCommand: String,

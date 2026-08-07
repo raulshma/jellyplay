@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.livetv.recordings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,10 +18,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -77,6 +81,37 @@ fun RecordingsScreen(
         tag = "recordings_init",
     )
 
+    // Delete confirm dialog. Long-press a recording to open it.
+    uiState.pendingDelete?.let { recording ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDeleteDialog() },
+            title = { Text(stringResource(R.string.livetv_delete_recording_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.livetv_delete_recording_body,
+                        recording.name,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.deleteRecording() },
+                    enabled = !uiState.isDeleting,
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) { Text(stringResource(R.string.livetv_delete)) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.dismissDeleteDialog() },
+                    enabled = !uiState.isDeleting,
+                ) { Text(stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel)) }
+            },
+        )
+    }
+
     when {
         uiState.isLoading && uiState.recordings.isEmpty() -> {
             ScreenLoadingState(modifier = Modifier.fillMaxSize())
@@ -123,6 +158,7 @@ fun RecordingsScreen(
                                         recording = recording,
                                         imageUrl = viewModel.getImageUrl(recording.id, recording.imageTag),
                                         onClick = { onRecordingClick(recording.id) },
+                                        onLongClick = { viewModel.showDeleteDialog(recording) },
                                         modifier = Modifier.weight(1f),
                                     )
                                 }
@@ -157,13 +193,18 @@ private fun RecordingCard(
     recording: LiveTvRecording,
     imageUrl: String,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
             .clip(ShapeCache.smooth12)
             .focusIndicator(ShapeCache.smooth12)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onLongClickLabel = stringResource(R.string.livetv_delete_recording_cd),
+            )
             .padding(4.dp),
     ) {
         Box(

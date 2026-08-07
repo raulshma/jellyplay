@@ -2,8 +2,10 @@ package com.raulshma.jellyplay.feature.auth
 
 import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,11 +27,15 @@ sealed class QuickConnectUiState {
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val apiClient: JellyfinApiClient,
     @ApplicationContext private val appContext: Context,
 ) : JellyPlayViewModel() {
 
     val servers = authRepository.servers
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _serverHealth = stateFlow<Map<String, ServerHealth>>(emptyMap())
+    val serverHealth = _serverHealth.flow
 
     val currentServerUsers = authRepository.currentServerUsers
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -54,6 +60,35 @@ class AuthViewModel @Inject constructor(
     fun removeServer(serverId: String) {
         launch {
             authRepository.removeServer(serverId)
+        }
+    }
+
+    /**
+     * Pings each saved server once and publishes per-address [ServerHealth]
+     * into [serverHealth]. Safe to call repeatedly; concurrent calls are
+     * guarded by cancelling any in-flight batch.
+     */
+    private var healthCheckJob: Job? = null
+    fun checkServersHealth(addresses: List<String>) {
+        healthCheckJob?.cancel()
+        if (addresses.isEmpty()) {
+            _serverHealth.set(emptyMap())
+            return
+        }
+        // Immediately mark everything as Checking so the UI can render a dot.
+        _serverHealth.set(addresses.associateWith { ServerHealth.Checking })
+        healthCheckJob = launch {
+            addresses.forEach { address ->
+                val startTime = System.currentTimeMillis()
+                val result = apiClient.getServerInfo(address)
+                val latency = System.currentTimeMillis() - startTime
+                val health = if (result.isSuccess) {
+                    ServerHealth.Healthy(latencyMs = latency)
+                } else {
+                    ServerHealth.Unreachable
+                }
+                _serverHealth.update { it + (address to health) }
+            }
         }
     }
 
@@ -188,5 +223,6 @@ class AuthViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         quickConnectPollingJob?.cancel()
+        healthCheckJob?.cancel()
     }
 }

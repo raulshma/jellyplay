@@ -54,6 +54,7 @@ internal fun PixelPlayerTopBar(
     onNightModeClick: () -> Unit,
     onNightModeStrengthChange: (com.raulshma.jellyplay.core.model.EffectStrength) -> Unit,
     onAmbientClick: () -> Unit,
+    onAddToPlaylistClick: () -> Unit = {},
     sleepTimerActive: Boolean = false,
     sleepTimerEndOfEpisode: Boolean = false,
     sleepTimerRemainingFlow: StateFlow<Long> = MutableStateFlow(0L),
@@ -175,6 +176,12 @@ internal fun PixelPlayerTopBar(
                         text = { Text(stringResource(R.string.audio_menu_ambient_mode)) },
                         onClick = onAmbientClick,
                         leadingIcon = { Icon(Tabler.Outline.MoonStars, null) },
+                        colors = itemColors,
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.audio_menu_add_to_playlist)) },
+                        onClick = { onAddToPlaylistClick(); onMenuToggle(false) },
+                        leadingIcon = { Icon(Tabler.Outline.PlaylistAdd, null) },
                         colors = itemColors,
                     )
                     DropdownMenuItem(

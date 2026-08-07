@@ -22,7 +22,10 @@ interface AppUpdateRepository {
     suspend fun checkForUpdate(supportedAbis: Array<String>): Result<AppUpdateInfo>
 
     /**
-     * Streams the APK at [url] into the cache directory, reporting progress.
+     * Streams the APK at [url] into the app's files directory, reporting
+     * progress. Stored under filesDir (not cacheDir) so it survives the
+     * system installer's round trip — backgrounding, screen lock, or the user
+     * leaving to grant unknown-sources permission must not delete the file.
      *
      * @param url `browser_download_url` of the chosen asset.
      * @param onProgress Called with (fraction 0..1, bytesRead, totalBytes) on
@@ -41,4 +44,14 @@ interface AppUpdateRepository {
      * `startActivity`s it.
      */
     fun buildInstallIntent(apkFile: File): Intent
+
+    /**
+     * Deletes any previously-downloaded update APK. The system installer is
+     * launched in a separate process and returns no result for `ACTION_VIEW`,
+     * so this is best invoked on app startup ([Application.onCreate]): a
+     * successful self-update restarts the process, leaving the prior APK
+     * orphaned — the next launch sweeps it. Safe to call before any download
+     * has started.
+     */
+    fun cleanupDownloadedApk()
 }

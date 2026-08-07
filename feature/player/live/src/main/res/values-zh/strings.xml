@@ -46,4 +46,6 @@
     <string name="live_option_auto_desc">由服务器选择（可能时使用直连串流）</string>
     <string name="live_option_direct_desc">直接读取已打开的调谐器（最佳画质）</string>
     <string name="live_option_transcode_desc">在服务器上重新编码（更低带宽）</string>
+    <string name="live_now_playing_short">正在播放</string>
+    <string name="livetv_last_watched_section">最近观看</string>
 </resources>

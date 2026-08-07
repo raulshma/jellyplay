@@ -135,7 +135,8 @@ class ResilientSeerrApiClient @Inject constructor(
     override suspend fun getRequests(
         baseUrl: String, credentials: SeerrCredentials, take: Int, skip: Int,
         filter: String, sort: String, sortDirection: String, requestedBy: Int?, mediaType: String?,
-    ): Result<SeerrRequestListResponse> = req { delegate.getRequests(baseUrl, credentials, take, skip, filter, sort, sortDirection, requestedBy, mediaType) }
+        search: String?,
+    ): Result<SeerrRequestListResponse> = req { delegate.getRequests(baseUrl, credentials, take, skip, filter, sort, sortDirection, requestedBy, mediaType, search) }
 
     override suspend fun getRequest(
         baseUrl: String, credentials: SeerrCredentials, id: Int,

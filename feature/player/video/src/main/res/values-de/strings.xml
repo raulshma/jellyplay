@@ -169,6 +169,8 @@
     <string name="player_video_set_a_point">A-Punkt setzen</string>
     <string name="player_video_set_b_point">B-Punkt setzen</string>
     <string name="player_video_clear_ab_repeat">A/B-Wiederholung löschen</string>
+    <string name="player_audio_only">Nur Audio</string>
+    <string name="player_audio_only_on">Nur Audio an — Video ausgeblendet</string>
 
     <!-- Video filter sheet -->
     <string name="player_video_brightness">Helligkeit</string>

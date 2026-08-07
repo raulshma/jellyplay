@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.requests
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,11 +51,14 @@ fun RequestListItem(
     mediaInfo: RequestMediaInfo?,
     isAdmin: Boolean,
     actionInProgress: Boolean,
+    selectionMode: Boolean = false,
+    isSelected: Boolean = false,
     onApprove: () -> Unit = {},
     onDecline: () -> Unit = {},
     onRetry: () -> Unit = {},
     onDelete: () -> Unit = {},
     onClick: () -> Unit = {},
+    onLongClick: () -> Unit = {},
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val requestStatus = remember(request.status) { SeerrRequestStatus.fromValue(request.status) }
@@ -93,9 +96,13 @@ fun RequestListItem(
             .fillMaxWidth()
             .clip(ShapeCache.smooth16)
             .focusIndicator()
-            .clickable { onClick() },
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
         shape = ShapeCache.smooth16,
-        color = colorScheme.surfaceContainer.copy(alpha = 0.6f),
+        color = if (isSelected) colorScheme.primaryContainer.copy(alpha = 0.5f)
+        else colorScheme.surfaceContainer.copy(alpha = 0.6f),
         tonalElevation = 1.dp,
     ) {
         Row(
@@ -104,6 +111,26 @@ fun RequestListItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Selection checkbox — only rendered while in selection mode.
+            if (selectionMode) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(if (isSelected) colorScheme.primary else colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (isSelected) {
+                        Text(
+                            "✓",
+                            color = colorScheme.onPrimary,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+            }
             Box(
                 modifier = Modifier
                     .size(width = 48.dp, height = 72.dp)

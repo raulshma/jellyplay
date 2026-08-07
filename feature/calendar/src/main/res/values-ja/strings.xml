@@ -4,6 +4,7 @@
 
     <!-- Month nav -->
     <string name="calendar_today">今日</string>
+    <string name="calendar_pick_date_cd">日付を選択</string>
     <string name="calendar_prev_month_cd">前の月</string>
     <string name="calendar_next_month_cd">翌月</string>
     <string name="calendar_refresh_cd">更新</string>

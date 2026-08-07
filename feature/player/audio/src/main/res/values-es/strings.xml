@@ -36,6 +36,7 @@
     <string name="audio_menu_night_mode">Modo nocturno</string>
     <string name="audio_menu_night_mode_with_strength">Modo nocturno · %1$s</string>
     <string name="audio_menu_ambient_mode">Modo ambiente</string>
+    <string name="audio_menu_add_to_playlist">Añadir a lista de reproducción</string>
     <string name="audio_menu_sleep_timer">Temporizador de sueño</string>
     <string name="audio_menu_sleep_timer_active">Temporizador de sueño · %1$s</string>
     <string name="audio_menu_karaoke_mode">Modo karaoke</string>
@@ -96,6 +97,13 @@
     <!-- Queue sheet -->
     <string name="audio_queue_title">Cola</string>
     <string name="audio_queue_remove">Quitar de la cola</string>
+    <string name="audio_queue_position">%1$d de %2$d</string>
+
+    <!-- Add to playlist picker -->
+    <string name="audio_playlist_picker_title">Añadir a lista de reproducción</string>
+    <string name="audio_added_to_playlist">Añadido a \"%1$s\"</string>
+    <string name="audio_no_playlists">Aún no hay listas</string>
+    <string name="audio_playlist_items_count">%1$d elementos</string>
 
     <!-- Speed picker -->
     <string name="audio_speed_title">Velocidad de reproducción</string>

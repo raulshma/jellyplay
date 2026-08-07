@@ -2,6 +2,8 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="shared_images" path="shared_images/" />
     <cache-path name="shared_logs" path="shared_logs/" />
-    <!-- Downloaded update APKs, shared with the system package installer. -->
-    <cache-path name="updates" path="updates/" />
+    <!-- Downloaded update APKs, shared with the system package installer.
+         Lives under filesDir (not cacheDir) so the file survives the system
+         installer's round trip (backgrounding, OS cache eviction). -->
+    <files-path name="updates" path="updates/" />
 </paths>

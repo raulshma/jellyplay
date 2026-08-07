@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.music.albums.MusicSortOption
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,7 +87,7 @@ fun TracksScreen(
                     modifier = Modifier.then(sortFocusState.focusModifier).tvFocusIndicator(sortFocusState, CircleShape),
                 ) {
                     Text(
-                        text = viewModel.selectedSort.label,
+                        text = stringResource(viewModel.selectedSort.labelRes),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -95,9 +96,14 @@ fun TracksScreen(
                     expanded = showSortMenu,
                     onDismissRequest = { showSortMenu = false },
                 ) {
-                    TrackSortOption.entries.forEach { option ->
+                    listOf(
+                        MusicSortOption.NAME,
+                        MusicSortOption.DATE_ADDED,
+                        MusicSortOption.DATE_PLAYED,
+                        MusicSortOption.RANDOM,
+                    ).forEach { option ->
                         DropdownMenuItem(
-                            text = { Text(option.label) },
+                            text = { Text(stringResource(option.labelRes)) },
                             onClick = {
                                 viewModel.setSort(option)
                                 showSortMenu = false

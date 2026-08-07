@@ -71,7 +71,8 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
         override fun onCreate() = Unit
 
         override fun onDataSetChanged() {
-            items = runBlocking { store.continueWatching.first() }
+            val maxCount = store.getWidgetConfigForIdSync(appWidgetId).continueWatchingItemCount
+            items = runBlocking { store.continueWatching.first() }.take(maxCount)
             // Pre-fetch posters concurrently so each `getViewAt` is a map lookup.
             // A slow URL is bounded by `WidgetImageLoader`'s internal timeout.
             val urlById = items.associate { item ->

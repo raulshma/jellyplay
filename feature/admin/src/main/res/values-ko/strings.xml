@@ -38,6 +38,9 @@
     <string name="admin_stop_live_cd">라이브 중지</string>
     <string name="admin_start_live_cd">라이브 시작</string>
     <string name="admin_stop">중지</string>
+    <string name="admin_stop_session_cd">재생 중지</string>
+    <string name="admin_stop_session_title">재생을 중지하시겠습니까?</string>
+    <string name="admin_stop_session_body">\"%1$s\"에서 재생 중인 미디어를 중지하시겠습니까?</string>
     <string name="admin_run">실행</string>
 
     <!-- Relative time -->
@@ -79,11 +82,13 @@
     <string name="admin_edit_device_name_title">기기 이름 편집</string>
     <string name="admin_custom_name">사용자 지정 이름</string>
     <string name="admin_no_devices">기기를 찾을 수 없습니다</string>
+    <string name="admin_devices_search_placeholder">이름 또는 사용자로 검색</string>
 
     <!-- LogsScreen -->
     <string name="admin_logs_title">로그</string>
     <string name="admin_no_log_files">로그 파일을 찾을 수 없습니다</string>
     <string name="admin_no_activity_log">활동 로그 항목이 없습니다</string>
+    <string name="admin_logs_search_placeholder">메시지 필터</string>
 
     <!-- Plugins -->
     <string name="admin_plugins_title">플러그인</string>
@@ -380,5 +385,13 @@
     <!-- Audit history row labels (batch) -->
     <string name="admin_audit_by_user">에서 %1$s</string>
     <string name="admin_audit_items_removed">%1$d개 항목 제거됨</string>
+
+    <!-- User statistics sort & export -->
+    <string name="user_stats_sort_plays">재생 수</string>
+    <string name="user_stats_sort_time">시청 시간</string>
+    <string name="user_stats_sort_name">이름</string>
+    <string name="user_stats_sort_cd">정렬</string>
+    <string name="user_stats_export_cd">CSV 내보내기</string>
+    <string name="user_stats_export_shared">내보냈습니다</string>
 
 </resources>

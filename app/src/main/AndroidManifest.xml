@@ -205,6 +205,26 @@
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".widget.config.ContinueWatchingWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.JellyPlay.Starting"
+            android:label="@string/widget_continue_watching_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.config.NowPlayingWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.JellyPlay.Starting"
+            android:label="@string/widget_now_playing_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
         <receiver android:name="androidx.mediarouter.media.MediaTransferReceiver" />
 
         <receiver

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.audio
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
@@ -41,6 +42,12 @@ data class AudioPlayerUiState(
     val lyrics: LyricsState = LyricsState(),
     val sleepTimer: SleepTimerState = SleepTimerState(),
     val queue: QueueState = QueueState(),
+    // "Add to playlist" picker.
+    val showPlaylistPicker: Boolean = false,
+    val playlists: List<Playlist> = emptyList(),
+    val isLoadingPlaylists: Boolean = false,
+    val isAddingToPlaylist: Boolean = false,
+    val playlistMessage: String? = null,
 )
 
 @Immutable

@@ -46,4 +46,6 @@
     <string name="live_option_auto_desc">Server auswählen lassen (direkter Stream, wenn möglich)</string>
     <string name="live_option_direct_desc">Den offenen Tuner direkt auslesen (beste Qualität)</string>
     <string name="live_option_transcode_desc">Auf dem Server neu codieren (geringere Bandbreite)</string>
+    <string name="live_now_playing_short">Läuft gerade</string>
+    <string name="livetv_last_watched_section">Zuletzt gesehen</string>
 </resources>

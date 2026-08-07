@@ -25,6 +25,7 @@
     <string name="requests_sort_modified">수정됨</string>
     <string name="requests_filter_mine">내 요청</string>
     <string name="requests_cd_sort_direction">정렬 방향</string>
+    <string name="requests_search_placeholder">요청 검색</string>
 
     <string name="requests_status_declined">거부됨</string>
     <string name="requests_status_failed">실패</string>
@@ -39,6 +40,8 @@
 
     <string name="requests_action_approve">승인</string>
     <string name="requests_action_decline">거부</string>
+    <string name="requests_selected_count">%1$d개 선택됨</string>
+    <string name="requests_select_all">모두 선택</string>
     <string name="requests_action_delete">삭제</string>
     <string name="requests_action_delete_confirm">확실합니까?</string>
 
