@@ -60,8 +60,11 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
+import com.raulshma.jellyplay.core.ui.components.ConfirmState
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.AnimatedEntrance
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
@@ -172,6 +175,8 @@ private fun AlbumDetailContent(
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
     val backgroundColor = rememberScreenBackgroundColor()
+
+    val deleteAlbumConfirm = rememberConfirmState()
 
     Box(
         modifier = Modifier
@@ -308,7 +313,7 @@ private fun AlbumDetailContent(
                         androidx.compose.material3.IconButton(
                             onClick = {
                                 if (allDownloaded) {
-                                    onDeleteAlbum()
+                                    deleteAlbumConfirm.request { onDeleteAlbum() }
                                 } else {
                                     onDownloadAlbum()
                                 }
@@ -375,6 +380,14 @@ private fun AlbumDetailContent(
                 Spacer(Modifier.height(32.dp))
             }
         }
+
+        deleteAlbumConfirm.ConfirmDialog(
+            title = stringResource(R.string.music_delete_album_downloads_confirm_title),
+            message = stringResource(R.string.music_delete_album_downloads_confirm_message),
+            confirmText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_delete),
+            dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+            isDestructive = true,
+        )
     }
 }
 

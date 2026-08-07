@@ -132,13 +132,13 @@ private const val STALE_POSITION_THRESHOLD_MS = 60L * 60L * 1000L
  * "only advance forward" rules are unit-testable without a ViewModel.
  *
  * Rules:
- *  - No persisted position (`savedPosMs <= 0`): keep the entry point.
- *  - Persisted position too old (`persistedAtMs > 0` and older than
- *    [staleThresholdMs]): keep the entry point. A zero/missing timestamp is
- *    treated as fresh so a normal resume-from-background keeps working.
- *  - Otherwise resume at the persisted position, but never below the deliberate
- *    entry point (auto-advance may have moved the user forward of the route's
- *    original ticks; rewinding would jump back unexpectedly).
+ * - No persisted position (`savedPosMs <= 0`): keep the entry point.
+ * - Persisted position too old (`persistedAtMs > 0` and older than
+ * [staleThresholdMs]): keep the entry point. A zero/missing timestamp is
+ * treated as fresh so a normal resume-from-background keeps working.
+ * - Otherwise resume at the persisted position, but never below the deliberate
+ * entry point (auto-advance may have moved the user forward of the route's
+ * original ticks; rewinding would jump back unexpectedly).
  */
 internal fun resolveResumeTicks(
     savedPosMs: Long,
@@ -344,6 +344,17 @@ class VideoPlayerViewModel @Inject constructor(
 
     private val _closePlayer = Channel<Unit>(Channel.BUFFERED)
     val closePlayer = _closePlayer.receiveAsFlow()
+
+    /**
+     * Fires once when playback resumes from a saved position, so the screen can
+     * surface a transient "Resumed — Restart" affordance. Carries
+     * the resumed position in ms so the chip can label it. `null`/0 means "no
+     * reminder pending".
+     */
+    private val _resumeReminder = kotlinx.coroutines.flow.MutableSharedFlow<Long>(
+        extraBufferCapacity = 1,
+    )
+    val resumeReminder: kotlinx.coroutines.flow.SharedFlow<Long> = _resumeReminder
 
     private val playerSessionManager = PlayerSessionManager(
         context = context,
@@ -557,6 +568,15 @@ class VideoPlayerViewModel @Inject constructor(
         persistPlaybackPosition(positionMs, force = true)
     }
 
+    /**
+     * Restarts the current item from the beginning. Backs the
+     * "Restart" action on the resume-reminder chip shown when playback resumes
+     * from a saved position.
+     */
+    fun restartPlayback() {
+        seekTo(0L)
+    }
+
     fun resumePlayback() {
         val engine = playerSessionManager.engine ?: return
         val skipMs = aggregateStore.aggregate.value.videoPlayer.videoSkipBackOnResumeMs
@@ -641,13 +661,13 @@ class VideoPlayerViewModel @Inject constructor(
      * threshold, gated by [com.raulshma.jellyplay.core.model.legacy.UserPreferences.smartDownloadsEnabled].
      *
      * Guards against the two risks flagged in the architecture analysis:
-     *  - *Premature delete on misreported duration*: the reporter derives
-     *    "95% watched" from `position / duration`. A live stream or a buggy
-     *    container can report a tiny/growing duration and trip the threshold
-     *    almost immediately. We require the resolved duration to be at least
-     *    [MIN_DURATION_FOR_SMART_DELETE_MS] before deleting.
-     *  - *Silent destructive action*: the deletion is now surfaced to the
-     *    user via [userMessageBus] instead of happening invisibly.
+     * - *Premature delete on misreported duration*: the reporter derives
+     * "95% watched" from `position / duration`. A live stream or a buggy
+     * container can report a tiny/growing duration and trip the threshold
+     * almost immediately. We require the resolved duration to be at least
+     * [MIN_DURATION_FOR_SMART_DELETE_MS] before deleting.
+     * - *Silent destructive action*: the deletion is now surfaced to the
+     * user via [userMessageBus] instead of happening invisibly.
      */
     private fun handleSmartDownloadCleanup(itemId: String) {
         if (!downloadsStore.downloads.value.smartDownloadsEnabled) return
@@ -1263,6 +1283,12 @@ class VideoPlayerViewModel @Inject constructor(
         // upcoming session's Stop can be reported.
         stopReportedForSession = null
         trackSelectionHelper.setPendingStreams(subtitleStreamIndex, audioStreamIndex)
+
+        // Surface a one-shot "Resumed — Restart" reminder when opening at a saved
+        // position. The screen renders it as a transient chip.
+        if (startPositionTicks > 0) {
+            _resumeReminder.tryEmit(startPositionTicks / 10_000)
+        }
 
         // "Play On" routing: if a Jellyfin remote session is connected (via the
         // Home FAB "Play On" entry), send the video to that session instead of

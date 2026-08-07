@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,6 +77,7 @@ fun GroupedLibraryContent(
     gridPadding: PaddingValues,
     onItemClick: (itemId: String, mediaType: MediaType, parentId: String?, itemName: String) -> Unit,
     getImageUrl: (String) -> String,
+    onFocusedItemChange: ((MediaItem?) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     require(groupBy != GroupBy.NONE) { "GroupedLibraryContent requires a non-NONE GroupBy" }
@@ -138,6 +140,9 @@ fun GroupedLibraryContent(
                         imageUrl = remember(item.id) { getImageUrl(item.id) },
                         blurHash = item.blurHashes.primary,
                         onClick = memoizedClick,
+                        modifier = Modifier.onFocusChanged {
+                            if (it.isFocused || it.hasFocus) onFocusedItemChange?.invoke(item)
+                        },
                     )
                 } else {
                     GroupHeader(label = header.orEmpty())
@@ -181,6 +186,9 @@ fun GroupedLibraryContent(
                         blurHash = cardImage.blurHash,
                         sharedElementKey = "poster_${item.id}",
                         showEpisodeSeriesBadge = cardImage.showSeriesBadge,
+                        modifier = Modifier.onFocusChanged {
+                            if (it.isFocused || it.hasFocus) onFocusedItemChange?.invoke(item)
+                        },
                     )
                 } else {
                     GroupHeader(label = header.orEmpty())

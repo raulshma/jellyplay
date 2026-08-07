@@ -213,9 +213,18 @@ fun JellyPlayApp(
             )
         }
         isAuthenticated -> {
+            // "Surprise Me" launcher-shortcut controller. Built
+            // once so the StateFlow reference is stable across recompositions.
+            val surpriseController = remember(viewModel) {
+                com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController(
+                    armed = viewModel.surpriseOnLaunch,
+                    consume = { viewModel.consumeSurpriseOnLaunch() },
+                )
+            }
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides viewModel.networkMonitor.networkStatus,
                 com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides viewModel.serverHealth,
+                com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
             ) {
                 MainContent(
                     onLogout = { revoke ->
@@ -844,82 +853,12 @@ private fun MainContent(
                 }
                 }
             } // end inner blur Box
-                androidx.compose.material3.SnackbarHost(
+                com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
                     hostState = snackbarHostState,
                     modifier = Modifier
                         .align(androidx.compose.ui.Alignment.BottomCenter)
-                        .padding(bottom = if (isFullScreenRoute) 16.dp else 96.dp)
-                ) { snackbarData ->
-                    val isError = snackbarData.visuals.duration == androidx.compose.material3.SnackbarDuration.Long
-                    val containerColor = if (isError) {
-                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
-                    }
-                    val contentColor = if (isError) {
-                        MaterialTheme.colorScheme.onErrorContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                    val iconColor = if (isError) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    }
-                    val borderColor = if (isError) {
-                        MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
-                    } else {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                    }
-                    val icon = if (isError) {
-                        Tabler.Outline.AlertCircle
-                    } else {
-                        Tabler.Outline.InfoCircle
-                    }
-
-                    androidx.compose.material3.Surface(
-                        shape = ShapeCache.smoothPill,
-                        color = containerColor,
-                        contentColor = contentColor,
-                        shadowElevation = 6.dp,
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = borderColor
-                        ),
-                        modifier = Modifier
-                            .padding(horizontal = 24.dp, vertical = 8.dp)
-                            .widthIn(max = 480.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = iconColor,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = snackbarData.visuals.message,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = contentColor
-                            )
-                            if (snackbarData.visuals.actionLabel != null) {
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = snackbarData.visuals.actionLabel!!,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = iconColor,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.clickable { snackbarData.performAction() }
-                                )
-                            }
-                        }
-                    }
-                }
+                        .padding(bottom = if (isFullScreenRoute) 16.dp else 96.dp),
+                )
             }
             // Press-and-hold peek overlay — topmost. Only composed when the user
             // has enabled the experimental feature and on phone; on TV the

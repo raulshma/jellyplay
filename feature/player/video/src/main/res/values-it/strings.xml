@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Sottotitoli</string>
+    <string name="player_resumed_message">Ripreso da dove avevi interrotto</string>
     <string name="player_reset_to_auto">Reimposta su automatico</string>
     <string name="player_track_default">Predefinito</string>
     <string name="player_track_off">Off</string>

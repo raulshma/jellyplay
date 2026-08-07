@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Untertitel</string>
+    <string name="player_resumed_message">An der letzten Position fortgesetzt</string>
     <string name="player_reset_to_auto">Auf Auto zurücksetzen</string>
     <string name="player_track_default">Standard</string>
     <string name="player_track_off">Aus</string>

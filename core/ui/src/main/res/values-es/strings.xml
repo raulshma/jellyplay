@@ -8,6 +8,32 @@
     <string name="core_reset">Restablecer</string>
     <string name="core_close">Cerrar</string>
     <string name="core_done">Hecho</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">Confirmar</string>
+    <string name="core_ok">Aceptar</string>
+    <string name="core_apply">Aplicar</string>
+    <string name="core_delete">Eliminar</string>
+    <string name="core_clear">Borrar</string>
+    <string name="core_undo">Deshacer</string>
+    <string name="core_clear_filters">Quitar filtros</string>
+    <string name="core_copy">Copiar</string>
+    <string name="core_copied_to_clipboard">Copiado al portapapeles</string>
+    <string name="core_play_from_start">Reproducir desde el inicio</string>
+    <string name="core_restart">Reiniciar</string>
+    <string name="core_send_now">Enviar ahora</string>
+    <string name="core_search">Buscar</string>
+    <string name="core_stop_playback">Detener reproducción</string>
+    <string name="core_select_all">Seleccionar todo</string>
+    <string name="core_mark_all_seen">Marcar todo como visto</string>
+    <string name="core_loading">Cargando…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_quick_actions">Acciones rápidas</string>
+    <string name="core_action_play">Reproducir</string>
+    <string name="core_action_mark_watched">Marcar como visto</string>
+    <string name="core_action_mark_unwatched">Marcar como no visto</string>
+    <string name="core_action_download">Descargar</string>
+    <string name="core_action_add_to_playlist">Añadir a la lista de reproducción</string>
+    <string name="core_action_details">Ver detalles</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->

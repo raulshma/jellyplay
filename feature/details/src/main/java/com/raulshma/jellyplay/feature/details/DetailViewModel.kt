@@ -120,7 +120,7 @@ class DetailViewModel @Inject constructor(
      * Whether the "Manage Series" action should be shown. True iff:
      * - The DIRECT_ARR_INTEGRATION experimental flag is enabled, AND
      * - The current item is a SERIES (episode navigation goes via the parent
-     *   series detail, so the menu naturally appears there), AND
+     * series detail, so the menu naturally appears there), AND
      * - The series has a tvdb id (Sonarr resolves series by tvdb), AND
      * - At least one Sonarr server is resolved.
      *
@@ -689,6 +689,37 @@ class DetailViewModel @Inject constructor(
                 .onFailure {
                     _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_mark_unplayed)))
                 }
+        }
+    }
+
+    /**
+     * Marks a row item (related/collection/episode) played or
+     * unplayed without switching the screen's current detail item. Flips the
+     * item in-place in [DetailUiState.relatedItems] so the card's badge updates
+     * immediately; the next detail fetch reconciles the server truth.
+     */
+    fun markRowItemPlayed(item: MediaItem, played: Boolean) {
+        launch {
+            val result = if (played) mediaRepository.markPlayed(item.id)
+            else mediaRepository.markUnplayed(item.id)
+            result.onSuccess {
+                _uiState.update { state ->
+                    state.copy(
+                        relatedItems = state.relatedItems.map {
+                            if (it.id == item.id) it.copy(
+                                isPlayed = played,
+                                playbackPositionTicks = 0L,
+                            ) else it
+                        },
+                        collectionItems = state.collectionItems.map {
+                            if (it.id == item.id) it.copy(
+                                isPlayed = played,
+                                playbackPositionTicks = 0L,
+                            ) else it
+                        },
+                    )
+                }
+            }
         }
     }
 

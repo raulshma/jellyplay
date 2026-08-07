@@ -94,6 +94,8 @@ internal fun SeasonsSection(
     currentSeasonId: String? = null,
     onEpisodePlayClick: (MediaItem) -> Unit,
     onEpisodeDetailClick: (MediaItem) -> Unit,
+    onEpisodeLongPress: (MediaItem) -> Unit = {},
+    onFocusedEpisodeChange: (MediaItem) -> Unit = {},
     onSeasonSelected: (seasonId: String) -> Unit = {},
     hideEpisodeThumbnails: Boolean = false,
     episodesDescending: Boolean = true,
@@ -381,6 +383,7 @@ internal fun SeasonsSection(
                                     isCurrentEpisode = episode.id == currentItemId,
                                     onPlayClick = { onEpisodePlayClick(episode) },
                                     onDetailClick = { onEpisodeDetailClick(episode) },
+                                    onLongPress = { onEpisodeLongPress(episode) },
                                     hideThumbnail = hideEpisodeThumbnails,
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
@@ -398,6 +401,9 @@ internal fun SeasonsSection(
                             contentType = { _, _ -> "episode" },
                             contentPadding = PaddingValues(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            onFocusedIndexChange = { index ->
+                                currentEpisodes.getOrNull(index)?.let(onFocusedEpisodeChange)
+                            },
                         ) { _, episode, focusModifier ->
                                 EpisodeCard(
                                     episode = episode,
@@ -405,6 +411,7 @@ internal fun SeasonsSection(
                                     isCurrentEpisode = episode.id == currentItemId,
                                     onPlayClick = { onEpisodePlayClick(episode) },
                                     onDetailClick = { onEpisodeDetailClick(episode) },
+                                    onLongPress = { onEpisodeLongPress(episode) },
                                     modifier = focusModifier,
                                     hideThumbnail = hideEpisodeThumbnails,
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
@@ -418,15 +425,17 @@ internal fun SeasonsSection(
                     }
                 }
                 else -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        FadingItem {
-                            Text(stringResource(R.string.detail_no_episodes_available), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                    // episode-less season was a plain text line.
+                    // Use the standard empty state (icon + title + description).
+                    FadingItem {
+                        com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
+                            icon = Tabler.Outline.Movie,
+                            title = stringResource(R.string.detail_season_empty_title),
+                            description = stringResource(R.string.detail_season_empty_description),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                        )
                     }
                 }
             }
@@ -470,6 +479,7 @@ internal fun EpisodeCard(
     modifier: Modifier = Modifier,
     hideThumbnail: Boolean = false,
     sharedThumbnailModifier: Modifier = Modifier,
+    onLongPress: (() -> Unit)? = null,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -552,7 +562,7 @@ internal fun EpisodeCard(
                 interactionSource = cardInteractionSource,
                 indication = null,
                 onClick = onDetailClick,
-                onLongClick = peek.onLongClick,
+                onLongClick = onLongPress ?: peek.onLongClick,
             )
     ) {
         Box(
@@ -730,6 +740,7 @@ private fun CompactEpisodeRow(
     hideThumbnail: Boolean = false,
     modifier: Modifier = Modifier,
     sharedThumbnailModifier: Modifier = Modifier,
+    onLongPress: (() -> Unit)? = null,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -772,7 +783,7 @@ private fun CompactEpisodeRow(
                 interactionSource = cardInteractionSource,
                 indication = null,
                 onClick = onDetailClick,
-                onLongClick = peek.onLongClick,
+                onLongClick = onLongPress ?: peek.onLongClick,
             ),
     ) {
         Box(

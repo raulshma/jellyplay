@@ -213,6 +213,7 @@
             <intent-filter>
                 <action android:name="com.raulshma.jellyplay.notification.OPEN_DETAIL" />
                 <action android:name="com.raulshma.jellyplay.notification.MARK_SEEN" />
+                <action android:name="com.raulshma.jellyplay.notification.MARK_ALL_SEEN" />
             </intent-filter>
         </receiver>
 

@@ -13,10 +13,13 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
+import com.raulshma.jellyplay.core.ui.feedback.UiText
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.R
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineConfig
@@ -71,13 +74,14 @@ private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
 @HiltViewModel
 class LiveTvPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    mediaRepository: MediaRepository,
+    private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val appRuntimeStateStore: AppRuntimeStateStore,
     private val playbackStore: PlaybackStore,
     private val lastChannelStore: LastChannelStore,
     private val engineFactory: LiveEngineFactory,
     private val imageUrlProvider: ImageUrlProvider,
+    private val userMessageBus: UserMessageBus,
 ) : ViewModel() {
 
     private val liveTvRepository: LiveTvRepository = mediaRepository
@@ -222,6 +226,85 @@ class LiveTvPlayerViewModel @Inject constructor(
         }
     }
 
+    // ── In-player recording ──
+    // Mirrors ChannelDetailViewModel: each action schedules/cancels a timer on
+    // the currently-airing program then re-fetches the program window so the
+    // Record ↔ Cancel sheet state follows the server, emitting a one-shot
+    // snackbar via [UserMessageBus]. No-op without a current program.
+
+    /** Schedules a single-episode timer for the current program. */
+    fun recordCurrentProgramOnce() {
+        val program = _state.value.currentProgram ?: return
+        viewModelScope.launch {
+            mediaRepository.createTimer(program.id)
+                .onSuccess {
+                    userMessageBus.info(UiText.Resource(R.string.live_record_success))
+                    refreshProgramsForCurrentChannel()
+                }
+                .onFailure { e ->
+                    userMessageBus.error(UiText.Raw(e.message ?: "Failed to set recording"))
+                }
+        }
+    }
+
+    /** Schedules a series timer rooted at the current program. */
+    fun recordCurrentProgramSeries() {
+        val program = _state.value.currentProgram ?: return
+        viewModelScope.launch {
+            mediaRepository.createSeriesTimer(program.id)
+                .onSuccess {
+                    userMessageBus.info(UiText.Resource(R.string.live_record_success))
+                    refreshProgramsForCurrentChannel()
+                }
+                .onFailure { e ->
+                    userMessageBus.error(UiText.Raw(e.message ?: "Failed to set recording"))
+                }
+        }
+    }
+
+    /** Cancels the single timer on the current program (if one is set). */
+    fun cancelCurrentProgramTimer() {
+        val program = _state.value.currentProgram ?: return
+        val timerId = program.timerId ?: return
+        viewModelScope.launch {
+            mediaRepository.cancelTimer(timerId)
+                .onSuccess {
+                    userMessageBus.info(UiText.Resource(R.string.live_record_canceled))
+                    refreshProgramsForCurrentChannel()
+                }
+                .onFailure { e ->
+                    userMessageBus.error(UiText.Raw(e.message ?: "Failed to cancel recording"))
+                }
+        }
+    }
+
+    /** Cancels the series timer on the current program (if one is set). */
+    fun cancelCurrentProgramSeries() {
+        val program = _state.value.currentProgram ?: return
+        val seriesTimerId = program.seriesTimerId ?: return
+        viewModelScope.launch {
+            mediaRepository.cancelSeriesTimer(seriesTimerId)
+                .onSuccess {
+                    userMessageBus.info(UiText.Resource(R.string.live_record_canceled))
+                    refreshProgramsForCurrentChannel()
+                }
+                .onFailure { e ->
+                    userMessageBus.error(UiText.Raw(e.message ?: "Failed to cancel recording"))
+                }
+        }
+    }
+
+    /**
+     * Re-fetches the program window for the current channel and merges the
+     * refreshed [LiveTvProgram] (with its updated timerId / seriesTimerId)
+     * into [_state]. Used by the record/cancel actions above so the Record ↔
+     * Cancel sheet reflects the latest server state without a full reload.
+     */
+    private suspend fun refreshProgramsForCurrentChannel() {
+        val channelId = _state.value.currentChannel?.id ?: return
+        loadPrograms(channelId)
+    }
+
     private fun switchTo(
         index: Int,
         audioStreamIndex: Int?,
@@ -246,26 +329,26 @@ class LiveTvPlayerViewModel @Inject constructor(
      * Resolves a playable live URL for [channel] and starts playback.
      *
      * end-to-end flow:
-     *   1. Always resolve under [PlaybackMode.AUTO] regardless of the user's
-     *      playback pref — live tuners do not support static direct play
-     *      (FORCE_DIRECT_PLAY disables direct stream + transcode, leaving
-     *      the server no playable method for a live source) and forcing
-     *      transcode up-front breaks tuners that only offer direct stream.
-     *   2. Call `fetchPlaybackInfo` with `autoOpenLiveStream = true` and a
-     *      **blank** `mediaSourceId` (live sources have a server-generated
-     *      source id distinct from the channel id; passing the channel id as
-     *      the source id causes the server to return an empty source list).
-     *   3. Pick the first source from the response.
-     *   4. Try `resolvePlayback` first — it walks the full Direct Play /
-     *      Direct Stream / Transcode decision tree and returns null only if
-     *      the server offers no playable method.
-     *   5. If `resolvePlayback` returns null, fall back to building a direct
-     *      stream URL directly via `getStreamUrl(itemId, sourceId,
-     *      liveStreamId)` (the VOD path's `PlayerSessionManager.loadOnline`
-     *      does the same fallback). The server has already opened the tuner
-     *      session via `autoOpenLiveStream=true`, so the URL works even when
-     *      the source flags are all false.
-     *   6. If we still have no URL, surface the error with the actual cause.
+     * 1. Always resolve under [PlaybackMode.AUTO] regardless of the user's
+     * playback pref — live tuners do not support static direct play
+     * (FORCE_DIRECT_PLAY disables direct stream + transcode, leaving
+     * the server no playable method for a live source) and forcing
+     * transcode up-front breaks tuners that only offer direct stream.
+     * 2. Call `fetchPlaybackInfo` with `autoOpenLiveStream = true` and a
+     * **blank** `mediaSourceId` (live sources have a server-generated
+     * source id distinct from the channel id; passing the channel id as
+     * the source id causes the server to return an empty source list).
+     * 3. Pick the first source from the response.
+     * 4. Try `resolvePlayback` first — it walks the full Direct Play /
+     * Direct Stream / Transcode decision tree and returns null only if
+     * the server offers no playable method.
+     * 5. If `resolvePlayback` returns null, fall back to building a direct
+     * stream URL directly via `getStreamUrl(itemId, sourceId,
+     * liveStreamId)` (the VOD path's `PlayerSessionManager.loadOnline`
+     * does the same fallback). The server has already opened the tuner
+     * session via `autoOpenLiveStream=true`, so the URL works even when
+     * the source flags are all false.
+     * 6. If we still have no URL, surface the error with the actual cause.
      */
     private suspend fun playChannel(
         channel: LiveTvChannel,
@@ -593,6 +676,20 @@ class LiveTvPlayerViewModel @Inject constructor(
 
     fun seekWithinDvr(positionMs: Long) {
         engine?.seekTo(positionMs)
+    }
+
+    /**
+     * Restarts the current program from its beginning.
+     * Seeks to the start of the DVR window (position 0); only meaningful when
+     * the server exposes a timeshift buffer (`durationMs > 0`). On pure-live
+     * streams with no DVR window there is no "start" to return to, so this is
+     * a no-op — the UI gates the action on `canSeek`.
+     */
+    fun playFromStart() {
+        // Guard: only restart when a DVR window exists. Mirrors the seek-bar
+        // gate (LiveSeekBar returns early when durationMs <= 0).
+        if (_state.value.durationMs <= 0L) return
+        engine?.seekTo(0L)
     }
 
     /** Polled by the screen every 500ms while playing to refresh seek-bar state. */

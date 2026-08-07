@@ -36,6 +36,8 @@
     <string name="music_now_playing">Wird wiedergegeben</string>
     <string name="music_download_album">Album herunterladen</string>
     <string name="music_download_track">Titel herunterladen</string>
+    <string name="music_delete_album_downloads_confirm_title">Album-Downloads löschen?</string>
+    <string name="music_delete_album_downloads_confirm_message">Dadurch werden alle heruntergeladenen Titel dieses Albums entfernt.</string>
 
     <!-- Track / row menus -->
     <string name="music_go_to_album">Zum Album</string>

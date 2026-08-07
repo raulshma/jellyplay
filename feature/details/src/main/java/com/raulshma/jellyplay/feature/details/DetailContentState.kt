@@ -96,4 +96,8 @@ internal data class DetailContentCallbacks(
     val onShowFromContinueWatching: () -> Unit,
     val onManageSeries: () -> Unit,
     val onAddToPlaylist: () -> Unit,
+    /** Open the quick-action sheet for a row item */
+    val onMediaQuickActions: (MediaItem) -> Unit = {},
+    /** Track the TV-focused row item so the Menu key can open its quick actions. */
+    val onFocusedMediaItem: (MediaItem) -> Unit = {},
 )

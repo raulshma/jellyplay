@@ -316,7 +316,11 @@ fun PosterCard(
     // per-card peek composition allocations in contexts that can't use it
     // (e.g. a library grid without the experimental preview enabled).
     val mediaPreviewController = com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController.current
-    val previewFactory = if (mediaPreviewController != null) {
+    // When the host screen provides a quick-action controller,
+    // long-press opens the action sheet instead of the peek preview — the
+    // action sheet supersedes peek so both never fight over one gesture.
+    val quickActionController = LocalMediaQuickActionController.current
+    val previewFactory = if (quickActionController != null) null else if (mediaPreviewController != null) {
         remember(item, imageUrl, fallbackUrls, blurHash) {
             { sourceBounds: androidx.compose.ui.geometry.Rect? ->
                 com.raulshma.jellyplay.core.ui.preview.MediaPreview(
@@ -329,6 +333,13 @@ fun PosterCard(
             }
         }
     } else null
+
+    // Stable per-item lambda so combinedClickable's gesture detector isn't
+    // restarted mid-press. Reads the controller from composition scope so the
+    // sheet target is always this card's exact item.
+    val onQuickActionsLongPress = quickActionController?.let { controller ->
+        remember(item, controller) { { controller.show(item) } }
+    }
 
     MediaCardScaffold(
         onClick = onClick,
@@ -365,6 +376,7 @@ fun PosterCard(
         sharedElementKey = sharedElementKey,
         scrimBrush = gradientBrush,
         previewFactory = previewFactory,
+        onLongPress = onQuickActionsLongPress,
         showProgress = showProgress,
         progressFraction = progressPercent,
         overlays = {

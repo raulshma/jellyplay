@@ -20,6 +20,17 @@
     <string name="live_channel_up">이전 채널</string>
     <string name="live_channel_down">다음 채널</string>
     <string name="live_stream_options">스트림 옵션</string>
+    <string name="live_record">녹화</string>
+    <string name="live_record_title">녹화</string>
+    <string name="live_record_once">한 번 녹화</string>
+    <string name="live_record_series">시리즈 녹화</string>
+    <string name="live_cancel_recording">녹화 취소</string>
+    <string name="live_cancel_series">시리즈 취소</string>
+    <string name="live_record_success">녹화가 예약되었습니다</string>
+    <string name="live_record_canceled">녹화가 취소되었습니다</string>
+    <string name="live_record_failed">녹화를 설정할 수 없습니다</string>
+    <string name="live_record_no_program">프로그램 정보가 없습니다</string>
+    <string name="live_play_from_start">처음부터 재생</string>
     <string name="live_error_playback">재생 오류</string>
     <string name="live_error_playback_fallback">재생 오류</string>
     <string name="live_error_show_details">세부정보 표시</string>

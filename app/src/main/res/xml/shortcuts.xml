@@ -44,4 +44,26 @@
             android:targetPackage="com.raulshma.jellyplay"
             android:targetClass="com.raulshma.jellyplay.MainActivity" />
     </shortcut>
+    <shortcut
+        android:shortcutId="surprise_me"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_surprise"
+        android:shortcutShortLabel="@string/shortcut_surprise_short"
+        android:shortcutLongLabel="@string/shortcut_surprise_long">
+        <intent
+            android:action="com.raulshma.jellyplay.action.SURPRISE_ME"
+            android:targetPackage="com.raulshma.jellyplay"
+            android:targetClass="com.raulshma.jellyplay.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="settings"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_settings"
+        android:shortcutShortLabel="@string/shortcut_settings_short"
+        android:shortcutLongLabel="@string/shortcut_settings_long">
+        <intent
+            android:action="com.raulshma.jellyplay.action.SETTINGS"
+            android:targetPackage="com.raulshma.jellyplay"
+            android:targetClass="com.raulshma.jellyplay.MainActivity" />
+    </shortcut>
 </shortcuts>

@@ -145,16 +145,19 @@ fun AboutScreen(
                         icon = Tabler.Outline.Server,
                         title = stringResource(R.string.settings_server_name_label),
                         subtitle = viewModel.serverName ?: stringResource(R.string.settings_unknown),
+                        copyableValue = viewModel.serverName,
                     )
                     SettingInfoItem(
                         icon = Tabler.Outline.Server,
                         title = stringResource(R.string.settings_server_version_label),
                         subtitle = viewModel.serverVersion ?: stringResource(R.string.settings_unknown),
+                        copyableValue = viewModel.serverVersion,
                     )
                     SettingInfoItem(
                         icon = Tabler.Outline.Server,
                         title = stringResource(R.string.settings_server_address_label_info),
                         subtitle = viewModel.serverAddress ?: stringResource(R.string.settings_unknown),
+                        copyableValue = viewModel.serverAddress,
                     )
                 }
 

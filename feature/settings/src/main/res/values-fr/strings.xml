@@ -107,6 +107,8 @@
     <string name="settings_manage_addresses_cd">Gérer les adresses</string>
     <string name="settings_active_cd">Actif</string>
     <string name="settings_remove_cd">Retirer</string>
+    <string name="settings_remove_server_confirm_title">Supprimer le serveur ?</string>
+    <string name="settings_remove_server_confirm_message">Cela supprime le serveur et tous les utilisateurs enregistrés sur celui-ci.</string>
     <string name="settings_add_address">Ajouter une adresse</string>
     <string name="settings_primary">Principale</string>
     <string name="settings_switch">Changer</string>

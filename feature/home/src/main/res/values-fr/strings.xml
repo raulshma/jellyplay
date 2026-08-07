@@ -36,6 +36,7 @@
     <string name="home_downloads">Téléchargements</string>
     <string name="home_play_on">Lire sur</string>
     <string name="home_settings">Paramètres</string>
+    <string name="home_switch_user">Changer d\'utilisateur</string>
     <string name="home_going_online">Connexion en cours…</string>
     <string name="home_go_online">Se connecter</string>
     <string name="home_go_offline">Se déconnecter</string>

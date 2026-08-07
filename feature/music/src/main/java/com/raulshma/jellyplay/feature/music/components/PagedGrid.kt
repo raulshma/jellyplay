@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
@@ -19,6 +20,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
+import com.raulshma.jellyplay.feature.music.R
 
 @Composable
 fun <T : Any> PagedGrid(
@@ -29,14 +31,17 @@ fun <T : Any> PagedGrid(
     gridMin: Dp = 150.dp,
     spacing: Dp = 12.dp,
     emptyIcon: ImageVector = Tabler.Outline.Search,
-    emptyTitle: String = "Nothing found",
+    emptyTitle: String = stringResource(R.string.music_nothing_found),
     itemContent: @Composable (T, Modifier) -> Unit,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         when (val refreshState = items.loadState.refresh) {
             is LoadState.Loading -> ScreenLoadingState()
             is LoadState.Error -> ErrorScreen(
-                message = refreshState.error.localizedMessage ?: "Failed to load",
+                // was a raw "Failed to load" literal — reuse the
+                // localized string so the error path matches the empty path.
+                message = refreshState.error.localizedMessage
+                    ?: stringResource(R.string.music_failed_load),
                 onRetry = { items.refresh() },
             )
             is LoadState.NotLoading -> {

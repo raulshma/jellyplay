@@ -116,6 +116,10 @@ import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
+import com.raulshma.jellyplay.core.ui.components.QuickAction
+import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.*
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -124,8 +128,10 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.model.GroupBy
 import com.raulshma.jellyplay.core.model.LibraryViewMode
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
@@ -243,6 +249,22 @@ fun LibraryScreen(
         }
     }
 
+    val quickActionController = rememberMediaQuickActionController(
+        resolveActions = remember { { item: MediaItem -> libraryQuickActions(item) } },
+        executeAction = remember(viewModel, onItemClick) {
+            { item: MediaItem, action: QuickAction ->
+                when (action) {
+                    QuickAction.PLAY -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
+                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
+                    QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
+                    QuickAction.DETAILS -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
+                    else -> Unit
+                }
+            }
+        },
+    )
+    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
+
     val backgroundColor = MaterialTheme.colorScheme.background
 
 
@@ -268,8 +290,15 @@ fun LibraryScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor),
+            .background(backgroundColor)
+            .onDpadKey(
+                onMenu = {
+                    tvFocusedItem?.let { quickActionController.show(it) }
+                    true
+                },
+            ),
     ) {
+        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
         if (error != null && pagedItems.itemCount == 0) {
             ErrorScreen(
                 message = error!!,
@@ -572,11 +601,18 @@ fun LibraryScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                         if (hasActiveFilters) {
-                                            Text(
-                                                text = stringResource(R.string.library_try_adjusting_filters),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
+                                            // the "adjust your filters" hint was plain
+                                            // text with no affordance. Promote it to a tonal button
+                                            // that clears the active filters so empty results become
+                                            // recoverable in one tap.
+                                            androidx.compose.material3.FilledTonalButton(
+                                                onClick = { viewModel.clearFilters() },
+                                            ) {
+                                                Text(
+                                                    text = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_clear_filters),
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -623,6 +659,7 @@ fun LibraryScreen(
                                                 gridPadding = gridPadding,
                                                 onItemClick = onItemClick,
                                                 getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
+                                                onFocusedItemChange = { item -> tvFocusedItem = item },
                                             )
                                         } else when (activeMode) {
                                     LibraryViewMode.LIST -> {
@@ -688,6 +725,7 @@ fun LibraryScreen(
                                             verticalArrangement = Arrangement.spacedBy(spacing),
                                             modifier = Modifier.fillMaxSize(),
                                             contentType = { "mediaItem" },
+                                            onFocusedIndexChange = { index -> pagedItems[index]?.let { tvFocusedItem = it } },
                                         ) { index, itemModifier ->
                                             val item = pagedItems[index]
                                             if (item != null) {
@@ -725,6 +763,7 @@ fun LibraryScreen(
                                             verticalArrangement = Arrangement.spacedBy(spacing),
                                             modifier = Modifier.fillMaxSize(),
                                             contentType = { "mediaItem" },
+                                            onFocusedIndexChange = { index -> pagedItems[index]?.let { tvFocusedItem = it } },
                                         ) { index, itemModifier ->
                                             val item = pagedItems[index]
                                             if (item != null) {
@@ -1004,7 +1043,9 @@ fun LibraryScreen(
                 }
             }
         }
+        } // close CompositionLocalProvider
     }
+    MediaQuickActionHost(quickActionController)
 
     if (showFilters) {
         LibraryFilterSheet(
@@ -1222,14 +1263,14 @@ private fun GlassPill(
  * Right-edge alphabet "jump to letter" rail for large libraries. Renders the set
  * of leading letters present in the loaded items (plus `#` for non A–Z names) as
  * a compact vertical column. Input modes:
- *  - Tap anywhere on the rail → jump to the letter at that Y-position via [onJump].
- *  - Drag (touch) up and down the rail → fisheye lens: the letter under the finger
- *    magnifies most, its neighbors taper smaller via a gaussian falloff, and the
- *    whole bell-curve animates continuously with the finger. [onJump] fires as the
- *    finger crosses each letter boundary. A magnifier bubble tracks the finger Y.
- *  - dpad-focus a letter (TV) → press select to jump.
- *  - The active letter (from the host's scroll position) is tinted primary so the
- *    rail doubles as a "you are here" indicator.
+ * - Tap anywhere on the rail → jump to the letter at that Y-position via [onJump].
+ * - Drag (touch) up and down the rail → fisheye lens: the letter under the finger
+ * magnifies most, its neighbors taper smaller via a gaussian falloff, and the
+ * whole bell-curve animates continuously with the finger. [onJump] fires as the
+ * finger crosses each letter boundary. A magnifier bubble tracks the finger Y.
+ * - dpad-focus a letter (TV) → press select to jump.
+ * - The active letter (from the host's scroll position) is tinted primary so the
+ * rail doubles as a "you are here" indicator.
  *
  * Touch input is handled at the rail level (not per-letter) so the user never has
  * to hit a ~16px label — any point on the rail maps to a letter. Per-letter focus
@@ -1528,5 +1569,24 @@ private fun groupByLabel(groupBy: GroupBy): String = when (groupBy) {
     GroupBy.TYPE -> stringResource(R.string.library_group_by_type)
     GroupBy.GENRE -> stringResource(R.string.library_group_by_genre)
     GroupBy.YEAR -> stringResource(R.string.library_group_by_year)
+}
+
+/**
+ * Which quick actions apply to a library grid item Non-playable
+ * entries (photos, photo folders) and group headers get none. The library grid
+ * has no inline play affordance, so PLAY and DETAILS both flow through
+ * [LibraryScreen.onItemClick].
+ */
+private fun libraryQuickActions(item: MediaItem): List<QuickAction> = buildList {
+    when (item.mediaType) {
+        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE,
+        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST,
+        MediaType.MUSIC_VIDEO, MediaType.COLLECTION, MediaType.LIVE_TV, MediaType.CHANNEL -> {
+            add(QuickAction.PLAY)
+            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
+            add(QuickAction.DETAILS)
+        }
+        else -> Unit
+    }
 }
 

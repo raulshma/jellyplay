@@ -58,15 +58,17 @@ import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
  * one-file edit instead of three.
  *
  * @param image renders the poster/backdrop art, given an [imageModifier] that
- *  already carries the [aspectRatio] and (when [sharedElementKey] is set) the
- *  shared-element transition. The caller renders its [com.raulshma.jellyplay.core.ui.image.MediaImage]
- *  / placeholder with that modifier.
+ * already carries the [aspectRatio] and (when [sharedElementKey] is set) the
+ * shared-element transition. The caller renders its [com.raulshma.jellyplay.core.ui.image.MediaImage]
+ * / placeholder with that modifier.
  * @param aspectRatio image aspect ratio — 2:3 for posters, 16:9 for wide cards.
  * @param previewFactory when non-null, wires the press-and-hold peek preview;
- *  receives the card's captured bounds so it can populate
- *  [MediaPreview.sourceBounds]. Pass `null` (the default) to disable peek.
+ * receives the card's captured bounds so it can populate
+ * [MediaPreview.sourceBounds]. Pass `null` (the default) to disable peek.
+ * @param onLongPress when non-null, long-press fires this instead of the peek
+ * preview (e.g. a quick-action sheet wired by the host screen).
  * @param overlays badges, chips, shimmer, brightness tints — anything drawn
- *  on top of the image (z-order: image → scrim → overlays → play → progress).
+ * on top of the image (z-order: image → scrim → overlays → play → progress).
  * @param footer the meta row beneath the title (year • runtime, series info…).
  */
 @Composable
@@ -88,6 +90,7 @@ fun MediaCardScaffold(
     border: BorderStroke? = null,
     titleColor: Color = MaterialTheme.colorScheme.onSurface,
     previewFactory: ((sourceBounds: Rect?) -> MediaPreview)? = null,
+    onLongPress: (() -> Unit)? = null,
     overlays: @Composable BoxScope.() -> Unit = {},
     footer: @Composable ColumnScope.() -> Unit = {},
     showProgress: Boolean = false,
@@ -173,7 +176,7 @@ fun MediaCardScaffold(
                         null
                     },
                     onClick = onClick,
-                    onLongClick = peek?.onLongClick,
+                    onLongClick = onLongPress ?: peek?.onLongClick,
                     enabled = enabled,
                 ),
             shape = cardShape,

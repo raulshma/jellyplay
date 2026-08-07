@@ -506,6 +506,8 @@ internal fun DetailContentBody(
                         onEpisodeDetailClick = { episode ->
                             callbacks.onItemClick(episode.id)
                         },
+                        onEpisodeLongPress = callbacks.onMediaQuickActions,
+                        onFocusedEpisodeChange = callbacks.onFocusedMediaItem,
                         onSeasonSelected = callbacks.onSeasonSelected,
                         hideEpisodeThumbnails = state.preferences.hideEpisodeThumbnails,
                         episodesDescending = state.preferences.episodesDescending,
@@ -536,6 +538,9 @@ internal fun DetailContentBody(
                         key = { "collection_${it.id}" },
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        onFocusedIndexChange = { index ->
+                            state.collectionItems.getOrNull(index)?.let(callbacks.onFocusedMediaItem)
+                        },
                     ) { _, collectionItem, focusModifier ->
                             val collectionClick = remember(collectionItem.id) { { callbacks.onItemClick(collectionItem.id) } }
                             val collectionProgress = collectionItem.progressFraction()
@@ -614,6 +619,9 @@ internal fun DetailContentBody(
                         key = { "related_${it.id}" },
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        onFocusedIndexChange = { index ->
+                            state.relatedItems.getOrNull(index)?.let(callbacks.onFocusedMediaItem)
+                        },
                     ) { _, related, focusModifier ->
                             val relatedClick = remember(related.id) { { callbacks.onItemClick(related.id) } }
                             val relatedImageUrl = remember(related.id) { callbacks.getImageUrl(related.id) }

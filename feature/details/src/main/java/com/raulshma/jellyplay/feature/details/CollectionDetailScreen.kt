@@ -15,18 +15,26 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.size.Size as CoilSize
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.feature.details.R
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.LayoutGrid
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -38,9 +46,14 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
+import com.raulshma.jellyplay.core.ui.components.QuickAction
+import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,11 +82,41 @@ fun CollectionDetailScreen(
         }
     }
 
-    JellyPlayScreenScaffold(
-        title = title,
-        onBack = onBack,
-        topBarStyle = TopBarStyle.Collapsing,
-    ) { padding ->
+    // Long-press / TV-Menu quick actions for collection cards
+    val quickActionController = rememberMediaQuickActionController(
+        resolveActions = remember { { item: MediaItem -> collectionQuickActions(item) } },
+        executeAction = remember(viewModel, onItemClick) {
+            { item: MediaItem, action: QuickAction ->
+                when (action) {
+                    QuickAction.PLAY -> onItemClick(item.id)
+                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, played = true)
+                    QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, played = false)
+                    QuickAction.DETAILS -> onItemClick(item.id)
+                    else -> Unit
+                }
+            }
+        },
+    )
+    // TV-only: the card currently holding D-pad focus, so the Menu key can open
+    // its quick actions.
+    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onDpadKey(
+                onMenu = {
+                    tvFocusedItem?.let { quickActionController.show(it) }
+                    true
+                },
+            ),
+    ) {
+        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+        JellyPlayScreenScaffold(
+            title = title,
+            onBack = onBack,
+            topBarStyle = TopBarStyle.Collapsing,
+        ) { padding ->
         when (state) {
             CollectionDetailUiState.Loading -> {
                 DelayedLoadingScreen(modifier = Modifier.padding(padding))
@@ -131,6 +174,17 @@ fun CollectionDetailScreen(
                         val gridMin = adaptiveInfo.gridMinSize(isTv)
                         val spacing = adaptiveInfo.itemSpacing(isTv)
 
+                        // an empty collection previously rendered
+                        // just the backdrop banner with nothing below. Surface a
+                        // proper empty state instead of a bare grid.
+                        if (items.isEmpty()) {
+                            com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
+                                icon = Tabler.Outline.LayoutGrid,
+                                title = stringResource(R.string.detail_collection_empty_title),
+                                description = stringResource(R.string.detail_collection_empty_description),
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
                         TvFocusableGrid(
                             items = items,
                             key = { it.id },
@@ -143,6 +197,7 @@ fun CollectionDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(spacing),
                             modifier = Modifier.fillMaxSize(),
                             contentType = { "mediaItem" },
+                            onFocusedIndexChange = { index -> items.getOrNull(index)?.let { tvFocusedItem = it } },
                         ) { index, item, focusModifier ->
                             val itemVisible = remember { mutableStateOf(false) }
                             LaunchedEffect(Unit) { itemVisible.value = true }
@@ -167,9 +222,28 @@ fun CollectionDetailScreen(
                                 )
                             }
                         }
+                        } // close else (items non-empty)
                     }
                 }
             }
         }
+        } // close scaffold content lambda
+        } // close CompositionLocalProvider
+    } // close Box
+    MediaQuickActionHost(quickActionController)
+} // close CollectionDetailScreen
+
+/**
+ * Which quick actions apply to a collection card Movies and
+ * series get play / mark-watched / details; other entries are excluded.
+ */
+private fun collectionQuickActions(item: MediaItem): List<QuickAction> = buildList {
+    when (item.mediaType) {
+        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE -> {
+            add(QuickAction.PLAY)
+            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
+            add(QuickAction.DETAILS)
+        }
+        else -> Unit
     }
 }

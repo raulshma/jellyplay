@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="syncplay_leave_group">Esci dal gruppo</string>
+    <string name="syncplay_leave_group_confirm_title">Uscire dal gruppo?</string>
+    <string name="syncplay_leave_group_confirm_message">Verrai rimosso dalla visione di gruppo.</string>
     <string name="syncplay_retry">Riprova</string>
     <string name="syncplay_no_active_groups">Nessun gruppo SyncPlay attivo</string>
     <string name="syncplay_create_group_together">Crea un gruppo per guardare insieme</string>

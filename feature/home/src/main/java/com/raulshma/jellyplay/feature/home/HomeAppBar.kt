@@ -42,7 +42,9 @@ import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.ToggleFloatingActionButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +56,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.Surface
+import com.raulshma.jellyplay.core.model.UserInfo
+import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
@@ -98,6 +104,9 @@ fun HomeTopDock(
     activeDownloadCount: Int,
     pendingSyncCount: Int,
     showClock: Boolean,
+    currentUser: UserInfo?,
+    currentServerUsers: List<UserInfo>,
+    onUserSwitch: (String) -> Unit,
     onModeChange: (HomeMode) -> Unit,
     onSearchExpanded: (Boolean) -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -187,6 +196,9 @@ fun HomeTopDock(
                         appBarIconColorFaded = appBarIconColorFaded,
                         pendingSyncCount = pendingSyncCount,
                         showClock = showClock,
+                        currentUser = currentUser,
+                        currentServerUsers = currentServerUsers,
+                        onUserSwitch = onUserSwitch,
                         onToggleOffline = onToggleOffline,
                         isGoingOnline = isGoingOnline,
                         onShowSyncDetails = onShowSyncDetails,
@@ -398,12 +410,25 @@ private fun CollapsedDockContent(
     appBarIconColorFaded: Color,
     pendingSyncCount: Int,
     showClock: Boolean,
+    currentUser: UserInfo?,
+    currentServerUsers: List<UserInfo>,
+    onUserSwitch: (String) -> Unit,
     onToggleOffline: () -> Unit,
     isGoingOnline: Boolean = false,
     onShowSyncDetails: () -> Unit = {},
     onModeChange: (HomeMode) -> Unit,
     onSearchExpand: () -> Unit,
 ) {
+    // Quick user switcher : tappable avatar chip in the dock, only when the
+    // server has ≥2 persisted users. Opens a DropdownMenu (mobile) or a
+    // TvSafeSheet (TV) — the project's canonical dual-renderer menu idiom.
+    if (currentUser != null && currentServerUsers.size >= 2) {
+        UserSwitcherChip(
+            currentUser = currentUser,
+            users = currentServerUsers,
+            onUserSwitch = onUserSwitch,
+        )
+    }
     if (showClock) {
         Row(
             modifier = Modifier
@@ -677,4 +702,115 @@ fun HomeFabMenu(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
         )
     }
+}
+
+/**
+ * The home app-bar quick user switcher chip. Renders the current user's
+ * initials avatar + name; tapping opens a [DropdownMenu] (mobile) or a
+ * [TvSafeSheet] (TV) listing every persisted user for the server. Mirrors the
+ * `DetailTopBar` overflow-menu idiom (single shared option list, dual renderer).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UserSwitcherChip(
+    currentUser: UserInfo,
+    users: List<UserInfo>,
+    onUserSwitch: (String) -> Unit,
+) {
+    val isTv = LocalTvMode.current
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showTvMenu by remember { mutableStateOf(false) }
+
+    val colorScheme = MaterialTheme.colorScheme
+    val (containerTriplet, onContainerTriplet) = remember(colorScheme) {
+        avatarColorPairForChip(colorScheme)
+    }
+    val (avatarColor, onAvatarColor) = remember(currentUser.name, containerTriplet, onContainerTriplet) {
+        avatarColorsForName(currentUser.name, containerTriplet, onContainerTriplet)
+    }
+
+    val chipFocusState = rememberTvFocusState()
+    Box {
+        Row(
+            modifier = Modifier
+                .padding(end = 12.dp)
+                .then(chipFocusState.focusModifier)
+                .tvFocusIndicator(chipFocusState, CircleShape)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                .border(
+                    width = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                    shape = CircleShape,
+                )
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {
+                    if (isTv) showTvMenu = true else menuExpanded = true
+                }
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            UserAvatar(
+                name = currentUser.name,
+                size = 22.dp,
+                avatarColor = avatarColor,
+                onAvatarColor = onAvatarColor,
+            )
+            Text(
+                text = currentUser.name.ifBlank { "?" },
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+            )
+        }
+
+        if (!isTv) {
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                val options = rememberUserSwitchOptions(
+                    users = users,
+                    currentUserId = currentUser.id,
+                    onClose = { menuExpanded = false },
+                    onUserSwitch = onUserSwitch,
+                )
+                options.forEach { option -> UserSwitchDropdownItem(option) }
+            }
+        }
+    }
+
+    if (isTv && showTvMenu) {
+        val options = rememberUserSwitchOptions(
+            users = users,
+            currentUserId = currentUser.id,
+            onClose = { showTvMenu = false },
+            onUserSwitch = onUserSwitch,
+        )
+        TvSafeSheet(
+            onDismissRequest = { showTvMenu = false },
+            title = stringResource(R.string.home_switch_user),
+        ) {
+            options.forEach { option -> UserSwitchTvRow(option) }
+        }
+    }
+}
+
+/** Palette helper duplicating `HomeUserSwitchMenu`'s private pair (kept local to
+ * avoid widening that file's API; the colors are the M3 container triplet). */
+private fun avatarColorPairForChip(cs: androidx.compose.material3.ColorScheme) =
+    listOf(cs.primaryContainer, cs.secondaryContainer, cs.tertiaryContainer) to
+        listOf(cs.onPrimaryContainer, cs.onSecondaryContainer, cs.onTertiaryContainer)
+
+private fun avatarColorsForName(
+    name: String,
+    containerTriplet: List<Color>,
+    onContainerTriplet: List<Color>,
+): Pair<Color, Color> {
+    val raw = name.hashCode().mod(containerTriplet.size)
+    val index = if (raw < 0) -raw else raw
+    return containerTriplet[index] to onContainerTriplet[index]
 }

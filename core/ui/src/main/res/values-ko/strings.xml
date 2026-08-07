@@ -8,6 +8,32 @@
     <string name="core_reset">재설정</string>
     <string name="core_close">닫기</string>
     <string name="core_done">완료</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">확인</string>
+    <string name="core_ok">확인</string>
+    <string name="core_apply">적용</string>
+    <string name="core_delete">삭제</string>
+    <string name="core_clear">지우기</string>
+    <string name="core_undo">실행 취소</string>
+    <string name="core_clear_filters">필터 지우기</string>
+    <string name="core_copy">복사</string>
+    <string name="core_copied_to_clipboard">클립보드에 복사했습니다</string>
+    <string name="core_play_from_start">처음부터 재생</string>
+    <string name="core_restart">처음부터 재생</string>
+    <string name="core_send_now">지금 보내기</string>
+    <string name="core_search">검색</string>
+    <string name="core_stop_playback">재생 중지</string>
+    <string name="core_select_all">모두 선택</string>
+    <string name="core_mark_all_seen">모두 시청한 것으로 표시</string>
+    <string name="core_loading">로드 중…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_quick_actions">빠른 작업</string>
+    <string name="core_action_play">재생</string>
+    <string name="core_action_mark_watched">시청한 것으로 표시</string>
+    <string name="core_action_mark_unwatched">시청하지 않은 것으로 표시</string>
+    <string name="core_action_download">다운로드</string>
+    <string name="core_action_add_to_playlist">재생목록에 추가</string>
+    <string name="core_action_details">세부정보 보기</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->

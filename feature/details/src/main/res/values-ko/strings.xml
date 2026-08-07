@@ -139,6 +139,14 @@
     <string name="detail_msg_couldnt_mark_unplayed">재생 안 됨으로 표시할 수 없습니다</string>
     <string name="detail_mark_season_watched">시즌을 시청함으로 표시</string>
     <string name="detail_mark_season_unwatched">시즌을 시청 안 함으로 표시</string>
+    <string name="detail_mark_series_watched_confirm_title">시리즈를 시청한 것으로 표시하시겠습니까?</string>
+    <string name="detail_mark_series_watched_confirm_message">모든 에피소드가 시청한 것으로 표시되고 모든 이어보기 위치가 삭제됩니다.</string>
+    <string name="detail_mark_series_unwatched_confirm_title">시리즈를 시청하지 않은 것으로 표시하시겠습니까?</string>
+    <string name="detail_mark_series_unwatched_confirm_message">모든 에피소드가 시청하지 않은 것으로 표시됩니다.</string>
+    <string name="detail_mark_season_watched_confirm_title">시즌을 시청한 것으로 표시하시겠습니까?</string>
+    <string name="detail_mark_season_watched_confirm_message">이 시즌의 모든 에피소드가 시청한 것으로 표시되고 이어보기 위치가 삭제됩니다.</string>
+    <string name="detail_mark_season_unwatched_confirm_title">시즌을 시청하지 않은 것으로 표시하시겠습니까?</string>
+    <string name="detail_mark_season_unwatched_confirm_message">이 시즌의 모든 에피소드가 시청하지 않은 것으로 표시됩니다.</string>
     <string name="detail_cd_season_options">시즌을 시청함 또는 시청 안 함으로 표시</string>
     <string name="detail_msg_no_episodes_queued">대기열에 추가할 수 있는 에피소드가 없습니다</string>
     <string name="detail_msg_hidden_from_next_up">다음에 볼 작품에서 숨겨짐</string>
@@ -256,5 +264,13 @@
     <string name="detail_seerr_country">국가</string>
     <string name="detail_seerr_studios">스튜디오</string>
     <string name="detail_seerr_currently_streaming_on">현재 스트리밍 중</string>
+
+    <!-- 빈 상태 -->
+    <string name="detail_collection_empty_title">이 컬렉션이 비어 있습니다</string>
+    <string name="detail_collection_empty_description">이 컬렉션에 추가된 항목이 여기에 표시됩니다.</string>
+    <string name="detail_person_empty_title">제목을 찾을 수 없습니다</string>
+    <string name="detail_person_empty_description">이 인물에는 현재 필터와 일치하는 제목이 없습니다.</string>
+    <string name="detail_season_empty_title">사용 가능한 에피소드가 없습니다</string>
+    <string name="detail_season_empty_description">에피소드가 추가되면 여기에 표시됩니다.</string>
 
 </resources>

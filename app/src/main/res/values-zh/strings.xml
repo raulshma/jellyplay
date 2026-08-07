@@ -17,6 +17,10 @@
     <string name="shortcut_play_music_long">播放音乐</string>
     <string name="shortcut_downloads_short">下载</string>
     <string name="shortcut_downloads_long">打开下载</string>
+    <string name="shortcut_surprise_short">随机</string>
+    <string name="shortcut_surprise_long">随机推荐</string>
+    <string name="shortcut_settings_short">设置</string>
+    <string name="shortcut_settings_long">打开设置</string>
 
     <string name="widget_now_playing_label">正在播放</string>
     <string name="widget_now_playing_description">直接从主屏幕查看和控制你正在收听的音乐。</string>

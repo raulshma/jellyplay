@@ -5,8 +5,11 @@ import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.PlaylistItem
+import com.raulshma.jellyplay.core.ui.components.UndoableAction
+import com.raulshma.jellyplay.core.ui.components.undoActionChannel
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.receiveAsFlow
 import javax.inject.Inject
 
 @HiltViewModel
@@ -33,6 +36,11 @@ class PlaylistDetailViewModel @Inject constructor(
 
     private val _isMutating = composeState(false)
     val isMutating: Boolean get() = _isMutating.value
+
+    /** Recoverable-action snackbars (e.g. "Removed 'X' — Undo"). Screen collects
+     * this and re-runs [UndoableAction.onUndo] if the user taps Undo. */
+    private val _undoActions = undoActionChannel()
+    val undoActions = _undoActions.receiveAsFlow()
 
     fun load(playlistId: String, playlistName: String? = null) {
         _playlistId.value = playlistId
@@ -76,12 +84,38 @@ class PlaylistDetailViewModel @Inject constructor(
         val entryId = item.playlistItemId ?: return
         val currentId = playlistId
         if (currentId.isEmpty()) return
+        // Optimistically drop the row so the list reacts instantly, then surface an
+        // Undo that re-adds it. The server remove runs fire-and-forget; on undo we
+        // re-add by the underlying media id (the entry id is gone server-side).
+        _items.value = _items.value.filterNot { it.playlistItemId == entryId }
         launch {
             _isMutating.value = true
             _error.value = null
             mediaRepository.removeItemsFromPlaylist(currentId, listOf(entryId))
-                .onSuccess { load(currentId, playlistName) }
                 .onFailure { _error.value = it.message ?: "Failed to remove from playlist" }
+                .onSuccess {
+                    _undoActions.trySend(
+                        UndoableAction(
+                            message = "Removed \"${item.name}\" from playlist",
+                            onUndo = { restoreToPlaylist(item) },
+                        ),
+                    )
+                }
+            _isMutating.value = false
+        }
+    }
+
+    /** Re-adds [item] to the current playlist after an undo. Re-fetches so the
+     * restored row carries a fresh entry id. */
+    private fun restoreToPlaylist(item: PlaylistItem) {
+        val currentId = playlistId
+        if (currentId.isEmpty()) return
+        launch {
+            _isMutating.value = true
+            _error.value = null
+            mediaRepository.addItemsToPlaylist(currentId, listOf(item.id))
+                .onSuccess { load(currentId, playlistName) }
+                .onFailure { _error.value = it.message ?: "Failed to restore to playlist" }
             _isMutating.value = false
         }
     }

@@ -25,6 +25,17 @@
     <string name="live_channel_up">Channel up</string>
     <string name="live_channel_down">Channel down</string>
     <string name="live_stream_options">Stream options</string>
+    <string name="live_record">Record</string>
+    <string name="live_record_title">Record</string>
+    <string name="live_record_once">Record once</string>
+    <string name="live_record_series">Record series</string>
+    <string name="live_cancel_recording">Cancel recording</string>
+    <string name="live_cancel_series">Cancel series</string>
+    <string name="live_record_success">Recording scheduled</string>
+    <string name="live_record_canceled">Recording canceled</string>
+    <string name="live_record_failed">Failed to set recording</string>
+    <string name="live_record_no_program">No program info available</string>
+    <string name="live_play_from_start">Play from start</string>
 
     <!-- Error banner -->
     <string name="live_error_playback">Playback Error</string>

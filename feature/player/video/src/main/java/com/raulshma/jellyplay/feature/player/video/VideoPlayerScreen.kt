@@ -41,6 +41,7 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -170,9 +171,19 @@ private const val ASPECT_BADGE_DURATION_MS = 5_000L
 /** How long the zoom badge is shown before auto-dismissing. */
 private const val ZOOM_BADGE_DURATION_MS = 2_000L
 
+/** "Resumed — tap to restart" chip lifetime (3s). */
+private const val RESUME_CHIP_DISPLAY_MS = 3_000L
+
 // ── Bottom-control clearances for overlays anchored above the controls ───
 /** Snackbar offset above the bottom controls (landscape/TV layout). */
 private const val SNACKBAR_BOTTOM_CLEARANCE_DP = 200
+/**
+ * Resume chip offset below the top bar. The host is additionally offset by
+ * `WindowInsets.statusBars` (see the call site), so this covers only the top
+ * bar's own height — the 40dp back-button row + 8dp vertical scrim padding
+ * (top+bottom) — plus a small gap so the chip clears the title row.
+ */
+private const val RESUME_CHIP_TOP_CLEARANCE_DP = 60
 /** Hold-speed pill offset above the bottom controls. */
 private const val HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP = 180
 /** Trickplay thumbnail offset above the bottom controls. */
@@ -211,8 +222,39 @@ fun VideoPlayerScreen(
     val context = LocalContext.current
     val activity = context.findActivity()
     val snackbarHostState = remember { SnackbarHostState() }
+    // Dedicated host for the resume chip. Kept separate from [snackbarHostState]
+    // so the chip can anchor under the top bar (TopCenter) while the shared
+    // bottom host still serves screenshot / syncplay / pass-out toasts.
+    val resumeChipHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Resume-reminder chip: when playback resumes from a saved position, offer a
+    // one-tap "Restart" so the user isn't forced to scrub back.
+    val resumedMessage = stringResource(R.string.player_resumed_message)
+    val restartLabel = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_restart)
+    LaunchedEffect(viewModel) {
+        viewModel.resumeReminder.collect {
+            // Specified as a 3s chip. SnackbarDuration has no 3s
+            // preset (Short ≈ 1.5s), so show it Indefinite and auto-dismiss
+            // after 3s unless the user taps "Restart" first.
+            val snackbarJob = scope.launch {
+                val result = resumeChipHostState.showSnackbar(
+                    message = resumedMessage,
+                    actionLabel = restartLabel,
+                    duration = SnackbarDuration.Indefinite,
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    viewModel.restartPlayback()
+                }
+            }
+            scope.launch {
+                delay(RESUME_CHIP_DISPLAY_MS)
+                resumeChipHostState.currentSnackbarData?.dismiss()
+            }
+            snackbarJob.join()
+        }
+    }
 
     val isInPipMode by viewModel.pipController.isInPipMode.collectAsStateWithLifecycle()
 
@@ -1464,19 +1506,21 @@ fun VideoPlayerScreen(
                 )
             }
 
-            SnackbarHost(
+            com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = SNACKBAR_BOTTOM_CLEARANCE_DP.dp),
-            ) { data ->
-                Snackbar(
-                    snackbarData = data,
-                    shape = ShapeCache.smoothPill,
-                    containerColor = playerOnScrim().copy(alpha = 0.15f),
-                    contentColor = playerOnScrim(),
-                )
-            }
+            )
+
+            // "Resumed from where you left off" chip — anchored under the top bar.
+            com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
+                hostState = resumeChipHostState,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = RESUME_CHIP_TOP_CLEARANCE_DP.dp),
+            )
 
             val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
             val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled

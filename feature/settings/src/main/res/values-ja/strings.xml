@@ -107,6 +107,8 @@
     <string name="settings_manage_addresses_cd">アドレスを管理</string>
     <string name="settings_active_cd">アクティブ</string>
     <string name="settings_remove_cd">削除</string>
+    <string name="settings_remove_server_confirm_title">サーバーを削除しますか？</string>
+    <string name="settings_remove_server_confirm_message">サーバーと、そこに保存されているすべてのユーザーが削除されます。</string>
     <string name="settings_add_address">アドレスを追加</string>
     <string name="settings_primary">プライマリ</string>
     <string name="settings_switch">切り替え</string>

@@ -107,6 +107,8 @@
     <string name="settings_manage_addresses_cd">주소 관리</string>
     <string name="settings_active_cd">활성</string>
     <string name="settings_remove_cd">제거</string>
+    <string name="settings_remove_server_confirm_title">서버를 삭제하시겠습니까?</string>
+    <string name="settings_remove_server_confirm_message">서버와 그 서버에 저장된 모든 사용자가 삭제됩니다.</string>
     <string name="settings_add_address">주소 추가</string>
     <string name="settings_primary">기본</string>
     <string name="settings_switch">전환</string>

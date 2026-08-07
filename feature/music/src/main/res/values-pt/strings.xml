@@ -36,6 +36,8 @@
     <string name="music_now_playing">Reproduzindo agora</string>
     <string name="music_download_album">Baixar álbum</string>
     <string name="music_download_track">Baixar faixa</string>
+    <string name="music_delete_album_downloads_confirm_title">Eliminar transferências do álbum?</string>
+    <string name="music_delete_album_downloads_confirm_message">Isto remove todas as faixas transferidas deste álbum.</string>
 
     <!-- Track / row menus -->
     <string name="music_go_to_album">Ir para o álbum</string>

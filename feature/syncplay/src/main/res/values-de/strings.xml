@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="syncplay_leave_group">Gruppe verlassen</string>
+    <string name="syncplay_leave_group_confirm_title">Gruppe verlassen?</string>
+    <string name="syncplay_leave_group_confirm_message">Du wirst aus der Watch-Party entfernt.</string>
     <string name="syncplay_retry">Erneut versuchen</string>
     <string name="syncplay_no_active_groups">Keine aktiven SyncPlay-Gruppen</string>
     <string name="syncplay_create_group_together">Erstelle eine Gruppe, um gemeinsam zu schauen</string>

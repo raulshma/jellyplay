@@ -231,6 +231,9 @@ fun HomeMediaRow(
     showEpisodeSeriesBadge: Boolean = false,
     onSectionLongClick: (() -> Unit)? = null,
     onSeeAllClick: (() -> Unit)? = null,
+    // TV-only: reports the D-pad-focused item so the screen's Menu key can open
+    // its quick actions
+    onFocusedItemChange: ((MediaItem) -> Unit)? = null,
     // Resolves a series' poster URL by id — used so episode cards render the
     // show's poster instead of the episode's own primary image (a landscape
     // scene grab). See [EpisodePosterResolver] usage below.
@@ -277,6 +280,9 @@ fun HomeMediaRow(
                 focusRequester = focusRequester,
                 onRowFocused = onRowFocused,
                 clipToBounds = clippingEnabled,
+                onFocusedIndexChange = { index ->
+                    onFocusedItemChange?.let { change -> effectiveItems.getOrNull(index)?.let(change) }
+                },
             ) { _, item, focusModifier ->
                 val memoizedClick = remember(item) { { onItemClick(item) } }
                 val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
@@ -359,10 +365,10 @@ fun HomeMediaRow(
 
 /**
  * The row title for a home section. Renders the heading typography and:
- *  - an optional long-press affordance ([onLongClick]) to configure the section
- *    (toggle visibility / reorder / open Home Layout settings), and
- *  - an optional "See All" affordance ([onSeeAllClick]) that opens the full
- *    library screen for that section with pre-applied filters.
+ * - an optional long-press affordance ([onLongClick]) to configure the section
+ * (toggle visibility / reorder / open Home Layout settings), and
+ * - an optional "See All" affordance ([onSeeAllClick]) that opens the full
+ * library screen for that section with pre-applied filters.
  *
  * On touch, the title surface still only intercepts long-press so the row's own
  * horizontal scroll and item clicks are unaffected; "See All" is a separate

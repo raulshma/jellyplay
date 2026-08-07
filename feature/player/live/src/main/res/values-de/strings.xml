@@ -20,6 +20,17 @@
     <string name="live_channel_up">Kanal hoch</string>
     <string name="live_channel_down">Kanal runter</string>
     <string name="live_stream_options">Stream-Optionen</string>
+    <string name="live_record">Aufnehmen</string>
+    <string name="live_record_title">Aufnehmen</string>
+    <string name="live_record_once">Einmal aufnehmen</string>
+    <string name="live_record_series">Serie aufnehmen</string>
+    <string name="live_cancel_recording">Aufnahme abbrechen</string>
+    <string name="live_cancel_series">Serie abbrechen</string>
+    <string name="live_record_success">Aufnahme geplant</string>
+    <string name="live_record_canceled">Aufnahme abgebrochen</string>
+    <string name="live_record_failed">Aufnahme konnte nicht aktiviert werden</string>
+    <string name="live_record_no_program">Keine Programminfo verfügbar</string>
+    <string name="live_play_from_start">Von Anfang an wiedergeben</string>
     <string name="live_error_playback">Wiedergabefehler</string>
     <string name="live_error_playback_fallback">Wiedergabefehler</string>
     <string name="live_error_show_details">Details anzeigen</string>
