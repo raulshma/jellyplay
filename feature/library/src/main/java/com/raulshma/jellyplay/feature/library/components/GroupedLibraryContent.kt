@@ -31,6 +31,7 @@ import androidx.paging.compose.LazyPagingItems
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.GroupBy
+import com.raulshma.jellyplay.core.model.LibraryGrouper
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -48,18 +49,14 @@ import com.raulshma.jellyplay.feature.library.components.LibraryListItem
  *
  * Returns an empty string for [GroupBy.NONE] instead of throwing: although the caller
  * only mounts this composable when grouping is active, the persisted [GroupBy] value
- * flows in asynchronously (see [LibraryViewModel.loadLayoutPrefs]) and can transiently
- * resolve to NONE while a grouped view is still mounted (e.g. across an
- * AnimatedContent view-mode transition). Throwing here crashed the app on every library
- * open once a non-NONE value had been persisted (issue #113).
+ * flows in asynchronously and can transiently resolve to NONE while a grouped view is
+ * still mounted. Throwing here crashed the app on every library open once a non-NONE
+ * value had been persisted (issue #113).
+ *
+ * Delegates to the pure, tested [LibraryGrouper] — the logic was lifted out of this
+ * Composable so it can be unit-tested (it was the site of two #113 crashes).
  */
-private fun MediaItem.groupKey(groupBy: GroupBy): String = when (groupBy) {
-    GroupBy.NONE -> ""
-    GroupBy.NAME -> (name.firstOrNull()?.uppercaseChar()?.takeIf { it in 'A'..'Z' } ?: '#').toString()
-    GroupBy.TYPE -> mediaType.name
-    GroupBy.GENRE -> genres.firstOrNull() ?: "Unknown"
-    GroupBy.YEAR -> year?.toString() ?: "Unknown"
-}
+private fun MediaItem.groupKey(groupBy: GroupBy): String = LibraryGrouper.groupKey(this, groupBy)
 
 /**
  * Sort comparator that orders items to match the active [GroupBy] dimension, so groups
@@ -68,9 +65,7 @@ private fun MediaItem.groupKey(groupBy: GroupBy): String = when (groupBy) {
  * across the list, which produced duplicate `"header_${key}"` lazy keys and crashed the
  * app (issue #113). Within a group, the server's existing order is preserved (stable sort).
  */
-private fun groupComparator(groupBy: GroupBy): Comparator<MediaItem> = Comparator { a, b ->
-    a.groupKey(groupBy).compareTo(b.groupKey(groupBy))
-}
+private fun groupComparator(groupBy: GroupBy): Comparator<MediaItem> = LibraryGrouper.groupComparator(groupBy)
 
 /**
  * A flattened (header | item) row emitted into the grouped LazyColumn/LazyVerticalGrid.
