@@ -4,7 +4,6 @@ import com.raulshma.jellyplay.core.model.SubtitleBorderStyle
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver
-import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 
 /**
  * Pure FreeType typography mapping, the single source for LibVLC's `:freetype-*`
@@ -29,23 +28,28 @@ internal object LibVlcSubtitleStyleMapping {
         if (style.applyCustomStyle) colorOptions(style) else defaultOptions()
 
     /**
-     * LibVLC's native default caption style, matching the other engines'
-     * bundled-default reference (white text, transparent background, black
-     * outline + shadow, 24px reference size). Emitted when the user has not
-     * enabled a custom subtitle style.
+     * LibVLC's native default caption style, sourced from the shared
+     * [com.raulshma.jellyplay.core.model.SubtitleRenderDefaults] table (white
+     * text, transparent background, black outline + shadow, 24px reference size)
+     * so it cannot drift from the other engines. The thickness/shadow-opacity
+     * magnitudes are LibVLC-specific FreeType format translations of the shared
+     * edge-type/opacity, not independent defaults.
      */
-    fun defaultOptions(): List<String> = listOf(
-        ":freetype-color=${WHITE_RGB}", // White (0xFFFFFF)
-        ":freetype-background-color=0", // Black/transparent
-        ":freetype-background-opacity=0", // Transparent
-        ":freetype-outline-color=0", // Black
-        ":freetype-outline-thickness=2",
-        ":freetype-shadow-opacity=255",
-        // Absolute pixel size, matching the other engines' bundled-default
-        // reference size (24sp). :freetype-rel-fontsize would clamp/ignore
-        // 24 here — it is a relative-size enum, not a pixel value.
-        ":freetype-fontsize=${SubtitleDefaults.REFERENCE_FONT_SIZE}",
-    )
+    fun defaultOptions(): List<String> {
+        val d = com.raulshma.jellyplay.core.model.SubtitleRenderDefaults.DEFAULT
+        return listOf(
+            ":freetype-color=${d.fontColor and 0x00FFFFFF}", // White (0xFFFFFF)
+            ":freetype-background-color=0", // Black/transparent
+            ":freetype-background-opacity=0", // Transparent
+            ":freetype-outline-color=0", // Black
+            ":freetype-outline-thickness=2",
+            ":freetype-shadow-opacity=255",
+            // Absolute pixel size, matching the other engines' bundled-default
+            // reference size (24sp). :freetype-rel-fontsize would clamp/ignore
+            // 24 here — it is a relative-size enum, not a pixel value.
+            ":freetype-fontsize=${d.fontSizeSp}",
+        )
+    }
 
     fun typefaceOptions(style: SubtitleStyle, bundledFallbackPath: String): List<String> = if (style.applyCustomStyle) {
         listOf(
@@ -111,7 +115,4 @@ internal object LibVlcSubtitleStyleMapping {
         val margin = (style.verticalPosition.coerceIn(0f, 0.4f) * frameHeight).toInt()
         return ":sub-margin=$margin"
     }
-
-    /** White as a decimal RGB int (FreeType wants RGB, alpha stripped). */
-    private const val WHITE_RGB: Int = 0xFFFFFF
 }
