@@ -144,7 +144,7 @@ fun LibraryFilterSheet(
                                 selectedMediaTypes = emptyList()
                                 selectedGenres = emptyList()
                                 selectedYears = emptySet()
-                                selectedSort = SortOption.SORT_NAME
+                                selectedSort = SortOption.YEAR_DESC
                                 selectedPlayedStatus = PlayedStatus.ALL
                                 selectedTags = emptySet()
                                 selectedMinRating = 0f

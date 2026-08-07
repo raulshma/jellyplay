@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
@@ -98,9 +99,10 @@ class LibraryViewModelTest {
     }
 
     @Test
-    fun `configureSection for tvshows scopes mediaTypes to EPISODE to match home Latest row`() = runTest {
-        // Matches the home Latest row: a TV library's
-        // /Items/Latest row shows episodes, so "See All" must scope to EPISODE.
+    fun `configureSection for tvshows mirrors the default library view with no mediaType scoping`() = runTest {
+        // Issue #113: "See All" from a home Latest row should mirror the default
+        // library tab (top-level series), sorted by latest — NOT scope to flat
+        // episodes. mediaTypes stays empty so pagedItems queries TOP_LEVEL items.
         val vm = createViewModel()
         vm.configureSection(
             LibrarySectionContext(
@@ -111,11 +113,12 @@ class LibraryViewModelTest {
             )
         )
 
-        assertEquals(listOf(MediaType.EPISODE), vm.filters.value.mediaTypes)
+        assertEquals(emptyList<MediaType>(), vm.filters.value.mediaTypes)
+        assertEquals(SortOption.DATE_ADDED, vm.filters.value.sortBy)
     }
 
     @Test
-    fun `configureSection for movies scopes mediaTypes to MOVIE to match home Latest row`() = runTest {
+    fun `configureSection for movies mirrors the default library view with no mediaType scoping`() = runTest {
         val vm = createViewModel()
         vm.configureSection(
             LibrarySectionContext(
@@ -126,7 +129,7 @@ class LibraryViewModelTest {
             )
         )
 
-        assertEquals(listOf(MediaType.MOVIE), vm.filters.value.mediaTypes)
+        assertEquals(emptyList<MediaType>(), vm.filters.value.mediaTypes)
     }
 
     @Test
@@ -142,6 +145,59 @@ class LibraryViewModelTest {
         )
 
         assertEquals(emptyList<MediaType>(), vm.filters.value.mediaTypes)
+    }
+
+    @Test
+    fun `configureSection honors explicitly-passed mediaTypes over the default`() = runTest {
+        // Explicit ctx.mediaTypes still win (e.g. a future home row that targets
+        // a specific leaf type).
+        val vm = createViewModel()
+        vm.configureSection(
+            LibrarySectionContext(
+                title = "Latest Shows",
+                parentId = "lib-tv",
+                collectionType = "tvshows",
+                sortBy = SortOption.DATE_ADDED.apiValue,
+                mediaTypes = listOf(MediaType.MOVIE),
+            )
+        )
+
+        assertEquals(listOf(MediaType.MOVIE), vm.filters.value.mediaTypes)
+    }
+
+    @Test
+    fun `clearSectionMode resets section state so the Library tab shows its default view`() = runTest {
+        // Issue #113: the VM is shared across the Library tab and the section
+        // deep-link. After a "See All" visit, clearing section mode must restore
+        // the default browsing view (no synthetic folder, no leftover filters).
+        val vm = createViewModel()
+        vm.configureSection(
+            LibrarySectionContext(
+                title = "Latest Shows",
+                parentId = "lib-tv",
+                collectionType = "tvshows",
+                sortBy = SortOption.DATE_ADDED.apiValue,
+            )
+        )
+        assertNotNull(vm.sectionContext.value)
+        assertEquals("Latest Shows", vm.title.value)
+        assertNotNull(vm.selectedFolder.value)
+
+        vm.clearSectionMode()
+
+        assertNull(vm.sectionContext.value)
+        assertNull(vm.title.value)
+        assertNull(vm.selectedFolder.value)
+        assertEquals(LibraryFilters(), vm.filters.value)
+    }
+
+    @Test
+    fun `clearSectionMode is a no-op when not in section mode`() = runTest {
+        val vm = createViewModel()
+        // Not in section mode — clearing should be a safe no-op.
+        vm.clearSectionMode()
+        assertNull(vm.sectionContext.value)
+        assertEquals(LibraryFilters(), vm.filters.value)
     }
 
     @Test

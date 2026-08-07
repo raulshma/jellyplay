@@ -63,6 +63,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
@@ -188,9 +189,16 @@ fun LibraryScreen(
 
     // Section mode: configure the VM once with the injected context. Idempotent
     // (configureSection early-returns on an equal context) so recomposition is
-    // safe. Skipped in tab mode (sectionContext == null).
+    // safe. In tab mode (sectionContext == null) clear any leftover section state
+    // so the Library tab shows its default view — the VM is shared across the
+    // tab and the section deep-link, so without this reset the "Latest X"
+    // filters/sort would leak into the tab (issue #113).
     LaunchedEffect(sectionContext) {
-        sectionContext?.let { viewModel.configureSection(it) }
+        if (sectionContext != null) {
+            viewModel.configureSection(sectionContext)
+        } else {
+            viewModel.clearSectionMode()
+        }
     }
 
     val pagedItems = viewModel.pagedItems.collectAsLazyPagingItems()
@@ -680,23 +688,11 @@ fun LibraryScreen(
                                                     val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                         { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                     }
-                                                    val subtitle = remember(item.year, item.mediaType) {
-                                                        buildString {
-                                                            if (item.year != null) append("${item.year}")
-                                                            val typeLabel = when (item.mediaType) {
-                                                                MediaType.EPISODE -> "Episode"
-                                                                MediaType.SERIES -> "Series"
-                                                                MediaType.MOVIE -> "Movie"
-                                                                MediaType.AUDIO -> "Audio"
-                                                                MediaType.MUSIC -> "Music"
-                                                                MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
-                                                                else -> null
-                                                            }
-                                                            if (typeLabel != null) {
-                                                                if (isNotEmpty()) append(" · ")
-                                                                append(typeLabel)
-                                                            }
-                                                        }
+                                                    val subtitle = remember(item.mediaType, item.seriesName, item.seasonNumber, item.episodeNumber, item.year) {
+                                                        // Episodes show an SxxExx + series context line (bold tag);
+                                                        // other types keep the year/type label. Shared with the
+                                                        // grouped list path via libraryListSubtitle.
+                                                        item.libraryListSubtitle()
                                                     }
                                                     LibraryListItem(
                                                         title = item.name,
