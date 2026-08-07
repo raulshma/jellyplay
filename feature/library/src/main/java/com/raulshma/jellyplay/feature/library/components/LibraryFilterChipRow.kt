@@ -64,7 +64,7 @@ fun LibraryFilterChipRow(
             FilterOptionChip(
                 label = filters.sortBy.displayName,
                 onClick = { onOpenSheet(FilterSheetKind.SORT) },
-                highlight = filters.sortBy != SortOption.SORT_NAME,
+                highlight = filters.sortBy != SortOption.YEAR_DESC,
             )
         }
         item(key = "type") {

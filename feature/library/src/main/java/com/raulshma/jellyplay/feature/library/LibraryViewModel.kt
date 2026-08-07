@@ -48,7 +48,10 @@ data class LibraryFilters(
     val mediaTypes: List<MediaType> = emptyList(),
     val genres: List<String> = emptyList(),
     val years: List<Int> = emptyList(),
-    val sortBy: SortOption = SortOption.SORT_NAME,
+    // Newest (highest production year first) is the most useful landing sort for
+    // a media library — a user opening the tab wants to see fresh content, not an
+    // alphabetical list. Overridden per-folder by the persisted filter blob.
+    val sortBy: SortOption = SortOption.YEAR_DESC,
     val playedStatus: PlayedStatus = PlayedStatus.ALL,
     val tags: List<String> = emptyList(),
     val minRating: Float = 0f,
@@ -118,8 +121,14 @@ class LibraryViewModel @Inject constructor(
      * Non-null when this VM is driving a home-section "See All" deep-link. While
      * set, the folder chips are hidden, folder loading is skipped, and the
      * pre-applied sort / media-type filter from the source section is used
-     * instead of the persisted per-folder state. Cleared implicitly when the VM
-     * is disposed (each route entry gets a fresh VM).
+     * instead of the persisted per-folder state.
+     *
+     * NOTE: this VM is shared across the Library tab ([Route.Library]) and the
+     * section deep-link ([Route.LibrarySection]) because there is no per-entry
+     * ViewModel store — `hiltViewModel()` resolves to the Activity scope. So
+     * section state is NOT cleared implicitly; the tab entry must call
+     * [clearSectionMode] on entry to reset to the default browsing view,
+     * otherwise stale "Latest X" filters leak into the Library tab (issue #113).
      */
     private val _sectionContext = stateFlow<LibrarySectionContext?>(null)
     val sectionContext = _sectionContext.flow
@@ -166,9 +175,9 @@ class LibraryViewModel @Inject constructor(
         _filters.flow,
         _sectionContext.flow,
         _refreshTrigger,
-    ) { folder, filters, sectionCtx, _ ->
-        Triple(folder, filters, sectionCtx)
-    }.flatMapLatest { (folder, filters, sectionCtx) ->
+    ) { folder, filters, _, _ ->
+        folder to filters
+    }.flatMapLatest { (folder, filters) ->
       mediaRepository.getMediaItemsPaged(
           parentId = folder?.id,
           mediaTypes = filters.mediaTypes.ifEmpty { null },
@@ -179,12 +188,13 @@ class LibraryViewModel @Inject constructor(
           tags = filters.tags.ifEmpty { null },
           playedStatus = filters.playedStatus.takeIf { it != PlayedStatus.ALL },
           minRating = filters.minRating.takeIf { it > 0f },
-          // Section mode ("See All" from a home Latest row) must match what the
-          // home row showed. Home's /Items/Latest returns leaf items: episodes
-          // for a TV library, movies for a movie library. To reproduce that leaf
-          // set, section mode includes episodes; normal library tab browsing
-          // shows top-level items only.
-          kindFilter = if (sectionCtx == null) ItemKindFilter.TOP_LEVEL else ItemKindFilter.LEAF_ITEMS,
+          // Section mode ("See All" from a home Latest row) shows the same
+          // top-level items as the default library tab — series for a TV library,
+          // movies for a movie library — just sorted by latest. (Previously this
+          // returned leaf episodes for a TV library, which stacked flat episode
+          // blocks; issue #113.) Filtering to a specific leaf type is still
+          // possible via the Media Type filter.
+          kindFilter = ItemKindFilter.TOP_LEVEL,
       )
     }
     .cachedIn(scope)
@@ -212,27 +222,40 @@ class LibraryViewModel @Inject constructor(
         val sectionSort = ctx.sortBy?.let { api ->
             SortOption.entries.firstOrNull { it.apiValue == api || it.name == api }
         } ?: SortOption.DATE_ADDED
-        // Reproduce the home row's /Items/Latest item set:
-        // a TV library's Latest row shows episodes, so "See All" must scope to
-        // EPISODE too. Explicitly-passed ctx.mediaTypes win over the derived
-        // default. All other library types show their top-level items as the
-        // row does.
+        // "See All" from a home Latest row should mirror the default library tab
+        // view (top-level items: series for TV, movies for a movie library, …)
+        // and only differ in sort order (latest first). Previously this defaulted
+        // to leaf episodes for a TV library, which produced large blocks of flat
+        // episode rows — unintuitive and not what the user expects from "Latest".
+        // Explicit ctx.mediaTypes (if ever passed) still win; otherwise we show
+        // top-level items sorted by latest. See pagedItems' kindFilter below.
         _userViewModeOverride.value = null
-        val sectionMediaTypes = ctx.mediaTypes.ifEmpty {
-            when (ctx.collectionType) {
-                "tvshows" -> listOf(MediaType.EPISODE)
-                "movies" -> listOf(MediaType.MOVIE)
-                "music" -> listOf(MediaType.AUDIO)
-                "musicvideos" -> listOf(MediaType.MUSIC_VIDEO)
-                else -> emptyList()
-            }
-        }
         _filters.set(
             LibraryFilters(
                 sortBy = sectionSort,
-                mediaTypes = sectionMediaTypes,
+                mediaTypes = ctx.mediaTypes,
             )
         )
+    }
+
+    /**
+     * Resets all section-mode state so the Library tab renders its default
+     * browsing view. Called when the tab entry ([Route.Library]) is shown after a
+     * section deep-link, because the VM is shared across both entries (see the
+     * note on [_sectionContext]). Idempotent: a no-op when not in section mode,
+     * so repeated recompositions are safe.
+     *
+     * Restores the default filter set and clears the synthetic folder/title so
+     * the folder chips reload and the toolbar shows "Library" again. Per-folder
+     * persisted filters are re-applied the next time a folder is selected.
+     */
+    fun clearSectionMode() {
+        if (_sectionContext.value == null) return
+        _sectionContext.set(null)
+        _title.set(null)
+        _selectedFolder.set(null)
+        _filters.set(LibraryFilters())
+        _userViewModeOverride.value = null
     }
 
     private fun loadLayoutPrefs() {
@@ -388,7 +411,7 @@ class LibraryViewModel @Inject constructor(
                     newFilters = LibraryFilters()
                 }
             } else if (savedOrder != null) {
-                val option = SortOption.entries.find { it.name == savedOrder || it.apiValue == savedOrder } ?: SortOption.SORT_NAME
+                val option = SortOption.entries.find { it.name == savedOrder || it.apiValue == savedOrder } ?: SortOption.YEAR_DESC
                 newFilters = LibraryFilters(sortBy = option)
             }
 

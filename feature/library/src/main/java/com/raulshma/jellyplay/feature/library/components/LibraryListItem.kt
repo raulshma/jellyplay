@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,7 +36,7 @@ import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 @Composable
 fun LibraryListItem(
     title: String,
-    subtitle: String?,
+    subtitle: AnnotatedString?,
     imageUrl: String?,
     blurHash: String?,
     onClick: () -> Unit,
