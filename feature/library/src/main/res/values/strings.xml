@@ -51,11 +51,20 @@
 
     <!-- LibraryFilterSheet -->
     <string name="library_reset">Reset</string>
+    <string name="library_reset_all">Reset all</string>
+    <string name="library_reset_confirm_title">Reset library?</string>
+    <!-- Info shown in the reset confirmation dialog. -->
+    <string name="library_reset_confirm_message">This clears all filters and returns to the default library. Your view mode, poster size and grouping, plus the saved filters and sort order for the current folder, will be reset.</string>
+    <string name="library_reset_dont_show_again">Don\'t show again</string>
     <string name="library_sort_by">Sort By</string>
     <string name="library_media_type">Filter by Type</string>
     <string name="library_status">Status</string>
     <string name="library_genres">Genres</string>
     <string name="library_year_range">Year Range</string>
+    <!-- %1$d = selected start year -->
+    <string name="library_year_from">From %1$d</string>
+    <!-- %1$d = selected end year -->
+    <string name="library_year_to">To %1$d</string>
     <string name="library_tags">Tags</string>
     <string name="library_minimum_rating">Minimum Rating</string>
     <string name="library_apply_filters">Apply Filters</string>

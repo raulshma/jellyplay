@@ -42,6 +42,7 @@ fun LibraryListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     sharedElementKey: String? = null,
+    fallbackUrls: List<String> = emptyList(),
 ) {
     var isFocused by remember { mutableStateOf(false) }
     Row(
@@ -64,6 +65,7 @@ fun LibraryListItem(
             if (imageUrl != null) {
                 MediaImage(
                     url = imageUrl,
+                    fallbackUrls = fallbackUrls,
                     contentDescription = title,
                     modifier = Modifier.matchParentSize(),
                     blurHash = blurHash,

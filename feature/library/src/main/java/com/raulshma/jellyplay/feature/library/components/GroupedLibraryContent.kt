@@ -35,7 +35,9 @@ import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.displayTitle
 import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
+import com.raulshma.jellyplay.core.ui.components.rememberSeriesImageFallback
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
@@ -183,10 +185,14 @@ fun GroupedLibraryContent(
                         // ungrouped list path via libraryListSubtitle.
                         item.libraryListSubtitle()
                     }
+                    // Seasons fall back to the parent series poster when the season's
+                    // own artwork 404s (shared with the ungrouped list path).
+                    val fallbackUrls = item.rememberSeriesImageFallback(getImageUrl)
                     LibraryListItem(
-                        title = item.name,
+                        title = item.displayTitle(),
                         subtitle = subtitle,
                         imageUrl = remember(item.id) { getImageUrl(item.id) },
+                        fallbackUrls = fallbackUrls,
                         blurHash = item.blurHashes.primary,
                         onClick = memoizedClick,
                         modifier = Modifier.onFocusChanged {

@@ -97,6 +97,8 @@ class AppearanceSettingsViewModel @Inject constructor(
         editor.edit { library.setSkipSpecials(enabled) }
     fun setCompactEpisodeList(enabled: Boolean) =
         editor.edit { library.setCompactEpisodeList(enabled) }
+    fun setConfirmLibraryReset(enabled: Boolean) =
+        editor.edit { library.setConfirmLibraryReset(enabled) }
     fun setLibraryViewMode(mode: LibraryViewMode) =
         editor.edit { library.setLibraryViewMode(mode) }
     fun setShowShareMediaOption(enabled: Boolean) =

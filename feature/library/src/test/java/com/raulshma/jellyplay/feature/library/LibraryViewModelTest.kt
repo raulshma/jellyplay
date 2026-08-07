@@ -270,4 +270,61 @@ class LibraryViewModelTest {
         assertNull(vm.title.value)
         assertNull(vm.sectionContext.value)
     }
+
+    @Test
+    fun `resetToDefault clears filters folder and layout and persists the defaults`() = runTest {
+        coEvery { libraryStore.setLibraryFilters(any(), any()) } returns Unit
+        coEvery { libraryStore.setDefaultLibrarySortOrder(any(), any()) } returns Unit
+        coEvery { libraryStore.setLibraryPosterSize(any()) } returns Unit
+        coEvery { libraryStore.setLibraryGroupBy(any()) } returns Unit
+
+        val vm = createViewModel()
+        vm.selectFolder(LibraryFolder(id = "lib-1", name = "TV"))
+        vm.updateFilters(LibraryFilters(mediaTypes = listOf(MediaType.MOVIE), sortBy = SortOption.RATING))
+        vm.setPosterSize(1.3f)
+        vm.setGroupBy(GroupBy.GENRE)
+        vm.setViewMode(LibraryViewMode.LIST)
+        advanceUntilIdle()
+
+        vm.resetToDefault()
+        advanceUntilIdle()
+
+        assertNull(vm.selectedFolder.value)
+        assertEquals(LibraryFilters(), vm.filters.value)
+        assertEquals(1.0f, vm.posterSize.value)
+        assertEquals(GroupBy.NONE, vm.groupBy.value)
+        // Folder is null, so the view mode derives back to the global default.
+        assertEquals(LibraryViewMode.GRID, vm.viewMode.value)
+
+        coVerify { libraryStore.setLibraryPosterSize(1.0f) }
+        coVerify { libraryStore.setLibraryGroupBy(GroupBy.NONE) }
+        // The previously selected folder's stale saved filters are overwritten.
+        coVerify { libraryStore.setLibraryFilters("lib-1", any()) }
+        coVerify { libraryStore.setDefaultLibrarySortOrder("lib-1", SortOption.YEAR_DESC.name) }
+    }
+
+    @Test
+    fun `resetToDefault does not persist folder filters in section mode`() = runTest {
+        coEvery { libraryStore.setLibraryPosterSize(any()) } returns Unit
+        coEvery { libraryStore.setLibraryGroupBy(any()) } returns Unit
+
+        val vm = createViewModel()
+        vm.configureSection(
+            LibrarySectionContext(
+                title = "Latest Shows",
+                parentId = "lib-tv",
+                collectionType = "tvshows",
+                sortBy = SortOption.DATE_ADDED.apiValue,
+            )
+        )
+        advanceUntilIdle()
+
+        vm.resetToDefault()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { libraryStore.setLibraryFilters(any(), any()) }
+        coVerify(exactly = 0) { libraryStore.setDefaultLibrarySortOrder(any(), any()) }
+        assertNull(vm.selectedFolder.value)
+        assertEquals(LibraryFilters(), vm.filters.value)
+    }
 }

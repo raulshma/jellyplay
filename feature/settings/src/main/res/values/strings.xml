@@ -906,6 +906,8 @@
     <string name="settings_hide_episode_thumbnails_subtitle">Hide episode preview images to avoid spoilers</string>
     <string name="settings_compact_episode_list">Compact Episode List</string>
     <string name="settings_compact_episode_list_subtitle">Show episodes as a vertical list on mobile instead of a horizontal row</string>
+    <string name="settings_confirm_library_reset">Confirm Library Reset</string>
+    <string name="settings_confirm_library_reset_subtitle">Show a confirmation dialog before resetting the library to defaults</string>
     <string name="settings_skip_special_episodes">Skip Special Episodes</string>
     <string name="settings_skip_special_episodes_subtitle">Exclude specials/bonus episodes from episode lists</string>
     <string name="settings_haptic_feedback">Haptic Feedback</string>

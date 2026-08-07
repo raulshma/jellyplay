@@ -73,3 +73,31 @@ fun MediaItem.libraryListSubtitle(): AnnotatedString? =
                 append(typeLabel)
             }
         }.let(::AnnotatedString)
+
+/**
+ * Season card title context: `Sxx - SeriesName`. A season's own name (e.g.
+ * "Season 1") doesn't identify the show in flat season lists (library filtered
+ * by type, search results), so card titles render the series instead.
+ *
+ * The season number is read from [indexNumber] first, then [seasonNumber].
+ * Jellyfin season items carry their number in `IndexNumber` (mapped to
+ * [indexNumber]); `ParentIndexNumber` (mapped to [seasonNumber]) is null for
+ * seasons — it's only populated on episodes, where it means "the season this
+ * episode belongs to". The [seasonNumber] fallback covers non-Jellyfin sources
+ * that might populate it for seasons. Returns null for non-seasons, seasons
+ * without a series name, or seasons whose number is unknown.
+ */
+fun MediaItem.seasonContextTitle(): String? {
+    if (mediaType != MediaType.SEASON) return null
+    val series = seriesName?.takeIf { it.isNotBlank() } ?: return null
+    val number = indexNumber ?: seasonNumber ?: return null
+    return "S${number.toString().padStart(2, '0')} - $series"
+}
+
+/**
+ * Card/list title with season context: seasons render as `Sxx - SeriesName`
+ * (see [seasonContextTitle]), everything else keeps its plain name. Single
+ * source of truth for title rendering across card components (PosterCard,
+ * ThumbCard, WideMediaCard) and list rows.
+ */
+fun MediaItem.displayTitle(): String = seasonContextTitle() ?: name

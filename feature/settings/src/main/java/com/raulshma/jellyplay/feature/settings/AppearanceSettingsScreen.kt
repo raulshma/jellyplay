@@ -809,6 +809,16 @@ fun AppearanceSettingsScreen(
                     )
 
                     SettingToggleItem(
+                        icon = Tabler.Outline.AlertTriangle,
+                        title = stringResource(R.string.settings_confirm_library_reset),
+                        subtitle = stringResource(R.string.settings_confirm_library_reset_subtitle),
+                        checked = preferences.confirmLibraryReset,
+                        highlighted = highlightSettingId == "confirm_library_reset",
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setConfirmLibraryReset(it) },
+                    )
+
+                    SettingToggleItem(
                         icon = Tabler.Outline.PlayerSkipForward,
                         title = stringResource(R.string.settings_skip_special_episodes),
                         subtitle = stringResource(R.string.settings_skip_special_episodes_subtitle),

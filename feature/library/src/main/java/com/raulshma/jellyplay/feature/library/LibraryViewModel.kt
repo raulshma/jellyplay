@@ -69,6 +69,9 @@ private data class ViewModePrefs(
  */
 private const val FILTER_RETRY_DELAY_MS: Long = 800
 
+/** Factory-default poster-size multiplier (matches the toolbar slider's 1.0 center). */
+private const val DEFAULT_POSTER_SIZE = 1.0f
+
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
@@ -146,6 +149,21 @@ class LibraryViewModel @Inject constructor(
     val groupBy = _groupBy.flow
 
     /**
+     * Whether the reset-all confirmation dialog is currently visible. Mirrors
+     * [_confirmResetEnabled]: the dialog only ever appears while the user opted
+     * to keep confirmations on.
+     */
+    private val _resetDialogVisible = stateFlow(false)
+    val resetDialogVisible = _resetDialogVisible.flow
+
+    /**
+     * Whether the reset-all confirmation is enabled. Persisted via
+     * [com.raulshma.jellyplay.core.datastore.library.LibraryStore] so a
+     * "Don't show again" choice survives navigation and restarts.
+     */
+    private val _confirmResetEnabled = stateFlow(true)
+
+    /**
      * Per-item slice of [photoFolderChildUrls]. Lets each photo-folder card
      * collect only its own urls so a prefetch merge (which produces a new Map
      * reference) doesn't invalidate the entire [LibraryScreen] — only the one
@@ -205,6 +223,7 @@ class LibraryViewModel @Inject constructor(
         loadTags()
         loadViewMode()
         loadLayoutPrefs()
+        loadResetConfirmPref()
     }
 
     /**
@@ -267,6 +286,15 @@ class LibraryViewModel @Inject constructor(
                     _posterSize.set(posterSize)
                     _groupBy.set(groupBy)
                 }
+        }
+    }
+
+    private fun loadResetConfirmPref() {
+        launch {
+            libraryStore.library
+                .map { it.confirmLibraryReset }
+                .distinctUntilChanged()
+                .collect { _confirmResetEnabled.set(it) }
         }
     }
 
@@ -456,6 +484,79 @@ class LibraryViewModel @Inject constructor(
 
     fun clearFilters() {
         _filters.set(LibraryFilters())
+    }
+
+    /**
+     * Entry point for the top-bar Reset pill. Shows the confirmation dialog while
+     * the user hasn't opted out; otherwise resets immediately so the pill stays a
+     * one-tap action for users who dismissed the confirmation.
+     */
+    fun onResetClick() {
+        if (_confirmResetEnabled.value) {
+            _resetDialogVisible.set(true)
+        } else {
+            resetToDefault()
+        }
+    }
+
+    /** Dismisses the reset confirmation without resetting anything. */
+    fun dismissResetDialog() {
+        _resetDialogVisible.set(false)
+    }
+
+    /**
+     * Confirmed reset-all. Optionally persists "don't show again" so future
+     * reset taps skip the dialog and reset immediately.
+     */
+    fun confirmResetAll(dontShowAgain: Boolean) {
+        _resetDialogVisible.set(false)
+        if (dontShowAgain) {
+            launch {
+                libraryStore.setConfirmLibraryReset(false)
+                _confirmResetEnabled.set(false)
+            }
+        }
+        resetToDefault()
+    }
+
+    /**
+     * Resets the whole library screen to defaults: clears all filters, returns to
+     * the "All" folder chip, restores the default view mode, resets poster size
+     * and grouping, and persists the reset so it survives navigation. Any stale
+     * per-folder saved filters for the currently selected folder are overwritten
+     * with the defaults so re-selecting the folder shows a clean slate.
+     *
+     * In section mode ("See All" deep-link) the Reset pill is hidden from the
+     * UI, but this method stays defensive: it also tears down the section
+     * context so the synthetic folder/title can't linger after the reset, and
+     * the captured [wasInSection] flag (not the post-clear state) gates
+     * per-folder persistence — the section's parentId must never be written as
+     * a real library's saved filters.
+     */
+    fun resetToDefault() {
+        val currentFolder = _selectedFolder.value
+        val wasInSection = _sectionContext.value != null
+        if (wasInSection) {
+            _sectionContext.set(null)
+            _title.set(null)
+        }
+        // Clear the override so loadViewMode's collector is free to re-derive.
+        _userViewModeOverride.value = null
+        _selectedFolder.set(null)
+        _filters.set(LibraryFilters())
+        _posterSize.set(DEFAULT_POSTER_SIZE)
+        _groupBy.set(GroupBy.NONE)
+        // Optimistic snapshot so the grid doesn't flash the stale mode before
+        // loadViewMode re-emits (folder is null now, so this is the global pref).
+        _viewMode.set(libraryStore.library.value.libraryViewMode)
+        launch {
+            if (currentFolder != null && !wasInSection) {
+                libraryStore.setLibraryFilters(currentFolder.id, libraryJson.encodeToString(LibraryFilters()))
+                libraryStore.setDefaultLibrarySortOrder(currentFolder.id, SortOption.YEAR_DESC.name)
+            }
+            libraryStore.setLibraryPosterSize(DEFAULT_POSTER_SIZE)
+            libraryStore.setLibraryGroupBy(GroupBy.NONE)
+        }
     }
 
     fun refresh() {

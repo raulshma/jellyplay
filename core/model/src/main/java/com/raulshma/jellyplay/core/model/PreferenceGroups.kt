@@ -399,6 +399,8 @@ data class AppearanceScreenPreferences(
     val hideEpisodeThumbnails: Boolean = false,
     val skipSpecials: Boolean = false,
     val compactEpisodeList: Boolean = false,
+    /** Whether the library "Reset" pill shows a confirmation dialog before clearing. */
+    val confirmLibraryReset: Boolean = true,
     val showExternalRatings: Boolean = true,
     val showShareMediaOption: Boolean = true,
     val hideSearchHistory: Boolean = false,
