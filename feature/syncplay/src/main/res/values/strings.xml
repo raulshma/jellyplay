@@ -4,6 +4,8 @@
     <string name="syncplay_title" translatable="false">SyncPlay</string>
 
     <string name="syncplay_leave_group">Leave group</string>
+    <string name="syncplay_leave_group_confirm_title">Leave group?</string>
+    <string name="syncplay_leave_group_confirm_message">You\'ll be removed from the watch party.</string>
     <string name="syncplay_retry">Retry</string>
     <string name="syncplay_no_active_groups">No active SyncPlay groups</string>
     <string name="syncplay_create_group_together">Create a group to watch together</string>

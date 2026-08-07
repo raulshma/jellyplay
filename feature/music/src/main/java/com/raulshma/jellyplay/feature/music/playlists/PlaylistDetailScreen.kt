@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.UndoSnackbarOverlay
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -124,6 +125,12 @@ fun PlaylistDetailScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            // "Removed 'X' from playlist — Undo" recovery for removals
+            // The screen previously had no SnackbarHost at all; this is the single host.
+            UndoSnackbarOverlay(
+                actions = viewModel.undoActions,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
             when {
                 viewModel.isLoading && viewModel.items.isEmpty() -> {
                     ScreenLoadingState()

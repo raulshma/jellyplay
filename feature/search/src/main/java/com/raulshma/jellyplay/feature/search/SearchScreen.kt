@@ -56,6 +56,7 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +81,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -88,8 +90,12 @@ import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
+import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
@@ -108,6 +114,7 @@ import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
@@ -232,11 +239,39 @@ fun SearchScreen(
 
     val gridCellSize = adaptiveInfo.gridCellSize(isTv)
 
+    // Long-press / TV-Menu quick actions for search result cards. The
+    // controller is provided to every PosterCard below via
+    // CompositionLocal; the TV Menu key opens the focused card's actions.
+    val quickActionController = rememberMediaQuickActionController(
+        resolveActions = remember { { item: MediaItem -> searchQuickActions(item) } },
+        executeAction = remember(viewModel, onItemClick) {
+            { item: MediaItem, action: QuickAction ->
+                when (action) {
+                    QuickAction.PLAY -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
+                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
+                    QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
+                    QuickAction.DETAILS -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
+                    else -> Unit
+                }
+            }
+        },
+    )
+    // TV-only: the card currently holding D-pad focus, so the Menu key can open
+    // its quick actions.
+    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor),
+            .background(backgroundColor)
+            .onDpadKey(
+                onMenu = {
+                    tvFocusedItem?.let { quickActionController.show(it) }
+                    true
+                },
+            ),
     ) {
+        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -730,6 +765,7 @@ fun SearchScreen(
                                         onItemClick = { item ->
                                             onItemClick(item.id, item.mediaType, item.parentId, item.name)
                                         },
+                                        onFocusedItemChange = { item -> tvFocusedItem = item },
                                     )
                                 }
 
@@ -851,6 +887,17 @@ fun SearchScreen(
                                 verticalArrangement = Arrangement.spacedBy(spacing),
                                 modifier = Modifier.fillMaxSize(),
                                 contentType = { "mediaItem" },
+                                onFocusedIndexChange = { index ->
+                                    if (index in 0 until pagedResults.itemCount) {
+                                        try {
+                                            tvFocusedItem = pagedResults[index]
+                                        } catch (_: IndexOutOfBoundsException) {
+                                            tvFocusedItem = null
+                                        }
+                                    } else {
+                                        tvFocusedItem = null
+                                    }
+                                },
                             ) { index, itemModifier ->
                                 val item = if (index in 0 until pagedResults.itemCount) {
                                     try {
@@ -955,8 +1002,10 @@ fun SearchScreen(
                     }
                 } // close Box(library content)
             } // close Column(Grid Content)
-        }
-    }
+        } // close Column
+        } // close CompositionLocalProvider
+    } // close Box
+    MediaQuickActionHost(quickActionController)
 
     // Seerr request dialog
     requestItem?.let { item ->
@@ -1069,6 +1118,7 @@ private fun SuggestionSection(
     cardWidth: androidx.compose.ui.unit.Dp,
     getImageUrl: (String) -> String,
     onItemClick: (com.raulshma.jellyplay.core.model.MediaItem) -> Unit,
+    onFocusedItemChange: (com.raulshma.jellyplay.core.model.MediaItem?) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -1098,6 +1148,7 @@ private fun SuggestionSection(
             key = { it.id },
             horizontalArrangement = Arrangement.spacedBy(spacing),
             contentPadding = PaddingValues(end = contentPadding),
+            onFocusedIndexChange = { index -> onFocusedItemChange(items.getOrNull(index)) },
         ) { _, item, itemModifier ->
             val imageUrl = remember(item.id) { getImageUrl(item.id) }
             PosterCard(
@@ -1226,11 +1277,29 @@ private fun OfflineSearchCard(
                 modifier = Modifier.size(10.dp),
                 tint = MaterialTheme.colorScheme.tertiary,
             )
-            Text(
-                text = item.mediaType.mediaTypeDisplayName(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Text(
+            text = item.mediaType.mediaTypeDisplayName(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+}
+
+/**
+ * Which quick actions apply to a search result card
+ * Playable entries get play / mark-watched / details, mirroring the library
+ * grid's actions.
+ */
+private fun searchQuickActions(item: MediaItem): List<QuickAction> = buildList {
+    when (item.mediaType) {
+        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE,
+        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST,
+        MediaType.MUSIC_VIDEO, MediaType.COLLECTION, MediaType.LIVE_TV, MediaType.CHANNEL -> {
+            add(QuickAction.PLAY)
+            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
+            add(QuickAction.DETAILS)
         }
+        else -> Unit
     }
 }

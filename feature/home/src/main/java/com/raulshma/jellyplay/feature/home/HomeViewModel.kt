@@ -45,10 +45,13 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.components.UndoableAction
+import com.raulshma.jellyplay.core.ui.components.undoActionChannel
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchRegistry
@@ -75,6 +78,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
@@ -296,6 +300,21 @@ class HomeViewModel @Inject constructor(
     private val _searchHistory = MutableStateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory
 
+    /** Recoverable-action snackbars for home (search-history delete/clear).
+     * Home previously had no SnackbarHost at all */
+    private val _undoActions = undoActionChannel()
+    val undoActions = _undoActions.receiveAsFlow()
+
+    /**
+     * All users persisted for the current server. Backs the home app-bar quick
+     * user switcher. Mirrored into [HomeUiState.currentServerUsers] so the
+     * UI observes a single state object; the underlying flow is
+     * DB-backed ([AuthRepository.currentServerUsers]) so it's already populated
+     * after login — no extra fetch.
+     */
+    val currentServerUsers: StateFlow<List<UserInfo>> = authRepository.currentServerUsers
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /**
      * Encapsulates all Seerr request UI state (result, servers, loading, seasons).
      * SearchViewModel uses the same holder — this avoids Home duplicating that
@@ -357,6 +376,15 @@ class HomeViewModel @Inject constructor(
                     startPeriodicRefresh()
                 }
                 previousUserId = userId
+            }
+        }
+
+        // Mirror the server's persisted user list into UI state so the home
+        // app-bar user switcher can decide whether to render (≥2 users)
+        // without the UI subscribing to the repo flow directly.
+        launch {
+            currentServerUsers.collect { users ->
+                _uiState.update { it.copy(currentServerUsers = users) }
             }
         }
 
@@ -599,6 +627,17 @@ class HomeViewModel @Inject constructor(
         val playback: PlaybackSlice,
     )
 
+    /**
+     * Switches the active user. The [AuthRepository.currentUser] collector in
+     * [init] re-runs the full home refresh on the resulting user change, so no
+     * callback or explicit reload is needed here — the UI observes the flow.
+     */
+    fun switchUser(userId: String) {
+        launch {
+            authRepository.switchUser(userId)
+        }
+    }
+
     /** Intermediate holder for the five combined Seerr flows. */
     private data class SeerrRequestSlice(
         val result: com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult?,
@@ -656,6 +695,38 @@ class HomeViewModel @Inject constructor(
             firstVisibleItemIndex = firstVisibleItemIndex.coerceAtLeast(0),
             firstVisibleItemScrollOffset = firstVisibleItemScrollOffset.coerceAtLeast(0),
         )
+    }
+
+    /**
+     * Marks a home-row item (quick actions) played/unplayed.
+     * Flips the item in-place in every section so the card badge updates
+     * immediately; the next home refresh reconciles the server truth.
+     */
+    fun markItemPlayed(item: MediaItem) = setItemPlayed(item, played = true)
+
+    fun markItemUnplayed(item: MediaItem) = setItemPlayed(item, played = false)
+
+    private fun setItemPlayed(item: MediaItem, played: Boolean) {
+        launch {
+            val result = if (played) mediaRepository.markPlayed(item.id)
+            else mediaRepository.markUnplayed(item.id)
+            if (result.isSuccess) {
+                _uiState.update { state ->
+                    state.copy(
+                        sections = state.sections.map { section ->
+                            section.copy(
+                                items = section.items.map {
+                                    if (it.id == item.id) it.copy(
+                                        isPlayed = played,
+                                        playbackPositionTicks = 0L,
+                                    ) else it
+                                }
+                            )
+                        }
+                    )
+                }
+            }
+        }
     }
 
     fun resetHomeScrollPosition() {
@@ -758,13 +829,45 @@ class HomeViewModel @Inject constructor(
     }
 
     fun deleteSearchHistoryItem(id: Long) {
-        launch { searchHistoryRepository.deleteById(id) }
+        // Capture the query before deleting so Undo can re-save it (the DB row id
+        // changes on re-insert; the query text is what matters).
+        val item = _searchHistory.value.firstOrNull { it.id == id }
+        launch {
+            searchHistoryRepository.deleteById(id)
+            if (item != null) {
+                _undoActions.trySend(
+                    UndoableAction(
+                        message = "Removed \"${item.query}\" from search history",
+                        onUndo = {
+                            launch {
+                                val uid = serverIdentityStore.activeUserId.first() ?: return@launch
+                                searchHistoryRepository.saveQuery(item.query, uid)
+                            }
+                        },
+                    ),
+                )
+            }
+        }
     }
 
     fun clearSearchHistory() {
         launch {
             val userId = serverIdentityStore.activeUserId.first() ?: return@launch
+            // Snapshot before clearing so Undo can restore the full set.
+            val snapshot = _searchHistory.value
             searchHistoryRepository.clearAll(userId)
+            if (snapshot.isNotEmpty()) {
+                _undoActions.trySend(
+                    UndoableAction(
+                        message = "Cleared search history",
+                        onUndo = {
+                            launch {
+                                snapshot.forEach { searchHistoryRepository.saveQuery(it.query, userId) }
+                            }
+                        },
+                    ),
+                )
+            }
         }
     }
 
@@ -1179,10 +1282,10 @@ class HomeViewModel @Inject constructor(
  * Resolved media context for a single pending-sync outbox row.
  *
  * @property item the resolved [MediaItem] (title, type, episode context), or
- *   `null` if neither the offline store nor the server had a row for the id.
+ * `null` if neither the offline store nor the server had a row for the id.
  * @property posterUrl the URL to load the poster from. For offline items this
- *   is the locally-saved [OfflineMediaItem.posterPath]; otherwise it is the
- *   id-derived server URL, which will only resolve once back online.
+ * is the locally-saved [OfflineMediaItem.posterPath]; otherwise it is the
+ * id-derived server URL, which will only resolve once back online.
  */
 data class ResolvedSyncMedia(
     val item: com.raulshma.jellyplay.core.model.MediaItem?,

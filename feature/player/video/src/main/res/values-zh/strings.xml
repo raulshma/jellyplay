@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">音频</string>
     <string name="player_subtitles">字幕</string>
+    <string name="player_resumed_message">已从您上次离开的位置继续</string>
     <string name="player_reset_to_auto">重置为自动</string>
     <string name="player_track_default">默认</string>
     <string name="player_track_off">关闭</string>

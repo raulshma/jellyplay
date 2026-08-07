@@ -11,6 +11,7 @@
     <!-- Per-item notification action buttons -->
     <string name="notification_action_mark_seen">視聴済みにする</string>
     <string name="notification_action_open">開く</string>
+    <string name="notification_action_mark_all_seen">すべて視聴済みにする</string>
 
     <!-- Per-library notification channel -->
     <string name="notification_channel_new_in_library">%1$sの新着</string>

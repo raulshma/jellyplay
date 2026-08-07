@@ -278,7 +278,10 @@ class NowPlayingWidget : AppWidgetProvider() {
             val width = dims.width
             val height = dims.height
 
-            // Responsive width rules
+            // Responsive width rules. Compact (<180dp) keeps prev/next so the
+            // widget stays usable down to its 110dp min-resize width; only the
+            // artwork, progress, subtitle, and the secondary seek buttons drop
+            // out.
             if (width < 180) {
                 views.setViewVisibility(R.id.widget_album_art, android.view.View.GONE)
                 views.setViewVisibility(R.id.widget_progress_container, android.view.View.GONE)
@@ -287,8 +290,8 @@ class NowPlayingWidget : AppWidgetProvider() {
 
                 views.setViewVisibility(R.id.widget_rewind, android.view.View.GONE)
                 views.setViewVisibility(R.id.widget_forward, android.view.View.GONE)
-                views.setViewVisibility(R.id.widget_prev, android.view.View.GONE)
-                views.setViewVisibility(R.id.widget_next, android.view.View.GONE)
+                views.setViewVisibility(R.id.widget_prev, android.view.View.VISIBLE)
+                views.setViewVisibility(R.id.widget_next, android.view.View.VISIBLE)
                 views.setViewVisibility(R.id.widget_play_pause, android.view.View.VISIBLE)
             } else if (width < 280) {
                 views.setViewVisibility(R.id.widget_album_art, android.view.View.VISIBLE)

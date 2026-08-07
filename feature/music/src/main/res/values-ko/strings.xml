@@ -36,6 +36,8 @@
     <string name="music_now_playing">재생 중</string>
     <string name="music_download_album">앨범 다운로드</string>
     <string name="music_download_track">트랙 다운로드</string>
+    <string name="music_delete_album_downloads_confirm_title">앨범 다운로드를 삭제하시겠습니까?</string>
+    <string name="music_delete_album_downloads_confirm_message">이 앨범의 모든 다운로드된 트랙이 제거됩니다.</string>
 
     <!-- Track / row menus -->
     <string name="music_go_to_album">앨범으로 이동</string>

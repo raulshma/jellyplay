@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Subtítulos</string>
+    <string name="player_resumed_message">Reanudado desde donde lo dejaste</string>
     <string name="player_reset_to_auto">Restablecer a Automático</string>
     <string name="player_track_default">Predeterminada</string>
     <string name="player_track_off">Desactivado</string>

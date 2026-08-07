@@ -7,6 +7,32 @@
     <string name="core_reset">Reset</string>
     <string name="core_close">Close</string>
     <string name="core_done">Done</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">Confirm</string>
+    <string name="core_ok">OK</string>
+    <string name="core_apply">Apply</string>
+    <string name="core_delete">Delete</string>
+    <string name="core_clear">Clear</string>
+    <string name="core_undo">Undo</string>
+    <string name="core_clear_filters">Clear filters</string>
+    <string name="core_copy">Copy</string>
+    <string name="core_copied_to_clipboard">Copied to clipboard</string>
+    <string name="core_play_from_start">Play from start</string>
+    <string name="core_restart">Restart</string>
+    <string name="core_send_now">Send now</string>
+    <string name="core_search">Search</string>
+    <string name="core_stop_playback">Stop playback</string>
+    <string name="core_select_all">Select all</string>
+    <string name="core_mark_all_seen">Mark all as seen</string>
+    <string name="core_loading">Loading…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_quick_actions">Quick actions</string>
+    <string name="core_action_play">Play</string>
+    <string name="core_action_mark_watched">Mark as watched</string>
+    <string name="core_action_mark_unwatched">Mark as unwatched</string>
+    <string name="core_action_download">Download</string>
+    <string name="core_action_add_to_playlist">Add to playlist</string>
+    <string name="core_action_details">View details</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->

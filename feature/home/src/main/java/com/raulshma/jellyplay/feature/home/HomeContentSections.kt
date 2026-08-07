@@ -108,8 +108,8 @@ internal data class HomeContentCallbacks(
     val onSeerrRequest: (com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem) -> Unit,
     val seerrPrefetch: (Int, String, () -> Unit) -> Unit,
     /** Open the inline section-config sheet for a given section. Carries the
-     *  optional [libraryId] for per-library sections (LATEST_MEDIA) so the sheet
-     *  can apply a per-library override instead of a global toggle. */
+     * optional [libraryId] for per-library sections (LATEST_MEDIA) so the sheet
+     * can apply a per-library override instead of a global toggle. */
     val onConfigureSection: (HomeSectionType, String?) -> Unit,
     /** Deep-link into Settings → Home Screen Layout (global ordering / presets). */
     val onConfigureHomeLayout: () -> Unit,
@@ -117,6 +117,9 @@ internal data class HomeContentCallbacks(
     val onConfigureLibraries: () -> Unit,
     /** Open the full library screen for a home-section "See All" action. */
     val onSeeAllClick: (sectionType: HomeSectionType, libraryId: String?, collectionType: String?, title: String) -> Unit = { _, _, _, _ -> },
+    /** TV-only: reports the D-pad-focused item so the Menu key can open its
+     * quick actions */
+    val onFocusedMediaItem: (MediaItem) -> Unit = {},
 )
 
 /**
@@ -405,6 +408,7 @@ internal fun HomeContentList(
                                 { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
                             } else null
                         },
+                        onFocusedItemChange = callbacks.onFocusedMediaItem,
                         seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
                         seriesBackdropResolver = remember(callbacks.getBackdropUrl) { { id: String -> callbacks.getBackdropUrl(id) } },
                     )

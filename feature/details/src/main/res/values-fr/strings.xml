@@ -141,6 +141,14 @@
     <string name="detail_msg_couldnt_mark_unplayed">Impossible de marquer comme non lu</string>
     <string name="detail_mark_season_watched">Marquer la saison comme vue</string>
     <string name="detail_mark_season_unwatched">Marquer la saison comme non vue</string>
+    <string name="detail_mark_series_watched_confirm_title">Marquer la série comme vue ?</string>
+    <string name="detail_mark_series_watched_confirm_message">Cela marque tous les épisodes comme vus et efface toutes les positions de reprise.</string>
+    <string name="detail_mark_series_unwatched_confirm_title">Marquer la série comme non vue ?</string>
+    <string name="detail_mark_series_unwatched_confirm_message">Cela marque tous les épisodes comme non vus.</string>
+    <string name="detail_mark_season_watched_confirm_title">Marquer la saison comme vue ?</string>
+    <string name="detail_mark_season_watched_confirm_message">Cela marque tous les épisodes de cette saison comme vus et efface leurs positions de reprise.</string>
+    <string name="detail_mark_season_unwatched_confirm_title">Marquer la saison comme non vue ?</string>
+    <string name="detail_mark_season_unwatched_confirm_message">Cela marque tous les épisodes de cette saison comme non vus.</string>
     <string name="detail_cd_season_options">Marquer la saison comme vue ou non vue</string>
     <string name="detail_msg_no_episodes_queued">Aucun épisode n\'a pu être mis en file</string>
     <string name="detail_msg_hidden_from_next_up">Masqué de À suivre</string>
@@ -259,5 +267,13 @@
     <string name="detail_seerr_country">Pays</string>
     <string name="detail_seerr_studios">Studios</string>
     <string name="detail_seerr_currently_streaming_on">Actuellement en streaming sur</string>
+
+    <!-- États vides -->
+    <string name="detail_collection_empty_title">Cette collection est vide</string>
+    <string name="detail_collection_empty_description">Les éléments ajoutés à cette collection apparaîtront ici.</string>
+    <string name="detail_person_empty_title">Aucun titre trouvé</string>
+    <string name="detail_person_empty_description">Cette personne n\'a aucun titre correspondant au filtre actuel.</string>
+    <string name="detail_season_empty_title">Aucun épisode disponible</string>
+    <string name="detail_season_empty_description">Les épisodes apparaîtront ici une fois ajoutés.</string>
 
 </resources>

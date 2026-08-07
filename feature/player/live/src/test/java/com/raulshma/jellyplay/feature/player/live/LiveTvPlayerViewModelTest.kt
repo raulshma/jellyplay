@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlaybackRequest
@@ -448,5 +449,6 @@ class LiveTvPlayerViewModelTest {
         lastChannelStore = lastChannelStore,
         engineFactory = engineFactory,
         imageUrlProvider = imageUrlProvider,
+        userMessageBus = UserMessageBus(),
     )
 }

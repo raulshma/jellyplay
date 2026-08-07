@@ -630,46 +630,12 @@ fun AudioPlayerScreen(
                 }
             }
 
-            SnackbarHost(
+            com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
-            ) { snackbarData ->
-                // Material 3 Expressive snackbar: pill surface, elevated tonal,
-                // rounded to the expressive shape, with a bold action label.
-                Surface(
-                    shape = ShapeCache.smoothPill,
-                    color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.95f),
-                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                    shadowElevation = 6.dp,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = snackbarData.visuals.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.inverseOnSurface,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (snackbarData.visuals.actionLabel != null) {
-                            Spacer(Modifier.width(8.dp))
-                            TextButton(onClick = { snackbarData.performAction() }) {
-                                Text(
-                                    snackbarData.visuals.actionLabel!!,
-                                    color = MaterialTheme.colorScheme.inversePrimary,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            )
 
             AnimatedVisibility(
                 visible = showErrorOverlay && uiState.playbackError != null,

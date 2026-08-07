@@ -36,6 +36,7 @@
     <string name="home_downloads">Downloads</string>
     <string name="home_play_on">Auf Gerät abspielen</string>
     <string name="home_settings">Einstellungen</string>
+    <string name="home_switch_user">Benutzer wechseln</string>
     <string name="home_going_online">Verbindung wird hergestellt…</string>
     <string name="home_go_online">Online gehen</string>
     <string name="home_go_offline">Offline gehen</string>

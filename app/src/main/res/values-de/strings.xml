@@ -17,6 +17,10 @@
     <string name="shortcut_play_music_long">Musik abspielen</string>
     <string name="shortcut_downloads_short">Downloads</string>
     <string name="shortcut_downloads_long">Downloads öffnen</string>
+    <string name="shortcut_surprise_short">Überraschung</string>
+    <string name="shortcut_surprise_long">Überrasche mich</string>
+    <string name="shortcut_settings_short">Einstellungen</string>
+    <string name="shortcut_settings_long">Einstellungen öffnen</string>
 
     <string name="widget_now_playing_label">Aktuelle Wiedergabe</string>
     <string name="widget_now_playing_description">Sieh und steuere die Musik, die du gerade hörst, direkt vom Startbildschirm.</string>

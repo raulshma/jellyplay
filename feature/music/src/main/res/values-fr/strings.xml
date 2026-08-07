@@ -36,6 +36,8 @@
     <string name="music_now_playing">Lecture en cours</string>
     <string name="music_download_album">Télécharger l\'album</string>
     <string name="music_download_track">Télécharger le titre</string>
+    <string name="music_delete_album_downloads_confirm_title">Supprimer les téléchargements de l\'album ?</string>
+    <string name="music_delete_album_downloads_confirm_message">Cela supprime toutes les pistes téléchargées de cet album.</string>
 
     <!-- Track / row menus -->
     <string name="music_go_to_album">Aller à l\'album</string>

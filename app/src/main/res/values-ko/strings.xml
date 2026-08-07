@@ -17,6 +17,10 @@
     <string name="shortcut_play_music_long">음악 재생</string>
     <string name="shortcut_downloads_short">다운로드</string>
     <string name="shortcut_downloads_long">다운로드 열기</string>
+    <string name="shortcut_surprise_short">랜덤</string>
+    <string name="shortcut_surprise_long">랜덤 재생</string>
+    <string name="shortcut_settings_short">설정</string>
+    <string name="shortcut_settings_long">설정 열기</string>
 
     <string name="widget_now_playing_label">지금 재생 중</string>
     <string name="widget_now_playing_description">홈 화면에서 바로 듣고 있는 음악을 보고 조작하세요.</string>

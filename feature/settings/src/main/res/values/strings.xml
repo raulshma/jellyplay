@@ -125,6 +125,8 @@
     <string name="settings_manage_addresses_cd">Manage addresses</string>
     <string name="settings_active_cd">Active</string>
     <string name="settings_remove_cd">Remove</string>
+    <string name="settings_remove_server_confirm_title">Remove server?</string>
+    <string name="settings_remove_server_confirm_message">This removes the server and all saved users on it.</string>
     <string name="settings_add_address">Add Address</string>
     <string name="settings_primary">Primary</string>
     <string name="settings_switch">Switch</string>

@@ -332,6 +332,18 @@ class SearchViewModel @Inject constructor(
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
 
+    /**
+     * Marks a result item played/unplayed on the server.
+     * Intentionally silent: the paged results are left untouched so the user
+     * keeps their scroll position — the badge updates on the next natural data
+     * refresh.
+     */
+    fun markItemPlayed(item: MediaItem, played: Boolean) {
+        launch {
+            if (played) mediaRepository.markPlayed(item.id) else mediaRepository.markUnplayed(item.id)
+        }
+    }
+
     fun getSeerrPosterUrl(posterPath: String?): String? =
         posterPath?.let { buildPosterUrl(it) }
 

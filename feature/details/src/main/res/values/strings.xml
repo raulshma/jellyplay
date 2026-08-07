@@ -142,6 +142,17 @@
     <string name="detail_msg_couldnt_mark_unplayed">Couldn\'t mark as unplayed</string>
     <string name="detail_mark_season_watched">Mark season as watched</string>
     <string name="detail_mark_season_unwatched">Mark season as unwatched</string>
+    <!-- Confirm dialogs for multi-episode mark-played cascades.
+         Jellyfin recurses into children and clears every resume position, so the
+         tap is gated behind a confirm that names the episode count. -->
+    <string name="detail_mark_series_watched_confirm_title">Mark series as watched?</string>
+    <string name="detail_mark_series_watched_confirm_message">This marks every episode as watched and clears all resume positions.</string>
+    <string name="detail_mark_series_unwatched_confirm_title">Mark series as unwatched?</string>
+    <string name="detail_mark_series_unwatched_confirm_message">This marks every episode as unwatched.</string>
+    <string name="detail_mark_season_watched_confirm_title">Mark season as watched?</string>
+    <string name="detail_mark_season_watched_confirm_message">This marks every episode in this season as watched and clears their resume positions.</string>
+    <string name="detail_mark_season_unwatched_confirm_title">Mark season as unwatched?</string>
+    <string name="detail_mark_season_unwatched_confirm_message">This marks every episode in this season as unwatched.</string>
     <string name="detail_cd_season_options">Mark season watched or unwatched</string>
     <string name="detail_msg_no_episodes_queued">No episodes could be queued</string>
     <string name="detail_msg_hidden_from_next_up">Hidden from Next Up</string>
@@ -255,5 +266,13 @@
     <string name="detail_seerr_country">Country</string>
     <string name="detail_seerr_studios">Studios</string>
     <string name="detail_seerr_currently_streaming_on">Currently Streaming On</string>
+
+    <!-- Empty states -->
+    <string name="detail_collection_empty_title">This collection is empty</string>
+    <string name="detail_collection_empty_description">Items added to this collection will appear here.</string>
+    <string name="detail_person_empty_title">No titles found</string>
+    <string name="detail_person_empty_description">This person has no titles matching the current filter.</string>
+    <string name="detail_season_empty_title">No episodes available</string>
+    <string name="detail_season_empty_description">Episodes will appear here once they\'re added.</string>
 
 </resources>

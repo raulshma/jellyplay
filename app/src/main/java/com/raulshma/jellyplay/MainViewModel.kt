@@ -146,6 +146,14 @@ class MainViewModel @Inject constructor(
     val pendingRoute = _pendingRoute.flow
 
     /**
+     * One-shot signal fired by the "Surprise Me" launcher shortcut. The Home
+     * hero controller has no VM entry point, so the Home screen
+     * observes this and flips its local `showSurprise` state on launch.
+     */
+    private val _surpriseOnLaunch = stateFlow(false)
+    val surpriseOnLaunch = _surpriseOnLaunch.flow
+
+    /**
      * `true` only on a fresh ViewModel construction — i.e. a restore *after
      * state loss*, not a config-change recreate (which reuses the same
      * ViewModel via `onRetainNonConfigurationInstance`). Covers every case
@@ -216,9 +224,9 @@ class MainViewModel @Inject constructor(
                         // Capabilities must be posted *after* the server has a
                         // session for this device. The Jellyfin server computes
                         // a session's SupportsRemoteControl as:
-                        //   Capabilities?.SupportsMediaControl == true
-                        //   && an attached SessionController (the WebSocket)
-                        //      also reports SupportsMediaControl.
+                        // Capabilities?.SupportsMediaControl == true
+                        // && an attached SessionController (the WebSocket)
+                        // also reports SupportsMediaControl.
                         // POST /Sessions/Capabilities/Full resolves the session
                         // by deviceId and throws if none exists yet — which is
                         // the case if it races ahead of the WebSocket handshake.
@@ -432,11 +440,23 @@ class MainViewModel @Inject constructor(
                 val itemId = intent.getStringExtra(AppShortcutManager.EXTRA_ITEM_ID)
                 if (!itemId.isNullOrBlank()) Route.AudioPlayer(itemId) else null
             }
+            // Static launcher shortcuts
+            AppShortcutManager.ACTION_SETTINGS -> Route.Settings
+            AppShortcutManager.ACTION_SURPRISE_ME -> {
+                // Route home and arm the surprise signal the Home screen consumes.
+                _surpriseOnLaunch.set(true)
+                Route.Home
+            }
             else -> null
         }
         if (route != null) {
             _pendingRoute.set(route)
         }
+    }
+
+    /** Clears the surprise-on-launch signal after the Home screen consumes it. */
+    fun consumeSurpriseOnLaunch() {
+        _surpriseOnLaunch.set(false)
     }
 
     fun handleDeepLink(intent: Intent) {

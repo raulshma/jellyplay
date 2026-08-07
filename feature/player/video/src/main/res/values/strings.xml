@@ -2,6 +2,8 @@
 <resources>
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Subtitles</string>
+    <!-- Resume-reminder chip shown when playback resumes from a saved position -->
+    <string name="player_resumed_message">Resumed from where you left off</string>
     <string name="player_reset_to_auto">Reset to Auto</string>
     <string name="player_track_default">Default</string>
     <string name="player_track_off">Off</string>

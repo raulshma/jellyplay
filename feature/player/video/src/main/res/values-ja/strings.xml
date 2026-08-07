@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">音声</string>
     <string name="player_subtitles">字幕</string>
+    <string name="player_resumed_message">前回の位置から再開しました</string>
     <string name="player_reset_to_auto">自動にリセット</string>
     <string name="player_track_default">デフォルト</string>
     <string name="player_track_off">オフ</string>

@@ -8,6 +8,32 @@
     <string name="core_reset">リセット</string>
     <string name="core_close">閉じる</string>
     <string name="core_done">完了</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">確認</string>
+    <string name="core_ok">OK</string>
+    <string name="core_apply">適用</string>
+    <string name="core_delete">削除</string>
+    <string name="core_clear">クリア</string>
+    <string name="core_undo">元に戻す</string>
+    <string name="core_clear_filters">フィルターをクリア</string>
+    <string name="core_copy">コピー</string>
+    <string name="core_copied_to_clipboard">クリップボードにコピーしました</string>
+    <string name="core_play_from_start">最初から再生</string>
+    <string name="core_restart">最初から再生</string>
+    <string name="core_send_now">今すぐ送信</string>
+    <string name="core_search">検索</string>
+    <string name="core_stop_playback">再生を停止</string>
+    <string name="core_select_all">すべて選択</string>
+    <string name="core_mark_all_seen">すべて視聴済みにする</string>
+    <string name="core_loading">読み込んでいます…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_quick_actions">クイック操作</string>
+    <string name="core_action_play">再生</string>
+    <string name="core_action_mark_watched">視聴済みにする</string>
+    <string name="core_action_mark_unwatched">未視聴にする</string>
+    <string name="core_action_download">ダウンロード</string>
+    <string name="core_action_add_to_playlist">プレイリストに追加</string>
+    <string name="core_action_details">詳細を表示</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->

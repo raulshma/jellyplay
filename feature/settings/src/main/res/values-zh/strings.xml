@@ -107,6 +107,8 @@
     <string name="settings_manage_addresses_cd">管理地址</string>
     <string name="settings_active_cd">当前使用</string>
     <string name="settings_remove_cd">移除</string>
+    <string name="settings_remove_server_confirm_title">移除服务器？</string>
+    <string name="settings_remove_server_confirm_message">这会移除该服务器及其上所有已保存的用户。</string>
     <string name="settings_add_address">添加地址</string>
     <string name="settings_primary">主要</string>
     <string name="settings_switch">切换</string>

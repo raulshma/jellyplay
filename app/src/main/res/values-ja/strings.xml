@@ -17,6 +17,10 @@
     <string name="shortcut_play_music_long">音楽を再生</string>
     <string name="shortcut_downloads_short">ダウンロード</string>
     <string name="shortcut_downloads_long">ダウンロードを開く</string>
+    <string name="shortcut_surprise_short">おまかせ</string>
+    <string name="shortcut_surprise_long">おまかせ</string>
+    <string name="shortcut_settings_short">設定</string>
+    <string name="shortcut_settings_long">設定を開く</string>
 
     <string name="widget_now_playing_label">再生中</string>
     <string name="widget_now_playing_description">ホーム画面から今聴いている音楽を確認・操作できます。</string>

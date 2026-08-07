@@ -5,13 +5,16 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,8 +36,15 @@ import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
+import com.raulshma.jellyplay.core.ui.components.QuickAction
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.MovieOff
+import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.material3.FilterChip
@@ -59,6 +69,7 @@ private fun PersonFilmography(
     biography: String?,
     getImageUrl: (String) -> String,
     onItemClick: (String) -> Unit,
+    onFocusedMediaItem: (MediaItem?) -> Unit,
     contentPad: androidx.compose.ui.unit.Dp,
     gridMin: androidx.compose.ui.unit.Dp,
     spacing: androidx.compose.ui.unit.Dp,
@@ -84,6 +95,7 @@ private fun PersonFilmography(
         horizontalArrangement = Arrangement.spacedBy(spacing),
         verticalArrangement = Arrangement.spacedBy(spacing),
         contentType = { "mediaItem" },
+        onFocusedIndexChange = { index -> onFocusedMediaItem(visibleFilmography.getOrNull(index)) },
         // Full-span header (biography + movie/TV filter chips) stays in scroll
         // flow above the poster grid. extraContent is emitted before the items.
         extraContent = {
@@ -94,6 +106,28 @@ private fun PersonFilmography(
                     onFilterChange = { filter = it },
                     contentPad = contentPad,
                 )
+            }
+            // an empty filmography (no titles, or a Movies/TV
+            // filter that matches nothing) previously rendered just the header.
+            // Surface an empty state with a one-tap "Clear filter" CTA so the
+            // zero-result case is recoverable.
+            if (visibleFilmography.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
+                        icon = Tabler.Outline.MovieOff,
+                        title = androidx.compose.ui.res.stringResource(com.raulshma.jellyplay.feature.details.R.string.detail_person_empty_title),
+                        description = androidx.compose.ui.res.stringResource(com.raulshma.jellyplay.feature.details.R.string.detail_person_empty_description),
+                        actionLabel = if (filter != PersonFilmographyFilter.ALL) {
+                            androidx.compose.ui.res.stringResource(com.raulshma.jellyplay.core.ui.R.string.core_clear_filters)
+                        } else null,
+                        onAction = if (filter != PersonFilmographyFilter.ALL) {
+                            { filter = PersonFilmographyFilter.ALL }
+                        } else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                    )
+                }
             }
         },
     ) { index, itemModifier ->
@@ -176,20 +210,50 @@ fun PersonDetailScreen(
     val title = (state as? PersonDetailUiState.Success)?.name ?: ""
     val isLoading = state is PersonDetailUiState.Loading
 
-    JellyPlayScreenScaffold(
-        title = title,
-        onBack = onBack,
-        topBarStyle = TopBarStyle.Collapsing,
-        actions = {
-            if (isLoading) {
-                JellyPlayLoadingIndicator(
-                    modifier = Modifier
-                        .padding(end = 16.dp)
-                        .size(24.dp)
-                )
+    // Long-press / TV-Menu quick actions for filmography cards
+    val quickActionController = rememberMediaQuickActionController(
+        resolveActions = remember { { item: MediaItem -> personQuickActions(item) } },
+        executeAction = remember(viewModel, onItemClick) {
+            { item: MediaItem, action: QuickAction ->
+                when (action) {
+                    QuickAction.PLAY -> onItemClick(item.id)
+                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, played = true)
+                    QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, played = false)
+                    QuickAction.DETAILS -> onItemClick(item.id)
+                    else -> Unit
+                }
             }
         },
-    ) { padding ->
+    )
+    // TV-only: the card currently holding D-pad focus, so the Menu key can open
+    // its quick actions.
+    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onDpadKey(
+                onMenu = {
+                    tvFocusedItem?.let { quickActionController.show(it) }
+                    true
+                },
+            ),
+    ) {
+        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+        JellyPlayScreenScaffold(
+            title = title,
+            onBack = onBack,
+            topBarStyle = TopBarStyle.Collapsing,
+            actions = {
+                if (isLoading) {
+                    JellyPlayLoadingIndicator(
+                        modifier = Modifier
+                            .padding(end = 16.dp)
+                            .size(24.dp)
+                    )
+                }
+            },
+        ) { padding ->
         when (state) {
             is PersonDetailUiState.Error -> {
                 val message = (state as PersonDetailUiState.Error).message
@@ -222,6 +286,7 @@ fun PersonDetailScreen(
                     biography = success.biography,
                     getImageUrl = viewModel::getImageUrl,
                     onItemClick = onItemClick,
+                    onFocusedMediaItem = { item -> tvFocusedItem = item },
                     contentPad = contentPad,
                     gridMin = gridMin,
                     spacing = spacing,
@@ -230,5 +295,24 @@ fun PersonDetailScreen(
                 )
             }
         }
+        } // close scaffold content lambda
+        } // close CompositionLocalProvider
+    } // close Box
+    MediaQuickActionHost(quickActionController)
+} // close PersonDetailScreen
+
+/**
+ * Which quick actions apply to a filmography card Movies,
+ * series and episodes get play / mark-watched / details; other entries are
+ * excluded.
+ */
+private fun personQuickActions(item: MediaItem): List<QuickAction> = buildList {
+    when (item.mediaType) {
+        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE -> {
+            add(QuickAction.PLAY)
+            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
+            add(QuickAction.DETAILS)
+        }
+        else -> Unit
     }
 }

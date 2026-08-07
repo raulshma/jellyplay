@@ -17,6 +17,10 @@
     <string name="shortcut_play_music_long">Riproduci musica</string>
     <string name="shortcut_downloads_short">Download</string>
     <string name="shortcut_downloads_long">Apri download</string>
+    <string name="shortcut_surprise_short">Sorpresa</string>
+    <string name="shortcut_surprise_long">Sorpresa</string>
+    <string name="shortcut_settings_short">Impostazioni</string>
+    <string name="shortcut_settings_long">Apri impostazioni</string>
 
     <string name="widget_now_playing_label">In riproduzione</string>
     <string name="widget_now_playing_description">Visualizza e controlla la musica che stai ascoltando direttamente dalla schermata home.</string>

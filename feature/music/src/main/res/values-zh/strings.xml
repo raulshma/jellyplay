@@ -36,6 +36,8 @@
     <string name="music_now_playing">正在播放</string>
     <string name="music_download_album">下载专辑</string>
     <string name="music_download_track">下载曲目</string>
+    <string name="music_delete_album_downloads_confirm_title">删除专辑下载？</string>
+    <string name="music_delete_album_downloads_confirm_message">这会移除该专辑的所有已下载曲目。</string>
 
     <!-- Track / row menus -->
     <string name="music_go_to_album">前往专辑</string>
