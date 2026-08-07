@@ -112,6 +112,8 @@
     <string name="update_install">Install</string>
     <string name="update_failed_title">Update failed</string>
     <string name="update_close">Close</string>
+    <string name="update_auto_download_label">Download updates automatically</string>
+    <string name="update_auto_download_subtitle">New updates download right away for this device</string>
 
     <!-- Shared media transport (content descriptions & labels) -->
     <string name="media_play">Play</string>

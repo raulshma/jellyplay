@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
+import com.raulshma.jellyplay.core.data.worker.DownloadNotificationHelper
 import com.raulshma.jellyplay.core.data.worker.awaitResponse
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
@@ -112,6 +113,9 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadItem? =
         downloadDao.getDownloadByMediaItemId(mediaItemId)?.toDownloadItem()
+
+    override suspend fun getDownloadName(id: String): String? =
+        downloadDao.getDownloadById(id)?.name
 
     override suspend fun startDownload(
         mediaItemId: String,
@@ -220,6 +224,7 @@ class DownloadRepositoryImpl @Inject constructor(
         // its next 2-second poll tick discovers the row is gone.
         cancelWorkForDownload(id)
         cleanupDownloadFiles(entity)
+        refreshDownloadSummary()
     }
 
     override suspend fun pauseDownload(id: String): Result<Unit> = runCatching {
@@ -234,6 +239,7 @@ class DownloadRepositoryImpl @Inject constructor(
             // alone; only NETWORK interruptions auto-resume.
             downloadDao.updatePausedReason(id, DownloadPauseReason.USER.persistedValue)
         }
+        refreshDownloadSummary()
     }
 
     override suspend fun resumeDownload(id: String): Result<Unit> = runCatching {
@@ -245,12 +251,14 @@ class DownloadRepositoryImpl @Inject constructor(
             downloadDao.updatePausedReason(id, null)
             downloadDao.resetRetryCount(id)
         }
+        refreshDownloadSummary()
     }
 
     override suspend fun deleteDownload(id: String): Result<Unit> = runCatching {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatching
         cancelWorkForDownload(id)
         cleanupDownloadFiles(entity)
+        refreshDownloadSummary()
     }
 
     /**
@@ -267,11 +275,24 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Keeps the download notification group summary in sync when this repository
+     * changes a row's state (pause/cancel/resume/retry/delete) — e.g. in-app
+     * controls that never cross the notification action receiver. Best-effort:
+     * a Room/notification hiccup must not fail the state change.
+     */
+    private suspend fun refreshDownloadSummary() {
+        runCatching {
+            DownloadNotificationHelper.refreshSummary(context, downloadDao.getInFlightDownloadCount())
+        }
+    }
+
     override suspend fun retryDownload(id: String): Result<Unit> = runCatching {
         downloadDao.updateProgress(id, 0L, DownloadStatus.PENDING.name)
         // A manual retry starts fresh — clear the auto-retry budget and reason.
         downloadDao.updatePausedReason(id, null)
         downloadDao.resetRetryCount(id)
+        refreshDownloadSummary()
     }
 
     override suspend fun resumeInterruptedDownloads() {
@@ -307,6 +328,7 @@ class DownloadRepositoryImpl @Inject constructor(
                 Log.w(TAG, "Failed to resume interrupted download ${row.id}", e)
             }
         }
+        refreshDownloadSummary()
     }
 
     override suspend fun getTotalDownloadedBytes(): Long =

@@ -269,6 +269,14 @@ fun AboutScreen(
                     checked = viewModel.selfUpdateCheckEnabled,
                     onCheckedChange = { viewModel.updateSelfUpdateCheckPref(it) },
                 )
+                SettingToggleItem(
+                    icon = Tabler.Outline.Download,
+                    title = stringResource(R.string.settings_download_updates_automatically),
+                    subtitle = stringResource(R.string.settings_download_updates_subtitle),
+                    checked = viewModel.selfUpdateDownloadEnabled,
+                    enabled = viewModel.selfUpdateCheckEnabled,
+                    onCheckedChange = { viewModel.updateSelfUpdateDownloadPref(it) },
+                )
                 if (viewModel.selfUpdateCheckEnabled) {
                     SettingListItem(
                         icon = Tabler.Outline.Refresh,

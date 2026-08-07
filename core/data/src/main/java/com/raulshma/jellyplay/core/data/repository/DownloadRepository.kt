@@ -24,6 +24,13 @@ interface DownloadRepository : OfflineDownloadWriter {
 
     suspend fun getDownloadByMediaItemId(mediaItemId: String): DownloadItem?
 
+    /**
+     * The display name of a download row, or null if it no longer exists.
+     * Thin read accessor for callers (e.g. the notification action receiver)
+     * that need only the name and shouldn't depend on the DAO layer directly.
+     */
+    suspend fun getDownloadName(id: String): String?
+
     suspend fun cancelDownload(id: String): Result<Unit>
 
     suspend fun pauseDownload(id: String): Result<Unit>

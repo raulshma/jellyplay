@@ -183,6 +183,14 @@ class MainViewModel @Inject constructor(
     private val _updateState = stateFlow<UpdateState>(UpdateState.Idle)
     val updateState = _updateState.flow
 
+    /**
+     * User's "download updates automatically" preference, mirrored from
+     * [ExperimentalStore] so the update sheet can render + toggle it while a
+     * flow is active without subscribing to the whole experimental slice.
+     */
+    private val _selfUpdateDownloadEnabled = stateFlow(false)
+    val selfUpdateDownloadEnabled = _selfUpdateDownloadEnabled.flow
+
     init {
         launch {
             coroutineScope {
@@ -298,6 +306,12 @@ class MainViewModel @Inject constructor(
         }
 
         appShortcutManager.observePlaybackForDynamicShortcuts()
+
+        launch {
+            experimentalStore.experimental.collect { prefs ->
+                _selfUpdateDownloadEnabled.set(prefs.selfUpdateDownloadEnabled)
+            }
+        }
     }
 
     fun refreshLibraryFolders() {
@@ -311,8 +325,9 @@ class MainViewModel @Inject constructor(
      * Checks GitHub Releases for a newer build, called once on launch after
      * session restore. Gated by `selfUpdateCheckEnabled`. Stays silent unless
      * an update is actually available — it never surfaces a sheet for an
-     * up-to-date result. Use [manualCheckForUpdate] when the user wants
-     * feedback regardless of outcome.
+     * up-to-date result. When the user's opted into auto-download, an available
+     * update begins streaming immediately instead of prompting. Use
+     * [manualCheckForUpdate] when the user wants feedback regardless of outcome.
      */
     fun checkForAppUpdate() {
         launch {
@@ -326,7 +341,13 @@ class MainViewModel @Inject constructor(
                 // Honor a prior dismissal: if the user dismissed this exact
                 // version less than 24h ago, stay quiet on the launch auto-check.
                 if (isUpdateRecentlyDismissed(info.latestVersion, experimental)) return@onSuccess
-                _updateState.set(UpdateState.UpdateAvailable(info))
+                // With auto-download enabled, skip the prompt and stream the APK
+                // straight away (the sheet surfaces download progress/cancel).
+                if (experimental.selfUpdateDownloadEnabled && info.downloadAssetUrl != null) {
+                    startUpdateDownload(info)
+                } else {
+                    _updateState.set(UpdateState.UpdateAvailable(info))
+                }
             }
         }
     }
@@ -349,26 +370,43 @@ class MainViewModel @Inject constructor(
      * Manual, user-initiated check (from Settings). Always surfaces the result:
      * a sheet for an available update, or a "you're up to date" sheet (with a
      * link to view the current version's release notes) when none is. Bypasses
-     * the auto-check preference.
+     * the auto-check preference, but still honors auto-download (an available
+     * update begins streaming immediately when enabled).
      */
     fun manualCheckForUpdate() {
         launch {
             _updateState.set(UpdateState.Checking)
+            val experimental = experimentalStore.experimental.first()
             val result = appUpdateRepository.checkForUpdate(
                 supportedAbis = android.os.Build.SUPPORTED_ABIS,
             )
             result
                 .onSuccess { info ->
-                    _updateState.set(
-                        if (info.isUpdateAvailable) UpdateState.UpdateAvailable(info)
-                        else UpdateState.NoUpdate(info),
-                    )
+                    when {
+                        // Always surface the "up to date" result with release notes.
+                        !info.isUpdateAvailable -> _updateState.set(UpdateState.NoUpdate(info))
+                        // Auto-download enabled → begin streaming without the prompt.
+                        experimental.selfUpdateDownloadEnabled && info.downloadAssetUrl != null ->
+                            startUpdateDownload(info)
+                        else -> _updateState.set(UpdateState.UpdateAvailable(info))
+                    }
                 }
                 .onFailure { _updateState.set(UpdateState.Error(it.message ?: "Update check failed")) }
         }
     }
 
-    /** Begins streaming the APK for the given update, reporting progress. */
+    /**
+     * Persists the "download updates automatically" preference. Also exposed
+     * from the update sheet so the toggle takes effect from either place.
+     */
+    fun setSelfUpdateDownloadEnabled(enabled: Boolean) {
+        _selfUpdateDownloadEnabled.set(enabled)
+        launch { experimentalStore.setSelfUpdateDownloadEnabled(enabled) }
+    }
+
+    /**
+     * Begins streaming the APK for the given update, reporting progress.
+     */
     fun startUpdateDownload(info: com.raulshma.jellyplay.core.model.AppUpdateInfo) {
         val url = info.downloadAssetUrl ?: return
         launch {

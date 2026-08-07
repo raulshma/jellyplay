@@ -36,6 +36,15 @@ interface DownloadDao {
     @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING', 'PAUSED')")
     fun getActiveDownloadCount(): Flow<Int>
 
+    /**
+     * Count of downloads actively in flight — `PENDING`/`QUEUED`/`DOWNLOADING`
+     * only (excludes `PAUSED`, which the summary counts as resolved). Used by the
+     * download notification group summary so it collapses to one shade item and
+     * dismisses itself when the last transfer finishes.
+     */
+    @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING')")
+    suspend fun getInFlightDownloadCount(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDownload(download: DownloadEntity)
 

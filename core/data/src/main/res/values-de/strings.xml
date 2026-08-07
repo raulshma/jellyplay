@@ -20,6 +20,16 @@
     <string name="data_channel_downloads">Downloads</string>
     <string name="data_channel_downloads_desc">Benachrichtigungen zum Download-Fortschritt</string>
 
+    <!-- Downloads notification actions -->
+    <string name="data_download_action_pause">Pause</string>
+    <string name="data_download_action_resume">Fortsetzen</string>
+    <string name="data_download_action_cancel">Abbrechen</string>
+    <string name="data_download_paused">Download pausiert</string>
+    <plurals name="data_download_summary_active">
+        <item quantity="one">%1$d Download wird ausgeführt</item>
+        <item quantity="other">%1$d Downloads werden ausgeführt</item>
+    </plurals>
+
     <!-- Admin statistics: content-type breakdown labels -->
     <string name="data_label_movies">Filme</string>
     <string name="data_label_episodes">Episoden</string>

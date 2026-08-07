@@ -31,8 +31,9 @@ import javax.inject.Singleton
 /**
  * Deep module owning the **experimental features + misc app / update** preference
  * domain: the opt-in experimental feature set (JSON), the self-update check
- * toggle, the app language override, the share-media / search-history /
- * audio-description toggles, and the dismissed-update one-time state.
+ * + auto-download toggles, the app language override, the share-media /
+ * search-history / audio-description toggles, and the dismissed-update
+ * one-time state.
  *
  * Extracted from the `UserPreferencesStore` god object so this concern owns its
  * keys, setters, read projection, JSON memoisation, and reset list end-to-end.
@@ -56,8 +57,9 @@ import javax.inject.Singleton
  * legacy `UserPreferencesStore.Keys` names — no migration file.
  *
  * **Codec note:** none of the booleans owned here
- * (`self_update_check_enabled`, `show_share_media_option`,
- * `hide_search_history`, `prefer_audio_description`) appear in the legacy-string
+ * (`self_update_check_enabled`, `self_update_download_enabled`,
+ * `show_share_media_option`, `hide_search_history`,
+ * `prefer_audio_description`) appear in the legacy-string
  * → typed-key migration lists, so they are read with plain `prefs[key] ?: default`.
  */
 @Singleton
@@ -72,6 +74,7 @@ class ExperimentalStore @Inject constructor(
     internal object Keys {
         val ENABLED_EXPERIMENTAL_FEATURES = stringPreferencesKey("enabled_experimental_features")
         val SELF_UPDATE_CHECK_ENABLED = booleanPreferencesKey("self_update_check_enabled")
+        val SELF_UPDATE_DOWNLOAD_ENABLED = booleanPreferencesKey("self_update_download_enabled")
         val APP_LANGUAGE = stringPreferencesKey("app_language")
         val SHOW_SHARE_MEDIA_OPTION = booleanPreferencesKey("show_share_media_option")
         val HIDE_SEARCH_HISTORY = booleanPreferencesKey("hide_search_history")
@@ -100,6 +103,7 @@ class ExperimentalStore @Inject constructor(
     internal fun read(prefs: Preferences): ExperimentalSlice = ExperimentalSlice(
         enabledExperimentalFeatures = readEnabledExperimentalFeatures(prefs),
         selfUpdateCheckEnabled = prefs[Keys.SELF_UPDATE_CHECK_ENABLED] ?: true,
+        selfUpdateDownloadEnabled = prefs[Keys.SELF_UPDATE_DOWNLOAD_ENABLED] ?: false,
         appLanguage = prefs[Keys.APP_LANGUAGE],
         showShareMediaOption = prefs[Keys.SHOW_SHARE_MEDIA_OPTION] ?: true,
         hideSearchHistory = prefs[Keys.HIDE_SEARCH_HISTORY] ?: false,
@@ -136,6 +140,15 @@ class ExperimentalStore @Inject constructor(
 
     suspend fun setSelfUpdateCheckEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.SELF_UPDATE_CHECK_ENABLED] = enabled }
+    }
+
+    /**
+     * When enabled, an available update's APK begins downloading immediately
+     * after a check instead of waiting for the user to tap Download. Defaults
+     * to off; can be toggled from Settings (About) or from the update sheet.
+     */
+    suspend fun setSelfUpdateDownloadEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.SELF_UPDATE_DOWNLOAD_ENABLED] = enabled }
     }
 
     suspend fun setAppLanguage(language: String?) {
@@ -200,6 +213,7 @@ class ExperimentalStore @Inject constructor(
         )
         PreferenceResetCategory.MISC_APP -> listOf(
             Keys.SELF_UPDATE_CHECK_ENABLED,
+            Keys.SELF_UPDATE_DOWNLOAD_ENABLED,
             Keys.SHOW_SHARE_MEDIA_OPTION,
             Keys.HIDE_SEARCH_HISTORY,
         )
@@ -220,6 +234,7 @@ class ExperimentalStore @Inject constructor(
         dataStore.edit { it ->
             it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(userPreferences.enabledExperimentalFeatures.map { feature -> feature.name }.toSet())
             it[Keys.SELF_UPDATE_CHECK_ENABLED] = userPreferences.selfUpdateCheckEnabled
+            it[Keys.SELF_UPDATE_DOWNLOAD_ENABLED] = userPreferences.selfUpdateDownloadEnabled
             userPreferences.appLanguage?.let { language -> it[Keys.APP_LANGUAGE] = language }
             it[Keys.SHOW_SHARE_MEDIA_OPTION] = userPreferences.showShareMediaOption
             it[Keys.HIDE_SEARCH_HISTORY] = userPreferences.hideSearchHistory
@@ -241,6 +256,7 @@ class ExperimentalStore @Inject constructor(
         dataStore.edit { it ->
             it[Keys.ENABLED_EXPERIMENTAL_FEATURES] = json.encodeToString(slice.enabledExperimentalFeatures.map { feature -> feature.name }.toSet())
             it[Keys.SELF_UPDATE_CHECK_ENABLED] = slice.selfUpdateCheckEnabled
+            it[Keys.SELF_UPDATE_DOWNLOAD_ENABLED] = slice.selfUpdateDownloadEnabled
             slice.appLanguage?.let { language -> it[Keys.APP_LANGUAGE] = language }
             it[Keys.SHOW_SHARE_MEDIA_OPTION] = slice.showShareMediaOption
             it[Keys.HIDE_SEARCH_HISTORY] = slice.hideSearchHistory
@@ -264,6 +280,7 @@ class ExperimentalStore @Inject constructor(
 data class ExperimentalSlice(
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
     val selfUpdateCheckEnabled: Boolean = true,
+    val selfUpdateDownloadEnabled: Boolean = false,
     val appLanguage: String? = null,
     val showShareMediaOption: Boolean = true,
     val hideSearchHistory: Boolean = false,
