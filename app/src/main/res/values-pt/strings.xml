@@ -99,6 +99,7 @@
     <string name="update_ready_title">Pronto para instalar — v%1$s</string>
     <string name="update_ready_body">A atualização foi transferida. Toque em Instalar para continuar.</string>
     <string name="update_install">Instalar</string>
+    <string name="update_download_again">Transferir novamente</string>
     <string name="update_failed_title">Falha na atualização</string>
     <string name="update_close">Fechar</string>
 

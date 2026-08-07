@@ -79,6 +79,27 @@ internal object DownloadNotificationHelper {
         }
     }
 
+    /**
+     * Queued-state foreground notification — shown while a transfer waits for a
+     * concurrency slot. Distinct from [createForegroundInfo] so the shade shows
+     * "Queued…" with an indeterminate bar instead of the misleading "0 B / …"
+     * that the byte-formatted progress text renders at zero downloaded bytes.
+     */
+    fun createQueuedForegroundInfo(
+        context: Context,
+        downloadId: String,
+        notificationId: Int,
+        name: String,
+    ): ForegroundInfo {
+        createNotificationChannel(context)
+        val notification = buildQueuedNotification(context, downloadId, name)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(notificationId, notification)
+        }
+    }
+
     fun updateNotification(
         context: Context,
         downloadId: String,
@@ -192,6 +213,39 @@ internal object DownloadNotificationHelper {
             .setOnlyAlertOnce(true)
             .setProgress(100, progress, false)
             .setSubText(speedBytesPerSec.formatSpeed())
+            .setContentIntent(openDownloadsPendingIntent(context))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setGroup(GROUP_KEY)
+            .addAction(
+                R.drawable.ic_notification_pause,
+                context.getString(R.string.data_download_action_pause),
+                actionPendingIntent(context, downloadId, DownloadActionReceiver.ACTION_PAUSE, ACTION_PAUSE_OFFSET),
+            )
+            .addAction(
+                R.drawable.ic_notification_stop,
+                context.getString(R.string.data_download_action_cancel),
+                actionPendingIntent(context, downloadId, DownloadActionReceiver.ACTION_CANCEL, ACTION_CANCEL_OFFSET),
+            )
+            .build()
+    }
+
+    /**
+     * Queued variant: indeterminate progress bar and a "Queued…" body, with the
+     * same Pause/Cancel actions so the user can still hold or cancel while
+     * waiting for a slot.
+     */
+    private fun buildQueuedNotification(
+        context: Context,
+        downloadId: String,
+        name: String,
+    ): Notification {
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle(name)
+            .setContentText(context.getString(R.string.data_download_queued))
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setProgress(0, 0, true)
             .setContentIntent(openDownloadsPendingIntent(context))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setGroup(GROUP_KEY)

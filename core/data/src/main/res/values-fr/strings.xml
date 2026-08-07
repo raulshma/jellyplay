@@ -25,6 +25,7 @@
     <string name="data_download_action_resume">Reprendre</string>
     <string name="data_download_action_cancel">Annuler</string>
     <string name="data_download_paused">Téléchargement en pause</string>
+    <string name="data_download_queued">En file d\'attente\u2026</string>
     <plurals name="data_download_summary_active">
         <item quantity="one">%1$d téléchargement en cours</item>
         <item quantity="other">%1$d téléchargements en cours</item>

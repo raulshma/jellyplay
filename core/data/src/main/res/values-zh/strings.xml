@@ -24,6 +24,7 @@
     <string name="data_download_action_resume">继续</string>
     <string name="data_download_action_cancel">取消</string>
     <string name="data_download_paused">下载已暂停</string>
+    <string name="data_download_queued">排队中\u2026</string>
     <plurals name="data_download_summary_active">
         <item quantity="other">%1$d 个下载正在进行</item>
     </plurals>

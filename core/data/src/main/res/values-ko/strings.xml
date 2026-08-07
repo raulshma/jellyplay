@@ -24,6 +24,7 @@
     <string name="data_download_action_resume">재개</string>
     <string name="data_download_action_cancel">취소</string>
     <string name="data_download_paused">다운로드 일시 정지됨</string>
+    <string name="data_download_queued">대기 중\u2026</string>
     <plurals name="data_download_summary_active">
         <item quantity="other">%1$d개 다운로드 진행 중</item>
     </plurals>

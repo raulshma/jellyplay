@@ -99,6 +99,7 @@
     <string name="update_ready_title">설치 준비 완료 — v%1$s</string>
     <string name="update_ready_body">업데이트가 다운로드되었습니다. 계속하려면 설치를 누르세요.</string>
     <string name="update_install">설치</string>
+    <string name="update_download_again">다시 다운로드</string>
     <string name="update_failed_title">업데이트 실패</string>
     <string name="update_close">닫기</string>
 

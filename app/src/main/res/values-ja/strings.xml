@@ -99,6 +99,7 @@
     <string name="update_ready_title">インストール準備完了 — v%1$s</string>
     <string name="update_ready_body">更新がダウンロードされました。続行するにはインストールをタップしてください。</string>
     <string name="update_install">インストール</string>
+    <string name="update_download_again">再度ダウンロード</string>
     <string name="update_failed_title">更新に失敗しました</string>
     <string name="update_close">閉じる</string>
 

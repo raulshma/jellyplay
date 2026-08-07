@@ -79,28 +79,32 @@ internal fun ChapterPickerSheet(
                 modifier = Modifier.padding(horizontal = 24.dp),
             )
             Spacer(Modifier.height(12.dp))
+            // Resolve the current chapter once in an O(n) pass instead of an
+            // O(n^2) re-scan (chapters.none { chapters.indexOf(it) }) per row,
+            // per position tick — the sheet re-lambdas at ~4 Hz while open.
+            val currentChapterIndex = remember(chapters, currentPositionMs) {
+                var found = -1
+                for (i in chapters.indices) {
+                    val chapterMs = chapters[i].startPositionTicks / 10_000
+                    val nextMs = if (i < chapters.lastIndex) {
+                        chapters[i + 1].startPositionTicks / 10_000
+                    } else {
+                        Long.MAX_VALUE
+                    }
+                    if (currentPositionMs >= chapterMs && currentPositionMs < nextMs) {
+                        found = i
+                        break
+                    }
+                }
+                found
+            }
+            // The focus target is the current chapter, or the first row when no
+            // chapter matches the position (mirrors the prior .none{} fallback).
+            val focusTargetIndex = if (currentChapterIndex >= 0) currentChapterIndex else 0
             LazyColumn(modifier = Modifier.verticalWrapAround()) {
                 itemsIndexed(chapters, key = { index, chapter -> "${index}_${chapter.startPositionTicks}" }, contentType = { _, _ -> "chapter" }) { index, chapter ->
-                    val isCurrentChapter = {
-                        val chapterMs = chapter.startPositionTicks / 10_000
-                        if (index < chapters.lastIndex) {
-                            val nextChapterMs = chapters[index + 1].startPositionTicks / 10_000
-                            currentPositionMs in chapterMs until nextChapterMs
-                        } else {
-                            currentPositionMs >= chapterMs
-                        }
-                    }()
-                    val isFirst = index == 0
-                    val isTarget = isCurrentChapter || (chapters.none {
-                        val chapterMs = it.startPositionTicks / 10_000
-                        val idx = chapters.indexOf(it)
-                        if (idx < chapters.lastIndex) {
-                            val nextChapterMs = chapters[idx + 1].startPositionTicks / 10_000
-                            currentPositionMs in chapterMs until nextChapterMs
-                        } else {
-                            currentPositionMs >= chapterMs
-                        }
-                    } && isFirst)
+                    val isCurrentChapter = index == currentChapterIndex
+                    val isTarget = index == focusTargetIndex
 
                     ChapterItem(
                         chapter = chapter,

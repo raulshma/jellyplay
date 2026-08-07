@@ -76,10 +76,14 @@ class DownloadWorker @AssistedInject constructor(
         concurrencyLimiter.configure(maxConcurrent)
 
         val notificationId = DownloadNotificationHelper.notificationIdFor(downloadId)
+        val existingBytes = entity.downloadedBytes
+        // Mark the row QUEUED while it waits for a concurrency slot so the UI
+        // can show a distinct indicator instead of a stalled DOWNLOADING row.
+        dao.updateProgress(downloadId, existingBytes, DownloadStatus.QUEUED.name)
         try {
             setForeground(
-                DownloadNotificationHelper.createForegroundInfo(
-                    applicationContext, downloadId, notificationId, entity.name, 0, 0L, entity.totalSizeBytes, 0L,
+                DownloadNotificationHelper.createQueuedForegroundInfo(
+                    applicationContext, downloadId, notificationId, entity.name,
                 )
             )
             DownloadNotificationHelper.dismissPausedNotification(applicationContext, downloadId)
@@ -101,11 +105,6 @@ class DownloadWorker @AssistedInject constructor(
             // OEMs): fall through and attempt the download as a background
             // worker — best-effort.
         }
-
-        val existingBytes = entity.downloadedBytes
-        // Mark the row QUEUED while it waits for a concurrency slot so the UI
-        // can show a distinct indicator instead of a stalled DOWNLOADING row.
-        dao.updateProgress(downloadId, existingBytes, DownloadStatus.QUEUED.name)
 
         val activeUserId = serverIdentityStore.activeUserId.firstOrNull()
         val accessToken = activeUserId?.let { uid ->
