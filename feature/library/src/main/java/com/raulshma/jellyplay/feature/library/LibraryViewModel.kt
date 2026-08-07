@@ -68,15 +68,6 @@ class LibraryViewModel @Inject constructor(
     // enforced by hand-scattered guards. The reducer is now the single source.
     private val _browserState = stateFlow(LibraryBrowserState())
     val browserState = _browserState.flow
-    // Back-compat accessors so the screen/tests can read individual slices without
-    // a wider churn; they all derive from the single browser state value.
-    val folder = _browserState.flow.map { it.folder }
-    val filters = _browserState.flow.map { it.filters }
-    val viewMode = _browserState.flow.map { it.viewMode }
-    val posterSize = _browserState.flow.map { it.posterSize }
-    val groupBy = _browserState.flow.map { it.groupBy }
-    val sectionContext = _browserState.flow.map { it.sectionContext }
-    val title = _browserState.flow.map { it.title }
 
     // ---- Non-browser flows that genuinely stay separate ----
     private val _folders = stateFlow<List<LibraryFolder>>(emptyList())
