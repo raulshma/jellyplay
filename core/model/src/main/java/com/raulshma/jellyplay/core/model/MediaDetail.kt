@@ -53,7 +53,17 @@ data class PersonInfo(
     val type: String,
     val primaryImageTag: String? = null,
     val primaryBlurHash: String? = null,
-)
+) {
+    /**
+     * True for person types Jellyfin treats as on-screen/credited cast (Actor,
+     * Director) that carry a primary image. Centralizes the predicate duplicated
+     * by the offline cast-preload + cast-image-persist paths so the eligible set
+     * stays consistent. Guest stars and crew types without a primary image are
+     * excluded (no fetchable portrait).
+     */
+    fun hasCastImage(): Boolean =
+        (type == "Actor" || type == "Director") && !primaryImageTag.isNullOrBlank()
+}
 
 @Immutable
 @Serializable

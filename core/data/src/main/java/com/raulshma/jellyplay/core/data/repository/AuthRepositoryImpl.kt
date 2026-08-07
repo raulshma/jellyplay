@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.QuickConnectInfo
 import com.raulshma.jellyplay.core.model.QuickConnectState
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -38,7 +38,7 @@ class AuthRepositoryImpl @Inject constructor(
     private val database: JellyPlayDatabase,
     private val serverDao: ServerDao,
     private val userDao: UserDao,
-    private val preferencesStore: UserPreferencesStore,
+    private val serverIdentityStore: ServerIdentityStore,
     private val tokenCipher: TokenCipher,
     private val json: Json,
 ) : AuthRepository {
@@ -103,7 +103,7 @@ class AuthRepositoryImpl @Inject constructor(
         if (userEntity != null) {
             val user = userEntity.toUserInfo(server.address)
             apiClient.setUser(user)
-            preferencesStore.setActiveSession(serverId, userEntity.userId)
+            serverIdentityStore.setActiveSession(serverId, userEntity.userId)
             database.withTransaction {
                 serverDao.updateServer(serverEntity.copy(lastConnected = System.currentTimeMillis()))
                 userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
@@ -247,15 +247,15 @@ class AuthRepositoryImpl @Inject constructor(
         apiClient.authorizeQuickConnect(code)
 
     override suspend fun restoreSession(): Result<Unit> = runCatching {
-        val serverId: String? = preferencesStore.activeServerId.first()
-        val userId: String? = preferencesStore.activeUserId.first()
+        val serverId: String? = serverIdentityStore.activeServerId.first()
+        val userId: String? = serverIdentityStore.activeUserId.first()
         if (serverId != null && userId != null) {
             val serverEntity = serverDao.getServerById(serverId)
             if (serverEntity == null) {
                 // Don't log the raw server/user GUIDs — they survive into
                 // release builds and can be used for cross-session correlation.
                 Log.w("AuthRepository", "restoreSession: server not found in DB")
-                preferencesStore.setActiveSession("", "")
+                serverIdentityStore.setActiveSession("", "")
                 return@runCatching
             }
             val server = serverEntity.toServerInfo()
@@ -264,7 +264,7 @@ class AuthRepositoryImpl @Inject constructor(
             val userEntity = userDao.getUserById(userId)
             if (userEntity == null) {
                 Log.w("AuthRepository", "restoreSession: user not found in DB")
-                preferencesStore.setActiveUser("")
+                serverIdentityStore.setActiveUser("")
                 return@runCatching
             }
             val token = tokenCipher.decrypt(userEntity.accessToken)
@@ -350,7 +350,7 @@ class AuthRepositoryImpl @Inject constructor(
         // Clear only the active session selection — preserve the stable
         // device id and all user preferences (theme/player/EQ/onboarding/…)
         // so re-login does not orphan server-side sessions or reset settings.
-        preferencesStore.clearSession()
+        serverIdentityStore.clearSession()
     }
 
     override suspend fun revokeServerSession() {
@@ -364,7 +364,7 @@ class AuthRepositoryImpl @Inject constructor(
             removeUser(currentUserId)
         }
         apiClient.disconnect()
-        preferencesStore.clearSession()
+        serverIdentityStore.clearSession()
     }
 
     override suspend fun switchUser(userId: String): Result<Unit> = runCatching {
@@ -373,7 +373,7 @@ class AuthRepositoryImpl @Inject constructor(
         apiClient.disconnect()
         apiClient.setServer(server.toServerInfo())
         apiClient.setUser(userEntity.toUserInfo(server.address))
-        preferencesStore.setActiveSession(server.id, userId)
+        serverIdentityStore.setActiveSession(server.id, userId)
         database.withTransaction {
             userDao.updateUser(userEntity.copy(lastConnected = System.currentTimeMillis()))
             serverDao.updateServer(
@@ -398,7 +398,7 @@ class AuthRepositoryImpl @Inject constructor(
         val currentUserId = apiClient.currentUser.first()?.id
         if (currentUserId == userId) {
             apiClient.disconnect()
-            preferencesStore.setActiveUser("")
+            serverIdentityStore.setActiveUser("")
         }
     }
 
@@ -446,7 +446,7 @@ class AuthRepositoryImpl @Inject constructor(
                 )
             )
         }
-        preferencesStore.setActiveSession(server.id, user.id)
+        serverIdentityStore.setActiveSession(server.id, user.id)
     }
 
     private fun ServerEntity.toServerInfo() = ServerInfo(

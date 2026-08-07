@@ -1,0 +1,221 @@
+package com.raulshma.jellyplay.core.model
+
+import androidx.compose.runtime.Immutable
+import kotlinx.serialization.Serializable
+
+/**
+ * Freshness status of an offline item relative to the server. Orthogonal to
+ * [DownloadStatus] (which tracks the media-file transfer), this tracks whether
+ * the persisted metadata / images are stale.
+ */
+@Immutable
+@Serializable
+enum class SyncStatus {
+    /** No check has ever completed for this item (never synced / new download). */
+    UNKNOWN,
+
+    /** Last check found no changes; within the freshness TTL. */
+    CURRENT,
+
+    /** A check is in progress. */
+    CHECKING,
+
+    /** Server has newer metadata and/or images than the persisted baseline. */
+    UPDATE_AVAILABLE,
+
+    /** Last check failed (network error, server unreachable, …). */
+    ERROR,
+}
+
+/**
+ * The freshness state of a single offline item, surfaced to the UI. Persisted
+ * on the `offline_media` row so a badge can render from the DB with no network.
+ */
+@Immutable
+@Serializable
+data class OfflineSyncState(
+    val status: SyncStatus,
+    val metadataChanged: Boolean = false,
+    val imagesChanged: Boolean = false,
+    /** The media file itself changed server-side (different MediaSource id/size).
+     *  Surfaced separately because a resync cannot fix it — it requires a full
+     *  re-download of the media file. */
+    val mediaFileChanged: Boolean = false,
+    /** Epoch millis of the last completed server check. Null when never checked. */
+    val lastCheckedAt: Long? = null,
+) {
+    /** True when a lightweight resync (metadata + images) will bring the item up to date. */
+    val needsResync: Boolean get() = metadataChanged || imagesChanged
+}
+
+/**
+ * Result of a single-item freshness check. [needsResync] is true when a
+ * metadata/images resync would bring the item current; [mediaFileChanged] is
+ * reported separately since it requires a media-file re-download.
+ */
+@Immutable
+@Serializable
+data class ResyncCheckResult(
+    val itemId: String,
+    val state: OfflineSyncState,
+)
+
+/**
+ * User-facing selection of which data categories a resync should refresh. Maps
+ * onto the optional [ResyncStep]s (metadata -> PERSIST_METADATA, poster ->
+ * DOWNLOAD_POSTER, backdrop -> DOWNLOAD_BACKDROP); FETCH_DETAIL and
+ * UPDATE_BASELINE are always-on infrastructure and therefore not selectable.
+ *
+ * Defaults to all-true so the existing "resync everything" call sites behave
+ * identically when the parameter is omitted. A user-driven force resync passes
+ * an explicit selection (e.g. metadata + poster only) to skip categories.
+ */
+@Immutable
+@Serializable
+data class ResyncOptions(
+    val metadata: Boolean = true,
+    val poster: Boolean = true,
+    val backdrop: Boolean = true,
+) {
+    /** True when no category is selected — callers should treat this as a no-op. */
+    val isEmpty: Boolean get() = !metadata && !poster && !backdrop
+
+    companion object {
+        /** Resync every category. The historical default behaviour. */
+        val ALL get() = ResyncOptions()
+    }
+}
+
+/** A single step in a resync operation, for granular progress reporting. */
+@Immutable
+@Serializable
+enum class ResyncStep {
+    FETCH_DETAIL,
+    PERSIST_METADATA,
+    DOWNLOAD_POSTER,
+    DOWNLOAD_BACKDROP,
+    UPDATE_BASELINE,
+}
+
+@Immutable
+@Serializable
+data class ResyncStepResult(
+    val itemId: String,
+    val step: ResyncStep,
+    val success: Boolean,
+    val message: String? = null,
+)
+
+/** Aggregate result of resyncing a single item. */
+@Immutable
+@Serializable
+data class ResyncResult(
+    val itemId: String,
+    val steps: List<ResyncStepResult>,
+    val mediaFileChanged: Boolean,
+) {
+    val succeeded: Boolean get() = steps.isNotEmpty() && steps.all { it.success }
+}
+
+/** Per-item progress phase for batch resync UI. */
+@Immutable
+@Serializable
+enum class ResyncPhase { PENDING, WORKING, DONE, ERROR }
+
+@Immutable
+@Serializable
+data class ResyncItemProgress(
+    val itemId: String,
+    val phase: ResyncPhase,
+    val currentStep: ResyncStep? = null,
+)
+
+/**
+ * Live progress for a batch resync, exposed as a [kotlinx.coroutines.flow.StateFlow]
+ * so the downloads sheet can render per-item status + aggregate counts in real time.
+ */
+@Immutable
+@Serializable
+data class ResyncBatchProgress(
+    val items: Map<String, ResyncItemProgress> = emptyMap(),
+    val total: Int = 0,
+) {
+    val completed: Int get() = items.values.count { it.phase == ResyncPhase.DONE || it.phase == ResyncPhase.ERROR }
+    val active: Boolean get() = items.values.any { it.phase == ResyncPhase.WORKING || it.phase == ResyncPhase.PENDING }
+}
+
+/**
+ * Lightweight view of an item flagged for resync, surfaced to the downloads
+ * screen's resync sheet. [mediaFileChanged] is reported separately because it
+ * can't be fixed by a metadata/image resync.
+ *
+ * The episode-context fields ([mediaType], [seriesName], [seasonNumber],
+ * [episodeNumber]) let the sheet render the same SXXEXX + series line the
+ * downloads list shows, so episodes are identifiable in the flat sheet list.
+ */
+@Immutable
+@Serializable
+data class OfflineSyncUpdate(
+    val id: String,
+    val name: String,
+    val mediaFileChanged: Boolean,
+    val mediaType: MediaType? = null,
+    val seriesName: String? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
+)
+
+/**
+ * The single source of truth for projecting the persisted sync-baseline flags
+ * (all stored as `Int` 0/1 columns on the `offline_media` row) into a UI-facing
+ * [OfflineSyncState]. Shared by [OfflineSyncManager] and [OfflineRepository] so
+ * the badge rendered from the DB (offline detail) and the state returned from a
+ * check/resync agree — one decision shape, not two that can drift.
+ *
+ * Precedence: a stale `checking` marker wins (transient), then error, then
+ * media-changed, then update-available, then current/unknown. Note that the
+ * stored `syncUpdateAvailable` flag is coarse — it doesn't split metadata vs
+ * images — so both are surfaced to drive the badge; the check path returns the
+ * precise split via [ResyncCheckResult].
+ *
+ * The boolean params accept `Int`-as-Boolean so callers can pass the DAO column
+ * values (`1`/`0`) directly without a per-call conversion.
+ */
+fun offlineSyncStateOf(
+    checking: Boolean,
+    error: Boolean,
+    mediaChanged: Boolean,
+    updateAvailable: Boolean,
+    lastSyncedAt: Long?,
+): OfflineSyncState = when {
+    checking -> OfflineSyncState(SyncStatus.CHECKING, lastCheckedAt = lastSyncedAt)
+    error -> OfflineSyncState(SyncStatus.ERROR, lastCheckedAt = lastSyncedAt)
+    mediaChanged -> OfflineSyncState(
+        status = SyncStatus.UPDATE_AVAILABLE,
+        mediaFileChanged = true,
+        lastCheckedAt = lastSyncedAt,
+    )
+    updateAvailable -> OfflineSyncState(
+        status = SyncStatus.UPDATE_AVAILABLE,
+        metadataChanged = true,
+        imagesChanged = true,
+        lastCheckedAt = lastSyncedAt,
+    )
+    lastSyncedAt != null -> OfflineSyncState(SyncStatus.CURRENT, lastCheckedAt = lastSyncedAt)
+    else -> OfflineSyncState(SyncStatus.UNKNOWN)
+}
+
+/** Convenience overload taking the raw `Int` (0/1) column values. */
+fun offlineSyncStateOf(
+    checking: Int,
+    error: Int,
+    mediaChanged: Int,
+    updateAvailable: Int,
+    lastSyncedAt: Long?,
+): OfflineSyncState = offlineSyncStateOf(
+    checking = checking != 0,
+    error = error != 0,
+    mediaChanged = mediaChanged != 0,
+    updateAvailable = updateAvailable != 0,
+    lastSyncedAt = lastSyncedAt,
+)

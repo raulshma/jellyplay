@@ -29,6 +29,10 @@ data class DetailUiState(
     // Core load state
     val detail: MediaDetail? = null,
     val isLoading: Boolean = false,
+    // True while a pull-to-refresh is in flight. Unlike [isLoading], the
+    // current content stays visible while this is set — only the
+    // pull-to-refresh indicator spins.
+    val isRefreshing: Boolean = false,
     val error: String? = null,
     // True when the item load failed because the user lacks permission (HTTP
     // 401/403). Lets the screen render a dedicated "no access" treatment

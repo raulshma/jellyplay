@@ -11,6 +11,7 @@
     <!-- Per-item notification action buttons -->
     <string name="notification_action_mark_seen">Marquer comme vu</string>
     <string name="notification_action_open">Ouvrir</string>
+    <string name="notification_action_mark_all_seen">Tout marquer comme vu</string>
 
     <!-- Per-library notification channel -->
     <string name="notification_channel_new_in_library">Nouveau dans %1$s</string>

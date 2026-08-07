@@ -127,6 +127,9 @@ class AppShortcutManager @Inject constructor(
         const val ACTION_PLAY_MUSIC = "com.raulshma.jellyplay.action.PLAY_MUSIC"
         const val ACTION_DOWNLOADS = "com.raulshma.jellyplay.action.DOWNLOADS"
         const val ACTION_PLAY_AUDIO = "com.raulshma.jellyplay.action.PLAY_AUDIO"
+        // Static launcher shortcuts
+        const val ACTION_SURPRISE_ME = "com.raulshma.jellyplay.action.SURPRISE_ME"
+        const val ACTION_SETTINGS = "com.raulshma.jellyplay.action.SETTINGS"
 
         const val EXTRA_ITEM_ID = "extra_item_id"
         const val EXTRA_TITLE = "extra_title"

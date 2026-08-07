@@ -11,11 +11,9 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -50,7 +48,6 @@ class ArrSettingsViewModel @Inject constructor(
 ) : JellyPlayViewModel() {
 
     val preferences: StateFlow<ArrPreferences> = arrPreferencesStore.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), ArrPreferences())
 
     private val _servers = MutableStateFlow<ArrServiceSummary>(ArrServiceSummary())
     val servers: StateFlow<ArrServiceSummary> = _servers.asStateFlow()

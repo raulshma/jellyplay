@@ -26,6 +26,14 @@ android {
             isReturnDefaultValues = true
         }
     }
+    // testFixtures hosts the shared `stubMediaSessionPlayer()` helper used by
+    // PlaybackSessionManagerPriorityTest (here) and MediaSessionControllerTest
+    // (in :feature:player:video) — both build a real MediaSession around a
+    // mockk Player and need the identical getter pinning so MediaSession's
+    // PlaybackStateCompat construction doesn't NPE on null boxed returns.
+    testFixtures {
+        enable = true
+    }
 }
 
 dependencies {
@@ -72,4 +80,13 @@ dependencies {
     testImplementation(libs.work.testing)
     testImplementation(libs.androidx.junit)
     testImplementation(libs.androidx.test.core)
+
+    // testFixtures dependencies: the shared stubMediaSessionPlayer() helper
+    // builds a mockk<Player> against media3-common. AGP's testFixtures source
+    // set does not inherit the main `implementation` classpath, so media3 + the
+    // stub's own test deps must be redeclared here. Available to every consumer
+    // of this module's test fixtures (currently the two MediaSession test sites).
+    testFixturesImplementation(libs.media3.session)
+    testFixturesImplementation(libs.media3.exoplayer)
+    testFixturesImplementation(libs.mockk)
 }

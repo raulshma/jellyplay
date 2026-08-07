@@ -107,6 +107,8 @@
     <string name="settings_manage_addresses_cd">주소 관리</string>
     <string name="settings_active_cd">활성</string>
     <string name="settings_remove_cd">제거</string>
+    <string name="settings_remove_server_confirm_title">서버를 삭제하시겠습니까?</string>
+    <string name="settings_remove_server_confirm_message">서버와 그 서버에 저장된 모든 사용자가 삭제됩니다.</string>
     <string name="settings_add_address">주소 추가</string>
     <string name="settings_primary">기본</string>
     <string name="settings_switch">전환</string>
@@ -400,6 +402,7 @@
     <string name="settings_library_view_grid">항목을 격자 레이아웃으로 표시</string>
     <string name="settings_library_view_list">항목을 목록 레이아웃으로 표시</string>
     <string name="settings_library_view_thumb">항목을 가로 섬네일로 표시</string>
+    <string name="settings_library_view_masonry">항목을 메이슨리 레이아웃으로 표시</string>
     <string name="settings_home_mode">홈 모드</string>
     <string name="settings_home_mode_video">비디오 중심 홈 화면</string>
     <string name="settings_home_mode_music">음악 중심 홈 화면</string>
@@ -693,6 +696,8 @@
     <string name="settings_exp_press_hold_preview">길게 눌러 미리보기</string>
     <string name="settings_exp_press_hold_preview_subtitle">미디어 카드를 길게 눌러 흐려진 미리보기를 보고, 놓으면 닫기</string>
     <string name="settings_exp_arr_integration_subtitle">Radarr/Sonarr에서 요청의 다운로드 대기열 진행률과 홈의 예정된 캘린더를 표시. 서버 세부 정보는 Seerr에서 자동 감지되며 *arr 설정에서 수동 재정의</string>
+    <string name="settings_exp_expressive_nav">Material 3 익스프레시브 탐색</string>
+    <string name="settings_exp_expressive_nav_subtitle">별도의 검색 버튼이 있는 Google 포토 리디자인 스타일 플로팅 탐색 캡슐.</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">자막 글꼴 크기</string>
@@ -822,6 +827,8 @@
     <string name="settings_hide_watched_items_subtitle">라이브러리에서 시청한 미디어 기본 필터</string>
     <string name="settings_hide_episode_thumbnails">에피소드 썸네일 숨기기</string>
     <string name="settings_hide_episode_thumbnails_subtitle">스포일러 방지를 위해 에피소드 미리보기 숨기기</string>
+    <string name="settings_compact_episode_list">간결한 에피소드 목록</string>
+    <string name="settings_compact_episode_list_subtitle">모바일에서 가로 행 대신 세로 목록으로 에피소드 표시</string>
     <string name="settings_skip_special_episodes">스페셜 에피소드 건너뛰기</string>
     <string name="settings_skip_special_episodes_subtitle">에피소드 목록에서 스페셜/보너스 제외</string>
     <string name="settings_haptic_feedback">햅틱 피드백</string>
@@ -1136,4 +1143,9 @@
     <string name="settings_subtitles_test">테스트</string>
     <string name="settings_subtitles_testing">테스트 중…</string>
     <string name="settings_subtitles_connected">연결됨</string>
+    <string name="settings_nav_style">탐색 스타일</string>
+    <string name="settings_nav_style_expressive">익스프레시브 (M3)</string>
+    <string name="settings_nav_style_classic">클래식</string>
+    <string name="settings_nav_style_expressive_subtitle">Google 포토 스타일 플로팅 알약 + 독립형 검색 버튼</string>
+    <string name="settings_nav_style_classic_subtitle">기존 플로팅 하단 탐색 바</string>
 </resources>

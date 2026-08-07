@@ -49,6 +49,8 @@
     <string name="detail_no_episodes_available">Nessun episodio disponibile</string>
     <string name="detail_spoiler">Spoiler</string>
     <string name="detail_watched_badge">Visto</string>
+    <string name="detail_cd_switch_to_list">Passa a elenco episodi verticale</string>
+    <string name="detail_cd_switch_to_cards">Passa a schede episodi orizzontali</string>
     <string name="detail_time_left_format">%1$s rimanenti</string>
 
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
@@ -139,6 +141,14 @@
     <string name="detail_msg_couldnt_mark_unplayed">Impossibile segnare come non riprodotto</string>
     <string name="detail_mark_season_watched">Segna stagione come vista</string>
     <string name="detail_mark_season_unwatched">Segna stagione come non vista</string>
+    <string name="detail_mark_series_watched_confirm_title">Segnare la serie come vista?</string>
+    <string name="detail_mark_series_watched_confirm_message">Questo segna tutti gli episodi come visti e cancella tutte le posizioni di ripresa.</string>
+    <string name="detail_mark_series_unwatched_confirm_title">Segnare la serie come non vista?</string>
+    <string name="detail_mark_series_unwatched_confirm_message">Questo segna tutti gli episodi come non visti.</string>
+    <string name="detail_mark_season_watched_confirm_title">Segnare la stagione come vista?</string>
+    <string name="detail_mark_season_watched_confirm_message">Questo segna tutti gli episodi di questa stagione come visti e cancella le loro posizioni di ripresa.</string>
+    <string name="detail_mark_season_unwatched_confirm_title">Segnare la stagione come non vista?</string>
+    <string name="detail_mark_season_unwatched_confirm_message">Questo segna tutti gli episodi di questa stagione come non visti.</string>
     <string name="detail_cd_season_options">Segna stagione come vista o non vista</string>
     <string name="detail_msg_no_episodes_queued">Nessun episodio può essere messo in coda</string>
     <string name="detail_msg_hidden_from_next_up">Nascosto dai Prossimi</string>
@@ -257,5 +267,13 @@
     <string name="detail_seerr_country">Paese</string>
     <string name="detail_seerr_studios">Studio</string>
     <string name="detail_seerr_currently_streaming_on">Attualmente in streaming su</string>
+
+    <!-- Stati vuoti -->
+    <string name="detail_collection_empty_title">Questa raccolta è vuota</string>
+    <string name="detail_collection_empty_description">Gli elementi aggiunti a questa raccolta appariranno qui.</string>
+    <string name="detail_person_empty_title">Nessun titolo trovato</string>
+    <string name="detail_person_empty_description">Questa persona non ha titoli che corrispondono al filtro attuale.</string>
+    <string name="detail_season_empty_title">Nessun episodio disponibile</string>
+    <string name="detail_season_empty_description">Gli episodi appariranno qui una volta aggiunti.</string>
 
 </resources>

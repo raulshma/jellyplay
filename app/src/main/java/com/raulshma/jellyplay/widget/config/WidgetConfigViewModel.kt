@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.widget.config
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
 import com.raulshma.jellyplay.core.model.SeerrWidgetSource
 import com.raulshma.jellyplay.core.model.WidgetConfig
@@ -25,12 +25,12 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class WidgetConfigViewModel @Inject constructor(
-    private val userPreferencesStore: UserPreferencesStore,
+    private val widgetDataStore: WidgetDataStore,
 ) : ViewModel() {
 
     private var appWidgetId: Int = -1
 
-    val state: StateFlow<WidgetConfig> = userPreferencesStore.widgetConfig
+    val state: StateFlow<WidgetConfig> = widgetDataStore.widgetConfig
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
@@ -51,7 +51,7 @@ class WidgetConfigViewModel @Inject constructor(
      */
     fun getWidgetConfig(): StateFlow<WidgetConfig> {
         return if (appWidgetId != -1) {
-            userPreferencesStore.getWidgetConfigForId(appWidgetId)
+            widgetDataStore.getWidgetConfigForId(appWidgetId)
                 .stateIn(
                     viewModelScope,
                     SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
@@ -67,9 +67,9 @@ class WidgetConfigViewModel @Inject constructor(
             val current = getWidgetConfig().first()
             val updated = current.copy(librarySource = source)
             if (appWidgetId != -1) {
-                userPreferencesStore.setWidgetConfigForId(appWidgetId, updated)
+                widgetDataStore.setWidgetConfigForId(appWidgetId, updated)
             } else {
-                userPreferencesStore.setWidgetConfig(updated)
+                widgetDataStore.setWidgetConfig(updated)
             }
         }
     }
@@ -79,9 +79,9 @@ class WidgetConfigViewModel @Inject constructor(
             val current = getWidgetConfig().first()
             val updated = current.copy(seerrSource = source)
             if (appWidgetId != -1) {
-                userPreferencesStore.setWidgetConfigForId(appWidgetId, updated)
+                widgetDataStore.setWidgetConfigForId(appWidgetId, updated)
             } else {
-                userPreferencesStore.setWidgetConfig(updated)
+                widgetDataStore.setWidgetConfig(updated)
             }
         }
     }

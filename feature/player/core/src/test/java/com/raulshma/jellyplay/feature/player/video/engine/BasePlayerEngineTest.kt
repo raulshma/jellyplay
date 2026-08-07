@@ -20,6 +20,7 @@ class BasePlayerEngineTest {
 
     private class ConcreteBaseEngine : BasePlayerEngine() {
         override val capabilities: EngineCapabilities = EngineCapabilities()
+        override val displayName: String = "test-engine"
 
         var configChangeCount = 0
         var lastOldConfig: EngineConfig? = null

@@ -44,11 +44,15 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
             val mergedBoost = dialogueBoostStrength ?: existing?.dialogueBoostStrength?.let {
                 runCatching { com.raulshma.jellyplay.core.model.EffectStrength.valueOf(it) }.getOrNull()
             }
+            // Subtitle language and "subtitles off" are mutually exclusive:
+            // pinning a language clears any prior disabled intent so the two
+            // can't both be set on one row.
+            val mergedDisabled = if (mergedSub != null) null else existing?.subtitleDisabled
             // A row with nothing set carries no preference — drop it so the table
             // stays tidy and `get` returns null (i.e. "inherit global"). Subtitle
             // role fields only persist alongside a language, so they are never the
             // sole occupants of a row.
-            if (mergedAudio == null && mergedSub == null && mergedBoost == null) {
+            if (mergedAudio == null && mergedSub == null && mergedBoost == null && mergedDisabled == null) {
                 dao.deleteByKey(scope.name, key)
                 return@withTransaction
             }
@@ -59,6 +63,7 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
                     key = key,
                     audioLanguage = mergedAudio,
                     subtitleLanguage = mergedSub,
+                    subtitleDisabled = mergedDisabled,
                     subtitleForced = mergedForced,
                     subtitleHearingImpaired = mergedSdh,
                     dialogueBoostStrength = mergedBoost?.name,
@@ -70,7 +75,9 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
 
     override suspend fun clearAudioLanguage(scope: PlaybackPrefScope, key: String) {
         val existing = dao.getByKey(scope.name, key) ?: return
-        if (existing.subtitleLanguage == null && existing.dialogueBoostStrength == null) {
+        if (existing.subtitleLanguage == null && existing.subtitleDisabled == null &&
+            existing.dialogueBoostStrength == null
+        ) {
             // Nothing left to remember — remove the row entirely.
             dao.deleteByKey(scope.name, key)
         } else {
@@ -80,7 +87,9 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
 
     override suspend fun clearSubtitleLanguage(scope: PlaybackPrefScope, key: String) {
         val existing = dao.getByKey(scope.name, key) ?: return
-        if (existing.audioLanguage == null && existing.dialogueBoostStrength == null) {
+        if (existing.audioLanguage == null && existing.subtitleDisabled == null &&
+            existing.dialogueBoostStrength == null
+        ) {
             // Nothing left to remember — remove the row entirely.
             dao.deleteByKey(scope.name, key)
         } else {
@@ -97,9 +106,48 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun setSubtitleDisabled(scope: PlaybackPrefScope, key: String, disabled: Boolean) {
+        database.withTransaction {
+            val existing = dao.getByKey(scope.name, key)
+            if (disabled) {
+                // Pinning "off" clears any pinned subtitle language + role: the
+                // two intents are mutually exclusive.
+                dao.upsert(
+                    (existing ?: ItemPlaybackPreferenceEntity(
+                        scope = scope.name,
+                        key = key,
+                        audioLanguage = null,
+                        subtitleLanguage = null,
+                        updatedAt = System.currentTimeMillis(),
+                    )).copy(
+                        subtitleLanguage = null,
+                        subtitleForced = null,
+                        subtitleHearingImpaired = null,
+                        subtitleDisabled = true,
+                        updatedAt = System.currentTimeMillis(),
+                    )
+                )
+            } else {
+                // Clearing the disabled intent: drop the row if nothing else is set.
+                val row = existing ?: return@withTransaction
+                val cleared = row.copy(subtitleDisabled = null, updatedAt = System.currentTimeMillis())
+                val hasNothingElse = cleared.audioLanguage == null &&
+                    cleared.subtitleLanguage == null &&
+                    cleared.dialogueBoostStrength == null
+                if (hasNothingElse) {
+                    dao.deleteByKey(scope.name, key)
+                } else {
+                    dao.upsert(cleared)
+                }
+            }
+        }
+    }
+
     override suspend fun clearDialogueBoostStrength(scope: PlaybackPrefScope, key: String) {
         val existing = dao.getByKey(scope.name, key) ?: return
-        if (existing.audioLanguage == null && existing.subtitleLanguage == null) {
+        if (existing.audioLanguage == null && existing.subtitleLanguage == null &&
+            existing.subtitleDisabled == null
+        ) {
             dao.deleteByKey(scope.name, key)
         } else {
             dao.upsert(existing.copy(dialogueBoostStrength = null, updatedAt = System.currentTimeMillis()))
@@ -131,6 +179,7 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
             }
             val hasNothingElse = cleared.audioLanguage == null &&
                 cleared.subtitleLanguage == null &&
+                cleared.subtitleDisabled == null &&
                 cleared.dialogueBoostStrength == null &&
                 cleared.rememberedAudioLabel == null &&
                 cleared.rememberedSubtitleLabel == null
@@ -173,6 +222,7 @@ class ItemPlaybackPreferenceRepositoryImpl @Inject constructor(
             key = key,
             audioLanguage = audioLanguage,
             subtitleLanguage = subtitleLanguage,
+            subtitleDisabled = subtitleDisabled,
             subtitleForced = subtitleForced,
             subtitleHearingImpaired = subtitleHearingImpaired,
             dialogueBoostStrength = dialogueBoostStrength?.let {

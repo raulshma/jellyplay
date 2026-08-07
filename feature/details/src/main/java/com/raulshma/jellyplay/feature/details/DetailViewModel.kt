@@ -11,7 +11,14 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.datastore.library.LibraryStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -20,7 +27,6 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isVideoType
 import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
@@ -52,28 +58,33 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
-
-/**
- * Ceiling on the number of season-episode fetches that may run concurrently
- * for the download-sheet path (which still fetches per-season on demand).
- */
-private const val MAX_PARALLEL_SEASON_FETCHES = 5
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
+    /**
+     * The consolidated series seasons/episodes snapshot — the single owner of
+     * the "seasons → per-season episodes → sorted" shape this screen used to
+     * re-assemble privately (`episodesMap`, `cachedSortedEpisodes*`,
+     * `episodeDataEpoch`, the three `load*` functions). All episode loads now
+     * read from the catalogue snapshot; smart-play reads its `sortedEpisodes`.
+     */
+    private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue,
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val downloadIntake: DownloadIntake,
-    private val preferencesStore: UserPreferencesStore,
+    private val projections: PreferenceProjections,
+    private val libraryStore: LibraryStore,
+    private val homeDiscoveryStore: HomeDiscoveryStore,
+    private val experimentalStore: ExperimentalStore,
+    private val downloadsStore: DownloadsStore,
+    private val appRuntimeStateStore: AppRuntimeStateStore,
+    private val engineStore: PlayerEngineStore,
     private val offlineModeManager: OfflineModeManager,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     private val seerrRepository: SeerrRepository,
@@ -84,8 +95,8 @@ class DetailViewModel @Inject constructor(
     private val arrRepository: ArrRepository,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    /** Media-detail preference fields, projected centrally off the store slices. */
+    val preferences: StateFlow<DetailPreferences> = projections.detailPreferences
 
     // Single source of truth for detail-screen state. All mutations
     // funnel through [_uiState.update]; the [uiState] aggregator additionally
@@ -109,7 +120,7 @@ class DetailViewModel @Inject constructor(
      * Whether the "Manage Series" action should be shown. True iff:
      * - The DIRECT_ARR_INTEGRATION experimental flag is enabled, AND
      * - The current item is a SERIES (episode navigation goes via the parent
-     *   series detail, so the menu naturally appears there), AND
+     * series detail, so the menu naturally appears there), AND
      * - The series has a tvdb id (Sonarr resolves series by tvdb), AND
      * - At least one Sonarr server is resolved.
      *
@@ -123,7 +134,7 @@ class DetailViewModel @Inject constructor(
         // equal emissions that StateFlow deduplicates.
         _uiState.map { it.detail?.item?.let { item -> ItemIdentity(item.id, item.mediaType) } },
         _uiState.map { it.detail?.providerIds?.get("tvdb") },
-        preferencesStore.preferences.map { it.isExperimentalEnabled(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
+        experimentalStore.experimental.map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) },
         _uiState.map { it.sonarrServersResolved },
     ) { itemIdentity, tvdbId, flagEnabled, sonarrResolved ->
         if (!flagEnabled || itemIdentity == null) false
@@ -191,51 +202,22 @@ class DetailViewModel @Inject constructor(
     val selectedSubtitleIndex: Int? get() = _uiState.value.selectedSubtitleIndex
     val selectedAudioIndex: Int? get() = _uiState.value.selectedAudioIndex
 
-    // Internal caches (not observable UI state). All access happens on the
-    // Main dispatcher (viewModelScope), so a plain MutableMap suffices — the
-    // previous synchronizedMap wrappers added lock overhead with no contention.
     // Internal caches (not observable UI state). Mutations happen on the Main
-    // dispatcher (viewModelScope), and cross-dispatcher reads (e.g. the smart-
-    // play computation on Dispatchers.Default) only ever observe the
-    // `.toMap()` snapshot copied into uiState — never this mutable map. Keep
-    // it that way: do NOT read or mutate [episodesMap] from a non-Main path,
-    // or switch to a thread-safe container if that changes.
-    private val episodesMap = mutableMapOf<String, List<MediaItem>>()
-    // Cached flattened+sorted episode list. Keyed on BOTH the set of fetched
-    // seasons and [episodeDataEpoch]. A re-fetch (loadAllEpisodes /
-    // loadAllSeasonsBatched / loadEpisodes) can land fresh server data — updated
-    // isPlayed/playbackPositionTicks on the SAME season set — so keying on the
-    // season set alone would return a stale list and pick the wrong resume/next-
-    // up target. Bumping the epoch on every episode-map mutation invalidates the
-    // cache precisely then.
-    //
-    // NOTE: markPlayed / markUnplayed / toggleFavorite do NOT bump the epoch.
-    // They mutate the series/movie item in [DetailUiState.detail], not the
-    // episodes map, so the sorted episode list (and its playback order) is
-    // genuinely unchanged. If a future per-episode mutation (e.g. per-episode
-    // mark-played, or a playback-position refresh after returning from the
-    // player) mutates entries in [episodesMap], it MUST call
-    // [invalidateSortedEpisodesCache] or it will silently serve a stale list.
-    //
-    // Reads and writes are guarded by [sortedEpisodesSnapshot]'s `@Synchronized`
-    // (runs on Dispatchers.Default) and [resetSortedEpisodesCache] /
-    // [invalidateSortedEpisodesCache] (run on Main). `@Synchronized` locks on the
-    // VM instance, so these calls are serialized regardless of thread — the
-    // @Volatile below is belt-and-braces, the monitor is what actually makes
-    // access safe.
-    @Volatile
-    private var cachedSortedEpisodes: List<MediaItem>? = null
-    @Volatile
-    private var cachedSortedEpisodesKey: Set<String> = emptySet()
-    @Volatile
-    private var cachedSortedEpisodesEpoch: Long = 0L
-    // Bumped on every episode-map mutation (see callers of
-    // [invalidateSortedEpisodesCache]) so [sortedEpisodesSnapshot] can detect
-    // "same season set, but the contents changed" and rebuild.
-    @Volatile
-    private var episodeDataEpoch: Long = 0L
+    // dispatcher (viewModelScope). The seasons/episodes map, the sorted-episodes
+    // cache and the episode-data epoch that used to live here have moved into
+    // [episodeCatalogue] — the single owner of the series snapshot. The only
+    // episode state kept locally is the download sheet's per-season on-demand
+    // cache (the sheet fetches seasons lazily, independent of the main display).
     private val downloadSheetEpisodesMap = mutableMapOf<String, List<MediaItem>>()
     private var downloadSheetFetchedSeasonIds: Set<String> = emptySet()
+    /**
+     * The last catalogue snapshot loaded for [currentSeriesId]. Held locally so
+     * smart-play and the optimistic mark-season rewrite read the canonical
+     * playback order without a second catalogue round-trip. Nulled in
+     * [loadItemInternal] when the series changes.
+     */
+    @Volatile
+    private var currentCatalogueSnapshot: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot? = null
     private var loadJob: Job? = null
     private var currentItemId: String? = null
     private var currentSeriesId: String? = null
@@ -246,7 +228,7 @@ class DetailViewModel @Inject constructor(
         _uiState.update { it.copy(selectedSubtitleIndex = index) }
         val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
-            preferencesStore.setMediaStreamSelection(
+            engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 subtitleStreamIndex = index,
                 audioStreamIndex = _uiState.value.selectedAudioIndex,
@@ -258,7 +240,7 @@ class DetailViewModel @Inject constructor(
         _uiState.update { it.copy(selectedAudioIndex = index) }
         val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
-            preferencesStore.setMediaStreamSelection(
+            engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 audioStreamIndex = index,
                 subtitleStreamIndex = _uiState.value.selectedSubtitleIndex,
@@ -273,13 +255,39 @@ class DetailViewModel @Inject constructor(
      * without any per-screen plumbing.
      */
     fun setEpisodesDescending(descending: Boolean) {
-        launch { preferencesStore.setEpisodesDescending(descending) }
+        launch { libraryStore.setEpisodesDescending(descending) }
+    }
+
+    /**
+     * Toggles the compact vertical episode list preference (mobile only). Like
+     * [setEpisodesDescending], persisted app-wide so the choice carries across
+     * every series detail screen.
+     */
+    fun setCompactEpisodeList(enabled: Boolean) {
+        launch { libraryStore.setCompactEpisodeList(enabled) }
     }
 
     fun getDownloadFlow(itemId: String): Flow<com.raulshma.jellyplay.core.model.DownloadItem?> =
         downloadRepository.getDownloadByMediaItemIdFlow(itemId)
 
     fun loadItem(itemId: String) {
+        loadItemInternal(itemId, refresh = false)
+    }
+
+    /**
+     * Pull-to-refresh: invalidates every in-memory cache backing this detail
+     * screen (detail, similar, seasons/episodes, album tracks, collection
+     * items) and re-fetches all data fresh from the server. Unlike [loadItem]
+     * the current content stays on screen (the full-screen loading state is
+     * skipped); the pull-to-refresh indicator is driven by
+     * [DetailUiState.isRefreshing] instead.
+     */
+    fun forceRefresh() {
+        val itemId = _uiState.value.detail?.item?.id ?: return
+        loadItemInternal(itemId, refresh = true)
+    }
+
+    private fun loadItemInternal(itemId: String, refresh: Boolean) {
         // Record the item we're loading synchronously so that a stale
         // loadSeerrDataIfNeeded() call (from a freshly-composed screen still
         // observing the previous item's detail via the shared ViewModel) can be
@@ -289,11 +297,15 @@ class DetailViewModel @Inject constructor(
         loadJob = launch {
             // Single atomic reset — collapses what used to be ~14 separate
             // composeState/stateFlow mutations into one emission so observers
-            // see one recomposition, not fourteen.
+            // see one recomposition, not fourteen. On refresh the detail is
+            // kept so the content stays visible under the pull-to-refresh
+            // indicator; every subsidiary slice is still cleared so fresh data
+            // replaces it wholesale.
             _uiState.update {
                 it.copy(
-                    detail = null,
-                    isLoading = true,
+                    detail = if (refresh) it.detail else null,
+                    isLoading = !refresh,
+                    isRefreshing = refresh,
                     error = null,
                     seasons = emptyList(),
                     episodes = emptyMap(),
@@ -311,8 +323,10 @@ class DetailViewModel @Inject constructor(
                     sonarrServersResolved = false,
                 )
             }
-            episodesMap.clear()
-            resetSortedEpisodesCache()
+            // Drop the catalogue snapshot for any series we were viewing so the
+            // new item's load starts fresh (the VM is reused across navigations).
+            currentSeriesId?.let { episodeCatalogue.invalidateSeries(it) }
+            currentCatalogueSnapshot = null
             seerrDataLoaded = false
             // Bump the seerr generation so any in-flight trailer/video/recommendation
             // fetch from the *previous* item is invalidated and cannot write its stale
@@ -321,9 +335,22 @@ class DetailViewModel @Inject constructor(
             // Clear download-sheet caches too, since the same VM instance is reused.
             downloadSheetEpisodesMap.clear()
             downloadSheetFetchedSeasonIds = emptySet()
+            if (refresh) {
+                // Invalidate every cache the detail screen reads so the refetch
+                // hits the server rather than the TTL caches.
+                val item = _uiState.value.detail?.item
+                mediaRepository.invalidateDetailCache(itemId)
+                when (item?.mediaType) {
+                    MediaType.SERIES -> episodeCatalogue.invalidateSeries(item.id)
+                    MediaType.EPISODE -> item.seriesId?.let { episodeCatalogue.invalidateSeries(it) }
+                    MediaType.ALBUM -> mediaRepository.invalidateUserDataCaches(itemId)
+                    MediaType.COLLECTION -> mediaRepository.invalidateCollectionItemsCache(itemId)
+                    else -> Unit
+                }
+            }
             mediaRepository.getMediaDetail(itemId)
                 .onSuccess { detail ->
-                    val storedSelection = preferences.value.mediaStreamSelections[itemId]
+                    val storedSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
                     _uiState.update {
                         it.copy(
                             detail = detail,
@@ -400,7 +427,7 @@ class DetailViewModel @Inject constructor(
                     }
                     _uiState.update { it.copy(error = message, isAccessDenied = accessDenied) }
                 }
-            _uiState.update { it.copy(isLoading = false) }
+            _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
         }
     }
 
@@ -427,153 +454,72 @@ class DetailViewModel @Inject constructor(
     private fun loadSeasons(seriesId: String) {
         currentSeriesId = seriesId
         launch {
-            mediaRepository.getSeasons(seriesId)
-                .onSuccess { seasonList ->
-                    // Guard: if navigation moved to another series, drop the
-                    // result rather than overwriting the new screen's seasons.
-                    if (currentSeriesId != seriesId) return@onSuccess
-                    _uiState.update { it.copy(seasons = seasonList) }
-                    if (seasonList.isEmpty()) return@onSuccess
-                    loadAllEpisodes(seriesId, seasonList)
-                }
-        }
-    }
-
-    /**
-     * Fetches every episode for a series in a single round-trip via
-     * [MediaRepository.getAllEpisodesGrouped], which calls Jellyfin's
-     * `/Shows/{seriesId}/Episodes` endpoint with no `seasonId` so the server
-     * returns the full set. Collapses an N-season fan-out (one request per
-     * season) into a single call and a single [DetailUiState] emission.
-     */
-    private fun loadAllEpisodes(seriesId: String, seasonList: List<MediaItem>) {
-        launch {
-            mediaRepository.getAllEpisodesGrouped(seriesId)
-                .onSuccess { grouped ->
-                    // Guard: navigation moved to another series — drop the
-                    // result instead of clobbering the new screen's episodes.
-                    if (currentSeriesId != seriesId) return@onSuccess
-                    episodesMap.clear()
-                    episodesMap.putAll(grouped)
-                    // Only mark a season "fetched" when the batch actually
-                    // returned a value for THAT season's id. Previously every
-                    // season was force-inserted as emptyList() and added to
-                    // fetchedSeasonIds, so a season whose episodes grouped under
-                    // a different key (e.g. "" when an episode's seasonId came
-                    // back null) showed empty AND was marked fetched — which
-                    // short-circuited loadEpisodesForSeason and pinned it empty.
-                    // Leaving such seasons absent lets the UI show its loading
-                    // state and lets loadEpisodesForSeason fire the per-season
-                    // refetch (the proven-working old path).
-                    val fetchedIds = seasonList
-                        .filter { grouped.containsKey(it.id) }
-                        .map { it.id }
-                        .toSet()
-                    // New episode contents (fresh played/position from server)
-                    // can land with the same season set as before — bump the
-                    // epoch so [sortedEpisodesSnapshot] rebuilds.
-                    invalidateSortedEpisodesCache()
-                    _uiState.update {
-                        it.copy(
-                            episodes = episodesMap.toMap(),
-                            fetchedSeasonIds = fetchedIds,
-                        )
-                    }
-                    maybeComputeSmartPlayTarget()
-                }
-                .onFailure {
-                    // Guard also applies to the fallback: only fan out if we're
-                    // still on the same series.
-                    if (currentSeriesId != seriesId) return@onFailure
-                    // Fall back to per-season fetches only if the batched call
-                    // fails (e.g. older server that rejected the unfiltered
-                    // query). Caps concurrency at MAX_PARALLEL_SEASON_FETCHES.
-                    loadAllSeasonsBatched(seriesId, seasonList)
-                }
+            // One consolidated load: seasons + every season's episodes + the
+            // canonical playback order, all from [episodeCatalogue]. The
+            // catalogue owns single-flight, caching, the batched→per-season
+            // fallback and the fetchedSeasonIds edge (a season whose episodes
+            // group under a different key stays absent so the on-demand refetch
+            // below can still fire).
+            val snapshot = episodeCatalogue.loadSeriesEpisodes(seriesId).getOrNull()
+            // Guard: if navigation moved to another series, drop the result.
+            if (currentSeriesId != seriesId) return@launch
+            if (snapshot == null) return@launch
+            currentCatalogueSnapshot = snapshot
+            _uiState.update {
+                it.copy(
+                    seasons = snapshot.seasons,
+                    episodes = snapshot.episodesBySeason,
+                    fetchedSeasonIds = snapshot.fetchedSeasonIds,
+                )
+            }
+            maybeComputeSmartPlayTarget()
         }
     }
 
     fun loadEpisodesForSeason(seriesId: String, seasonId: String) {
         if (_uiState.value.fetchedSeasonIds.contains(seasonId)) return
-        loadEpisodes(seriesId, seasonId)
-    }
-
-    /**
-     * Per-season fallback used when the batched [loadAllEpisodes] call fails.
-     * Mirrors the previous fan-out: N concurrent requests capped by a semaphore,
-     * folded into one emission when the last season resolves.
-     */
-    private fun loadAllSeasonsBatched(seriesId: String, seasonList: List<MediaItem>) {
-        val pending = AtomicInteger(seasonList.size)
-        val semaphore = Semaphore(MAX_PARALLEL_SEASON_FETCHES)
-        seasonList.forEach { season ->
-            launch {
-                semaphore.withPermit {
-                    mediaRepository.getEpisodes(seriesId, season.id)
-                        .onSuccess { episodeList ->
-                            episodesMap[season.id] = episodeList
-                        }
-                        .onFailure {
-                            if (!episodesMap.containsKey(season.id)) {
-                                episodesMap[season.id] = emptyList()
-                            }
-                        }
-                }
-                if (pending.decrementAndGet() == 0) {
-                    // Guard: don't emit if navigation moved to another series.
-                    if (currentSeriesId != seriesId) return@launch
-                    invalidateSortedEpisodesCache()
-                    _uiState.update {
-                        it.copy(
-                            episodes = episodesMap.toMap(),
-                            fetchedSeasonIds = episodesMap.keys.toSet(),
-                        )
-                    }
-                    maybeComputeSmartPlayTarget()
-                }
-            }
-        }
-    }
-
-    /**
-     * Fetch episodes for a single season (used by [loadEpisodesForSeason] for
-     * on-demand loads outside the initial batch). Smart-play is re-evaluated
-     * after the season resolves.
-     */
-    private fun loadEpisodes(seriesId: String, seasonId: String) {
         launch {
-            mediaRepository.getEpisodes(seriesId, seasonId)
-                .onSuccess { episodeList ->
-                    if (currentSeriesId != seriesId) return@onSuccess
-                    episodesMap[seasonId] = episodeList
-                    invalidateSortedEpisodesCache()
-                    // Fold the fetchedSeasonIds update into the same emission as
-                    // the episodes update so each call produces one uiState copy.
-                    _uiState.update {
-                        it.copy(
-                            episodes = episodesMap.toMap(),
-                            fetchedSeasonIds = it.fetchedSeasonIds + seasonId,
-                        )
-                    }
-                    maybeComputeSmartPlayTarget()
-                }
-                .onFailure {
-                    if (currentSeriesId != seriesId) return@onFailure
-                    if (!_uiState.value.episodes.containsKey(seasonId)) {
-                        episodesMap[seasonId] = emptyList()
-                        _uiState.update {
-                            it.copy(
-                                episodes = episodesMap.toMap(),
-                                fetchedSeasonIds = it.fetchedSeasonIds + seasonId,
-                            )
-                        }
-                    } else {
-                        _uiState.update { it.copy(fetchedSeasonIds = it.fetchedSeasonIds + seasonId) }
-                    }
-                    maybeComputeSmartPlayTarget()
-                }
+            // On-demand per-season load via the catalogue: serves from the
+            // shared snapshot if present, else fetches the one season and merges
+            // it back. The local snapshot is updated by folding the new season
+            // in (rather than re-reading the full snapshot) so a season that was
+            // absent from the batched load — the fetchedSeasonIds edge — still
+            // lands in uiState and smart-play's source list.
+            val episodes = episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId).getOrNull()
+                ?: return@launch
+            if (currentSeriesId != seriesId) return@launch
+            val merged = currentCatalogueSnapshot?.let { current ->
+                current.copy(
+                    episodesBySeason = current.episodesBySeason + (seasonId to episodes),
+                    fetchedSeasonIds = current.fetchedSeasonIds + seasonId,
+                    sortedEpisodes = (current.episodesBySeason + (seasonId to episodes))
+                        .values.flatten().sortedByPlaybackOrder(),
+                )
+            }
+            currentCatalogueSnapshot = merged
+            _uiState.update {
+                it.copy(
+                    episodes = merged?.episodesBySeason ?: it.episodes + (seasonId to episodes),
+                    fetchedSeasonIds = (merged?.fetchedSeasonIds ?: it.fetchedSeasonIds) + seasonId,
+                )
+            }
+            maybeComputeSmartPlayTarget()
         }
     }
+
+    /**
+     * The canonical playback order, matching the catalogue's
+     * `sortedByPlaybackOrder`. Used only by [loadEpisodesForSeason]'s optimistic
+     * merge to rebuild `sortedEpisodes` after a per-season fetch lands.
+     */
+    private fun Iterable<MediaItem>.sortedByPlaybackOrder(): List<MediaItem> =
+        sortedWith(
+            compareBy(
+                { it.seasonNumber ?: Int.MAX_VALUE },
+                { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE },
+                { it.name },
+            )
+        )
 
     private fun loadAlbumTracks(albumId: String) {
         launch {
@@ -625,12 +571,12 @@ class DetailViewModel @Inject constructor(
     private fun computeSeriesSmartPlayTarget() {
         launch(Dispatchers.Default) {
             val state = _uiState.value
-            // Check pending seasons BEFORE flattening — flattening all episode
-            // lists is O(total episodes) and was previously paid N times (once
-            // per season landing) even when the early-return below would fire.
+            // Check pending seasons BEFORE reading the snapshot — a season not
+            // yet in fetchedSeasonIds means the catalogue snapshot is incomplete
+            // and smart-play would target the wrong episode.
             val seasonsPending = state.seasons.any { s -> !state.fetchedSeasonIds.contains(s.id) }
             if (seasonsPending) return@launch
-            val sorted = sortedEpisodesSnapshot(state)
+            val sorted = currentCatalogueSnapshot?.sortedEpisodes ?: return@launch
             val result = SmartPlayResolver.resolveSeries(sorted)
             if (result == null) {
                 _uiState.update { it.copy(smartPlayTarget = null) }
@@ -644,7 +590,7 @@ class DetailViewModel @Inject constructor(
 
     private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
         launch(Dispatchers.Default) {
-            val sorted = sortedEpisodesSnapshot(_uiState.value)
+            val sorted = currentCatalogueSnapshot?.sortedEpisodes ?: return@launch
             // The episode must still be present in the current sorted view.
             if (sorted.none { it.id == currentEpisode.id }) {
                 _uiState.update { it.copy(smartPlayTarget = null) }
@@ -672,57 +618,6 @@ class DetailViewModel @Inject constructor(
             startPositionTicks = startPositionTicks,
         )
     }
-
-    /**
-     * Returns the flattened + playback-sorted episode list, cached keyed on
-     * [DetailUiState.fetchedSeasonIds] and [episodeDataEpoch]. A re-fetch can
-     * land fresh episode contents (played state, playback position) with the
-     * same season set, so the epoch distinguishes "same seasons, same contents"
-     * from "same seasons, contents changed"; without this cache each call
-     * re-flattened and re-sorted the entire episode set (O(N×E) on a large
-     * series). The cache is invalidated in [loadItem] and whenever the set of
-     * fetched seasons or the episode contents change.
-     */
-    @Synchronized
-    private fun sortedEpisodesSnapshot(state: DetailUiState): List<MediaItem> {
-        val key = state.fetchedSeasonIds
-        val epoch = episodeDataEpoch
-        if (cachedSortedEpisodes != null && cachedSortedEpisodesKey == key && cachedSortedEpisodesEpoch == epoch) {
-            return cachedSortedEpisodes!!
-        }
-        val sorted = state.episodes.values.flatten().sortedByPlaybackOrder()
-        cachedSortedEpisodes = sorted
-        cachedSortedEpisodesKey = key
-        cachedSortedEpisodesEpoch = epoch
-        return sorted
-    }
-
-    @Synchronized
-    private fun resetSortedEpisodesCache() {
-        cachedSortedEpisodes = null
-        cachedSortedEpisodesKey = emptySet()
-        cachedSortedEpisodesEpoch = 0L
-    }
-
-    /**
-     * Bumps the episode-data epoch so [sortedEpisodesSnapshot] rebuilds its
-     * cached list. Call after any mutation that changes the contents of the
-     * fetched episodes (played/favorite/position) without changing the set of
-     * fetched seasons.
-     */
-    @Synchronized
-    private fun invalidateSortedEpisodesCache() {
-        episodeDataEpoch++
-    }
-
-    private fun List<MediaItem>.sortedByPlaybackOrder(): List<MediaItem> =
-        sortedWith(
-            compareBy<MediaItem>(
-                { it.seasonNumber ?: Int.MAX_VALUE },
-                { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE },
-                { it.name },
-            )
-        )
 
     fun toggleFavorite() {
         val detail = _uiState.value.detail ?: return
@@ -798,15 +693,49 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
+     * Marks a row item (related/collection/episode) played or
+     * unplayed without switching the screen's current detail item. Flips the
+     * item in-place in [DetailUiState.relatedItems] so the card's badge updates
+     * immediately; the next detail fetch reconciles the server truth.
+     */
+    fun markRowItemPlayed(item: MediaItem, played: Boolean) {
+        launch {
+            val result = if (played) mediaRepository.markPlayed(item.id)
+            else mediaRepository.markUnplayed(item.id)
+            result.onSuccess {
+                _uiState.update { state ->
+                    state.copy(
+                        relatedItems = state.relatedItems.map {
+                            if (it.id == item.id) it.copy(
+                                isPlayed = played,
+                                playbackPositionTicks = 0L,
+                            ) else it
+                        },
+                        collectionItems = state.collectionItems.map {
+                            if (it.id == item.id) it.copy(
+                                isPlayed = played,
+                                playbackPositionTicks = 0L,
+                            ) else it
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    /**
      * Marks every episode in [seasonId] as played. Jellyfin's
      * `markPlayedItem` endpoint recurses into a season's children, so this is a
      * single network call — but the UI needs the optimistic in-place flip so
      * every `EpisodeCard` shows the WATCHED badge and the Play button target
      * recomputes without waiting on a re-fetch.
      *
-     * See the [episodesMap] / [invalidateSortedEpisodesCache] contract: any
-     * mutation of episode contents (played state) MUST bump the epoch or the
-     * sorted-episode cache silently serves a stale list.
+     * The optimistic write goes through [episodeCatalogue.updateSeasonEpisodes],
+     * which rewrites the season in the cached snapshot and rebuilds its derived
+     * `sortedEpisodes` — so smart-play's next-up target recomputes against the
+     * flipped contents. The catalogue snapshot is then dropped via
+     * [EpisodeCatalogue.invalidateSeries] so re-entry refetches the
+     * fully-cascaded server state (no refetch here — see the old comment below).
      */
     fun markSeasonPlayed(seasonId: String) {
         markSeason(seasonId, played = true)
@@ -817,7 +746,8 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun markSeason(seasonId: String, played: Boolean) {
-        val current = episodesMap[seasonId] ?: return
+        val seriesId = currentSeriesId ?: return
+        val current = currentCatalogueSnapshot?.seasonEpisodes(seasonId) ?: return
         // No-op if there is nothing to flip — avoids an unnecessary network
         // call, a spurious cache invalidation, and a redundant uiState emission.
         val alreadyInTargetState = current.all { it.isPlayed == played }
@@ -828,46 +758,47 @@ class DetailViewModel @Inject constructor(
             else mediaRepository.markUnplayed(seasonId)
             result
                 .onSuccess {
-                    episodesMap[seasonId] = current.map { episode ->
-                        // The mark-played/unplayed endpoints clear the resume
-                        // position server-side; mirror that locally for BOTH
-                        // directions. For mark-unplayed this is what stops the
-                        // in-progress bar and the "remaining time" label from
-                        // lingering on an episode the user just marked unplayed,
-                        // and keeps the episode out of continue watching locally
-                        // until the next re-fetch confirms the server state.
-                        episode.copy(
-                            isPlayed = played,
-                            playbackPositionTicks = 0L,
-                        )
+                    // Optimistically rewrite the season in the catalogue snapshot;
+                    // updateSeasonEpisodes rebuilds the derived sortedEpisodes so
+                    // smart-play targets the right episode immediately.
+                    val rewritten = episodeCatalogue.updateSeasonEpisodes(seriesId, seasonId) { episodes ->
+                        episodes.map { episode ->
+                            // The mark-played/unplayed endpoints clear the resume
+                            // position server-side; mirror that locally for BOTH
+                            // directions. For mark-unplayed this is what stops the
+                            // in-progress bar and the "remaining time" label from
+                            // lingering on an episode the user just marked unplayed,
+                            // and keeps the episode out of continue watching locally
+                            // until the next re-fetch confirms the server state.
+                            episode.copy(
+                                isPlayed = played,
+                                playbackPositionTicks = 0L,
+                            )
+                        }
                     }
-                    invalidateSortedEpisodesCache()
+                    currentCatalogueSnapshot = rewritten
                     _uiState.update { state ->
-                        state.copy(episodes = episodesMap.toMap())
+                        state.copy(episodes = rewritten?.episodesBySeason ?: state.episodes)
                     }
-                    // Drop the repo-level seasons/episodes caches for this
-                    // series. The in-place flip above keeps the current screen
-                    // correct, but `MediaRepositoryImpl.invalidateUserDataCaches`
-                    // keys the series-cache drop off `detailCache.get(seasonId)`,
-                    // which is null — seasons are loaded via getSeasons(seriesId),
-                    // not as standalone details. Without this explicit drop,
-                    // re-entering the series detail (back navigation, app
-                    // background) would serve the stale pre-mutation snapshot.
-                    currentSeriesId?.let { mediaRepository.invalidateSeriesCache(it) }
+                    // Drop the catalogue snapshot for this series. The optimistic
+                    // flip above keeps the current screen correct, but
+                    // `MediaRepositoryImpl.invalidateUserDataCaches` keys the
+                    // series-cache drop off `detailCache.get(seasonId)`, which is
+                    // null — seasons are loaded via the catalogue, not as
+                    // standalone details. Without this explicit drop, re-entering
+                    // the series detail (back navigation, app background) would
+                    // serve the stale pre-mutation snapshot.
+                    episodeCatalogue.invalidateSeries(seriesId)
                     // No post-mutation server refetch. The optimistic flip above
                     // already holds the correct post-mutation state for this
                     // screen, and a refetch would actively cause a stale-badge
-                    // regression on re-entry: getEpisodes writes its response back
-                    // into episodesCache (a single-season slice), so
-                    // getAllEpisodesGrouped would HIT that entry when the user
-                    // returns and serve pre-cascade data — the watched/unwatched
-                    // badges would flip back to stale and only self-correct "after
-                    // some time" once the TTL expired. Dropping the cache above and
-                    // NOT re-populating it forces re-entry's getAllEpisodesGrouped
-                    // to miss the cache and hit the server, which by then has the
-                    // fully-cascaded UserData.Played state (the same authoritative
-                    // state the per-episode detail screen reads). Re-entry is
-                    // therefore correct without a refetch here.
+                    // regression on re-entry: the per-season slice would be written
+                    // back into the catalogue, so a later loadSeriesEpisodes would
+                    // serve pre-cascade data — the watched/unwatched badges would
+                    // flip back to stale and only self-correct once the TTL
+                    // expired. Dropping the cache above and NOT re-populating it
+                    // forces re-entry's load to miss and hit the server, which by
+                    // then has the fully-cascaded UserData.Played state.
                     // The Play-button target may now point to a different
                     // episode (e.g. next-up moved to the following season), so
                     // recompute it against the updated episode contents.
@@ -890,7 +821,7 @@ class DetailViewModel @Inject constructor(
         val item = _uiState.value.detail?.item ?: return
         val seriesId = item.seriesId ?: item.id
         launch {
-            preferencesStore.excludeSeriesFromNextUp(seriesId)
+            homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
             _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_hidden_from_next_up)))
         }
     }
@@ -899,7 +830,7 @@ class DetailViewModel @Inject constructor(
         val item = _uiState.value.detail?.item ?: return
         val seriesId = item.seriesId ?: item.id
         launch {
-            preferencesStore.includeSeriesInNextUp(seriesId)
+            homeDiscoveryStore.includeSeriesInNextUp(seriesId)
             _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_shown_in_next_up)))
         }
     }
@@ -907,7 +838,7 @@ class DetailViewModel @Inject constructor(
     fun hideFromContinueWatching() {
         val item = _uiState.value.detail?.item ?: return
         launch {
-            preferencesStore.hideCwItem(item.id)
+            homeDiscoveryStore.hideCwItem(item.id)
             _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_hidden_from_continue_watching)))
         }
     }
@@ -915,7 +846,7 @@ class DetailViewModel @Inject constructor(
     fun showFromContinueWatching() {
         val item = _uiState.value.detail?.item ?: return
         launch {
-            preferencesStore.unhideCwItem(item.id)
+            homeDiscoveryStore.unhideCwItem(item.id)
             _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_shown_in_continue_watching)))
         }
     }
@@ -933,7 +864,7 @@ class DetailViewModel @Inject constructor(
         // Cellular download size warning: when on a metered network and the
         // user has configured a warning threshold (MB), surface a
         // confirmation dialog instead of silently consuming data.
-        val prefs = preferencesStore.preferences.value
+        val prefs = downloadsStore.downloads.value
         val thresholdMb = prefs.cellularDownloadSizeWarningMb
         if (thresholdMb > 0 && !adaptiveBitrateManager.isUnmeteredConnection()) {
             val sizeBytes = source.size ?: 0L
@@ -949,7 +880,7 @@ class DetailViewModel @Inject constructor(
 
     /**
      * Called from the UI after the user explicitly confirms a cellular
-     * download that exceeded the [com.raulshma.jellyplay.core.model.UserPreferences.cellularDownloadSizeWarningMb]
+     * download that exceeded the [com.raulshma.jellyplay.core.model.legacy.UserPreferences.cellularDownloadSizeWarningMb]
      * threshold. Clears the warning state and proceeds with the download.
      */
     fun confirmCellularDownload() {
@@ -976,7 +907,7 @@ class DetailViewModel @Inject constructor(
                 // The intake seam owns the full bundle (local images, trickplay,
                 // subtitles, segments, offline metadata row), so feature modules
                 // no longer re-implement the artifact-writing recipe.
-                val prefs = preferencesStore.preferences.value
+                val prefs = downloadsStore.downloads.value
                 val maxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
                 val result = downloadIntake.start(detail, maxBitrate)
                 if (result.downloadItem == null) {
@@ -1029,18 +960,15 @@ class DetailViewModel @Inject constructor(
         _uiState.update { it.copy(downloadSheetLoadingSeasons = seasonIds) }
 
         launch {
-            val grouped = mediaRepository.getAllEpisodesGrouped(seriesId).getOrDefault(emptyMap())
+            // The catalogue snapshot already holds the grouped map (and refetches
+            // any missing season on demand internally), so the download sheet
+            // reads it directly instead of re-issuing getAllEpisodesGrouped + a
+            // per-season fallback fan-out.
+            val snapshot = episodeCatalogue.loadSeriesEpisodes(seriesId).getOrNull()
             if (currentSeriesId != seriesId) return@launch
-            episodesMap.putAll(grouped)
+            currentCatalogueSnapshot = snapshot
             seasons.forEach { season ->
-                downloadSheetEpisodesMap[season.id] = grouped[season.id] ?: emptyList()
-            }
-
-            val missing = seasons.filter { downloadSheetEpisodesMap[it.id].isNullOrEmpty() }
-            missing.forEach { season ->
-                mediaRepository.getEpisodes(seriesId, season.id)
-                    .onSuccess { downloadSheetEpisodesMap[season.id] = it }
-                    .onFailure { downloadSheetEpisodesMap[season.id] = emptyList() }
+                downloadSheetEpisodesMap[season.id] = snapshot?.seasonEpisodes(season.id) ?: emptyList()
             }
 
             downloadSheetFetchedSeasonIds = seasonIds
@@ -1058,24 +986,12 @@ class DetailViewModel @Inject constructor(
         val seriesId = currentSeriesId ?: return
         _uiState.update { it.copy(downloadSheetLoadingSeasons = it.downloadSheetLoadingSeasons + seasonId) }
         launch {
-            // Reuse episodes already fetched by the main seasons display when
-            // available, avoiding a duplicate network round-trip and a second
-            // in-memory copy of the same episode list.
-            val cached = episodesMap[seasonId]
-            if (cached != null) {
-                downloadSheetEpisodesMap[seasonId] = cached
-                _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
-            } else {
-                mediaRepository.getEpisodes(seriesId, seasonId)
-                    .onSuccess { episodeList ->
-                        downloadSheetEpisodesMap[seasonId] = episodeList
-                        _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
-                    }
-                    .onFailure {
-                        downloadSheetEpisodesMap[seasonId] = emptyList()
-                        _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
-                    }
-            }
+            // Read the season from the catalogue snapshot (serves from the shared
+            // cache when already present, else fetches the one season), avoiding
+            // a duplicate round-trip and a second in-memory copy.
+            val episodes = episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId).getOrDefault(emptyList())
+            downloadSheetEpisodesMap[seasonId] = episodes
+            _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
             downloadSheetFetchedSeasonIds = downloadSheetFetchedSeasonIds + seasonId
             _uiState.update { it.copy(downloadSheetLoadingSeasons = it.downloadSheetLoadingSeasons - seasonId) }
         }
@@ -1340,7 +1256,7 @@ class DetailViewModel @Inject constructor(
      */
     fun addToWatchLater() {
         val detail = _uiState.value.detail ?: return
-        val cachedId = preferencesStore.preferences.value.watchLaterPlaylistId
+        val cachedId = appRuntimeStateStore.state.value.watchLaterPlaylistId
         launch {
             _uiState.update { it.copy(isAddingToPlaylist = true) }
             val ids = resolvePlaylistItemIds(detail).getOrElse {
@@ -1378,7 +1294,7 @@ class DetailViewModel @Inject constructor(
                     itemIds = ids,
                     mediaType = playlistMediaType(detail.item.mediaType),
                 ).onSuccess { newId ->
-                    preferencesStore.setWatchLaterPlaylistId(newId)
+                    appRuntimeStateStore.setWatchLaterPlaylistId(newId)
                     _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_added_to_watch_later)))
                 }.onFailure {
                     _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
@@ -1445,16 +1361,16 @@ class DetailViewModel @Inject constructor(
     ): Result<List<String>> = runCatching {
         val item = detail.item
         if (item.mediaType != MediaType.SERIES) return@runCatching listOf(item.id)
-        val cached = episodesMap.values.flatten().map { it.id }
-        if (cached.isNotEmpty()) return@runCatching cached
-        // No episodes loaded yet — fetch the full set. A series is playable as
-        // a playlist only via its episodes, so an empty result is surfaced as
-        // a no-op message rather than adding the (invalid) series id.
-        mediaRepository.getAllEpisodesGrouped(item.id)
-            .getOrDefault(emptyMap())
-            .values
-            .flatten()
-            .map { it.id }
+        // A series is playable as a playlist only via its episodes. Read the
+        // canonical playback order from the catalogue snapshot if loaded, else
+        // load it; an empty result is surfaced as a no-op message rather than
+        // adding the (invalid) series id.
+        val sortedIds = currentCatalogueSnapshot?.takeIf { it.seriesId == item.id }?.allEpisodeIds
+        if (!sortedIds.isNullOrEmpty()) return@runCatching sortedIds
+        episodeCatalogue.loadSeriesEpisodes(item.id)
+            .getOrNull()
+            ?.allEpisodeIds
+            ?: emptyList()
     }
 
     /**

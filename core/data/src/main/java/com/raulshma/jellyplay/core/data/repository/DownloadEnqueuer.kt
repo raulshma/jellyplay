@@ -9,7 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -35,7 +35,7 @@ import javax.inject.Singleton
 @Singleton
 class DownloadEnqueuer @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val preferencesStore: UserPreferencesStore,
+    private val downloadsStore: DownloadsStore,
 ) {
 
     /**
@@ -53,7 +53,7 @@ class DownloadEnqueuer @Inject constructor(
         downloadId: String,
         honorScheduleAndNetwork: Boolean = true,
     ) {
-        val prefs = if (honorScheduleAndNetwork) preferencesStore.preferences.value else null
+        val prefs = if (honorScheduleAndNetwork) downloadsStore.downloads.value else null
 
         val constraintsBuilder = Constraints.Builder()
         var initialDelayMs = 0L

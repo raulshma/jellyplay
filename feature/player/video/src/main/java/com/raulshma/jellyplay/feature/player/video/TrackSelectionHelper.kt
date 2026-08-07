@@ -1,42 +1,34 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrackType
-import com.raulshma.jellyplay.core.model.isLanguageMatch
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
-import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
 import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-@Immutable
-data class TrackOption(
-    val index: Int,
-    val label: String,
-    val language: String?,
-    val isSelected: Boolean,
-    /**
-     * The engine track's container stream index (mpv `ff-index`), when exposed.
-     * Equals the server's `MediaStream.index` for demuxed tracks, so it is the
-     * robust key for resolving a stored Jellyfin stream selection. Null for
-     * side-loaded tracks / engines that don't expose it (matched by label).
-     */
-    val streamIndex: Int? = null,
-    /**
-     * Ordered role badges (Forced/Default/SDH) rendered beside the label by the
-     * picker. Mirrors [com.raulshma.jellyplay.feature.player.video.engine.MediaTrack.badges].
-     */
-    val badges: List<TrackBadge> = emptyList(),
-)
-
+/**
+ * The track-selection *hub*: builds the audio/subtitle picker rows from engine
+ * + server stream data, drives the side-effecting consequences of a selection
+ * (`engine.selectTrack`, latch the held-selection guard, persist the per-item
+ * choice, mutate/hydrate the cross-episode memory), and consumes the
+ * pending-navigation stream index.
+ *
+ * The pure *decision* — *which* track plays? — is delegated to
+ * [trackSelectionPolicy]. That keeps this hub free of the precedence ladder
+ * (pending → stored → scoring → type-specific → matcher → fallback), which now
+ * has a first-class, unit-tested home. See [TrackSelectionPolicy].
+ */
 internal class TrackSelectionHelper(
-    private val preferencesStore: UserPreferencesStore,
+    private val engineStore: PlayerEngineStore,
+    private val subtitleStore: SubtitleLanguageStore,
+    private val trackSelectionPolicy: TrackSelectionPolicy = TrackSelectionPolicy(),
     private val getEngine: () -> MediaEngine?,
     private val getUiState: () -> VideoPlayerUiState,
     private val updateUiState: ((VideoPlayerUiState) -> VideoPlayerUiState) -> Unit,
@@ -260,7 +252,7 @@ internal class TrackSelectionHelper(
         }
 
         val audioOptions = rawAudioTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex, t.badges)
+            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex, t.badges, id = t.id)
         }
         // Upgrade each engine audio track's label/badges with the richer server
         // MediaStream data when a match is found (by stream index, then language
@@ -303,7 +295,7 @@ internal class TrackSelectionHelper(
         }
 
         val engineSubOptions = rawSubTracks.map { t ->
-            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex, t.badges)
+            TrackOption(t.index, t.label, t.language, t.isSelected, t.streamIndex, t.badges, id = t.id)
         }
         // Same server enrichment as audio — Direct-Play subtitle tracks get
         // their real title/codec/flags from the server MediaStream instead of
@@ -354,7 +346,7 @@ internal class TrackSelectionHelper(
                 // against the engine track's container stream index (mpv ff-index)
                 // — NOT the engine track id, which is unrelated to the server
                 // index. Fall back to label for engines/tracks without one.
-                resolveByStreamIndex(audioTracks, pendingAudio, targetStream)
+                trackSelectionPolicy.resolveByStreamIndex(audioTracks, pendingAudio, targetStream)
                     ?.let { selectAudioTrack(it, isUserOverride = false) }
             }
         } else if (!audioSelectionHeld) {
@@ -367,10 +359,11 @@ internal class TrackSelectionHelper(
             // returned null → the next emission dropped audio back to default.
             val itemId = getCurrentItemId()
             if (itemId != null) {
-                val currentPrefs = preferencesStore.preferences.value
-                val stored = currentPrefs.mediaStreamSelections[itemId]
+                val engine = engineStore.playerEngine.value
+                val sub = subtitleStore.subtitle.value
+                val stored = engine.mediaStreamSelections[itemId]
                 val audioIdx = stored?.audioStreamIndex
-                val prefAudioLang = currentPrefs.preferredAudioLanguage ?: "eng"
+                val prefAudioLang = sub.preferredAudioLanguage ?: "eng"
                 if (audioIdx != null) {
                     if (audioIdx == -1) {
                         audioTracks.firstOrNull { it.index < 0 }?.let { selectAudioTrack(it, isUserOverride = false) }
@@ -382,7 +375,7 @@ internal class TrackSelectionHelper(
                         // server index); fall back to label for engines/side-loaded
                         // tracks that don't expose one. Offline (no server streams)
                         // falls through to the engine positional index.
-                        val resolved = resolveByStreamIndex(audioTracks, audioIdx, targetStream)
+                        val resolved = trackSelectionPolicy.resolveByStreamIndex(audioTracks, audioIdx, targetStream)
                         if (resolved != null) {
                             selectAudioTrack(resolved, isUserOverride = false)
                         } else if (streams.isEmpty()) {
@@ -395,20 +388,19 @@ internal class TrackSelectionHelper(
                     // global preferred audio language when set.
                     val resolvedAudioLang = playbackPreferenceResolver.resolved.value?.audioLanguage
                         ?: prefAudioLang
-                    // G5: cross-episode scoring pre-pass. If the previous episode's
-                    // selected audio track is remembered, try to find a confident
-                    // (≥3) match among this episode's tracks first — so a specific
-                    // "English · 5.1" pick carries forward instead of dropping to
-                    // the first English track. Falls through to the language rule.
+                    // The full precedence ladder — G5 scoring pre-pass →
+                    // audio-description preference → language match — lives in
+                    // TrackSelectionPolicy now. Returns null when no match
+                    // exists; we then select the Default placeholder.
                     hydrateRememberedAudioTrack()
-                    val scored = rememberedAudioTrack?.let { remembered ->
-                        pickByScoring(audioTracks, remembered)
-                    }
-                    val match = scored ?: pickPreferredAudioTrack(
-                        audioTracks = audioTracks,
-                        streams = streams,
-                        prefAudioLang = resolvedAudioLang,
-                        preferAudioDescription = currentPrefs.preferAudioDescription,
+                    val match = trackSelectionPolicy.resolveAudio(
+                        AudioResolutionArgs(
+                            tracks = audioTracks,
+                            streams = streams,
+                            resolvedLang = resolvedAudioLang,
+                            preferAudioDescription = sub.preferAudioDescription,
+                            remembered = rememberedAudioTrack,
+                        ),
                     )
                     if (match != null) {
                         selectAudioTrack(match, isUserOverride = false)
@@ -432,7 +424,7 @@ internal class TrackSelectionHelper(
                     // server's MediaStream.index) — robust against blank/dup/
                     // translated titles. Fall back to label only for engines or
                     // side-loaded tracks that don't expose a stream index.
-                    val match = resolveByStreamIndex(subtitleTracks, pending, targetStream)
+                    val match = trackSelectionPolicy.resolveByStreamIndex(subtitleTracks, pending, targetStream)
                     if (match != null) {
                         selectSubtitleTrack(match, isUserOverride = false)
                     }
@@ -449,10 +441,11 @@ internal class TrackSelectionHelper(
             // override the user just set. Guarding it keeps the held selection.
             val itemId = getCurrentItemId()
             if (itemId != null) {
-                val currentPrefs = preferencesStore.preferences.value
-                val stored = currentPrefs.mediaStreamSelections[itemId]
+                val engine = engineStore.playerEngine.value
+                val sub = subtitleStore.subtitle.value
+                val stored = engine.mediaStreamSelections[itemId]
                 val subIdx = stored?.subtitleStreamIndex
-                val prefSubLang = currentPrefs.preferredSubtitleLanguage ?: "eng"
+                val prefSubLang = sub.preferredSubtitleLanguage ?: "eng"
                 if (subIdx != null) {
                     if (subIdx == -1) {
                         subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
@@ -465,7 +458,7 @@ internal class TrackSelectionHelper(
                         // engines/side-loaded tracks without one. Offline (no
                         // server streams) falls through to the engine positional
                         // index (see resolveMediaStreamIndex).
-                        val resolved = resolveByStreamIndex(subtitleTracks, subIdx, targetStream)
+                        val resolved = trackSelectionPolicy.resolveByStreamIndex(subtitleTracks, subIdx, targetStream)
                         if (resolved != null) {
                             selectSubtitleTrack(resolved, isUserOverride = false)
                         } else if (streams.isEmpty()) {
@@ -474,43 +467,43 @@ internal class TrackSelectionHelper(
                         }
                     }
                 } else {
-                    // Per-item then per-series language rule overrides the
-                    // global preferred subtitle language when set.
-                    val resolvedSubLang = playbackPreferenceResolver.resolved.value?.subtitleLanguage
-                        ?: prefSubLang
-                    val forcedOnly = currentPrefs.subtitlesForcedOnly
-                    // G5: cross-episode scoring pre-pass (non-forced only — forced/
-                    // hearing-impaired rules must take precedence for accessibility).
-                    val scored = if (!forcedOnly) {
-                        hydrateRememberedSubtitleTrack()
-                        rememberedSubtitleTrack?.let { remembered ->
-                            pickByScoring(subtitleTracks, remembered)
-                        }
+                    // Per-item then per-series preference overrides the global
+                    // preferred subtitle language when set.
+                    val resolvedPref = playbackPreferenceResolver.resolved.value
+                    // An explicit "subtitles off" intent (item scope over series)
+                    // short-circuits the matcher: force Off and skip the language
+                    // ladder entirely, mirroring how subIdx == -1 works above for
+                    // the per-item stream-index override.
+                    if (resolvedPref?.subtitleDisabled == true) {
+                        subtitleTracks.firstOrNull { it.index < 0 }
+                            ?.let { selectSubtitleTrack(it, isUserOverride = false) }
                     } else {
-                        null
-                    }
-                    val match = scored ?: if (forcedOnly) {
-                        val forcedStream = streams
-                            .firstOrNull { it.type == StreamType.SUBTITLE && it.isForced && isLanguageMatch(it.language, resolvedSubLang) }
-                            ?: streams.firstOrNull { it.type == StreamType.SUBTITLE && it.isForced }
-                        if (forcedStream != null) {
-                            // Prefer container stream index (robust); fall back to label.
-                            resolveByStreamIndex(subtitleTracks, forcedStream.index, forcedStream)
-                        } else {
-                            null
+                        val resolvedSubLang = resolvedPref?.subtitleLanguage
+                            ?: prefSubLang
+                        val forcedOnly = sub.subtitlesForcedOnly
+                        // The full precedence ladder — G5 scoring pre-pass (non-forced
+                        // only) → forced-only stream pick → tiered SubtitleTrackMatcher
+                        // → null — lives in TrackSelectionPolicy now. Returns null when
+                        // no same-language track exists; we then select Off.
+                        if (!forcedOnly) {
+                            hydrateRememberedSubtitleTrack()
                         }
-                    } else {
-                        SubtitleTrackMatcher.match(
-                            tracks = subtitleTracks,
-                            lang = resolvedSubLang,
-                            forced = playbackPreferenceResolver.resolved.value?.subtitleForced,
-                            hearingImpaired = playbackPreferenceResolver.resolved.value?.subtitleHearingImpaired,
+                        val match = trackSelectionPolicy.resolveSubtitle(
+                            SubtitleResolutionArgs(
+                                tracks = subtitleTracks,
+                                streams = streams,
+                                lang = resolvedSubLang,
+                                forcedOnly = forcedOnly,
+                                forced = resolvedPref?.subtitleForced,
+                                hearingImpaired = resolvedPref?.subtitleHearingImpaired,
+                                remembered = if (forcedOnly) null else rememberedSubtitleTrack,
+                            ),
                         )
-                    }
-                    if (match != null) {
-                        selectSubtitleTrack(match, isUserOverride = false)
-                    } else {
-                        subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
+                        if (match != null) {
+                            selectSubtitleTrack(match, isUserOverride = false)
+                        } else {
+                            subtitleTracks.firstOrNull { it.index < 0 }?.let { selectSubtitleTrack(it, isUserOverride = false) }
+                        }
                     }
                 }
             }
@@ -522,8 +515,8 @@ internal class TrackSelectionHelper(
         selectedAudioTrackIndex = null
         audioSelectionHeld = false
         scope.launch {
-            val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
-            preferencesStore.setMediaStreamSelection(
+            val currentSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
+            engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 audioStreamIndex = null,
                 subtitleStreamIndex = currentSelection?.subtitleStreamIndex
@@ -537,8 +530,8 @@ internal class TrackSelectionHelper(
         selectedSubtitleTrackIndex = null
         subtitleSelectionHeld = false
         scope.launch {
-            val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
-            preferencesStore.setMediaStreamSelection(
+            val currentSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
+            engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 audioStreamIndex = currentSelection?.audioStreamIndex,
                 subtitleStreamIndex = null
@@ -653,116 +646,26 @@ internal class TrackSelectionHelper(
     ) {
         val itemId = getCurrentItemId() ?: return
         val streams = getUiState().mediaStreams
-        val currentSelection = preferencesStore.preferences.value.mediaStreamSelections[itemId]
+        val currentSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
         val audioStreamIndex = if (audioTrackOption != null) {
             if (audioTrackOption.index < 0) -1
-            else resolveMediaStreamIndex(streams, StreamType.AUDIO, audioTrackOption)
+            else trackSelectionPolicy.resolveMediaStreamIndex(streams, StreamType.AUDIO, audioTrackOption)
         } else {
             currentSelection?.audioStreamIndex
         }
         val subtitleStreamIndex = if (subtitleTrackOption != null) {
             if (subtitleTrackOption.index < 0) -1
-            else resolveMediaStreamIndex(streams, StreamType.SUBTITLE, subtitleTrackOption)
+            else trackSelectionPolicy.resolveMediaStreamIndex(streams, StreamType.SUBTITLE, subtitleTrackOption)
         } else {
             currentSelection?.subtitleStreamIndex
         }
         scope.launch {
-            preferencesStore.setMediaStreamSelection(
+            engineStore.setMediaStreamSelection(
                 itemId = itemId,
                 audioStreamIndex = audioStreamIndex,
                 subtitleStreamIndex = subtitleStreamIndex,
             )
         }
-    }
-
-    /**
-     * Resolves a stored/pending server [MediaStream.index] to an engine
-     * [TrackOption]. Prefers the engine track's container stream index (mpv
-     * `ff-index`, which equals the server index for demuxed tracks) — robust
-     * against blank/duplicate/translated titles — and falls back to matching
-     * [targetStream]'s label for engines or side-loaded tracks that don't
-     * expose a stream index. Returns null if neither matches (the caller then
-     * handles the offline-positional-index case).
-     */
-    private fun resolveByStreamIndex(
-        tracks: List<TrackOption>,
-        streamIndex: Int,
-        targetStream: MediaStream?,
-    ): TrackOption? {
-        val byStreamIndex = tracks.firstOrNull { it.index >= 0 && it.streamIndex == streamIndex }
-        if (byStreamIndex != null) return byStreamIndex
-        val targetLabel = targetStream?.displayTitle ?: targetStream?.title ?: targetStream?.language
-            ?: return null
-        return tracks.firstOrNull { it.index >= 0 && it.label == targetLabel }
-    }
-
-    private fun resolveMediaStreamIndex(
-        streams: List<MediaStream>,
-        type: StreamType,
-        trackOption: TrackOption,
-    ): Int? {
-        val typedStreams = streams.filter { it.type == type }
-        val trackLabel = trackOption.label
-        val trackLanguage = trackOption.language
-
-        // Offline playback carries no server mediaStreams (detail.mediaSources is
-        // empty), so there is nothing to match against here. Persist the engine
-        // track's positional index directly — it's the only stable handle for
-        // offline sidecar subs, and restore-on-reload re-matches by label in
-        // updateTracksFromEngine. Previously this returned null offline, so the
-        // stored per-item selection silently became null and never restored.
-        if (typedStreams.isEmpty()) return trackOption.index
-
-        val exactMatch = typedStreams.firstOrNull {
-            it.displayTitle == trackLabel || it.title == trackLabel || it.language == trackLabel
-        }
-        if (exactMatch != null) return exactMatch.index
-
-        if (trackLanguage != null) {
-            val languageMatches = typedStreams.filter { isLanguageMatch(it.language, trackLanguage) }
-            if (languageMatches.isNotEmpty()) {
-                if (languageMatches.size == 1) return languageMatches[0].index
-                val bestMatch = languageMatches.firstOrNull { stream ->
-                    val streamTitle = stream.displayTitle ?: stream.title ?: ""
-                    streamTitle.isNotBlank() && (trackLabel.contains(streamTitle, ignoreCase = true) || streamTitle.contains(trackLabel, ignoreCase = true))
-                } ?: languageMatches.firstOrNull { it.isDefault } ?: languageMatches.first()
-                return bestMatch.index
-            }
-        }
-
-        return typedStreams.firstOrNull { it.index >= 0 }?.index
-    }
-
-    /**
-     * Picks the best audio [TrackOption] for automatic (no stored override)
-     * selection. When [preferAudioDescription] is enabled, descriptive tracks
-     * (matched via title/label keywords) are preferred over the default
-     * language match so visually-impaired users get narration by default.
-     */
-    private fun pickPreferredAudioTrack(
-        audioTracks: List<TrackOption>,
-        streams: List<MediaStream>,
-        prefAudioLang: String,
-        preferAudioDescription: Boolean,
-    ): TrackOption? {
-        val selectable = audioTracks.filter { it.index >= 0 }
-        if (selectable.isEmpty()) return null
-        if (preferAudioDescription) {
-            val descriptiveStreamIdx = streams
-                .firstOrNull { it.type == StreamType.AUDIO && isAudioDescriptionStream(it) }
-                ?.index
-            if (descriptiveStreamIdx != null) {
-                // Engine track indices are positional (0..n) while mediaStream
-                // indices come from the server. Match by label as a bridge.
-                val targetStream = streams.firstOrNull { it.index == descriptiveStreamIdx }
-                val targetLabel = targetStream?.displayTitle ?: targetStream?.title
-                val match = selectable.firstOrNull { opt ->
-                    opt.label == targetLabel || (targetLabel != null && opt.label.contains(targetLabel, ignoreCase = true))
-                } ?: selectable.firstOrNull { opt -> isAudioDescriptionLabel(opt.label) }
-                if (match != null) return match
-            }
-        }
-        return selectable.firstOrNull { isLanguageMatch(it.language, prefAudioLang) }
     }
 
     /**
@@ -783,53 +686,10 @@ internal class TrackSelectionHelper(
     }
 
     /**
-     * Cross-episode scoring pre-pass (G5). Given the candidate [tracks] for a new
-     * episode and the previously-selected [remembered] track, returns the best-
-     * scoring candidate if one clears the confidence threshold, else null (the
-     * caller falls back to the language rule). Used for both audio and subtitle
-     * resolution — the two former near-identical helpers (`pickAudioByScoring` /
-     * `pickSubtitleByScoring`) differed only in the list variable name. See
-     * [TrackScorer].
-     */
-    private fun pickByScoring(
-        tracks: List<TrackOption>,
-        remembered: RememberedTrack,
-    ): TrackOption? {
-        if (remembered.label.isBlank()) return null
-        val selectable = tracks.filter { it.index >= 0 }
-        if (selectable.isEmpty()) return null
-        val candidates = selectable.mapIndexed { i, opt ->
-            TrackScorer.Candidate(
-                language = opt.language.orEmpty(),
-                label = opt.label,
-                indexWithinLanguage = remembered.indexWithinLanguage,
-                candidateIndexWithinLanguage = positionalIndexWithinLanguage(selectable, i),
-                optionId = i,
-            )
-        }
-        val winner = TrackScorer.bestMatch(remembered.language, remembered.label, candidates = candidates) ?: return null
-        return selectable.getOrNull(winner.optionId)
-    }
-
-    /**
-     * Position of the track at array position [i] within [tracks] among the
-     * tracks sharing its language, or -1 if unknown. Used by the scoring
-     * candidate builder, which passes the positional offset into the filtered
-     * [tracks] list. (Splits the old `positionWithinLanguage` that conflated a
-     * positional offset with an engine index — a latent bug.)
-     */
-    private fun positionalIndexWithinLanguage(tracks: List<TrackOption>, i: Int): Int {
-        val target = tracks.getOrNull(i) ?: return -1
-        val lang = target.language?.lowercase()?.trim().orEmpty()
-        if (lang.isEmpty()) return -1
-        val sameLang = tracks.filter { it.language?.lowercase()?.trim() == lang }
-        return sameLang.indexOf(target)
-    }
-
-    /**
      * Position among same-language tracks of the track whose engine [index]
      * matches, or -1 if unknown. Used when remembering a selection — the caller
-     * knows the real engine track index, not its array position.
+     * knows the real engine track index, not its array position. (The scoring
+     * read-side equivalent lives in [TrackSelectionPolicy].)
      */
     private fun engineIndexWithinLanguage(tracks: List<TrackOption>, index: Int): Int {
         val target = tracks.firstOrNull { it.index == index } ?: return -1
@@ -837,20 +697,5 @@ internal class TrackSelectionHelper(
         if (lang.isEmpty()) return -1
         val sameLang = tracks.filter { it.language?.lowercase()?.trim() == lang }
         return sameLang.indexOf(target)
-    }
-
-    /** Heuristics for detecting audio-description tracks from titles/labels. */
-    private fun isAudioDescriptionStream(stream: MediaStream): Boolean {
-        val title = stream.displayTitle ?: stream.title ?: return false
-        return isAudioDescriptionLabel(title)
-    }
-
-    private fun isAudioDescriptionLabel(label: String): Boolean {
-        val lower = label.lowercase()
-        return lower.contains("description") ||
-            lower.contains("descriptive") ||
-            lower.contains("narration") ||
-            lower.contains(" dvs") ||
-            lower.endsWith(" ad")
     }
 }

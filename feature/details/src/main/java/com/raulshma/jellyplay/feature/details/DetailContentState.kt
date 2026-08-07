@@ -2,9 +2,9 @@ package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -35,6 +35,7 @@ internal data class DetailContentState(
     val isDownloadingSeries: Boolean,
     val activeDownload: DownloadItem?,
     val isLoading: Boolean,
+    val isRefreshing: Boolean,
     val error: String?,
     val isAccessDenied: Boolean,
     val albumTracks: List<MediaItem>,
@@ -45,7 +46,7 @@ internal data class DetailContentState(
     val seerrSimilar: List<SeerrSearchItem>,
     val isSeerrConnected: Boolean,
     val isSeerrRecommendationsEnabled: Boolean,
-    val preferences: UserPreferences,
+    val preferences: DetailPreferences,
     val canManageSeries: Boolean,
 )
 
@@ -65,6 +66,7 @@ internal data class DetailContentCallbacks(
     val getBackdropUrl: (String) -> String,
     val getSeerrPosterUrl: (String?) -> String?,
     val onRetry: () -> Unit,
+    val onRefresh: () -> Unit,
     val onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     val onAudioClick: () -> Unit,
     val onDownloadClick: () -> Unit,
@@ -81,6 +83,7 @@ internal data class DetailContentCallbacks(
     val onNavigateToSeries: (String) -> Unit,
     val onSeasonSelected: (String) -> Unit,
     val onEpisodesDescendingChange: (Boolean) -> Unit,
+    val onCompactEpisodeListChange: (Boolean) -> Unit,
     val onBack: () -> Unit,
     val onSeerrRequest: (SeerrSearchItem) -> Unit,
     val onNavigate: (Route) -> Unit,
@@ -93,4 +96,8 @@ internal data class DetailContentCallbacks(
     val onShowFromContinueWatching: () -> Unit,
     val onManageSeries: () -> Unit,
     val onAddToPlaylist: () -> Unit,
+    /** Open the quick-action sheet for a row item */
+    val onMediaQuickActions: (MediaItem) -> Unit = {},
+    /** Track the TV-focused row item so the Menu key can open its quick actions. */
+    val onFocusedMediaItem: (MediaItem) -> Unit = {},
 )

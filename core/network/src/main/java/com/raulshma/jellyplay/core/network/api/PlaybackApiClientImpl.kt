@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.isImageSubtitleCodec
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
@@ -24,7 +25,7 @@ import javax.inject.Singleton
 class PlaybackApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
     private val deviceProfileProvider: DeviceProfileProvider,
-    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val playbackStore: PlaybackStore,
 ) : PlaybackApiClient {
 
     override suspend fun reportPlaybackStart(
@@ -177,7 +178,7 @@ class PlaybackApiClientImpl @Inject constructor(
         } else {
             deviceProfileProvider.forPlayer(
                 playerType = playerType,
-                pgsDirectPlay = preferencesStore.preferences.value.pgsSubtitleDirectPlay,
+                pgsDirectPlay = playbackStore.playback.value.pgsSubtitleDirectPlay,
             )
         }
 

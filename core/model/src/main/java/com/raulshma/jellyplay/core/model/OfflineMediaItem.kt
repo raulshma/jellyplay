@@ -52,6 +52,14 @@ data class OfflineMediaItem(
 /**
  * A person (actor/crew) persisted for offline detail screens. Stored as a
  * JSON column on [OfflineMediaItem]; decoded at read time.
+ *
+ * [localImagePath] is resolved at read time (not persisted in the JSON blob):
+ * when a cast image has been downloaded to disk beside the item's media file,
+ * [com.raulshma.jellyplay.core.data.repository.OfflineRepositoryImpl] copies
+ * the row with this field set to the on-disk absolute path. The offline detail
+ * screen then prefers it over the remote URL, so the cast row renders without
+ * network even when Coil's memory cache has been evicted (memory pressure, app
+ * restart, or a row downloaded before cast-image preloading existed).
  */
 @Immutable
 @Serializable
@@ -62,6 +70,7 @@ data class OfflinePersonInfo(
     val type: String = "Actor",
     val imageTag: String? = null,
     val blurHash: String? = null,
+    val localImagePath: String? = null,
 )
 
 /**

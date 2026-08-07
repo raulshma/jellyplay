@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.playback
 
 import javax.inject.Inject
 import javax.inject.Singleton
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 
 /**
  * Lifecycle callbacks for the active player engine.
@@ -26,7 +26,7 @@ interface PlayerLifecycleCallbacks {
  */
 @Singleton
 class PlayerLifecycleManager @Inject constructor(
-    private val preferencesStore: UserPreferencesStore
+    private val playbackStore: PlaybackStore
 ) {
 
     // Set by the ViewModel/PlayerSessionManager when an engine is created/released.
@@ -45,7 +45,7 @@ class PlayerLifecycleManager @Inject constructor(
 
     /** Called from Activity.onPause() when NOT in PiP mode */
     fun onActivityPause() {
-        if (!preferencesStore.preferences.value.backgroundVideoAudioEnabled) {
+        if (!playbackStore.playback.value.backgroundVideoAudioEnabled) {
             activeCallbacks?.onActivityPause()
         }
     }

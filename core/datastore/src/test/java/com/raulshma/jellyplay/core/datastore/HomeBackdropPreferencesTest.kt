@@ -1,10 +1,12 @@
 package com.raulshma.jellyplay.core.datastore
 
 import androidx.test.core.app.ApplicationProvider
+import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,8 +19,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Verifies the `homeBackdropEnabled` preference round-trips through DataStore,
- * mirroring [AudioCachePreferencesTest]'s real-store pattern.
+ * Verifies the `homeBackdropEnabled` preference round-trips through DataStore
+ * via [com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore] (the
+ * canonical slice owner).
  *
  * [FixMethodOrder] keeps the default-value assertion first: the shared
  * `"user_prefs"` DataStore file persists between test methods in the class, so
@@ -30,33 +33,34 @@ import org.robolectric.annotation.Config
 class HomeBackdropPreferencesTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-    private lateinit var store: UserPreferencesStore
+    private lateinit var graph: PreferenceSliceGraph
 
     @Before
     fun setup() {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val dataStore = com.raulshma.jellyplay.core.datastore.TestDataStoreProvider.get(context)
-        val widgetDataStore = com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore(dataStore, scope)
-        val serverIdentityStore = com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore(dataStore, scope)
-        val pinRateLimiter = com.raulshma.jellyplay.core.datastore.security.PinRateLimiter(dataStore, scope)
-        store = UserPreferencesStore(scope, dataStore, widgetDataStore, serverIdentityStore, pinRateLimiter)
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+            val dataStore = TestDataStoreProvider.get(context)
+            dataStore.edit { it.clear() }
+            graph = createPreferenceSliceGraph(scope, dataStore)
+            graph.homeDiscoveryStore.homeDiscovery.first()
+        }
     }
 
     @Test
     fun `a_default is enabled`() = runTest {
-        assertTrue(store.preferences.first().homeBackdropEnabled)
+        assertTrue(graph.homeDiscoveryStore.homeDiscovery.value.homeBackdropEnabled)
     }
 
     @Test
     fun `b_setHomeBackdropEnabled persists and reads back`() = runTest {
-        store.setHomeBackdropEnabled(false)
-        assertFalse(store.preferences.first().homeBackdropEnabled)
+        graph.homeDiscoveryStore.setHomeBackdropEnabled(false)
+        assertFalse(graph.homeDiscoveryStore.homeDiscovery.first().homeBackdropEnabled)
     }
 
     @Test
     fun `c_re-enabling persists after disable`() = runTest {
-        store.setHomeBackdropEnabled(false)
-        store.setHomeBackdropEnabled(true)
-        assertTrue(store.preferences.first().homeBackdropEnabled)
+        graph.homeDiscoveryStore.setHomeBackdropEnabled(false)
+        graph.homeDiscoveryStore.setHomeBackdropEnabled(true)
+        assertTrue(graph.homeDiscoveryStore.homeDiscovery.first().homeBackdropEnabled)
     }
 }

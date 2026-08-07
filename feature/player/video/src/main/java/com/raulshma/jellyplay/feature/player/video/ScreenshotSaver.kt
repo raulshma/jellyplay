@@ -133,8 +133,7 @@ object ScreenshotSaver {
 
     private fun saveToMediaStore(context: Context, bitmap: Bitmap, titleHint: String): Uri {
         val timestamp = System.currentTimeMillis()
-        val safeTitle = titleHint.ifBlank { "frame" }
-            .replace(Regex("[^A-Za-z0-9 _-]"), "").trim().ifBlank { "frame" }
+        val safeTitle = sanitizeTitle(titleHint)
         val filename = "JellyPlay_${safeTitle}_$timestamp.png"
 
         val values = ContentValues().apply {
@@ -174,4 +173,9 @@ object ScreenshotSaver {
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
+
+    /** Sanitizes a user supplied title into a safe, filesystem friendly name. */
+    internal fun sanitizeTitle(titleHint: String): String =
+        titleHint.ifBlank { "frame" }
+            .replace(Regex("[^A-Za-z0-9 _-]"), "").trim().ifBlank { "frame" }
 }

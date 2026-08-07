@@ -8,6 +8,32 @@
     <string name="core_reset">재설정</string>
     <string name="core_close">닫기</string>
     <string name="core_done">완료</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">확인</string>
+    <string name="core_ok">확인</string>
+    <string name="core_apply">적용</string>
+    <string name="core_delete">삭제</string>
+    <string name="core_clear">지우기</string>
+    <string name="core_undo">실행 취소</string>
+    <string name="core_clear_filters">필터 지우기</string>
+    <string name="core_copy">복사</string>
+    <string name="core_copied_to_clipboard">클립보드에 복사했습니다</string>
+    <string name="core_play_from_start">처음부터 재생</string>
+    <string name="core_restart">처음부터 재생</string>
+    <string name="core_send_now">지금 보내기</string>
+    <string name="core_search">검색</string>
+    <string name="core_stop_playback">재생 중지</string>
+    <string name="core_select_all">모두 선택</string>
+    <string name="core_mark_all_seen">모두 시청한 것으로 표시</string>
+    <string name="core_loading">로드 중…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_quick_actions">빠른 작업</string>
+    <string name="core_action_play">재생</string>
+    <string name="core_action_mark_watched">시청한 것으로 표시</string>
+    <string name="core_action_mark_unwatched">시청하지 않은 것으로 표시</string>
+    <string name="core_action_download">다운로드</string>
+    <string name="core_action_add_to_playlist">재생목록에 추가</string>
+    <string name="core_action_details">세부정보 보기</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->
@@ -576,6 +602,44 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">Radarr/Sonarr의 다운로드 대기열 진행률 및 곧 출시될 캘린더입니다</string>
     <string name="ss_arr_settings_title">Radarr / Sonarr 서버</string>
     <string name="ss_arr_settings_subtitle">다이렉트 Radarr/Sonarr 서버 연결을 설정합니다</string>
+    <string name="ss_sign_out_from_server_title">서버에서 로그아웃</string>
+    <string name="ss_sign_out_from_server_subtitle">서버에서 이 기기의 세션을 취소합니다</string>
+    <string name="ss_screensaver_show_title_title">제목 표시</string>
+    <string name="ss_screensaver_show_title_subtitle">미디어 제목 표시</string>
+    <string name="ss_screensaver_categories_title">카테고리</string>
+    <string name="ss_screensaver_categories_subtitle">표시할 라이브러리 유형 선택</string>
+    <string name="ss_screensaver_slideshow_interval_title">슬라이드쇼 간격</string>
+    <string name="ss_screensaver_slideshow_interval_subtitle">이미지 변경 사이의 시간</string>
+    <string name="ss_screensaver_ken_burns_title">Ken Burns 효과</string>
+    <string name="ss_screensaver_ken_burns_subtitle">팬 및 줌 애니메이션</string>
+    <string name="ss_screensaver_transition_style_title">전환 스타일</string>
+    <string name="ss_screensaver_transition_style_subtitle">화면 보호기가 이미지를 전환하는 방식</string>
+    <string name="ss_home_backdrop_title">홈 배경</string>
+    <string name="ss_home_backdrop_subtitle">히어로 아트워크를 앰비언트 배경으로 블러</string>
+    <string name="ss_compact_episode_list_title">간결한 에피소드 목록</string>
+    <string name="ss_compact_episode_list_subtitle">모바일에서 가로 행 대신 세로 목록으로 에피소드 표시</string>
+    <string name="ss_nav_bar_customization_title">내비게이션 바</string>
+    <string name="ss_nav_bar_customization_subtitle">내비게이션 바 항목 표시, 숨기기, 순서 변경</string>
+    <string name="ss_nav_hide_on_scroll_title">스크롤 시 숨기기</string>
+    <string name="ss_nav_hide_on_scroll_subtitle">아래로 스크롤하면 바 숨김</string>
+    <string name="ss_newsletter_sections_title">뉴스레터 레이아웃 및 설정</string>
+    <string name="ss_newsletter_sections_subtitle">뉴스레터에 표시할 섹션 선택</string>
+    <string name="ss_dialogue_boost_strength_title">대화 부스트 강도</string>
+    <string name="ss_dialogue_boost_strength_subtitle">대화 증폭 수준</string>
+    <string name="ss_mpv_extra_config_title">고급 구성</string>
+    <string name="ss_mpv_extra_config_subtitle">원시 mpv 옵션(mpv.conf 스타일)</string>
+    <string name="ss_reset_engine_defaults_title">기본값으로 재설정</string>
+    <string name="ss_reset_engine_defaults_subtitle">MPV, LibVLC 또는 ExoPlayer 설정 복원</string>
+    <string name="ss_audio_prefetch_backfill_title">백필 수</string>
+    <string name="ss_audio_prefetch_backfill_subtitle">다시 재생을 위해 캐시에 보관된 최근 트랙</string>
+    <string name="ss_audio_cache_clear_title">오디오 캐시 지우기</string>
+    <string name="ss_audio_cache_clear_subtitle">캐시된 모든 오디오 데이터 삭제</string>
+    <string name="ss_subtitle_tester_title">자막 스타일 테스터</string>
+    <string name="ss_subtitle_tester_subtitle">엔진 간 스타일 미리 보기</string>
+    <string name="ss_subtitle_provider_settings_title">자막 제공자</string>
+    <string name="ss_subtitle_provider_settings_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
+    <string name="ss_MEDIA_CARD_PEEK_title">길게 눌러 미리보기</string>
+    <string name="ss_MEDIA_CARD_PEEK_subtitle">미디어 카드를 길게 눌러 흐려진 미리보기를 보고, 놓으면 닫기</string>
 
     <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
     <string name="core_segment_intro">인트로</string>

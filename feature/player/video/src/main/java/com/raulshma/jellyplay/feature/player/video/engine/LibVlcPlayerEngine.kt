@@ -12,11 +12,13 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.model.parseLanguageFromLabel
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
@@ -53,6 +55,7 @@ class LibVlcPlayerEngine(
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
 
     override val capabilities = EngineCapabilityMatrix.LIBVLC
+    override val displayName: String = PlayerType.LIBVLC.displayName
 
     private var libVLC: LibVLC? = null
     val libVlc: LibVLC? get() = libVLC
@@ -678,39 +681,11 @@ class LibVlcPlayerEngine(
     }
 
     private fun Media.applySubtitleStyle(style: SubtitleStyle) {
-        if (style.applyCustomStyle) {
-            val fontColor = style.fontColor.value and 0x00FFFFFF
-            val backgroundColor = style.backgroundColor.value and 0x00FFFFFF
-            val edgeColor = style.edgeColor.value and 0x00FFFFFF
-
-            addOption(":freetype-rel-fontsize=${style.fontSize}")
-            addOption(":freetype-color=$fontColor")
-            addOption(":freetype-background-color=$backgroundColor")
-            addOption(":freetype-background-opacity=${(style.backgroundOpacity * 255).toInt().coerceIn(0, 255)}")
-            addOption(":freetype-outline-color=$edgeColor")
-            when (style.edgeType) {
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.NONE -> addOption(":freetype-outline-thickness=0")
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> addOption(":freetype-outline-thickness=2")
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> {
-                    addOption(":freetype-outline-thickness=0")
-                    addOption(":freetype-shadow-opacity=255")
-                }
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.RAISED,
-                com.raulshma.jellyplay.core.model.SubtitleEdgeType.DEPRESSED -> {
-                    addOption(":freetype-outline-thickness=1")
-                    addOption(":freetype-shadow-opacity=255")
-                }
-            }
-        } else {
-            // Default styling matching MPV (white text, transparent background, black outline and shadow)
-            addOption(":freetype-color=16777215") // White (0xFFFFFF)
-            addOption(":freetype-background-color=0") // Black/transparent
-            addOption(":freetype-background-opacity=0") // Transparent
-            addOption(":freetype-outline-color=0") // Black
-            addOption(":freetype-outline-thickness=2")
-            addOption(":freetype-shadow-opacity=255")
-            addOption(":freetype-rel-fontsize=${style.fontSize}")
-        }
+        // All `:freetype-*` color/size/opacity options come from the tested
+        // pure mapping — this is the single source, so the shipped path is the
+        // tested path (no inline shadow). Branching on applyCustomStyle lives
+        // inside freetypeOptions; the dispatcher picks custom vs default.
+        LibVlcSubtitleStyleMapping.freetypeOptions(style).forEach(::addOption)
 
         // The freetype module accepts a font file path. Supplying the same
         // bundled fallback used by the other engines makes its synthetic
@@ -720,9 +695,11 @@ class LibVlcPlayerEngine(
             .typefaceOptions(style, fontProvider.bundledFallbackPath())
             .forEach(::addOption)
 
+        // Vertical margin in pixels from the bottom of the frame. subMarginPixels
+        // clamps verticalPosition to [0, 0.4] — the inline copy previously used
+        // an unclamped raw fraction, which could push captions off-screen.
         val screenHeight = context.resources.displayMetrics.heightPixels
-        val marginPixels = (style.verticalPosition * screenHeight).toInt()
-        addOption(":sub-margin=$marginPixels")
+        addOption(LibVlcSubtitleStyleMapping.subMarginPixels(style, screenHeight))
     }
 
     override fun setAspectRatio(mode: Int, ratio: Float?) {

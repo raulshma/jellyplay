@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 
@@ -28,6 +30,15 @@ import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
  *    engine player for the cast receiver's player).
  *  - [release]: tears down the active session (idempotent).
  *
+ * Both builders construct a [MediaLibrarySession] (not a plain [MediaSession]).
+ * The host service [com.raulshma.jellyplay.core.data.playback.JellyPlayPlaybackService]
+ * is a `MediaLibraryService` whose `onGetSession` casts the current session to
+ * `MediaLibrarySession?`; a plain `MediaSession` would cast to null and the
+ * service would reject new controller connections. Media-button / headset-hook
+ * events arrive as *new* controller connections, so returning null broke
+ * background pause until the app was restarted. Video never browses the library,
+ * so [NO_OP_LIBRARY_CALLBACK] rejects browse calls by default.
+ *
  * The controller is the sole owner of the [MediaSession] reference; the VM no
  * longer holds a `videoMediaSession` field.
  */
@@ -44,10 +55,14 @@ internal class MediaSessionController(
     /**
      * Build + activate a session for the current item, pinning [title] /
      * [subtitle] + the item's artwork. No-op if no underlying player is bound.
-     * Releases any prior session first.
+     *
+     * The prior session is released *atomically* by [PlaybackSessionManager.setActiveSession]
+     * when the new session takes the slot — do NOT release it here first. Releasing
+     * here briefly nulls the singleton slot, which fires `onSessionChanged(null)`
+     * and `stopSelf`s the service mid-reload; under background-start restrictions
+     * the service then cannot be restarted (see [PlaybackSessionManager.startPlaybackService]).
      */
     fun createForItem(itemId: String, title: String, subtitle: String) {
-        release()
         val player = getPlayer() ?: return
 
         val artworkUri = getImageUrl(itemId, ARTWORK_MAX_WIDTH)
@@ -62,7 +77,7 @@ internal class MediaSessionController(
             override fun getMediaMetadata(): MediaMetadata = pinnedMetadata
         }
 
-        activate(MediaSession.Builder(context, sessionPlayer)
+        activate(MediaLibrarySession.Builder(context, sessionPlayer, NO_OP_LIBRARY_CALLBACK)
             .setId("${SESSION_ID_PREFIX}$itemId")
             .build())
     }
@@ -70,11 +85,10 @@ internal class MediaSessionController(
     /**
      * Build + activate a bare session around [player] with the given [sessionId]
      * (used by background-cast detach/reattach, which swap the player surface).
-     * Releases any prior session first.
+     * Atomic replace semantics — see [createForItem].
      */
     fun createForPlayer(player: Player, sessionId: String) {
-        release()
-        activate(MediaSession.Builder(context, player)
+        activate(MediaLibrarySession.Builder(context, player, NO_OP_LIBRARY_CALLBACK)
             .setId(sessionId)
             .build())
     }
@@ -97,5 +111,16 @@ internal class MediaSessionController(
     private companion object {
         const val SESSION_ID_PREFIX = "jellyplay_video_"
         const val ARTWORK_MAX_WIDTH = 300
+
+        /**
+         * Video playback never exposes a browsable library; the callback exists
+         * only to satisfy [MediaLibrarySession]'s constructor so the host
+         * `MediaLibraryService` will serve the session from `onGetSession`
+         * (and thus accept media-button / headset-hook controller connections).
+         * The base [MediaLibrarySession.Callback] returns
+         * `RESULT_ERROR_NOT_SUPPORTED` for every library method by default, which
+         * is the correct behaviour for a non-browsable video session.
+         */
+        val NO_OP_LIBRARY_CALLBACK = object : MediaLibrarySession.Callback {}
     }
 }

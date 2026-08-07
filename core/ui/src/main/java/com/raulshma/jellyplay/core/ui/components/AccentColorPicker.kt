@@ -34,6 +34,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -152,6 +157,15 @@ fun SwatchCircle(
     Box(
         modifier = modifier
             .size(44.dp)
+            // each swatch was an unlabeled 44dp Box — TalkBack
+            // only announced "selected". Expose the colour name as the node's
+            // content description + RadioButton role + selected state so the
+            // picker reads "Sapphire Blue, selected" / "Coral Orange".
+            .semantics(mergeDescendants = true) {
+                contentDescription = swatch.displayName
+                role = Role.RadioButton
+                selected = isSelected
+            }
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -170,9 +184,12 @@ fun SwatchCircle(
         contentAlignment = Alignment.Center
     ) {
         if (isSelected) {
+            // Decorative check — the merged-descendants semantics above already
+            // convey selected state, so this icon must be unlabeled or TalkBack
+            // would read "selected" twice.
             Icon(
                 imageVector = Tabler.Outline.Check,
-                contentDescription = stringResource(R.string.core_ui_selected),
+                contentDescription = null,
                 tint = checkTint,
                 modifier = Modifier.size(18.dp)
             )
@@ -185,6 +202,7 @@ fun DynamicSwatchCircle(
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    swatchName: String = stringResource(R.string.core_ui_dynamic_colors),
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.15f)
     val interactionSource = remember { MutableInteractionSource() }
@@ -208,13 +226,20 @@ fun DynamicSwatchCircle(
             Color(0xFF34A853), // Green
             Color(0xFFFBBC05), // Yellow
             Color(0xFAEA4335), // Red
-            Color(0xFF4285F4)  // Blue
+            Color(0xFF4285F4) // Blue
         )
     )
 
     Box(
         modifier = modifier
             .size(44.dp)
+            // same accessibility treatment as SwatchCircle — the
+            // Dynamic swatch announces its label + selected state for TalkBack.
+            .semantics(mergeDescendants = true) {
+                contentDescription = swatchName
+                role = Role.RadioButton
+                selected = isSelected
+            }
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -239,9 +264,10 @@ fun DynamicSwatchCircle(
                 .background(Color.Black.copy(alpha = 0.35f)),
             contentAlignment = Alignment.Center,
         ) {
+            // Decorative wand — merged-descendants semantics already label the node.
             Icon(
                 imageVector = Tabler.Outline.Wand,
-                contentDescription = stringResource(R.string.core_ui_dynamic_colors),
+                contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(16.dp)
             )
@@ -398,9 +424,9 @@ fun SynthwaveAccentPicker(
 
         val accents = listOf(
             "magenta" to Color(0xFFFF007F), // Neon Magenta
-            "cyan" to Color(0xFF00F0FF),    // Neon Cyan
-            "violet" to Color(0xFF9D00FF),  // Neon Violet
-            "orange" to Color(0xFFFF5E00)   // Neon Orange
+            "cyan" to Color(0xFF00F0FF), // Neon Cyan
+            "violet" to Color(0xFF9D00FF), // Neon Violet
+            "orange" to Color(0xFFFF5E00) // Neon Orange
         )
 
         LazyRow(
@@ -433,6 +459,15 @@ fun SynthwaveAccentPicker(
                 Box(
                     modifier = Modifier
                         .size(44.dp)
+                        // mirror SwatchCircle a11y semantics so
+                        // TalkBack reads "ocean, selected" instead of just
+                        // "selected" (these themed pickers were missed when
+                        // SwatchCircle / DynamicSwatchCircle were labelled).
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = accentName
+                            role = Role.RadioButton
+                            selected = isSelected
+                        }
                         .graphicsLayer {
                             scaleX = scale
                             scaleY = scale
@@ -453,7 +488,9 @@ fun SynthwaveAccentPicker(
                     if (isSelected) {
                         Icon(
                             imageVector = Tabler.Outline.Check,
-                            contentDescription = stringResource(R.string.core_ui_selected),
+                            // Decorative check — the merged-descendants semantics
+                            // above already convey selected state.
+                            contentDescription = null,
                             tint = checkTint,
                             modifier = Modifier.size(18.dp)
                         )
@@ -544,6 +581,15 @@ fun SoothingAccentPicker(
                 Box(
                     modifier = Modifier
                         .size(44.dp)
+                        // mirror SwatchCircle a11y semantics so
+                        // TalkBack reads "sage, selected" instead of just
+                        // "selected" (themed pickers were missed when
+                        // SwatchCircle / DynamicSwatchCircle were labelled).
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = accentName
+                            role = Role.RadioButton
+                            selected = isSelected
+                        }
                         .graphicsLayer {
                             scaleX = scale
                             scaleY = scale
@@ -564,7 +610,9 @@ fun SoothingAccentPicker(
                     if (isSelected) {
                         Icon(
                             imageVector = Tabler.Outline.Check,
-                            contentDescription = stringResource(R.string.core_ui_selected),
+                            // Decorative check — the merged-descendants semantics
+                            // above already convey selected state.
+                            contentDescription = null,
                             tint = checkTint,
                             modifier = Modifier.size(18.dp)
                         )

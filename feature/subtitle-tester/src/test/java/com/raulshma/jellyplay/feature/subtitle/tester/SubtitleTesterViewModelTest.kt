@@ -1,10 +1,10 @@
 package com.raulshma.jellyplay.feature.subtitle.tester
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
@@ -37,10 +37,10 @@ class SubtitleTesterViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var engineFactory: PlayerEngineFactory
-    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var subtitleLanguageStore: SubtitleLanguageStore
     private lateinit var fontProvider: FontProvider
     private lateinit var fakeEngine: MediaEngine
-    private lateinit var prefsFlow: MutableStateFlow<UserPreferences>
+    private lateinit var subtitleFlow: MutableStateFlow<SubtitleSlice>
     private lateinit var tempFilesDir: java.io.File
     private val appContext: Context = mockk(relaxed = true)
 
@@ -66,14 +66,14 @@ class SubtitleTesterViewModelTest {
         engineFactory = mockk(relaxed = true)
         every { engineFactory.create(any()) } returns fakeEngine
 
-        prefsFlow = MutableStateFlow(UserPreferences())
-        preferencesStore = mockk(relaxed = true)
-        every { preferencesStore.preferences } returns prefsFlow
+        subtitleFlow = MutableStateFlow(SubtitleSlice())
+        subtitleLanguageStore = mockk(relaxed = true)
+        every { subtitleLanguageStore.subtitle } returns subtitleFlow
         fontProvider = mockk(relaxed = true)
 
         viewModel = SubtitleTesterViewModel(
             engineFactory = engineFactory,
-            preferencesStore = preferencesStore,
+            subtitleLanguageStore = subtitleLanguageStore,
             fontProvider = fontProvider,
             context = appContext,
         )
@@ -91,7 +91,7 @@ class SubtitleTesterViewModelTest {
     fun init_snapshotsCurrentPrefsAsWorkingAndOriginal() {
         val sdrStyle = SubtitleStyle(fontSize = 30, fontColor = SubtitleColor.RED)
         val hdrStyle = SubtitleStyle(fontSize = 40)
-        prefsFlow.value = UserPreferences(
+        subtitleFlow.value = SubtitleSlice(
             subtitleStyle = sdrStyle,
             hdrSubtitleStyle = hdrStyle,
             hdrSubtitleStyleEnabled = true,
@@ -99,7 +99,7 @@ class SubtitleTesterViewModelTest {
         // Re-create VM to consume the new prefs.
         viewModel = SubtitleTesterViewModel(
             engineFactory = engineFactory,
-            preferencesStore = preferencesStore,
+            subtitleLanguageStore = subtitleLanguageStore,
             fontProvider = fontProvider,
             context = appContext,
         )
@@ -175,9 +175,9 @@ class SubtitleTesterViewModelTest {
         viewModel.applyAndExit { exited = true }
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify { preferencesStore.setSubtitleStyle(newSdr.copy(applyCustomStyle = true)) }
-        coVerify { preferencesStore.setHdrSubtitleStyle(newHdr.copy(applyCustomStyle = true)) }
-        coVerify { preferencesStore.setHdrSubtitleStyleEnabled(true) }
+        coVerify { subtitleLanguageStore.setSubtitleStyle(newSdr.copy(applyCustomStyle = true)) }
+        coVerify { subtitleLanguageStore.setHdrSubtitleStyle(newHdr.copy(applyCustomStyle = true)) }
+        coVerify { subtitleLanguageStore.setHdrSubtitleStyleEnabled(true) }
         assertTrue(exited)
     }
 
@@ -185,7 +185,7 @@ class SubtitleTesterViewModelTest {
     fun reset_doesNotPersist() {
         viewModel.updateStyle(viewModel.uiState.value.workingSdrStyle.copy(fontSize = 99))
         viewModel.reset()
-        coVerify(exactly = 0) { preferencesStore.setSubtitleStyle(any()) }
+        coVerify(exactly = 0) { subtitleLanguageStore.setSubtitleStyle(any()) }
     }
 
     @Test
@@ -205,7 +205,7 @@ class SubtitleTesterViewModelTest {
     @Test
     fun onCleared_releasesEngine() {
         // onCleared() is protected; invoke via reflection to exercise the release path.
-        val clearedVm = SubtitleTesterViewModel(engineFactory, preferencesStore, fontProvider, appContext)
+        val clearedVm = SubtitleTesterViewModel(engineFactory, subtitleLanguageStore, fontProvider, appContext)
         testDispatcher.scheduler.advanceUntilIdle()
         val onCleared = androidx.lifecycle.ViewModel::class.java.getDeclaredMethod("onCleared")
         onCleared.isAccessible = true
@@ -285,7 +285,7 @@ class SubtitleTesterViewModelTest {
 
     @Test
     fun onCleared_clearsActiveEngine() {
-        val clearedVm = SubtitleTesterViewModel(engineFactory, preferencesStore, fontProvider, appContext)
+        val clearedVm = SubtitleTesterViewModel(engineFactory, subtitleLanguageStore, fontProvider, appContext)
         testDispatcher.scheduler.advanceUntilIdle()
         assertNotNull(clearedVm.activeEngine.value)
 

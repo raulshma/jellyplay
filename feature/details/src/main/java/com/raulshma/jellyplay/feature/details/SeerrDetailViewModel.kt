@@ -5,9 +5,9 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
@@ -39,24 +39,15 @@ private const val TAG = "SeerrDetailVM"
 class SeerrDetailViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
-    private val preferencesStore: UserPreferencesStore,
+    private val projections: PreferenceProjections,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val mediaRepository: MediaRepository,
 ) : JellyPlayViewModel() {
 
-    val preferences: StateFlow<UserPreferences> = preferencesStore.preferences
-        .stateIn(
-            scope = scope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = UserPreferences(),
-        )
+    /** Artwork theme + inline-trailer autoplay, projected centrally off the store slices. */
+    val preferences: StateFlow<SeerrDetailPreferences> = projections.seerrDetailPreferences
 
     val seerrPreferences: StateFlow<SeerrPreferences> = seerrPreferencesStore.preferences
-        .stateIn(
-            scope = scope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = SeerrPreferences(),
-        )
 
     // Single source of truth for Seerr-detail state. All mutations funnel
     // through [_uiState.update]. Seerr request delegate state (service details,

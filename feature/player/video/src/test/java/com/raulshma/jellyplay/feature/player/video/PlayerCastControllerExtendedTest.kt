@@ -3,9 +3,9 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.PlaybackMode
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.every
 import io.mockk.mockk
@@ -19,7 +19,7 @@ class PlayerCastControllerExtendedTest {
     private lateinit var castManager: CastManager
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
-    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var syncPlayCastStore: SyncPlayCastStore
     private lateinit var castController: PlayerCastController
     private lateinit var engine: MediaEngine
 
@@ -28,17 +28,17 @@ class PlayerCastControllerExtendedTest {
         castManager = mockk(relaxed = true)
         playbackRepository = mockk(relaxed = true)
         adaptiveBitrateManager = mockk(relaxed = true)
-        preferencesStore = mockk(relaxed = true)
+        syncPlayCastStore = mockk(relaxed = true)
         engine = mockk(relaxed = true)
 
-        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        every { syncPlayCastStore.syncPlayCast } returns MutableStateFlow(SyncPlayCastSlice())
         every { engine.isPlaying } returns MutableStateFlow(false)
 
         castController = PlayerCastController(
             castManager = castManager,
             playbackRepository = playbackRepository,
             adaptiveBitrateManager = adaptiveBitrateManager,
-            preferencesStore = preferencesStore,
+            syncPlayCastStore = syncPlayCastStore,
             getEngine = { engine },
             getCurrentPlaybackMode = { PlaybackMode.AUTO },
             getSessionState = { PlayerSessionState() },

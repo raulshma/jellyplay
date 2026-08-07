@@ -33,17 +33,26 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmState
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
+import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
+import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.SeerrPrefetchCallback
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
+import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -92,6 +101,42 @@ fun MediaDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarContext = LocalContext.current
 
+    // Series/season mark-played cascades recurse into every episode and clear all
+    // resume positions, so they're gated behind a confirm
+    // Direction is tracked alongside so the dialog shows the right verb/message
+    // for a watched vs unwatched flip.
+    val markSeriesConfirm = rememberConfirmState()
+    var markSeriesToWatched by remember { mutableStateOf(true) }
+    val markSeasonConfirm = rememberConfirmState()
+    var markSeasonToWatched by remember { mutableStateOf(true) }
+
+    // Quick actions for row items (related/collection/episode cards) and the
+    // TV Menu key on the focused card. The controller is
+    // provided to every PosterCard/EpisodeCard below via CompositionLocal.
+    val quickActionController = rememberMediaQuickActionController(
+        resolveActions = remember(viewModel) { { item: MediaItem -> detailQuickActions(item) } },
+        executeAction = remember(viewModel, onPlayClick, onItemClick) {
+            { item: MediaItem, action: QuickAction ->
+                when (action) {
+                    QuickAction.PLAY -> onPlayClick(
+                        item.id,
+                        null,
+                        item.playbackPositionTicks ?: 0L,
+                        viewModel.selectedSubtitleIndex,
+                        viewModel.selectedAudioIndex,
+                    )
+                    QuickAction.MARK_WATCHED -> viewModel.markRowItemPlayed(item, played = true)
+                    QuickAction.MARK_UNWATCHED -> viewModel.markRowItemPlayed(item, played = false)
+                    QuickAction.DETAILS -> onItemClick(item.id)
+                    else -> Unit
+                }
+            }
+        },
+    )
+    // TV-only: the card currently holding D-pad focus, so the Menu key can open
+    // its quick actions.
+    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
+
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message ->
             val text = when (message) {
@@ -137,14 +182,31 @@ fun MediaDetailScreen(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onDpadKey(
+                onMenu = {
+                    // TV remote Menu button: open the focused card's quick
+                    // actions. The focused card is tracked by the
+                    // rows via onFocusedMediaItem.
+                    val focused = tvFocusedItem
+                    if (focused != null) {
+                        quickActionController.show(focused)
+                        true
+                    } else {
+                        false
+                    }
+                },
+            ),
+    ) {
         ArtworkThemeWrapper(
             imageUrl = backdropUrl,
-            dynamicTheming = preferences.dynamicTheming,
+            dynamicTheming = preferences.theme.dynamicTheming,
             darkTheme = !outerIsLightTheme,
-            oledMode = preferences.oledMode,
-            colorStyle = preferences.colorStyle,
-            accentColorSwatch = preferences.accentColorSwatch,
+            oledMode = preferences.theme.oledMode,
+            colorStyle = preferences.theme.colorStyle,
+            accentColorSwatch = preferences.theme.accentColorSwatch,
         ) {
             val downloadFlow = remember(itemId) { viewModel.getDownloadFlow(itemId) }
             val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
@@ -207,6 +269,7 @@ fun MediaDetailScreen(
                     isDownloadingSeries = uiState.isDownloadingSeries,
                     activeDownload = activeDownload,
                     isLoading = uiState.isLoading,
+                    isRefreshing = uiState.isRefreshing,
                     error = uiState.error,
                     isAccessDenied = uiState.isAccessDenied,
                     albumTracks = uiState.albumTracks,
@@ -236,6 +299,7 @@ fun MediaDetailScreen(
                         getBackdropUrl = rememberedGetBackdropUrl,
                         getSeerrPosterUrl = rememberedGetSeerrPosterUrl,
                         onRetry = { viewModel.loadItem(itemId) },
+                        onRefresh = { viewModel.forceRefresh() },
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
                             onPlayClick(
                                 playItemId,
@@ -253,10 +317,33 @@ fun MediaDetailScreen(
                             viewModel.prepareDownloadSheetEpisodes()
                         },
                         onToggleFavorite = { viewModel.toggleFavorite() },
-                        onMarkPlayed = { viewModel.markPlayed() },
-                        onMarkUnplayed = { viewModel.markUnplayed() },
-                        onMarkSeasonPlayed = { seasonId -> viewModel.markSeasonPlayed(seasonId) },
-                        onMarkSeasonUnplayed = { seasonId -> viewModel.markSeasonUnplayed(seasonId) },
+                        onMarkPlayed = {
+                            // A series mark recurses into every episode and clears every
+                            // resume position; confirm first. Single movies/episodes flip
+                            // immediately (trivially reversible via the same button).
+                            if (currentItem?.mediaType == MediaType.SERIES) {
+                                markSeriesToWatched = true
+                                markSeriesConfirm.request { viewModel.markPlayed() }
+                            } else {
+                                viewModel.markPlayed()
+                            }
+                        },
+                        onMarkUnplayed = {
+                            if (currentItem?.mediaType == MediaType.SERIES) {
+                                markSeriesToWatched = false
+                                markSeriesConfirm.request { viewModel.markUnplayed() }
+                            } else {
+                                viewModel.markUnplayed()
+                            }
+                        },
+                        onMarkSeasonPlayed = { seasonId ->
+                            markSeasonToWatched = true
+                            markSeasonConfirm.request { viewModel.markSeasonPlayed(seasonId) }
+                        },
+                        onMarkSeasonUnplayed = { seasonId ->
+                            markSeasonToWatched = false
+                            markSeasonConfirm.request { viewModel.markSeasonUnplayed(seasonId) }
+                        },
                         onSubtitleSelect = { idx: Int? -> viewModel.selectSubtitle(idx) },
                         onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },
                         onItemClick = onItemClick,
@@ -267,6 +354,9 @@ fun MediaDetailScreen(
                         },
                         onEpisodesDescendingChange = { descending: Boolean ->
                             viewModel.setEpisodesDescending(descending)
+                        },
+                        onCompactEpisodeListChange = { enabled: Boolean ->
+                            viewModel.setCompactEpisodeList(enabled)
                         },
                         onBack = onBack,
                         onSeerrRequest = { item: SeerrSearchItem -> seerrRequestItem = item },
@@ -280,6 +370,8 @@ fun MediaDetailScreen(
                         onShowFromContinueWatching = { viewModel.showFromContinueWatching() },
                         onManageSeries = { onManageSeries(itemId) },
                         onAddToPlaylist = { viewModel.openPlaylistPicker() },
+                        onMediaQuickActions = { item -> quickActionController.show(item) },
+                        onFocusedMediaItem = { item -> tvFocusedItem = item },
                     )
                 }
 
@@ -288,11 +380,15 @@ fun MediaDetailScreen(
                     provider
                 }
 
-                DetailContent(
-                    state = state,
-                    callbacks = callbacks,
-                    availableStorageProvider = availableStorageProvider,
-                )
+                CompositionLocalProvider(
+                    LocalMediaQuickActionController provides quickActionController,
+                ) {
+                    DetailContent(
+                        state = state,
+                        callbacks = callbacks,
+                        availableStorageProvider = availableStorageProvider,
+                    )
+                }
 
                 // Seerr request dialog
                 seerrRequestItem?.let { item ->
@@ -386,14 +482,48 @@ fun MediaDetailScreen(
             }
         }
 
-        SnackbarHost(
+        com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(bottom = 80.dp),
-        ) { data ->
-            Snackbar(snackbarData = data)
+        )
+
+        // Series mark-played confirm : watched vs unwatched differ only in verb.
+        if (markSeriesConfirm.isVisible) {
+            val title = stringResource(
+                if (markSeriesToWatched) R.string.detail_mark_series_watched_confirm_title
+                else R.string.detail_mark_series_unwatched_confirm_title,
+            )
+            val message = stringResource(
+                if (markSeriesToWatched) R.string.detail_mark_series_watched_confirm_message
+                else R.string.detail_mark_series_unwatched_confirm_message,
+            )
+            markSeriesConfirm.ConfirmDialog(
+                title = title,
+                message = message,
+                confirmText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_confirm),
+                dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+            )
+        }
+
+        // Season mark-played confirm.
+        if (markSeasonConfirm.isVisible) {
+            val title = stringResource(
+                if (markSeasonToWatched) R.string.detail_mark_season_watched_confirm_title
+                else R.string.detail_mark_season_unwatched_confirm_title,
+            )
+            val message = stringResource(
+                if (markSeasonToWatched) R.string.detail_mark_season_watched_confirm_message
+                else R.string.detail_mark_season_unwatched_confirm_message,
+            )
+            markSeasonConfirm.ConfirmDialog(
+                title = title,
+                message = message,
+                confirmText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_confirm),
+                dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+            )
         }
 
         activeTrailerKey?.let { key ->
@@ -425,5 +555,24 @@ fun MediaDetailScreen(
                 }
             }
         }
+
+        // Long-press / TV-Menu quick actions for row cards.
+        MediaQuickActionHost(quickActionController)
     } // Box
+}
+
+/**
+ * Which quick actions apply to a row item on the detail screen
+ * Series/movies/episodes get play/mark-watched/details; anything else (people,
+ * videos) is excluded by the card renderers anyway.
+ */
+private fun detailQuickActions(item: MediaItem): List<QuickAction> = buildList {
+    when (item.mediaType) {
+        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE -> {
+            add(QuickAction.PLAY)
+            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
+            add(QuickAction.DETAILS)
+        }
+        else -> Unit
+    }
 }

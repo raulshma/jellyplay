@@ -1,10 +1,16 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.lifecycle.SavedStateHandle
+import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
+import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.OfflineSyncState
+import com.raulshma.jellyplay.core.model.ResyncResult
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,6 +31,10 @@ class OfflineDetailViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
     private val playbackRepository: PlaybackRepository,
     private val mediaRepository: MediaRepository,
+    private val libraryStore: LibraryStore,
+    private val editor: PreferencesEditor,
+    private val syncManager: OfflineSyncManager,
+    private val downloadIntake: DownloadIntake,
     @Suppress("unused") savedStateHandle: SavedStateHandle,
 ) : JellyPlayViewModel() {
 
@@ -33,6 +43,19 @@ class OfflineDetailViewModel @Inject constructor(
     val item: StateFlow<OfflineMediaItem?> =
         _itemId.flatMapLatest { id -> if (id == null) flowOf(null) else offlineRepository.getOfflineDetail(id) }
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Freshness state for the loaded item. Drives the "update available" badge;
+     * updates reactively as the sync manager flips the persisted flags.
+     */
+    val syncState: StateFlow<OfflineSyncState?> =
+        _itemId.flatMapLatest { id ->
+            if (id == null) flowOf(null) else offlineRepository.getOfflineSyncState(id)
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Resync operation status, for the inline progress affordance. */
+    private val _resyncState = MutableStateFlow<ResyncUiState>(ResyncUiState.Idle)
+    val resyncState: StateFlow<ResyncUiState> = _resyncState
 
     /** Children (e.g. album tracks) for the item, with download rows joined. */
     val children: StateFlow<List<OfflineMediaItem>> =
@@ -69,6 +92,14 @@ class OfflineDetailViewModel @Inject constructor(
                 combine(perSeason) { pairs -> pairs.toMap() }
             }
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Compact vertical episode list preference (shared with the online detail screen). */
+    val compactEpisodeList: StateFlow<Boolean> =
+        libraryStore.library.map { it.compactEpisodeList }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setCompactEpisodeList(enabled: Boolean) =
+        editor.edit { library.setCompactEpisodeList(enabled) }
 
     /** Drives the screen's data. Called once from a LaunchedEffect(itemId). */
     fun load(itemId: String) {
@@ -117,4 +148,80 @@ class OfflineDetailViewModel @Inject constructor(
     fun markSeasonUnplayed(seasonId: String) {
         launch { mediaRepository.markUnplayed(seasonId) }
     }
+
+    /**
+     * TTL-gated server freshness check. Safe to call on every screen entry —
+     * the manager no-ops (network-wise) when within the per-item TTL or when
+     * offline, so this is cheap. The resulting flag re-emits via [syncState].
+     */
+    fun checkForUpdates() {
+        val id = _itemId.value ?: return
+        launch { syncManager.checkForUpdates(id) }
+    }
+
+    /**
+     * Re-syncs the loaded item's metadata and changed images. Surfaces progress
+     * via [resyncState]; the badge clears reactively once the baseline updates.
+     * Does NOT re-download the media file even if [OfflineSyncState.mediaFileChanged].
+     */
+    fun resync() {
+        val id = _itemId.value ?: return
+        if (_resyncState.value is ResyncUiState.Working) return
+        launch {
+            _resyncState.value = ResyncUiState.Working
+            val result = syncManager.resyncItem(id)
+            _resyncState.value = if (result.succeeded) {
+                ResyncUiState.Done(result)
+            } else {
+                ResyncUiState.Error(result.steps.lastOrNull { !it.success }?.message ?: "Resync failed")
+            }
+        }
+    }
+
+    fun clearResyncState() {
+        if (_resyncState.value !is ResyncUiState.Working) _resyncState.value = ResyncUiState.Idle
+    }
+
+    /**
+     * Re-downloads the media file when the server's MediaSource changed (a
+     * metadata/images resync can't fix that). Fetches fresh detail, removes the
+     * stale offline item (clearing its file + row + stale flags), then routes
+     * through [DownloadIntake.start] — the same single-item path the online
+     * detail screen uses — so the new file + fresh baseline land together.
+     * Surfaces progress via [resyncState] (reuses the Working/Done/Error states).
+     */
+    fun redownloadMedia() {
+        val id = _itemId.value ?: return
+        if (_resyncState.value is ResyncUiState.Working) return
+        launch {
+            _resyncState.value = ResyncUiState.Working
+            _resyncState.value = try {
+                mediaRepository.invalidateDetailCache(id)
+                val detail = mediaRepository.getMediaDetail(id).getOrNull()
+                if (detail == null) {
+                    ResyncUiState.Error("Couldn't load latest details")
+                } else {
+                    offlineRepository.deleteOfflineItem(id)
+                    val result = downloadIntake.start(detail)
+                    if (result.downloadItem != null) ResyncUiState.Done(
+                        com.raulshma.jellyplay.core.model.ResyncResult(
+                            itemId = id,
+                            steps = emptyList(),
+                            mediaFileChanged = false,
+                        ),
+                    ) else ResyncUiState.Error(result.error ?: "Re-download failed")
+                }
+            } catch (e: Exception) {
+                ResyncUiState.Error(e.message ?: "Re-download failed")
+            }
+        }
+    }
+}
+
+/** UI-facing resync status for the offline detail screen. */
+sealed interface ResyncUiState {
+    data object Idle : ResyncUiState
+    data object Working : ResyncUiState
+    data class Done(val result: ResyncResult) : ResyncUiState
+    data class Error(val message: String) : ResyncUiState
 }

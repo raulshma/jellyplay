@@ -13,7 +13,7 @@ import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,7 +52,7 @@ class CastManager @Inject constructor(
     private val googleCastStrategy: GoogleCastStrategy,
     private val dlnaCastStrategy: DlnaCastStrategy,
     private val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
-    private val userPreferencesStore: UserPreferencesStore,
+    private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
 ) {
     companion object {
         private const val TAG = "CastManager"
@@ -272,7 +272,7 @@ class CastManager @Inject constructor(
      * needs a discovery-capable default strategy).
      */
     private fun applyDefaultCastingStrategy() {
-        val pref = userPreferencesStore.preferences.value.defaultCastingStrategy
+        val pref = syncPlayCastStore.syncPlayCast.value.defaultCastingStrategy
         activeStrategyName = when (pref) {
             CastingStrategy.PREFER_DLNA -> STRATEGY_DLNA
             CastingStrategy.PREFER_CAST, CastingStrategy.ASK -> STRATEGY_GOOGLE
@@ -282,14 +282,14 @@ class CastManager @Inject constructor(
 
     /**
      * Watches discovered devices and auto-connects to the user's
-     * [com.raulshma.jellyplay.core.model.UserPreferences.preferredRenderer]
+     * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.preferredRenderer]
      * when it appears, so frequently-used renderers are selected without
      * manual intervention.
      */
     private fun startPreferredRendererWatcher() {
         preferredRendererJob?.cancel()
         preferredRendererJob = coroutineScope.launch {
-            _allDiscoveredDevices.combine(userPreferencesStore.preferences) { devices, prefs ->
+            _allDiscoveredDevices.combine(syncPlayCastStore.syncPlayCast) { devices, prefs ->
                 devices to prefs.preferredRenderer
             }
                 .distinctUntilChanged()

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="syncplay_leave_group">退出群组</string>
+    <string name="syncplay_leave_group_confirm_title">退出群组？</string>
+    <string name="syncplay_leave_group_confirm_message">您将从观看派对中移除。</string>
     <string name="syncplay_retry">重试</string>
     <string name="syncplay_no_active_groups">没有活跃的 SyncPlay 群组</string>
     <string name="syncplay_create_group_together">创建一个群组一起观看</string>

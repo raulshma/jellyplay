@@ -55,6 +55,11 @@ data class RememberedTrack(
  *   (when [PlaybackPrefScope.SERIES]).
  * @param audioLanguage preferred audio language code (ISO-639), or null to inherit.
  * @param subtitleLanguage preferred subtitle language code (ISO-639), or null to inherit.
+ *   Mutually exclusive with [subtitleDisabled]: when one is set the other must be null.
+ * @param subtitleDisabled explicit "subtitles off" intent, or null to inherit. When `true`
+ *   the resolver forces subtitles off for this item/series instead of resolving a track.
+ *   Mutually exclusive with [subtitleLanguage] (and its role fields); the repository keeps
+ *   them consistent on write. Added in migration 41→42.
  * @param subtitleForced whether the preferred subtitle should be a forced-narrative
  *   track, or null to not care. Lets a series pin "English Forced" so the
  *   restore matcher (in `TrackSelectionHelper`) prefers forced over plain for
@@ -77,6 +82,7 @@ data class ItemPlaybackPreference(
     val key: String,
     val audioLanguage: String? = null,
     val subtitleLanguage: String? = null,
+    val subtitleDisabled: Boolean? = null,
     val subtitleForced: Boolean? = null,
     val subtitleHearingImpaired: Boolean? = null,
     val dialogueBoostStrength: EffectStrength? = null,

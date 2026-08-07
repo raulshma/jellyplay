@@ -8,12 +8,13 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import io.mockk.every
@@ -47,13 +48,14 @@ class PlayerSessionManagerExtendedTest {
         val playbackRepository = mockk<PlaybackRepository>(relaxed = true)
         val downloadRepository = mockk<DownloadRepository>(relaxed = true)
         val offlineRepository = mockk<OfflineRepository>(relaxed = true)
-        val preferencesStore = mockk<UserPreferencesStore>(relaxed = true)
+        val playbackSourceResolver = mockk<com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver>(relaxed = true)
+        val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         val playerLifecycleManager = mockk<PlayerLifecycleManager>(relaxed = true)
         val pipController = mockk<com.raulshma.jellyplay.core.data.playback.PipController>(relaxed = true)
         val adaptiveBitrateManager = mockk<AdaptiveBitrateManager>(relaxed = true)
 
-        every { preferencesStore.preferences } returns
-            MutableStateFlow(UserPreferences(preferredPlayer = PlayerType.EXTERNAL))
+        every { aggregateStore.aggregate } returns
+            MutableStateFlow(VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL)))
 
         mockkStatic(Uri::class)
         every { Uri.fromFile(any()) } returns mockk(relaxed = true)
@@ -65,7 +67,7 @@ class PlayerSessionManagerExtendedTest {
             playbackRepository = playbackRepository,
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
-            preferencesStore = preferencesStore,
+            aggregateStore = aggregateStore,
             playerLifecycleManager = playerLifecycleManager,
             pipController = pipController,
             adaptiveBitrateManager = adaptiveBitrateManager,
@@ -74,6 +76,7 @@ class PlayerSessionManagerExtendedTest {
                 okHttpClient,
                 mockk<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>(relaxed = true),
             ),
+            playbackSourceResolver = playbackSourceResolver,
         )
     }
 

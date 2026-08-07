@@ -28,6 +28,7 @@
     <string name="home_search">Search</string>
     <string name="home_clear_search">Clear search</string>
     <string name="home_search_placeholder">Search movies, shows, music…</string>
+    <string name="home_see_all">See All</string>
 
     <!-- Home floating action button menu. -->
     <string name="home_close_menu">Close menu</string>
@@ -37,6 +38,7 @@
     <string name="home_downloads">Downloads</string>
     <string name="home_play_on">Play On</string>
     <string name="home_settings">Settings</string>
+    <string name="home_switch_user">Switch User</string>
     <string name="home_going_online">Going online…</string>
     <string name="home_go_online">Go Online</string>
     <string name="home_go_offline">Go Offline</string>

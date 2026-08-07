@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.PinLockoutState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,6 +49,15 @@ class PinRateLimiter @Inject constructor(
     private val snapshot: StateFlow<Preferences> =
         dataStore.data
             .stateIn(externalScope, SharingStarted.Eagerly, emptyPreferences())
+
+    /**
+     * Reactive view of the persisted lockout deadline, for UI surfaces (e.g. the
+     * lockscreen) that re-render as the lockout ticks down. Replaces the former
+     * live read off the `UserPreferences.pinLockoutUntilEpochMs` aggregate field.
+     */
+    val pinLockoutUntilEpochMs: StateFlow<Long> =
+        snapshot.map { it[Keys.PIN_LOCKOUT_UNTIL_MS] ?: 0L }
+            .stateIn(externalScope, SharingStarted.Eagerly, 0L)
 
     fun getPinLockoutState(): PinLockoutState {
         val prefs = snapshot.value
@@ -117,7 +127,7 @@ class PinRateLimiter @Inject constructor(
         }
     }
 
-    private object Keys {
+    internal object Keys {
         val PIN_FAILED_ATTEMPTS = intPreferencesKey("pin_failed_attempts")
         val PIN_LOCKOUT_UNTIL_MS = longPreferencesKey("pin_lockout_until_ms")
     }

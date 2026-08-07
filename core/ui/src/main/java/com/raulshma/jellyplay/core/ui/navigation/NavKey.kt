@@ -25,6 +25,20 @@ sealed class Route : NavKey {
         val folderName: String,
         val collectionType: String? = null,
     ) : Route()
+    /**
+     * Library screen opened from a home-section "See All" action. Carries a
+     * [title] to display, an optional [parentId] to scope to a single library
+     * (per-library Latest Media), and a pre-applied [sortBy] / [mediaTypes]
+     * derived from the source section. Renders the same [LibraryScreen] in
+     * "section mode" — see [com.raulshma.jellyplay.feature.library.LibraryViewModel.configureSection].
+     */
+    @Serializable data class LibrarySection(
+        val title: String,
+        val parentId: String? = null,
+        val collectionType: String? = null,
+        val sortBy: String? = null,
+        val mediaTypes: List<String> = emptyList(),
+    ) : Route()
     @Serializable data object Search : Route()
     @Serializable data object LiveTv : Route()
 
@@ -295,6 +309,7 @@ val Route.isDetail: Boolean
         is Route.PersonDetail,
         is Route.ManageSeries,
         is Route.MediaInfo,
+        is Route.LibrarySection,
         is Route.CollectionDetail,
         is Route.OfflineSeries,
         is Route.OfflineDetail,

@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -187,60 +188,44 @@ internal fun DetailContent(
             isExpanded = isExpanded,
         )
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
-        ) {
-            item { Spacer(modifier = Modifier.height(scrollState.baseBackdropHeight - 150.dp)) }
-
-            item {
-                val gradientEndPx = with(LocalDensity.current) { 150.dp.toPx() }
-                val fadeBrush = remember(scrollState.backgroundColor, gradientEndPx) {
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            scrollState.backgroundColor.copy(alpha = 0.9f),
-                            scrollState.backgroundColor,
-                        ),
-                        startY = 0f,
-                        endY = gradientEndPx,
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .drawBehind { drawRect(fadeBrush) },
-                ) {
-                    if (isExpanded && adaptiveInfo.isLandscape) {
-                        DetailBodyLandscape(
-                            state = state,
-                            callbacks = callbacks,
-                            scrollState = scrollState,
-                            contentVisible = contentVisible,
-                            contentFocusRequester = contentFocusRequester,
-                            isAudio = isAudio,
-                            isAlbum = isAlbum,
-                            isExpanded = isExpanded,
-                            item = item,
-                        )
-                    } else {
-                        DetailBodyPortrait(
-                            state = state,
-                            callbacks = callbacks,
-                            scrollState = scrollState,
-                            contentVisible = contentVisible,
-                            contentFocusRequester = contentFocusRequester,
-                            isAudio = isAudio,
-                            isAlbum = isAlbum,
-                            isExpanded = isExpanded,
-                            isTv = isTv,
-                            item = item,
-                        )
-                    }
-                }
+        // Pull-to-refresh lets the user force a fresh fetch (invalidating the
+        // in-memory caches) by pulling the content down. Disabled on TV — the
+        // D-pad has no drag gesture, and the LazyColumn's tvFocusRestorer stays
+        // the outermost modifier there.
+        if (!isTv) {
+            PullToRefreshBox(
+                isRefreshing = state.isRefreshing,
+                onRefresh = callbacks.onRefresh,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                DetailScrollContent(
+                    state = state,
+                    callbacks = callbacks,
+                    listState = listState,
+                    scrollState = scrollState,
+                    contentVisible = contentVisible,
+                    contentFocusRequester = contentFocusRequester,
+                    isExpanded = isExpanded,
+                    isTv = isTv,
+                    item = item,
+                    isAudio = isAudio,
+                    isAlbum = isAlbum,
+                )
             }
+        } else {
+            DetailScrollContent(
+                state = state,
+                callbacks = callbacks,
+                listState = listState,
+                scrollState = scrollState,
+                contentVisible = contentVisible,
+                contentFocusRequester = contentFocusRequester,
+                isExpanded = isExpanded,
+                isTv = isTv,
+                item = item,
+                isAudio = isAudio,
+                isAlbum = isAlbum,
+            )
         }
 
         DetailTopBar(
@@ -265,5 +250,83 @@ internal fun DetailContent(
             },
             onDismiss = { showDownloadDialog = false },
         )
+    }
+}
+
+/**
+ * The scrollable detail body (spacer + backdrop-fade + body). Extracted so the
+ * touch path can wrap it in a [PullToRefreshBox] while the TV path keeps the
+ * [LazyColumn] at the top of the modifier chain (for [tvFocusRestorer]).
+ */
+@Composable
+private fun DetailScrollContent(
+    state: DetailContentState,
+    callbacks: DetailContentCallbacks,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    scrollState: DetailScrollState,
+    contentVisible: Boolean,
+    contentFocusRequester: androidx.compose.ui.focus.FocusRequester,
+    isExpanded: Boolean,
+    isTv: Boolean,
+    item: com.raulshma.jellyplay.core.model.MediaItem?,
+    isAudio: Boolean,
+    isAlbum: Boolean,
+) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .then(if (isTv) Modifier.tvFocusRestorer() else Modifier),
+    ) {
+        item { Spacer(modifier = Modifier.height(scrollState.baseBackdropHeight - 150.dp)) }
+
+        item {
+            val gradientEndPx = with(LocalDensity.current) { 150.dp.toPx() }
+            val fadeBrush = remember(scrollState.backgroundColor, gradientEndPx) {
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        scrollState.backgroundColor.copy(alpha = 0.9f),
+                        scrollState.backgroundColor,
+                    ),
+                    startY = 0f,
+                    endY = gradientEndPx,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .drawBehind { drawRect(fadeBrush) },
+            ) {
+                if (isExpanded && adaptiveInfo.isLandscape) {
+                    DetailBodyLandscape(
+                        state = state,
+                        callbacks = callbacks,
+                        scrollState = scrollState,
+                        contentVisible = contentVisible,
+                        contentFocusRequester = contentFocusRequester,
+                        isAudio = isAudio,
+                        isAlbum = isAlbum,
+                        isExpanded = isExpanded,
+                        item = item,
+                    )
+                } else {
+                    DetailBodyPortrait(
+                        state = state,
+                        callbacks = callbacks,
+                        scrollState = scrollState,
+                        contentVisible = contentVisible,
+                        contentFocusRequester = contentFocusRequester,
+                        isAudio = isAudio,
+                        isAlbum = isAlbum,
+                        isExpanded = isExpanded,
+                        isTv = isTv,
+                        item = item,
+                    )
+                }
+            }
+        }
     }
 }

@@ -10,16 +10,17 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.LibraryFolder
-import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.MainPreferences
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -31,6 +32,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.async
@@ -43,7 +45,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 class MainViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val authRepository: AuthRepository,
-    val preferencesStore: UserPreferencesStore,
+    private val projections: PreferenceProjections,
+    private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
+    val homeDiscoveryStore: com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore,
+    val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
+    val serverIdentityStore: ServerIdentityStore,
+    val pinRateLimiter: PinRateLimiter,
+    val securityStore: SecurityStore,
     val networkMonitor: NetworkMonitor,
     val syncPlayManager: com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager,
     val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,
@@ -54,10 +62,9 @@ class MainViewModel @Inject constructor(
     val remoteControlReceiver: RemoteControlReceiver,
     val remoteNavigationBridge: RemoteNavigationBridge,
     private val deepLinkHandler: DeepLinkHandler,
-    private val downloadRepository: DownloadRepository,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-    private val offlineRepository: OfflineRepository,
+    private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
     private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
     val userMessageBus: UserMessageBus,
     private val serverHealthMonitor: com.raulshma.jellyplay.core.data.network.ServerHealthMonitor,
@@ -113,14 +120,38 @@ class MainViewModel @Inject constructor(
      */
     private val dismissedUpdateSuppressMs = 24L * 60 * 60 * 1000
 
-    val preferences = preferencesStore.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    /**
+     * Preferences read by the app-shell composables (MainActivity +
+     * JellyPlayApp). Built off [PreferenceProjections.mainPreferences] (which
+     * covers all slice-owned fields) with the two runtime-only fields —
+     * `pinLockoutUntilEpochMs` (from [PinRateLimiter]) and `onboardingCompleted`
+     * (from [appRuntimeStateStore]) — merged in via a typed `combine`, since
+     * neither lives in a preference slice.
+     */
+    val preferences = combine(
+        projections.mainPreferences,
+        pinRateLimiter.pinLockoutUntilEpochMs,
+        appRuntimeStateStore.state,
+    ) { prefs, pinLockout, runtime ->
+        prefs.copy(
+            pinLockoutUntilEpochMs = pinLockout,
+            onboardingCompleted = runtime.onboardingCompleted,
+        )
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), MainPreferences())
 
     private val _libraryFolders = stateFlow<List<LibraryFolder>>(emptyList())
     val libraryFolders = _libraryFolders.flow
 
     private val _pendingRoute = stateFlow<Route?>(null)
     val pendingRoute = _pendingRoute.flow
+
+    /**
+     * One-shot signal fired by the "Surprise Me" launcher shortcut. The Home
+     * hero controller has no VM entry point, so the Home screen
+     * observes this and flips its local `showSurprise` state on launch.
+     */
+    private val _surpriseOnLaunch = stateFlow(false)
+    val surpriseOnLaunch = _surpriseOnLaunch.flow
 
     /**
      * `true` only on a fresh ViewModel construction — i.e. a restore *after
@@ -156,7 +187,7 @@ class MainViewModel @Inject constructor(
         launch {
             coroutineScope {
                 val authDeferred = async { authRepository.restoreSession() }
-                val prefsDeferred = async { preferences.first() }
+                val prefsDeferred = async { experimentalStore.experimental.first() }
                 val result = authDeferred.await()
                 prefsDeferred.await()
                 if (result.isSuccess) {
@@ -181,7 +212,7 @@ class MainViewModel @Inject constructor(
                     val user = authRepository.currentUser.first()
                     if (server != null && user != null) {
                         serverHealthMonitor.startMonitoring(server.address)
-                        val deviceId = preferencesStore.ensureDeviceId()
+                        val deviceId = serverIdentityStore.ensureDeviceId()
                         val deviceName = buildDeviceName(user.name)
                         webSocketClient.connect(
                             serverAddress = server.address,
@@ -193,9 +224,9 @@ class MainViewModel @Inject constructor(
                         // Capabilities must be posted *after* the server has a
                         // session for this device. The Jellyfin server computes
                         // a session's SupportsRemoteControl as:
-                        //   Capabilities?.SupportsMediaControl == true
-                        //   && an attached SessionController (the WebSocket)
-                        //      also reports SupportsMediaControl.
+                        // Capabilities?.SupportsMediaControl == true
+                        // && an attached SessionController (the WebSocket)
+                        // also reports SupportsMediaControl.
                         // POST /Sessions/Capabilities/Full resolves the session
                         // by deviceId and throws if none exists yet — which is
                         // the case if it races ahead of the WebSocket handshake.
@@ -285,8 +316,8 @@ class MainViewModel @Inject constructor(
      */
     fun checkForAppUpdate() {
         launch {
-            val prefs = preferencesStore.preferences.first()
-            if (!prefs.selfUpdateCheckEnabled) return@launch
+            val experimental = experimentalStore.experimental.first()
+            if (!experimental.selfUpdateCheckEnabled) return@launch
             val result = appUpdateRepository.checkForUpdate(
                 supportedAbis = android.os.Build.SUPPORTED_ABIS,
             )
@@ -294,7 +325,7 @@ class MainViewModel @Inject constructor(
                 if (!info.isUpdateAvailable) return@onSuccess // stay Idle.
                 // Honor a prior dismissal: if the user dismissed this exact
                 // version less than 24h ago, stay quiet on the launch auto-check.
-                if (isUpdateRecentlyDismissed(info.latestVersion, prefs)) return@onSuccess
+                if (isUpdateRecentlyDismissed(info.latestVersion, experimental)) return@onSuccess
                 _updateState.set(UpdateState.UpdateAvailable(info))
             }
         }
@@ -306,11 +337,11 @@ class MainViewModel @Inject constructor(
      */
     private fun isUpdateRecentlyDismissed(
         version: String,
-        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+        experimental: ExperimentalSlice,
     ): Boolean {
-        val dismissedVersion = prefs.dismissedUpdateVersion ?: return false
+        val dismissedVersion = experimental.dismissedUpdateVersion ?: return false
         if (dismissedVersion != version) return false
-        val elapsed = System.currentTimeMillis() - prefs.dismissedUpdateAtMs
+        val elapsed = System.currentTimeMillis() - experimental.dismissedUpdateAtMs
         return elapsed in 0..dismissedUpdateSuppressMs
     }
 
@@ -365,7 +396,7 @@ class MainViewModel @Inject constructor(
         val state = _updateState.value
         if (state is UpdateState.UpdateAvailable) {
             launch {
-                preferencesStore.setDismissedUpdate(state.info.latestVersion)
+                experimentalStore.setDismissedUpdate(state.info.latestVersion)
             }
         }
         _updateState.set(UpdateState.Idle)
@@ -409,11 +440,23 @@ class MainViewModel @Inject constructor(
                 val itemId = intent.getStringExtra(AppShortcutManager.EXTRA_ITEM_ID)
                 if (!itemId.isNullOrBlank()) Route.AudioPlayer(itemId) else null
             }
+            // Static launcher shortcuts
+            AppShortcutManager.ACTION_SETTINGS -> Route.Settings
+            AppShortcutManager.ACTION_SURPRISE_ME -> {
+                // Route home and arm the surprise signal the Home screen consumes.
+                _surpriseOnLaunch.set(true)
+                Route.Home
+            }
             else -> null
         }
         if (route != null) {
             _pendingRoute.set(route)
         }
+    }
+
+    /** Clears the surprise-on-launch signal after the Home screen consumes it. */
+    fun consumeSurpriseOnLaunch() {
+        _surpriseOnLaunch.set(false)
     }
 
     fun handleDeepLink(intent: Intent) {
@@ -509,32 +552,23 @@ class MainViewModel @Inject constructor(
         mediaSourceId: String?,
         startPositionTicks: Long,
     ): ExternalPlayerLaunch? {
-        val download = downloadRepository.getDownloadByMediaItemId(itemId)
-        val localFile = download?.let {
-            java.io.File(it.downloadPath).takeIf { f -> f.exists() }
-        }
+        // The download-vs-stream fork lives once in PlaybackSourceResolver: a
+        // completed download with an existing file resolves to a `file://` URI
+        // (title from the offline item, falling back to the download name),
+        // else the resolver fetches `getMediaDetail` and builds the stream URL.
+        // The resolver silently falls back to streaming when a COMPLETED row's
+        // file vanished — the historical MainViewModel disk-staleness behaviour.
+        val resolved = playbackSourceResolver.resolvePlaybackSource(
+            itemId = itemId,
+            mediaSourceId = mediaSourceId,
+            startPositionTicks = startPositionTicks,
+        ) ?: return null
 
-        val url: String
-        val title: String
-
-        if (download != null && localFile != null && download.status == DownloadStatus.COMPLETED) {
-            url = Uri.fromFile(localFile).toString()
-            val offlineItem = offlineRepository.getOfflineItem(itemId)
-            title = offlineItem?.name ?: download.name
-        } else {
-            val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: return null
-            val source = if (mediaSourceId != null) {
-                detail.mediaSources.find { it.id == mediaSourceId }
-            } else {
-                detail.mediaSources.firstOrNull()
-            }
-            url = playbackRepository.getStreamUrl(
-                itemId,
-                source?.id ?: "",
-                startPositionTicks,
-            )
-            title = detail.item.name
+        val url = when (resolved) {
+            is com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource.Local -> resolved.uri
+            is com.raulshma.jellyplay.core.data.playback.ResolvedPlaybackSource.Stream -> resolved.url
         }
+        val title = resolved.title
 
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(Uri.parse(url), "video/*")

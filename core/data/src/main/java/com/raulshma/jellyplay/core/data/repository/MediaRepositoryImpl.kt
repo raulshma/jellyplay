@@ -4,18 +4,20 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import android.util.Log
+import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
+import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 import com.raulshma.jellyplay.core.data.paging.FavoritesPagingSource
 import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
 import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
+import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.TtlCache
-import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
@@ -24,6 +26,7 @@ import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.ProgramFilters
 import com.raulshma.jellyplay.core.model.LrcLibTrack
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.LyricsResult
@@ -34,7 +37,6 @@ import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
@@ -52,6 +54,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -65,8 +68,18 @@ class MediaRepositoryImpl @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val lrcLibApi: LrcLibApi,
     private val lyricsCacheDao: LyricsCacheDao,
+    private val homeSectionCacheDao: HomeSectionCacheDao,
     private val networkMonitor: NetworkMonitor,
     private val playedStateSync: PlayedStateSync,
+    /**
+     * The deep "Episode Catalogue": the single owner of the series
+     * seasons/episodes snapshot. Injected (not constructed) so the repo's
+     * `getSeasons`/`getEpisodes`/`getAllEpisodesGrouped` can delegate to it.
+     * The catalogue depends on `JellyfinApiClient` + `OfflineRepository` only
+     * (never on `MediaRepository`), so this edge does NOT form a DI cycle —
+     * both live in `core:data` and Hilt resolves the direction.
+     */
+    private val episodeCatalogue: EpisodeCatalogue,
 ) : MediaRepository {
 
     private val detailCache = TtlCache<MediaDetail>(
@@ -79,13 +92,11 @@ class MediaRepositoryImpl @Inject constructor(
     private val studiosCache = TtlCache<List<Studio>>(maxSize = 64, ttlMs = FOLDERS_CACHE_TTL_MS)
     private val latestMediaCache = TtlCache<List<MediaItem>>(maxSize = 64, ttlMs = LATEST_CACHE_TTL_MS)
 
-    // Series-scoped caches for the detail screen's subsidiary loads. Re-entry
-    // into the same series detail (back from player, returning from background,
-    // tab switch) used to re-issue the full episode storm + seasons + similar
-    // fetches. These share the detail cache TTL so user-data mutations that
-    // invalidate one invalidate all.
-    private val seasonsCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
-    private val episodesCache = TtlCache<Map<String, List<MediaItem>>>(ttlMs = DETAIL_CACHE_TTL_MS)
+    // Series-scoped seasons/episodes caches used to live here; they've moved
+    // into [episodeCatalogue], the single owner of the series snapshot. The
+    // remaining series-adjacent caches (similar, album tracks, collection
+    // items) stay — they're not part of the catalogue's "seasons → episodes →
+    // sorted" shape.
     private val similarCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
     private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = DETAIL_CACHE_TTL_MS)
     private val collectionItemsCache = TtlCache<SearchResult>(ttlMs = DETAIL_CACHE_TTL_MS)
@@ -93,11 +104,12 @@ class MediaRepositoryImpl @Inject constructor(
     override fun invalidateDetailCache(itemId: String?) {
         detailCacheEpoch.incrementAndGet()
         if (itemId != null) {
-            detailCache.remove(itemId)
+            val identity = currentIdentity()
+            detailCache.remove(identity, itemId)
             // similarCache keys are `similar_${itemId}_$limit` (the limit is
             // part of the key so a different limit never serves a truncated
             // list), so evict by prefix to drop every limit variant.
-            similarCache.removeByKeyPrefix("similar_$itemId")
+            similarCache.removeByKeyPrefix(identity, "similar_$itemId")
         } else {
             detailCache.clear()
             similarCache.clear()
@@ -105,17 +117,49 @@ class MediaRepositoryImpl @Inject constructor(
     }
 
     override fun invalidateSeriesCache(seriesId: String) {
-        seasonsCache.remove("seasons_$seriesId")
-        episodesCache.remove("episodes_$seriesId")
+        // Seasons/episodes caches now live in [episodeCatalogue]; funnel the
+        // invalidation through it so the snapshot + epoch drop together.
+        episodeCatalogue.invalidateSeries(seriesId)
     }
 
-    @Volatile
-    private var cachedHomeSections: HomeSectionsResult? = null
-    @Volatile
-    private var cachedHomeSectionsTimestamp: Long = 0L
-    @Volatile
-    private var cachedHomeSectionsKey: String = ""
-    private val homeSectionsLock = Any()
+    override fun invalidateCollectionItemsCache(collectionId: String) {
+        // Keys are `collection_${id}_${startIndex}_${limit}`, so evict by prefix.
+        collectionItemsCache.removeByKeyPrefix(currentIdentity(), "collection_$collectionId")
+    }
+
+    // In-memory home-sections cache. Previously a hand-rolled triple of
+    // @Volatile fields + a lock (cachedHomeSections / Timestamp / Key + lock);
+    // folded into a single-entry TtlCache so the home path shares the same
+    // identity-keyed primitive as every other cache here. Identity-keyed so a
+    // user/server switch can't serve the previous identity's payload.
+    private val homeSectionsCache = TtlCache<HomeSectionsResult>(
+        maxSize = 1,
+        ttlMs = HOME_SECTIONS_CACHE_TTL_MS,
+    )
+
+    /**
+     * The current `(serverId, userId)` as a [CacheIdentity], read synchronously
+     * from the [lastStableIdentity] mirror maintained by the `init {}` observer.
+     * `Flow<ServerInfo?>` / `Flow<UserInfo?>` are not `StateFlow`s at this
+     * interface boundary, so there's no `.value` to read; the mirror is the
+     * authoritative synchronous source. Returns [CacheIdentity.UNKNOWN] before
+     * login / after logout — nothing cached under that key can leak across
+     * users, since no real identity ever collides with it.
+     */
+    private fun currentIdentity(): CacheIdentity {
+        val (serverId, userId) = lastStableIdentity.get() ?: return CacheIdentity.UNKNOWN
+        return CacheIdentity.ofOrNull(serverId, userId)
+    }
+
+    /**
+     * Drops the in-memory home-sections cache for the current identity. Used by
+     * [toggleFavorite] / [markPlayed] / [markUnplayed] so a user-data change is
+     * reflected on the next home load (the previous hand-rolled slot zeroed the
+     * timestamp to force a TTL miss; this is the identity-aware equivalent).
+     */
+    private fun invalidateHomeSectionsCache() {
+        homeSectionsCache.clear()
+    }
 
     // Throttle for lyrics-cache eviction. cacheLyrics() is called on every
     // successful lyrics fetch, and each call used to fire a full
@@ -133,11 +177,13 @@ class MediaRepositoryImpl @Inject constructor(
     private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
-     * Tracks the last observed stable identity. `null` means we're in an "empty" state
-     * (logged out / restoring session). Non-null means we have a stable (serverId|userId)
+     * Tracks the last observed stable (serverId, userId) pair. `null` means we're in an
+     * "empty" state (logged out / restoring session). Non-null means we have a stable
      * identity whose replacement by a different value should trigger cache invalidation.
+     * Kept as a pair (not a flattened key) so the observer can clear the *previous*
+     * identity's persisted home-section SWR rows by identity — see [init].
      */
-    private val lastStableIdentityKey = AtomicReference<String?>(null)
+    private val lastStableIdentity = AtomicReference<Pair<String, String>?>(null)
 
     init {
         // Observe active server/user changes and self-invalidate caches. This closes a
@@ -154,63 +200,115 @@ class MediaRepositoryImpl @Inject constructor(
         //  - Empty  → Empty  : never invalidates.
         cacheScope.launch {
             combine(apiClient.currentServer, apiClient.currentUser) { server, user ->
-                if (server != null && user != null) "${server.id}|${user.id}" else null
-            }.collect { identityKey ->
-                val previous = lastStableIdentityKey.getAndSet(identityKey)
+                if (server != null && user != null) server.id to user.id else null
+            }.collect { identity ->
+                val previous = lastStableIdentity.getAndSet(identity)
                 val shouldInvalidate = when {
-                    previous == null && identityKey == null -> false
-                    previous == null && identityKey != null -> false // session restore, no prior data
-                    previous != null && identityKey == null -> true  // logout: clear for privacy
-                    previous != identityKey -> true                  // user or server switch
+                    previous == null && identity == null -> false
+                    previous == null && identity != null -> false // session restore, no prior data
+                    previous != null && identity == null -> true  // logout: clear for privacy
+                    previous != identity -> true                  // user or server switch
                     else -> false
                 }
                 if (shouldInvalidate) {
                     invalidateCaches()
+                    // Clear the PREVIOUS identity's persisted home-section SWR
+                    // rows — scoped, not wholesale, so a multi-account server
+                    // keeps the other users' snapshots for their next cold open.
+                    // Runs here (where we hold the previous identity) rather than
+                    // in invalidateCaches() (which has no identity context).
+                    previous?.let { (serverId, userId) ->
+                        clearHomeSectionsForIdentity(serverId, userId)
+                    }
                 }
             }
         }
     }
 
+    /**
+     * Clears the persisted home-section SWR snapshot for a single (server, user).
+     * Failure is logged, not swallowed: this runs on logout / identity switch and
+     * a silent failure would leave the just-logged-out user's home payload in the
+     // table, to be served to a different user on the next cold open.
+     */
+    private suspend fun clearHomeSectionsForIdentity(serverId: String, userId: String) {
+        runCatching { homeSectionCacheDao.clearForIdentity(serverId, userId) }
+            .onFailure { e ->
+                android.util.Log.w(
+                    "MediaRepo",
+                    "Failed to clear home-section SWR cache for server=$serverId user=$userId",
+                    e,
+                )
+            }
+    }
+
     override suspend fun getHomeSections(
-        enabledSections: Set<HomeSectionType>,
-        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>>,
-        nextUpRewatching: Boolean,
-        nextUpMaxDays: Int,
-        nextUpExcludedSeriesIds: Set<String>,
-        hiddenCwItemIds: Set<String>,
-        pinnedSections: List<PinnedHomeSection>,
+        query: HomeSectionQuery,
     ): Result<HomeSectionsResult> {
-        val cacheKey = "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections"
-        val cached = cachedHomeSections
-        val timestamp = cachedHomeSectionsTimestamp
-        if (cached != null && cacheKey == cachedHomeSectionsKey &&
-            android.os.SystemClock.elapsedRealtime() - timestamp < HOME_SECTIONS_CACHE_TTL_MS
-        ) {
-            return Result.success(cached)
-        }
+        val identity = currentIdentity()
+        val cacheKey = query.cacheKey()
+        homeSectionsCache.get(identity, cacheKey)?.let { return Result.success(it) }
         return apiClient.getHomeSections(
-            enabledSections,
-            libraryHomeSectionOverrides,
-            nextUpRewatching,
-            nextUpMaxDays,
-            nextUpExcludedSeriesIds,
-            hiddenCwItemIds,
-            pinnedSections,
+            enabledSections = query.enabledSections,
+            libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
+            nextUpRewatching = query.nextUpRewatching,
+            nextUpMaxDays = query.nextUpMaxDays,
+            nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
+            hiddenCwItemIds = query.hiddenCwItemIds,
+            pinnedSections = query.pinnedSections,
         ).also { result ->
             result.getOrNull()?.let { homeResult ->
-                synchronized(homeSectionsLock) {
-                    cachedHomeSections = homeResult
-                    cachedHomeSectionsKey = cacheKey
-                    cachedHomeSectionsTimestamp = android.os.SystemClock.elapsedRealtime()
-                }
+                homeSectionsCache.put(identity, cacheKey, homeResult)
+                // Persist the snapshot for stale-while-revalidate on cold open.
+                // The in-memory cache above is lost on process death; this row lets
+                // getCachedHomeSections() render instantly next launch while a
+                // network refresh runs. Identity-keyed (serverId, userId) so a
+                // user switch never serves another user's payload — cleared by
+                // clearHomeSectionsForIdentity() from the identity observer below.
+                persistHomeSectionsSnapshot(cacheKey, homeResult)
             }
+        }
+    }
+
+    override suspend fun getCachedHomeSections(
+        query: HomeSectionQuery,
+    ): HomeSectionsResult? {
+        // Read identity directly from the source flows rather than the volatile
+        // mirror fields: this runs from the Home VM's currentUser collector,
+        // which can fire before the repo's identity observer has written the
+        // mirror. .first() is suspend + non-blocking and guarantees the current
+        // value, so the SWR read never misses due to an observe ordering race.
+        val server = apiClient.currentServer.first() ?: return null
+        val user = apiClient.currentUser.first() ?: return null
+        return homeSectionCacheDao.get(server.id, user.id, query.cacheKey())?.payload
+    }
+
+    private suspend fun persistHomeSectionsSnapshot(cacheKey: String, result: HomeSectionsResult) {
+        val server = apiClient.currentServer.first() ?: return
+        val user = apiClient.currentUser.first() ?: return
+        runCatching {
+            homeSectionCacheDao.upsert(
+                HomeSectionCacheEntity(
+                    serverId = server.id,
+                    userId = user.id,
+                    cacheKey = cacheKey,
+                    payloadJson = com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(result),
+                    // Wall-clock on purpose: this value must survive a reboot to
+                    // serve the next cold open, and monotonic clocks reset on
+                    // boot. The in-memory TTL above uses SystemClock.elapsedRealtime
+                    // (monotonic) because it only compares two readings within one
+                    // process. fetchedAt isn't read for a TTL today.
+                    fetchedAt = System.currentTimeMillis(),
+                ),
+            )
         }
     }
 
     override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> {
-        libraryFoldersCache.get("folders")?.let { return Result.success(it) }
+        val identity = currentIdentity()
+        libraryFoldersCache.get(identity, "folders")?.let { return Result.success(it) }
         return apiClient.getLibraryFolders().also { result ->
-            result.getOrNull()?.let { libraryFoldersCache.put("folders", it) }
+            result.getOrNull()?.let { libraryFoldersCache.put(identity, "folders", it) }
         }
     }
 
@@ -218,10 +316,11 @@ class MediaRepositoryImpl @Inject constructor(
         parentId: String,
         limit: Int,
     ): Result<List<MediaItem>> {
+        val identity = currentIdentity()
         val cacheKey = "latest_${parentId}_$limit"
-        latestMediaCache.get(cacheKey)?.let { return Result.success(it) }
+        latestMediaCache.get(identity, cacheKey)?.let { return Result.success(it) }
         return apiClient.getLatestMedia(parentId = parentId, limit = limit).also { result ->
-            result.getOrNull()?.let { latestMediaCache.put(cacheKey, it) }
+            result.getOrNull()?.let { latestMediaCache.put(identity, cacheKey, it) }
         }
     }
 
@@ -238,6 +337,7 @@ class MediaRepositoryImpl @Inject constructor(
         tags: List<String>?,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
         minRating: Float?,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Result<SearchResult> = apiClient.getMediaItems(
         parentId = parentId,
         mediaTypes = mediaTypes,
@@ -251,6 +351,7 @@ class MediaRepositoryImpl @Inject constructor(
         tags = tags,
         playedStatus = playedStatus,
         minRating = minRating,
+        kindFilter = kindFilter,
     )
 
     // Single-flight dedup for getMediaDetail: the detail screen is reachable
@@ -274,17 +375,18 @@ class MediaRepositoryImpl @Inject constructor(
     private val detailCacheEpoch = AtomicLong(0L)
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> {
+        val identity = currentIdentity()
         // Fast path: serve from cache without entering coroutineScope, avoiding
         // the scope-creation overhead on the (common) cached read. The authoritative
         // single-flight coordination still happens below under the mutex.
-        detailCache.get(itemId)?.let { return Result.success(it) }
+        detailCache.get(identity, itemId)?.let { return Result.success(it) }
         return coroutineScope {
             // Single-flight: if another caller already started this fetch, await
             // its result instead of issuing a duplicate request. The cache read is
             // captured inside the lock so a concurrent fetch that completes while
             // we waited is observed exactly once.
             val cachedOrDeferred: Any = detailInFlightMutex.withLock {
-                detailCache.get(itemId)?.let { return@withLock it }
+                detailCache.get(identity, itemId)?.let { return@withLock it }
                 val epochAtStart = detailCacheEpoch.get()
                 detailInFlight.getOrPut(itemId) {
                     // async on the current coroutineScope so the fetch runs on
@@ -297,7 +399,7 @@ class MediaRepositoryImpl @Inject constructor(
                                 // freshly fetched snapshot could be stale relative
                                 // to a concurrent user-data mutation.
                                 if (detailCacheEpoch.get() == epochAtStart) {
-                                    result.getOrNull()?.let { detail -> detailCache.put(itemId, detail) }
+                                    result.getOrNull()?.let { detail -> detailCache.put(identity, itemId, detail) }
                                 }
                             }
                         } finally {
@@ -332,7 +434,7 @@ class MediaRepositoryImpl @Inject constructor(
                         val epochAtRetry = detailCacheEpoch.get()
                         apiClient.getMediaDetail(itemId).also { result ->
                             if (detailCacheEpoch.get() == epochAtRetry) {
-                                result.getOrNull()?.let { detail -> detailCache.put(itemId, detail) }
+                                result.getOrNull()?.let { detail -> detailCache.put(identity, itemId, detail) }
                             }
                         }
                     }
@@ -393,6 +495,7 @@ class MediaRepositoryImpl @Inject constructor(
         tags: List<String>?,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
         minRating: Float?,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Flow<PagingData<MediaItem>> = Pager(
         config = PagingConfig(
             pageSize = PAGE_SIZE,
@@ -412,6 +515,7 @@ class MediaRepositoryImpl @Inject constructor(
                 tags = tags,
                 playedStatus = playedStatus,
                 minRating = minRating,
+                kindFilter = kindFilter,
             )
         },
     ).flow
@@ -443,18 +547,20 @@ class MediaRepositoryImpl @Inject constructor(
     ).flow
 
     override suspend fun getGenres(parentId: String?): Result<List<Genre>> {
+        val identity = currentIdentity()
         val cacheKey = "genres_${parentId ?: "root"}"
-        genresCache.get(cacheKey)?.let { return Result.success(it) }
+        genresCache.get(identity, cacheKey)?.let { return Result.success(it) }
         return apiClient.getGenres(parentId).also { result ->
-            result.getOrNull()?.let { genresCache.put(cacheKey, it) }
+            result.getOrNull()?.let { genresCache.put(identity, cacheKey, it) }
         }
     }
 
     override suspend fun getStudios(parentId: String?): Result<List<Studio>> {
+        val identity = currentIdentity()
         val cacheKey = "studios_${parentId ?: "root"}"
-        studiosCache.get(cacheKey)?.let { return Result.success(it) }
+        studiosCache.get(identity, cacheKey)?.let { return Result.success(it) }
         return apiClient.getStudios(parentId).also { result ->
-            result.getOrNull()?.let { studiosCache.put(cacheKey, it) }
+            result.getOrNull()?.let { studiosCache.put(identity, cacheKey, it) }
         }
     }
 
@@ -469,15 +575,16 @@ class MediaRepositoryImpl @Inject constructor(
         apiClient.getArtistAlbums(artistId, limit)
 
     override suspend fun getAlbumTracks(albumId: String): Result<List<MediaItem>> {
+        val identity = currentIdentity()
         val cacheKey = "tracks_$albumId"
-        albumTracksCache.get(cacheKey)?.let { return Result.success(it) }
+        albumTracksCache.get(identity, cacheKey)?.let { return Result.success(it) }
         val epochAtStart = detailCacheEpoch.get()
         return apiClient.getAlbumTracks(albumId).also { result ->
             // Skip the cache write if a user-data invalidation landed while the
             // fetch was in flight — otherwise this (now stale) snapshot would be
             // pinned for the full TTL. See [detailCacheEpoch] for the rationale.
             if (detailCacheEpoch.get() == epochAtStart) {
-                result.getOrNull()?.let { albumTracksCache.put(cacheKey, it) }
+                result.getOrNull()?.let { albumTracksCache.put(identity, cacheKey, it) }
             }
         }
     }
@@ -490,17 +597,18 @@ class MediaRepositoryImpl @Inject constructor(
         ).map { it.items }
 
     override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> {
+        val identity = currentIdentity()
         // Key includes the limit so a call with a different limit doesn't serve
         // a stale truncated list.
         val cacheKey = "similar_${itemId}_$limit"
-        similarCache.get(cacheKey)?.let { return Result.success(it) }
+        similarCache.get(identity, cacheKey)?.let { return Result.success(it) }
         val epochAtStart = detailCacheEpoch.get()
         return apiClient.getSimilarItems(itemId, limit).also { result ->
             // Skip the cache write if a user-data invalidation landed while the
             // fetch was in flight; otherwise a pre-mutation similar-items list
             // (e.g. before a favorite toggle) would be pinned for the full TTL.
             if (detailCacheEpoch.get() == epochAtStart) {
-                result.getOrNull()?.let { similarCache.put(cacheKey, it) }
+                result.getOrNull()?.let { similarCache.put(identity, cacheKey, it) }
             }
         }
     }
@@ -514,72 +622,35 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
         apiClient.getThemeSongs(itemId)
 
-    override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> {
-        val cacheKey = "seasons_$seriesId"
-        seasonsCache.get(cacheKey)?.let { return Result.success(it) }
-        val epochAtStart = detailCacheEpoch.get()
-        return apiClient.getSeasons(seriesId).also { result ->
-            if (detailCacheEpoch.get() == epochAtStart) {
-                result.getOrNull()?.let { seasonsCache.put(cacheKey, it) }
-            }
-        }
-    }
+    override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> =
+        // Thin passthrough: the catalogue owns the seasons/episodes snapshot
+        // (grouping, single-flight, epoch guard, offline branch). Server order
+        // is preserved — the snapshot never reorders seasons.
+        episodeCatalogue.loadSeriesEpisodes(seriesId).map { it.seasons }
 
-    override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> {
-        // Try the series-wide cache first; if present, slice the requested
-        // season out of it so a per-season call after a batched load doesn't
-        // re-hit the network.
-        episodesCache.get("episodes_$seriesId")?.let { grouped ->
-            grouped[seasonId]?.let { return Result.success(it) }
-        }
-        val epochAtStart = detailCacheEpoch.get()
-        return apiClient.getEpisodes(seriesId, seasonId).also { result ->
-            // Skip the cache write if a user-data invalidation landed while the
-            // fetch was in flight — [invalidateSeriesCache] already removed the
-            // entry, and re-inserting this (now stale) season would pin it for
-            // the full TTL.
-            if (detailCacheEpoch.get() != epochAtStart) return@also
-            result.getOrNull()?.let { episodes ->
-                // Merge into the series-wide cache under a single critical section
-                // so the [DetailViewModel.loadAllSeasonsBatched] fan-out (up to
-                // MAX_PARALLEL_SEASON_FETCHES concurrent calls) can't lose a
-                // season: the prior get-then-put let two near-simultaneous
-                // completions read the same `current` map and clobber each other.
-                // detailInFlightMutex is reused to avoid introducing a second
-                // lock that would have to be ordered against it.
-                val cacheKey = "episodes_$seriesId"
-                detailInFlightMutex.withLock {
-                    val current = episodesCache.get(cacheKey) ?: emptyMap()
-                    episodesCache.put(cacheKey, current + (seasonId to episodes))
-                }
-            }
-        }
-    }
+    override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
+        // Per-season slice: serves from the shared snapshot if that season is
+        // present, else fetches the one season and merges it back (the exact
+        // "per-season fetch merges into the grouped cache" semantics the
+        // catalogue absorbed from this repository).
+        episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId)
 
-    override suspend fun getAllEpisodesGrouped(seriesId: String): Result<Map<String, List<MediaItem>>> {
-        val cacheKey = "episodes_$seriesId"
-        episodesCache.get(cacheKey)?.let { return Result.success(it) }
-        val epochAtStart = detailCacheEpoch.get()
-        return apiClient.getAllEpisodes(seriesId).map { all ->
-            // groupBy preserves the first occurrence per key and keeps encounter
-            // order, matching the season ordering the per-season path produced.
-            all.groupBy { it.seasonId ?: "" }
-        }.also { result ->
-            if (detailCacheEpoch.get() == epochAtStart) {
-                result.getOrNull()?.let { grouped -> episodesCache.put(cacheKey, grouped) }
-            }
-        }
-    }
+    override suspend fun getAllEpisodesGrouped(seriesId: String): Result<Map<String, List<MediaItem>>> =
+        // The grouped map shape is derived from the catalogue snapshot's
+        // `episodesBySeason`. groupBy-by-seasonId semantics are preserved in
+        // the catalogue (an episode whose seasonId is null groups under "").
+        episodeCatalogue.loadSeriesEpisodes(seriesId).map { it.episodesBySeason }
 
     override suspend fun getCollectionItems(
         collectionId: String,
         startIndex: Int,
         limit: Int,
     ): Result<SearchResult> {
+        val identity = currentIdentity()
         val cacheKey = "collection_${collectionId}_$startIndex" + "_$limit"
-        collectionItemsCache.get(cacheKey)?.let { return Result.success(it) }
+        collectionItemsCache.get(identity, cacheKey)?.let { return Result.success(it) }
         return apiClient.getCollectionItems(collectionId, startIndex, limit).also { result ->
-            result.getOrNull()?.let { collectionItemsCache.put(cacheKey, it) }
+            result.getOrNull()?.let { collectionItemsCache.put(identity, cacheKey, it) }
         }
     }
 
@@ -852,13 +923,13 @@ class MediaRepositoryImpl @Inject constructor(
         apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex)
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
-        cachedHomeSectionsTimestamp = 0L
+        invalidateHomeSectionsCache()
         invalidateUserDataCaches(itemId)
         return apiClient.toggleFavorite(itemId)
     }
 
     override suspend fun markPlayed(itemId: String): Result<Unit> {
-        cachedHomeSectionsTimestamp = 0L
+        invalidateHomeSectionsCache()
         invalidateUserDataCaches(itemId)
         // Fan-out (online API + best-effort offline mirror, or local apply +
         // outbox staging when offline / online call failed) is owned by
@@ -868,7 +939,7 @@ class MediaRepositoryImpl @Inject constructor(
     }
 
     override suspend fun markUnplayed(itemId: String): Result<Unit> {
-        cachedHomeSectionsTimestamp = 0L
+        invalidateHomeSectionsCache()
         invalidateUserDataCaches(itemId)
         return playedStateSync.flip(itemId, played = false)
     }
@@ -881,11 +952,12 @@ class MediaRepositoryImpl @Inject constructor(
      * of serving the cached pre-mutation snapshot.
      */
     override fun invalidateUserDataCaches(itemId: String) {
+        val identity = currentIdentity()
         // Read the cached detail first to discover whether this item belongs
         // to a series (either is the series or is an episode of one) so we can
         // drop the series-scoped seasons/episodes caches too.
-        val cached = detailCache.get(itemId)
-        albumTracksCache.remove("tracks_$itemId")
+        val cached = detailCache.get(identity, itemId)
+        albumTracksCache.remove(identity, "tracks_$itemId")
         invalidateDetailCache(itemId)
         val seriesId = cached?.item?.seriesId ?: cached?.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
         if (seriesId != null) invalidateSeriesCache(seriesId)
@@ -987,23 +1059,34 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun invalidateCaches() {
         invalidateDetailCache()
-        synchronized(homeSectionsLock) {
-            cachedHomeSections = null
-            cachedHomeSectionsTimestamp = 0L
-            cachedHomeSectionsKey = ""
-        }
+        homeSectionsCache.clear()
         // Also clear the secondary caches — they hold user-scoped data (library folders,
-        // latest media, genres, studios, photo folder child URLs) that would otherwise
-        // leak across user/server switches until their TTL expires.
+        // latest media, genres, studios, photo folder child URLs). They are now
+        // identity-keyed (a wrong identity misses by construction), so this wholesale
+        // clear is the secondary guard; the primary one is that a previous identity's
+        // key can never match the current identity's key.
         libraryFoldersCache.clear()
         latestMediaCache.clear()
         genresCache.clear()
         studiosCache.clear()
-        seasonsCache.clear()
-        episodesCache.clear()
+        // Seasons/episodes caches now live in [episodeCatalogue]; drop the
+        // whole catalogue (every series snapshot + the long epoch) so a
+        // wholesale invalidation behaves the same as before.
+        episodeCatalogue.invalidateAll()
         albumTracksCache.clear()
         collectionItemsCache.clear()
         photoFolderChildUrlCache.clear()
+        // The network-layer home hot-path caches (per-folder latest + per-seed
+        // similar) are likewise identity-keyed now, so they no longer need a
+        // cross-boundary clear from here.
+        // NOTE: the persistent home-section SWR snapshot is intentionally NOT
+        // cleared here. invalidateCaches() doesn't know which (server, user)
+        // it's running for — it's called both from the identity observer (which
+        // has the previous identity in hand) and from background sync workers
+        // (which have no identity context). Clearing wholesale here would wipe
+        // every user's snapshot on any sync, defeating the multi-account SWR
+        // benefit. The identity observer clears the previous identity's rows
+        // directly via clearHomeSectionsForIdentity() — see init {}.
     }
 
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =
@@ -1083,9 +1166,10 @@ class MediaRepositoryImpl @Inject constructor(
     )
 
     override suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int): List<String> {
-        photoFolderChildUrlCache.get(folderId)?.let { return it }
+        val identity = currentIdentity()
+        photoFolderChildUrlCache.get(identity, folderId)?.let { return it }
         val urls = apiClient.getChildItemImageUrls(folderId, limit)
-        photoFolderChildUrlCache.put(folderId, urls)
+        photoFolderChildUrlCache.put(identity, folderId, urls)
         return urls
     }
 }

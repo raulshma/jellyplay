@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepositoryImpl
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -39,6 +41,8 @@ import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.UserDataSyncSchedulerImpl
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncSchedulerImpl
+import com.raulshma.jellyplay.core.data.worker.DownloadTransferClient
+import com.raulshma.jellyplay.core.data.worker.OkHttpDownloadTransferClient
 import com.raulshma.jellyplay.core.network.config.OkHttpConfigProvider
 import dagger.Binds
 import dagger.Module
@@ -66,11 +70,13 @@ abstract class DataModule {
         @dagger.Provides
         @Singleton
         fun provideStoragePolicy(
-            preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+            networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
+            downloadsStore: com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore,
             downloadDao: com.raulshma.jellyplay.core.database.dao.DownloadDao,
         ): com.raulshma.jellyplay.core.data.repository.StoragePolicy =
             com.raulshma.jellyplay.core.data.repository.StoragePolicy(
-                preferencesStore = preferencesStore,
+                networkOfflineStore = networkOfflineStore,
+                downloadsStore = downloadsStore,
                 currentBytesProvider = { downloadDao.getTotalDownloadedBytes() },
             )
 
@@ -90,6 +96,14 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindMediaRepository(impl: MediaRepositoryImpl): MediaRepository
+
+    // The deep "Episode Catalogue" seam: the single owner of the series
+    // seasons/episodes snapshot. See EpisodeCatalogue kdoc — depends on
+    // JellyfinApiClient + OfflineRepository only (never MediaRepository), so
+    // MediaRepositoryImpl can take it without forming a DI cycle.
+    @Binds
+    @Singleton
+    abstract fun bindEpisodeCatalogue(impl: EpisodeCatalogueImpl): EpisodeCatalogue
 
     @Binds
     @Singleton
@@ -121,6 +135,15 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindOfflineRepository(impl: OfflineRepositoryImpl): OfflineRepository
+
+    // The deep "Playback Source Resolver" seam: the single owner of the
+    // download-vs-stream fork. See PlaybackSourceResolver kdoc — every caller
+    // already depends on :core:data, so this @Binds is the only wiring needed.
+    @Binds
+    @Singleton
+    abstract fun bindPlaybackSourceResolver(
+        impl: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolverImpl,
+    ): com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 
     @Binds
     @Singleton
@@ -157,6 +180,13 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPlaybackSyncScheduler(impl: PlaybackSyncSchedulerImpl): PlaybackSyncScheduler
+
+    // OkHttp adapter for the download transfer seam (DownloadTransferRunner /
+    // DownloadWorker depend on the interface; the fake in src/test backs it in
+    // unit tests). @Inject constructor on the impl, interface bound here.
+    @Binds
+    @Singleton
+    abstract fun bindDownloadTransferClient(impl: OkHttpDownloadTransferClient): DownloadTransferClient
 
     @Binds
     @Singleton

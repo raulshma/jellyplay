@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="syncplay_leave_group">그룹 나가기</string>
+    <string name="syncplay_leave_group_confirm_title">그룹에서 나가시겠습니까?</string>
+    <string name="syncplay_leave_group_confirm_message">시청 파티에서 제거됩니다.</string>
     <string name="syncplay_retry">다시 시도</string>
     <string name="syncplay_no_active_groups">활성 SyncPlay 그룹이 없습니다</string>
     <string name="syncplay_create_group_together">함께 시청할 그룹을 만드세요</string>

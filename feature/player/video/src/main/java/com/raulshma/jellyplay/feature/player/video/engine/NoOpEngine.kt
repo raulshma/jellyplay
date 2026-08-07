@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 import android.view.View
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.emptyFlow
 internal class NoOpEngine : MediaEngine {
 
     override val capabilities = EngineCapabilityMatrix.EXTERNAL
+    override val displayName: String = PlayerType.EXTERNAL.displayName
 
     private val _playbackState = MutableStateFlow(EnginePlaybackState.IDLE)
     override val playbackState: StateFlow<EnginePlaybackState> = _playbackState.asStateFlow()
@@ -49,6 +51,10 @@ internal class NoOpEngine : MediaEngine {
     private val _availableTracks = MutableStateFlow(emptyList<MediaTrack>())
     override val availableTracks: StateFlow<List<MediaTrack>> = _availableTracks.asStateFlow()
 
+    override val currentCues: StateFlow<List<TimedCue>> = MutableStateFlow(emptyList())
+
+    override val liveSubtitleCue: StateFlow<CharSequence?> = MutableStateFlow(null)
+
     private val _pollingIntervalMs = MutableStateFlow(0L)
     override val pollingIntervalMs: StateFlow<Long> = _pollingIntervalMs.asStateFlow()
 
@@ -59,6 +65,7 @@ internal class NoOpEngine : MediaEngine {
     override val durationMs: Long = 0L
     override val positionFlow: Flow<Long> = emptyFlow()
     override val errorFlow: Flow<EngineError> = emptyFlow()
+    override val subtitleEvents: Flow<SubtitleEvent> = emptyFlow()
     override val playbackSpeed: Float = 1f
     override val audioSessionId: Int = -1
 

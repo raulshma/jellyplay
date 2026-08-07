@@ -11,6 +11,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import coil3.size.Size
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.model.ImageCache
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import androidx.hilt.work.HiltWorkerFactory
@@ -38,7 +39,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     // off the cold-start path until Coil's first image request, which only
     // happens once setContent renders an image — well after onCreate returns.
     @Inject lateinit var okHttpClientProvider: javax.inject.Provider<OkHttpClient>
-    @Inject lateinit var userPreferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+    @Inject lateinit var networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
     // javax.inject.Provider defers Hilt construction of AudioPlaybackManager
     // (and its transitive 14-dep graph: AudioLibraryBrowser,
     // AudioProgressReporter, AudioCrossfader, QueueUndoStack, LruCache(25), …)
@@ -116,7 +117,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     }
 
     private val imageLoader by lazy {
-        val cacheMb = userPreferencesStore.preferences.value.maxCacheSizeMb
+        val cacheMb = networkOfflineStore.networkOffline.value.maxCacheSizeMb
         val cacheSize = if (cacheMb > 0) cacheMb * 1024L * 1024L else 256L * 1024 * 1024
 
         // Tier the memory-cache budget on device RAM class, mirroring the

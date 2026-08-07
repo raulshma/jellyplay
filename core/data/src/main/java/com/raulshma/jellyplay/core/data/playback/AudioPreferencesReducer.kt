@@ -1,9 +1,10 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ReverbPreset
-import com.raulshma.jellyplay.core.model.UserPreferences
 
 /**
  * Deep module: the pure preference→effect diff that drives audio-effects
@@ -48,60 +49,65 @@ object AudioPreferencesReducer {
      *
      * Returns an empty list when nothing changed.
      */
-    fun diff(prev: UserPreferences, next: UserPreferences): List<EffectCommand> {
-        if (prev === next) return emptyList()
+    fun diff(
+        prevEffects: AudioEffectsSlice,
+        prevAudio: AudioSlice,
+        nextEffects: AudioEffectsSlice,
+        nextAudio: AudioSlice,
+    ): List<EffectCommand> {
+        if (prevEffects === nextEffects && prevAudio === nextAudio) return emptyList()
         val commands = mutableListOf<EffectCommand>()
 
         // 1. Standalone settings.
-        if (next.audioVisualizerEnabled != prev.audioVisualizerEnabled) {
-            commands += EffectCommand.SetVisualizerEnabled(next.audioVisualizerEnabled)
+        if (nextAudio.audioVisualizerEnabled != prevAudio.audioVisualizerEnabled) {
+            commands += EffectCommand.SetVisualizerEnabled(nextAudio.audioVisualizerEnabled)
         }
-        if (next.equalizerPreset != prev.equalizerPreset) {
-            commands += EffectCommand.SetEqualizerPreset(next.equalizerPreset)
+        if (nextEffects.equalizerPreset != prevEffects.equalizerPreset) {
+            commands += EffectCommand.SetEqualizerPreset(nextEffects.equalizerPreset)
         }
-        if (next.lrBalance != prev.lrBalance) {
-            commands += EffectCommand.SetLrBalance(next.lrBalance)
+        if (nextEffects.lrBalance != prevEffects.lrBalance) {
+            commands += EffectCommand.SetLrBalance(nextEffects.lrBalance)
         }
-        if (next.pitchSemitones != prev.pitchSemitones) {
-            commands += EffectCommand.SetPitchSemitones(next.pitchSemitones)
+        if (nextEffects.pitchSemitones != prevEffects.pitchSemitones) {
+            commands += EffectCommand.SetPitchSemitones(nextEffects.pitchSemitones)
         }
 
         // 2. Strengths BEFORE their enabled flags so the effect picks up the
         //    new value when (re-)attaching.
-        if (next.bassBoostStrength != prev.bassBoostStrength) {
-            commands += EffectCommand.SetBassBoostStrength(next.bassBoostStrength)
+        if (nextEffects.bassBoostStrength != prevEffects.bassBoostStrength) {
+            commands += EffectCommand.SetBassBoostStrength(nextEffects.bassBoostStrength)
         }
-        if (next.virtualizerStrength != prev.virtualizerStrength) {
-            commands += EffectCommand.SetVirtualizerStrength(next.virtualizerStrength)
+        if (nextEffects.virtualizerStrength != prevEffects.virtualizerStrength) {
+            commands += EffectCommand.SetVirtualizerStrength(nextEffects.virtualizerStrength)
         }
-        if (next.dialogueBoostStrength != prev.dialogueBoostStrength) {
-            commands += EffectCommand.SetDialogueBoostStrength(next.dialogueBoostStrength)
+        if (nextEffects.dialogueBoostStrength != prevEffects.dialogueBoostStrength) {
+            commands += EffectCommand.SetDialogueBoostStrength(nextEffects.dialogueBoostStrength)
         }
-        if (next.nightModeStrength != prev.nightModeStrength) {
-            commands += EffectCommand.SetNightModeStrength(next.nightModeStrength)
+        if (nextEffects.nightModeStrength != prevEffects.nightModeStrength) {
+            commands += EffectCommand.SetNightModeStrength(nextEffects.nightModeStrength)
         }
 
         // 3. Enabled flags.
-        if (next.equalizerEnabled != prev.equalizerEnabled) {
-            commands += EffectCommand.SetEqualizerEnabled(next.equalizerEnabled)
+        if (nextEffects.equalizerEnabled != prevEffects.equalizerEnabled) {
+            commands += EffectCommand.SetEqualizerEnabled(nextEffects.equalizerEnabled)
         }
-        if (next.bassBoostEnabled != prev.bassBoostEnabled) {
-            commands += EffectCommand.SetBassBoostEnabled(next.bassBoostEnabled)
+        if (nextEffects.bassBoostEnabled != prevEffects.bassBoostEnabled) {
+            commands += EffectCommand.SetBassBoostEnabled(nextEffects.bassBoostEnabled)
         }
-        if (next.virtualizerEnabled != prev.virtualizerEnabled) {
-            commands += EffectCommand.SetVirtualizerEnabled(next.virtualizerEnabled)
+        if (nextEffects.virtualizerEnabled != prevEffects.virtualizerEnabled) {
+            commands += EffectCommand.SetVirtualizerEnabled(nextEffects.virtualizerEnabled)
         }
-        if (next.dialogueBoostEnabled != prev.dialogueBoostEnabled) {
-            commands += EffectCommand.SetDialogueBoostEnabled(next.dialogueBoostEnabled)
+        if (nextEffects.dialogueBoostEnabled != prevEffects.dialogueBoostEnabled) {
+            commands += EffectCommand.SetDialogueBoostEnabled(nextEffects.dialogueBoostEnabled)
         }
-        if (next.nightModeEnabled != prev.nightModeEnabled) {
-            commands += EffectCommand.SetNightModeEnabled(next.nightModeEnabled)
+        if (nextEffects.nightModeEnabled != prevEffects.nightModeEnabled) {
+            commands += EffectCommand.SetNightModeEnabled(nextEffects.nightModeEnabled)
         }
 
         // 4. Reverb preset — changing it re-attaches the effect, so it runs
         //    after the enabled flags settle.
-        if (next.reverbPreset != prev.reverbPreset) {
-            commands += EffectCommand.SetReverbPreset(next.reverbPreset)
+        if (nextEffects.reverbPreset != prevEffects.reverbPreset) {
+            commands += EffectCommand.SetReverbPreset(nextEffects.reverbPreset)
         }
 
         return commands

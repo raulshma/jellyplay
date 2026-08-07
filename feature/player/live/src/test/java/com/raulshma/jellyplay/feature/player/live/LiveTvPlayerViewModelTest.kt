@@ -2,7 +2,10 @@ package com.raulshma.jellyplay.feature.player.live
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -10,7 +13,7 @@ import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlaybackRequest
@@ -39,7 +42,8 @@ class LiveTvPlayerViewModelTest {
 
     private lateinit var liveTvRepo: MediaRepository
     private lateinit var playbackRepo: PlaybackRepository
-    private lateinit var prefs: UserPreferencesStore
+    private lateinit var appRuntimeStateStore: AppRuntimeStateStore
+    private lateinit var playbackStore: PlaybackStore
     private lateinit var lastChannelStore: LastChannelStore
     private lateinit var engineFactory: LiveEngineFactory
     private lateinit var fakeEngine: LivePlayerEngine
@@ -47,14 +51,16 @@ class LiveTvPlayerViewModelTest {
     private lateinit var appContext: android.content.Context
 
     private val capturedRequests = mutableListOf<LivePlaybackRequest>()
-    private val preferencesFlow = MutableStateFlow(UserPreferences())
+    private val appRuntimeFlow = MutableStateFlow(AppRuntimeState())
+    private val playbackFlow = MutableStateFlow(PlaybackSlice())
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         liveTvRepo = mockk<MediaRepository>(relaxed = true)
         playbackRepo = mockk(relaxed = true)
-        prefs = mockk(relaxed = true)
+        appRuntimeStateStore = mockk(relaxed = true)
+        playbackStore = mockk(relaxed = true)
         lastChannelStore = mockk(relaxed = true)
         engineFactory = mockk(relaxed = true)
         fakeEngine = mockk(relaxed = true)
@@ -63,12 +69,17 @@ class LiveTvPlayerViewModelTest {
         // becoming-noisy/audio-focus registration no-ops cleanly under unit test.
         appContext = mockk(relaxed = true)
         every { appContext.getSystemService(any<String>()) } returns null
+        every { appContext.getString(R.string.live_error_no_channels) } returns "No channels available"
+        every { appContext.getString(R.string.live_error_resolve_failed, any()) } answers {
+            "Unable to resolve live stream for ${secondArg<Any>()}"
+        }
 
         every { lastChannelStore.observeLastChannelId() } returns flowOf(null)
-        every { prefs.preferences } returns preferencesFlow
-        coEvery { prefs.setFavoriteChannels(any()) } answers {
+        every { appRuntimeStateStore.state } returns appRuntimeFlow
+        every { playbackStore.playback } returns playbackFlow
+        coEvery { appRuntimeStateStore.setFavoriteChannels(any()) } answers {
             val newFavs = firstArg<Set<String>>()
-            preferencesFlow.value = preferencesFlow.value.copy(favoriteChannels = newFavs)
+            appRuntimeFlow.value = appRuntimeFlow.value.copy(favoriteChannels = newFavs)
         }
         every { playbackRepo.getAccessToken() } returns "tok"
         every { engineFactory.create(any(), any()) } returns fakeEngine
@@ -317,7 +328,7 @@ class LiveTvPlayerViewModelTest {
         coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList<LiveTvProgram>())
 
         // Opt into Direct Stream.
-        preferencesFlow.value = preferencesFlow.value.copy(liveStreamOption = LiveStreamOption.DIRECT_STREAM)
+        playbackFlow.value = playbackFlow.value.copy(liveStreamOption = LiveStreamOption.DIRECT_STREAM)
 
         val vm = createVm()
         vm.initialize("ch-0", null, null)
@@ -400,17 +411,17 @@ class LiveTvPlayerViewModelTest {
         val vm = createVm()
         vm.toggleFavorite("ch-7")
         kotlinx.coroutines.delay(50)
-        assertTrue("ch-7" in preferencesFlow.value.favoriteChannels)
+        assertTrue("ch-7" in appRuntimeFlow.value.favoriteChannels)
         assertTrue("ch-7" in vm.state.value.favorites)
     }
 
     @Test
     fun `toggleFavorite removes already-present id`() = runTest {
-        preferencesFlow.value = preferencesFlow.value.copy(favoriteChannels = setOf("ch-7"))
+        appRuntimeFlow.value = appRuntimeFlow.value.copy(favoriteChannels = setOf("ch-7"))
         val vm = createVm()
         vm.toggleFavorite("ch-7")
         kotlinx.coroutines.delay(50)
-        assertTrue("ch-7" !in preferencesFlow.value.favoriteChannels)
+        assertTrue("ch-7" !in appRuntimeFlow.value.favoriteChannels)
         assertTrue("ch-7" !in vm.state.value.favorites)
     }
 
@@ -433,9 +444,11 @@ class LiveTvPlayerViewModelTest {
         context = appContext,
         mediaRepository = liveTvRepo,
         playbackRepository = playbackRepo,
-        userPreferencesStore = prefs,
+        appRuntimeStateStore = appRuntimeStateStore,
+        playbackStore = playbackStore,
         lastChannelStore = lastChannelStore,
         engineFactory = engineFactory,
         imageUrlProvider = imageUrlProvider,
+        userMessageBus = UserMessageBus(),
     )
 }

@@ -1,12 +1,14 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrackType
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaTrack
 import io.mockk.every
@@ -30,7 +32,8 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class TrackSelectionHelperTest {
 
-    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var engineStore: PlayerEngineStore
+    private lateinit var subtitleStore: SubtitleLanguageStore
     private lateinit var engine: MediaEngine
     private lateinit var availableTracks: MutableStateFlow<List<MediaTrack>>
     private lateinit var state: MutableStateFlow<VideoPlayerUiState>
@@ -40,15 +43,18 @@ class TrackSelectionHelperTest {
 
     @Before
     fun setUp() {
-        preferencesStore = mockk(relaxed = true)
-        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        engineStore = mockk(relaxed = true)
+        subtitleStore = mockk(relaxed = true)
+        every { engineStore.playerEngine } returns MutableStateFlow(PlayerEngineSlice())
+        every { subtitleStore.subtitle } returns MutableStateFlow(SubtitleSlice())
         engine = mockk(relaxed = true)
         availableTracks = MutableStateFlow(emptyList())
         every { engine.availableTracks } returns availableTracks
         state = MutableStateFlow(VideoPlayerUiState())
 
         helper = TrackSelectionHelper(
-            preferencesStore = preferencesStore,
+            engineStore = engineStore,
+            subtitleStore = subtitleStore,
             getEngine = { engine },
             getUiState = { state.value },
             updateUiState = { transform -> state.value = transform(state.value) },
@@ -68,10 +74,22 @@ class TrackSelectionHelperTest {
         return ItemPlaybackPreferenceResolver(repo, { null }, { null }, scope)
     }
 
+    /** A resolver that resolves to [pref] for the series scope. The Unconfined
+     *  scope runs [ItemPlaybackPreferenceResolver.refresh] synchronously, so the
+     *  cached value is set before this returns. */
+    private fun resolverFor(pref: com.raulshma.jellyplay.core.model.ItemPlaybackPreference): ItemPlaybackPreferenceResolver {
+        val repo = mockk<ItemPlaybackPreferenceRepository>(relaxed = true)
+        coEvery { repo.get(any(), any()) } returns pref
+        val resolver = ItemPlaybackPreferenceResolver(repo, { null }, { "series1" }, scope)
+        resolver.refresh()
+        return resolver
+    }
+
     @Test
     fun updateTracksFromEngine_noEngine_returnsEarly() {
         helper = TrackSelectionHelper(
-            preferencesStore = preferencesStore,
+            engineStore = engineStore,
+            subtitleStore = subtitleStore,
             getEngine = { null },
             getUiState = { state.value },
             updateUiState = { transform -> state.value = transform(state.value) },
@@ -165,7 +183,8 @@ class TrackSelectionHelperTest {
     @Test
     fun selectAudioTrack_noEngine_returnsEarly() {
         helper = TrackSelectionHelper(
-            preferencesStore = preferencesStore,
+            engineStore = engineStore,
+            subtitleStore = subtitleStore,
             getEngine = { null },
             getUiState = { state.value },
             updateUiState = { transform -> state.value = transform(state.value) },
@@ -213,8 +232,8 @@ class TrackSelectionHelperTest {
 
     @Test
     fun updateTracksFromEngine_preferredAudioLanguageMatches_autoSelects() {
-        every { preferencesStore.preferences } returns MutableStateFlow(
-            UserPreferences(preferredAudioLanguage = "spa"),
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(preferredAudioLanguage = "spa"),
         )
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
@@ -227,8 +246,8 @@ class TrackSelectionHelperTest {
 
     @Test
     fun updateTracksFromEngine_noLanguageMatch_fallsBackToDefault() {
-        every { preferencesStore.preferences } returns MutableStateFlow(
-            UserPreferences(preferredAudioLanguage = "jpn"),
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(preferredAudioLanguage = "jpn"),
         )
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.AUDIO, isSelected = false),
@@ -268,8 +287,8 @@ class TrackSelectionHelperTest {
 
     @Test
     fun updateTracksFromEngine_storedSelectionByIndex_resolvesAndSelects() {
-        every { preferencesStore.preferences } returns MutableStateFlow(
-            UserPreferences(
+        every { engineStore.playerEngine } returns MutableStateFlow(
+            PlayerEngineSlice(
                 mediaStreamSelections = mapOf("item1" to MediaStreamSelection(audioStreamIndex = 1)),
             ),
         )
@@ -289,8 +308,8 @@ class TrackSelectionHelperTest {
 
     @Test
     fun updateTracksFromEngine_subtitlesForcedOnly_selectsForcedStream() {
-        every { preferencesStore.preferences } returns MutableStateFlow(
-            UserPreferences(
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(
                 preferredSubtitleLanguage = "eng",
                 subtitlesForcedOnly = true,
             ),
@@ -361,7 +380,8 @@ class TrackSelectionHelperTest {
         // Offline: empty mediaStreams. resolveMediaStreamIndex previously
         // returned null so the stored selection was lost. Now it persists the
         // engine positional index directly.
-        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        every { engineStore.playerEngine } returns MutableStateFlow(PlayerEngineSlice())
+        every { subtitleStore.subtitle } returns MutableStateFlow(SubtitleSlice())
         state.value = VideoPlayerUiState() // empty mediaStreams
         availableTracks.value = listOf(
             mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
@@ -372,7 +392,7 @@ class TrackSelectionHelperTest {
         // The persisted per-item selection should carry index 0 (engine index),
         // not null.
         coVerify {
-            preferencesStore.setMediaStreamSelection(
+            engineStore.setMediaStreamSelection(
                 itemId = "item1",
                 audioStreamIndex = null,
                 subtitleStreamIndex = 0,
@@ -433,7 +453,8 @@ class TrackSelectionHelperTest {
     @Test
     fun resetAudioSelection_clearsStoredAudioSelection_whenNoItemId_returnsEarly() {
         val noItemId = TrackSelectionHelper(
-            preferencesStore = preferencesStore,
+            engineStore = engineStore,
+            subtitleStore = subtitleStore,
             getEngine = { engine },
             getUiState = { state.value },
             updateUiState = { transform -> state.value = transform(state.value) },
@@ -445,6 +466,44 @@ class TrackSelectionHelperTest {
             scope = scope,
         )
         noItemId.resetAudioSelection() // should not throw
+    }
+
+    @Test
+    fun updateTracksFromEngine_seriesSubtitleDisabled_forcesOffInsteadOfLanguageMatch() {
+        // A "subtitles off" series preference must short-circuit the language
+        // matcher: even though an "eng" subtitle track exists and the global
+        // preferred subtitle language is "eng", the disabled intent wins and
+        // Off is selected.
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            SubtitleSlice(preferredSubtitleLanguage = "eng"),
+        )
+        helper = TrackSelectionHelper(
+            engineStore = engineStore,
+            subtitleStore = subtitleStore,
+            getEngine = { engine },
+            getUiState = { state.value },
+            updateUiState = { transform -> state.value = transform(state.value) },
+            getCurrentItemId = { "item1" },
+            getCurrentSeriesId = { "series1" },
+            getPlayMethod = { com.raulshma.jellyplay.core.model.PlayMethod.DIRECT_PLAY },
+            onReloadForStreamChange = { _, _ -> },
+            playbackPreferenceResolver = resolverFor(
+                com.raulshma.jellyplay.core.model.ItemPlaybackPreference(
+                    scope = com.raulshma.jellyplay.core.model.PlaybackPrefScope.SERIES,
+                    key = "series1",
+                    subtitleDisabled = true,
+                )
+            ),
+            scope = scope,
+        )
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, -1) }
+        // The English track must NOT have been selected by the matcher.
+        verify(exactly = 0) { engine.selectTrack(TrackType.SUBTITLE, 0) }
     }
 
     private fun mediaTrack(

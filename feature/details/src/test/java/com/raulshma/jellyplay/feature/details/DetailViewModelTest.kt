@@ -13,18 +13,33 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.datastore.library.LibrarySlice
+import com.raulshma.jellyplay.core.datastore.library.LibraryStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +73,13 @@ class DetailViewModelTest {
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var downloadIntake: DownloadIntake
-    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var projections: PreferenceProjections
+    private lateinit var libraryStore: LibraryStore
+    private lateinit var homeDiscoveryStore: HomeDiscoveryStore
+    private lateinit var experimentalStore: ExperimentalStore
+    private lateinit var downloadsStore: DownloadsStore
+    private lateinit var appRuntimeStateStore: AppRuntimeStateStore
+    private lateinit var engineStore: PlayerEngineStore
     private lateinit var offlineModeManager: OfflineModeManager
     private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
     private lateinit var seerrRepository: SeerrRepository
@@ -67,6 +88,7 @@ class DetailViewModelTest {
     private lateinit var themeMusicPlayer: ThemeMusicPlayer
     private lateinit var tmdbApiClient: TmdbApiClient
     private lateinit var arrRepository: ArrRepository
+    private lateinit var episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 
     private lateinit var viewModel: DetailViewModel
 
@@ -78,7 +100,13 @@ class DetailViewModelTest {
         imageUrlProvider = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
-        preferencesStore = mockk(relaxed = true)
+        projections = mockk(relaxed = true)
+        libraryStore = mockk(relaxed = true)
+        homeDiscoveryStore = mockk(relaxed = true)
+        experimentalStore = mockk(relaxed = true)
+        downloadsStore = mockk(relaxed = true)
+        appRuntimeStateStore = mockk(relaxed = true)
+        engineStore = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
         adaptiveBitrateManager = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
@@ -87,8 +115,14 @@ class DetailViewModelTest {
         themeMusicPlayer = mockk(relaxed = true)
         tmdbApiClient = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
+        episodeCatalogue = mockk(relaxed = true)
 
-        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        every { projections.detailPreferences } returns MutableStateFlow(DetailPreferences())
+        every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
+        every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
+        every { experimentalStore.experimental } returns MutableStateFlow(ExperimentalSlice())
+        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
+        every { engineStore.playerEngine } returns MutableStateFlow(PlayerEngineSlice())
         every { seerrRepository.isConnected() } returns flowOf(false)
         every { seerrRepository.isRecommendationsEnabled() } returns flowOf(false)
         // Default stub for the similar-items fetch so loadItem's concurrent
@@ -140,11 +174,18 @@ class DetailViewModelTest {
         viewModel = DetailViewModel(
             context = context,
             mediaRepository = mediaRepository,
+            episodeCatalogue = episodeCatalogue,
             playbackRepository = playbackRepository,
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
             downloadIntake = downloadIntake,
-            preferencesStore = preferencesStore,
+            projections = projections,
+            libraryStore = libraryStore,
+            homeDiscoveryStore = homeDiscoveryStore,
+            experimentalStore = experimentalStore,
+            downloadsStore = downloadsStore,
+            appRuntimeStateStore = appRuntimeStateStore,
+            engineStore = engineStore,
             offlineModeManager = offlineModeManager,
             adaptiveBitrateManager = adaptiveBitrateManager,
             seerrRepository = seerrRepository,
@@ -197,6 +238,187 @@ class DetailViewModelTest {
 
         assertNotNull(viewModel.uiState.value.detail)
         assertNull(viewModel.uiState.value.smartPlayTarget)
+    }
+
+    // ---- Pull-to-refresh ---------------------------------------------------
+
+    @Test
+    fun forceRefresh_withoutLoadedDetail_isNoOp() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { mediaRepository.invalidateDetailCache(any()) }
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        assertFalse(viewModel.uiState.value.isRefreshing)
+    }
+
+    @Test
+    fun forceRefresh_keepsContentVisibleWhileRefetching() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),
+        )
+
+        viewModel.loadItem("m1")
+        advanceUntilIdle()
+
+        // Hold the refresh's re-fetch open so the in-flight state is observable.
+        val gate = CompletableDeferred<Unit>()
+        coEvery { mediaRepository.getMediaDetail("m1") } coAnswers {
+            gate.await()
+            Result.success(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)))
+        }
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        // Unlike loadItem, the detail must stay on screen during the refresh —
+        // no full-screen loading state, just the pull-to-refresh indicator.
+        assertNotNull(viewModel.uiState.value.detail)
+        assertTrue(viewModel.uiState.value.isRefreshing)
+        assertFalse(viewModel.uiState.value.isLoading)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isRefreshing)
+        assertEquals("m1", viewModel.uiState.value.detail?.item?.id)
+    }
+
+    @Test
+    fun forceRefresh_movie_invalidatesDetailCacheAndRefetches() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),
+        )
+
+        viewModel.loadItem("m1")
+        advanceUntilIdle()
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("m1") }
+        coVerify(exactly = 0) { mediaRepository.invalidateSeriesCache(any()) }
+        // Cache dropped, so the refetch must hit the repo again (2 calls total).
+        coVerify(exactly = 2) { mediaRepository.getMediaDetail("m1") }
+    }
+
+    @Test
+    fun forceRefresh_series_invalidatesSeriesCachesAndRefetches() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+        stubSeries("s1", season, listOf(episode("e1", 1, 1, isPlayed = false)))
+
+        viewModel.loadItem("s1")
+        advanceUntilIdle()
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("s1") }
+        // Seasons/episodes caches now live in the catalogue; force-refresh drops
+        // them via episodeCatalogue.invalidateSeries (the load reset also drops
+        // the prior series' snapshot, so the call count is >= 1).
+        coVerify(atLeast = 1) { episodeCatalogue.invalidateSeries("s1") }
+        coVerify(exactly = 0) { mediaRepository.invalidateUserDataCaches(any()) }
+        // Fresh seasons + episodes must be fetched after the cache drop — the
+        // detail screen reloads via the catalogue snapshot.
+        coVerify(atLeast = 2) { episodeCatalogue.loadSeriesEpisodes("s1", any()) }
+    }
+
+    @Test
+    fun forceRefresh_episode_invalidatesParentSeriesCaches() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("e1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "e1", name = "Ep 1", mediaType = MediaType.EPISODE, seriesId = "s1")),
+        )
+        val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+        // The parent series' catalogue snapshot (empty episodes suffice — this
+        // test only asserts the invalidation, not the loaded episodes).
+        val snapshot = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot(
+            seriesId = "s1",
+            seasons = listOf(season),
+            episodesBySeason = emptyMap(),
+            fetchedSeasonIds = emptySet(),
+            sortedEpisodes = emptyList(),
+            epoch = 0L,
+        )
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
+
+        viewModel.loadItem("e1")
+        advanceUntilIdle()
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("e1") }
+        // Episode belongs to a series → its catalogue snapshot must drop (the
+        // load reset also drops the prior series' snapshot, so >= 1).
+        coVerify(atLeast = 1) { episodeCatalogue.invalidateSeries("s1") }
+        coVerify(exactly = 0) { mediaRepository.invalidateUserDataCaches(any()) }
+    }
+
+    @Test
+    fun forceRefresh_album_invalidatesUserDataCachesForAlbumTracks() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("al1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "al1", name = "Album", mediaType = MediaType.ALBUM)),
+        )
+        coEvery { mediaRepository.getAlbumTracks("al1") } returns Result.success(emptyList())
+
+        viewModel.loadItem("al1")
+        advanceUntilIdle()
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("al1") }
+        // Album tracks have no scoped series cache — invalidateUserDataCaches
+        // drops the `tracks_$itemId` entry so the refetch is truly fresh.
+        coVerify(exactly = 1) { mediaRepository.invalidateUserDataCaches("al1") }
+        coVerify(exactly = 0) { mediaRepository.invalidateSeriesCache(any()) }
+        coVerify(exactly = 2) { mediaRepository.getAlbumTracks("al1") }
+    }
+
+    @Test
+    fun forceRefresh_collection_invalidatesCollectionItemsCache() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("c1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "c1", name = "Collection", mediaType = MediaType.COLLECTION)),
+        )
+        coEvery { mediaRepository.getCollectionItems("c1", limit = 100) } returns Result.success(
+            com.raulshma.jellyplay.core.model.SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0),
+        )
+
+        viewModel.loadItem("c1")
+        advanceUntilIdle()
+
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.invalidateDetailCache("c1") }
+        coVerify(exactly = 1) { mediaRepository.invalidateCollectionItemsCache("c1") }
+        coVerify(exactly = 0) { mediaRepository.invalidateSeriesCache(any()) }
+        coVerify(exactly = 2) { mediaRepository.getCollectionItems("c1", limit = 100) }
+    }
+
+    @Test
+    fun forceRefresh_refetchFailure_surfacesErrorAndClearsIndicator() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(
+            MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)),
+        )
+        viewModel.loadItem("m1")
+        advanceUntilIdle()
+
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.failure(RuntimeException("boom"))
+        viewModel.forceRefresh()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isRefreshing)
+        assertEquals("boom", viewModel.uiState.value.error)
     }
 
     @Test
@@ -400,12 +622,25 @@ class DetailViewModelTest {
             coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(
                 MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES)),
             )
-            coEvery { mediaRepository.getSeasons("s1") } returns Result.success(listOf(s1, s2))
-            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(listOf(s1e1))
-            coEvery { mediaRepository.getEpisodes("s1", "season2") } returns Result.success(listOf(s2e1))
-            coEvery { mediaRepository.getAllEpisodesGrouped("s1") } returns Result.success(
-                mapOf("season1" to listOf(s1e1), "season2" to listOf(s2e1)),
+            // Two-season catalogue snapshot stub (the detail screen reads both
+            // seasons + episodes from the consolidated snapshot now).
+            val snapshot = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot(
+                seriesId = "s1",
+                seasons = listOf(s1, s2),
+                episodesBySeason = mapOf("season1" to listOf(s1e1), "season2" to listOf(s2e1)),
+                fetchedSeasonIds = setOf("season1", "season2"),
+                sortedEpisodes = listOf(s1e1, s2e1),
+                epoch = 0L,
             )
+            coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
+            coEvery { episodeCatalogue.updateSeasonEpisodes("s1", "season1", any()) } answers {
+                val transform = thirdArg<(List<MediaItem>) -> List<MediaItem>>()
+                val rewritten = transform(listOf(s1e1))
+                snapshot.copy(
+                    episodesBySeason = snapshot.episodesBySeason + ("season1" to rewritten),
+                    sortedEpisodes = (rewritten + listOf(s2e1)),
+                )
+            }
             coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
 
             viewModel.loadItem("s1")
@@ -440,7 +675,9 @@ class DetailViewModelTest {
             advanceUntilIdle()
 
             io.mockk.coVerify(exactly = 1) { mediaRepository.markPlayed("season1") }
-            io.mockk.verify(exactly = 1) { mediaRepository.invalidateSeriesCache("s1") }
+            // markSeason drops the catalogue snapshot for re-entry (the series
+            // cache now lives in the catalogue, not the repo).
+            io.mockk.verify(exactly = 1) { episodeCatalogue.invalidateSeries("s1") }
         }
 
     // Repository failure must surface the localized snackbar and leave the
@@ -618,22 +855,28 @@ class DetailViewModelTest {
         runTest(mainDispatcherRule.testDispatcher) {
             backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
             val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
-            // Batched response groups under "" (null seasonId on the server) —
-            // does not contain a "season1" entry.
             coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(
                 MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES)),
             )
-            coEvery { mediaRepository.getSeasons("s1") } returns Result.success(listOf(season))
-            coEvery { mediaRepository.getAllEpisodesGrouped("s1") } returns Result.success(
-                mapOf("" to listOf(episode("e1", 1, 1))),
-            )
             val eps = listOf(episode("e1", 1, 1), episode("e2", 1, 2))
-            coEvery { mediaRepository.getEpisodes("s1", "season1") } returns Result.success(eps)
+            // The catalogue snapshot groups under "" (null seasonId on the
+            // server), so season1 is absent from fetchedSeasonIds — the on-demand
+            // per-season refetch must still fire and populate it.
+            val mismatchedSnapshot = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot(
+                seriesId = "s1",
+                seasons = listOf(season),
+                episodesBySeason = mapOf("" to listOf(episode("e1", 1, 1))),
+                fetchedSeasonIds = emptySet(),
+                sortedEpisodes = listOf(episode("e1", 1, 1)),
+                epoch = 0L,
+            )
+            coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(mismatchedSnapshot)
+            coEvery { episodeCatalogue.loadSeasonEpisodes("s1", "season1", any()) } returns Result.success(eps)
 
             viewModel.loadItem("s1")
             advanceUntilIdle()
 
-            // season1 was not in the batched map, so it must NOT be marked fetched.
+            // season1 was not in the snapshot, so it must NOT be marked fetched.
             assertEquals(false, viewModel.uiState.value.fetchedSeasonIds.contains("season1"))
             // On-demand load for season1 must fire the per-season refetch.
             viewModel.loadEpisodesForSeason("s1", "season1")
@@ -695,9 +938,42 @@ class DetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail(seriesId) } returns Result.success(
             MediaDetail(item = MediaItem(id = seriesId, name = "Show", mediaType = MediaType.SERIES)),
         )
-        coEvery { mediaRepository.getSeasons(seriesId) } returns Result.success(listOf(season))
-        coEvery { mediaRepository.getEpisodes(seriesId, season.id) } returns Result.success(episodes)
-        coEvery { mediaRepository.getAllEpisodesGrouped(seriesId) } returns Result.success(mapOf(season.id to episodes))
+        // The detail screen now reads seasons + episodes from the consolidated
+        // catalogue snapshot, so stub the catalogue directly. The snapshot's
+        // sortedEpisodes mirrors the canonical playback order the VM consumes.
+        val snapshot = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot(
+            seriesId = seriesId,
+            seasons = listOf(season),
+            episodesBySeason = mapOf(season.id to episodes),
+            fetchedSeasonIds = setOf(season.id),
+            sortedEpisodes = episodes.sortedWith(
+                compareBy<MediaItem>(
+                    { it.seasonNumber ?: Int.MAX_VALUE },
+                    { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE },
+                    { it.name },
+                ),
+            ),
+            epoch = 0L,
+        )
+        coEvery { episodeCatalogue.loadSeriesEpisodes(seriesId, any()) } returns Result.success(snapshot)
+        coEvery { episodeCatalogue.loadSeasonEpisodes(seriesId, season.id, any()) } returns Result.success(episodes)
+        // updateSeasonEpisodes applies the optimistic transform against the
+        // stubbed snapshot, mirroring the real catalogue's rewrite-and-rebuild
+        // so markSeasonPlayed's in-place flip + smart-play recompute resolve.
+        coEvery { episodeCatalogue.updateSeasonEpisodes(seriesId, season.id, any()) } answers {
+            val transform = thirdArg<(List<MediaItem>) -> List<MediaItem>>()
+            val rewritten = transform(episodes)
+            snapshot.copy(
+                episodesBySeason = snapshot.episodesBySeason + (season.id to rewritten),
+                sortedEpisodes = rewritten.sortedWith(
+                    compareBy<MediaItem>(
+                        { it.seasonNumber ?: Int.MAX_VALUE },
+                        { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE },
+                        { it.name },
+                    ),
+                ),
+            )
+        }
     }
 
     private fun episode(

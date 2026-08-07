@@ -92,6 +92,8 @@
     <string name="downloads_progress">진행률</string>
     <string name="downloads_watch_status">시청 상태</string>
     <string name="downloads_watched">시청함</string>
+    <string name="downloads_cd_switch_to_list">세로 에피소드 목록으로 전환</string>
+    <string name="downloads_cd_switch_to_cards">가로 에피소드 카드로 전환</string>
     <string name="downloads_watched_label">시청함</string>
     <string name="downloads_in_progress">진행 중</string>
     <string name="downloads_started">시작됨</string>

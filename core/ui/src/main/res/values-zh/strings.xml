@@ -8,6 +8,32 @@
     <string name="core_reset">重置</string>
     <string name="core_close">关闭</string>
     <string name="core_done">完成</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">确认</string>
+    <string name="core_ok">确定</string>
+    <string name="core_apply">应用</string>
+    <string name="core_delete">删除</string>
+    <string name="core_clear">清除</string>
+    <string name="core_undo">撤销</string>
+    <string name="core_clear_filters">清除筛选条件</string>
+    <string name="core_copy">复制</string>
+    <string name="core_copied_to_clipboard">已复制到剪贴板</string>
+    <string name="core_play_from_start">从头播放</string>
+    <string name="core_restart">重新开始</string>
+    <string name="core_send_now">立即发送</string>
+    <string name="core_search">搜索</string>
+    <string name="core_stop_playback">停止播放</string>
+    <string name="core_select_all">全选</string>
+    <string name="core_mark_all_seen">全部标记为已看</string>
+    <string name="core_loading">加载中…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_quick_actions">快捷操作</string>
+    <string name="core_action_play">播放</string>
+    <string name="core_action_mark_watched">标记为已看</string>
+    <string name="core_action_mark_unwatched">标记为未看</string>
+    <string name="core_action_download">下载</string>
+    <string name="core_action_add_to_playlist">添加到播放列表</string>
+    <string name="core_action_details">查看详情</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->
@@ -576,6 +602,44 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">来自您的 Radarr/Sonarr 的下载队列进度以及即将推出的日历</string>
     <string name="ss_arr_settings_title">Radarr / Sonarr 服务器</string>
     <string name="ss_arr_settings_subtitle">配置直接的 Radarr/Sonarr 服务器连接</string>
+    <string name="ss_sign_out_from_server_title">从服务器退出登录</string>
+    <string name="ss_sign_out_from_server_subtitle">撤销本设备在服务器上的会话</string>
+    <string name="ss_screensaver_show_title_title">显示标题</string>
+    <string name="ss_screensaver_show_title_subtitle">显示媒体标题</string>
+    <string name="ss_screensaver_categories_title">分类</string>
+    <string name="ss_screensaver_categories_subtitle">选择显示哪些媒体库类型</string>
+    <string name="ss_screensaver_slideshow_interval_title">幻灯片间隔</string>
+    <string name="ss_screensaver_slideshow_interval_subtitle">图片切换之间的时间间隔</string>
+    <string name="ss_screensaver_ken_burns_title">Ken Burns 效果</string>
+    <string name="ss_screensaver_ken_burns_subtitle">平移和缩放动画</string>
+    <string name="ss_screensaver_transition_style_title">过渡样式</string>
+    <string name="ss_screensaver_transition_style_subtitle">屏保切换图片的方式</string>
+    <string name="ss_home_backdrop_title">主页背景</string>
+    <string name="ss_home_backdrop_subtitle">将主视觉艺术图模糊为环境背景</string>
+    <string name="ss_compact_episode_list_title">紧凑剧集列表</string>
+    <string name="ss_compact_episode_list_subtitle">在手机上以垂直列表而非横向一行显示剧集</string>
+    <string name="ss_nav_bar_customization_title">导航栏</string>
+    <string name="ss_nav_bar_customization_subtitle">显示、隐藏和重新排列导航栏项目</string>
+    <string name="ss_nav_hide_on_scroll_title">滚动时隐藏</string>
+    <string name="ss_nav_hide_on_scroll_subtitle">向下滚动时隐藏导航栏</string>
+    <string name="ss_newsletter_sections_title">通讯布局与配置</string>
+    <string name="ss_newsletter_sections_subtitle">选择通讯中显示的版块</string>
+    <string name="ss_dialogue_boost_strength_title">对白增强强度</string>
+    <string name="ss_dialogue_boost_strength_subtitle">对白增强程度</string>
+    <string name="ss_mpv_extra_config_title">高级配置</string>
+    <string name="ss_mpv_extra_config_subtitle">原始 mpv 选项（mpv.conf 样式）</string>
+    <string name="ss_reset_engine_defaults_title">重置为默认</string>
+    <string name="ss_reset_engine_defaults_subtitle">恢复 MPV、LibVLC 或 ExoPlayer 设置</string>
+    <string name="ss_audio_prefetch_backfill_title">回填数量</string>
+    <string name="ss_audio_prefetch_backfill_subtitle">为重新播放而保留缓存的近期曲目数</string>
+    <string name="ss_audio_cache_clear_title">清除音频缓存</string>
+    <string name="ss_audio_cache_clear_subtitle">删除所有已缓存的音频数据</string>
+    <string name="ss_subtitle_tester_title">字幕样式测试器</string>
+    <string name="ss_subtitle_tester_subtitle">跨引擎预览样式</string>
+    <string name="ss_subtitle_provider_settings_title">字幕提供商</string>
+    <string name="ss_subtitle_provider_settings_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
+    <string name="ss_MEDIA_CARD_PEEK_title">长按预览</string>
+    <string name="ss_MEDIA_CARD_PEEK_subtitle">长按媒体卡片以窥视模糊的详情预览；松开以关闭</string>
 
     <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
     <string name="core_segment_intro">片头</string>

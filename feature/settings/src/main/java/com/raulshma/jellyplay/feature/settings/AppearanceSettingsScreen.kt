@@ -63,7 +63,7 @@ private val THEME_HIGHLIGHT_IDS = setOf("theme_mode", "theme_scheduler")
 private val APPEARANCE_LIBRARY_GROUP_IDS = setOf("show_unwatched_badge", "show_watched_checkmark", "hide_watched_items", "hide_episode_thumbnails", "skip_specials", "show_share_media", "show_external_ratings")
 private val PERFORMANCE_GROUP_IDS = setOf("performance_mode", "reduce_motion")
 private val BLUE_LIGHT_GROUP_IDS = setOf("blue_light_filter", "blue_light_strength")
-private val NEWSLETTER_GROUP_IDS = setOf("newsletter_enabled", "newsletter_delivery_day")
+private val NEWSLETTER_GROUP_IDS = setOf("newsletter_enabled", "newsletter_delivery_day", "newsletter_sections")
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -430,17 +430,13 @@ fun AppearanceSettingsScreen(
                                         LibraryViewMode.GRID -> stringResource(R.string.settings_library_view_grid)
                                         LibraryViewMode.LIST -> stringResource(R.string.settings_library_view_list)
                                         LibraryViewMode.THUMB -> stringResource(R.string.settings_library_view_thumb)
+                                        LibraryViewMode.MASONRY -> stringResource(R.string.settings_library_view_masonry)
                                     },
                                     trailingText = preferences.libraryViewMode.name,
                                     highlighted = highlightSettingId == "library_view_mode",
                                     index = currentIdx++, count = totalCount,
                                     onClick = {
-                                        val next = when (preferences.libraryViewMode) {
-                                            LibraryViewMode.GRID -> LibraryViewMode.THUMB
-                                            LibraryViewMode.THUMB -> LibraryViewMode.LIST
-                                            LibraryViewMode.LIST -> LibraryViewMode.GRID
-                                        }
-                                        viewModel.setLibraryViewMode(next)
+                                        viewModel.setLibraryViewMode(preferences.libraryViewMode.next)
                                     },
                                 )
                             }
@@ -800,6 +796,16 @@ fun AppearanceSettingsScreen(
                         highlighted = highlightSettingId == "hide_episode_thumbnails",
                         index = cardIdx++, count = cardTotal,
                         onCheckedChange = { viewModel.setHideEpisodeThumbnails(it) },
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.List,
+                        title = stringResource(R.string.settings_compact_episode_list),
+                        subtitle = stringResource(R.string.settings_compact_episode_list_subtitle),
+                        checked = preferences.compactEpisodeList,
+                        highlighted = highlightSettingId == "compact_episode_list",
+                        index = cardIdx++, count = cardTotal,
+                        onCheckedChange = { viewModel.setCompactEpisodeList(it) },
                     )
 
                     SettingToggleItem(

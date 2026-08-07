@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.database
 
 import androidx.room.TypeConverter
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import kotlinx.serialization.json.Json
 
 object Converters {
@@ -47,4 +48,18 @@ object Converters {
     @TypeConverter
     @JvmStatic
     fun fromEnum(value: Enum<*>?): String? = value?.name
+
+    // Home-screen SWR snapshot. These are plain encode/decode helpers, NOT
+    // @TypeConverter methods: HomeSectionCacheEntity stores the payload as a
+    // raw String column (payloadJson) and resolves the typed value itself,
+    // so Room never needs to convert a HomeSectionsResult column. Annotating
+    // them as @TypeConverter would be cargo-cult — Room would register a
+    // converter for a type no column uses.
+    @JvmStatic
+    fun encodeHomeSectionsResult(value: HomeSectionsResult): String =
+        json.encodeToString(value)
+
+    @JvmStatic
+    fun decodeHomeSectionsResult(value: String): HomeSectionsResult? =
+        runCatching { json.decodeFromString<HomeSectionsResult>(value) }.getOrNull()
 }

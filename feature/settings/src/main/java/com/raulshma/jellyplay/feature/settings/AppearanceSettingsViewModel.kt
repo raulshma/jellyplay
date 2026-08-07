@@ -19,33 +19,31 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.model.NavigationStyle
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class AppearanceSettingsViewModel @Inject constructor(
     private val store: UserPreferencesStore,
+    private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {
 
     /** Appearance-screen slice — recomposes this screen only on appearance-field writes. */
-    val preferences: StateFlow<AppearanceScreenPreferences> = store.appearanceScreenPreferences
+    val preferences: StateFlow<AppearanceScreenPreferences> = projections.appearanceScreenPreferences
 
     /** Navigation-customization slice, consumed by the embedded `NavigationCustomizationGroup`. */
     val navigationCustomizationPreferences: StateFlow<NavigationCustomizationPreferences> =
-        store.navigationCustomizationPreferences
+        projections.navigationCustomizationPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = store.preferences
-        .map { it.showAdvancedSettings }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
 
     fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { setShowAdvancedSettings(enabled) }
+        editor.edit { appearance.setShowAdvancedSettings(enabled) }
 
     fun setThemeMode(mode: ThemeMode) = editor.setThemeMode(mode)
     fun setDynamicTheming(enabled: Boolean) = editor.setDynamicTheming(enabled)
@@ -55,25 +53,25 @@ class AppearanceSettingsViewModel @Inject constructor(
     fun setColorStyle(style: ColorStyle) = editor.setColorStyle(style)
     fun setAccentColorSwatch(swatch: String) = editor.setAccentColorSwatch(swatch)
     fun setSynthwaveMode(enabled: Boolean) =
-        editor.edit { setSynthwaveMode(enabled) }
+        editor.edit { appearance.setSynthwaveMode(enabled) }
     fun setSynthwaveAccent(accent: String) =
-        editor.edit { setSynthwaveAccent(accent) }
+        editor.edit { appearance.setSynthwaveAccent(accent) }
     fun setSoothingMode(enabled: Boolean) =
-        editor.edit { setSoothingMode(enabled) }
+        editor.edit { appearance.setSoothingMode(enabled) }
     fun setSoothingAccent(accent: String) =
-        editor.edit { setSoothingAccent(accent) }
+        editor.edit { appearance.setSoothingAccent(accent) }
     fun setMonochromeMode(enabled: Boolean) =
-        editor.edit { setMonochromeMode(enabled) }
+        editor.edit { appearance.setMonochromeMode(enabled) }
     fun setBlueLightFilterEnabled(enabled: Boolean) =
-        editor.edit { setBlueLightFilterEnabled(enabled) }
+        editor.edit { appearance.setBlueLightFilterEnabled(enabled) }
     fun setBlueLightFilterStrength(strength: Float) =
-        editor.edit { setBlueLightFilterStrength(strength) }
+        editor.edit { appearance.setBlueLightFilterStrength(strength) }
     fun setColorBlindMode(mode: ColorBlindMode) = editor.setColorBlindMode(mode)
     fun setScheduledThemeStartHour(hour: Int) = editor.setScheduledThemeStartHour(hour)
     fun setScheduledThemeEndHour(hour: Int) = editor.setScheduledThemeEndHour(hour)
     fun setHandMode(mode: HandMode) = editor.setHandMode(mode)
     fun setReduceMotionEnabled(enabled: Boolean) =
-        editor.edit { setReduceMotionEnabled(enabled) }
+        editor.edit { appearance.setReduceMotionEnabled(enabled) }
     fun setAppFontScale(scale: AppFontScale) = editor.setAppFontScale(scale)
     fun setDateFormatPreference(preference: DateFormatPreference) =
         editor.setDateFormatPreference(preference)
@@ -81,68 +79,73 @@ class AppearanceSettingsViewModel @Inject constructor(
     fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) =
         editor.setEnabledHomeSectionTypes(types)
     fun setHomeSectionOrder(order: List<HomeSectionType>) =
-        editor.edit { setHomeSectionOrder(order) }
+        editor.edit { homeDiscovery.setHomeSectionOrder(order) }
     fun setHomeHeroEnabled(enabled: Boolean) = editor.setHomeHeroEnabled(enabled)
     fun setHomeBackdropEnabled(enabled: Boolean) = editor.setHomeBackdropEnabled(enabled)
     fun setNavBarShowLabels(show: Boolean) = editor.setNavBarShowLabels(show)
     fun setHideSearchHistory(enabled: Boolean) =
-        editor.edit { setHideSearchHistory(enabled) }
+        editor.edit { experimental.setHideSearchHistory(enabled) }
     fun setShowUnwatchedBadge(enabled: Boolean) =
-        editor.edit { setShowUnwatchedBadge(enabled) }
+        editor.edit { homeDiscovery.setShowUnwatchedBadge(enabled) }
     fun setShowWatchedCheckmark(enabled: Boolean) =
-        editor.edit { setShowWatchedCheckmark(enabled) }
+        editor.edit { homeDiscovery.setShowWatchedCheckmark(enabled) }
     fun setHideWatchedItems(enabled: Boolean) =
-        editor.edit { setHideWatchedItems(enabled) }
+        editor.edit { homeDiscovery.setHideWatchedItems(enabled) }
     fun setHideEpisodeThumbnails(enabled: Boolean) =
-        editor.edit { setHideEpisodeThumbnails(enabled) }
+        editor.edit { library.setHideEpisodeThumbnails(enabled) }
     fun setSkipSpecials(enabled: Boolean) =
-        editor.edit { setSkipSpecials(enabled) }
+        editor.edit { library.setSkipSpecials(enabled) }
+    fun setCompactEpisodeList(enabled: Boolean) =
+        editor.edit { library.setCompactEpisodeList(enabled) }
     fun setLibraryViewMode(mode: LibraryViewMode) =
-        editor.edit { setLibraryViewMode(mode) }
+        editor.edit { library.setLibraryViewMode(mode) }
     fun setShowShareMediaOption(enabled: Boolean) =
-        editor.edit { setShowShareMediaOption(enabled) }
+        editor.edit { experimental.setShowShareMediaOption(enabled) }
     fun setShowExternalRatings(enabled: Boolean) =
-        editor.edit { setShowExternalRatings(enabled) }
+        editor.edit { homeDiscovery.setShowExternalRatings(enabled) }
     fun setShowClockOnHome(enabled: Boolean) =
-        editor.edit { setShowClockOnHome(enabled) }
+        editor.edit { homeDiscovery.setShowClockOnHome(enabled) }
     fun setShowSettingsInHomeSearch(enabled: Boolean) = editor.setShowSettingsInHomeSearch(enabled)
     fun setContinueWatchingClickBehavior(behavior: ContinueWatchingClickBehavior) =
-        editor.edit { setContinueWatchingClickBehavior(behavior) }
+        editor.edit { homeDiscovery.setContinueWatchingClickBehavior(behavior) }
     fun setMergeContinueWatchingAndNextUp(enabled: Boolean) =
-        editor.edit { setMergeContinueWatchingAndNextUp(enabled) }
+        editor.edit { homeDiscovery.setMergeContinueWatchingAndNextUp(enabled) }
     fun unhideAllCwItems() =
-        editor.edit { unhideAllCwItems() }
+        editor.edit { homeDiscovery.unhideAllCwItems() }
     fun setNextUpMaxDays(days: Int) =
-        editor.edit { setNextUpMaxDays(days) }
+        editor.edit { homeDiscovery.setNextUpMaxDays(days) }
     fun setNextUpRewatching(enabled: Boolean) =
-        editor.edit { setNextUpRewatching(enabled) }
+        editor.edit { homeDiscovery.setNextUpRewatching(enabled) }
     fun setEnabledNewsletterSections(sections: Set<NewsletterSectionType>) =
-        editor.edit { setEnabledNewsletterSections(sections) }
+        editor.edit { notification.setEnabledNewsletterSections(sections) }
     fun setNewsletterSectionOrder(order: List<NewsletterSectionType>) =
-        editor.edit { setNewsletterSectionOrder(order) }
+        editor.edit { notification.setNewsletterSectionOrder(order) }
     fun setNewsletterEnabled(enabled: Boolean) =
-        editor.edit { setNewsletterEnabled(enabled) }
+        editor.edit { notification.setNewsletterEnabled(enabled) }
     fun setNewsletterDayOfWeek(day: Int) =
-        editor.edit { setNewsletterDayOfWeek(day) }
+        editor.edit { notification.setNewsletterDayOfWeek(day) }
     fun setHapticsEnabled(enabled: Boolean) = editor.setHapticsEnabled(enabled)
     fun setBackdropThemeMusicEnabled(enabled: Boolean) =
-        editor.edit { setBackdropThemeMusicEnabled(enabled) }
+        editor.edit { appearance.setBackdropThemeMusicEnabled(enabled) }
     fun setDreamShowTitle(enabled: Boolean) =
-        editor.edit { setDreamShowTitle(enabled) }
+        editor.edit { screensaver.setDreamShowTitle(enabled) }
     fun setDreamImageCategories(categories: Set<DreamImageCategory>) =
-        editor.edit { setDreamImageCategories(categories) }
+        editor.edit { screensaver.setDreamImageCategories(categories) }
     fun setDreamSlideshowIntervalMs(ms: Long) =
-        editor.edit { setDreamSlideshowIntervalMs(ms) }
+        editor.edit { screensaver.setDreamSlideshowIntervalMs(ms) }
     fun setDreamKenBurnsEnabled(enabled: Boolean) =
-        editor.edit { setDreamKenBurnsEnabled(enabled) }
+        editor.edit { screensaver.setDreamKenBurnsEnabled(enabled) }
     fun setDreamTransitionStyle(style: DreamTransitionStyle) =
-        editor.edit { setDreamTransitionStyle(style) }
+        editor.edit { screensaver.setDreamTransitionStyle(style) }
+
     fun setHideBottomNavOnScroll(hide: Boolean) =
-        editor.edit { setHideBottomNavOnScroll(hide) }
+        editor.edit { navigation.setHideBottomNavOnScroll(hide) }
     fun setHiddenNavItems(items: Set<String>) =
-        editor.edit { setHiddenNavItems(items) }
+        editor.edit { navigation.setHiddenNavItems(items) }
     fun setNavItemOrder(order: List<String>) =
-        editor.edit { setNavItemOrder(order) }
+        editor.edit { navigation.setNavItemOrder(order) }
+    fun setNavigationStyle(style: NavigationStyle) =
+        editor.edit { navigation.setNavigationStyle(style) }
 
     fun resetCategory(category: PreferenceResetCategory) = editor.resetCategory(category)
 }

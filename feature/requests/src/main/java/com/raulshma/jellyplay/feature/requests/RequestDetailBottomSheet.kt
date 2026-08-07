@@ -447,7 +447,7 @@ fun RequestDetailBottomSheet(
         ModalBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
-            shape = ShapeCache.smooth20,
+            shape = ShapeCache.smoothTop28,
             containerColor = colorScheme.surfaceContainer.copy(alpha = 0.95f),
             content = content,
         )

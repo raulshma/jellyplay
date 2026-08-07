@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Subtítulos</string>
+    <string name="player_resumed_message">Reanudado desde donde lo dejaste</string>
     <string name="player_reset_to_auto">Restablecer a Automático</string>
     <string name="player_track_default">Predeterminada</string>
     <string name="player_track_off">Desactivado</string>
@@ -73,6 +74,7 @@
     <string name="player_video_border_width">Ancho de borde: %1$s</string>
     <string name="player_video_shadow_offset">Desplazamiento de sombra: %1$s</string>
     <string name="player_video_subtitle_offset">Desfase de subtítulos: %1$s</string>
+    <string name="player_video_sync_preview_reset">Restablecer desfase</string>
     <string name="player_video_vertical_position">Posición vertical: %1$d%%</string>
 
     <!-- Sleep timer sheet -->
@@ -211,18 +213,10 @@
     <string name="player_video_on">Activado</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_subtitle_delay">Retraso de subtítulos</string>
     <string name="player_video_reset_both">Restablecer ambos</string>
     <string name="player_video_av_sync_audio_helper">Negativo: audio antes. Positivo: audio después.</string>
-    <string name="player_video_av_sync_subtitle_helper">Negativo: subtítulos antes. Positivo: subtítulos después.</string>
     <string name="player_video_av_sync_decrease">Disminuir %1$s</string>
     <string name="player_video_av_sync_increase">Aumentar %1$s</string>
-    <string name="player_video_sync_helper">Ayuda de sincronización</string>
-    <string name="player_video_sync_helper_hint">Mantén pulsado «Voz escuchada» cuando se diga una línea, luego «Texto visto» cuando aparezca su subtítulo.</string>
-    <string name="player_video_voice_heard">🔊 Voz escuchada</string>
-    <string name="player_video_listening">Escuchando…</string>
-    <string name="player_video_text_seen">💬 Texto visto</string>
-    <string name="player_video_watching">Observando…</string>
     <string name="player_video_picture_in_picture">Imagen en imagen</string>
     <string name="player_video_play_next">Reproducir siguiente</string>
     <string name="player_video_turn_on_autoplay">Activar reproducción automática</string>
@@ -237,6 +231,7 @@
     <string name="player_video_duration">Duración</string>
     <string name="player_video_remember_audio_language">Recordar idioma de audio para esta serie</string>
     <string name="player_video_remember_subtitle_language">Recordar idioma de subtítulos para esta serie</string>
+    <string name="player_video_remember_subtitles_off">Mantener subtítulos desactivados para esta serie</string>
     <string name="player_video_error_offline_file_missing">Error: falta el archivo sin conexión</string>
     <string name="player_video_error_loading_media">Error al cargar los medios</string>
     <string name="player_video_trickplay_thumbnail">Miniatura de trickplay</string>

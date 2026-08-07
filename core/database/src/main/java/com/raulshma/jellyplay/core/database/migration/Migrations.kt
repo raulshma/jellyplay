@@ -671,8 +671,67 @@ val MIGRATION_39_40 = object : Migration(39, 40) {
     }
 }
 
+// Persistent stale-while-revalidate cache for home-screen sections. The home
+// screen rendered nothing until its full section set (8–20 network requests)
+// resolved on every cold open past the 60s in-memory TTL; this table holds the
+// last successful payload so Home can paint instantly while a network refresh
+// runs in the background. Keyed by (serverId, userId, cacheKey) so a user
+// switch / logout never serves another user's payload.
+val MIGRATION_40_41 = object : Migration(40, 41) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS home_section_cache (
+                serverId TEXT NOT NULL,
+                userId TEXT NOT NULL,
+                cacheKey TEXT NOT NULL,
+                payloadJson TEXT NOT NULL,
+                fetchedAt INTEGER NOT NULL,
+                PRIMARY KEY(serverId, userId, cacheKey)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_home_section_cache_serverId_userId ON home_section_cache(serverId, userId)"
+        )
+    }
+}
+
+// Per-series / per-item "subtitles off" intent. Lets a user disable subtitles
+// for a whole series so every episode loads with subs off (instead of the
+// resolver auto-picking the global-language match). Nullable: NULL means
+// "inherit" (resolve normally), so existing rows are unaffected. Mutually
+// exclusive with subtitleLanguage — the repository keeps them consistent, but
+// the column itself has no DB-level constraint.
+val MIGRATION_41_42 = object : Migration(41, 42) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE item_playback_preferences ADD COLUMN subtitleDisabled INTEGER")
+    }
+}
+
+// Offline download resync: persist a freshness baseline (image tags, metadata
+// signature, media source id/size) + the last check timestamp and result flags
+// so a freshness check can diff a fresh fetch against this baseline, and the UI
+// can render an "update available" badge from the DB with zero network. All
+// columns are nullable or default to 0 so existing rows are unaffected until
+// their first check (or next download, which seeds the baseline).
+val MIGRATION_42_43 = object : Migration(42, 43) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedPosterTag TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedBackdropTag TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedMetadataSignature TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedMediaSourceId TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedMediaSizeBytes INTEGER")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN lastSyncedAt INTEGER")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncUpdateAvailable INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncMediaChanged INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncChecking INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncError INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v40 migration chain, with the
+ * The complete, correctly-ordered v1→v43 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -720,4 +779,7 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_37_38,
         MIGRATION_38_39,
         MIGRATION_39_40,
+        MIGRATION_40_41,
+        MIGRATION_41_42,
+        MIGRATION_42_43,
     )

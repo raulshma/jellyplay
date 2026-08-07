@@ -119,7 +119,7 @@ class ArrRepositoryImpl @Inject constructor(
     override suspend fun resolveServers(): Result<ArrServiceSummary> = withContext(cacheScope.coroutineContext) {
         serverCache.get(SERVERS_KEY)?.let { return@withContext Result.success(it) }
 
-        val prefs = arrPreferencesStore.preferences.first()
+        val prefs = arrPreferencesStore.preferences.value
         val manualRadarr = prefs.manualServers.filter { it.kind == ArrServiceKind.RADARR }
         val manualSonarr = prefs.manualServers.filter { it.kind == ArrServiceKind.SONARR }
 

@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">Áudio</string>
     <string name="player_subtitles">Legendas</string>
+    <string name="player_resumed_message">Recontinuado de onde deixou</string>
     <string name="player_reset_to_auto">Repor para Automático</string>
     <string name="player_track_default">Predefinido</string>
     <string name="player_track_off">Desligado</string>
@@ -73,6 +74,7 @@
     <string name="player_video_border_width">Largura da borda: %1$s</string>
     <string name="player_video_shadow_offset">Deslocamento da sombra: %1$s</string>
     <string name="player_video_subtitle_offset">Desvio das legendas: %1$s</string>
+    <string name="player_video_sync_preview_reset">Redefinir desvio</string>
     <string name="player_video_vertical_position">Posição vertical: %1$d%%</string>
 
     <!-- Sleep timer sheet -->
@@ -211,18 +213,10 @@
     <string name="player_video_on">Ativado</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_subtitle_delay">Atraso da legenda</string>
     <string name="player_video_reset_both">Repor ambos</string>
     <string name="player_video_av_sync_audio_helper">Negativo: áudio mais cedo. Positivo: áudio mais tarde.</string>
-    <string name="player_video_av_sync_subtitle_helper">Negativo: legendas mais cedo. Positivo: legendas mais tarde.</string>
     <string name="player_video_av_sync_decrease">Diminuir %1$s</string>
     <string name="player_video_av_sync_increase">Aumentar %1$s</string>
-    <string name="player_video_sync_helper">Assistente de sincronização</string>
-    <string name="player_video_sync_helper_hint">Mantenha premido «Voz ouvida» quando uma linha é dita, depois «Texto visto» quando a legenda aparece.</string>
-    <string name="player_video_voice_heard">🔊 Voz ouvida</string>
-    <string name="player_video_listening">A ouvir…</string>
-    <string name="player_video_text_seen">💬 Texto visto</string>
-    <string name="player_video_watching">A observar…</string>
     <string name="player_video_picture_in_picture">Imagem na imagem</string>
     <string name="player_video_play_next">Reproduzir seguinte</string>
     <string name="player_video_turn_on_autoplay">Ativar reprodução automática</string>
@@ -237,6 +231,7 @@
     <string name="player_video_duration">Duração</string>
     <string name="player_video_remember_audio_language">Memorizar idioma de áudio para esta série</string>
     <string name="player_video_remember_subtitle_language">Memorizar idioma de legendas para esta série</string>
+    <string name="player_video_remember_subtitles_off">Manter legendas desativadas para esta série</string>
     <string name="player_video_error_offline_file_missing">Erro: ficheiro offline em falta</string>
     <string name="player_video_error_loading_media">Erro ao carregar conteúdo</string>
     <string name="player_video_trickplay_thumbnail">Miniatura trickplay</string>

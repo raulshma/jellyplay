@@ -20,8 +20,17 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
@@ -32,13 +41,17 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.ui.components.UndoableAction
+import com.raulshma.jellyplay.core.ui.components.undoActionChannel
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchMatcher
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchRegistry
@@ -65,6 +78,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
@@ -89,8 +103,13 @@ class HomeViewModel @Inject constructor(
     private val playbackSyncScheduler: PlaybackSyncScheduler,
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: NewsletterTriggerManager,
-    private val preferencesStore: UserPreferencesStore,
+    private val homeDiscoveryStore: HomeDiscoveryStore,
+    private val appearanceStore: AppearanceStore,
+    private val experimentalStore: ExperimentalStore,
+    private val playbackStore: PlaybackStore,
     private val preferencesEditor: PreferencesEditor,
+    private val serverIdentityStore: ServerIdentityStore,
+    private val widgetDataStore: WidgetDataStore,
     private val searchHistoryRepository: SearchHistoryRepository,
     private val seerrRepository: SeerrRepository,
     private val seerrRequestDelegate: SeerrRequestDelegate,
@@ -281,6 +300,21 @@ class HomeViewModel @Inject constructor(
     private val _searchHistory = MutableStateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory
 
+    /** Recoverable-action snackbars for home (search-history delete/clear).
+     * Home previously had no SnackbarHost at all */
+    private val _undoActions = undoActionChannel()
+    val undoActions = _undoActions.receiveAsFlow()
+
+    /**
+     * All users persisted for the current server. Backs the home app-bar quick
+     * user switcher. Mirrored into [HomeUiState.currentServerUsers] so the
+     * UI observes a single state object; the underlying flow is
+     * DB-backed ([AuthRepository.currentServerUsers]) so it's already populated
+     * after login — no extra fetch.
+     */
+    val currentServerUsers: StateFlow<List<UserInfo>> = authRepository.currentServerUsers
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /**
      * Encapsulates all Seerr request UI state (result, servers, loading, seasons).
      * SearchViewModel uses the same holder — this avoids Home duplicating that
@@ -317,7 +351,27 @@ class HomeViewModel @Inject constructor(
                 } else if (previousUserId != userId) {
                     refreshJob?.cancel()
                     resetHomeScrollPosition()
-                    _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null, isLoading = true) }
+                    // Stale-while-revalidate: paint the persisted snapshot (if any)
+                    // instead of clearing to empty. The empty+isLoading path drives
+                    // a full-screen loading box (DelayedLoadingScreen) that looks like
+                    // the splash screen re-appearing — so when we already have cached
+                    // content, show it immediately and drop isLoading; the network
+                    // fetch below revalidates and overwrites. Only clear+load when
+                    // there's genuinely nothing to show.
+                    val cachedSections = orderedCachedHomeSections(currentHomeSectionQuery())
+                    if (cachedSections != null) {
+                        _uiState.update {
+                            it.copy(
+                                sections = cachedSections,
+                                favorites = emptyList(),
+                                discoverSections = emptyMap(),
+                                error = null,
+                                isLoading = false,
+                            )
+                        }
+                    } else {
+                        _uiState.update { it.copy(sections = emptyList(), favorites = emptyList(), discoverSections = emptyMap(), error = null, isLoading = true) }
+                    }
                     fetchAndUpdateSections()
                     startPeriodicRefresh()
                 }
@@ -325,49 +379,65 @@ class HomeViewModel @Inject constructor(
             }
         }
 
+        // Mirror the server's persisted user list into UI state so the home
+        // app-bar user switcher can decide whether to render (≥2 users)
+        // without the UI subscribing to the repo flow directly.
+        launch {
+            currentServerUsers.collect { users ->
+                _uiState.update { it.copy(currentServerUsers = users) }
+            }
+        }
+
         launch {
             var hasSeenHomePreferences = false
-            preferencesStore.preferences.collect { prefs ->
+            combine(
+                homeDiscoveryStore.homeDiscovery,
+                appearanceStore.appearance,
+                experimentalStore.experimental,
+                playbackStore.playback,
+            ) { home, appearance, experimental, playback ->
+                HomePrefs(home, appearance, experimental, playback)
+            }.collect { prefs ->
                 val homeSectionPrefsChanged = hasSeenHomePreferences && (
-                    prefs.enabledHomeSectionTypes != enabledHomeSectionTypes ||
-                        prefs.homeSectionOrder != homeSectionOrder ||
-                        prefs.libraryHomeSectionOverrides != libraryHomeSectionOverrides ||
-                        prefs.mergeContinueWatchingAndNextUp != mergeContinueWatchingAndNextUp ||
-                        prefs.nextUpMaxDays != nextUpMaxDays ||
-                        prefs.nextUpRewatching != nextUpRewatching ||
-                        prefs.nextUpExcludedSeriesIds != nextUpExcludedSeriesIds ||
-                        prefs.hiddenCwItemIds != hiddenCwItemIds ||
-                        prefs.pinnedHomeSections != pinnedHomeSections
-                    )
+                    prefs.home.enabledHomeSectionTypes != enabledHomeSectionTypes ||
+                        prefs.home.homeSectionOrder != homeSectionOrder ||
+                        prefs.home.libraryHomeSectionOverrides != libraryHomeSectionOverrides ||
+                        prefs.home.mergeContinueWatchingAndNextUp != mergeContinueWatchingAndNextUp ||
+                        prefs.home.nextUpMaxDays != nextUpMaxDays ||
+                        prefs.home.nextUpRewatching != nextUpRewatching ||
+                        prefs.home.nextUpExcludedSeriesIds != nextUpExcludedSeriesIds ||
+                        prefs.home.hiddenCwItemIds != hiddenCwItemIds ||
+                        prefs.home.pinnedHomeSections != pinnedHomeSections
+                )
 
                 hasSeenHomePreferences = true
-                enabledHomeSectionTypes = prefs.enabledHomeSectionTypes
-                homeSectionOrder = prefs.homeSectionOrder
-                libraryHomeSectionOverrides = prefs.libraryHomeSectionOverrides
-                mergeContinueWatchingAndNextUp = prefs.mergeContinueWatchingAndNextUp
-                nextUpMaxDays = prefs.nextUpMaxDays
-                nextUpRewatching = prefs.nextUpRewatching
-                nextUpExcludedSeriesIds = prefs.nextUpExcludedSeriesIds
-                hiddenCwItemIds = prefs.hiddenCwItemIds
-                pinnedHomeSections = prefs.pinnedHomeSections
-                androidTvWatchNextEnabled = prefs.androidTvWatchNextEnabled
+                enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes
+                homeSectionOrder = prefs.home.homeSectionOrder
+                libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides
+                mergeContinueWatchingAndNextUp = prefs.home.mergeContinueWatchingAndNextUp
+                nextUpMaxDays = prefs.home.nextUpMaxDays
+                nextUpRewatching = prefs.home.nextUpRewatching
+                nextUpExcludedSeriesIds = prefs.home.nextUpExcludedSeriesIds
+                hiddenCwItemIds = prefs.home.hiddenCwItemIds
+                pinnedHomeSections = prefs.home.pinnedHomeSections
+                androidTvWatchNextEnabled = prefs.playback.androidTvWatchNextEnabled
                 _uiState.update { it.copy(
-                    homeMode = prefs.homeMode,
-                    dynamicTheming = prefs.dynamicTheming,
-                    oledMode = prefs.oledMode,
-                    colorStyle = prefs.colorStyle,
-                    accentColorSwatch = prefs.accentColorSwatch,
-                    homeHeroEnabled = prefs.homeHeroEnabled,
-                    homeBackdropEnabled = prefs.homeBackdropEnabled,
-                    performanceMode = prefs.performanceMode,
-                    showClock = prefs.showClockOnHome,
-                    showSettingsInHomeSearch = prefs.showSettingsInHomeSearch,
-                    continueWatchingClickBehavior = prefs.continueWatchingClickBehavior,
-                    experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.enabledExperimentalFeatures,
-                    directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.enabledExperimentalFeatures,
-                    enabledHomeSectionTypes = prefs.enabledHomeSectionTypes,
-                    homeSectionOrder = prefs.homeSectionOrder,
-                    libraryHomeSectionOverrides = prefs.libraryHomeSectionOverrides,
+                    homeMode = prefs.home.homeMode,
+                    dynamicTheming = prefs.appearance.dynamicTheming,
+                    oledMode = prefs.appearance.oledMode,
+                    colorStyle = prefs.appearance.colorStyle,
+                    accentColorSwatch = prefs.appearance.accentColorSwatch,
+                    homeHeroEnabled = prefs.home.homeHeroEnabled,
+                    homeBackdropEnabled = prefs.home.homeBackdropEnabled,
+                    performanceMode = prefs.appearance.performanceMode,
+                    showClock = prefs.home.showClockOnHome,
+                    showSettingsInHomeSearch = prefs.home.showSettingsInHomeSearch,
+                    continueWatchingClickBehavior = prefs.home.continueWatchingClickBehavior,
+                    experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.experimental.enabledExperimentalFeatures,
+                    directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures,
+                    enabledHomeSectionTypes = prefs.home.enabledHomeSectionTypes,
+                    homeSectionOrder = prefs.home.homeSectionOrder,
+                    libraryHomeSectionOverrides = prefs.home.libraryHomeSectionOverrides,
                 ) }
 
                 if (homeSectionPrefsChanged) {
@@ -467,7 +537,7 @@ class HomeViewModel @Inject constructor(
         }
 
         launch {
-            preferencesStore.activeUserId
+            serverIdentityStore.activeUserId
                 .flatMapLatest { userId ->
                     if (userId != null) searchHistoryRepository.getRecent(userId)
                     else flowOf(emptyList())
@@ -549,6 +619,25 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /** Intermediate holder for the four home-preference slices combined above. */
+    private data class HomePrefs(
+        val home: HomeDiscoverySlice,
+        val appearance: AppearanceSlice,
+        val experimental: ExperimentalSlice,
+        val playback: PlaybackSlice,
+    )
+
+    /**
+     * Switches the active user. The [AuthRepository.currentUser] collector in
+     * [init] re-runs the full home refresh on the resulting user change, so no
+     * callback or explicit reload is needed here — the UI observes the flow.
+     */
+    fun switchUser(userId: String) {
+        launch {
+            authRepository.switchUser(userId)
+        }
+    }
+
     /** Intermediate holder for the five combined Seerr flows. */
     private data class SeerrRequestSlice(
         val result: com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult?,
@@ -606,6 +695,38 @@ class HomeViewModel @Inject constructor(
             firstVisibleItemIndex = firstVisibleItemIndex.coerceAtLeast(0),
             firstVisibleItemScrollOffset = firstVisibleItemScrollOffset.coerceAtLeast(0),
         )
+    }
+
+    /**
+     * Marks a home-row item (quick actions) played/unplayed.
+     * Flips the item in-place in every section so the card badge updates
+     * immediately; the next home refresh reconciles the server truth.
+     */
+    fun markItemPlayed(item: MediaItem) = setItemPlayed(item, played = true)
+
+    fun markItemUnplayed(item: MediaItem) = setItemPlayed(item, played = false)
+
+    private fun setItemPlayed(item: MediaItem, played: Boolean) {
+        launch {
+            val result = if (played) mediaRepository.markPlayed(item.id)
+            else mediaRepository.markUnplayed(item.id)
+            if (result.isSuccess) {
+                _uiState.update { state ->
+                    state.copy(
+                        sections = state.sections.map { section ->
+                            section.copy(
+                                items = section.items.map {
+                                    if (it.id == item.id) it.copy(
+                                        isPlayed = played,
+                                        playbackPositionTicks = 0L,
+                                    ) else it
+                                }
+                            )
+                        }
+                    )
+                }
+            }
+        }
     }
 
     fun resetHomeScrollPosition() {
@@ -708,13 +829,45 @@ class HomeViewModel @Inject constructor(
     }
 
     fun deleteSearchHistoryItem(id: Long) {
-        launch { searchHistoryRepository.deleteById(id) }
+        // Capture the query before deleting so Undo can re-save it (the DB row id
+        // changes on re-insert; the query text is what matters).
+        val item = _searchHistory.value.firstOrNull { it.id == id }
+        launch {
+            searchHistoryRepository.deleteById(id)
+            if (item != null) {
+                _undoActions.trySend(
+                    UndoableAction(
+                        message = "Removed \"${item.query}\" from search history",
+                        onUndo = {
+                            launch {
+                                val uid = serverIdentityStore.activeUserId.first() ?: return@launch
+                                searchHistoryRepository.saveQuery(item.query, uid)
+                            }
+                        },
+                    ),
+                )
+            }
+        }
     }
 
     fun clearSearchHistory() {
         launch {
-            val userId = preferencesStore.activeUserId.first() ?: return@launch
+            val userId = serverIdentityStore.activeUserId.first() ?: return@launch
+            // Snapshot before clearing so Undo can restore the full set.
+            val snapshot = _searchHistory.value
             searchHistoryRepository.clearAll(userId)
+            if (snapshot.isNotEmpty()) {
+                _undoActions.trySend(
+                    UndoableAction(
+                        message = "Cleared search history",
+                        onUndo = {
+                            launch {
+                                snapshot.forEach { searchHistoryRepository.saveQuery(it.query, userId) }
+                            }
+                        },
+                    ),
+                )
+            }
         }
     }
 
@@ -727,13 +880,13 @@ class HomeViewModel @Inject constructor(
      */
     fun onSettingsResultClicked(item: ResolvedSettingsItem) {
         if (item.isAdvanced) {
-            launch { preferencesEditor.edit { setShowAdvancedSettings(true) } }
+            launch { preferencesEditor.edit { appearance.setShowAdvancedSettings(true) } }
         }
     }
 
     fun excludeSeriesFromNextUp(seriesId: String) {
         launch {
-            preferencesStore.excludeSeriesFromNextUp(seriesId)
+            homeDiscoveryStore.excludeSeriesFromNextUp(seriesId)
         }
     }
 
@@ -765,7 +918,7 @@ class HomeViewModel @Inject constructor(
             val removed = removeAt(index)
             add(target, removed)
         }
-        preferencesEditor.edit { setHomeSectionOrder(updated) }
+        preferencesEditor.edit { homeDiscovery.setHomeSectionOrder(updated) }
     }
 
     /**
@@ -798,6 +951,41 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Reads + orders the persisted home-sections snapshot for the current
+     * query, or null if none is cached. Used to paint cached content *before*
+     * clearing sections on a user/refresh transition, so the home screen never
+     * shows the full-screen loading box (DelayedLoadingScreen) when we already
+     * have stale content to display — stale-while-revalidate without the flash.
+     */
+    private fun currentHomeSectionQuery(): HomeSectionQuery = HomeSectionQuery(
+        enabledSections = enabledHomeSectionTypes,
+        libraryHomeSectionOverrides = libraryHomeSectionOverrides,
+        nextUpRewatching = nextUpRewatching,
+        nextUpMaxDays = nextUpMaxDays,
+        nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
+        hiddenCwItemIds = hiddenCwItemIds,
+        pinnedSections = pinnedHomeSections,
+    )
+
+    /**
+     * Reads the persisted SWR snapshot for [query] and orders it for display,
+     * or null if nothing is cached / the cached sections are empty. Shared by
+     * the user-switch collector (paint snapshot instead of a loading box) and
+     * the cold-open path in [fetchAndUpdateSections].
+     */
+    private suspend fun orderedCachedHomeSections(query: HomeSectionQuery): List<HomeSection>? =
+        runCatching { mediaRepository.getCachedHomeSections(query) }
+            .getOrNull()
+            ?.takeIf { it.sections.isNotEmpty() }
+            ?.let { cached ->
+                orderHomeSections(
+                    sections = cached.sections,
+                    order = homeSectionOrder,
+                    mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
+                )
+            }
+
     private suspend fun fetchAndUpdateSections() {
         // Do not drop a refresh that arrives while another request is running.
         // In particular, a sign-in can complete while Home's earlier request is
@@ -819,85 +1007,102 @@ class HomeViewModel @Inject constructor(
             }
 
             lastRefreshTime = timeSource.nowEpochMillis()
-            val query = HomeSectionQuery(
-                enabledSections = enabledHomeSectionTypes,
-                libraryHomeSectionOverrides = libraryHomeSectionOverrides,
-                nextUpRewatching = nextUpRewatching,
-                nextUpMaxDays = nextUpMaxDays,
-                nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
-                hiddenCwItemIds = hiddenCwItemIds,
-                pinnedSections = pinnedHomeSections,
-            )
-            mediaRepository.getHomeSections(
-                enabledSections = query.enabledSections,
-                libraryHomeSectionOverrides = query.libraryHomeSectionOverrides,
-                nextUpRewatching = query.nextUpRewatching,
-                nextUpMaxDays = query.nextUpMaxDays,
-                nextUpExcludedSeriesIds = query.nextUpExcludedSeriesIds,
-                hiddenCwItemIds = query.hiddenCwItemIds,
-                pinnedSections = query.pinnedSections,
-            )
-                .onSuccess { homeResult ->
-                    val fetchedSections = homeResult.sections
-                    // Surface a non-blocking notice only when a section type
-                    // actually failed to load (403/500/network). Sections that
-                    // returned zero items (e.g. no watch history, no Next Up) are
-                    // NOT failures — previously the size-mismatch heuristic
-                    // false-positived on new users and after merges.
-                    _uiState.update { it.copy(partialLoadError = homeResult.failedSectionTypes.isNotEmpty()) }
-                    // OrderHomeSectionsUseCase is pure and operates on a handful
-                    // of sections (sub-microsecond), so no thread offload. The
-                    // previous withContext(Dispatchers.Default) hop escaped the
-                    // test scheduler and made isRefreshing/isLoading assertions
-                    // racy under StandardTestDispatcher.
-                    val finalSections = orderHomeSections(
-                        sections = fetchedSections,
-                        order = homeSectionOrder,
-                        mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
-                    )
+            val query = currentHomeSectionQuery()
 
-                    _uiState.update { it.copy(sections = finalSections) }
+            // Stale-while-revalidate: on a cold open (sections still empty),
+            // paint the persisted snapshot from Room instantly so the home
+            // screen renders before the network refresh below resolves. The
+            // fresh fetch overwrites it on success; if the network fails we keep
+            // showing stale rather than an empty screen. Only when empty — a
+            // pull-to-refresh or pref change already has sections on screen and
+            // flashing stale would feel worse than the brief spinner.
+            if (_uiState.value.sections.isEmpty()) {
+                orderedCachedHomeSections(query)?.let { cachedSections ->
+                    _uiState.update { it.copy(sections = cachedSections) }
+                }
+            }
 
-                    val continueWatching = finalSections
-                        .find { it.type == HomeSectionType.CONTINUE_WATCHING }
-                        ?.items ?: emptyList()
-                    val currentIds = continueWatching.map { it.id }.toSet()
-                    if (currentIds != lastContinueWatchingIds) {
-                        lastContinueWatchingIds = currentIds
-                        preferencesStore.setContinueWatching(continueWatching)
-                        // Defer the widget broadcast + TV Watch Next refresh until
-                        // after the mutex is released (see pendingCwSideEffect above).
-                        pendingCwSideEffect = {
-                            // Push the CW change to the home-screen widget. The
-                            // broadcaster owns the explicit-component broadcast so
-                            // this VM no longer needs an Android Context.
-                            continueWatchingBroadcaster.refreshContinueWatching()
-                            // Refresh the Android TV "Watch Next" OS row so the
-                            // system home stays in sync with the user's progress.
-                            // Worker is a no-op on phones and respects its preference.
-                            if (androidTvWatchNextEnabled) {
-                                tvWatchNextScheduler.scheduleRefresh()
+            // The three fetch groups write independent _uiState fields
+            // (sections / discoverSections / recentlyGrabbed), so run them
+            // concurrently rather than one after another — cold-open latency
+            // becomes the max of the three instead of their sum. The CW
+            // widget/TV-Watch-Next side-effect stays tied to the main sections
+            // result and is invoked after the mutex releases. Discover/arr are
+            // runCatching-wrapped so a failure in either can never cancel the
+            // main fetch via coroutineScope's structured concurrency.
+            coroutineScope {
+                val mainDeferred = async {
+                    mediaRepository.getHomeSections(query)
+                }
+                val discoverDeferred = if (_uiState.value.discoverEnabled) {
+                    async { runCatching { fetchDiscoverSections(seerrPreferences) } }
+                } else null
+                // Direct *arr "Recently Grabbed" calendar — gated by the
+                // DIRECT_ARR_INTEGRATION flag and the same TTL gate as discover
+                // sections so it never adds extra round-trips on every refresh.
+                val arrDeferred = if (_uiState.value.directArrEnabled) {
+                    async { runCatching { fetchRecentlyGrabbed() } }
+                } else null
+
+                mainDeferred.await()
+                    .onSuccess { homeResult ->
+                        val fetchedSections = homeResult.sections
+                        // Surface a non-blocking notice only when a section type
+                        // actually failed to load (403/500/network). Sections that
+                        // returned zero items (e.g. no watch history, no Next Up) are
+                        // NOT failures — previously the size-mismatch heuristic
+                        // false-positived on new users and after merges.
+                        _uiState.update { it.copy(partialLoadError = homeResult.failedSectionTypes.isNotEmpty()) }
+                        // OrderHomeSectionsUseCase is pure and operates on a handful
+                        // of sections (sub-microsecond), so no thread offload. The
+                        // previous withContext(Dispatchers.Default) hop escaped the
+                        // test scheduler and made isRefreshing/isLoading assertions
+                        // racy under StandardTestDispatcher.
+                        val finalSections = orderHomeSections(
+                            sections = fetchedSections,
+                            order = homeSectionOrder,
+                            mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
+                        )
+
+                        _uiState.update { it.copy(sections = finalSections) }
+
+                        val continueWatching = finalSections
+                            .find { it.type == HomeSectionType.CONTINUE_WATCHING }
+                            ?.items ?: emptyList()
+                        val currentIds = continueWatching.map { it.id }.toSet()
+                        if (currentIds != lastContinueWatchingIds) {
+                            lastContinueWatchingIds = currentIds
+                            widgetDataStore.setContinueWatching(continueWatching)
+                            // Defer the widget broadcast + TV Watch Next refresh until
+                            // after the mutex is released (see pendingCwSideEffect above).
+                            pendingCwSideEffect = {
+                                // Push the CW change to the home-screen widget. The
+                                // broadcaster owns the explicit-component broadcast so
+                                // this VM no longer needs an Android Context.
+                                continueWatchingBroadcaster.refreshContinueWatching()
+                                // Refresh the Android TV "Watch Next" OS row so the
+                                // system home stays in sync with the user's progress.
+                                // Worker is a no-op on phones and respects its preference.
+                                if (androidTvWatchNextEnabled) {
+                                    tvWatchNextScheduler.scheduleRefresh()
+                                }
                             }
                         }
+
+                        _uiState.update { it.copy(error = null) }
+                    }
+                    .onFailure { throwable ->
+                        if (_uiState.value.sections.isEmpty()) {
+                            _uiState.update { s -> s.copy(error = throwable.message ?: "${throwable::class.simpleName}") }
+                        }
+                        _uiState.update { it.copy(partialLoadError = false) }
                     }
 
-                    _uiState.update { it.copy(error = null) }
-                }
-                .onFailure { throwable ->
-                    if (_uiState.value.sections.isEmpty()) {
-                        _uiState.update { s -> s.copy(error = throwable.message ?: "${throwable::class.simpleName}") }
-                    }
-                    _uiState.update { it.copy(partialLoadError = false) }
-                }
-
-            if (_uiState.value.discoverEnabled) {
-                fetchDiscoverSections(seerrPreferences)
-            }
-            // Direct *arr "Recently Grabbed" calendar — gated by the
-            // DIRECT_ARR_INTEGRATION flag and the same TTL gate as discover
-            // sections so it never adds extra round-trips on every refresh.
-            if (_uiState.value.directArrEnabled) {
-                fetchRecentlyGrabbed()
+                // Await the optional groups so coroutineScope doesn't return
+                // before their state writes land. Errors are already swallowed
+                // by runCatching above; the results are intentionally ignored.
+                discoverDeferred?.await()
+                arrDeferred?.await()
             }
         } finally {
             // isGoingOnline is also cleared in the offlineMode collector's
@@ -1050,7 +1255,7 @@ class HomeViewModel @Inject constructor(
                 jellyfinDeferred.await().onSuccess { result ->
                     updateSearch { it.copy(jellyfinResults = result.items) }
                     if (result.items.isNotEmpty()) {
-                        val userId = preferencesStore.activeUserId.first()
+                        val userId = serverIdentityStore.activeUserId.first()
                         if (userId != null) {
                             searchHistoryRepository.saveQuery(query, userId)
                         }
@@ -1077,10 +1282,10 @@ class HomeViewModel @Inject constructor(
  * Resolved media context for a single pending-sync outbox row.
  *
  * @property item the resolved [MediaItem] (title, type, episode context), or
- *   `null` if neither the offline store nor the server had a row for the id.
+ * `null` if neither the offline store nor the server had a row for the id.
  * @property posterUrl the URL to load the poster from. For offline items this
- *   is the locally-saved [OfflineMediaItem.posterPath]; otherwise it is the
- *   id-derived server URL, which will only resolve once back online.
+ * is the locally-saved [OfflineMediaItem.posterPath]; otherwise it is the
+ * id-derived server URL, which will only resolve once back online.
  */
 data class ResolvedSyncMedia(
     val item: com.raulshma.jellyplay.core.model.MediaItem?,

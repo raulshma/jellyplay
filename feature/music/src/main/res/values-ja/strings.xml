@@ -36,6 +36,8 @@
     <string name="music_now_playing">再生中</string>
     <string name="music_download_album">アルバムをダウンロード</string>
     <string name="music_download_track">トラックをダウンロード</string>
+    <string name="music_delete_album_downloads_confirm_title">アルバムのダウンロードを削除しますか？</string>
+    <string name="music_delete_album_downloads_confirm_message">このアルバムのすべてのダウンロード済みトラックが削除されます。</string>
 
     <!-- Track / row menus -->
     <string name="music_go_to_album">アルバムへ移動</string>

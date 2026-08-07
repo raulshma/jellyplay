@@ -2,9 +2,10 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.every
 import io.mockk.mockk
@@ -27,22 +28,25 @@ class AppearanceSettingsViewModelHomeBackdropTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private lateinit var store: UserPreferencesStore
+    private lateinit var projections: PreferenceProjections
+    private lateinit var appearanceStore: AppearanceStore
     private lateinit var editor: PreferencesEditor
 
     @Before
     fun setUp() {
         store = mockk(relaxed = true)
+        projections = mockk(relaxed = true)
+        appearanceStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
-        every { store.preferences } returns MutableStateFlow(UserPreferences())
-        every { store.appearanceScreenPreferences } returns
+        every { projections.appearanceScreenPreferences } returns
             MutableStateFlow(AppearanceScreenPreferences())
-        every { store.navigationCustomizationPreferences } returns
+        every { projections.navigationCustomizationPreferences } returns
             MutableStateFlow(NavigationCustomizationPreferences())
     }
 
     @Test
     fun `setHomeBackdropEnabled delegates to editor`() {
-        val viewModel = AppearanceSettingsViewModel(store, editor)
+        val viewModel = AppearanceSettingsViewModel(store, projections, appearanceStore, editor)
 
         viewModel.setHomeBackdropEnabled(false)
 

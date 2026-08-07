@@ -1,7 +1,12 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.model.UserPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -26,21 +31,31 @@ class SettingsProjectorTest {
 
     @Test
     fun project_updatesFieldsFromUserPreferences() {
-        val prefs = UserPreferences(
-            sleepTimerDurationMs = 20_000L,
-            videoShowPlaybackMetadata = true,
-            showClockInPlayer = true,
-            showTimeRemaining = true,
-            tvZoomModePercent = 100f,
-            keepScreenOnDuringVideo = true,
-            videoPassOutProtectionHours = 4,
-            autoPlayCountdownSec = 10,
-            usePinForPlayerLock = true,
-            pinHash = "hashed_pin",
-            preferredSubtitleLanguage = "spa",
+        val agg = VideoPlayerAggregate(
+            playback = PlaybackSlice(
+                keepScreenOnDuringVideo = true,
+                autoPlayCountdownSec = 10,
+            ),
+            videoPlayer = VideoPlayerSlice(
+                videoShowPlaybackMetadata = true,
+                showClockInPlayer = true,
+                showTimeRemaining = true,
+                tvZoomModePercent = 100f,
+                videoPassOutProtectionHours = 4,
+            ),
+            audio = AudioSlice(
+                sleepTimerDurationMs = 20_000L,
+            ),
+            subtitle = SubtitleSlice(
+                preferredSubtitleLanguage = "spa",
+            ),
+            security = SecuritySlice(
+                usePinForPlayerLock = true,
+                pinHash = "hashed_pin",
+            ),
         )
 
-        projector.project(prefs)
+        projector.project(agg)
 
         assertEquals(20_000L, uiState.sleepTimerLastUsedDurationMs)
         assertTrue(uiState.showPlaybackMetadata)
@@ -57,13 +72,14 @@ class SettingsProjectorTest {
 
     @Test
     fun project_returnsTrueWhenSubtitleStyleChanges() {
-        val prefsInitial = UserPreferences()
-        projector.project(prefsInitial)
+        val aggInitial = VideoPlayerAggregate()
+        projector.project(aggInitial)
 
-        val newStyle = prefsInitial.resolvedSubtitleStyle(isHdr = false).copy(fontSize = 42)
-        val prefsUpdated = prefsInitial.copy(subtitleStyle = newStyle)
+        val initialSlice = SubtitleSlice()
+        val newStyle = resolveSubtitleStyle(initialSlice, isHdr = false).copy(fontSize = 42)
+        val aggUpdated = VideoPlayerAggregate(subtitle = SubtitleSlice(subtitleStyle = newStyle))
 
-        val subtitleStyleChanged = projector.project(prefsUpdated)
+        val subtitleStyleChanged = projector.project(aggUpdated)
         assertTrue("Project returns true when subtitle style changes", subtitleStyleChanged)
         assertEquals(42, uiState.subtitleStyle.fontSize)
     }
@@ -71,15 +87,15 @@ class SettingsProjectorTest {
     @Test
     fun project_noOpsWhenPreferencesAreUnchanged() {
         // UiState seeds subtitleStyle with SubtitleStyle.DEFAULT (applyCustomStyle=true),
-        // so build prefs whose stored style resolves to the same value. Under the
-        // Override-respecting resolver a default UserPreferences() has the toggle off,
+        // so build an aggregate whose stored style resolves to the same value. Under the
+        // Override-respecting resolver a default aggregate has the toggle off,
         // which would (correctly) read as a change on first project — not the no-op
         // this test pins.
-        val prefs = UserPreferences(subtitleStyle = SubtitleStyle.DEFAULT)
-        val changed1 = projector.project(prefs)
+        val agg = VideoPlayerAggregate(subtitle = SubtitleSlice(subtitleStyle = SubtitleStyle.DEFAULT))
+        val changed1 = projector.project(agg)
         assertFalse(changed1)
 
-        val changed2 = projector.project(prefs)
+        val changed2 = projector.project(agg)
         assertFalse(changed2)
     }
 }

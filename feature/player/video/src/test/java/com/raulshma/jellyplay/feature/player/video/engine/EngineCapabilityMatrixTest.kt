@@ -83,7 +83,7 @@ class EngineCapabilityMatrixTest {
         val c = EngineCapabilityMatrix.MPV
         assertTrue(c.supportsPip)
         assertFalse(c.supportsMiniMode)
-        assertTrue(c.supportsCues)             // MPV publishes cue text via libass
+        assertTrue(c.supportsCues)             // MPV exposes sub-text/sub-start for cue accumulation
         assertTrue(c.supportsAudioDelay)
         assertTrue(c.supportsSubtitleDelay)
         assertTrue(c.supportsAudioPassthrough)

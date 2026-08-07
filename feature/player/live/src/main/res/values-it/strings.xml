@@ -20,6 +20,17 @@
     <string name="live_channel_up">Canale su</string>
     <string name="live_channel_down">Canale giù</string>
     <string name="live_stream_options">Opzioni flusso</string>
+    <string name="live_record">Registra</string>
+    <string name="live_record_title">Registra</string>
+    <string name="live_record_once">Registra una volta</string>
+    <string name="live_record_series">Registra serie</string>
+    <string name="live_cancel_recording">Annulla registrazione</string>
+    <string name="live_cancel_series">Annulla serie</string>
+    <string name="live_record_success">Registrazione pianificata</string>
+    <string name="live_record_canceled">Registrazione annullata</string>
+    <string name="live_record_failed">Impossibile pianificare la registrazione</string>
+    <string name="live_record_no_program">Nessuna info sul programma</string>
+    <string name="live_play_from_start">Riproduci dall\'inizio</string>
     <string name="live_error_playback">Errore di riproduzione</string>
     <string name="live_error_playback_fallback">Errore di riproduzione</string>
     <string name="live_error_show_details">Mostra dettagli</string>

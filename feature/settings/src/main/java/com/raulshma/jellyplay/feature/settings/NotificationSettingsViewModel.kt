@@ -9,27 +9,24 @@ import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class NotificationSettingsViewModel @Inject constructor(
     private val store: UserPreferencesStore,
+    private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val editor: PreferencesEditor,
     private val mediaRepository: MediaRepository,
     private val notificationScheduler: NotificationScheduler,
 ) : JellyPlayViewModel() {
 
     /** Notification-screen slice — recomposes this screen only on notification-field writes. */
-    val preferences: StateFlow<NotificationPreferences> = store.notificationPreferences
+    val preferences: StateFlow<NotificationPreferences> = projections.notificationPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = store.preferences
-        .map { it.showAdvancedSettings }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
 
     private val _libraryFolders = MutableStateFlow<List<LibraryFolder>>(emptyList())
     val libraryFolders: StateFlow<List<LibraryFolder>> = _libraryFolders.asStateFlow()
@@ -42,7 +39,7 @@ class NotificationSettingsViewModel @Inject constructor(
     }
 
     fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { setShowAdvancedSettings(enabled) }
+        editor.edit { appearance.setShowAdvancedSettings(enabled) }
 
     /**
      * Applies a transform to the notification preferences and reschedules the
@@ -50,7 +47,7 @@ class NotificationSettingsViewModel @Inject constructor(
      */
     fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {
         editor.edit {
-            updateNotificationPreferences(transform)
+            notification.updateNotificationPreferences(transform)
             notificationScheduler.scheduleOrUpdate()
         }
     }

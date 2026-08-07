@@ -100,6 +100,8 @@ internal fun GestureOverlay(
     onEdgeSwipe: () -> Unit,
     onHapticPulse: () -> Unit = {},
     overlayDismissDelayMs: Long = 800L,
+    onStartGesture: () -> Unit = {},
+    onCancelOverlays: () -> Unit = {},
 ) {
     val currentOnSeekGesture by rememberUpdatedState(onSeekGesture)
     val currentOnBrightnessGesture by rememberUpdatedState(onBrightnessGesture)
@@ -107,6 +109,8 @@ internal fun GestureOverlay(
     val currentOnClearOverlays by rememberUpdatedState(onClearOverlays)
     val currentOnEdgeSwipe by rememberUpdatedState(onEdgeSwipe)
     val currentOnHapticPulse by rememberUpdatedState(onHapticPulse)
+    val currentOnStartGesture by rememberUpdatedState(onStartGesture)
+    val currentOnCancelOverlays by rememberUpdatedState(onCancelOverlays)
 
     val edgeThresholdPx = with(LocalDensity.current) { 40.dp.toPx() }
     val deadZonePx = with(LocalDensity.current) { 30.dp.toPx() }
@@ -130,6 +134,8 @@ internal fun GestureOverlay(
                         var edgeSwipeConsumed = false
                         var prevBrightnessBoundHapticTime = 0L
                         var prevVolumeBoundHapticTime = 0L
+                        var wasMultiTouchCancelled = false
+                        currentOnStartGesture()
                         do {
                             val event = awaitPointerEvent()
                             // A second finger means the user is pinching to
@@ -138,7 +144,10 @@ internal fun GestureOverlay(
                             // so it doesn't fight the pinch detector, and leave
                             // the changes unconsumed so the surface's pinch
                             // handler can take over.
-                            if (event.changes.count { it.pressed } >= 2) break
+                            if (event.changes.count { it.pressed } >= 2) {
+                                wasMultiTouchCancelled = true
+                                break
+                            }
                             val change = event.changes.firstOrNull() ?: break
                             if (!change.pressed) break
                             val totalDx = change.position.x - startX
@@ -189,7 +198,11 @@ internal fun GestureOverlay(
                                 change.consume()
                             }
                         } while (true)
-                        currentOnClearOverlays()
+                        if (wasMultiTouchCancelled) {
+                            currentOnCancelOverlays()
+                        } else {
+                            currentOnClearOverlays()
+                        }
                     }
                 } else Modifier
             ),

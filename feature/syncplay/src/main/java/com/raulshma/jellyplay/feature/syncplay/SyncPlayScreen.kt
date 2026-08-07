@@ -76,6 +76,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ConfirmState
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -114,6 +117,7 @@ fun SyncPlayScreen(
     val spacing = adaptiveInfo.itemSpacing(isTv)
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val leaveConfirm = rememberConfirmState()
     val headerStatus = resolveHeaderStatus(
         isLoading = isLoading,
         hasError = error != null,
@@ -171,7 +175,7 @@ fun SyncPlayScreen(
             )
             if (isInGroup) {
                 TooltipIconButton(
-                    onClick = { viewModel.leaveGroup() },
+                    onClick = { leaveConfirm.request { viewModel.leaveGroup() } },
                     imageVector = Tabler.Outline.Logout,
                     contentDescription = stringResource(R.string.syncplay_leave_group),
                     tooltipText = stringResource(R.string.syncplay_leave_group),
@@ -208,7 +212,7 @@ fun SyncPlayScreen(
                              groupInfo = group,
                              onTogglePlayback = { viewModel.togglePlayback() },
                              onStop = { viewModel.stop() },
-                             onLeave = { viewModel.leaveGroup() },
+                             onLeave = { leaveConfirm.request { viewModel.leaveGroup() } },
                              onSetRepeatMode = { viewModel.setRepeatMode(it) },
                              onSetShuffleMode = { viewModel.setShuffleMode(it) },
                              onSetIgnoreWait = { viewModel.setIgnoreWait(it) },
@@ -255,14 +259,12 @@ fun SyncPlayScreen(
                 }
             }
 
-            SnackbarHost(
+            com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 80.dp),
-            ) { data ->
-                Snackbar(data)
-            }
+            )
 
             AnimatedVisibility(
                 visible = !isInGroup,
@@ -290,6 +292,15 @@ fun SyncPlayScreen(
         CreateGroupDialog(
             onDismiss = { viewModel.updateShowCreateDialog(false) },
             onCreate = { viewModel.createGroup(it) },
+        )
+    }
+
+    if (leaveConfirm.isVisible) {
+        leaveConfirm.ConfirmDialog(
+            title = stringResource(R.string.syncplay_leave_group_confirm_title),
+            message = stringResource(R.string.syncplay_leave_group_confirm_message),
+            confirmText = stringResource(R.string.syncplay_leave_group),
+            dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
         )
     }
 

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 import com.raulshma.jellyplay.core.model.LyricsLine
@@ -35,20 +36,32 @@ class MediaRepositoryImplTest {
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val lrcLibApi: LrcLibApi = mockk(relaxed = true)
     private val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
+    private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor = mockk(relaxed = true)
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
+    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
 
     private lateinit var repository: MediaRepositoryImpl
 
     @Before
     fun setup() {
         every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
+        // The repository delegates getSeasons/getEpisodes/getAllEpisodesGrouped
+        // to a real EpisodeCatalogueImpl, which in turn calls back into the
+        // mocked apiClient — so the existing series/episodes stubs keep working
+        // end-to-end through the catalogue transplant.
+        val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
+            apiClient,
+            offlineRepository,
+        )
         repository = MediaRepositoryImpl(
             apiClient,
             lrcLibApi,
             lyricsCacheDao,
+            homeSectionCacheDao,
             networkMonitor,
             playedStateSync,
+            episodeCatalogue,
         )
     }
 
@@ -347,9 +360,12 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `getSeasons caches result per series`() = runTest {
+        // getSeasons now delegates to the consolidated catalogue snapshot, which
+        // fetches seasons + episodes together — so both primitives are stubbed.
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(
             listOf(seasonItem("s1"), seasonItem("s2"))
         )
+        coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
 
         repository.getSeasons("series-1")
         repository.getSeasons("series-1")
@@ -362,6 +378,7 @@ class MediaRepositoryImplTest {
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(
             listOf(seasonItem("s1"))
         )
+        coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
 
         repository.getSeasons("series-1")
         repository.invalidateSeriesCache("series-1")
@@ -376,6 +393,11 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `getAllEpisodesGrouped groups episodes by seasonId and caches`() = runTest {
+        // The catalogue snapshot loads seasons + episodes together; stub the
+        // seasons primitive so the snapshot completes.
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(
+            listOf(seasonItem("season-1"), seasonItem("season-2"))
+        )
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(
             listOf(
                 episodeItem("e1", seriesId = "series-1", seasonId = "season-1"),
@@ -399,6 +421,7 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `invalidateSeriesCache drops grouped episodes so next call re-fetches`() = runTest {
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(emptyList())
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(
             listOf(episodeItem("e1", seriesId = "series-1", seasonId = "season-1"))
         )
@@ -419,6 +442,9 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `getEpisodes serves from grouped cache after getAllEpisodesGrouped`() = runTest {
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(
+            listOf(seasonItem("season-1"), seasonItem("season-2"))
+        )
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(
             listOf(
                 episodeItem("e1", seriesId = "series-1", seasonId = "season-1"),
@@ -432,7 +458,7 @@ class MediaRepositoryImplTest {
 
         assertTrue(seasonOne.isSuccess)
         assertEquals(listOf("e1"), seasonOne.getOrNull()!!.map { it.id })
-        // No per-season network fetch — served from the grouped cache.
+        // No per-season network fetch — served from the grouped snapshot.
         coVerify(exactly = 0) { apiClient.getEpisodes("series-1", "season-1") }
     }
 
@@ -498,6 +524,7 @@ class MediaRepositoryImplTest {
             MediaDetail(item = MediaItem(id = "series-1", name = "Show", mediaType = MediaType.SERIES))
         )
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(listOf(seasonItem("s1")))
+        coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
         coEvery { apiClient.markPlayed("series-1") } returns Result.success(Unit)
 
         repository.getMediaDetail("series-1")
@@ -516,6 +543,7 @@ class MediaRepositoryImplTest {
             MediaDetail(item = mediaItem("movie-1"))
         )
         coEvery { apiClient.getSeasons("series-1") } returns Result.success(listOf(seasonItem("s1")))
+        coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
         coEvery { apiClient.markPlayed("movie-1") } returns Result.success(Unit)
 
         repository.getMediaDetail("movie-1")
@@ -600,6 +628,9 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `getSeasons does not cache a fetch that raced an invalidation`() = runTest {
+        // getSeasons delegates to the catalogue snapshot, which fetches seasons
+        // + episodes. Gate the seasons primitive so the invalidation lands
+        // mid-fetch; the snapshot's cache write must be skipped (epoch guard).
         val fetchStarted = CompletableDeferred<Unit>()
         val releaseFetch = CompletableDeferred<Unit>()
         coEvery { apiClient.getSeasons("series-1") } coAnswers {
@@ -607,13 +638,15 @@ class MediaRepositoryImplTest {
             releaseFetch.await()
             Result.success(listOf(seasonItem("s1")))
         }
+        coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(emptyList())
 
         val first = async { repository.getSeasons("series-1") }
         fetchStarted.await()
         // Invalidation lands while the fetch is in flight → epoch bumps.
         // markPlayed on the series itself triggers invalidateUserDataCaches,
-        // which calls invalidateSeriesCache (seasons cache) + invalidateDetailCache
-        // (epoch bump). The fetch in flight must therefore skip its cache write.
+        // which calls invalidateSeriesCache (drops the catalogue snapshot) +
+        // invalidateDetailCache (epoch bump). The fetch in flight must skip its
+        // cache write.
         coEvery { apiClient.getMediaDetail("series-1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "series-1", name = "Show", mediaType = MediaType.SERIES))
         )
@@ -654,6 +687,10 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `getAllEpisodesGrouped does not cache a fetch that raced an invalidation`() = runTest {
+        // The catalogue snapshot fetches seasons (quick) then episodes (gated);
+        // the invalidation lands during the episodes fetch, so the snapshot's
+        // cache write must be skipped (epoch guard).
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(emptyList())
         val fetchStarted = CompletableDeferred<Unit>()
         val releaseFetch = CompletableDeferred<Unit>()
         coEvery { apiClient.getAllEpisodes("series-1") } coAnswers {
@@ -665,10 +702,11 @@ class MediaRepositoryImplTest {
         val first = async { repository.getAllEpisodesGrouped("series-1") }
         fetchStarted.await()
         // markPlayed on the series triggers invalidateUserDataCaches, which calls
-        // both invalidateSeriesCache (drops the entry) AND invalidateDetailCache
-        // (bumps detailCacheEpoch). The fetch in flight captured the pre-bump
-        // epoch, so its completing write must be skipped — otherwise the stale
-        // pre-mutation episode list would be pinned for the full TTL.
+        // both invalidateSeriesCache (drops the catalogue snapshot) AND
+        // invalidateDetailCache (bumps detailCacheEpoch). The fetch in flight
+        // captured the pre-bump epoch, so its completing write must be skipped —
+        // otherwise the stale pre-mutation episode list would be pinned for the
+        // full TTL.
         coEvery { apiClient.getMediaDetail("series-1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "series-1", name = "Show", mediaType = MediaType.SERIES))
         )
@@ -694,7 +732,11 @@ class MediaRepositoryImplTest {
 
     @Test
     fun `getEpisodes falls back to network when season absent from grouped cache`() = runTest {
-        // Grouped cache populated for season-1 only.
+        // Snapshot populated for season-1 only (seasons primitive stubbed so
+        // the catalogue's loadSeriesEpisodes completes).
+        coEvery { apiClient.getSeasons("series-1") } returns Result.success(
+            listOf(seasonItem("season-1"), seasonItem("season-2"))
+        )
         coEvery { apiClient.getAllEpisodes("series-1") } returns Result.success(
             listOf(episodeItem("e1", seriesId = "series-1", seasonId = "season-1"))
         )
@@ -708,7 +750,7 @@ class MediaRepositoryImplTest {
 
         assertTrue(seasonTwo.isSuccess)
         assertEquals(listOf("e2"), seasonTwo.getOrNull()!!.map { it.id })
-        // The per-season path fired because season-2 was absent from the grouped cache.
+        // The per-season path fired because season-2 was absent from the snapshot.
         coVerify(exactly = 1) { apiClient.getEpisodes("series-1", "season-2") }
     }
 

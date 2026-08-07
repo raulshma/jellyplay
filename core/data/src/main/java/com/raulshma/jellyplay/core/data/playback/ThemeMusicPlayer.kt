@@ -8,7 +8,7 @@ import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +22,7 @@ import javax.inject.Singleton
 
 /**
  * Plays ambient theme music on media detail pages when the
- * [com.raulshma.jellyplay.core.model.UserPreferences.backdropThemeMusicEnabled]
+ * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.backdropThemeMusicEnabled]
  * preference is enabled. Uses a dedicated [ExoPlayer] instance kept separate
  * from the main audio/video players so it never interferes with active
  * playback. The player loops a single theme song at a low ambient volume and
@@ -33,7 +33,7 @@ class ThemeMusicPlayer @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-    private val preferencesStore: UserPreferencesStore,
+    private val appearanceStore: AppearanceStore,
 ) {
     companion object {
         private const val TAG = "ThemeMusicPlayer"
@@ -54,7 +54,7 @@ class ThemeMusicPlayer @Inject constructor(
      * different id) followed by the new id to switch tracks.
      */
     fun playThemeFor(itemId: String) {
-        if (!preferencesStore.preferences.value.backdropThemeMusicEnabled) return
+        if (!appearanceStore.appearance.value.backdropThemeMusicEnabled) return
         if (currentPlayerItemId == itemId && player?.isPlaying == true) return
         stop()
         currentPlayerItemId = itemId

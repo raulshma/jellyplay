@@ -147,11 +147,21 @@ class DownloadDelegate @Inject constructor(
                 if (downloadItem.status == com.raulshma.jellyplay.core.model.DownloadStatus.PENDING) {
                     writer.enqueueDownload(downloadItem.id)
                     try {
-                        val backdropUrl = playbackRepository.getBackdropUrl(request.mediaItemId, maxWidth = 1280)
                         // Download poster + backdrop to local files so they render
                         // offline; fall back to the remote URL if a download fails.
                         // Filenames are keyed by mediaItemId so items sharing the
                         // flat downloads dir don't overwrite each other.
+                        //
+                        // Episodes persist NO backdrop of their own: Jellyfin
+                        // usually has no Backdrop image for an episode, so the
+                        // download 404s and the persisted path falls back to a
+                        // remote URL that only renders offline when Coil's cache
+                        // happens to hold it. The online detail screen resolves
+                        // episode heroes to the SERIES backdrop instead, so the
+                        // offline row leaves backdropPath null and
+                        // OfflineRepositoryImpl.getOfflineDetail substitutes the
+                        // series' local backdrop at load time (the same result
+                        // with a deterministic local file behind it).
                         val parentDir = java.io.File(downloadItem.downloadPath).parentFile
                         val localPoster = if (parentDir != null) {
                             writer.downloadOfflineImage(
@@ -161,19 +171,44 @@ class DownloadDelegate @Inject constructor(
                         } else {
                             request.imageUrl
                         }
-                        val localBackdrop = if (parentDir != null) {
+                        val localBackdrop = if (!isEpisode && parentDir != null) {
+                            val backdropUrl = playbackRepository.getBackdropUrl(request.mediaItemId, maxWidth = 1280)
                             writer.downloadOfflineImage(
                                 request.mediaItemId, "Backdrop", 1280, parentDir,
                                 com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.backdropFile(request.mediaItemId),
                             ) ?: backdropUrl
                         } else {
-                            backdropUrl
+                            null
                         }
                         // Persist full metadata when the originating MediaDetail
                         // is available (overview, cast, studios, ratings, …);
                         // otherwise fall back to the minimal item path so we
                         // never leave the download without an offline row.
                         val detail = request.detail
+                        // Download up to 10 cast/person images to disk (keyed by
+                        // personId) so the offline detail cast row renders without
+                        // network even after Coil's memory cache evicts the entries
+                        // (memory pressure, app restart, or rows downloaded before
+                        // cast preloading existed). Best-effort: failures are
+                        // swallowed per-image and never block the download. The
+                        // shared flat downloads dir + personId-keyed filenames mean
+                        // the same image satisfies every item referencing that id.
+                        if (detail != null && parentDir != null) {
+                            detail.people
+                                .filter { it.hasCastImage() }
+                                .take(CAST_IMAGE_MAX_COUNT)
+                                .forEach { person ->
+                                    try {
+                                        writer.downloadOfflineImage(
+                                            person.id, "Primary", CAST_IMAGE_WIDTH, parentDir,
+                                            com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.personImageFile(person.id),
+                                        )
+                                    } catch (_: Exception) {
+                                        // Best-effort: a failed cast image must not
+                                        // abort the download or other metadata writes.
+                                    }
+                                }
+                        }
                         if (detail != null) {
                             writer.saveOfflineMediaDetail(
                                 detail,
@@ -221,5 +256,17 @@ class DownloadDelegate @Inject constructor(
                 DownloadResult(downloadItem = null, error = error.message ?: "Download failed")
             },
         )
+    }
+
+    private companion object {
+        // Max number of cast/person images persisted to disk per item. Caps the
+        // per-download image-fetch cost; the cast row rarely needs more than the
+        // top-billed handful, and the rest fall back to the remote URL/blurhash.
+        const val CAST_IMAGE_MAX_COUNT = 10
+
+        // Pixel width requested for each cast portrait. Cast thumbnails render
+        // small, so 200px is ample and keeps disk + bandwidth low (matches the
+        // width the online cast row requests via ImageUrlProvider).
+        const val CAST_IMAGE_WIDTH = 200
     }
 }

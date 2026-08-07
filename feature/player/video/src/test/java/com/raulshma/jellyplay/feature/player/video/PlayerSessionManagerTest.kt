@@ -8,7 +8,9 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -16,7 +18,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.UserPreferences
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -55,7 +56,8 @@ class PlayerSessionManagerTest {
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var downloadRepository: DownloadRepository
     private lateinit var offlineRepository: OfflineRepository
-    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
+    private lateinit var aggregateStore: VideoPlayerAggregateStore
     private lateinit var playerLifecycleManager: PlayerLifecycleManager
     private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
     private lateinit var sessionManager: PlayerSessionManager
@@ -63,19 +65,21 @@ class PlayerSessionManagerTest {
     @Before
     fun setUp() {
         context = mockk(relaxed = true)
+        every { context.getString(com.raulshma.jellyplay.feature.player.video.R.string.player_video_error_offline_file_missing) } returns "Error: offline file missing"
         val okHttpClient = mockk<OkHttpClient>(relaxed = true)
         mediaRepository = mockk(relaxed = true)
         playbackRepository = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
-        preferencesStore = mockk(relaxed = true)
+        playbackSourceResolver = mockk(relaxed = true)
+        aggregateStore = mockk(relaxed = true)
         playerLifecycleManager = mockk(relaxed = true)
         val pipController = mockk<com.raulshma.jellyplay.core.data.playback.PipController>(relaxed = true)
         adaptiveBitrateManager = mockk(relaxed = true)
 
         // Default: EXTERNAL player to avoid real engine instantiation in unit tests.
-        every { preferencesStore.preferences } returns
-            MutableStateFlow(UserPreferences(preferredPlayer = PlayerType.EXTERNAL))
+        every { aggregateStore.aggregate } returns
+            MutableStateFlow(VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL)))
 
         // Default: PlaybackInfo resolution yields nothing, so loadOnline
         // falls back to the static direct-stream URL (PlayMethod.DIRECT_PLAY).
@@ -99,7 +103,7 @@ class PlayerSessionManagerTest {
             playbackRepository = playbackRepository,
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
-            preferencesStore = preferencesStore,
+            aggregateStore = aggregateStore,
             playerLifecycleManager = playerLifecycleManager,
             pipController = pipController,
             adaptiveBitrateManager = adaptiveBitrateManager,
@@ -110,6 +114,7 @@ class PlayerSessionManagerTest {
                 okHttpClient,
                 mockk<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>(relaxed = true),
             ),
+            playbackSourceResolver = playbackSourceResolver,
         )
     }
 
@@ -126,7 +131,7 @@ class PlayerSessionManagerTest {
         tempFile.deleteOnExit()
         val itemId = "item-movie"
         val download = downloadItem(itemId, tempFile.absolutePath)
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns download
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns download
         coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId)
 
         sessionManager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
@@ -141,7 +146,7 @@ class PlayerSessionManagerTest {
     @Test
     fun loadMedia_autoWithoutDownload_goesOnline() = runTest(testDispatcher) {
         val itemId = "item-movie"
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns null
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
         coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(mediaDetail(itemId))
 
         sessionManager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
@@ -158,7 +163,7 @@ class PlayerSessionManagerTest {
         tempFile.deleteOnExit()
         val itemId = "item-movie"
         val download = downloadItem(itemId, tempFile.absolutePath, status = DownloadStatus.DOWNLOADING)
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns download
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns download
         coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(mediaDetail(itemId))
 
         sessionManager.loadMedia(PlaybackSource.Auto(itemId, null), startPositionTicks = 0L)
@@ -176,7 +181,7 @@ class PlayerSessionManagerTest {
         tempFile.deleteOnExit()
         val itemId = "item-movie"
         // No download in the DB
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns null
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
         coEvery { offlineRepository.getOfflineItem(itemId) } returns null
 
         sessionManager.loadMedia(
@@ -194,7 +199,7 @@ class PlayerSessionManagerTest {
     @Test
     fun loadMedia_forcedOfflineWithMissingFile_reportsError() = runTest(testDispatcher) {
         val itemId = "item-movie"
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns null
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
 
         sessionManager.loadMedia(
             PlaybackSource.Offline(itemId, "/nonexistent/path/file.mp4"),
@@ -218,7 +223,7 @@ class PlayerSessionManagerTest {
         tempFile.deleteOnExit()
         val itemId = "ep-1"
         val download = downloadItem(itemId, tempFile.absolutePath)
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns download
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns download
         coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineEpisodeItem(itemId)
 
         sessionManager.loadMedia(
@@ -240,7 +245,7 @@ class PlayerSessionManagerTest {
         val tempFile = Files.createTempFile("test-movie", ".mp4").toFile()
         tempFile.deleteOnExit()
         val itemId = "item-movie"
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns downloadItem(itemId, tempFile.absolutePath)
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns downloadItem(itemId, tempFile.absolutePath)
         // Legacy download with no offline_media row — only the download exists.
         coEvery { offlineRepository.getOfflineItem(itemId) } returns null
 
@@ -264,7 +269,7 @@ class PlayerSessionManagerTest {
         val itemId = "item-movie"
         // A completed download exists in the DB…
         val download = downloadItem(itemId, tempFile.absolutePath)
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns download
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns download
         // …but we force online, so the server should be queried.
         coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(mediaDetail(itemId))
 
@@ -284,7 +289,7 @@ class PlayerSessionManagerTest {
     @Test
     fun loadMedia_legacyOverload_delegatesToAutoResolution() = runTest(testDispatcher) {
         val itemId = "item-movie"
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns null
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
         coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(mediaDetail(itemId))
 
         sessionManager.loadMedia(itemId, mediaSourceId = null, startPositionTicks = 0L)
@@ -300,7 +305,7 @@ class PlayerSessionManagerTest {
         tempFile.deleteOnExit()
         val itemId = "item-movie"
         val download = downloadItem(itemId, tempFile.absolutePath)
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns download
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns download
         coEvery { offlineRepository.getOfflineItem(itemId) } returns offlineMediaItem(itemId)
 
         sessionManager.loadMedia(itemId, mediaSourceId = null, startPositionTicks = 0L)
@@ -315,7 +320,7 @@ class PlayerSessionManagerTest {
     @Test
     fun loadMedia_resetsIsReadyAtStart() = runTest(testDispatcher) {
         val itemId = "item-movie"
-        coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns null
+        coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns null
         coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(mediaDetail(itemId))
 
         // We can't observe the transient false because loadMedia is synchronous

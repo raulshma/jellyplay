@@ -7,7 +7,8 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
@@ -29,7 +30,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -69,11 +69,12 @@ class PlayerSessionManager(
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
-    private val preferencesStore: UserPreferencesStore,
+    private val aggregateStore: VideoPlayerAggregateStore,
     private val playerLifecycleManager: PlayerLifecycleManager,
     private val pipController: com.raulshma.jellyplay.core.data.playback.PipController,
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
     private val playerEngineFactory: PlayerEngineFactory,
+    private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
 ) {
     private val _sessionState = MutableStateFlow(PlayerSessionState())
     val sessionState: StateFlow<PlayerSessionState> = _sessionState.asStateFlow()
@@ -83,6 +84,24 @@ class PlayerSessionManager(
     val engine: MediaEngine? get() = _engine.value
 
     private var lastPlaybackRequest: PlaybackRequest? = null
+
+    /**
+     * The external (side-loaded) subtitle sources for the current session, or
+     * null when no media is loaded. Exposed so features like the subtitle-sync
+     * preview can resolve and parse the active track's bytes. The backing
+     * [PlaybackRequest] is immutable — external subs are replaced wholesale
+     * (see [addExternalSubtitle]).
+     */
+    val currentExternalSubtitles: List<SubtitleSource>?
+        get() = lastPlaybackRequest?.externalSubtitles
+
+    /**
+     * The request headers (auth etc., e.g. Jellyfin `X-Emby-Token`) for the
+     * current session, or null when no media is loaded. Used to authenticate
+     * HTTP-fetched external subtitle bytes (see [SubtitlePreviewRepository]).
+     */
+    val currentPlaybackHeaders: Map<String, String>?
+        get() = lastPlaybackRequest?.headers
     private var lastPlayerType: PlayerType? = null
 
     /**
@@ -143,6 +162,12 @@ class PlayerSessionManager(
      * on the resolved [PlaybackSource]. The [PlaybackSource.Auto] variant is
      * resolved via [PlaybackSource.Auto.resolve] using the downloads DB,
      * matching the historical auto-detection behaviour exactly.
+     *
+     * The completed-download predicate is owned by
+     * [PlaybackSourceResolver.resolveUsableDownload] (the shared core routine
+     * every call-site converges on); here it doubles as the Auto resolution
+     * input and the metadata source for [loadOffline]. `Auto.resolve` then
+     * maps a non-null download → Offline, null → Online.
      */
     suspend fun loadMedia(source: PlaybackSource, startPositionTicks: Long) {
         val itemId = source.itemId
@@ -150,8 +175,9 @@ class PlayerSessionManager(
 
         // The download lookup is needed both for Auto resolution and for
         // metadata enrichment during offline playback, so it is performed
-        // unconditionally — identical to the pre-refactor behaviour.
-        val download = downloadRepository.getDownloadByMediaItemId(itemId)
+        // unconditionally — identical to the pre-refactor behaviour. The
+        // shared resolver owns the COMPLETED + file-exists predicate.
+        val download = playbackSourceResolver.resolveUsableDownload(itemId)
 
         val resolved = when (source) {
             is PlaybackSource.Auto -> source.resolve(download)
@@ -241,8 +267,8 @@ class PlayerSessionManager(
             )
         }
 
-        val prefs = preferencesStore.preferences.first()
-        val playerType = prefs.preferredPlayer
+        val agg = aggregateStore.aggregate.value
+        val playerType = agg.playback.preferredPlayer
 
         // Preserve the offline item's rich metadata (seriesId, seasonId,
         // season/episode numbers, seriesName, …) via the canonical adapter so
@@ -268,7 +294,7 @@ class PlayerSessionManager(
             return
         }
 
-        initializeEngine(playerType, detail, null, url, startPositionTicks, prefs, mimeType = mimeHint)
+        initializeEngine(playerType, detail, null, url, startPositionTicks, agg, mimeType = mimeHint)
 
         // Attach external subtitles bundled with the download (offline subs).
         loadOfflineSubtitles(downloadPath)
@@ -302,8 +328,8 @@ class PlayerSessionManager(
         }
         val streams = source?.mediaStreams ?: emptyList()
 
-        val prefs = preferencesStore.preferences.first()
-        val playerType = prefs.preferredPlayer
+        val agg = aggregateStore.aggregate.value
+        val playerType = agg.playback.preferredPlayer
         val sourceId = source?.id ?: ""
 
         // Consult the PlaybackInfo endpoint so the server decides Direct
@@ -319,7 +345,7 @@ class PlayerSessionManager(
             audioStreamIndex = null,
             subtitleStreamIndex = null,
             maxStreamingBitrateBits = maxBitrate,
-            mode = prefs.playbackMode,
+            mode = agg.playback.playbackMode,
             playerType = playerType,
         )
         val url = resolved?.streamUrl
@@ -340,7 +366,7 @@ class PlayerSessionManager(
                 mediaStreams = streams,
                 playMethodString = playMethod.displayName(),
                 playMethod = playMethod,
-                isDirectPlayForced = prefs.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY,
+                isDirectPlayForced = agg.playback.playbackMode == PlaybackMode.FORCE_DIRECT_PLAY,
                 playSessionId = resolved?.playSessionId,
                 streamUrl = url,
             )
@@ -351,7 +377,7 @@ class PlayerSessionManager(
             return
         }
 
-        initializeEngine(playerType, detail, source, url, startPositionTicks, prefs, playMethod)
+        initializeEngine(playerType, detail, source, url, startPositionTicks, agg, playMethod)
         _sessionState.update { it.copy(isReady = true) }
     }
 
@@ -361,7 +387,7 @@ class PlayerSessionManager(
         source: MediaSource?,
         url: String,
         startPositionTicks: Long,
-        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+        agg: VideoPlayerAggregate,
         playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
         mimeType: String? = null,
     ) {
@@ -381,13 +407,13 @@ class PlayerSessionManager(
         pipController.requestAutoEnterPip(eng.capabilities.supportsPip)
 
         val config = EngineConfigBuilder.buildFromPreferences(
-            prefs = prefs,
+            agg = agg,
             mediaStreams = _sessionState.value.mediaStreams,
             itemId = detail.item.id,
-            engineSpecific = resolveEngineConfig(playerType, prefs),
+            engineSpecific = resolveEngineConfig(playerType, agg),
         )
         eng.updateConfig(config)
-        eng.setPlaybackSpeed(prefs.videoDefaultSpeed)
+        eng.setPlaybackSpeed(agg.videoPlayer.videoDefaultSpeed)
 
         val externalSubtitles = buildExternalSubtitles(detail, source, playMethod)
 
@@ -407,15 +433,15 @@ class PlayerSessionManager(
             artworkUri = artworkUri,
             externalSubtitles = externalSubtitles,
             headers = headers,
-            preferredAudioLanguage = prefs.preferredAudioLanguage,
-            preferredSubtitleLanguage = prefs.preferredSubtitleLanguage,
-            maxVideoBitrate = if (prefs.playbackMode == PlaybackMode.AUTO)
+            preferredAudioLanguage = agg.subtitle.preferredAudioLanguage,
+            preferredSubtitleLanguage = agg.subtitle.preferredSubtitleLanguage,
+            maxVideoBitrate = if (agg.playback.playbackMode == PlaybackMode.AUTO)
                 adaptiveBitrateManager.resolveEffectiveMaxBitrate()?.toInt()
                 else null,
             serverUrl = serverUrl,
             authToken = token,
-            minBufferMs = prefs.videoPreloadBufferSize.minBufferMs,
-            maxBufferMs = prefs.videoPreloadBufferSize.maxBufferMs,
+            minBufferMs = agg.videoPlayer.videoPreloadBufferSize.minBufferMs,
+            maxBufferMs = agg.videoPlayer.videoPreloadBufferSize.maxBufferMs,
             normalizationGain = detail.item.normalizationGain,
             mimeType = mimeType,
             serverDurationMs = (detail.item.runTimeTicks ?: 0L) / 10_000,
@@ -427,11 +453,11 @@ class PlayerSessionManager(
 
     private fun resolveEngineConfig(
         playerType: PlayerType,
-        prefs: com.raulshma.jellyplay.core.model.UserPreferences,
+        agg: VideoPlayerAggregate,
     ): EngineSpecificConfig? = when (playerType) {
-        PlayerType.MPV -> prefs.mpvConfig
-        PlayerType.LIBVLC -> prefs.libVlcConfig
-        PlayerType.EXO_PLAYER -> prefs.exoPlayerConfig
+        PlayerType.MPV -> agg.engine.mpvConfig
+        PlayerType.LIBVLC -> agg.engine.libVlcConfig
+        PlayerType.EXO_PLAYER -> agg.engine.exoPlayerConfig
         PlayerType.EXTERNAL -> null
     }
 
@@ -453,8 +479,8 @@ class PlayerSessionManager(
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
         val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
-        val prefs = preferencesStore.preferences.first()
-        val playerType = lastPlayerType ?: prefs.preferredPlayer
+        val agg = aggregateStore.aggregate.value
+        val playerType = lastPlayerType ?: agg.playback.preferredPlayer
         val maxBitrate = adaptiveBitrateManager.resolveMaxBitrate(quality)
 
         val resolved = playbackRepository.resolvePlayback(
@@ -494,7 +520,7 @@ class PlayerSessionManager(
         reloadWithEngine(
             playerType = playerType,
             currentPositionMs = currentPositionMs,
-            playbackSpeed = prefs.videoDefaultSpeed,
+            playbackSpeed = agg.videoPlayer.videoDefaultSpeed,
             maxVideoBitrate = engineMaxBitrate,
             uriOverride = url,
             externalSubtitlesOverride = rebuiltSubtitles,
@@ -523,10 +549,10 @@ class PlayerSessionManager(
     ): ResolvedPlayback? {
         val itemId = _sessionState.value.currentItemId ?: return null
         val sourceId = _sessionState.value.currentMediaSource?.id ?: ""
-        val prefs = preferencesStore.preferences.first()
-        val playerType = lastPlayerType ?: prefs.preferredPlayer
+        val agg = aggregateStore.aggregate.value
+        val playerType = lastPlayerType ?: agg.playback.preferredPlayer
         val maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate()
-        val mode = prefs.playbackMode
+        val mode = agg.playback.playbackMode
 
         val resolved = playbackRepository.resolvePlayback(
             itemId = itemId,
@@ -559,7 +585,7 @@ class PlayerSessionManager(
         reloadWithEngine(
             playerType = playerType,
             currentPositionMs = currentPositionMs,
-            playbackSpeed = prefs.videoDefaultSpeed,
+            playbackSpeed = agg.videoPlayer.videoDefaultSpeed,
             maxVideoBitrate = engineMaxBitrate,
             uriOverride = url,
             externalSubtitlesOverride = rebuiltSubtitles,
@@ -576,7 +602,7 @@ class PlayerSessionManager(
         externalSubtitlesOverride: List<SubtitleSource>? = null,
     ) {
         val last = lastPlaybackRequest ?: return
-        val prefs = preferencesStore.preferences.first()
+        val agg = aggregateStore.aggregate.value
 
         try {
             _engine.value?.release()
@@ -593,10 +619,10 @@ class PlayerSessionManager(
 
         val state = _sessionState.value
         val config = EngineConfigBuilder.buildFromPreferences(
-            prefs = prefs,
+            agg = agg,
             mediaStreams = state.mediaStreams,
             itemId = state.currentItemId,
-            engineSpecific = resolveEngineConfig(playerType, prefs),
+            engineSpecific = resolveEngineConfig(playerType, agg),
         )
         eng.updateConfig(config)
         eng.setPlaybackSpeed(playbackSpeed)

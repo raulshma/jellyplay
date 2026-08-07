@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +20,7 @@ internal const val AUDIO_CACHE_DIR_NAME = "audio_cache"
 
 /**
  * Manages the application's HTTP/image caches and honours the
- * [com.raulshma.jellyplay.core.model.UserPreferences.autoDeleteCache]
+ * [com.raulshma.jellyplay.core.model.legacy.UserPreferences.autoDeleteCache]
  * preference: when enabled, caches are cleared when the app goes to the
  * background (process `ON_STOP`).
  *
@@ -37,7 +37,7 @@ internal const val AUDIO_CACHE_DIR_NAME = "audio_cache"
 @Singleton
 class CacheManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val userPreferencesStore: UserPreferencesStore,
+    private val networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
     @ApplicationScope private val appScope: CoroutineScope,
 ) : DefaultLifecycleObserver {
 
@@ -59,7 +59,7 @@ class CacheManager @Inject constructor(
 
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
-        val prefs = userPreferencesStore.preferences.value
+        val prefs = networkOfflineStore.networkOffline.value
         if (prefs.autoDeleteCache) {
             // Fire-and-forget on the application scope so the lifecycle
             // callback is not blocked while the cache directory walk runs.

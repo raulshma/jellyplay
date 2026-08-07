@@ -10,15 +10,12 @@ import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.InterruptedResumeRow
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import dagger.Lazy
 import com.raulshma.jellyplay.core.model.DownloadStatus
-import com.raulshma.jellyplay.core.model.UserPreferences
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -51,7 +48,7 @@ class DownloadRepositoryImplResumeTest {
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val httpClient: OkHttpClient = mockk()
-    private val preferencesStore: UserPreferencesStore = mockk()
+    private val preferencesStore: DownloadsStore = mockk(relaxed = true)
     private val json: Json = Json
     // downloadSeries delegates the per-episode bundle here; the resume tests
     // never exercise it, so a relaxed mock behind a dagger.Lazy is sufficient.
@@ -64,6 +61,12 @@ class DownloadRepositoryImplResumeTest {
     // Path-layout policy was extracted out of the repo; the resume path never
     // starts a new download, so a relaxed mock suffices.
     private val storageLayout: DownloadStorageLayout = mockk(relaxed = true)
+    // The resume path never consults the offline-sync comparator; a relaxed mock
+    // satisfies the constructor param added alongside the sync wiring.
+    private val syncComparator: com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator = mockk(relaxed = true)
+    // The resume path never loads series episodes; a relaxed mock satisfies the
+    // catalogue constructor param added alongside the seasons/episodes migration.
+    private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue = mockk(relaxed = true)
 
     private fun repository() = DownloadRepositoryImpl(
         context = context,
@@ -71,14 +74,16 @@ class DownloadRepositoryImplResumeTest {
         offlineMediaDao = offlineMediaDao,
         database = database,
         mediaRepository = mediaRepository,
+        episodeCatalogue = episodeCatalogue,
         playbackRepository = playbackRepository,
         httpClient = httpClient,
-        preferencesStore = preferencesStore,
+        downloadsStore = preferencesStore,
         json = json,
         downloadDelegate = downloadDelegate,
         storagePolicy = storagePolicy,
         downloadEnqueuer = downloadEnqueuer,
         storageLayout = storageLayout,
+        syncComparator = syncComparator,
     )
 
     @Before
@@ -87,9 +92,6 @@ class DownloadRepositoryImplResumeTest {
             context,
             Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build(),
         )
-        // enqueueDownload reads the wifi-only / schedule preferences when
-        // building the work request constraints.
-        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
     }
 
     @Test

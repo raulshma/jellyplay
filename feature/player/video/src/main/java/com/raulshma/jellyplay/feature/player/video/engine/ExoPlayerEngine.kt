@@ -20,6 +20,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.text.Cue
+import androidx.media3.common.text.CueGroup
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -55,6 +57,7 @@ import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
@@ -130,11 +133,19 @@ class ExoPlayerEngine(
     }
 
     override val capabilities = EngineCapabilityMatrix.EXO_PLAYER
+    override val zoomSafeSubtitleStrategy = ZoomSafeSubtitleStrategy.NATIVE_PINNED
+    override val displayName: String = PlayerType.EXO_PLAYER.displayName
 
     private var player: ExoPlayer? = null
     private var trackSelector: DefaultTrackSelector? = null
     private var playerView: PlayerView? = null
     private var frameSizeListener: android.view.View.OnLayoutChangeListener? = null
+    // Optional screen-pinned host. When non-null, [reparentSubtitleViews]
+    // parents the SubtitleView/AssSubtitleView here (a sibling of the zoomed
+    // video surface, outside the pinch/crop transform) instead of the
+    // letterboxed `exo_content_frame`, so captions stay put under zoom/crop.
+    // Set via [setExternalSubtitleHost]; cleared on detach/release.
+    private var externalSubtitleHost: android.view.ViewGroup? = null
 
     // --- libass (ass-media) overlay state ---
     // Only one of these is populated per session: when AssSupport detects an
@@ -148,6 +159,15 @@ class ExoPlayerEngine(
     // Reflects whether the *currently selected* text track is ASS. Drives the
     // SubtitleView/AssSubtitleView visibility toggle in applySubtitleStyleToView.
     private var activeTrackIsAss: Boolean = false
+    // Cached id of the currently selected text track group, so onTracksChanged
+    // can detect a *subtitle* track switch (vs an audio-only change) and reset
+    // the accumulated cue list rather than mixing cues from two tracks.
+    private var lastSelectedTextTrackId: String? = null
+    // Latched once a malformed text track has been auto-disabled so further
+    // onCues callbacks are ignored until the user selects a different subtitle
+    // track (which clears this in onTracksChanged). Prevents a bad track from
+    // re-triggering the disable / re-enabling itself on the next render tick.
+    private var subtitleTrackAutoDisabled: Boolean = false
     private var lastFrameW = -1
     private var lastFrameH = -1
     @Volatile
@@ -252,6 +272,28 @@ class ExoPlayerEngine(
 
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
             _availableTracks.value = buildTracks()
+            // Reset the accumulated cue list when the *selected* subtitle track
+            // changes, so cues from a prior track don't bleed into the preview.
+            // An audio-only track change leaves the text selection untouched.
+            val currentTextId = currentSelectedTextTrackId()
+            if (currentTextId != lastSelectedTextTrackId) {
+                lastSelectedTextTrackId = currentTextId
+                _currentCues.value = emptyList()
+                // Clear the malformed-track latch only when a subtitle track
+                // becomes *selected* (null → non-null). The auto-disable path
+                // sets TRACK_TYPE_TEXT disabled, which itself fires this
+                // callback with the text id going non-null → null; clearing on
+                // that transition would self-clear the guard it just set. Only
+                // a fresh selection (user re-enabling / picking a track, or the
+                // first auto-select on load) should clear the latch.
+                if (currentTextId != null) {
+                    subtitleTrackAutoDisabled = false
+                }
+            }
+        }
+
+        override fun onCues(cueGroup: CueGroup) {
+            accumulateCues(cueGroup)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -439,6 +481,14 @@ class ExoPlayerEngine(
         // otherwise the plain base factories reproduce the pre-ASS build exactly.
         // withAssMkvSupport takes the extractors factory and the BARE
         // AssSubtitleParserFactory (the concrete type), per its signature.
+        //
+        // KNOWN LIMITATION: because withAssMkvSupport requires the concrete
+        // AssSubtitleParserFactory type, embedded ASS-in-MKV extraction bypasses
+        // the OffsettingSubtitleParserFactory — the subtitle-delay slider has no
+        // effect on embedded MKV ASS tracks in this engine. This is an ass-media
+        // library signature constraint; mpv and libVLC render embedded ASS at the
+        // correct offset via sub-delay/setSpuDelay regardless. Deliberately left
+        // as-is rather than destabilizing the working ASS path.
         val (finalRenderersFactory, msf) = if (assEnabledForSession) {
             val assExtractors = extractorsFactory.withAssMkvSupport(assParserFactory!!, assHandler!!)
             val renderers = AssRenderersFactory(assHandler!!, baseRenderersFactory)
@@ -446,7 +496,13 @@ class ExoPlayerEngine(
                 .setSubtitleParserFactory(offsetFactory)
             renderers to sourceFactory
         } else {
+            // setSubtitleParserFactory on the MediaSourceFactory so that side-
+            // loaded (side-car SubtitleConfiguration) text subs are also parsed
+            // through the offset wrapper. The extractors-level factory set above
+            // only covers embedded text tracks; side-car subs are parsed by the
+            // MSF's own factory, which must be the offset factory too.
             baseRenderersFactory to DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
+                .setSubtitleParserFactory(offsetFactory)
         }
 
         // DRM: attach a DrmSessionManager only when the caller supplied one via
@@ -610,6 +666,12 @@ class ExoPlayerEngine(
         player?.removeAnalyticsListener(decoderCountersListener)
         frameSizeListener?.let { playerView?.removeOnLayoutChangeListener(it) }
         frameSizeListener = null
+        // Detach the screen-pinned host first so subtitle views are released from
+        // it before the PlayerView is torn down. Without this, reparented views
+        // (now living outside the PlayerView subtree) would orphan in a host the
+        // engine no longer feeds. The screen's onRelease normally does this, but
+        // release() must be safe to call without it.
+        externalSubtitleHost = null
         playerView?.player = null
         playerView = null
         player?.release()
@@ -628,13 +690,17 @@ class ExoPlayerEngine(
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
+        _currentCues.value = emptyList()
+        lastSelectedTextTrackId = null
+        subtitleTrackAutoDisabled = false
 
         // Drop the libass overlay + handler so the next load() rebuilds them
-        // fresh. The AssSubtitleView is a child of the content frame, which was
-        // torn down with playerView above; nulling the references avoids leaks
-        // and lets the GC reclaim the native Ass/AssRender handles the handler
-        // owns. (ass-media has no explicit release() on AssHandler; it relies on
-        // the player release propagating to the renderer it injected.)
+        // fresh. The AssSubtitleView is a child of the (now-cleared) subtitle
+        // target, which was torn down with playerView above; nulling the
+        // references avoids leaks and lets the GC reclaim the native
+        // Ass/AssRender handles the handler owns. (ass-media has no explicit
+        // release() on AssHandler; it relies on the player release propagating
+        // to the renderer it injected.)
         assOverlayView = null
         assHandler = null
         assEnabledForSession = false
@@ -710,6 +776,14 @@ class ExoPlayerEngine(
         // a delay adjustment takes effect for subsequent cues without a media
         // reload. (Previously the offset was snapshotted at prepare() time and
         // the delay slider appeared broken for side-loaded subtitles.)
+        //
+        // KNOWN LIMITATION: Media3 parses a progressive side-car subtitle file
+        // once and caches the cues; parse() is not re-invoked when the delay
+        // changes mid-playback, so cues already loaded keep their original
+        // timestamps until the user seeks (which re-invokes the parser). mpv and
+        // libVLC re-evaluate the delay continuously, so their offset is truly
+        // live. Forcing a re-parse on every delay change risks perf/jank, so the
+        // buffered-cue limitation is accepted; seeking refreshes the offset.
 
         if (oldConfig.audioEffects != newConfig.audioEffects) {
             applyAudioEffects()
@@ -822,14 +896,15 @@ class ExoPlayerEngine(
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
         }
-        pv.post { reparentSubtitleViewIntoVideoFrame(pv) }
-        // Re-parent the SubtitleView into the (re-laid-out) content frame after
-        // every layout pass. In portrait the PlayerView letterboxes the video
-        // into the AspectRatioFrameLayout content frame; the SubtitleView must
-        // live inside that frame (not the full-screen PlayerView) so captions
-        // sit at the bottom of the *video*, and setBottomPaddingFraction /
-        // fractional text sizes compute against the video height, not the much
-        // taller screen height.
+        pv.post { reparentSubtitleViews(pv) }
+        // Re-parent the subtitle views into the (re-laid-out) target after every
+        // layout pass. By default that target is the AspectRatioFrameLayout
+        // content frame: in portrait the PlayerView letterboxes the video into
+        // it, and the SubtitleView must live inside that frame (not the
+        // full-screen PlayerView) so captions sit at the bottom of the *video*,
+        // and setBottomPaddingFraction / fractional text sizes compute against
+        // the video height. When an [externalSubtitleHost] is attached it
+        // replaces the content frame so captions pin to the screen under zoom.
         //
         // Layout passes fire frequently during playback (controls show/hide,
         // seekbar interaction, immersive transitions, video-size callbacks);
@@ -843,10 +918,10 @@ class ExoPlayerEngine(
             lastFrameW = w
             lastFrameH = h
             pv.post {
-                reparentSubtitleViewIntoVideoFrame(pv)
+                reparentSubtitleViews(pv)
                 // ASS coordinates are absolute to the video frame; the overlay
-                // is MATCH_PARENT inside the content frame so it already tracks
-                // the letterboxed geometry, but force a re-layout to be safe.
+                // is MATCH_PARENT inside the target so it already tracks the
+                // letterboxed geometry, but force a re-layout to be safe.
                 assOverlayView?.requestLayout()
             }
         }
@@ -869,16 +944,11 @@ class ExoPlayerEngine(
                 visibility = if (activeTrackIsAss) View.VISIBLE else View.GONE
             }
             assOverlayView = assView
-            pv.post {
-                val contentFrame = pv.findViewById<ViewGroup>(androidx.media3.ui.R.id.exo_content_frame)
-                contentFrame?.addView(
-                    assView,
-                    FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    ),
-                )
-            }
+            // Parent the ASS overlay via the unified reparent path so it tracks
+            // the active target (content frame, or the screen-pinned host when
+            // one is attached). Idempotent, so the initial reparent above plus
+            // this one collapse to a single add.
+            pv.post { reparentSubtitleViews(pv) }
         }
 
         applySubtitleStyleToView(pv, currentConfig.subtitleStyle)
@@ -886,32 +956,68 @@ class ExoPlayerEngine(
     }
 
     /**
-     * Moves PlayerView's SubtitleView from the full-screen PlayerView into the
-     * [AspectRatioFrameLayout] content frame (the letterboxed video rectangle).
-     * While the SubtitleView is a direct child of the PlayerView its layout
-     * fractions (bottom padding, fractional text size) are computed against the
+     * Parents both the native [SubtitleView] and the libass [AssSubtitleView]
+     * (when present) into the active subtitle target.
+     *
+     * Default target is PlayerView's `exo_content_frame` (the letterboxed video
+     * rectangle): while the SubtitleView is a direct child of the PlayerView its
+     * layout fractions (bottom padding, fractional text size) compute against the
      * whole screen height, so in portrait — where the video is letterboxed —
      * captions land in the bottom black bar instead of on the video. Inside the
      * content frame they are measured against the video dimensions, keeping them
      * correct and consistent with mpv / VLC across rotation.
+     *
+     * When an [externalSubtitleHost] is attached it replaces the content frame as
+     * the target. That host is a sibling of the zoomed video surface (outside the
+     * pinch/crop transform), so captions stay pinned to the screen under zoom and
+     * crop. Font sizes are SP (density-independent, unaffected); only
+     * `setBottomPaddingFraction` / fractional sizes then resolve against the
+     * screen height instead of the video height — the intended screen-pinned
+     * behavior. See [setExternalSubtitleHost].
+     *
+     * Idempotent: a view already parented to the active target is left alone, so
+     * repeated layout-pass calls are a cheap no-op (see `lastFrameW/H` guard in
+     * [createSurfaceView]).
      */
-    private fun reparentSubtitleViewIntoVideoFrame(pv: PlayerView) {
-        val subtitleView = pv.subtitleView ?: return
-        val contentFrame = pv.findViewById<android.view.ViewGroup>(
-            androidx.media3.ui.R.id.exo_content_frame
-        ) ?: return
-        val currentParent = subtitleView.parent as? android.view.ViewGroup
-        if (currentParent === contentFrame) return
-        currentParent?.removeView(subtitleView)
-        // Append (not index 0): the video surface is the first child of the
-        // content frame, so a 0-index insert would render captions behind it.
-        contentFrame.addView(
-            subtitleView,
+    private fun reparentSubtitleViews(pv: PlayerView) {
+        val target: android.view.ViewGroup = externalSubtitleHost
+            ?: pv.findViewById(androidx.media3.ui.R.id.exo_content_frame)
+            ?: return
+        reparentInto(pv.subtitleView, target)
+        reparentInto(assOverlayView, target)
+    }
+
+    /** Moves [view] into [target] if it isn't already there; no-op otherwise. */
+    private fun reparentInto(view: android.view.View?, target: android.view.ViewGroup) {
+        val view = view ?: return
+        val currentParent = view.parent as? android.view.ViewGroup
+        if (currentParent === target) return
+        currentParent?.removeView(view)
+        // Append (not index 0): in the content-frame target the video surface is
+        // the first child, so a 0-index insert would render captions behind it.
+        // For the screen-pinned host the host has no other children, so the index
+        // is irrelevant.
+        target.addView(
+            view,
             android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
+    }
+
+    override fun setExternalSubtitleHost(host: android.view.ViewGroup?) {
+        externalSubtitleHost = host
+        // Re-parent into the new target immediately when a surface exists. Called
+        // on the main thread by the screen's AndroidView factory/onRelease.
+        playerView?.let { pv -> pv.post { reparentSubtitleViews(pv) } }
+        // If the host is being detached (host == null) the screen's onRelease is
+        // about to tear the host down; reparent back into the content frame so
+        // the views don't orphan if the PlayerView outlives the host (it won't in
+        // practice — both share key(currentEngine) lifetime — but stay safe).
+        if (host == null) {
+            playerView?.let { pv -> pv.post { reparentSubtitleViews(pv) } }
+        }
     }
 
     override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
@@ -1172,6 +1278,74 @@ class ExoPlayerEngine(
         if (wasPlaying) exo.play()
     }
 
+    /**
+     * The id of the currently *selected* text track group, or null when none is
+     * selected. Used by [onTracksChanged] to detect a subtitle track switch and
+     * reset the accumulated cue list. Mirrors the id logic in [buildTracks].
+     */
+    private fun currentSelectedTextTrackId(): String? {
+        val p = player ?: return null
+        return p.currentTracks.groups
+            .firstOrNull { it.type == C.TRACK_TYPE_TEXT && (0 until it.length).any { i -> it.isTrackSelected(i) } }
+            ?.let { group ->
+                group.getTrackFormat(0).id?.takeIf { it.isNotBlank() }
+                    ?: "SUBTITLE_${group.mediaTrackGroup.hashCode()}"
+            }
+    }
+
+    /**
+     * Maps the cues in [cueGroup] to [TimedCue]s and folds them into the
+     * accumulated list via [mergeAccumulatedCues]. ExoPlayer surfaces only the
+     * *currently displayed* cue(s) per callback, so the preview is built
+     * incrementally as subs play — it covers the played range only (no
+     * ahead-lookahead for forward offsets).
+     */
+    private fun accumulateCues(cueGroup: CueGroup) {
+        // Malformed-text-track guard: a single onCues batch carrying an
+        // implausibly large number of simultaneous cues is the signature of a
+        // broken SRT/VTT (e.g. timestamp/index lines parsed as simultaneous
+        // cues). Media3 would hand all of them to SubtitleView, which lays
+        // them out every frame — the "subtitle wall" that freezes the UI and
+        // crashes the app. Disable the text track at source and notify.
+        if (isPathologicalCueBatch(cueGroup.cues.size)) {
+            disableTextTrackForMalformedCues()
+            return
+        }
+        // Once disabled, ignore further callbacks until the user selects a
+        // different subtitle track (onTracksChanged clears the latch).
+        if (subtitleTrackAutoDisabled) return
+        val posUs = cueGroup.presentationTimeUs
+        val mapped = cueGroup.cues.mapNotNull { cue: Cue ->
+            val text = cue.text
+            if (text.isNullOrBlank()) null else TimedCue(posUs, Long.MAX_VALUE, text)
+        }
+        if (mapped.isEmpty()) return
+        _currentCues.value = mergeAccumulatedCues(_currentCues.value, mapped)
+    }
+
+    /**
+     * Disables the text renderer (mirroring the `selectTrack(SUBTITLE, -1)`
+     * disable path), clears the accumulated cue list, latches the auto-disable
+     * guard, and emits a [SubtitleEvent.MalformedTrackDisabled] so the UI can
+     * tell the user subs were turned off. Called from [accumulateCues] when a
+     * pathological cue batch is detected. Runs on the player thread (onCues).
+     */
+    private fun disableTextTrackForMalformedCues() {
+        val selector = trackSelector ?: return
+        android.util.Log.w(TAG, "Disabling subtitle track: malformed cue batch detected (${">"}$MAX_INCOMING_CUES_PER_BATCH simultaneous cues)")
+        subtitleTrackAutoDisabled = true
+        _currentCues.value = emptyList()
+        try {
+            val params = selector.buildUponParameters()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            selector.setParameters(params)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Failed to disable malformed subtitle track", e)
+        }
+        _subtitleEvents.tryEmit(SubtitleEvent.MalformedTrackDisabled)
+    }
+
     private fun buildTracks(): List<MediaTrack> {
         val p = player ?: return emptyList()
         val tracks = p.currentTracks
@@ -1199,7 +1373,13 @@ class ExoPlayerEngine(
                 )
                 result.add(
                     MediaTrack(
-                        id = "${trackType.name}_${groupIndex}",
+                        // For side-loaded subtitles Media3 propagates the
+                        // MediaItem.SubtitleConfiguration id (== SubtitleSource.id)
+                        // into the track format, so prefer it over the synthetic
+                        // group index — the subtitle-sync preview resolves the
+                        // active external source by that id.
+                        id = format.id?.takeIf { it.isNotBlank() }
+                            ?: "${trackType.name}_${groupIndex}",
                         index = groupIndex,
                         label = TrackLabelFormatter.primary(info),
                         language = format.language,

@@ -2,7 +2,10 @@ package com.raulshma.jellyplay.core.data.playback
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.util.Log
 import androidx.annotation.GuardedBy
+import androidx.media3.common.Player
 import androidx.media3.session.MediaSession
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -45,12 +48,37 @@ class PlaybackSessionManager @Inject constructor(
     /**
      * Sets the active session. Releases the previous session if it's still active
      * and the caller hasn't already released it.
+     *
+     * Priority guard: an actively-playing session is **not** displaced by an
+     * incoming session whose player is idle. The audio singleton (created at app
+     * launch) and audio crossfade rebuilds both call `setActiveSession`; without
+     * this guard an idle audio session could evict a playing video session,
+     * making the now-playing notification + media buttons target the wrong
+     * player until the app was restarted. A playing→playing swap (audio
+     * crossfade) still displaces normally; so does any swap where the holder is
+     * not currently playing. The incoming session is released on rejection so
+     * the caller's freshly-built session doesn't leak.
      */
     fun setActiveSession(session: MediaSession) {
         val oldSession: MediaSession?
         val currentListeners: List<Listener>
         synchronized(lock) {
             oldSession = _currentSession
+            if (oldSession != null &&
+                oldSession !== session &&
+                oldSession.player.isPlaying &&
+                !session.player.isPlaying) {
+                // Current session is actively playing and the challenger is idle:
+                // refuse the eviction. Release the rejected session to avoid a leak.
+                // Log (don't swallow silently) so a rejection-time leak is diagnosable —
+                // mirrors the logging policy used by startPlaybackService below.
+                try {
+                    session.release()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to release rejected idle challenger session", e)
+                }
+                return
+            }
             _currentSession = session
             currentListeners = listeners.toList()
         }
@@ -60,7 +88,11 @@ class PlaybackSessionManager @Inject constructor(
         // Release the old session only if it's not the same as the new one.
         // Use try-catch to guard against double-release (isReleased is package-private).
         if (oldSession != null && oldSession !== session) {
-            try { oldSession.release() } catch (_: Exception) { }
+            try {
+                oldSession.release()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to release replaced media session", e)
+            }
         }
         // Ensure the playback service is started and will pick up this session
         startPlaybackService()
@@ -81,12 +113,45 @@ class PlaybackSessionManager @Inject constructor(
         currentListeners.forEach { it.onSessionChanged(null, oldSession) }
     }
 
+    /**
+     * Starts (and promotes to foreground) the host playback service so Media3
+     * can post the now-playing notification for the active session.
+     *
+     * When the active player is playing (or buffering toward play) we use
+     * [Context.startForegroundService]: this is the only form permitted while the
+     * app is backgrounded (plain [Context.startService] throws
+     * `BackgroundServiceStartNotAllowedException` on Android 8+). Media3's
+     * `MediaSessionService` base calls `startForeground(...)` itself before
+     * returning, so promotion is handled correctly. When the player is idle we
+     * keep the lighter [Context.startService], which is legal while the app is
+     * foregrounded during normal load setup and avoids a startForeground ANR.
+     */
     private fun startPlaybackService() {
+        val session = currentSession ?: return
+        val player = session.player
+        val shouldForeground = player.isPlaying ||
+            player.playbackState == Player.STATE_BUFFERING ||
+            (player.playWhenReady && player.playbackState != Player.STATE_ENDED)
         try {
             val intent = Intent(context, JellyPlayPlaybackService::class.java)
-            context.startService(intent)
-        } catch (_: Exception) {
-            // Service may not be registered yet or app is in background restriction
+            if (shouldForeground) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: Exception) {
+            // Service may not be registered yet, the app may be in background
+            // restriction, or startForegroundService may exceed the ANR budget.
+            // Log (don't swallow silently) so future regressions are diagnosable.
+            Log.w(TAG, "startPlaybackService failed (foreground=$shouldForeground)", e)
         }
+    }
+
+    companion object {
+        private const val TAG = "PlaybackSessionManager"
     }
 }

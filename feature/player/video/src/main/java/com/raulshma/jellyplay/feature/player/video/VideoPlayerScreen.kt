@@ -41,6 +41,7 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -120,7 +121,9 @@ import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
+import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
+import com.raulshma.jellyplay.feature.player.video.components.MpvSubtitleOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
@@ -168,9 +171,19 @@ private const val ASPECT_BADGE_DURATION_MS = 5_000L
 /** How long the zoom badge is shown before auto-dismissing. */
 private const val ZOOM_BADGE_DURATION_MS = 2_000L
 
+/** "Resumed — tap to restart" chip lifetime (3s). */
+private const val RESUME_CHIP_DISPLAY_MS = 3_000L
+
 // ── Bottom-control clearances for overlays anchored above the controls ───
 /** Snackbar offset above the bottom controls (landscape/TV layout). */
 private const val SNACKBAR_BOTTOM_CLEARANCE_DP = 200
+/**
+ * Resume chip offset below the top bar. The host is additionally offset by
+ * `WindowInsets.statusBars` (see the call site), so this covers only the top
+ * bar's own height — the 40dp back-button row + 8dp vertical scrim padding
+ * (top+bottom) — plus a small gap so the chip clears the title row.
+ */
+private const val RESUME_CHIP_TOP_CLEARANCE_DP = 60
 /** Hold-speed pill offset above the bottom controls. */
 private const val HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP = 180
 /** Trickplay thumbnail offset above the bottom controls. */
@@ -209,8 +222,39 @@ fun VideoPlayerScreen(
     val context = LocalContext.current
     val activity = context.findActivity()
     val snackbarHostState = remember { SnackbarHostState() }
+    // Dedicated host for the resume chip. Kept separate from [snackbarHostState]
+    // so the chip can anchor under the top bar (TopCenter) while the shared
+    // bottom host still serves screenshot / syncplay / pass-out toasts.
+    val resumeChipHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Resume-reminder chip: when playback resumes from a saved position, offer a
+    // one-tap "Restart" so the user isn't forced to scrub back.
+    val resumedMessage = stringResource(R.string.player_resumed_message)
+    val restartLabel = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_restart)
+    LaunchedEffect(viewModel) {
+        viewModel.resumeReminder.collect {
+            // Specified as a 3s chip. SnackbarDuration has no 3s
+            // preset (Short ≈ 1.5s), so show it Indefinite and auto-dismiss
+            // after 3s unless the user taps "Restart" first.
+            val snackbarJob = scope.launch {
+                val result = resumeChipHostState.showSnackbar(
+                    message = resumedMessage,
+                    actionLabel = restartLabel,
+                    duration = SnackbarDuration.Indefinite,
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    viewModel.restartPlayback()
+                }
+            }
+            scope.launch {
+                delay(RESUME_CHIP_DISPLAY_MS)
+                resumeChipHostState.currentSnackbarData?.dismiss()
+            }
+            snackbarJob.join()
+        }
+    }
 
     val isInPipMode by viewModel.pipController.isInPipMode.collectAsStateWithLifecycle()
 
@@ -255,6 +299,7 @@ fun VideoPlayerScreen(
     var userInteractionCount by rememberSaveable { mutableIntStateOf(0) }
 
     var brightnessOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
+    var initialBrightnessOnGestureStart by rememberSaveable { mutableFloatStateOf(-1f) }
     var volumeOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
     var gestureSeekPositionMs by rememberSaveable { mutableLongStateOf(0L) }
     var gestureStartPositionMs by rememberSaveable { mutableLongStateOf(0L) }
@@ -1016,6 +1061,15 @@ fun VideoPlayerScreen(
         ) {
             val currentEngine = engine
             if (currentEngine != null) {
+                // Effective zoom = pinch zoom × TV baseline zoom. Computed once
+                // so the video graphicsLayer and the zoom-gated subtitle logic
+                // share the exact same value (no drift). > 1 means the video is
+                // scaled/cropped, which is when subtitles would move off-screen.
+                val tvBaselineZoom = if (isTv && uiState.tvZoomModePercent != 0f) {
+                    1f + (uiState.tvZoomModePercent / 100f)
+                } else 1f
+                val effectiveZoom = videoZoom * tvBaselineZoom
+                val zoomed = effectiveZoom > 1f
                 key(currentEngine) {
                     AndroidView(
                         factory = { ctx ->
@@ -1035,18 +1089,69 @@ fun VideoPlayerScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                // TV zoom mode acts as a baseline crop/zoom for the
-                                // video surface (useful for overscan or to fill 4:3
-                                // content on 16:9 displays). The interactive pinch
-                                // zoom (videoZoom) multiplies on top of it.
-                                val tvBaselineZoom = if (isTv && uiState.tvZoomModePercent != 0f) {
-                                    1f + (uiState.tvZoomModePercent / 100f)
-                                } else 1f
-                                val effectiveZoom = videoZoom * tvBaselineZoom
                                 scaleX = effectiveZoom
                                 scaleY = effectiveZoom
                             },
                     )
+
+                    // ── Zoom/crop-safe subtitles ──
+                    //
+                    // The engine declares its zoom-safe subtitle strategy via
+                    // [MediaEngine.zoomSafeSubtitleStrategy]; the screen dispatches
+                    // on that single value instead of reverse-engineering the
+                    // strategy from a pair of capability booleans. Both paths keep
+                    // captions pinned to the screen (outside the graphicsLayer
+                    // above) so they no longer scale or translate off-screen when
+                    // the user pinch-zooms or crops. Both are siblings of the
+                    // zoomed video, not children, so they never inherit the
+                    // transform. DISABLED (libVLC/External) renders nothing here.
+                    when (currentEngine.zoomSafeSubtitleStrategy) {
+                        ZoomSafeSubtitleStrategy.NATIVE_PINNED -> {
+                            // ExoPlayer: a sibling FrameLayout host the engine
+                            // reparents its native SubtitleView / AssSubtitleView
+                            // into. Full styling/fidelity is preserved (native
+                            // rendering, just relocated). Lifetime follows
+                            // key(currentEngine): onRelease detaches the host
+                            // before the engine releases, so no subtitle view
+                            // orphans in a host the engine no longer feeds.
+                            AndroidView(
+                                factory = { ctx ->
+                                    android.widget.FrameLayout(ctx).apply {
+                                        layoutParams = android.view.ViewGroup.LayoutParams(
+                                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                        )
+                                    }.also { currentEngine.setExternalSubtitleHost(it) }
+                                },
+                                onRelease = { currentEngine.setExternalSubtitleHost(null) },
+                                // Sibling of the zoomed video — explicitly NOT in a
+                                // graphicsLayer, so it stays pinned to the screen.
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
+                        ZoomSafeSubtitleStrategy.COMPOSE_CUE -> {
+                            // mpv: libass composites into the GPU video surface and
+                            // can't be reparented, so while zoomed we hide the
+                            // native subs and render the live cue line
+                            // (engine.liveSubtitleCue) in a Compose overlay. At
+                            // zoom == 1 the native libass path renders with full
+                            // fidelity.
+                            LaunchedEffect(zoomed) {
+                                currentEngine.setNativeSubtitlesVisible(!zoomed)
+                            }
+                            val liveCue by currentEngine.liveSubtitleCue
+                                .collectAsStateWithLifecycle()
+                            if (zoomed) {
+                                MpvSubtitleOverlay(
+                                    cue = liveCue,
+                                    style = uiState.subtitleStyle,
+                                )
+                            }
+                        }
+
+                        ZoomSafeSubtitleStrategy.DISABLED -> { /* no zoom-safe path */ }
+                    }
                 }
             }
 
@@ -1178,6 +1283,38 @@ fun VideoPlayerScreen(
                                 }
                             }
                         }
+                    }
+                },
+                onStartGesture = remember(activity) {
+                    {
+                        initialBrightnessOnGestureStart = activity?.window?.attributes?.screenBrightness ?: -1f
+                    }
+                },
+                onCancelOverlays = remember(activity) {
+                    {
+                        activity?.let { act ->
+                            if (!act.isDestroyed && !act.isFinishing) {
+                                val layout = act.window.attributes
+                                if (initialBrightnessOnGestureStart >= 0f) {
+                                    layout.screenBrightness = initialBrightnessOnGestureStart
+                                } else {
+                                    layout.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                                }
+                                act.window.attributes = layout
+                            }
+                        }
+                        // Cancel any pending dismiss job from a prior gesture so it
+                        // doesn't fire redundantly after we've already cleared the
+                        // overlays here. (The job only hides the visual indicators;
+                        // it does not persist brightness/volume, which onClearOverlays
+                        // does synchronously — so cancelling it here is safe.)
+                        overlayDismissJob?.cancel()
+                        overlayDismissJob = null
+                        brightnessOverlay = -1f
+                        volumeOverlay = -1f
+                        volumeGestureAccumulator = 0f
+                        isGestureSeeking = false
+                        seekState.reset()
                     }
                 },
             )
@@ -1369,19 +1506,21 @@ fun VideoPlayerScreen(
                 )
             }
 
-            SnackbarHost(
+            com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = SNACKBAR_BOTTOM_CLEARANCE_DP.dp),
-            ) { data ->
-                Snackbar(
-                    snackbarData = data,
-                    shape = ShapeCache.smoothPill,
-                    containerColor = playerOnScrim().copy(alpha = 0.15f),
-                    contentColor = playerOnScrim(),
-                )
-            }
+            )
+
+            // "Resumed from where you left off" chip — anchored under the top bar.
+            com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
+                hostState = resumeChipHostState,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = RESUME_CHIP_TOP_CLEARANCE_DP.dp),
+            )
 
             val hasEpisodes = uiState.seriesSeasons.isNotEmpty() && uiState.seasonEpisodes.isNotEmpty()
             val episodeBrowserEnabled = uiState.videoEpisodeBrowserEnabled
@@ -1535,6 +1674,7 @@ fun VideoPlayerScreen(
                 supportsDialogueBoost = uiState.engineCapabilities.supportsDialogueBoost,
                 supportsNightMode = uiState.engineCapabilities.supportsNightMode,
                 supportsAudioDelay = uiState.engineCapabilities.supportsAudioDelay,
+                supportsSubtitleDelay = uiState.engineCapabilities.supportsSubtitleDelay,
                 supportsAudioPassthrough = uiState.engineCapabilities.supportsAudioPassthrough,
                 hasEpisodes = hasEpisodes,
                 episodeBrowserEnabled = episodeBrowserEnabled,
@@ -1635,7 +1775,6 @@ fun VideoPlayerScreen(
     LaunchedEffect(Unit) {
         snapshotFlow { seekState.timestamp to seekState.direction }
             .filter { (_, direction) -> direction != 0 }
-            .drop(1) // ignore the initial replay (no seek yet)
             .collectLatest {
                 delay(GESTURE_SEEK_LINGER_MS)
                 seekState.reset()
@@ -1700,6 +1839,23 @@ fun VideoPlayerScreen(
             delay(1000)
             gestureTrickplayVisible = false
             gestureTrickplayBitmap = null
+        }
+    }
+
+    // G10: lazily parse the active external subtitle track for the cue-preview
+    // whenever the AV-sync sheet opens; clear on close so a stale cue list from
+    // a prior track doesn't render. setPreviewSheetVisible gates the embedded-
+    // cue pump (and re-syncs on open) so onCues doesn't churn the UI state while
+    // the preview isn't on screen.
+    LaunchedEffect(currentSheet) {
+        if (currentSheet == PlayerSheet.AVSync) {
+            viewModel.setPreviewSheetVisible(true)
+            viewModel.loadActiveSubtitleCues()
+        } else if (uiState.subtitlePreviewCues != null) {
+            viewModel.clearActiveSubtitleCues()
+            viewModel.setPreviewSheetVisible(false)
+        } else {
+            viewModel.setPreviewSheetVisible(false)
         }
     }
 
@@ -1941,29 +2097,44 @@ private fun PlayerSheetRouter(
                 onDismiss = dismissSheet,
                 footer = if (uiState.seriesId != null) {
                     {
-                        // Per-series subtitle preference toggle. Saves the
-                        // currently-selected track's language AND its role
-                        // (forced / SDH) so every episode restores the right
-                        // same-language track; toggling off forgets it.
+                        // Per-series subtitle preference toggle. With a real track
+                        // selected it saves that track's language + role so every
+                        // episode restores the right same-language track; with the
+                        // "Off" row selected it saves a "subtitles off" intent so
+                        // every episode loads with subs off. Toggling off forgets
+                        // whichever intent was saved.
+                        val selectedOff = uiState.subtitleTracks
+                            .firstOrNull { it.isSelected && it.index < 0 } != null
+                        val label = if (selectedOff || uiState.hasSeriesSubtitleOffPref) {
+                            stringResource(R.string.player_video_remember_subtitles_off)
+                        } else {
+                            stringResource(R.string.player_video_remember_subtitle_language)
+                        }
                         RememberPreferenceToggle(
-                            label = stringResource(R.string.player_video_remember_subtitle_language),
+                            label = label,
                             checked = uiState.hasSeriesSubtitlePref,
                             onToggle = { remember ->
-                                val sel = if (remember) {
-                                    uiState.subtitleTracks.firstOrNull { it.isSelected && it.index >= 0 }
+                                val sel = uiState.subtitleTracks.firstOrNull { it.isSelected }
+                                if (sel != null && sel.index < 0) {
+                                    // Off row selected: toggle the "subtitles off"
+                                    // intent rather than a language.
+                                    viewModel.setSeriesSubtitleDisabled(remember)
+                                } else if (remember) {
+                                    viewModel.setSeriesSubtitlePreference(
+                                        language = sel?.language,
+                                        // A role is only pinned when present: selecting a
+                                        // plain track passes null ("don't care") so the
+                                        // restore matcher relaxes to any same-language
+                                        // track instead of strictly excluding forced/SDH
+                                        // tracks whose badges vary episode-to-episode.
+                                        forced = sel?.badges?.contains(TrackBadge.FORCED)?.takeIf { it },
+                                        hearingImpaired = sel?.badges?.contains(TrackBadge.SDH)?.takeIf { it },
+                                    )
                                 } else {
-                                    null
+                                    // A real track was selected and the user turned
+                                    // the toggle off: forget the language preference.
+                                    viewModel.setSeriesSubtitlePreference(language = null)
                                 }
-                                viewModel.setSeriesSubtitlePreference(
-                                    language = sel?.language,
-                                    // A role is only pinned when present: selecting a
-                                    // plain track passes null ("don't care") so the
-                                    // restore matcher relaxes to any same-language
-                                    // track instead of strictly excluding forced/SDH
-                                    // tracks whose badges vary episode-to-episode.
-                                    forced = sel?.badges?.contains(TrackBadge.FORCED)?.takeIf { it },
-                                    hearingImpaired = sel?.badges?.contains(TrackBadge.SDH)?.takeIf { it },
-                                )
                             },
                         )
                     }
@@ -2040,6 +2211,11 @@ private fun PlayerSheetRouter(
                 onAudioDelayChange = { viewModel.setAudioDelay(it) },
                 onSubtitleDelayChange = { viewModel.setSubtitleDelay(it) },
                 onDismiss = dismissSheet,
+                activeSubtitleCues = uiState.subtitlePreviewCues,
+                subtitlePreviewSource = uiState.subtitlePreviewSource,
+                playbackPositionMs = { viewModel.currentPositionMs.value },
+                audioDelaySupported = uiState.engineCapabilities.supportsAudioDelay,
+                subtitleDelaySupported = uiState.engineCapabilities.supportsSubtitleDelay,
             )
         }
         is PlayerSheet.Decoder -> {

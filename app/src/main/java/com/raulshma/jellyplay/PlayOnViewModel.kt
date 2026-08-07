@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -65,7 +64,6 @@ data class PlayOnUiState(
 class PlayOnViewModel @Inject constructor(
     private val jellyfinStrategy: JellyfinRemotePlayCastStrategy,
     private val audioPlaybackManager: AudioPlaybackManager,
-    @Suppress("unused") private val preferencesStore: UserPreferencesStore,
 ) : JellyPlayViewModel() {
 
     /** Shared singleton; exposed so the Home nav graph can short-circuit plays. */

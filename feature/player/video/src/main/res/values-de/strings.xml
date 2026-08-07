@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Untertitel</string>
+    <string name="player_resumed_message">An der letzten Position fortgesetzt</string>
     <string name="player_reset_to_auto">Auf Auto zurücksetzen</string>
     <string name="player_track_default">Standard</string>
     <string name="player_track_off">Aus</string>
@@ -73,6 +74,7 @@
     <string name="player_video_border_width">Rahmenbreite: %1$s</string>
     <string name="player_video_shadow_offset">Schattenversatz: %1$s</string>
     <string name="player_video_subtitle_offset">Untertitelversatz: %1$s</string>
+    <string name="player_video_sync_preview_reset">Versatz zurücksetzen</string>
     <string name="player_video_vertical_position">Vertikale Position: %1$d%%</string>
 
     <!-- Sleep timer sheet -->
@@ -211,18 +213,10 @@
     <string name="player_video_on">An</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_subtitle_delay">Untertitel-Verzögerung</string>
     <string name="player_video_reset_both">Beide zurücksetzen</string>
     <string name="player_video_av_sync_audio_helper">Negativ: Audio früher. Positiv: Audio später.</string>
-    <string name="player_video_av_sync_subtitle_helper">Negativ: Untertitel früher. Positiv: Untertitel später.</string>
     <string name="player_video_av_sync_decrease">%1$s verringern</string>
     <string name="player_video_av_sync_increase">%1$s erhöhen</string>
-    <string name="player_video_sync_helper">Synchronisationshilfe</string>
-    <string name="player_video_sync_helper_hint">Halten Sie „Stimme gehört“, sobald ein Satz gesprochen wird, dann „Text gesehen“, wenn der Untertitel erscheint.</string>
-    <string name="player_video_voice_heard">🔊 Stimme gehört</string>
-    <string name="player_video_listening">Lausche…</string>
-    <string name="player_video_text_seen">💬 Text gesehen</string>
-    <string name="player_video_watching">Beobachte…</string>
     <string name="player_video_picture_in_picture">Bild im Bild</string>
     <string name="player_video_play_next">Nächstes abspielen</string>
     <string name="player_video_turn_on_autoplay">Autoplay aktivieren</string>
@@ -237,6 +231,7 @@
     <string name="player_video_duration">Dauer</string>
     <string name="player_video_remember_audio_language">Audiosprache für diese Serie merken</string>
     <string name="player_video_remember_subtitle_language">Untertitelsprache für diese Serie merken</string>
+    <string name="player_video_remember_subtitles_off">Untertitel für diese Serie deaktiviert lassen</string>
     <string name="player_video_error_offline_file_missing">Fehler: Offlinedatei fehlt</string>
     <string name="player_video_error_loading_media">Fehler beim Laden der Medien</string>
     <string name="player_video_trickplay_thumbnail">Trickplay-Miniaturansicht</string>

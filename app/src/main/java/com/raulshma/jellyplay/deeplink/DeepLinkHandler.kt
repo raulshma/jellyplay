@@ -9,7 +9,12 @@ import javax.inject.Singleton
 @Singleton
 class DeepLinkHandler @Inject constructor() {
 
-    private val supportedHosts = setOf("media", "newsletter", "seerr")
+    private val supportedHosts = setOf(
+        "media", "newsletter", "seerr",
+        // Top-level destinations reachable via deep link, so
+        // widgets/notifications/launcher shortcuts can jump anywhere.
+        "search", "settings", "downloads", "library",
+    )
 
     fun parse(intent: Intent): Route? {
         val uri = intent.data ?: return null
@@ -44,6 +49,11 @@ class DeepLinkHandler @Inject constructor() {
                     ?: "movie"
                 Route.SeerrDetail(tmdbId = tmdbId, mediaType = mediaType)
             }
+            // Argument-less top-level destinations
+            "search" -> Route.Search
+            "settings" -> Route.Settings
+            "downloads" -> Route.Downloads
+            "library" -> Route.Library
             else -> null
         }
     }
@@ -52,16 +62,23 @@ class DeepLinkHandler @Inject constructor() {
         if (uri.host != HOST_WEB) return null
         val segments = uri.pathSegments
         if (segments.firstOrNull() != PATH_PREFIX) return null
-        if (segments.size < 3) return null
-        val type = segments[1]
-        val itemId = segments[2]
-        return routeForPath(type, itemId)
+        val type = segments.getOrNull(1) ?: return null
+        // Argument-less destinations only need prefix/type; item-bearing routes
+        // (media/newsletter) additionally require the trailing id segment.
+        val itemId = segments.getOrNull(2)
+        return if (itemId == null) routeForPath(type, "") else routeForPath(type, itemId)
     }
 
     private fun routeForPath(type: String, itemId: String): Route? {
         return when (type) {
             "media" -> Route.MediaDetail(itemId)
             "newsletter" -> Route.NewsletterSectionList(itemId)
+            // HTTPS equivalents of the argument-less top-level destinations.
+            // `itemId` is the trailing segment; these routes ignore it.
+            "search" -> Route.Search
+            "settings" -> Route.Settings
+            "downloads" -> Route.Downloads
+            "library" -> Route.Library
             else -> null
         }
     }
@@ -87,5 +104,11 @@ class DeepLinkHandler @Inject constructor() {
         fun createSeerrLink(tmdbId: Int, mediaType: String): String {
             return "$SCHEME_CUSTOM://seerr/$tmdbId/$mediaType"
         }
+
+        /** Deep-link builders for the argument-less top-level destinations. */
+        fun createSearchLink(): String = "$SCHEME_CUSTOM://search"
+        fun createSettingsLink(): String = "$SCHEME_CUSTOM://settings"
+        fun createDownloadsLink(): String = "$SCHEME_CUSTOM://downloads"
+        fun createLibraryLink(): String = "$SCHEME_CUSTOM://library"
     }
 }

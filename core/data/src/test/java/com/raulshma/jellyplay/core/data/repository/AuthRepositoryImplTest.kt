@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.ServerEntity
 import com.raulshma.jellyplay.core.database.entity.UserEntity
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ManagedUser
@@ -39,7 +39,7 @@ class AuthRepositoryImplTest {
     private val database: JellyPlayDatabase = mockk(relaxed = true)
     private val serverDao: ServerDao = mockk(relaxed = true)
     private val userDao: UserDao = mockk(relaxed = true)
-    private val preferencesStore: UserPreferencesStore = mockk(relaxed = true)
+    private val serverIdentityStore: ServerIdentityStore = mockk(relaxed = true)
     private val tokenCipher: TokenCipher = mockk(relaxed = true) {
         // Tests store plaintext tokens — make the cipher a no-op pass-through so existing
         // assertions about token values still hold. The cipher's real behaviour is covered
@@ -93,7 +93,7 @@ class AuthRepositoryImplTest {
             database = database,
             serverDao = serverDao,
             userDao = userDao,
-            preferencesStore = preferencesStore,
+            serverIdentityStore = serverIdentityStore,
             tokenCipher = tokenCipher,
             json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
         )
@@ -133,14 +133,13 @@ class AuthRepositoryImplTest {
         coVerify { apiClient.disconnect() }
         // logout must clear the active server/user selection only — NOT wipe
         // the whole DataStore (device id + all user prefs must be preserved).
-        coVerify { preferencesStore.clearSession() }
-        coVerify(exactly = 0) { preferencesStore.clearAll() }
+        coVerify { serverIdentityStore.clearSession() }
     }
 
     @Test
     fun `restoreSession with valid stored credentials`() = runTest {
-        every { preferencesStore.activeServerId } returns flowOf("server-1")
-        every { preferencesStore.activeUserId } returns flowOf("user-1")
+        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
+        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns testUserEntity
 
@@ -153,8 +152,8 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `restoreSession with no stored server succeeds without error`() = runTest {
-        every { preferencesStore.activeServerId } returns flowOf(null)
-        every { preferencesStore.activeUserId } returns flowOf(null)
+        every { serverIdentityStore.activeServerId } returns flowOf(null)
+        every { serverIdentityStore.activeUserId } returns flowOf(null)
 
         val result = repository.restoreSession()
 
@@ -164,27 +163,27 @@ class AuthRepositoryImplTest {
 
     @Test
     fun `restoreSession clears preferences when server not found in DB`() = runTest {
-        every { preferencesStore.activeServerId } returns flowOf("server-1")
-        every { preferencesStore.activeUserId } returns flowOf("user-1")
+        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
+        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         coEvery { serverDao.getServerById("server-1") } returns null
 
         val result = repository.restoreSession()
 
         assertTrue(result.isSuccess)
-        coVerify { preferencesStore.setActiveSession("", "") }
+        coVerify { serverIdentityStore.setActiveSession("", "") }
     }
 
     @Test
     fun `restoreSession clears user when user not found in DB`() = runTest {
-        every { preferencesStore.activeServerId } returns flowOf("server-1")
-        every { preferencesStore.activeUserId } returns flowOf("user-1")
+        every { serverIdentityStore.activeServerId } returns flowOf("server-1")
+        every { serverIdentityStore.activeUserId } returns flowOf("user-1")
         coEvery { serverDao.getServerById("server-1") } returns testServerEntity
         coEvery { userDao.getUserById("user-1") } returns null
 
         val result = repository.restoreSession()
 
         assertTrue(result.isSuccess)
-        coVerify { preferencesStore.setActiveUser("") }
+        coVerify { serverIdentityStore.setActiveUser("") }
     }
 
     @Test
@@ -223,7 +222,7 @@ class AuthRepositoryImplTest {
 
         coVerify { userDao.deleteUserById("user-1") }
         coVerify { apiClient.disconnect() }
-        coVerify { preferencesStore.setActiveUser("") }
+        coVerify { serverIdentityStore.setActiveUser("") }
     }
 
     @Test
@@ -264,7 +263,7 @@ class AuthRepositoryImplTest {
         coVerify { apiClient.revokeServerSession() }
         coVerify { userDao.deleteUserById("user-1") }
         coVerify { apiClient.disconnect() }
-        coVerify { preferencesStore.clearSession() }
+        coVerify { serverIdentityStore.clearSession() }
     }
 
     @Test

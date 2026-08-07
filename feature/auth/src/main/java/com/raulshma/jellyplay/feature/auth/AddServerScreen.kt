@@ -50,11 +50,15 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.raulshma.jellyplay.feature.auth.R
 import com.raulshma.jellyplay.core.model.DiscoveredServer
+import com.raulshma.jellyplay.core.network.LocalNetworkAccess
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -78,11 +82,30 @@ fun AddServerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var contentVisible by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
-    // Auto-start discovery when screen appears
-    LaunchedEffect(Unit) {
+    // Android 17+: local network access is required for SSDP discovery. Track
+    // the grant state so we can (a) gate auto-discovery on it and (b) show a
+    // rationale banner + re-request affordance when denied. On non-enforcing
+    // platforms this short-circuits to granted and the banner never appears.
+    var localNetworkGranted by remember {
+        mutableStateOf(LocalNetworkAccess.isGranted(context))
+    }
+    val localNetworkLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        // Just record the result; discovery is kicked off by the
+        // LaunchedEffect below keyed on localNetworkGranted, which is the
+        // single trigger for both initial and post-grant scans.
+        localNetworkGranted = granted
+    }
+
+    // Auto-start discovery when screen appears, but only if local network
+    // access is already available; otherwise the scan silently finds nothing.
+    // The rationale banner's "Allow access" button starts discovery after grant.
+    LaunchedEffect(localNetworkGranted) {
         contentVisible = true
-        viewModel.startDiscovery()
+        if (localNetworkGranted) viewModel.startDiscovery()
     }
 
     JellyPlayScreenScaffold(
@@ -136,6 +159,25 @@ fun AddServerScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Local network permission rationale (Android 17+). Shown when
+            // discovery can't work yet; grants kick off discovery via the launcher.
+            item {
+                AnimatedVisibility(
+                    visible = contentVisible && LocalNetworkAccess.enforced && !localNetworkGranted,
+                    enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + slideInVertically(
+                        initialOffsetY = { it / 20 },
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    ),
+                ) {
+                    LocalNetworkRationaleBanner(
+                        onAllow = {
+                            localNetworkLauncher.launch(LocalNetworkAccess.PERMISSION)
+                        },
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             // Discovery Section
@@ -537,6 +579,63 @@ private fun ManualEntrySection(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(if (uiState.isConnecting) stringResource(R.string.auth_connecting) else stringResource(R.string.auth_connect))
+        }
+    }
+}
+
+/**
+ * Rationale banner shown on Android 17+ when local network access has not been
+ * granted. Discovery and LAN connections can't work without it, so rather than
+ * spinning a scan that will silently return nothing, we explain why and offer a
+ * one-tap grant. "Allow access" launches the system permission prompt; the
+ * caller starts discovery on a successful grant.
+ */
+@Composable
+private fun LocalNetworkRationaleBanner(onAllow: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = ShapeCache.smooth16,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+    ) {
+        Row(
+            verticalAlignment = CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Icon(
+                Tabler.Outline.Wifi,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.auth_local_network_rationale_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.auth_local_network_rationale_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            val allowFocusState = rememberTvFocusState(focusedScale = 1.04f)
+            Button(
+                onClick = onAllow,
+                modifier = Modifier
+                    .then(allowFocusState.focusModifier)
+                    .tvFocusIndicator(allowFocusState, ShapeCache.smooth12),
+            ) {
+                Text(stringResource(R.string.auth_local_network_allow))
+            }
         }
     }
 }

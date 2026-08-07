@@ -47,11 +47,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.AlertCircle
+import com.composables.icons.tabler.outline.AlertTriangle
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ChevronDown
+import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.DeviceFloppy
+import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Star
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -95,6 +100,9 @@ fun OfflineDetailScreen(
     val children by viewModel.children.collectAsStateWithLifecycle(initialValue = emptyList())
     val seasons by viewModel.seasons.collectAsStateWithLifecycle(initialValue = emptyList())
     val episodes by viewModel.episodes.collectAsStateWithLifecycle(initialValue = emptyMap())
+    val compactEpisodeList by viewModel.compactEpisodeList.collectAsStateWithLifecycle(initialValue = false)
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle(initialValue = null)
+    val resyncState by viewModel.resyncState.collectAsStateWithLifecycle(initialValue = ResyncUiState.Idle)
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
@@ -102,10 +110,15 @@ fun OfflineDetailScreen(
     // Track whether the first load has resolved so we can tell "loading" apart
     // from "the item was deleted / doesn't exist".
     var loaded by remember { mutableStateOf(false) }
+    var showSyncSheet by remember { mutableStateOf(false) }
     LaunchedEffect(itemId) {
         viewModel.load(itemId)
         viewModel.item.first()
         loaded = true
+        // TTL-gated freshness check on entry — the manager no-ops network-wise
+        // when within the per-item TTL or offline, so this is cheap to fire on
+        // every visit.
+        viewModel.checkForUpdates()
     }
 
     when {
@@ -126,11 +139,29 @@ fun OfflineDetailScreen(
             onMarkSeasonUnplayed = { viewModel.markSeasonUnplayed(it) },
             onDelete = { viewModel.delete(onBack) },
             onBack = onBack,
+            compactEpisodeList = compactEpisodeList,
+            onCompactEpisodeListChange = viewModel::setCompactEpisodeList,
+            syncState = syncState,
+            resyncState = resyncState,
+            onShowSyncSheet = { showSyncSheet = true },
         )
         !loaded -> JellyPlayScreenScaffold(title = stringResource(R.string.downloads_loading), onBack = onBack) { ScreenLoadingState() }
         else -> JellyPlayScreenScaffold(title = stringResource(R.string.downloads_not_found), onBack = onBack) {
             ScreenEmptyState(icon = Tabler.Outline.DeviceFloppy, title = stringResource(R.string.downloads_download_unavailable))
         }
+    }
+
+    if (showSyncSheet) {
+        OfflineResyncSheet(
+            syncState = syncState,
+            resyncState = resyncState,
+            onResync = viewModel::resync,
+            onRedownloadMedia = viewModel::redownloadMedia,
+            onDismiss = {
+                showSyncSheet = false
+                viewModel.clearResyncState()
+            },
+        )
     }
 }
 
@@ -152,6 +183,11 @@ private fun OfflineDetailContent(
     onMarkSeasonUnplayed: (seasonId: String) -> Unit,
     onDelete: () -> Unit,
     onBack: () -> Unit,
+    compactEpisodeList: Boolean = false,
+    onCompactEpisodeListChange: (Boolean) -> Unit = {},
+    syncState: com.raulshma.jellyplay.core.model.OfflineSyncState? = null,
+    resyncState: ResyncUiState = ResyncUiState.Idle,
+    onShowSyncSheet: () -> Unit = {},
 ) {
     val isEpisode = item.mediaType == MediaType.EPISODE
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -421,6 +457,8 @@ private fun OfflineDetailContent(
                                     onEpisodeDelete = { episode -> onEpisodeDelete(episode.id) },
                                     onMarkSeasonPlayed = onMarkSeasonPlayed,
                                     onMarkSeasonUnplayed = onMarkSeasonUnplayed,
+                                    compactEpisodeList = compactEpisodeList,
+                                    onCompactEpisodeListChange = onCompactEpisodeListChange,
                                 )
                             }
                         }
@@ -463,6 +501,15 @@ private fun OfflineDetailContent(
                     StaggeredSection(delayIndex = 4) {
                         Column(modifier = Modifier.padding(horizontal = contentPad)) {
                             Spacer(Modifier.height(24.dp))
+                            // Freshness banner: surfaces a server-detected update
+                            // (metadata/images changed) or a media-file change that
+                            // needs a full re-download. Tappable to open the resync
+                            // sheet. Hidden when there's nothing to act on.
+                            SyncUpdateBanner(
+                                syncState = syncState,
+                                resyncState = resyncState,
+                                onClick = onShowSyncSheet,
+                            )
                             DownloadInfoCard(item = item)
                         }
                     }
@@ -488,7 +535,13 @@ private fun OfflineDetailContent(
                                 ) { _, person, focusModifier ->
                                     OfflinePersonItem(
                                         person = person,
-                                        imageUrl = personImageUrl(person.id),
+                                        // Prefer the on-disk cast image (resolved
+                                        // by the repository) so the row renders
+                                        // without network even after Coil's memory
+                                        // cache evicts the entry; fall back to the
+                                        // remote URL (a blurhash placeholder if the
+                                        // fetch fails offline).
+                                        imageUrl = person.localImagePath ?: personImageUrl(person.id),
                                         modifier = focusModifier,
                                     )
                                 }
@@ -806,3 +859,245 @@ private fun OfflineTrackRow(
 
 private fun formatDate(epochMillis: Long): String =
     DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(epochMillis))
+
+/**
+ * Inline freshness banner shown above the download-info card. Surfaces a
+ * server-detected update or media-file change, and opens the resync sheet on
+ * tap. Hidden unless there's something to act on (update available, media
+ * changed, checking, or an active/complete resync).
+ */
+@Composable
+private fun SyncUpdateBanner(
+    syncState: com.raulshma.jellyplay.core.model.OfflineSyncState?,
+    resyncState: ResyncUiState,
+    onClick: () -> Unit,
+) {
+    when {
+        resyncState is ResyncUiState.Working -> ResyncBannerRow(
+            icon = Tabler.Outline.Refresh,
+            tint = MaterialTheme.colorScheme.primary,
+            text = stringResource(R.string.downloads_resync_in_progress),
+            progress = true,
+            onClick = onClick,
+        )
+        resyncState is ResyncUiState.Done -> ResyncBannerRow(
+            icon = Tabler.Outline.Check,
+            tint = MaterialTheme.colorScheme.primary,
+            text = stringResource(R.string.downloads_resync_complete),
+            onClick = onClick,
+        )
+        resyncState is ResyncUiState.Error -> ResyncBannerRow(
+            icon = Tabler.Outline.AlertTriangle,
+            tint = MaterialTheme.colorScheme.error,
+            text = stringResource(R.string.downloads_resync_failed),
+            onClick = onClick,
+        )
+        syncState?.status == com.raulshma.jellyplay.core.model.SyncStatus.ERROR -> ResyncBannerRow(
+            icon = Tabler.Outline.AlertTriangle,
+            tint = MaterialTheme.colorScheme.error,
+            text = stringResource(R.string.downloads_resync_failed),
+            onClick = onClick,
+        )
+        syncState?.status == com.raulshma.jellyplay.core.model.SyncStatus.CHECKING -> ResyncBannerRow(
+            icon = Tabler.Outline.Refresh,
+            tint = MaterialTheme.colorScheme.primary,
+            text = stringResource(R.string.downloads_resync_checking),
+            progress = true,
+            onClick = onClick,
+        )
+        syncState?.status == com.raulshma.jellyplay.core.model.SyncStatus.UPDATE_AVAILABLE -> ResyncBannerRow(
+            icon = Tabler.Outline.AlertCircle,
+            tint = if (syncState.mediaFileChanged) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.tertiary,
+            text = if (syncState.mediaFileChanged) {
+                stringResource(R.string.downloads_resync_media_changed)
+            } else {
+                stringResource(R.string.downloads_resync_update_available)
+            },
+            onClick = onClick,
+        )
+        else -> Spacer(Modifier.height(0.dp))
+    }
+}
+
+@Composable
+private fun ResyncBannerRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color,
+    text: String,
+    progress: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Spacer(Modifier.height(8.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smooth16)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (progress) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = tint,
+            )
+        } else {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            Tabler.Outline.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/**
+ * Resync detail bottom sheet. Lists what changed (metadata/images/media) and
+ * offers a resync action with live status. For a media-file change it explains
+ * that a full re-download is required (the sheet doesn't trigger that itself —
+ * it points the user back to delete + download).
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun OfflineResyncSheet(
+    syncState: com.raulshma.jellyplay.core.model.OfflineSyncState?,
+    resyncState: ResyncUiState,
+    onResync: () -> Unit,
+    onRedownloadMedia: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(
+                    Tabler.Outline.Refresh,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    stringResource(R.string.downloads_resync_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+
+            val status = syncState?.status
+            if (status == com.raulshma.jellyplay.core.model.SyncStatus.UPDATE_AVAILABLE ||
+                status == com.raulshma.jellyplay.core.model.SyncStatus.CHECKING
+            ) {
+                Text(
+                    stringResource(R.string.downloads_resync_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (syncState?.metadataChanged == true) {
+                    ResyncChangeChip(stringResource(R.string.downloads_resync_change_metadata))
+                }
+                if (syncState?.imagesChanged == true) {
+                    ResyncChangeChip(stringResource(R.string.downloads_resync_change_images))
+                }
+                if (syncState?.mediaFileChanged == true) {
+                    ResyncChangeChip(stringResource(R.string.downloads_resync_change_media), error = true)
+                    Text(
+                        stringResource(R.string.downloads_resync_media_explanation),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                Text(
+                    stringResource(R.string.downloads_resync_up_to_date),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            when (resyncState) {
+                is ResyncUiState.Working -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp), strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(R.string.downloads_resync_in_progress), style = MaterialTheme.typography.bodyMedium)
+                }
+                is ResyncUiState.Error -> Text(
+                    stringResource(R.string.downloads_resync_failed) + ": " + resyncState.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                else -> {}
+            }
+
+            if (syncState?.needsResync == true && resyncState !is ResyncUiState.Working) {
+                androidx.compose.material3.Button(
+                    onClick = onResync,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Tabler.Outline.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.downloads_resync_action))
+                }
+            }
+            // When only the media file changed, offer the full re-download path —
+            // a metadata/images resync can't fix it. Uses an error-toned button so
+            // it reads as destructive (it deletes the existing file first).
+            if (syncState?.mediaFileChanged == true && resyncState !is ResyncUiState.Working) {
+                androidx.compose.material3.Button(
+                    onClick = onRedownloadMedia,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                ) {
+                    Icon(Tabler.Outline.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.downloads_resync_redownload))
+                }
+            }
+            androidx.compose.material3.TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.downloads_close))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResyncChangeChip(text: String, error: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            if (error) Tabler.Outline.AlertTriangle else Tabler.Outline.Check,
+            contentDescription = null,
+            tint = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}

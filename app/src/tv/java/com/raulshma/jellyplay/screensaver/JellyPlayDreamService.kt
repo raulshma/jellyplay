@@ -16,9 +16,9 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
+import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
 import com.raulshma.jellyplay.core.model.DreamImage
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -54,7 +54,7 @@ class JellyPlayDreamService : DreamService() {
     interface DreamServiceEntryPoint {
         fun jellyfinApiClient(): JellyfinApiClient
         fun authRepository(): AuthRepository
-        fun preferencesStore(): UserPreferencesStore
+        fun screensaverStore(): com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverStore
     }
 
     private val entryPoint by lazy {
@@ -62,7 +62,7 @@ class JellyPlayDreamService : DreamService() {
     }
     private val apiClient by lazy { entryPoint.jellyfinApiClient() }
     private val authRepository by lazy { entryPoint.authRepository() }
-    private val preferencesStore by lazy { entryPoint.preferencesStore() }
+    private val preferencesStore by lazy { entryPoint.screensaverStore() }
     private val imageProvider by lazy { DreamImageProvider(apiClient, applicationContext) }
 
     private val dreamLifecycle = DreamLifecycleOwner()
@@ -87,8 +87,8 @@ class JellyPlayDreamService : DreamService() {
 
         composeView.setContent {
             MaterialTheme {
-                val prefs by preferencesStore.preferences.collectAsState(
-                    initial = UserPreferences(),
+                val prefs by preferencesStore.screensaver.collectAsState(
+                    initial = com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice(),
                 )
                 DreamSlideshow(
                     images = images,
@@ -127,7 +127,7 @@ class JellyPlayDreamService : DreamService() {
         fetchJob = serviceScope.launch {
             try {
                 authRepository.restoreSession()
-                val prefs = preferencesStore.preferences.first()
+                val prefs = preferencesStore.screensaver.first()
                 val fetched = imageProvider.fetchImages(
                     categories = prefs.dreamImageCategories,
                     count = 25,

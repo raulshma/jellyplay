@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.core.data.cache
 
 import androidx.test.core.app.ApplicationProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -29,12 +29,12 @@ class CacheManagerAudioCacheExclusionTest {
     @get:Rule
     val tmpFolder = TemporaryFolder()
 
-    private val preferencesStore: UserPreferencesStore = mockk(relaxed = true)
+    private val networkOfflineStore: NetworkOfflineStore = mockk(relaxed = true)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
     @Before
     fun setup() {
-        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences(autoDeleteCache = true))
+        every { networkOfflineStore.networkOffline } returns MutableStateFlow(NetworkOfflineSlice(autoDeleteCache = true))
     }
 
     @Test
@@ -46,7 +46,7 @@ class CacheManagerAudioCacheExclusionTest {
 
         val manager = CacheManager(
             context = ApplicationProvider.getApplicationContext(),
-            userPreferencesStore = preferencesStore,
+            networkOfflineStore = networkOfflineStore,
             appScope = scope,
         ).apply { cacheDirOverride = cacheDir }
         manager.clearCache()
@@ -65,7 +65,7 @@ class CacheManagerAudioCacheExclusionTest {
 
         val manager = CacheManager(
             context = ApplicationProvider.getApplicationContext(),
-            userPreferencesStore = preferencesStore,
+            networkOfflineStore = networkOfflineStore,
             appScope = scope,
         ).apply { cacheDirOverride = cacheDir }
         val size = manager.cacheSizeBytes()

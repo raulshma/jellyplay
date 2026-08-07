@@ -36,6 +36,8 @@
     <string name="music_now_playing">Now Playing</string>
     <string name="music_download_album">Download Album</string>
     <string name="music_download_track">Download Track</string>
+    <string name="music_delete_album_downloads_confirm_title">Delete album downloads?</string>
+    <string name="music_delete_album_downloads_confirm_message">This removes all downloaded tracks from this album.</string>
 
     <!-- Track / row menus -->
     <string name="music_go_to_album">Go to Album</string>

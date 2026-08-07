@@ -2,25 +2,12 @@ package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,52 +15,37 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.size.Size as CoilSize
-import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
-import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.R
-import com.raulshma.jellyplay.core.ui.animation.defaultSpatialSpec
-import com.raulshma.jellyplay.core.ui.animation.fastEffectsSpec
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController
-import com.raulshma.jellyplay.core.ui.preview.rememberReleaseDismiss
 import com.raulshma.jellyplay.core.ui.preview.toMediaPreview
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import java.time.LocalDate
-import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.*
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 @Composable
 fun SeerrMediaCard(
@@ -86,77 +58,14 @@ fun SeerrMediaCard(
     clipToShape: Boolean = false,
 ) {
     val isTv = LocalTvMode.current
-    val tvFocusState = rememberTvFocusState()
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Press-and-hold "peek" preview. Seerr items aren't MediaItems, so we map
-    // via toMediaPreview() and call the controller directly (the
-    // rememberMediaPeek helper is MediaItem-typed). We still capture the card's
-    // bounds so the overlay can morph out of it. No-op when no controller is
-    // wired or on TV.
-    val previewController = LocalMediaPreviewController.current
-    val peekEnabled = com.raulshma.jellyplay.core.ui.preview.LocalMediaPeekEnabled.current
-    val boundsState = remember { mutableStateOf(Rect.Zero) }
-    val previewBoundsModifier = if (previewController != null && !isTv && peekEnabled) {
-        Modifier.onGloballyPositioned { coords ->
-            val pos = coords.positionInWindow()
-            boundsState.value = Rect(
-                left = pos.x,
-                top = pos.y,
-                right = pos.x + coords.size.width,
-                bottom = pos.y + coords.size.height,
-            )
-        }
-    } else Modifier
-    val onPreviewLongClick = if (previewController != null && !isTv && peekEnabled) {
-        remember(item, imageUrl) {
-            {
-                previewController.show(
-                    item.toMediaPreview(
-                        posterUrl = imageUrl,
-                        backdropUrl = item.backdropUrl,
-                        sourceBounds = boundsState.value.takeIf { it.width > 0 },
-                    )
-                )
-            }
-        }
-    } else null
-    rememberReleaseDismiss(isPressed)
-
-    val pulseScale = remember { Animatable(1f) }
-    val pulseSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-    LaunchedEffect(isLoading) {
-        if (isLoading) {
-            pulseScale.animateTo(
-                targetValue = 0.97f,
-                animationSpec = pulseSpec,
-            )
-        } else {
-            pulseScale.snapTo(1f)
-        }
-    }
-
-    val baseScale by animateFloatAsState(
-        targetValue = if (isLoading) pulseScale.value else if (isPressed) 0.95f else 1f,
-        animationSpec = defaultSpatialSpec<Float>(),
-        label = "seerrCardScale",
-    )
-    val scale by animateFloatAsState(
-        targetValue = baseScale * tvFocusState.scale,
-        animationSpec = defaultSpatialSpec<Float>(),
-        label = "seerrCardCombinedScale",
-    )
-
-    val brightnessOverlay by animateFloatAsState(
-        targetValue = if (isPressed && !isLoading) 0.08f else 0f,
-        animationSpec = fastEffectsSpec(),
-        label = "seerrCardBrightness",
-    )
-
+    // --- Loading shimmer / glow state machine (Seerr-only affordance) --------
+    // The card glows while a request is in flight. Kept here (not in the
+    // scaffold) because no other card has a loading state. The scaffold owns
+    // the press/focus scale; the animated border below carries the load signal.
     val shimmerOffset = remember { Animatable(-500f) }
     val glowAlpha = remember { Animatable(0.3f) }
-    val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
+    val reducedMotion = LocalReducedMotion.current
 
     LaunchedEffect(isLoading) {
         if (isLoading) {
@@ -174,14 +83,8 @@ fun SeerrMediaCard(
             }
             launch {
                 while (isActive) {
-                    glowAlpha.animateTo(
-                        0.8f,
-                        animationSpec = tween(800, easing = FancyTransitionEasing),
-                    )
-                    glowAlpha.animateTo(
-                        0.3f,
-                        animationSpec = tween(800, easing = FancyTransitionEasing),
-                    )
+                    glowAlpha.animateTo(0.8f, animationSpec = tween(800, easing = FancyTransitionEasing))
+                    glowAlpha.animateTo(0.3f, animationSpec = tween(800, easing = FancyTransitionEasing))
                 }
             }
         } else {
@@ -193,6 +96,7 @@ fun SeerrMediaCard(
     val effectiveShimmerOffset = if (isLoading) shimmerOffset.value else 0f
     val effectiveGlowAlpha = if (isLoading) glowAlpha.value else 0f
 
+    // --- Derived display state ----------------------------------------------
     val isUpcoming = remember(item.releaseDate, item.firstAirDate) {
         val dateStr = item.releaseDate ?: item.firstAirDate
         if (dateStr.isNullOrBlank()) false
@@ -208,8 +112,7 @@ fun SeerrMediaCard(
     }
 
     val mediaStatus = remember(item.mediaInfo?.status) {
-        item.mediaInfo?.status?.let { SeerrMediaStatus.fromValue(it) }
-            ?: SeerrMediaStatus.UNKNOWN
+        item.mediaInfo?.status?.let { SeerrMediaStatus.fromValue(it) } ?: SeerrMediaStatus.UNKNOWN
     }
     val isAvailable = remember(mediaStatus) {
         mediaStatus == SeerrMediaStatus.AVAILABLE ||
@@ -221,9 +124,8 @@ fun SeerrMediaCard(
     }
     val hasRequest = item.mediaInfo?.requests?.isNotEmpty() == true
 
-    val cardShape = ShapeCache.smooth12
+    // --- Border: animated glow when loading, themed default otherwise --------
     val glowColor = MaterialTheme.colorScheme.primary
-
     val glowBorderColors = remember(glowColor, effectiveGlowAlpha) {
         listOf(
             glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
@@ -231,6 +133,17 @@ fun SeerrMediaCard(
             glowColor.copy(alpha = effectiveGlowAlpha * 0.6f),
         )
     }
+    val loadingBorder = remember(glowBorderColors) {
+        BorderStroke(
+            width = 1.5.dp,
+            brush = Brush.linearGradient(
+                colors = glowBorderColors,
+                start = Offset.Zero,
+                end = Offset(1000f, 1500f),
+            ),
+        )
+    }
+
     val shimmerBaseColor = MaterialTheme.colorScheme.onSurface
     val shimmerColors = remember(shimmerBaseColor) {
         listOf(
@@ -240,150 +153,72 @@ fun SeerrMediaCard(
         )
     }
 
-    val imageModifier = Modifier
-        .fillMaxWidth()
-        .aspectRatio(2f / 3f)
-
-    Column(modifier = modifier) {
-        val isSynthwave = LocalIsSynthwave.current
-        val isSoothing = LocalIsSoothingTheme.current
-        val primary = MaterialTheme.colorScheme.primary
-        val secondary = MaterialTheme.colorScheme.secondary
-        val synthwaveBorder = remember(primary, secondary) {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.5.dp,
-                brush = Brush.linearGradient(colors = listOf(primary, secondary))
-            )
-        }
-        val outlineColor = MaterialTheme.colorScheme.outline
-        val soothingBorder = remember(outlineColor) {
-            androidx.compose.foundation.BorderStroke(
-                width = 0.8.dp,
-                color = outlineColor.copy(alpha = 0.35f)
-            )
-        }
-        val standardBorder = remember(outlineColor) {
-            androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                color = outlineColor.copy(alpha = 0.3f)
-            )
-        }
-        val border = when {
-            isSynthwave -> synthwaveBorder
-            isSoothing -> soothingBorder
-            else -> standardBorder
-        }
-
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(tvFocusState.focusModifier)
-                .then(previewBoundsModifier)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    clip = clipToShape
-                    shape = cardShape
-                }
-                .then(
-                    if (isLoading) {
-                        Modifier.border(
-                            width = (1.5).dp,
-                            brush = Brush.linearGradient(
-                                colors = glowBorderColors,
-                                start = Offset.Zero,
-                                end = Offset(1000f, 1500f),
-                            ),
-                            shape = cardShape,
-                        )
-                    } else {
-                        Modifier
-                    }
+    // --- Peek preview via the generalized factory overload ------------------
+    val previewController = LocalMediaPreviewController.current
+    val previewFactory = if (previewController != null) {
+        remember(item, imageUrl) {
+            { sourceBounds: androidx.compose.ui.geometry.Rect? ->
+                item.toMediaPreview(
+                    posterUrl = imageUrl,
+                    backdropUrl = item.backdropUrl,
+                    sourceBounds = sourceBounds,
                 )
-                .tvFocusIndicator(tvFocusState, cardShape)
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onClick,
-                    onLongClick = onPreviewLongClick,
-                    enabled = !isLoading,
-                ),
-            shape = cardShape,
-            border = border,
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 0.dp
-            ),
-        ) {
-            Box {
-                if (imageUrl != null) {
-                    MediaImage(
-                        url = imageUrl,
-                        contentDescription = item.displayName,
-                        modifier = imageModifier,
-                        contentScale = ContentScale.Crop,
-                        crossfade = false,
-                        // Poster card (2:3, fillMaxWidth). ~360×540 covers ~2× density
-                        // for typical grid card widths without the 512×512 over-decode.
-                        size = CoilSize(360, 540),
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(2f / 3f)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = item.displayName.take(2),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+            }
+        }
+    } else null
 
-                if (brightnessOverlay > 0.01f) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = brightnessOverlay))
+    MediaCardScaffold(
+        onClick = onClick,
+        image = { imageModifier ->
+            if (imageUrl != null) {
+                MediaImage(
+                    url = imageUrl,
+                    contentDescription = item.displayName,
+                    modifier = imageModifier,
+                    contentScale = ContentScale.Crop,
+                    crossfade = false,
+                    // Poster card (2:3, fillMaxWidth). ~360×540 covers ~2× density
+                    // for typical grid card widths without the 512×512 over-decode.
+                    size = CoilSize(360, 540),
+                )
+            } else {
+                Box(
+                    modifier = imageModifier
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = item.displayName.take(2),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+        },
+        title = item.displayName,
+        modifier = modifier,
+        aspectRatio = 2f / 3f,
+        enabled = !isLoading,
+        clipToShape = clipToShape,
+        border = if (isLoading) loadingBorder else null,
+        titleColor = if (isLoading) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+        previewFactory = previewFactory,
+        overlays = {
+            if (isLoading) {
+                val shimmerBrush = Brush.linearGradient(
+                    colors = shimmerColors,
+                    start = Offset(effectiveShimmerOffset, 0f),
+                    end = Offset(effectiveShimmerOffset + 400f, 400f),
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(shimmerBrush)
+                )
+            }
 
-                if (isLoading) {
-                    val shimmerBrush = Brush.linearGradient(
-                        colors = shimmerColors,
-                        start = Offset(effectiveShimmerOffset, 0f),
-                        end = Offset(effectiveShimmerOffset + 400f, 400f),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clip(cardShape)
-                            .background(shimmerBrush)
-                    )
-                }
-
-                if (!isLoading) {
-                    val surface = MaterialTheme.colorScheme.surface
-                    val bottomGradient = remember(surface) {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                surface.copy(alpha = 0.5f),
-                            ),
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(60.dp)
-                            .background(bottomGradient)
-                    )
-                }
-
-                if (!isLoading && item.voteAverage != null) {
+            if (!isLoading) {
+                if (item.voteAverage != null) {
                     RatingBadge(
                         rating = item.voteAverage,
                         modifier = Modifier
@@ -392,130 +227,48 @@ fun SeerrMediaCard(
                     )
                 }
 
-                if (!isLoading) {
-                    val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
-                    val surface = MaterialTheme.colorScheme.surface
-                    val onTertiaryContainer = MaterialTheme.colorScheme.onTertiaryContainer
-                    val onSurface = MaterialTheme.colorScheme.onSurface
-                    val mediaLabel = remember(isUpcoming, item.mediaType) {
-                        when {
-                            isUpcoming -> "UPCOMING"
-                            item.mediaType.equals("tv", ignoreCase = true) -> "SERIES"
-                            item.mediaType.equals("movie", ignoreCase = true) -> "MOVIE"
-                            else -> item.mediaType.uppercase()
-                        }
-                    }
+                SeerrMediaLabelBadge(
+                    isUpcoming = isUpcoming,
+                    mediaType = item.mediaType,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(6.dp),
+                )
 
-                    val labelColor = remember(isUpcoming, tertiaryContainer, surface) {
-                        if (isUpcoming) {
-                            tertiaryContainer.copy(alpha = 0.9f)
-                        } else {
-                            surface.copy(alpha = 0.6f)
-                        }
-                    }
-
-                    val textColor = remember(isUpcoming, onTertiaryContainer, onSurface) {
-                        if (isUpcoming) {
-                            onTertiaryContainer
-                        } else {
-                            onSurface
-                        }
-                    }
-
-                    Box(
+                if (isAvailable || isPending || hasRequest) {
+                    SeerrStatusBadge(
+                        isAvailable = isAvailable,
+                        isPending = isPending,
+                        hasRequest = hasRequest,
                         modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(6.dp)
-                            .background(
-                                labelColor,
-                                ShapeCache.smooth4,
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp),
+                    )
+                }
+
+                if (onRequestClick != null && !isAvailable && !hasRequest) {
+                    val requestBtnFocusState = rememberTvFocusState(focusedScale = 1.12f)
+                    IconButton(
+                        onClick = onRequestClick,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 4.dp, bottom = 4.dp)
+                            .then(requestBtnFocusState.focusModifier)
+                            .clip(ShapeCache.smooth8)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                            .tvFocusIndicator(requestBtnFocusState, ShapeCache.smooth8),
                     ) {
-                        Text(
-                            text = mediaLabel,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 8.sp,
-                                letterSpacing = 0.5.sp
-                            ),
-                            color = textColor,
+                        Icon(
+                            Tabler.Outline.Plus,
+                            contentDescription = stringResource(R.string.core_ui_request),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(2.dp),
                         )
                     }
                 }
-
-                if (!isLoading) {
-                    val badgeColor = remember(isAvailable, isPending, hasRequest) {
-                        when {
-                            isAvailable -> StatusColors.available
-                            isPending -> StatusColors.pending
-                            hasRequest -> StatusColors.requested
-                            else -> Color.Transparent
-                        }
-                    }
-
-                    if (badgeColor != Color.Transparent) {
-                        val badgeTextColor = remember(badgeColor) {
-                            if (isLightColor(badgeColor)) Color.Black else Color.White
-                        }
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(6.dp)
-                                .background(
-                                    badgeColor.copy(alpha = 0.9f),
-                                    ShapeCache.smooth4,
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        ) {
-                            Text(
-                                text = when {
-                                    isAvailable -> "✓"
-                                    isPending -> "⏳"
-                                    hasRequest -> "→"
-                                    else -> ""
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = badgeTextColor,
-                            )
-                        }
-                    }
-
-                    if (onRequestClick != null && !isAvailable && !hasRequest) {
-                        val requestBtnFocusState = rememberTvFocusState(focusedScale = 1.12f)
-                        IconButton(
-                            onClick = onRequestClick,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(end = 4.dp, bottom = 4.dp)
-                                .then(requestBtnFocusState.focusModifier)
-                                .clip(ShapeCache.smooth8)
-                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
-                                .tvFocusIndicator(requestBtnFocusState, ShapeCache.smooth8),
-                        ) {
-                            Icon(
-                                Tabler.Outline.Plus,
-                                contentDescription = stringResource(R.string.core_ui_request),
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(2.dp),
-                            )
-                        }
-                    }
-                }
             }
-        }
-
-        Column(
-            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = if (isTv) 8.dp else 6.dp),
-        ) {
-            Text(
-                text = item.displayName,
-                style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = if (isLoading) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.enableMarqueeOnFocus(focused = tvFocusState.isFocused),
-            )
+        },
+        footer = {
             if (item.year != null) {
                 Text(
                     text = item.year.toString(),
@@ -523,6 +276,102 @@ fun SeerrMediaCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        },
+    )
+}
+
+/**
+ * Bottom-left UPCOMING / SERIES / MOVIE label for Seerr cards. Routes through
+ * [GlassBadge] (the shared badge primitive) instead of a hand-rolled
+ * background box, so badge styling stays consistent with the rest of the app.
+ */
+@Composable
+private fun SeerrMediaLabelBadge(
+    isUpcoming: Boolean,
+    mediaType: String,
+    modifier: Modifier = Modifier,
+) {
+    val label = remember(isUpcoming, mediaType) {
+        when {
+            isUpcoming -> "UPCOMING"
+            mediaType.equals("tv", ignoreCase = true) -> "SERIES"
+            mediaType.equals("movie", ignoreCase = true) -> "MOVIE"
+            else -> mediaType.uppercase()
         }
+    }
+    val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
+    val surface = MaterialTheme.colorScheme.surface
+    val background = remember(isUpcoming, tertiaryContainer, surface) {
+        if (isUpcoming) tertiaryContainer.copy(alpha = 0.9f) else surface.copy(alpha = 0.6f)
+    }
+    val borderColor = remember(isUpcoming) {
+        if (isUpcoming) tertiaryContainer.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.18f)
+    }
+    val textColor = if (isUpcoming) {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    GlassBadge(
+        modifier = modifier,
+        background = background,
+        borderColor = borderColor,
+        shape = ShapeCache.smooth4,
+        horizontalPadding = 6.dp,
+        verticalPadding = 2.dp,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 8.sp,
+                letterSpacing = 0.5.sp,
+            ),
+            color = textColor,
+        )
+    }
+}
+
+/**
+ * Top-end availability/status glyph (✓ available, ⏳ pending, → requested) for
+ * Seerr cards. Built on [GlassBadge].
+ */
+@Composable
+private fun SeerrStatusBadge(
+    isAvailable: Boolean,
+    isPending: Boolean,
+    hasRequest: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val badgeColor = remember(isAvailable, isPending, hasRequest) {
+        when {
+            isAvailable -> StatusColors.available
+            isPending -> StatusColors.pending
+            hasRequest -> StatusColors.requested
+            else -> Color.Transparent
+        }
+    }
+    if (badgeColor == Color.Transparent) return
+    val badgeTextColor = remember(badgeColor) {
+        if (isLightColor(badgeColor)) Color.Black else Color.White
+    }
+    val glyph = when {
+        isAvailable -> "✓"
+        isPending -> "⏳"
+        hasRequest -> "→"
+        else -> ""
+    }
+    GlassBadge(
+        modifier = modifier,
+        background = badgeColor.copy(alpha = 0.9f),
+        shape = ShapeCache.smooth4,
+        horizontalPadding = 6.dp,
+        verticalPadding = 2.dp,
+    ) {
+        Text(
+            text = glyph,
+            style = MaterialTheme.typography.labelSmall,
+            color = badgeTextColor,
+        )
     }
 }

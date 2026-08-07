@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -22,6 +23,7 @@ import com.composables.icons.tabler.filled.Star
 import com.composables.icons.tabler.outline.Check
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 
 /**
  * A translucent "glass" overlay badge for poster/wide media cards.
@@ -114,6 +116,66 @@ fun WatchedBadge(
             tint = iconColor,
             modifier = Modifier.size(12.dp),
         )
+    }
+}
+
+/**
+ * High-contrast "Watched" tag for episode thumbnails (online detail + offline downloads).
+ *
+ * Pairs a check icon with the localized "Watched" label on a bold surface that "pops"
+ * over unpredictable episode artwork (dark scenes, bright frames, busy key art) so it
+ * stays legible at a glance while scrolling quickly.
+ *
+ * Prominence is achieved with three reinforcing cues rather than color alone:
+ *  - a saturated success-green surface (the universal "completed" semantic) instead of
+ *    the theme `primary`, which is branding-driven and can wash out on bright artwork;
+ *  - a hairline white border so the pill separates from similarly-colored art behind it;
+ *  - a deeper shadow (6.dp) plus tonal elevation so the tag lifts off the thumbnail.
+ *
+ * The [label] is passed in (rather than read from a string resource) so this core-ui
+ * composable stays module-agnostic: each feature screen supplies its own localization.
+ *
+ * @param label localized "Watched" text (e.g. from a `stringResource`).
+ * @param accentTint optional override for the surface color (personalized styling).
+ * @param textColor optional override for the content color. Defaults to white for
+ *  maximum contrast over the saturated surface.
+ */
+@Composable
+fun EpisodeWatchedTag(
+    label: String,
+    modifier: Modifier = Modifier,
+    accentTint: Color? = null,
+    textColor: Color? = null,
+) {
+    val containerColor = accentTint ?: StatusColors.success
+    val contentColor = textColor ?: Color.White
+    androidx.compose.material3.Surface(
+        modifier = modifier,
+        color = containerColor,
+        contentColor = contentColor,
+        shape = ShapeCache.smooth8,
+        shadowElevation = 6.dp,
+        tonalElevation = 2.dp,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.55f)),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.Check,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(12.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 

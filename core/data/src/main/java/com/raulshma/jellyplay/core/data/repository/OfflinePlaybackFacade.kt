@@ -1,9 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
-import com.raulshma.jellyplay.core.model.toMediaItem
-import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -92,13 +89,10 @@ class OfflinePlaybackFacade @Inject constructor(
     suspend fun getDownloadPath(itemId: String): String? =
         downloadRepository.getDownloadByMediaItemId(itemId)?.downloadPath
 
-    /** Offline seasons for [seriesId], mapped to player-facing [MediaItem]s. */
-    suspend fun resolveSeasons(seriesId: String): List<MediaItem> =
-        offlineRepository.getSeasonsForSeries(seriesId).first().map { it.toMediaItem() }
-
-    /** Offline episodes for [seasonId], mapped to player-facing [MediaItem]s. */
-    suspend fun resolveEpisodes(seasonId: String): List<MediaItem> =
-        offlineRepository.getEpisodesForSeason(seasonId).first().map { it.toMediaItem() }
+    // resolveSeasons / resolveEpisodes used to live here — the player's offline
+    // episode discovery now goes through EpisodeCatalogue.loadSeriesEpisodes /
+    // loadSeasonEpisodes (offline = true), which read the same OfflineRepository
+    // flows. With no remaining callers, the duplicates are gone.
 
     /**
      * Intro/outro/recap segments bundled with [itemId]'s download, or `null`

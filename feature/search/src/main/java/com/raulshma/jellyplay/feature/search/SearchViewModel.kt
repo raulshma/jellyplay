@@ -78,7 +78,8 @@ class SearchViewModel @Inject constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val searchHistoryRepository: SearchHistoryRepository,
     private val offlineRepository: OfflineRepository,
-    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
+    private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore,
 ) : JellyPlayViewModel() {
 
     private val _query = composeState("")
@@ -107,7 +108,7 @@ class SearchViewModel @Inject constructor(
     private val _searchHistory = stateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
 
-    private val hideSearchHistoryPref: StateFlow<Boolean> = preferencesStore.preferences
+    private val hideSearchHistoryPref: StateFlow<Boolean> = experimentalStore.experimental
         .map { it.hideSearchHistory }
         .stateIn(scope, SharingStarted.Lazily, false)
 
@@ -219,7 +220,7 @@ class SearchViewModel @Inject constructor(
 
     private fun loadSearchHistory() {
         launch {
-            preferencesStore.activeUserId
+            serverIdentityStore.activeUserId
                 .flatMapLatest { userId ->
                     if (userId != null) searchHistoryRepository.getRecent(userId)
                     else flowOf(emptyList())
@@ -240,7 +241,7 @@ class SearchViewModel @Inject constructor(
 
     fun clearHistory() {
         launch {
-            val userId = preferencesStore.activeUserId.first() ?: return@launch
+            val userId = serverIdentityStore.activeUserId.first() ?: return@launch
             searchHistoryRepository.clearAll(userId)
         }
     }
@@ -324,12 +325,24 @@ class SearchViewModel @Inject constructor(
         // Skip persistence entirely when the user has hidden search history —
         // avoids surfacing past queries the moment they re-enable the setting.
         if (hideSearchHistoryPref.value) return
-        val userId = preferencesStore.activeUserId.first() ?: return
+        val userId = serverIdentityStore.activeUserId.first() ?: return
         searchHistoryRepository.saveQuery(query, userId)
     }
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
+
+    /**
+     * Marks a result item played/unplayed on the server.
+     * Intentionally silent: the paged results are left untouched so the user
+     * keeps their scroll position — the badge updates on the next natural data
+     * refresh.
+     */
+    fun markItemPlayed(item: MediaItem, played: Boolean) {
+        launch {
+            if (played) mediaRepository.markPlayed(item.id) else mediaRepository.markUnplayed(item.id)
+        }
+    }
 
     fun getSeerrPosterUrl(posterPath: String?): String? =
         posterPath?.let { buildPosterUrl(it) }

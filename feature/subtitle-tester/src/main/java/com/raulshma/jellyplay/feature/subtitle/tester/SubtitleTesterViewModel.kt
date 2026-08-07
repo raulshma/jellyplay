@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.subtitle.tester
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import com.raulshma.jellyplay.core.model.AssOverrideMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -27,7 +27,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SubtitleTesterViewModel @Inject constructor(
     private val engineFactory: PlayerEngineFactory,
-    private val preferencesStore: UserPreferencesStore,
+    private val subtitleLanguageStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
     private val fontProvider: FontProvider,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -57,7 +57,7 @@ class SubtitleTesterViewModel @Inject constructor(
     init {
         // Seed working copies from current prefs once, then load the preview engine.
         viewModelScope.launch {
-            preferencesStore.preferences.collect { prefs ->
+            subtitleLanguageStore.subtitle.collect { prefs ->
                 if (!seeded) {
                     seeded = true
                     // Force applyCustomStyle = true on the working copies: the tester
@@ -155,9 +155,9 @@ class SubtitleTesterViewModel @Inject constructor(
         viewModelScope.launch {
             val state = _uiState.value
             // Force applyCustomStyle = true so the saved pref takes effect.
-            preferencesStore.setSubtitleStyle(state.workingSdrStyle.copy(applyCustomStyle = true))
-            preferencesStore.setHdrSubtitleStyle(state.workingHdrStyle.copy(applyCustomStyle = true))
-            preferencesStore.setHdrSubtitleStyleEnabled(state.hdrSubtitleEnabled)
+            subtitleLanguageStore.setSubtitleStyle(state.workingSdrStyle.copy(applyCustomStyle = true))
+            subtitleLanguageStore.setHdrSubtitleStyle(state.workingHdrStyle.copy(applyCustomStyle = true))
+            subtitleLanguageStore.setHdrSubtitleStyleEnabled(state.hdrSubtitleEnabled)
             onComplete()
         }
     }

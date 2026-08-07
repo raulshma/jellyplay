@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -295,254 +296,179 @@ fun PosterCard(
     showEpisodeSeriesBadge: Boolean = false,
     gradientBrush: Brush? = null,
 ) {
-    val uiEnvironment = LocalJellyPlayUi.current
+    val isTv = LocalJellyPlayUi.current.isTv
     val cardPrefs = LocalCardDisplayPreferences.current
-    val isTv = uiEnvironment.isTv
-    // Performance mode: per-card graphicsLayer shadows are an offscreen pass,
-    // and cards render by the hundred across Home/Library rows — the single
-    // most expensive GPU work in card grids on low-end devices. Drop it.
-    val focusInteraction = rememberJellyFocusableInteraction()
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    // Press feedback is applied via Modifier.pressScale(interactionSource) below
-    // (its own graphicsLayer, animated through motionScheme so it flattens under
-    // reduce-motion). Focus feedback is applied via the focus graphicsLayer that
-    // follows it. Two nested graphicsLayers multiply: press (0.95) × focus (1.05).
-    val focusScale = focusInteraction.scale
-    val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
-    val cardShape = ShapeCache.smooth12
-
     val dominantColor = rememberDominantColor(imageUrl, itemId = item.id)
     val playButtonSize = if (isTv) 44.dp else 36.dp
 
-    // Press-and-hold "peek" preview (Instagram-style). The handle's onLongClick
-    // opens the overlay; boundsModifier tracks the card's rect for the morph;
-    // rememberReleaseDismiss closes it when the finger lifts — all driven by
-    // this card's existing interactionSource. No-ops on TV and when no
-    // controller is provided (see LocalMediaPreviewController).
-    //
-    // Short-circuit when no controller AND no shared-element key: avoids the
-    // per-card peek/shared-element composition allocations in contexts that
-    // can't use either (e.g. library grid without preview enabled).
+    // For episode cards in Latest Media rows, show the series name as the title
+    // (the episode title alone doesn't identify the show); the season/episode
+    // chip on the image carries the S# E# context.
+    val titleText = remember(item, showEpisodeSeriesBadge) {
+        if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
+            item.seriesName?.takeIf { it.isNotBlank() } ?: item.name
+        } else {
+            item.name
+        }
+    }
+
+    // Short-circuit the peek factory when no controller is wired: avoids the
+    // per-card peek composition allocations in contexts that can't use it
+    // (e.g. a library grid without the experimental preview enabled).
     val mediaPreviewController = com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController.current
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    val canPeek = mediaPreviewController != null
-    val canShareElement = sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null
-
-    val peek = if (canPeek) {
-        rememberMediaPeek(
-            item = item,
-            posterUrl = imageUrl,
-            backdropUrl = fallbackUrls.firstOrNull(),
-            blurHash = blurHash,
-        )
-    } else null
-    if (canPeek) rememberReleaseDismiss(isPressed)
-
-    @OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
-    val sharedImageModifier =
-        if (canShareElement) {
-            with(sharedTransitionScope!!) {
-                Modifier.sharedElement(
-                    rememberSharedContentState(key = sharedElementKey!!),
-                    animatedVisibilityScope = animatedVisibilityScope!!,
+    // When the host screen provides a quick-action controller,
+    // long-press opens the action sheet instead of the peek preview — the
+    // action sheet supersedes peek so both never fight over one gesture.
+    val quickActionController = LocalMediaQuickActionController.current
+    val previewFactory = if (quickActionController != null) null else if (mediaPreviewController != null) {
+        remember(item, imageUrl, fallbackUrls, blurHash) {
+            { sourceBounds: androidx.compose.ui.geometry.Rect? ->
+                com.raulshma.jellyplay.core.ui.preview.MediaPreview(
+                    item = item,
+                    posterUrl = imageUrl,
+                    backdropUrl = fallbackUrls.firstOrNull(),
+                    blurHash = blurHash,
+                    sourceBounds = sourceBounds,
                 )
             }
-        } else Modifier
-
-    val imageModifier = Modifier
-        .fillMaxWidth()
-        .aspectRatio(2f / 3f)
-        .then(sharedImageModifier)
-
-    Column(modifier = modifier) {
-        val border = themeVariant.cardBorder(
-            primary = MaterialTheme.colorScheme.primary,
-            secondary = MaterialTheme.colorScheme.secondary,
-            outline = MaterialTheme.colorScheme.outline,
-        )
-
-        val surfaceColor = MaterialTheme.colorScheme.surface
-        val resolvedGradientBrush = gradientBrush ?: remember(surfaceColor) {
-            Brush.verticalGradient(
-                colors = listOf(
-                    Color.Transparent,
-                    surfaceColor.copy(alpha = 0.45f),
-                ),
-            )
         }
+    } else null
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(focusInteraction.modifier)
-                .then(peek?.boundsModifier ?: Modifier)
-                .pressScale(interactionSource = interactionSource)
-                .graphicsLayer {
-                    scaleX = focusScale
-                    scaleY = focusScale
-                    shadowElevation = 0f
-                    clip = clipToShape
-                    shape = cardShape
-                }
-                .jellyFocusIndicator(focusInteraction, cardShape)
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = if (com.raulshma.jellyplay.core.ui.animation.isReducedMotion()) {
-                        androidx.compose.foundation.LocalIndication.current
-                    } else {
-                        null
-                    },
-                    onClick = onClick,
-                    onLongClick = peek?.onLongClick,
-                ),
-            shape = cardShape,
-            border = border,
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        ) {
-            Box {
-                if (item.mediaType == MediaType.PHOTO_FOLDER && photoFolderChildImageUrls.isNotEmpty()) {
-                    PhotoFolderPoster(
-                        imageUrls = photoFolderChildImageUrls,
-                        modifier = imageModifier,
-                        contentDescription = item.name,
-                    )
-                } else {
-                    MediaImage(
-                        url = imageUrl,
-                        fallbackUrls = fallbackUrls,
-                        contentDescription = item.name,
-                        blurHash = blurHash,
-                        modifier = imageModifier,
-                        contentScale = ContentScale.Crop,
-                        crossfade = false,
-                        // Poster cards fill a dynamic column width at a 2:3 aspect ratio.
-                        // ~360×540 px covers ~2× density for typical grid card sizes
-                        // (≤180 dp wide) without the over-decode of the 512×512 default.
-                        size = CoilSize(360, 540),
-                    )
-                }
+    // Stable per-item lambda so combinedClickable's gesture detector isn't
+    // restarted mid-press. Reads the controller from composition scope so the
+    // sheet target is always this card's exact item.
+    val onQuickActionsLongPress = quickActionController?.let { controller ->
+        remember(item, controller) { { controller.show(item) } }
+    }
 
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(60.dp)
-                        .background(resolvedGradientBrush)
+    MediaCardScaffold(
+        onClick = onClick,
+        image = { imageModifier ->
+            if (item.mediaType == MediaType.PHOTO_FOLDER && photoFolderChildImageUrls.isNotEmpty()) {
+                PhotoFolderPoster(
+                    imageUrls = photoFolderChildImageUrls,
+                    modifier = imageModifier,
+                    contentDescription = item.name,
                 )
-
-                if (item.isPlayed && cardPrefs.showWatchedCheckmark) {
-                    WatchedBadge(
-                        accentTint = dominantColor,
-                        iconColor = remember(dominantColor) {
-                            if (isLightColor(dominantColor)) Color.Black else Color.White
-                        },
+            } else {
+                MediaImage(
+                    url = imageUrl,
+                    fallbackUrls = fallbackUrls,
+                    contentDescription = item.name,
+                    blurHash = blurHash,
+                    modifier = imageModifier,
+                    contentScale = ContentScale.Crop,
+                    crossfade = false,
+                    // Poster cards fill a dynamic column width at a 2:3 aspect ratio.
+                    // ~360×540 px covers ~2× density for typical grid card sizes
+                    // (≤180 dp wide) without the over-decode of the 512×512 default.
+                    size = CoilSize(360, 540),
+                )
+            }
+        },
+        title = titleText,
+        modifier = modifier,
+        aspectRatio = 2f / 3f,
+        clipToShape = clipToShape,
+        onPlayClick = onPlayClick,
+        playButtonDominantColor = dominantColor,
+        playButtonSize = playButtonSize,
+        sharedElementKey = sharedElementKey,
+        scrimBrush = gradientBrush,
+        previewFactory = previewFactory,
+        onLongPress = onQuickActionsLongPress,
+        showProgress = showProgress,
+        progressFraction = progressPercent,
+        overlays = {
+            if (item.isPlayed && cardPrefs.showWatchedCheckmark) {
+                WatchedBadge(
+                    accentTint = dominantColor,
+                    iconColor = remember(dominantColor) {
+                        if (isLightColor(dominantColor)) Color.Black else Color.White
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp),
+                )
+            } else if (!item.isPlayed && cardPrefs.showUnwatchedBadge) {
+                val unplayedCount = item.unplayedItemCount
+                // Unwatched-count badge for series/seasons/collections. Only
+                // rendered when the user has enabled the unwatched badge
+                // and the underlying MediaItem exposes a non-zero count.
+                if (unplayedCount != null && unplayedCount > 0) {
+                    UnwatchedCountBadge(
+                        count = unplayedCount,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(6.dp),
                     )
-                } else if (!item.isPlayed && cardPrefs.showUnwatchedBadge) {
-                    val unplayedCount = item.unplayedItemCount
-                    // Unwatched-count badge for series/seasons/collections. Only
-                    // rendered when the user has enabled the unwatched badge
-                    // and the underlying MediaItem exposes a non-zero count.
-                    if (unplayedCount != null && unplayedCount > 0) {
-                        UnwatchedCountBadge(
-                            count = unplayedCount,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(6.dp),
-                        )
-                    }
-                }
-
-                if (item.communityRating != null) {
-                    RatingBadge(
-                        rating = item.communityRating,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(6.dp),
-                    )
-                }
-
-                // Bottom-left season/episode chip for episode cards surfaced in
-                // Latest Media rows. The series name is shown as the card title
-                // (see below) so the chip only needs to carry the S# E# context.
-                if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
-                    EpisodeChip(
-                        seasonNumber = item.seasonNumber,
-                        episodeNumber = item.episodeNumber,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 6.dp, bottom = 6.dp),
-                    )
-                }
-
-                if (onPlayClick != null) {
-                    PlayButtonWithProgress(
-                        progressPercent = if (showProgress) progressPercent else 0f,
-                        dominantColor = dominantColor,
-                        onClick = onPlayClick,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 8.dp, bottom = 8.dp),
-                        buttonSize = playButtonSize,
-                    )
-                }
-
-                if (showProgress && progressPercent > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(progressPercent)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                    }
                 }
             }
-        }
 
-        Column(
-            modifier = Modifier.padding(
-                start = 4.dp,
-                end = 4.dp,
-                top = if (isTv) 8.dp else 6.dp,
-            ),
-        ) {
-            // For episode cards in Latest Media rows, show the series name as the
-            // title (the episode title alone doesn't identify the show); the
-            // season/episode chip below the image carries the S# E# context.
-            val titleText = remember(item, showEpisodeSeriesBadge) {
-                if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
-                    item.seriesName?.takeIf { it.isNotBlank() } ?: item.name
-                } else {
-                    item.name
-                }
+            if (item.communityRating != null) {
+                RatingBadge(
+                    rating = item.communityRating,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp),
+                )
             }
-            Text(
-                text = titleText,
-                style = if (isTv) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.enableMarqueeOnFocus(focused = focusInteraction.isFocused),
-            )
+
+            // Bottom-left season/episode chip for episode cards surfaced in
+            // Latest Media rows; the series name is shown as the card title.
+            if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
+                EpisodeChip(
+                    seasonNumber = item.seasonNumber,
+                    episodeNumber = item.episodeNumber,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 6.dp, bottom = 6.dp),
+                )
+            }
+        },
+        footer = {
+            // Items with no year/runtime (e.g. freshly-added episodes) would
+            // otherwise render an empty Row (0 height), making the card shorter
+            // than its neighbours that show a meta line. Reserve one line of the
+            // footer text style so every card's image+title+footer block is the
+            // same total height.
+            val footerStyle = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall
+            val footerLineHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+                footerStyle.lineHeight.toDp()
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.heightIn(min = footerLineHeight),
             ) {
-                if (item.year != null) {
+                // For episode cards the title shows the series name (see
+                // showEpisodeSeriesBadge); carry the S# E# context into the
+                // footer too, so the reserved line shows something useful
+                // instead of an empty gap (matches WideMediaCard's subtitle).
+                if (showEpisodeSeriesBadge && item.mediaType == MediaType.EPISODE) {
+                    val episodeSubtitle = remember(item.seasonNumber, item.episodeNumber) {
+                        when {
+                            item.seasonNumber != null && item.episodeNumber != null ->
+                                "S${item.seasonNumber} E${item.episodeNumber.toString().padStart(2, '0')}"
+                            item.episodeNumber != null -> "E${item.episodeNumber.toString().padStart(2, '0')}"
+                            item.seasonNumber != null -> "S${item.seasonNumber}"
+                            else -> null
+                        }
+                    }
+                    if (episodeSubtitle != null) {
+                        Text(
+                            text = episodeSubtitle,
+                            style = footerStyle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
+                } else if (item.year != null) {
                     Text(
                         text = item.year.toString(),
-                        style = if (isTv) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+                        style = footerStyle,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -576,6 +502,6 @@ fun PosterCard(
                     )
                 }
             }
-        }
-    }
+        },
+    )
 }

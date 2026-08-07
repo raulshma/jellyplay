@@ -53,9 +53,12 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
@@ -212,6 +215,7 @@ private fun ServerCard(
     onRemoveAddress: (String) -> Unit,
     onSwitchAddress: (String) -> Unit,
 ) {
+    val removeServerConfirm = rememberConfirmState()
     Card(
         onClick = { if (!isActive && !isSwitching) onSwitch() },
         modifier = Modifier
@@ -321,7 +325,7 @@ private fun ServerCard(
                         )
                     } else {
                         IconButton(
-                            onClick = onDelete,
+                            onClick = { removeServerConfirm.request(onDelete) },
                             modifier = Modifier.focusIndicator(CircleShape),
                         ) {
                             Icon(
@@ -403,6 +407,15 @@ private fun ServerCard(
                 }
             }
         }
+    }
+
+    if (removeServerConfirm.isVisible) {
+        removeServerConfirm.ConfirmDialog(
+            title = stringResource(R.string.settings_remove_server_confirm_title),
+            message = stringResource(R.string.settings_remove_server_confirm_message),
+            confirmText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_delete),
+            dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+        )
     }
 }
 

@@ -8,6 +8,32 @@
     <string name="core_reset">リセット</string>
     <string name="core_close">閉じる</string>
     <string name="core_done">完了</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">確認</string>
+    <string name="core_ok">OK</string>
+    <string name="core_apply">適用</string>
+    <string name="core_delete">削除</string>
+    <string name="core_clear">クリア</string>
+    <string name="core_undo">元に戻す</string>
+    <string name="core_clear_filters">フィルターをクリア</string>
+    <string name="core_copy">コピー</string>
+    <string name="core_copied_to_clipboard">クリップボードにコピーしました</string>
+    <string name="core_play_from_start">最初から再生</string>
+    <string name="core_restart">最初から再生</string>
+    <string name="core_send_now">今すぐ送信</string>
+    <string name="core_search">検索</string>
+    <string name="core_stop_playback">再生を停止</string>
+    <string name="core_select_all">すべて選択</string>
+    <string name="core_mark_all_seen">すべて視聴済みにする</string>
+    <string name="core_loading">読み込んでいます…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_quick_actions">クイック操作</string>
+    <string name="core_action_play">再生</string>
+    <string name="core_action_mark_watched">視聴済みにする</string>
+    <string name="core_action_mark_unwatched">未視聴にする</string>
+    <string name="core_action_download">ダウンロード</string>
+    <string name="core_action_add_to_playlist">プレイリストに追加</string>
+    <string name="core_action_details">詳細を表示</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->
@@ -576,6 +602,44 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">Radarr/Sonarr からのダウンロードキューの進捗と近日公開のカレンダー</string>
     <string name="ss_arr_settings_title">Radarr / Sonarr サーバー</string>
     <string name="ss_arr_settings_subtitle">Radarr/Sonarr サーバーへの直接接続を設定します</string>
+    <string name="ss_sign_out_from_server_title">サーバーからサインアウト</string>
+    <string name="ss_sign_out_from_server_subtitle">サーバー上のこの端末のセッションを取り消します</string>
+    <string name="ss_screensaver_show_title_title">タイトルを表示</string>
+    <string name="ss_screensaver_show_title_subtitle">メディアのタイトルを表示</string>
+    <string name="ss_screensaver_categories_title">カテゴリー</string>
+    <string name="ss_screensaver_categories_subtitle">表示するライブラリーの種類を選択</string>
+    <string name="ss_screensaver_slideshow_interval_title">スライドショーの間隔</string>
+    <string name="ss_screensaver_slideshow_interval_subtitle">画像が切り替わるまでの時間</string>
+    <string name="ss_screensaver_ken_burns_title">ケン・バーンス効果</string>
+    <string name="ss_screensaver_ken_burns_subtitle">パンとズームのアニメーション</string>
+    <string name="ss_screensaver_transition_style_title">トランジションスタイル</string>
+    <string name="ss_screensaver_transition_style_subtitle">スクリーンセーバーが画像を切り替える方法</string>
+    <string name="ss_home_backdrop_title">ホームの背景</string>
+    <string name="ss_home_backdrop_subtitle">ヒーローアートワークをぼかしてアンビエント背景に</string>
+    <string name="ss_compact_episode_list_title">コンパクトなエピソードリスト</string>
+    <string name="ss_compact_episode_list_subtitle">モバイルでは横1列の代わりに縦型リストでエピソードを表示</string>
+    <string name="ss_nav_bar_customization_title">ナビゲーションバー</string>
+    <string name="ss_nav_bar_customization_subtitle">ナビゲーションバーの項目の表示・非表示・並べ替え</string>
+    <string name="ss_nav_hide_on_scroll_title">スクロール時に非表示</string>
+    <string name="ss_nav_hide_on_scroll_subtitle">下にスクロールするとバーを非表示</string>
+    <string name="ss_newsletter_sections_title">ニュースレターのレイアウトと設定</string>
+    <string name="ss_newsletter_sections_subtitle">ニュースレターに表示するセクションを選択</string>
+    <string name="ss_dialogue_boost_strength_title">ダイアログブースト強度</string>
+    <string name="ss_dialogue_boost_strength_subtitle">ダイアログ増幅のレベル</string>
+    <string name="ss_mpv_extra_config_title">詳細設定</string>
+    <string name="ss_mpv_extra_config_subtitle">生 mpv オプション（mpv.conf 形式）</string>
+    <string name="ss_reset_engine_defaults_title">デフォルトにリセット</string>
+    <string name="ss_reset_engine_defaults_subtitle">MPV、LibVLC、ExoPlayer の設定を復元</string>
+    <string name="ss_audio_prefetch_backfill_title">バックフィル数</string>
+    <string name="ss_audio_prefetch_backfill_subtitle">再再生用にキャッシュに残す最近のトラック数</string>
+    <string name="ss_audio_cache_clear_title">オーディオキャッシュをクリア</string>
+    <string name="ss_audio_cache_clear_subtitle">キャッシュされたすべてのオーディオデータを削除</string>
+    <string name="ss_subtitle_tester_title">字幕スタイルテスター</string>
+    <string name="ss_subtitle_tester_subtitle">エンジン間のスタイルをプレビュー</string>
+    <string name="ss_subtitle_provider_settings_title">字幕プロバイダー</string>
+    <string name="ss_subtitle_provider_settings_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
+    <string name="ss_MEDIA_CARD_PEEK_title">長押しプレビュー</string>
+    <string name="ss_MEDIA_CARD_PEEK_subtitle">メディアカードを長押ししてぼかした詳細プレビューを表示、離して閉じる</string>
 
     <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
     <string name="core_segment_intro">イントロ</string>

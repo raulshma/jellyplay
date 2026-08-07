@@ -36,6 +36,8 @@
     <string name="music_now_playing">Reproduciendo ahora</string>
     <string name="music_download_album">Descargar álbum</string>
     <string name="music_download_track">Descargar pista</string>
+    <string name="music_delete_album_downloads_confirm_title">¿Eliminar descargas del álbum?</string>
+    <string name="music_delete_album_downloads_confirm_message">Esto elimina todas las pistas descargadas de este álbum.</string>
 
     <!-- Track / row menus -->
     <string name="music_go_to_album">Ir al álbum</string>

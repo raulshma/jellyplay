@@ -54,7 +54,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -506,10 +506,14 @@ internal fun DetailContentBody(
                         onEpisodeDetailClick = { episode ->
                             callbacks.onItemClick(episode.id)
                         },
+                        onEpisodeLongPress = callbacks.onMediaQuickActions,
+                        onFocusedEpisodeChange = callbacks.onFocusedMediaItem,
                         onSeasonSelected = callbacks.onSeasonSelected,
                         hideEpisodeThumbnails = state.preferences.hideEpisodeThumbnails,
                         episodesDescending = state.preferences.episodesDescending,
                         onEpisodesDescendingChange = callbacks.onEpisodesDescendingChange,
+                        compactEpisodeList = state.preferences.compactEpisodeList,
+                        onCompactEpisodeListChange = callbacks.onCompactEpisodeListChange,
                         onMarkSeasonPlayed = callbacks.onMarkSeasonPlayed,
                         onMarkSeasonUnplayed = callbacks.onMarkSeasonUnplayed,
                     )
@@ -534,6 +538,9 @@ internal fun DetailContentBody(
                         key = { "collection_${it.id}" },
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        onFocusedIndexChange = { index ->
+                            state.collectionItems.getOrNull(index)?.let(callbacks.onFocusedMediaItem)
+                        },
                     ) { _, collectionItem, focusModifier ->
                             val collectionClick = remember(collectionItem.id) { { callbacks.onItemClick(collectionItem.id) } }
                             val collectionProgress = collectionItem.progressFraction()
@@ -612,6 +619,9 @@ internal fun DetailContentBody(
                         key = { "related_${it.id}" },
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        onFocusedIndexChange = { index ->
+                            state.relatedItems.getOrNull(index)?.let(callbacks.onFocusedMediaItem)
+                        },
                     ) { _, related, focusModifier ->
                             val relatedClick = remember(related.id) { { callbacks.onItemClick(related.id) } }
                             val relatedImageUrl = remember(related.id) { callbacks.getImageUrl(related.id) }

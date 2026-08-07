@@ -1,30 +1,35 @@
 package com.raulshma.jellyplay.feature.onboarding
 
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.SeerrSecureCredentialsStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.OnboardingPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
+/**
+ * Onboarding-wizard preferences, projected centrally off the owning store
+ * slices by [PreferenceProjections]. The fields span 8 domains (appearance,
+ * home discovery, navigation, playback, video player, audio, subtitle,
+ * security) and are combined into one holder so the screen keeps its single
+ * `preferences.field` read pattern.
+ */
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
-    val preferencesStore: UserPreferencesStore,
+    private val projections: PreferenceProjections,
     val seerrPreferencesStore: SeerrPreferencesStore,
     private val seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
     private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {
 
-    val preferences = preferencesStore.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    val preferences: kotlinx.coroutines.flow.StateFlow<OnboardingPreferences> =
+        projections.onboardingPreferences
 
     val seerrPreferences = seerrPreferencesStore.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), com.raulshma.jellyplay.core.model.seerr.SeerrPreferences())
 
     private val _currentStep = stateFlow(0)
     val currentStep = _currentStep.flow
@@ -46,7 +51,7 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun completeOnboarding() {
-        editor.edit { setOnboardingCompleted(true) }
+        editor.edit { appRuntimeState.setOnboardingCompleted(true) }
     }
 
     fun setThemeMode(mode: com.raulshma.jellyplay.core.model.ThemeMode) = editor.setThemeMode(mode)

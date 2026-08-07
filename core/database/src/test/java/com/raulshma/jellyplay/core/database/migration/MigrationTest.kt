@@ -7,7 +7,13 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
+import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.database.migration.allMigrations
+import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -393,6 +399,64 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * Verifies the v40→v41 migration creates the `home_section_cache` table
+     * with the (serverId, userId, cacheKey) composite primary key + identity
+     * index, and that a typed payload round-trips through the DAO + JSON
+     * encode/decode helpers. This table backs the home-screen
+     * stale-while-revalidate cache, so the home screen can render instantly on
+     * cold open while a network refresh runs in the background.
+     */
+    @Test
+    fun migrateAllFromV12_addsHomeSectionCache() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+        }
+
+        val db = openWithMigrations()
+        val payload = HomeSectionsResult(
+            sections = listOf(
+                HomeSection(
+                    id = "cw",
+                    title = "Continue Watching",
+                    type = HomeSectionType.CONTINUE_WATCHING,
+                    items = listOf(
+                        MediaItem(
+                            id = "item-1",
+                            name = "Test Item",
+                            mediaType = MediaType.EPISODE,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        db.homeSectionCacheDao().upsert(
+            HomeSectionCacheEntity(
+                serverId = "srv-1",
+                userId = "u1",
+                cacheKey = "key-1",
+                payloadJson = com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(payload),
+                fetchedAt = 1L,
+            )
+        )
+        val read = db.homeSectionCacheDao().get("srv-1", "u1", "key-1")
+        assertNotNull(read)
+        assertEquals(1L, read!!.fetchedAt)
+        val decoded = read.payload
+        assertNotNull(decoded)
+        assertEquals(1, decoded!!.sections.size)
+        assertEquals("Continue Watching", decoded.sections[0].title)
+        assertEquals("item-1", decoded.sections[0].items[0].id)
+        // Identity-scoped clear must remove the row.
+        db.homeSectionCacheDao().clearForIdentity("srv-1", "u1")
+        assertEquals(null, db.homeSectionCacheDao().get("srv-1", "u1", "key-1"))
+        db.close()
+    }
+
 
     /**
      * Verifies the v24→v25 migration encrypts plaintext access tokens stored in the
@@ -569,17 +633,70 @@ class MigrationTest {
     }
 
     @Test
+    fun migrateAllFromV12_addsOfflineSyncColumns() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+            db.execSQL(
+                "INSERT INTO offline_media (id, name, mediaType) VALUES (?, ?, ?)",
+                arrayOf<Any>("item-1", "Test", "MOVIE"),
+            )
+        }
+
+        val db = openWithMigrations()
+        // The pre-existing row picks up the migration's defaults for the new
+        // sync columns: nullable baseline columns are NULL, flag columns 0.
+        val baseline = db.offlineMediaDao().getSyncBaseline("item-1")
+        assertNotNull(baseline)
+        with(baseline!!) {
+            assertEquals(null, syncedPosterTag)
+            assertEquals(null, syncedBackdropTag)
+            assertEquals(null, syncedMetadataSignature)
+            assertEquals(null, syncedMediaSourceId)
+            assertEquals(null, syncedMediaSizeBytes)
+            assertEquals(null, lastSyncedAt)
+            assertEquals(0, syncUpdateAvailable)
+            assertEquals(0, syncMediaChanged)
+            assertEquals(0, syncChecking)
+            assertEquals(0, syncError)
+        }
+        // A targeted baseline write round-trips through the new columns.
+        db.offlineMediaDao().updateSyncBaseline(
+            itemId = "item-1",
+            posterTag = "poster-1",
+            backdropTag = "backdrop-1",
+            metadataSignature = "sig",
+            mediaSourceId = "src-1",
+            mediaSizeBytes = 1000L,
+            lastSyncedAt = 123L,
+            updateAvailable = 1,
+            mediaChanged = 0,
+            checking = 0,
+            error = 0,
+        )
+        val updated = db.offlineMediaDao().getSyncBaseline("item-1")
+        assertEquals("poster-1", updated!!.syncedPosterTag)
+        assertEquals("sig", updated.syncedMetadataSignature)
+        assertEquals(123L, updated.lastSyncedAt)
+        assertEquals(1, updated.syncUpdateAvailable)
+        db.close()
+    }
+
+    @Test
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (40),
+        // One migration per step from v1 up to the current schema version (43),
         // each handing off to the next with no gaps or duplicate starts.
         // androidx.room.Database has CLASS retention, so getAnnotation() returns
         // null at runtime — the hardcoded fallback is the authoritative value
         // and must be bumped alongside JellyPlayDatabase's version.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 40
+            ?: 43
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",

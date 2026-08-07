@@ -80,6 +80,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DreamImageCategory
@@ -1263,7 +1264,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun buildAppearanceSummary(preferences: com.raulshma.jellyplay.core.model.UserPreferences): String {
+private fun buildAppearanceSummary(preferences: SettingsScreenPreferences): String {
     val parts = mutableListOf<String>()
     parts.add(preferences.themeMode.name.lowercase().replaceFirstChar { it.uppercase() })
     if (preferences.dynamicTheming) parts.add(stringResource(R.string.settings_dynamic_token))
@@ -1274,7 +1275,7 @@ private fun buildAppearanceSummary(preferences: com.raulshma.jellyplay.core.mode
 }
 
 @Composable
-private fun buildExperimentalSummary(preferences: com.raulshma.jellyplay.core.model.UserPreferences): String {
+private fun buildExperimentalSummary(preferences: SettingsScreenPreferences): String {
     val count = preferences.enabledExperimentalFeatures.size
     return if (count == 0) stringResource(R.string.settings_early_access_features)
     else pluralStringResource(R.plurals.settings_features_enabled, count, count)

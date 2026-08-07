@@ -10,14 +10,15 @@ import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.AudioPlayerUiPreferences
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsSource
 import com.raulshma.jellyplay.core.model.ReverbPreset
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
@@ -34,7 +36,9 @@ import javax.inject.Inject
 @HiltViewModel
 class AudioPlayerViewModel @Inject constructor(
     private val audioPlaybackManager: AudioPlaybackManager,
-    private val preferencesStore: UserPreferencesStore,
+    private val projections: PreferenceProjections,
+    private val audioStore: AudioStore,
+    private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
     private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
     private val downloadRepository: com.raulshma.jellyplay.core.data.repository.DownloadRepository,
     private val downloadIntake: com.raulshma.jellyplay.core.data.download.DownloadIntake,
@@ -56,8 +60,8 @@ class AudioPlayerViewModel @Inject constructor(
         castManager.releaseConsumer()
     }
 
-    val preferences = preferencesStore.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
+    /** Lyrics toggle + artwork theme, projected centrally off the store slices. */
+    val preferences: StateFlow<AudioPlayerUiPreferences> = projections.audioPlayerUiPreferences
 
     private val _uiState = MutableStateFlow(AudioPlayerUiState())
     val uiState: StateFlow<AudioPlayerUiState> = _uiState.asStateFlow()
@@ -305,8 +309,8 @@ class AudioPlayerViewModel @Inject constructor(
             }.collect {}
         }
         launch {
-            preferencesStore.preferences.collect { prefs ->
-                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(lastUsedDurationMs = prefs.sleepTimerDurationMs)) }
+            audioStore.audio.map { it.sleepTimerDurationMs }.collect { durationMs ->
+                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(lastUsedDurationMs = durationMs)) }
             }
         }
     }
@@ -315,33 +319,33 @@ class AudioPlayerViewModel @Inject constructor(
         audioPlaybackManager.play(itemId)
 
         launch {
-            val prefs = preferencesStore.preferences.first()
-            if (prefs.audioDefaultSpeed != 1.0f) {
-                audioPlaybackManager.changePlaybackSpeed(prefs.audioDefaultSpeed)
+            val (audio, effects) = combine(audioStore.audio, audioEffectsStore.audioEffects) { a, e -> a to e }.first()
+            if (audio.audioDefaultSpeed != 1.0f) {
+                audioPlaybackManager.changePlaybackSpeed(audio.audioDefaultSpeed)
             }
-            nightModeVolume = prefs.audioNightModeVolume
-            nightModeGain = prefs.audioNightModeGain
-            skipPreviousThresholdMs = prefs.audioSkipPreviousThresholdMs
-            audioPlaybackManager.setNightModeParams(prefs.audioNightModeVolume, prefs.audioNightModeGain)
-            audioPlaybackManager.setSkipPreviousThreshold(prefs.audioSkipPreviousThresholdMs)
-            audioPlaybackManager.setDialogueBoostStrength(prefs.dialogueBoostStrength)
-            audioPlaybackManager.setNightModeStrength(prefs.nightModeStrength)
-            audioPlaybackManager.setCrossfadeDurationMs(prefs.audioCrossfadeDurationMs)
-            audioPlaybackManager.setGaplessEnabled(prefs.audioGaplessEnabled)
-            audioPlaybackManager.setReplayGainMode(prefs.audioNormalizationMode)
-            audioPlaybackManager.setReplayGainPreAmpDb(prefs.replayGainPreAmpDb)
-            audioPlaybackManager.setBassBoostStrength(prefs.bassBoostStrength)
-            audioPlaybackManager.setVirtualizerStrength(prefs.virtualizerStrength)
-            audioPlaybackManager.setLrBalance(prefs.lrBalance)
-            audioPlaybackManager.setPitchSemitones(prefs.pitchSemitones)
-            audioPlaybackManager.setAutoEqByGenre(prefs.autoEqByGenre)
+            nightModeVolume = audio.audioNightModeVolume
+            nightModeGain = audio.audioNightModeGain
+            skipPreviousThresholdMs = audio.audioSkipPreviousThresholdMs
+            audioPlaybackManager.setNightModeParams(audio.audioNightModeVolume, audio.audioNightModeGain)
+            audioPlaybackManager.setSkipPreviousThreshold(audio.audioSkipPreviousThresholdMs)
+            audioPlaybackManager.setDialogueBoostStrength(effects.dialogueBoostStrength)
+            audioPlaybackManager.setNightModeStrength(effects.nightModeStrength)
+            audioPlaybackManager.setCrossfadeDurationMs(audio.audioCrossfadeDurationMs)
+            audioPlaybackManager.setGaplessEnabled(audio.audioGaplessEnabled)
+            audioPlaybackManager.setReplayGainMode(audio.audioNormalizationMode)
+            audioPlaybackManager.setReplayGainPreAmpDb(audio.replayGainPreAmpDb)
+            audioPlaybackManager.setBassBoostStrength(effects.bassBoostStrength)
+            audioPlaybackManager.setVirtualizerStrength(effects.virtualizerStrength)
+            audioPlaybackManager.setLrBalance(effects.lrBalance)
+            audioPlaybackManager.setPitchSemitones(effects.pitchSemitones)
+            audioPlaybackManager.setAutoEqByGenre(effects.autoEqByGenre)
             // Strength fields are not flow-exposed by the manager; seed them into uiState from prefs.
             _uiState.update {
                 it.copy(
                     effects = it.effects.copy(
-                        dialogueBoostStrength = prefs.dialogueBoostStrength,
-                        nightModeStrength = prefs.nightModeStrength,
-                        bassBoostStrength = prefs.bassBoostStrength,
+                        dialogueBoostStrength = effects.dialogueBoostStrength,
+                        nightModeStrength = effects.nightModeStrength,
+                        bassBoostStrength = effects.bassBoostStrength,
                     ),
                 )
             }
@@ -459,7 +463,7 @@ class AudioPlayerViewModel @Inject constructor(
     fun toggleDialogueBoost() {
         audioPlaybackManager.toggleDialogueBoost()
         launch {
-            preferencesStore.setDialogueBoostEnabled(_uiState.value.effects.dialogueBoostEnabled)
+            audioEffectsStore.setDialogueBoostEnabled(_uiState.value.effects.dialogueBoostEnabled)
         }
     }
 
@@ -469,14 +473,14 @@ class AudioPlayerViewModel @Inject constructor(
             it.copy(effects = it.effects.copy(dialogueBoostStrength = strength))
         }
         launch {
-            preferencesStore.setDialogueBoostStrength(strength)
+            audioEffectsStore.setDialogueBoostStrength(strength)
         }
     }
 
     fun toggleNightMode() {
         audioPlaybackManager.toggleNightMode()
         launch {
-            preferencesStore.setNightModeEnabled(_uiState.value.effects.nightModeEnabled)
+            audioEffectsStore.setNightModeEnabled(_uiState.value.effects.nightModeEnabled)
         }
     }
 
@@ -486,58 +490,58 @@ class AudioPlayerViewModel @Inject constructor(
             it.copy(effects = it.effects.copy(nightModeStrength = strength))
         }
         launch {
-            preferencesStore.setNightModeStrength(strength)
+            audioEffectsStore.setNightModeStrength(strength)
         }
     }
 
     fun setReplayGainMode(mode: AudioNormalizationMode) {
         audioPlaybackManager.setReplayGainMode(mode)
         launch {
-            preferencesStore.setAudioNormalizationMode(mode)
+            audioStore.setAudioNormalizationMode(mode)
         }
     }
 
     fun setReplayGainPreAmpDb(db: Float) {
         audioPlaybackManager.setReplayGainPreAmpDb(db)
         launch {
-            preferencesStore.setReplayGainPreAmpDb(db)
+            audioStore.setReplayGainPreAmpDb(db)
         }
     }
 
     fun toggleEqualizer() {
         audioPlaybackManager.toggleEqualizer()
         launch {
-            preferencesStore.setEqualizerEnabled(_uiState.value.effects.equalizerEnabled)
+            audioEffectsStore.setEqualizerEnabled(_uiState.value.effects.equalizerEnabled)
         }
     }
 
     fun setEqualizerBand(bandIndex: Int, levelDb: Int) {
         audioPlaybackManager.setEqualizerBand(bandIndex, levelDb)
         launch {
-            preferencesStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
+            audioEffectsStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
         }
     }
 
     fun resetEqualizer() {
         audioPlaybackManager.resetEqualizer()
         launch {
-            preferencesStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
-            preferencesStore.setEqualizerPreset(_uiState.value.effects.equalizerPreset)
+            audioEffectsStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
+            audioEffectsStore.setEqualizerPreset(_uiState.value.effects.equalizerPreset)
         }
     }
 
     fun applyEqualizerPreset(preset: EqualizerPreset) {
         audioPlaybackManager.setEqualizerPreset(preset)
         launch {
-            preferencesStore.setEqualizerPreset(preset)
-            preferencesStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
+            audioEffectsStore.setEqualizerPreset(preset)
+            audioEffectsStore.setEqualizerSettings(_uiState.value.effects.equalizerSettings)
         }
     }
 
     fun toggleBassBoost() {
         audioPlaybackManager.toggleBassBoost()
         launch {
-            preferencesStore.setBassBoostEnabled(_uiState.value.effects.bassBoostEnabled)
+            audioEffectsStore.setBassBoostEnabled(_uiState.value.effects.bassBoostEnabled)
         }
     }
 
@@ -547,49 +551,49 @@ class AudioPlayerViewModel @Inject constructor(
             it.copy(effects = it.effects.copy(bassBoostStrength = strength))
         }
         launch {
-            preferencesStore.setBassBoostStrength(strength)
+            audioEffectsStore.setBassBoostStrength(strength)
         }
     }
 
     fun toggleVirtualizer() {
         audioPlaybackManager.toggleVirtualizer()
         launch {
-            preferencesStore.setVirtualizerEnabled(_uiState.value.effects.virtualizerEnabled)
+            audioEffectsStore.setVirtualizerEnabled(_uiState.value.effects.virtualizerEnabled)
         }
     }
 
     fun applyVirtualizerStrength(strength: Int) {
         audioPlaybackManager.setVirtualizerStrength(strength)
         launch {
-            preferencesStore.setVirtualizerStrength(strength)
+            audioEffectsStore.setVirtualizerStrength(strength)
         }
     }
 
     fun applyReverbPreset(preset: ReverbPreset) {
         audioPlaybackManager.setReverbPreset(preset)
         launch {
-            preferencesStore.setReverbPreset(preset)
+            audioEffectsStore.setReverbPreset(preset)
         }
     }
 
     fun applyLrBalance(balance: Float) {
         audioPlaybackManager.setLrBalance(balance)
         launch {
-            preferencesStore.setLrBalance(balance)
+            audioEffectsStore.setLrBalance(balance)
         }
     }
 
     fun applyPitchSemitones(semitones: Float) {
         audioPlaybackManager.setPitchSemitones(semitones)
         launch {
-            preferencesStore.setPitchSemitones(semitones)
+            audioEffectsStore.setPitchSemitones(semitones)
         }
     }
 
     fun applyAutoEqByGenre(enabled: Boolean) {
         audioPlaybackManager.setAutoEqByGenre(enabled)
         launch {
-            preferencesStore.setAutoEqByGenre(enabled)
+            audioEffectsStore.setAutoEqByGenre(enabled)
         }
     }
 
@@ -626,21 +630,21 @@ class AudioPlayerViewModel @Inject constructor(
     fun updateCrossfadeDuration(ms: Long) {
         audioPlaybackManager.setCrossfadeDurationMs(ms)
         launch {
-            preferencesStore.setCrossfadeDurationMs(ms)
+            audioStore.setAudioCrossfadeDurationMs(ms)
         }
     }
 
     fun updateGaplessPlayback(enabled: Boolean) {
         audioPlaybackManager.setGaplessEnabled(enabled)
         launch {
-            preferencesStore.setGaplessEnabled(enabled)
+            audioStore.setAudioGaplessEnabled(enabled)
         }
     }
 
     fun startSleepTimer(durationMs: Long) {
         launch {
-            preferencesStore.setSleepTimerDurationMs(durationMs)
-            preferencesStore.setSleepTimerEndOfEpisode(false)
+            audioStore.setSleepTimerDurationMs(durationMs)
+            audioStore.setSleepTimerEndOfEpisode(false)
         }
         sleepTimerManager.setOnTimerExpired {
             // Explicit pause rather than togglePlayPause(): if the user paused
@@ -662,7 +666,7 @@ class AudioPlayerViewModel @Inject constructor(
 
     fun startSleepTimerEndOfEpisode() {
         launch {
-            preferencesStore.setSleepTimerEndOfEpisode(true)
+            audioStore.setSleepTimerEndOfEpisode(true)
         }
         sleepTimerManager.setOnTimerExpired {
             // Explicit pause rather than togglePlayPause(): see startSleepTimer.
@@ -711,7 +715,7 @@ class AudioPlayerViewModel @Inject constructor(
 
     /** Persists the lyrics overlay visibility so it survives across sessions. */
     fun setLyricsVisible(enabled: Boolean) {
-        launch { preferencesStore.setAudioLyricsVisible(enabled) }
+        launch { audioStore.setAudioLyricsVisible(enabled) }
     }
 
     private fun keySentinel(id: String) = "§null§$id"
