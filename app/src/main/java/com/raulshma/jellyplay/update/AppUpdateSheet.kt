@@ -56,6 +56,7 @@ fun AppUpdateSheet(
     onAutoDownloadToggle: (Boolean) -> Unit,
     onDownload: (AppUpdateInfo) -> Unit,
     onInstall: (Intent) -> Unit,
+    onRedownload: () -> Unit,
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
     buildInstallIntent: () -> Intent,
@@ -108,6 +109,7 @@ fun AppUpdateSheet(
                 is UpdateState.Downloaded -> DownloadedContent(
                     info = state.info,
                     onInstall = { onInstall(buildInstallIntent()) },
+                    onRedownload = onRedownload,
                     onDismiss = onDismiss,
                 )
                 is UpdateState.Error -> ErrorContent(
@@ -274,6 +276,7 @@ private fun DownloadingContent(
 private fun DownloadedContent(
     info: AppUpdateInfo,
     onInstall: () -> Unit,
+    onRedownload: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     Text(
@@ -290,6 +293,13 @@ private fun DownloadedContent(
     Spacer(Modifier.height(16.dp))
     ButtonsRow {
         OutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.update_later)) }
+        Spacer(Modifier.width(8.dp))
+        // Re-fetch the APK even though one is already on disk (e.g. the user
+        // suspects it's corrupt, or wants the latest patch for the same
+        // version). Overwrites the existing file + sidecar.
+        OutlinedButton(onClick = onRedownload) {
+            Text(stringResource(R.string.update_download_again))
+        }
         Spacer(Modifier.width(8.dp))
         Button(onClick = onInstall) { Text(stringResource(R.string.update_install)) }
     }

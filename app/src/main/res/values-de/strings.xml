@@ -99,6 +99,7 @@
     <string name="update_ready_title">Installationsbereit — v%1$s</string>
     <string name="update_ready_body">Das Update wurde heruntergeladen. Tippe auf Installieren, um fortzufahren.</string>
     <string name="update_install">Installieren</string>
+    <string name="update_download_again">Erneut herunterladen</string>
     <string name="update_failed_title">Update fehlgeschlagen</string>
     <string name="update_close">Schließen</string>
 

@@ -25,7 +25,10 @@ import javax.inject.Singleton
  *  - Image subs (PGS/VOBSUB/DVB) — not text-parseable.
  *
  * Results are memoized per [SubtitleSource.url] for the process lifetime; the
- * caller clears the cache when the active track changes via [clearCache].
+ * caller clears the cache when the active track changes via [clearCache]. The
+ * memo is bounded to [MAX_CACHED_SUBTITLE_TRACKS] entries (access-order LRU) so
+ * previewing many tracks over a long session can't grow it unbounded — an
+ * evicted entry is simply re-parsed on next access (it's network/file-backed).
  */
 @Singleton
 @UnstableApi
@@ -33,7 +36,15 @@ class SubtitlePreviewRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient,
 ) {
-    private val cache = mutableMapOf<String, List<TimedCue>>()
+    // Access-order LinkedHashMap: reads (get) re-order to MRU, and
+    // removeEldestEntry evicts the LRU once the cap is exceeded. All access is
+    // confined to withContext(Dispatchers.IO) / clearCache, matching the prior
+    // mutableMapOf concurrency model.
+    private val cache: MutableMap<String, List<TimedCue>> =
+        object : LinkedHashMap<String, List<TimedCue>>(MAX_CACHED_SUBTITLE_TRACKS, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<TimedCue>>?): Boolean =
+                size > MAX_CACHED_SUBTITLE_TRACKS
+        }
 
     /**
      * Resolves [source] to its bytes, maps its codec/extension to a MIME type,
@@ -115,6 +126,9 @@ class SubtitlePreviewRepository @Inject constructor(
 
     private companion object {
         const val TAG = "SubtitlePreviewRepo"
+
+        /** Max parsed-track lists held in the memo; LRU-evicted beyond this. */
+        const val MAX_CACHED_SUBTITLE_TRACKS = 8
 
         /** Codec / file-extension names → Media3 text MIME types. */
         val TEXT_MIME_BY_FORMAT = mapOf(

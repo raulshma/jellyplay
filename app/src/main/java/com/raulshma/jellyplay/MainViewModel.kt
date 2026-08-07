@@ -27,6 +27,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
+import com.raulshma.jellyplay.core.data.update.PendingAppUpdate
 import com.raulshma.jellyplay.update.UpdateState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -207,10 +208,23 @@ class MainViewModel @Inject constructor(
                 }
             }
             _isRestoring.set(false)
-            // Best-effort app-update check once the UI is up. Gated by the
-            // user's "check for updates automatically" preference so the
-            // toggle on the About screen remains the single off-switch.
-            checkForAppUpdate()
+            // Best-effort app-update check once the UI is up. First restore any
+            // update APK already downloaded but not yet installed (kept on disk
+            // across restarts); only if there's nothing pending do we hit the
+            // network. Gated by the "check for updates automatically" toggle so
+            // that off-switch stays the single way to silence update UI on
+            // launch — the file itself is still retained for a manual check.
+            val experimental = experimentalStore.experimental.first()
+            if (experimental.selfUpdateCheckEnabled) {
+                val pending = runCatching { appUpdateRepository.getPendingUpdate() }.getOrNull()
+                if (pending != null &&
+                    !isUpdateRecentlyDismissed(pending.info.latestVersion, experimental)
+                ) {
+                    _updateState.set(UpdateState.Downloaded(pending.info, pending.apkFile))
+                } else {
+                    checkForAppUpdate()
+                }
+            }
         }
 
         launch {
@@ -377,22 +391,57 @@ class MainViewModel @Inject constructor(
         launch {
             _updateState.set(UpdateState.Checking)
             val experimental = experimentalStore.experimental.first()
+            val pending = runCatching { appUpdateRepository.getPendingUpdate() }.getOrNull()
             val result = appUpdateRepository.checkForUpdate(
                 supportedAbis = android.os.Build.SUPPORTED_ABIS,
             )
-            result
-                .onSuccess { info ->
-                    when {
-                        // Always surface the "up to date" result with release notes.
-                        !info.isUpdateAvailable -> _updateState.set(UpdateState.NoUpdate(info))
-                        // Auto-download enabled → begin streaming without the prompt.
-                        experimental.selfUpdateDownloadEnabled && info.downloadAssetUrl != null ->
-                            startUpdateDownload(info)
-                        else -> _updateState.set(UpdateState.UpdateAvailable(info))
+            // Manual checks ignore the 24h dismissal — the user explicitly asked.
+            // Always hit the network so a release published *after* the on-disk
+            // APK was downloaded can still surface: when both are present, prefer
+            // the newer version (ties keep the pending APK so its already-downloaded
+            // bytes stay the install path). On network failure fall back to pending.
+            val remote = result.getOrNull()
+            val surface = pickUpdateToSurface(pending?.info, remote)
+            when {
+                // A newer version is available to download.
+                surface != null && surface.isUpdateAvailable -> {
+                    // If the chosen version is already on disk, show install-ready;
+                    // otherwise prompt (or auto-download) as usual.
+                    if (pending != null && surface.latestVersion == pending.info.latestVersion) {
+                        _updateState.set(UpdateState.Downloaded(pending.info, pending.apkFile))
+                    } else if (experimental.selfUpdateDownloadEnabled && surface.downloadAssetUrl != null) {
+                        startUpdateDownload(surface)
+                    } else {
+                        _updateState.set(UpdateState.UpdateAvailable(surface))
                     }
                 }
-                .onFailure { _updateState.set(UpdateState.Error(it.message ?: "Update check failed")) }
+                // Up to date — show the result (with release notes).
+                surface != null -> _updateState.set(UpdateState.NoUpdate(surface))
+                // Network failed but a pending APK exists — fall back to it.
+                pending != null ->
+                    _updateState.set(UpdateState.Downloaded(pending.info, pending.apkFile))
+                // Network failed, nothing pending.
+                else -> _updateState.set(UpdateState.Error(result.exceptionOrNull()?.message ?: "Update check failed"))
+            }
         }
+    }
+
+    /**
+     * Picks the [AppUpdateInfo] to surface for a manual check: the pending
+     * (on-disk) version, the freshly-fetched remote version, or null when the
+     * remote failed *and* nothing is pending. When both exist, prefers the
+     * newer version — ties keep the pending one so the already-downloaded APK
+     * stays the install path instead of forcing a re-download.
+     */
+    private fun pickUpdateToSurface(
+        pending: com.raulshma.jellyplay.core.model.AppUpdateInfo?,
+        remote: com.raulshma.jellyplay.core.model.AppUpdateInfo?,
+    ): com.raulshma.jellyplay.core.model.AppUpdateInfo? {
+        if (remote == null) return pending
+        if (pending == null) return remote
+        return if (com.raulshma.jellyplay.core.network.github.GitHubReleasesApiImpl
+                .compareVersions(remote.latestVersion, pending.latestVersion) > 0
+        ) remote else pending
     }
 
     /**
@@ -405,13 +454,15 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * Begins streaming the APK for the given update, reporting progress.
+     * Begins streaming the APK for the given update, reporting progress. Wipes
+     * any previously-downloaded APK + sidecar first, so this is also the path
+     * used by [redownloadUpdate] to overwrite an existing file.
      */
     fun startUpdateDownload(info: com.raulshma.jellyplay.core.model.AppUpdateInfo) {
-        val url = info.downloadAssetUrl ?: return
+        if (info.downloadAssetUrl == null) return
         launch {
             _updateState.set(UpdateState.Downloading(info, 0f, 0L, info.releaseSize))
-            val result = appUpdateRepository.downloadApk(url) { fraction, read, total ->
+            val result = appUpdateRepository.downloadApk(info) { fraction, read, total ->
                 _updateState.set(UpdateState.Downloading(info, fraction, read, total))
             }
             result
@@ -420,21 +471,42 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Re-downloads the update whose APK is already on disk (and shown as
+     * [UpdateState.Downloaded]). Falls back to the current state's info; the
+     * repository overwrites the existing file + sidecar via the normal
+     * download path.
+     */
+    fun redownloadUpdate() {
+        val state = _updateState.value
+        val info = (state as? UpdateState.Downloaded)?.info
+            ?: (state as? UpdateState.UpdateAvailable)?.info
+            ?: return
+        startUpdateDownload(info)
+    }
+
     /** Builds and emits the system package-installer intent for the APK. */
     fun buildInstallIntent(file: java.io.File): android.content.Intent =
         appUpdateRepository.buildInstallIntent(file)
 
     /**
      * Hides the update sheet without changing download state. When dismissed
-     * from an [UpdateState.UpdateAvailable] prompt, stamps the version + time
-     * so the launch-time auto-check stays quiet for the same version for 24h.
-     * Manual checks still surface the result regardless of dismissal.
+     * from an [UpdateState.UpdateAvailable] prompt or an install-ready
+     * [UpdateState.Downloaded] sheet, stamps the version + time so the
+     * launch-time auto-check / restore stays quiet for the same version for
+     * 24h. The downloaded APK is retained on disk either way. Manual checks
+     * still surface the result regardless of dismissal.
      */
     fun dismissUpdate() {
         val state = _updateState.value
-        if (state is UpdateState.UpdateAvailable) {
+        val dismissedVersion = when (state) {
+            is UpdateState.UpdateAvailable -> state.info.latestVersion
+            is UpdateState.Downloaded -> state.info.latestVersion
+            else -> null
+        }
+        if (dismissedVersion != null) {
             launch {
-                experimentalStore.setDismissedUpdate(state.info.latestVersion)
+                experimentalStore.setDismissedUpdate(dismissedVersion)
             }
         }
         _updateState.set(UpdateState.Idle)

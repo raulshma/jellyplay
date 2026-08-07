@@ -118,6 +118,16 @@ private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_i
 private const val SAVED_KEY_POSITION_PERSISTED_AT = "video_player.saved_position_persisted_at"
 private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
 /**
+ * Quiet-period for coalescing the *offline-mirror* DB write during rapid
+ * scrubbing: [seekTo] fires one per seek gesture, and the immediate
+ * `recordProgress` launches would queue against Room's executor. Only the DB
+ * mirror is coalesced — the SavedStateHandle writes stay immediate so explicit
+ * seek positions still survive process death. The position tick's throttled
+ * mirror write (`persistPlaybackPosition(force=false)`) catches up within
+ * seconds, so a dropped coalesced write is never lost for long.
+ */
+private const val SEEK_PROGRESS_COALESCE_MS = 500L
+/**
  * A persisted position older than this is treated as stale on a process-death
  * restore and ignored: the user backgrounded the app long enough that
  * auto-resuming mid-stream (potentially on an episode they auto-advanced past)
@@ -381,6 +391,11 @@ class VideoPlayerViewModel @Inject constructor(
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     // Last position (ms) written to savedStateHandle; used to throttle writes.
     private var lastPersistedPositionMs: Long = Long.MIN_VALUE
+    /**
+     * Single-flight coalescing job for the offline-mirror DB write during seek
+     * scrubbing. Cancelled+relaunched per [seekTo]; see [scheduleCoalescedSeekProgress].
+     */
+    private var pendingSeekProgressJob: Job? = null
 
     /**
      * Single resolved playback-session id. The server issues its own id
@@ -565,8 +580,21 @@ class VideoPlayerViewModel @Inject constructor(
         _currentPositionMs.value = positionMs
         playerSessionManager.engine?.seekTo(positionMs)
         // Explicit seeks are the most important position to survive process
-        // death; persist immediately rather than waiting for the throttle.
-        persistPlaybackPosition(positionMs, force = true)
+        // death; persist the SavedStateHandle snapshot immediately rather than
+        // waiting for the throttle.
+        val itemId = playerSessionManager.sessionState.value.currentItemId
+        if (itemId != null) {
+            lastPersistedPositionMs = positionMs
+            savedStateHandle[SAVED_KEY_ITEM_ID] = itemId
+            savedStateHandle[SAVED_KEY_POSITION_MS] = positionMs
+            savedStateHandle[SAVED_KEY_PLAY_SESSION_ID] = currentPlaySessionId
+            savedStateHandle[SAVED_KEY_POSITION_PERSISTED_AT] = System.currentTimeMillis()
+            // The DB mirror is coalesced: rapid scrubbing no longer queues one
+            // recordProgress per seek. SavedStateHandle above is already
+            // immediate, and the throttled tick mirror catches up regardless.
+            val durationMs = playerSessionManager.engine?.durationMs ?: 0L
+            scheduleCoalescedSeekProgress(itemId, positionMs, durationMs)
+        }
     }
 
     /**
@@ -1274,6 +1302,27 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Coalesces the offline-mirror DB write during seek scrubbing: cancels any
+     * in-flight pending write and schedules a fresh one [SEEK_PROGRESS_COALESCE_MS]
+     * later, so rapid seeks emit at most one `recordProgress` per quiet window.
+     * The SavedStateHandle snapshot is already written synchronously by [seekTo],
+     * and the throttled position tick (`persistPlaybackPosition(force=false)`)
+     * re-writes the mirror every [POSITION_PERSIST_MIN_INTERVAL_MS], so a dropped
+     * coalesced write is recovered within seconds.
+     */
+    private fun scheduleCoalescedSeekProgress(itemId: String, positionMs: Long, durationMs: Long) {
+        pendingSeekProgressJob?.cancel()
+        pendingSeekProgressJob = launch {
+            delay(SEEK_PROGRESS_COALESCE_MS)
+            val positionTicks = positionMs * 10_000L // ms → ticks
+            val percentage = if (durationMs > 0L) {
+                (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
+            } else 0.0
+            offlinePlaybackFacade.recordProgress(itemId, positionTicks, percentage, isPlayed = false)
+        }
+    }
+
     private fun initializeInternal(
         itemId: String,
         mediaSourceId: String?,
@@ -1379,6 +1428,8 @@ class VideoPlayerViewModel @Inject constructor(
             java.util.UUID.randomUUID().toString()
         }
         lastPersistedPositionMs = Long.MIN_VALUE
+        pendingSeekProgressJob?.cancel()
+        pendingSeekProgressJob = null
         trickplayManager.clear()
 
         if (wasInSyncPlay) {
@@ -2964,6 +3015,16 @@ class VideoPlayerViewModel @Inject constructor(
         pipController.reset()
         castManager.releaseConsumer()
         activePlayerController.clearEngine()
+        // Belt-and-suspenders: flush a pending coalesced seek-mirror write so the
+        // offline store doesn't lag the final position on release. The write is
+        // moved onto the release scope (IO + NonCancellable) so it survives the
+        // viewModelScope being cancelled on clear().
+        val pendingSeek = pendingSeekProgressJob
+        if (pendingSeek != null && itemId != null) {
+            releaseScope.launch(NonCancellable) {
+                pendingSeek.join()
+            }
+        }
         // Skip the second Stop if reportCurrentPlaybackStopped already
         // sent one for this session — duplicate Stop reports confuse the
         // server's resume/progress bookkeeping.

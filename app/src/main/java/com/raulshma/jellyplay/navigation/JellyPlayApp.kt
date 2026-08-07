@@ -280,6 +280,7 @@ private fun UpdateSheetOverlay(viewModel: MainViewModel) {
             onInstall = { intent ->
                 runCatching { context.startActivity(intent) }
             },
+            onRedownload = { viewModel.redownloadUpdate() },
             onCancel = { viewModel.dismissUpdate() },
             onDismiss = { viewModel.dismissUpdate() },
             buildInstallIntent = {

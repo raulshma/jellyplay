@@ -99,6 +99,7 @@
     <string name="update_ready_title">Prêt à installer — v%1$s</string>
     <string name="update_ready_body">La mise à jour a été téléchargée. Appuyez sur Installer pour continuer.</string>
     <string name="update_install">Installer</string>
+    <string name="update_download_again">Télécharger à nouveau</string>
     <string name="update_failed_title">Échec de la mise à jour</string>
     <string name="update_close">Fermer</string>
 

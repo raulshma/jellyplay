@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -86,6 +87,7 @@ dependencies {
     testImplementation(libs.work.testing)
     testImplementation(libs.androidx.junit)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.okhttp.mockwebserver)
 
     // testFixtures dependencies: the shared stubMediaSessionPlayer() helper
     // builds a mockk<Player> against media3-common. AGP's testFixtures source

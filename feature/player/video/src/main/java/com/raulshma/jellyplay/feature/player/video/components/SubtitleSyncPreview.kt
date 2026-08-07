@@ -350,9 +350,12 @@ private fun formatTimestamp(ms: Long): String {
     return "%02d:%02d.%03d".format(minutes, seconds, millis)
 }
 
+/** Compiled once; [parseTimestampMs] runs per keystroke via remember(timestampText). */
+private val TIMESTAMP_REGEX = Regex("(\\d+):(\\d{1,2})(?:\\.(\\d{1,3}))?")
+
 /** Parses an mm:ss.mmm string to milliseconds; returns 0 on parse failure. */
 private fun parseTimestampMs(text: String): Long {
-    val match = Regex("(\\d+):(\\d{1,2})(?:\\.(\\d{1,3}))?").find(text.trim()) ?: return 0L
+    val match = TIMESTAMP_REGEX.find(text.trim()) ?: return 0L
     val minutes = match.groupValues[1].toLongOrNull() ?: return 0L
     val seconds = match.groupValues[2].toLongOrNull() ?: return 0L
     val millis = match.groupValues[3].takeIf { it.isNotBlank() }?.padEnd(3, '0').orEmpty()

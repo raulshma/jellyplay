@@ -24,6 +24,7 @@
     <string name="data_download_action_resume">再開</string>
     <string name="data_download_action_cancel">キャンセル</string>
     <string name="data_download_paused">ダウンロードを一時停止しました</string>
+    <string name="data_download_queued">待機中\u2026</string>
     <plurals name="data_download_summary_active">
         <item quantity="other">%1$d 件のダウンロードが進行中</item>
     </plurals>

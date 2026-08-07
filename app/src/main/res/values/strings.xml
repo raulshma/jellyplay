@@ -110,6 +110,7 @@
     <string name="update_ready_title">Ready to install — v%1$s</string>
     <string name="update_ready_body">The update has been downloaded. Tap Install to continue.</string>
     <string name="update_install">Install</string>
+    <string name="update_download_again">Download again</string>
     <string name="update_failed_title">Update failed</string>
     <string name="update_close">Close</string>
     <string name="update_auto_download_label">Download updates automatically</string>

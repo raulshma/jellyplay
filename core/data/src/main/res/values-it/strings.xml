@@ -25,6 +25,7 @@
     <string name="data_download_action_resume">Riprendi</string>
     <string name="data_download_action_cancel">Annulla</string>
     <string name="data_download_paused">Download in pausa</string>
+    <string name="data_download_queued">In coda\u2026</string>
     <plurals name="data_download_summary_active">
         <item quantity="one">%1$d download in corso</item>
         <item quantity="other">%1$d download in corso</item>

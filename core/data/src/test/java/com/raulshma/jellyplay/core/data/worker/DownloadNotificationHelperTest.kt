@@ -89,6 +89,35 @@ class DownloadNotificationHelperTest {
     }
 
     @Test
+    fun `queued notification shows queued text with indeterminate progress and pause + cancel`() {
+        val downloadId = "dl-q"
+        val notificationId = DownloadNotificationHelper.notificationIdFor(downloadId)
+        val foregroundInfo = DownloadNotificationHelper.createQueuedForegroundInfo(
+            context, downloadId, notificationId, "Queued Episode",
+        )
+
+        assertEquals(notificationId, foregroundInfo.notificationId)
+        val notification = foregroundInfo.notification
+        assertEquals("Queued Episode", notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        assertEquals(
+            context.getString(R.string.data_download_queued),
+            notification.extras.getCharSequence(Notification.EXTRA_TEXT).toString(),
+        )
+        assertEquals(DownloadNotificationHelper.GROUP_KEY, notification.group)
+        // Indeterminate progress: the progress extras flag is set but the
+        // concrete values aren't meaningful — assert the body text only.
+        assertEquals(2, notification.actions.size)
+        assertEquals(
+            DownloadActionReceiver.ACTION_PAUSE,
+            shadowOf(notification.actions[0].actionIntent).savedIntent.action,
+        )
+        assertEquals(
+            DownloadActionReceiver.ACTION_CANCEL,
+            shadowOf(notification.actions[1].actionIntent).savedIntent.action,
+        )
+    }
+
+    @Test
     fun `summary collapses active downloads and dismisses when the last one finishes`() {
         DownloadNotificationHelper.refreshSummary(context, 2)
 
