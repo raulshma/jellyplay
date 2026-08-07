@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.core.data.worker
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
@@ -51,6 +53,40 @@ class AutoDownloadScheduler @Inject constructor(
             } else {
                 cancel()
             }
+        }
+    }
+
+    /**
+     * Immediate one-shot trigger fired when the app returns to the foreground
+     * or after a successful library scan. Mirrors [PlaybackSyncScheduler.enqueueNow]:
+     * a [OneTimeWorkRequestBuilder] with [ExistingWorkPolicy.KEEP] under a
+     * distinct unique name so the foreground trigger never duplicates an
+     * already-queued run.
+     *
+     * Gated on the preference here (not just inside the worker) so a disabled
+     * periodic schedule isn't resurrected by the foreground path — if the
+     * periodic was cancelled because the pref is off, this is a no-op.
+     */
+    fun enqueueNow() {
+        applicationScope.launch {
+            val enabled = downloadsStore.downloads.first().autoDownloadNewEpisodes
+            if (!enabled) return@launch
+
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
+                .build()
+
+            val request = OneTimeWorkRequestBuilder<AutoDownloadWorker>()
+                .setConstraints(constraints)
+                .addTag(AutoDownloadWorker.WORK_TAG)
+                .build()
+
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                AutoDownloadWorker.UNIQUE_NOW_NAME,
+                ExistingWorkPolicy.KEEP,
+                request,
+            )
         }
     }
 

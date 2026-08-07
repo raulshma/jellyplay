@@ -88,6 +88,10 @@
     <string name="widget_config_source_upcoming_movies_description">Movies releasing soon</string>
     <string name="widget_config_source_upcoming_tv">Upcoming TV</string>
     <string name="widget_config_source_upcoming_tv_description">Shows premiering soon</string>
+    <string name="widget_cw_item_count">Items to show</string>
+    <string name="widget_np_show_artwork">Show artwork</string>
+    <string name="widget_np_show_progress">Show progress</string>
+    <string name="widget_config_done">Done</string>
 
     <!-- In-app self-update sheet -->
     <string name="update_checking">Checking for updates\u2026</string>

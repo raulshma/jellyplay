@@ -752,6 +752,16 @@
     <string name="settings_storage_internal">Stockage interne</string>
     <string name="settings_storage_external">Carte SD externe</string>
 
+    <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
+    <string name="downloads_auto_delete_after_watch">Supprimer après visionnage</string>
+    <string name="downloads_auto_delete_after_watch_subtitle">Supprimer les téléchargements une fois entièrement regardés</string>
+
+    <!-- StorageSettingsScreen.kt: real storage mounts -->
+    <string name="storage_internal">Stockage interne</string>
+    <string name="storage_sd_card">Carte SD</string>
+    <string name="storage_usb">Stockage USB</string>
+    <string name="storage_external">Stockage externe</string>
+
     <!-- AudioSettingsScreen.kt -->
     <string name="settings_sleep_timer_duration">Durée du minuteur de sommeil</string>
     <string name="settings_sleep_timer_15_min">15 minutes</string>

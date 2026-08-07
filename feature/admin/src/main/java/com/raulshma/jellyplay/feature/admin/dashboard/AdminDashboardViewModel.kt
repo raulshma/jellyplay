@@ -30,6 +30,10 @@ data class AdminDashboardState(
     val isRestarting: Boolean = false,
     val isShuttingDown: Boolean = false,
     val libraryScanState: LibraryScanState = LibraryScanState.Idle,
+    /** Session awaiting a stop confirmation, if any. Null hides the dialog. */
+    val pendingStopSession: SessionInfo? = null,
+    /** True while a stop request is in flight (disables the confirm button). */
+    val isStoppingSession: Boolean = false,
 )
 
 @HiltViewModel
@@ -156,6 +160,43 @@ class AdminDashboardViewModel @Inject constructor(
                     it.copy(
                         isShuttingDown = false,
                         error = "Shutdown failed: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                    )
+                }
+            }
+        }
+    }
+
+    /** Opens the "stop this session's playback?" confirm dialog. */
+    fun showStopSessionDialog(session: SessionInfo) {
+        _uiState.update { it.copy(pendingStopSession = session) }
+    }
+
+    fun dismissStopSessionDialog() {
+        if (!_uiState.value.isStoppingSession) {
+            _uiState.update { it.copy(pendingStopSession = null) }
+        }
+    }
+
+    /**
+     * Stops active playback on the session currently pending confirmation.
+     * Issues Jellyfin's play-state STOP command, then refreshes the dashboard
+     * so the card reflects the stopped state.
+     */
+    fun stopSession() {
+        val session = _uiState.value.pendingStopSession ?: return
+        launch {
+            _uiState.update { it.copy(isStoppingSession = true) }
+            val result = apiClient.stopSession(session.id)
+            if (result.isSuccess) {
+                _uiState.update {
+                    it.copy(isStoppingSession = false, pendingStopSession = null, error = null)
+                }
+                loadDashboard()
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isStoppingSession = false,
+                        error = "Stop failed: ${result.exceptionOrNull()?.message ?: "unknown error"}",
                     )
                 }
             }

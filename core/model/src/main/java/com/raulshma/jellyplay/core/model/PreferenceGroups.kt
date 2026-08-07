@@ -291,6 +291,7 @@ data class StoragePreferences(
     val autoDownloadNewEpisodes: Boolean = false,
     val maxDownloadStorageGb: Int = 0,
     val downloadStorageLocation: String = "INTERNAL",
+    val autoDeleteAfterWatch: Boolean = false,
     val manualOfflineEnabled: Boolean = false,
     val autoOfflineEnabled: Boolean = true,
     val maxCacheSizeMb: Int = 0,

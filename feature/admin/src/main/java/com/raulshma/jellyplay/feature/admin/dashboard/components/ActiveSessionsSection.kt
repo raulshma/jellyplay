@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,6 +38,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.DeviceDesktop
 import com.composables.icons.tabler.outline.DeviceMobile
 import com.composables.icons.tabler.outline.DeviceTv
+import com.composables.icons.tabler.outline.PlayerStop
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
@@ -48,6 +50,7 @@ import com.raulshma.jellyplay.feature.admin.R
 fun ActiveSessionsSection(
     sessions: List<SessionInfo>,
     onViewAll: () -> Unit,
+    onStop: (SessionInfo) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val viewAllFocusState = rememberTvFocusState(focusedScale = 1.04f)
@@ -97,6 +100,7 @@ fun ActiveSessionsSection(
             sessions.take(5).forEachIndexed { index, session ->
                 SessionItem(
                     session = session,
+                    onStop = { onStop(session) },
                     showDivider = index < minOf(4, sessions.size - 1),
                 )
                 if (index < minOf(4, sessions.size - 1)) {
@@ -110,6 +114,7 @@ fun ActiveSessionsSection(
 @Composable
 private fun SessionItem(
     session: SessionInfo,
+    onStop: () -> Unit,
     showDivider: Boolean,
 ) {
     Row(
@@ -185,12 +190,34 @@ private fun SessionItem(
                     session.client.contains("iOS", ignoreCase = true) -> Tabler.Outline.DeviceMobile
                 else -> Tabler.Outline.DeviceDesktop
             }
-            Icon(
-                deviceIcon,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    deviceIcon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // Stop-playback affordance — only meaningful when something is
+                // actively playing on the session. Opens a confirm dialog.
+                if (session.nowPlayingItem != null) {
+                    Spacer(Modifier.width(4.dp))
+                    val stopFocusState = rememberTvFocusState()
+                    IconButton(
+                        onClick = onStop,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .then(stopFocusState.focusModifier)
+                            .tvFocusIndicator(stopFocusState, CircleShape),
+                    ) {
+                        Icon(
+                            Tabler.Outline.PlayerStop,
+                            contentDescription = stringResource(R.string.admin_stop_session_cd),
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(2.dp))
             Text(
                 session.client,

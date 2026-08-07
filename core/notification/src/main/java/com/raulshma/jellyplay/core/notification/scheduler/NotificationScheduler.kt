@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.core.notification.scheduler
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
@@ -33,6 +35,23 @@ class NotificationScheduler @Inject constructor(
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
     }
 
+    fun enqueueNow() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val request = OneTimeWorkRequestBuilder<NewMediaCheckWorker>()
+            .setConstraints(constraints)
+            .addTag(NewMediaCheckWorker.WORK_TAG)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            UNIQUE_NOW_NAME,
+            ExistingWorkPolicy.KEEP,
+            request,
+        )
+    }
+
     private fun enqueue(intervalMinutes: Long) {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -58,5 +77,6 @@ class NotificationScheduler @Inject constructor(
 
     companion object {
         const val WORK_NAME = "jellyplay_new_media_check"
+        const val UNIQUE_NOW_NAME = "jellyplay_new_media_check_now"
     }
 }

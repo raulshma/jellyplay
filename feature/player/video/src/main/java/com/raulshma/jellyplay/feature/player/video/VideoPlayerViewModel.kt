@@ -2762,6 +2762,10 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.engine?.setVideoStatsEnabled(newValue)
     }
 
+    fun toggleAudioOnly() {
+        _uiState.update { it.copy(audioOnly = !it.audioOnly) }
+    }
+
     fun toggleMute() {
         val engine = playerSessionManager.engine ?: return
         val currentlyMuted = _uiState.value.isMuted

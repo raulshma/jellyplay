@@ -38,6 +38,9 @@
     <string name="admin_stop_live_cd">Stop Live</string>
     <string name="admin_start_live_cd">Start Live</string>
     <string name="admin_stop">Stop</string>
+    <string name="admin_stop_session_cd">Stop playback</string>
+    <string name="admin_stop_session_title">Stop playback?</string>
+    <string name="admin_stop_session_body">Stop the media currently playing on \"%1$s\"?</string>
     <string name="admin_run">Run</string>
 
     <!-- Relative time (DevicesScreen.formatRelativeTime) -->
@@ -79,11 +82,13 @@
     <string name="admin_edit_device_name_title">Edit Device Name</string>
     <string name="admin_custom_name">Custom Name</string>
     <string name="admin_no_devices">No devices found</string>
+    <string name="admin_devices_search_placeholder">Search by name or user</string>
 
     <!-- LogsScreen -->
     <string name="admin_logs_title">Logs</string>
     <string name="admin_no_log_files">No log files found</string>
     <string name="admin_no_activity_log">No activity log entries</string>
+    <string name="admin_logs_search_placeholder">Filter messages</string>
 
     <!-- Plugins -->
     <string name="admin_plugins_title">Plugins</string>
@@ -380,5 +385,13 @@
     <!-- Audit history row labels (batch) -->
     <string name="admin_audit_by_user">by %1$s</string>
     <string name="admin_audit_items_removed">%1$d items removed</string>
+
+    <!-- User statistics sort & export -->
+    <string name="user_stats_sort_plays">Play count</string>
+    <string name="user_stats_sort_time">Watch time</string>
+    <string name="user_stats_sort_name">Name</string>
+    <string name="user_stats_sort_cd">Sort</string>
+    <string name="user_stats_export_cd">Export CSV</string>
+    <string name="user_stats_export_shared">User statistics exported</string>
 
 </resources>

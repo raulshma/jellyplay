@@ -56,6 +56,13 @@ class DownloadsStore @Inject constructor(
         val AUTO_DOWNLOAD_NEW_EPISODES = booleanPreferencesKey("auto_download_new_episodes")
         val MAX_DOWNLOAD_STORAGE_GB = intPreferencesKey("max_download_storage_gb")
         val DOWNLOAD_STORAGE_LOCATION = stringPreferencesKey("download_storage_location")
+        /**
+         * Auto-delete-after-watch: when ON, a downloaded item is removed from
+         * disk once it reaches 100% played. This is an unrequested,
+         * destructive, opt-in behaviour; see
+         * `PlayedStateSync.maybeAutoDeleteAfterWatch`. Default OFF.
+         */
+        val AUTO_DELETE_AFTER_WATCH = booleanPreferencesKey("auto_delete_after_watch")
         val CELLULAR_DOWNLOAD_SIZE_WARNING_MB = intPreferencesKey("cellular_download_size_warning_mb")
         val DOWNLOAD_SCHEDULE_ENABLED = booleanPreferencesKey("download_schedule_enabled")
         val DOWNLOAD_SCHEDULE_START = intPreferencesKey("download_schedule_start")
@@ -81,6 +88,7 @@ class DownloadsStore @Inject constructor(
         autoDownloadNewEpisodes = PreferenceCodec.readBool(prefs, Keys.AUTO_DOWNLOAD_NEW_EPISODES, "auto_download_new_episodes", false),
         maxDownloadStorageGb = PreferenceCodec.readInt(prefs, Keys.MAX_DOWNLOAD_STORAGE_GB, "max_download_storage_gb", 0),
         downloadStorageLocation = prefs[Keys.DOWNLOAD_STORAGE_LOCATION] ?: "INTERNAL",
+        autoDeleteAfterWatch = prefs[Keys.AUTO_DELETE_AFTER_WATCH] ?: false,
         cellularDownloadSizeWarningMb = PreferenceCodec.readInt(prefs, Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB, "cellular_download_size_warning_mb", 0),
         downloadScheduleEnabled = prefs[Keys.DOWNLOAD_SCHEDULE_ENABLED] ?: false,
         downloadScheduleWindow = DownloadScheduleWindow(
@@ -130,6 +138,10 @@ class DownloadsStore @Inject constructor(
         dataStore.edit { it[Keys.DOWNLOAD_STORAGE_LOCATION] = location }
     }
 
+    suspend fun setAutoDeleteAfterWatch(enabled: Boolean) {
+        dataStore.edit { it[Keys.AUTO_DELETE_AFTER_WATCH] = enabled }
+    }
+
     suspend fun setCellularDownloadSizeWarningMb(sizeMb: Int) {
         dataStore.edit { it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = sizeMb }
     }
@@ -156,6 +168,7 @@ class DownloadsStore @Inject constructor(
         Keys.WIFI_ONLY_DOWNLOADS, Keys.DOWNLOAD_CONNECTIONS, Keys.MAX_CONCURRENT_DOWNLOADS,
         Keys.DOWNLOAD_QUALITY, Keys.SMART_DOWNLOADS_ENABLED, Keys.AUTO_DOWNLOAD_NEW_EPISODES,
         Keys.MAX_DOWNLOAD_STORAGE_GB, Keys.DOWNLOAD_STORAGE_LOCATION,
+        Keys.AUTO_DELETE_AFTER_WATCH,
         Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB,
         Keys.DOWNLOAD_SCHEDULE_ENABLED, Keys.DOWNLOAD_SCHEDULE_START,
         Keys.DOWNLOAD_SCHEDULE_END, Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY,
@@ -176,6 +189,7 @@ class DownloadsStore @Inject constructor(
             Keys.AUTO_DOWNLOAD_NEW_EPISODES,
             Keys.MAX_DOWNLOAD_STORAGE_GB,
             Keys.DOWNLOAD_STORAGE_LOCATION,
+            Keys.AUTO_DELETE_AFTER_WATCH,
             Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB,
             Keys.DOWNLOAD_SCHEDULE_ENABLED,
             Keys.DOWNLOAD_SCHEDULE_START,
@@ -227,6 +241,7 @@ class DownloadsStore @Inject constructor(
             it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = slice.autoDownloadNewEpisodes
             it[Keys.MAX_DOWNLOAD_STORAGE_GB] = slice.maxDownloadStorageGb
             it[Keys.DOWNLOAD_STORAGE_LOCATION] = slice.downloadStorageLocation
+            it[Keys.AUTO_DELETE_AFTER_WATCH] = slice.autoDeleteAfterWatch
             it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = slice.cellularDownloadSizeWarningMb
             it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = slice.downloadScheduleEnabled
             it[Keys.DOWNLOAD_SCHEDULE_START] = slice.downloadScheduleWindow.startHour
@@ -251,6 +266,7 @@ data class DownloadsSlice(
     val autoDownloadNewEpisodes: Boolean = false,
     val maxDownloadStorageGb: Int = 0,
     val downloadStorageLocation: String = "INTERNAL",
+    val autoDeleteAfterWatch: Boolean = false,
     val cellularDownloadSizeWarningMb: Int = 0,
     val downloadScheduleEnabled: Boolean = false,
     val downloadScheduleWindow: DownloadScheduleWindow = DownloadScheduleWindow(),

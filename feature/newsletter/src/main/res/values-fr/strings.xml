@@ -4,6 +4,16 @@
     <string name="newsletter_could_not_load">Impossible de charger la newsletter</string>
     <string name="newsletter_preparing_digest">Préparation de votre récapitulatif\u2026</string>
 
+    <!-- Newsletter send actions (admin-gated; backend route required) -->
+    <string name="newsletter_send_now">Envoyer maintenant</string>
+    <string name="newsletter_send_test">Envoyer test</string>
+    <string name="newsletter_send_confirm_title">Envoyer la newsletter ?</string>
+    <string name="newsletter_send_confirm_body">Ceci enverra la newsletter à tous les abonnés.</string>
+    <string name="newsletter_send_success">Newsletter envoyée</string>
+    <string name="newsletter_send_failed">Échec de l\'envoi de la newsletter</string>
+    <string name="newsletter_test_sent">Newsletter de test envoyée</string>
+    <string name="newsletter_send_admin_only">Admin uniquement</string>
+
     <!-- Newsletter screens & sections -->
     <string name="newsletter_title">Newsletter</string>
     <string name="newsletter_activity_digest">Flux d\'activité</string>

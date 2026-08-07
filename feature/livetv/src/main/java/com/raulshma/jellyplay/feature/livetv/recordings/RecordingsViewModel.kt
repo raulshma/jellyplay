@@ -13,6 +13,9 @@ data class RecordingsUiState(
     val recordings: List<LiveTvRecording> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
+    /** Recording awaiting a delete confirmation, if any. Null hides the dialog. */
+    val pendingDelete: LiveTvRecording? = null,
+    val isDeleting: Boolean = false,
 )
 
 /**
@@ -48,6 +51,44 @@ class RecordingsViewModel @Inject constructor(
 
     fun getImageUrl(itemId: String, imageTag: String?): String =
         if (imageTag != null) imageUrlProvider.getImageUrl(itemId) else ""
+
+    // ── Delete / cancel affordance ──────────────────────────────────────────
+
+    /** Opens the confirm dialog for deleting [recording] (and cancelling its series timer if set). */
+    fun showDeleteDialog(recording: LiveTvRecording) {
+        _uiState.update { it.copy(pendingDelete = recording) }
+    }
+
+    fun dismissDeleteDialog() {
+        if (!_uiState.value.isDeleting) {
+            _uiState.update { it.copy(pendingDelete = null) }
+        }
+    }
+
+    /**
+     * Deletes the recording pending confirmation. If it has a [LiveTvRecording.seriesTimerId]
+     * the series timer is cancelled first so future episodes aren't recorded,
+     * then the recorded item itself is deleted.
+     */
+    fun deleteRecording() {
+        val recording = _uiState.value.pendingDelete ?: return
+        launch {
+            _uiState.update { it.copy(isDeleting = true) }
+            // Cancel the series timer (best-effort) if one is attached.
+            recording.seriesTimerId?.let { mediaRepository.cancelSeriesTimer(it) }
+            val result = mediaRepository.deleteRecording(recording.id)
+            if (result.isSuccess) {
+                _uiState.update {
+                    it.copy(isDeleting = false, pendingDelete = null, error = null)
+                }
+                load()
+            } else {
+                _uiState.update {
+                    it.copy(isDeleting = false, error = result.exceptionOrNull()?.message)
+                }
+            }
+        }
+    }
 
     private companion object {
         const val LATEST_LIMIT = 24

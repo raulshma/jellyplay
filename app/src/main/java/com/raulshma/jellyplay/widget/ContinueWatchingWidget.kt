@@ -20,6 +20,30 @@ import kotlinx.coroutines.flow.first
 
 class ContinueWatchingWidget : AppWidgetProvider() {
 
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface WidgetEntryPoint {
+        fun widgetDataStore(): com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+    }
+
+    override fun onDeleted(context: Context?, appWidgetIds: IntArray?) {
+        super.onDeleted(context, appWidgetIds)
+        if (context == null || appWidgetIds == null) return
+        val store = try {
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                WidgetEntryPoint::class.java,
+            ).widgetDataStore()
+        } catch (_: Exception) {
+            return
+        }
+        kotlinx.coroutines.runBlocking {
+            for (id in appWidgetIds) {
+                store.removeWidgetConfigForId(id)
+            }
+        }
+    }
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -53,10 +77,6 @@ class ContinueWatchingWidget : AppWidgetProvider() {
 
     override fun onDisabled(context: Context?) {
         super.onDisabled(context)
-    }
-
-    override fun onDeleted(context: Context?, appWidgetIds: IntArray?) {
-        super.onDeleted(context, appWidgetIds)
     }
 
     companion object {

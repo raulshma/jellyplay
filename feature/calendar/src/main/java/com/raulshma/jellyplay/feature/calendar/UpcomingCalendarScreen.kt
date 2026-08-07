@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.calendar
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -27,9 +30,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -54,6 +61,7 @@ import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.feedback.uiTextOf
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import java.time.LocalDate
+import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -68,6 +76,24 @@ fun UpcomingCalendarScreen(
     val userMessageBus = LocalUserMessageBus.current
     val listState = rememberLazyListState()
     val today = remember { today() }
+
+    // Tap-month → date-picker affordance. After a date is picked the
+    // visible month swaps (if needed) and the list scrolls to that day's row.
+    var showDatePicker by remember { mutableStateOf(false) }
+    var pendingScrollDate by remember { mutableStateOf<LocalDate?>(null) }
+
+    // Scroll the day-header for [pendingScrollDate] into view once the items
+    // for its month have loaded. Re-runs whenever the items snapshot changes.
+    LaunchedEffect(pendingScrollDate, state.items) {
+        val target = pendingScrollDate ?: return@LaunchedEffect
+        val dayGroups = groupByDay(state.items, state.filter)
+        val index = dayGroups.indexOfFirst { it.date == target }
+        if (index >= 0) {
+            // +2 offsets for the two leading header items (monthNav, filterRow).
+            listState.animateScrollToItem(index + 2)
+            pendingScrollDate = null
+        }
+    }
 
     JellyPlayScreenScaffold(
         title = stringResource(R.string.calendar_title),
@@ -135,6 +161,7 @@ fun UpcomingCalendarScreen(
                                         onPrevious = { viewModel.changeMonth(-1) },
                                         onNext = { viewModel.changeMonth(1) },
                                         onToday = { viewModel.goToToday() },
+                                        onLabelClick = { showDatePicker = true },
                                     )
                                 }
                                 item(key = "filterRow") {
@@ -178,6 +205,40 @@ fun UpcomingCalendarScreen(
                 }
             }
         }
+
+        if (showDatePicker) {
+            val datePickerState = rememberDatePickerState(
+                initialSelectedDateMillis = state.visibleMonth
+                    .atDay(1)
+                    .atStartOfDay(ZoneId.systemDefault())
+                    .toInstant()
+                    .toEpochMilli(),
+            )
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            datePickerState.selectedDateMillis?.let { millis ->
+                                val picked = LocalDate.ofEpochDay(millis / 86_400_000L)
+                                viewModel.goToDate(picked)
+                                pendingScrollDate = picked
+                            }
+                            showDatePicker = false
+                        },
+                    ) {
+                        Text(stringResource(com.raulshma.jellyplay.core.ui.R.string.core_ok))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text(stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel))
+                    }
+                },
+            ) {
+                DatePicker(state = datePickerState)
+            }
+        }
     }
 }
 
@@ -190,6 +251,7 @@ private fun MonthNavHeader(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onToday: () -> Unit,
+    onLabelClick: () -> Unit = {},
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -203,12 +265,36 @@ private fun MonthNavHeader(
             IconButton(onClick = onPrevious, enabled = canGoBack) {
                 Icon(Tabler.Outline.ChevronLeft, contentDescription = stringResource(R.string.calendar_prev_month_cd))
             }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
+            // Tapping the month label opens a date picker so the user can
+            // jump straight to a day instead of paging month by month.
+            val pickDateLabel = stringResource(R.string.calendar_pick_date_cd)
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClickLabel = pickDateLabel,
+                        role = androidx.compose.ui.semantics.Role.Button,
+                        onClick = onLabelClick,
+                    )
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.size(6.dp))
+                Icon(
+                    Tabler.Outline.Calendar,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             IconButton(onClick = onNext) {
                 Icon(Tabler.Outline.ChevronRight, contentDescription = stringResource(R.string.calendar_next_month_cd))
             }

@@ -87,4 +87,9 @@
 
     <!-- auto-localized: previously translatable="false" (1) -->
     <string name="auth_quick_connect">快速连接</string>
+
+    <!-- Server health indicator -->
+    <string name="server_health_healthy">在线</string>
+    <string name="server_health_unreachable">离线</string>
+    <string name="server_health_checking">检查中…</string>
 </resources>

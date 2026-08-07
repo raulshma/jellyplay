@@ -27,6 +27,7 @@ data class LiveTvPlayerUiState(
     val errorDetail: String? = null,
     val isSwitchingChannel: Boolean = false,
     val favorites: Set<String> = emptySet(),
+    val lastChannelId: String? = null,
     val isMuted: Boolean = false,
     val liveStreamOption: LiveStreamOption = LiveStreamOption.AUTO,
     /** Delivery method in use for the current stream (Direct Stream /

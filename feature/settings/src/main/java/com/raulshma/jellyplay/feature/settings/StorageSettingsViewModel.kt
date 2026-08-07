@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.settings
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayout
+import com.raulshma.jellyplay.core.data.repository.StorageMount
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.model.DownloadQuality
@@ -50,9 +52,33 @@ class StorageSettingsViewModel @Inject constructor(
     private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val editor: PreferencesEditor,
     private val autoDownloadScheduler: AutoDownloadScheduler,
+    private val storageLayout: DownloadStorageLayout,
 ) : JellyPlayViewModel() {
 
     val preferences: StateFlow<StoragePreferences> = projections.storagePreferences
+
+    /**
+     * Storage mounts the user can pick for downloads.
+     * Computed once on construction from `DownloadStorageLayout.availableMounts`
+     * (which reads `Context.getExternalFilesDirs`); recomputed cheaply only when
+     * the user re-enters the screen, since the mount set only changes when a
+     * card/USB is inserted or removed between screen entries.
+     */
+    var storageMounts by composeState<List<StorageMount>>(emptyList())
+        private set
+
+    init {
+        refreshStorageMounts()
+    }
+
+    private fun refreshStorageMounts() {
+        launch {
+            val mounts = withContext(Dispatchers.IO) {
+                runCatching { storageLayout.availableMounts() }.getOrDefault(emptyList())
+            }
+            storageMounts = mounts
+        }
+    }
 
     val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
 
@@ -193,6 +219,9 @@ class StorageSettingsViewModel @Inject constructor(
 
     fun setDownloadStorageLocation(location: String) =
         editor.edit { downloads.setDownloadStorageLocation(location) }
+
+    fun setAutoDeleteAfterWatch(enabled: Boolean) =
+        editor.edit { downloads.setAutoDeleteAfterWatch(enabled) }
 
     fun setMaxDownloadStorageGb(gb: Int) =
         editor.edit { downloads.setMaxDownloadStorageGb(gb) }

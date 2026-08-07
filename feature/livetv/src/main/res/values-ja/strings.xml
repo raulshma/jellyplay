@@ -31,6 +31,10 @@
     <string name="livetv_record_series">シリーズを録画</string>
     <string name="livetv_cancel_recording">録画をキャンセル</string>
     <string name="livetv_cancel_series">シリーズをキャンセル</string>
+    <string name="livetv_delete">削除</string>
+    <string name="livetv_delete_recording_cd">録画を削除</string>
+    <string name="livetv_delete_recording_title">録画を削除しますか？</string>
+    <string name="livetv_delete_recording_body">「%1$s」を削除しますか？この操作は元に戻せません。</string>
     <string name="livetv_record_success">録画を予約しました</string>
     <string name="livetv_record_failed">録画の設定に失敗しました</string>
     <string name="livetv_record_canceled">録画をキャンセルしました</string>

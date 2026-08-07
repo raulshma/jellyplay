@@ -1094,6 +1094,26 @@ fun VideoPlayerScreen(
                             },
                     )
 
+                    // Audio-only: keep the surface mounted (playback
+                    // uninterrupted) but cover it with a black panel + label.
+                    if (uiState.audioOnly) {
+                        Surface(
+                            color = Color.Black,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.player_audio_only_on),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                    }
+
                     // ── Zoom/crop-safe subtitles ──
                     //
                     // The engine declares its zoom-safe subtitle strategy via
@@ -1745,6 +1765,8 @@ fun VideoPlayerScreen(
                 onAbRepeatSetA = { viewModel.setAbRepeatPointA() },
                 onAbRepeatSetB = { viewModel.setAbRepeatPointB() },
                 onAbRepeatClear = { viewModel.clearAbRepeat() },
+                audioOnly = uiState.audioOnly,
+                onToggleAudioOnly = { viewModel.toggleAudioOnly() },
                 onLockClick = onLockClick,
                 onControlsFocusChange = onControlsFocusChange,
                 onOverflowMenuChange = onOverflowMenuChange,
@@ -2000,7 +2022,7 @@ private fun BoxScope.AutoAspectRatioBadge(
 
     PlayerBadge(
         show = showBadge,
-        text = "Auto: ${detectedAspectRatio?.displayName ?: ""}",
+        text = stringResource(R.string.player_video_aspect_auto, detectedAspectRatio?.displayName ?: ""),
         topPadding = 60.dp,
     )
 }

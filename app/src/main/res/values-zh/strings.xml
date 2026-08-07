@@ -79,6 +79,10 @@
     <string name="widget_config_source_upcoming_movies_description">即将上映的电影</string>
     <string name="widget_config_source_upcoming_tv">即将播出的剧集</string>
     <string name="widget_config_source_upcoming_tv_description">即将首播的剧集</string>
+    <string name="widget_cw_item_count">显示数量</string>
+    <string name="widget_np_show_artwork">显示封面</string>
+    <string name="widget_np_show_progress">显示进度</string>
+    <string name="widget_config_done">完成</string>
 
     <!-- In-app self-update sheet -->
     <string name="update_checking">正在检查更新\u2026</string>

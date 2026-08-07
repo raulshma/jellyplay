@@ -67,8 +67,13 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
     @Inject lateinit var playbackSyncSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler>
     @Inject lateinit var playbackSyncReconnectListenerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener>
     @Inject lateinit var downloadReconnectListenerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener>
+    @Inject lateinit var notificationReconnectListenerProvider: javax.inject.Provider<com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectListener>
     @Inject lateinit var widgetWorkSchedulerProvider: javax.inject.Provider<com.raulshma.jellyplay.widget.WidgetWorkScheduler>
     @Inject lateinit var downloadRecoveryInitializerProvider: javax.inject.Provider<com.raulshma.jellyplay.startup.DownloadRecoveryInitializer>
+    // javax.inject.Provider defers construction of AppUpdateRepository (which
+    // pulls GitHub + OkHttp) off the cold-start path. cleanupDownloadedApk is a
+    // cheap file delete, but construction is the cost worth deferring.
+    @Inject lateinit var appUpdateRepositoryProvider: javax.inject.Provider<com.raulshma.jellyplay.core.data.update.AppUpdateRepository>
 
     @Inject @ApplicationScope lateinit var applicationScope: CoroutineScope
 
@@ -90,12 +95,20 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
             playbackSyncSchedulerProvider.get().enqueuePeriodic()
             playbackSyncReconnectListenerProvider.get().start()
             downloadReconnectListenerProvider.get().start()
+            notificationReconnectListenerProvider.get().start()
             autoDownloadSchedulerProvider.get().sync()
             notificationSchedulerProvider.get().scheduleOrUpdate()
         }
         // Best-effort download recovery — independent of the above groups.
         applicationScope.launch(Dispatchers.IO) {
             downloadRecoveryInitializerProvider.get().recover()
+        }
+        // Sweep any APK left by a prior self-update. A successful install
+        // restarts the process (so this runs in the new version) and leaves the
+        // old APK orphaned; a cancelled/failed install also leaves it behind.
+        // Safe at startup: onCreate precedes any new download.
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching { appUpdateRepositoryProvider.get().cleanupDownloadedApk() }
         }
     }
 

@@ -31,6 +31,8 @@
     <string name="music_play_all">すべて再生</string>
     <string name="music_shuffle">シャッフル</string>
     <string name="music_add_to_queue">キューに追加</string>
+    <string name="music_move_up">上に移動</string>
+    <string name="music_move_down">下に移動</string>
     <string name="music_instant_mix">インスタントミックス</string>
     <string name="music_creating_mix">ミックスを作成中…</string>
     <string name="music_now_playing">再生中</string>
@@ -106,4 +108,11 @@
     <string name="music_smart_playlist_recently_added">最近追加</string>
     <string name="music_smart_playlist_unplayed">未再生トラック</string>
     <string name="music_smart_playlist_favorites">お気に入り</string>
+
+    <!-- Album / track sort labels -->
+    <string name="music_sort_name">名前</string>
+    <string name="music_sort_date_added">追加日</string>
+    <string name="music_sort_date_played">再生日</string>
+    <string name="music_sort_random">ランダム</string>
+    <string name="music_sort_year">年</string>
 </resources>

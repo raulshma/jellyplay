@@ -31,6 +31,8 @@
     <string name="music_play_all">Reproduzir tudo</string>
     <string name="music_shuffle">Aleatório</string>
     <string name="music_add_to_queue">Adicionar à fila</string>
+    <string name="music_move_up">Mover para cima</string>
+    <string name="music_move_down">Mover para baixo</string>
     <string name="music_instant_mix">Mix instantâneo</string>
     <string name="music_creating_mix">Criando mix…</string>
     <string name="music_now_playing">Reproduzindo agora</string>
@@ -106,4 +108,11 @@
     <string name="music_smart_playlist_recently_added">Adicionadas recentemente</string>
     <string name="music_smart_playlist_unplayed">Faixas não reproduzidas</string>
     <string name="music_smart_playlist_favorites">Favoritos</string>
+
+    <!-- Album / track sort labels -->
+    <string name="music_sort_name">Nome</string>
+    <string name="music_sort_date_added">Adicionado</string>
+    <string name="music_sort_date_played">Reproduzido</string>
+    <string name="music_sort_random">Aleatório</string>
+    <string name="music_sort_year">Ano</string>
 </resources>

@@ -30,6 +30,10 @@
     <string name="livetv_record_series">Record Series</string>
     <string name="livetv_cancel_recording">Cancel Recording</string>
     <string name="livetv_cancel_series">Cancel Series</string>
+    <string name="livetv_delete">Delete</string>
+    <string name="livetv_delete_recording_cd">Delete recording</string>
+    <string name="livetv_delete_recording_title">Delete recording?</string>
+    <string name="livetv_delete_recording_body">Delete \"%1$s\"? This cannot be undone.</string>
     <string name="livetv_record_success">Recording scheduled</string>
     <string name="livetv_record_failed">Failed to set recording</string>
     <string name="livetv_record_canceled">Recording canceled</string>

@@ -887,6 +887,8 @@ fun SettingsScreen(
                                 title = stringResource(R.string.settings_requests),
                                 subtitle = stringResource(R.string.settings_requests_subtitle),
                                 index = 4, count = insightsCount,
+                                trailingText = viewModel.pendingRequestCount.collectAsStateWithLifecycle().value
+                                    .takeIf { it > 0 }?.toString(),
                                 highlighted = lastClickedSettingId == "requests",
                                 onClick = {
                                     lastClickedSettingId = "requests"

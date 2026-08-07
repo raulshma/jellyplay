@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.requests
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.snapshotFlow
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
@@ -16,7 +17,10 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -50,10 +54,42 @@ data class RequestsUiState(
     val sortDirection: String = "desc",
     val mediaType: String? = null,
     val showMyRequestsOnly: Boolean = false,
+    /** Free-text search term forwarded to the Seerr `search` query param. */
+    val searchQuery: String = "",
     val actionInProgress: Boolean = false,
+    /** Selection-mode state for bulk approve/decline. */
+    val selectionMode: Boolean = false,
+    val selectedRequestIds: Set<Int> = emptySet(),
     val actionError: String? = null,
+) {
+    /** The filter-axis fields, bundled for hand-off to [RequestsFilterBar]. */
+    val filters: RequestsFilterState
+        get() = RequestsFilterState(
+            filter = filter,
+            mediaType = mediaType,
+            sort = sort,
+            sortDirection = sortDirection,
+            showMyRequestsOnly = showMyRequestsOnly,
+            searchQuery = searchQuery,
+        )
+}
+
+/**
+ * The six request-filter fields that travel together from
+ * [RequestsUiState] into [RequestsFilterBar]. Kept as a value so the bar's
+ * signature is one parameter (plus the callbacks) rather than six loose ones.
+ */
+@Immutable
+data class RequestsFilterState(
+    val filter: SeerrRequestFilter = SeerrRequestFilter.PENDING,
+    val mediaType: String? = null,
+    val sort: SeerrRequestSort = SeerrRequestSort.ADDED,
+    val sortDirection: String = "desc",
+    val showMyRequestsOnly: Boolean = false,
+    val searchQuery: String = "",
 )
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class RequestsViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
@@ -102,6 +138,14 @@ class RequestsViewModel @Inject constructor(
             }
             loadRequests(refresh = true)
         }
+        // Debounced search: re-runs the query 400ms after the user stops typing,
+        // so each keystroke doesn't hit the Seerr API.
+        launch {
+            snapshotFlow { _state.value.searchQuery }
+                .distinctUntilChanged()
+                .debounce(400)
+                .collect { loadRequests(refresh = true) }
+        }
     }
 
     override fun onCleared() {
@@ -126,6 +170,7 @@ class RequestsViewModel @Inject constructor(
                 sortDirection = s.sortDirection,
                 requestedBy = requestedBy,
                 mediaType = s.mediaType,
+                search = s.searchQuery.takeIf { it.isNotBlank() },
             ).onSuccess { response ->
                 _state.value = _state.value.copy(
                     requests = response.results,
@@ -286,6 +331,67 @@ class RequestsViewModel @Inject constructor(
         val newValue = !_state.value.showMyRequestsOnly
         _state.value = _state.value.copy(showMyRequestsOnly = newValue, currentPage = 1)
         loadRequests(refresh = true)
+    }
+
+    /**
+     * Updates the free-text [searchQuery]. The actual request is fired on a
+     * 400ms debounce (collected in [init]) so each keystroke doesn't hit the
+     * Seerr API. Clears back to page 1.
+     */
+    fun setSearchQuery(query: String) {
+        _state.value = _state.value.copy(searchQuery = query, currentPage = 1)
+    }
+
+    fun clearSearch() {
+        if (_state.value.searchQuery.isBlank()) return
+        _state.value = _state.value.copy(searchQuery = "", currentPage = 1)
+        loadRequests(refresh = true)
+    }
+
+    // ── Bulk selection ──────────────────────────────────────────────────────
+
+    /** Toggles [request]'s membership in the selection; enters selection mode on first pick. */
+    fun toggleSelection(request: SeerrRequestItem) {
+        val current = _state.value.selectedRequestIds
+        val next = if (request.id in current) current - request.id else current + request.id
+        _state.value = _state.value.copy(
+            selectedRequestIds = next,
+            selectionMode = next.isNotEmpty(),
+        )
+    }
+
+    fun selectAll() {
+        _state.value = _state.value.copy(
+            selectedRequestIds = _state.value.requests.map { it.id }.toSet(),
+            selectionMode = true,
+        )
+    }
+
+    fun clearSelection() {
+        _state.value = _state.value.copy(selectedRequestIds = emptySet(), selectionMode = false)
+    }
+
+    /** Approves every selected request; clears selection + refreshes on completion. */
+    fun approveSelected() = runBulk { id -> seerrRepository.approveRequest(id) }
+
+    /** Declines every selected request; clears selection + refreshes on completion. */
+    fun declineSelected() = runBulk { id -> seerrRepository.declineRequest(id) }
+
+    /**
+     * Shared body for [approveSelected] / [declineSelected]: flips
+     * [actionInProgress], runs [action] against each selected id, then clears
+     * selection and refreshes the list. Per-item failures are surfaced inside
+     * the Seerr result by the repository; here we only drive the fan-out.
+     */
+    private fun runBulk(action: suspend (Int) -> Unit) {
+        val ids = _state.value.selectedRequestIds.toList()
+        if (ids.isEmpty()) return
+        launch {
+            _state.value = _state.value.copy(actionInProgress = true, actionError = null)
+            ids.forEach { id -> action(id) }
+            _state.value = _state.value.copy(actionInProgress = false, selectedRequestIds = emptySet(), selectionMode = false)
+            loadRequests(refresh = true)
+        }
     }
 
     fun nextPage() {

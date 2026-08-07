@@ -82,7 +82,12 @@ class AppUpdateRepositoryImpl @Inject constructor(
                     )
                 }
 
-                val updatesDir = File(context.cacheDir, UPDATES_DIR).apply { mkdirs() }
+                // Persist under filesDir (NOT cacheDir): the APK must survive
+                // backgrounding during the system-installer round trip. cacheDir
+                // is swept by CacheManager on ON_STOP (autoDeleteCache) and can
+                // be evicted by the OS at any time — both delete the APK mid
+                // install, producing "There was a problem parsing the package".
+                val updatesDir = File(context.filesDir, UPDATES_DIR).apply { mkdirs() }
                 // Clean up any previously downloaded APK so a stale/partial file
                 // never masquerades as the new build.
                 updatesDir.listFiles()?.forEach { runCatching { it.delete() } }
@@ -136,6 +141,22 @@ class AppUpdateRepositoryImpl @Inject constructor(
             setDataAndType(uri, MIME_APK)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+
+    override fun cleanupDownloadedApk() {
+        // The system installer is launched in a separate process; we get no
+        // result callback for ACTION_VIEW. But a successful package replace
+        // kills and restarts our process, so onCreate runs again in the newly
+        // installed version — at which point any previously-downloaded APK is
+        // orphaned. Sweeping it here on startup removes those leftovers without
+        // racing an in-flight download (onCreate precedes any user action).
+        val updatesDir = File(context.filesDir, UPDATES_DIR)
+        runCatching {
+            updatesDir.listFiles()?.forEach { it.delete() }
+            if (updatesDir.exists() && updatesDir.listFiles()?.isEmpty() == true) {
+                updatesDir.delete()
+            }
         }
     }
 

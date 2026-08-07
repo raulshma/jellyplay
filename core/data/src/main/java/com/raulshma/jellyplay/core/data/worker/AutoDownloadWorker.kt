@@ -95,6 +95,7 @@ class AutoDownloadWorker @AssistedInject constructor(
 
     companion object {
         const val UNIQUE_PERIODIC_NAME = "com.raulshma.jellyplay.work.auto_download"
+        const val UNIQUE_NOW_NAME = "com.raulshma.jellyplay.work.auto_download_now"
         const val WORK_TAG = "auto_download"
         private const val TAG = "AutoDownloadWorker"
         private const val MAX_RETRIES = 3

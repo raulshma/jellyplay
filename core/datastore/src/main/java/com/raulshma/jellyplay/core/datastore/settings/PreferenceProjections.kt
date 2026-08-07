@@ -363,6 +363,7 @@ class PreferenceProjections @Inject constructor(
                 autoDownloadNewEpisodes = downloads.autoDownloadNewEpisodes,
                 maxDownloadStorageGb = downloads.maxDownloadStorageGb,
                 downloadStorageLocation = downloads.downloadStorageLocation,
+                autoDeleteAfterWatch = downloads.autoDeleteAfterWatch,
                 manualOfflineEnabled = network.manualOfflineEnabled,
                 autoOfflineEnabled = network.autoOfflineEnabled,
                 maxCacheSizeMb = network.maxCacheSizeMb,

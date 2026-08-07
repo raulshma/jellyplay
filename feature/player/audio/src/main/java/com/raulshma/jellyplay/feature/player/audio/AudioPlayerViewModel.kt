@@ -704,6 +704,60 @@ class AudioPlayerViewModel @Inject constructor(
     val currentPlayingItemId: String?
         get() = audioPlaybackManager.currentPlayingItemId.value
 
+    // ── Add to playlist ─────────────────────────────────────────────────────
+
+    /** Opens the playlist picker and loads the user's editable playlists. */
+    fun openPlaylistPicker() {
+        if (currentPlayingItemId == null) return
+        _uiState.update { it.copy(showPlaylistPicker = true, isLoadingPlaylists = true) }
+        launch {
+            mediaRepository.getPlaylists(limit = 100)
+                .onSuccess { all ->
+                    val editable = all.filter { it.canEdit }
+                    _uiState.update {
+                        it.copy(playlists = editable, isLoadingPlaylists = false)
+                    }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(isLoadingPlaylists = false) }
+                }
+        }
+    }
+
+    fun dismissPlaylistPicker() {
+        if (!_uiState.value.isAddingToPlaylist) {
+            _uiState.update { it.copy(showPlaylistPicker = false, playlists = emptyList(), playlistMessage = null) }
+        }
+    }
+
+    /** Adds the current track to [playlist]; clears the message after a beat. */
+    fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) {
+        val itemId = currentPlayingItemId ?: return
+        _uiState.update { it.copy(isAddingToPlaylist = true) }
+        launch {
+            mediaRepository.addItemsToPlaylist(playlist.id, listOf(itemId))
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            isAddingToPlaylist = false,
+                            showPlaylistPicker = false,
+                            playlists = emptyList(),
+                            playlistMessage = playlist.name,
+                        )
+                    }
+                }
+                .onFailure { err ->
+                    _uiState.update {
+                        it.copy(isAddingToPlaylist = false, playlistMessage = err.message)
+                    }
+                }
+        }
+    }
+
+    fun clearPlaylistMessage() {
+        _uiState.update { it.copy(playlistMessage = null) }
+    }
+
     fun setKaraokeModeEnabled(enabled: Boolean) {
         karaokeMode = enabled
         _uiState.update { it.copy(lyrics = it.lyrics.copy(karaokeMode = enabled)) }

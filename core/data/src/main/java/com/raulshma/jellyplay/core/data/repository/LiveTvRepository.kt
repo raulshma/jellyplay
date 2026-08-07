@@ -50,6 +50,9 @@ interface LiveTvRepository {
         isInProgress: Boolean? = null,
     ): Result<List<LiveTvRecording>>
 
+    /** Permanently deletes a recorded item by its Jellyfin item id. */
+    suspend fun deleteRecording(recordingId: String): Result<Unit>
+
     suspend fun getTimers(
         isActive: Boolean? = null,
         isScheduled: Boolean? = null,
