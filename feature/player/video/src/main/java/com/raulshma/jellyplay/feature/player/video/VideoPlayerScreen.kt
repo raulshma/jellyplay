@@ -113,6 +113,7 @@ import com.raulshma.jellyplay.core.ui.tv.components.rememberDpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.R
+import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
@@ -164,8 +165,6 @@ import androidx.media3.ui.AspectRatioFrameLayout
 // Named so the tuning is discoverable instead of scattered as bare literals.
 /** How long the gesture-seek ripple/indicator lingers after the last seek input. */
 private const val GESTURE_SEEK_LINGER_MS = 800L
-/** How long the brightness/volume gesture bars stay visible after the gesture ends. */
-private const val GESTURE_BARS_DISMISS_MS = 800L
 /** How long the AutoAspectRatio / Zoom badge is shown before auto-dismissing. */
 private const val ASPECT_BADGE_DURATION_MS = 5_000L
 /** How long the zoom badge is shown before auto-dismissing. */
@@ -298,21 +297,9 @@ fun VideoPlayerScreen(
     val keyboardFocusRequester = remember { FocusRequester() }
     var userInteractionCount by rememberSaveable { mutableIntStateOf(0) }
 
-    var brightnessOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
-    var initialBrightnessOnGestureStart by rememberSaveable { mutableFloatStateOf(-1f) }
-    var volumeOverlay by rememberSaveable { mutableFloatStateOf(-1f) }
-    var gestureSeekPositionMs by rememberSaveable { mutableLongStateOf(0L) }
-    var gestureStartPositionMs by rememberSaveable { mutableLongStateOf(0L) }
-    var gestureDeltaMs by rememberSaveable { mutableLongStateOf(0L) }
-    var isGestureSeeking by rememberSaveable { mutableStateOf(false) }
-    var gestureTrickplayVisible by rememberSaveable { mutableStateOf(false) }
-
     LaunchedEffect(showControls) {
         viewModel.setControlsVisible(showControls)
     }
-
-    var volumeGestureAccumulator by rememberSaveable { mutableFloatStateOf(0f) }
-    var overlayDismissJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val isScreenLocked = uiState.isScreenLocked
 
@@ -350,6 +337,7 @@ fun VideoPlayerScreen(
 
     var seekTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var gestureTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var gestureTrickplayVisible by remember { mutableStateOf(false) }
     var tvTrickplayBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     LaunchedEffect(itemId) {
@@ -767,6 +755,67 @@ fun VideoPlayerScreen(
         getDurationMs = { viewModel.playerEngineRef?.durationMs ?: 0L },
         onCommit = { doSeekTo(it) },
     )
+    // Gesture-seek / volume / brightness controller. Owns the overlay state and
+    // the commit-vs-cancel asymmetry that used to be ~120 lines of inline screen
+    // logic with zero test coverage. Android I/O (Window, AudioManager) moves
+    // behind lambdas; the pure math lives in GestureSeekMath. Gestures don't
+    // survive config changes by design (a half-finished swipe already behaves
+    // poorly across rotation), so the controller's StateFlows are in-memory.
+    val gestureController = remember(
+        scope,
+        engine,
+        uiState.swipeSeekMaxMs,
+        isCastConnected,
+        castVolume,
+        doSeekTo,
+    ) {
+        GestureSeekController(
+            scope = scope,
+            getEngine = { engine },
+            getSwipeSeekMaxMs = { uiState.swipeSeekMaxMs },
+            isCastConnected = { isCastConnected },
+            getCastVolume = { castVolume },
+            readWindowBrightness = { activity?.window?.attributes?.screenBrightness ?: -1f },
+            writeWindowBrightness = { newBrightness ->
+                activity?.let { act ->
+                    val layout = act.window.attributes
+                    layout.screenBrightness = newBrightness
+                    act.window.attributes = layout
+                }
+            },
+            restoreWindowBrightness = { restored ->
+                activity?.let { act ->
+                    if (!act.isDestroyed && !act.isFinishing) {
+                        val layout = act.window.attributes
+                        layout.screenBrightness =
+                            if (restored >= 0f) restored
+                            else android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                        act.window.attributes = layout
+                    }
+                }
+            },
+            readStreamVolume = {
+                val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                if (am != null) {
+                    am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) to
+                        am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                } else 0 to 0
+            },
+            writeStreamVolume = { newVol ->
+                val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                am?.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
+            },
+            doSeekTo = doSeekTo,
+            saveBrightness = viewModel::saveBrightness,
+            saveVolume = viewModel::saveVolume,
+            setCastVolume = viewModel::setCastVolume,
+        )
+    }
+    val brightnessOverlay by gestureController.brightnessOverlay.collectAsStateWithLifecycle()
+    val volumeOverlay by gestureController.volumeOverlay.collectAsStateWithLifecycle()
+    val gestureSeekPositionMs by gestureController.seekPositionMs.collectAsStateWithLifecycle()
+    val gestureDeltaMs by gestureController.deltaMs.collectAsStateWithLifecycle()
+    val isGestureSeeking by gestureController.isSeeking.collectAsStateWithLifecycle()
     val dismissSheet: () -> Unit = remember { { currentSheet = PlayerSheet.None } }
 
     // Shared confirmation haptic for discrete player actions (seek commit,
@@ -1183,101 +1232,13 @@ fun VideoPlayerScreen(
                 indicatorSide = uiState.gestureIndicatorSide,
                 gesturesEnabled = uiState.gesturesEnabled && !isScreenLocked,
                 swipeSeekMaxMs = uiState.swipeSeekMaxMs,
-                onSeekGesture = remember(engine) {
-                    { totalDeltaMs ->
-                        engine?.let { eng ->
-                            if (!isGestureSeeking) {
-                                gestureStartPositionMs = eng.currentPositionMs
-                                isGestureSeeking = true
-                            }
-                            gestureDeltaMs = totalDeltaMs
-                            val durationMs = eng.durationMs.coerceAtLeast(0)
-                            // For live streams durationMs is 0, so the upper
-                            // clamp is skipped. To avoid showing a trickplay
-                            // thumbnail + time label for a position that doesn't
-                            // For live streams durationMs is 0, so the upper
-                            // clamp is skipped. To avoid showing a trickplay
-                            // thumbnail + time label for a position that doesn't
-                            // exist, cap the *per-gesture* delta by the
-                            gestureSeekPositionMs = if (durationMs <= 0L) {
-                                val capped = totalDeltaMs.coerceIn(-uiState.swipeSeekMaxMs, uiState.swipeSeekMaxMs)
-                                (gestureStartPositionMs + capped).coerceAtLeast(0L)
-                            } else {
-                                (gestureStartPositionMs + totalDeltaMs).coerceIn(0L, durationMs)
-                            }
-                        }
-                    }
-                },
-                onBrightnessGesture = remember(activity) {
-                    { delta ->
-                        activity?.let { act ->
-                            val window = act.window
-                            val layout = window.attributes
-                            val current = layout.screenBrightness
-                            val newBrightness = (current + delta).coerceIn(0f, 1f)
-                            layout.screenBrightness = newBrightness
-                            window.attributes = layout
-                            brightnessOverlay = newBrightness
-                        }
-                    }
-                },
-                onVolumeGesture = remember(context, isCastConnected, castVolume) {
-                    { delta ->
-                        if (isCastConnected) {
-                            // Cast volume used to scale by 0.02, requiring
-                            // ~50 full-height swipes for the full range. Use the
-                            // accumulator pattern from the local path so one
-                            // full-height swipe moves ~0.5 of the range.
-                            val currentNorm = castVolume
-                            volumeGestureAccumulator += delta
-                            val newVolume = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
-                            volumeOverlay = newVolume
-                            viewModel.setCastVolume(newVolume)
-                        } else {
-                            val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                            am?.let { amRef ->
-                                val max = amRef.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-                                val current = amRef.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-                                val currentNorm = current.toFloat() / max.toFloat()
-                                val stepThreshold = 1f / max.toFloat()
-                                volumeGestureAccumulator += delta
-                                volumeOverlay = (currentNorm + volumeGestureAccumulator).coerceIn(0f, 1f)
-                                val steps = (volumeGestureAccumulator / stepThreshold).toInt()
-                                if (steps != 0) {
-                                    volumeGestureAccumulator -= steps * stepThreshold
-                                    val newVol = (current + steps).coerceIn(0, max)
-                                    amRef.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, newVol, 0)
-                                }
-                            }
-                        }
-                    }
-                },
-                onClearOverlays = remember(doSeekTo, scope) {
+                onSeekGesture = remember(gestureController) { { totalDeltaMs -> gestureController.onSeekGesture(totalDeltaMs) } },
+                onBrightnessGesture = remember(gestureController) { { delta -> gestureController.onBrightnessGesture(delta) } },
+                onVolumeGesture = remember(gestureController) { { delta -> gestureController.onVolumeGesture(delta) } },
+                onClearOverlays = remember(gestureController, seekState) {
                     {
-                        if (isGestureSeeking) {
-                            doSeekTo(gestureSeekPositionMs)
-                        }
-                        if (brightnessOverlay in 0f..1f) {
-                            viewModel.saveBrightness(brightnessOverlay)
-                        }
-                        if (volumeOverlay in 0f..1f) {
-                            val am = context.getSystemService(android.content.Context.AUDIO_SERVICE)
-                                as? android.media.AudioManager
-                            if (am != null) {
-                                val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-                                val cur = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
-                                if (max > 0) viewModel.saveVolume(cur.toFloat() / max)
-                            }
-                        }
+                        gestureController.onClearOverlays()
                         seekState.reset()
-                        volumeGestureAccumulator = 0f
-                        isGestureSeeking = false
-                        overlayDismissJob?.cancel()
-                        overlayDismissJob = scope.launch {
-                            delay(GESTURE_BARS_DISMISS_MS)
-                            brightnessOverlay = -1f
-                            volumeOverlay = -1f
-                        }
                     }
                 },
                 showControls = showControls,
@@ -1305,35 +1266,10 @@ fun VideoPlayerScreen(
                         }
                     }
                 },
-                onStartGesture = remember(activity) {
+                onStartGesture = remember(gestureController) { { gestureController.onStartGesture() } },
+                onCancelOverlays = remember(gestureController, seekState) {
                     {
-                        initialBrightnessOnGestureStart = activity?.window?.attributes?.screenBrightness ?: -1f
-                    }
-                },
-                onCancelOverlays = remember(activity) {
-                    {
-                        activity?.let { act ->
-                            if (!act.isDestroyed && !act.isFinishing) {
-                                val layout = act.window.attributes
-                                if (initialBrightnessOnGestureStart >= 0f) {
-                                    layout.screenBrightness = initialBrightnessOnGestureStart
-                                } else {
-                                    layout.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-                                }
-                                act.window.attributes = layout
-                            }
-                        }
-                        // Cancel any pending dismiss job from a prior gesture so it
-                        // doesn't fire redundantly after we've already cleared the
-                        // overlays here. (The job only hides the visual indicators;
-                        // it does not persist brightness/volume, which onClearOverlays
-                        // does synchronously — so cancelling it here is safe.)
-                        overlayDismissJob?.cancel()
-                        overlayDismissJob = null
-                        brightnessOverlay = -1f
-                        volumeOverlay = -1f
-                        volumeGestureAccumulator = 0f
-                        isGestureSeeking = false
+                        gestureController.onCancelOverlays()
                         seekState.reset()
                     }
                 },
