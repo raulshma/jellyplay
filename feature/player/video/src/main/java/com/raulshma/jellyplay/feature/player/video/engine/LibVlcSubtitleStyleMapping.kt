@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import com.raulshma.jellyplay.core.model.SubtitleBorderStyle
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver
 
@@ -29,14 +30,14 @@ internal object LibVlcSubtitleStyleMapping {
 
     /**
      * LibVLC's native default caption style, sourced from the shared
-     * [com.raulshma.jellyplay.core.model.SubtitleRenderDefaults] table (white
+     * [SubtitleRenderDefaults] table (white
      * text, transparent background, black outline + shadow, 24px reference size)
      * so it cannot drift from the other engines. The thickness/shadow-opacity
      * magnitudes are LibVLC-specific FreeType format translations of the shared
      * edge-type/opacity, not independent defaults.
      */
     fun defaultOptions(): List<String> {
-        val d = com.raulshma.jellyplay.core.model.SubtitleRenderDefaults.DEFAULT
+        val d = SubtitleRenderDefaults.DEFAULT
         return listOf(
             ":freetype-color=${d.fontColor and 0x00FFFFFF}", // White (0xFFFFFF)
             ":freetype-background-color=0", // Black/transparent

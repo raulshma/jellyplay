@@ -58,6 +58,8 @@ import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
@@ -93,12 +95,12 @@ import okhttp3.OkHttpClient
  * captions stable across orientation changes (a height-fraction scales against the
  * view height, which grows dramatically in portrait).
  *
- * Sourced from [com.raulshma.jellyplay.core.model.SubtitleRenderDefaults.EXOPLAYER_OVERRIDE]
+ * Sourced from [SubtitleRenderDefaults.EXOPLAYER_OVERRIDE]
  * — ExoPlayer's documented divergence from the shared 24sp default. See that
  * override's KDoc for why ExoPlayer keeps a distinct size/edge here.
  */
 private val DEFAULT_SUBTITLE_SIZE_SP =
-    com.raulshma.jellyplay.core.model.SubtitleRenderDefaults.EXOPLAYER_OVERRIDE.fontSizeSp.toFloat()
+    SubtitleRenderDefaults.EXOPLAYER_OVERRIDE.fontSizeSp.toFloat()
 private const val TAG = "ExoPlayerEngine"
 
 class ExoPlayerEngine(
@@ -1069,9 +1071,9 @@ class ExoPlayerEngine(
                         Color.WHITE,
                         Color.TRANSPARENT,
                         Color.TRANSPARENT,
-                        when (com.raulshma.jellyplay.core.model.SubtitleRenderDefaults.EXOPLAYER_OVERRIDE.edgeType) {
-                            com.raulshma.jellyplay.core.model.SubtitleEdgeType.DROP_SHADOW -> CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
-                            com.raulshma.jellyplay.core.model.SubtitleEdgeType.OUTLINE -> CaptionStyleCompat.EDGE_TYPE_OUTLINE
+                        when (SubtitleRenderDefaults.EXOPLAYER_OVERRIDE.edgeType) {
+                            SubtitleEdgeType.DROP_SHADOW -> CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
+                            SubtitleEdgeType.OUTLINE -> CaptionStyleCompat.EDGE_TYPE_OUTLINE
                             else -> CaptionStyleCompat.EDGE_TYPE_NONE
                         },
                         Color.BLACK,
