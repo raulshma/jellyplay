@@ -149,7 +149,6 @@ fun ManageSeriesScreen(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
                 .padding(bottom = 80.dp),
         )
     }
