@@ -12,9 +12,16 @@ import java.util.Collections
  * the canonical implementation lives here and the duplicates were removed.
  *
  * Thread-safe via a [Collections.synchronizedMap] wrapper. The `get`-check-`put`
- * sequence is *not* atomic across threads — concurrent callers may both observe
- * a miss and re-fetch. For idempotent network reads this is acceptable (the
+ * sequence is *not* atomic across threads — concurrent callers may both observe a
+ * miss and re-fetch. For idempotent network reads this is acceptable (the
  * last writer wins); do not rely on it for compute-expensive single-flight.
+ *
+ * Prefer the [CacheIdentity]-aware overloads ([get], [put], [remove],
+ * [removeByKeyPrefix]) for caches that hold user-scoped data: a wrong identity
+ * is a guaranteed miss by construction, so a previous user's data can never be
+ * served to the next within the TTL window. The bare-[String]-key overloads
+ * remain for subsystems whose keys already prove their own scope (e.g. per-host
+ * API clients with no cross-user sharing).
  *
  * @param maxSize LRU eviction threshold (entry-access-order, not insertion).
  * @param ttlMs   time-to-live in milliseconds; entries older than this are
@@ -56,12 +63,25 @@ class TtlCache<V>(
         }
     }
 
+    /** Identity-aware [get]: a wrong identity yields a distinct key and so misses. */
+    fun get(identity: CacheIdentity, key: String): V? = get(compositeKey(identity, key))
+
     fun put(key: String, value: V) {
         map[key] = Entry(value, clock())
     }
 
+    /** Identity-aware [put]. */
+    fun put(identity: CacheIdentity, key: String, value: V) {
+        put(compositeKey(identity, key), value)
+    }
+
     fun remove(key: String) {
         map.remove(key)
+    }
+
+    /** Identity-aware [remove]. */
+    fun remove(identity: CacheIdentity, key: String) {
+        remove(compositeKey(identity, key))
     }
 
     /**
@@ -79,6 +99,18 @@ class TtlCache<V>(
             map.entries.removeIf { it.key.startsWith(prefix) }
         }
     }
+
+    /**
+     * Identity-aware [removeByKeyPrefix]: only entries under [identity] whose
+     * key segment starts with [prefix] are evicted. A second identity's matching
+     * entries are untouched.
+     */
+    fun removeByKeyPrefix(identity: CacheIdentity, prefix: String) {
+        removeByKeyPrefix(compositeKey(identity, prefix))
+    }
+
+    private fun compositeKey(identity: CacheIdentity, key: String): String =
+        "${identity.encoded}::$key"
 
     fun clear() {
         map.clear()

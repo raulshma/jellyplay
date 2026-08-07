@@ -120,16 +120,19 @@ data class MediaPeekHandle(
  * `onLongClick` is `null` when the feature is unavailable (no controller wired,
  * or TV — where long-press does not exist on a D-pad).
  *
+ * [previewFactory] builds the [MediaPreview] at long-press time (not at
+ * composition), so cards whose preview content isn't a [MediaItem] — e.g.
+ * [SeerrSearchItem.toMediaPreview] — can participate without inlining the
+ * bounds/launcher plumbing themselves. The factory is given the captured
+ * card bounds so it can populate [MediaPreview.sourceBounds].
+ *
  * Pair this with [rememberReleaseDismiss] to get Instagram's lift-to-dismiss
  * behavior: the same [interactionSource] the card already uses for its
  * press-scale animation drives the hide-on-release.
  */
 @Composable
 fun rememberMediaPeek(
-    item: MediaItem,
-    posterUrl: String?,
-    backdropUrl: String?,
-    blurHash: String?,
+    previewFactory: (sourceBounds: Rect?) -> MediaPreview,
 ): MediaPeekHandle {
     val controller = LocalMediaPreviewController.current
     val isTv = LocalJellyPlayUi.current.isTv
@@ -155,17 +158,9 @@ fun rememberMediaPeek(
     }
 
     val onLongClick: (() -> Unit)? = if (controller != null && !isTv && enabled) {
-        remember(controller, item, posterUrl, backdropUrl, blurHash) {
+        remember(controller, previewFactory) {
             {
-                controller.show(
-                    MediaPreview(
-                        item = item,
-                        posterUrl = posterUrl,
-                        backdropUrl = backdropUrl,
-                        blurHash = blurHash,
-                        sourceBounds = boundsState.value.takeIf { it.width > 0 },
-                    )
-                )
+                controller.show(previewFactory(boundsState.value.takeIf { it.width > 0 }))
             }
         }
     } else {
@@ -174,6 +169,30 @@ fun rememberMediaPeek(
 
     return MediaPeekHandle(onLongClick = onLongClick, boundsModifier = boundsModifier)
 }
+
+/**
+ * [MediaItem]-typed convenience overload of [rememberMediaPeek]. Builds the
+ * [MediaPreview] from the item's fields; callers with a different source model
+ * (e.g. Seerr) use the [rememberMediaPeek] factory overload together with
+ * [SeerrSearchItem.toMediaPreview].
+ */
+@Composable
+fun rememberMediaPeek(
+    item: MediaItem,
+    posterUrl: String?,
+    backdropUrl: String?,
+    blurHash: String?,
+): MediaPeekHandle = rememberMediaPeek(
+    previewFactory = { sourceBounds ->
+        MediaPreview(
+            item = item,
+            posterUrl = posterUrl,
+            backdropUrl = backdropUrl,
+            blurHash = blurHash,
+            sourceBounds = sourceBounds,
+        )
+    }
+)
 
 /**
  * Dismisses the peek overlay the instant the user lifts their finger, driven by

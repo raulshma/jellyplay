@@ -6,6 +6,7 @@ import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.isPhotoType
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -75,6 +76,29 @@ fun EntryProviderScope<NavKey>.homeSection(
                 onNewsletterClick = { navigator.navigate(Route.Newsletter) },
                 onConfigureHomeLayout = { navigator.navigate(Route.AppearanceSettings("home_section_layout")) },
                 onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },
+                onSeeAllClick = { _, libraryId, collectionType, title ->
+                    // "See All" mirrors the home row's Recently-Added→library
+                    // mapping. Per-library sections
+                    // (LATEST_MEDIA) reproduce the home row's /Items/Latest item
+                    // set: the sort depends on the library's collectionType —
+                    // music/boxsets/books/folders sort by DateLastContentAdded
+                    // (when something was added to the library), everything else
+                    // by DateCreated (when the item itself was added). Global
+                    // Recently Added (libraryId == null) uses DateCreated.
+                    val sortBy = if (collectionType in setOf("music", "boxsets", "books", "folders")) {
+                        SortOption.DATE_LAST_CONTENT_ADDED.apiValue
+                    } else {
+                        SortOption.DATE_ADDED.apiValue
+                    }
+                    navigator.navigate(
+                        Route.LibrarySection(
+                            title = title,
+                            parentId = libraryId,
+                            collectionType = collectionType,
+                            sortBy = sortBy,
+                        )
+                    )
+                },
             )
         }
         HomeScreen(

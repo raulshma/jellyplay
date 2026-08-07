@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -162,6 +163,30 @@ class DownloadDelegateTest {
     }
 
     @Test
+    fun `executeDownload skips the backdrop bundle for episodes and persists a null backdrop`() = runTest {
+        // Jellyfin episodes usually have no Backdrop image, so an episode's own
+        // backdrop download 404s and would persist a dead remote URL that only
+        // renders offline when Coil's cache happens to hold it. The recipe must
+        // skip it entirely: the offline hero falls back to the series backdrop
+        // at load time (mirroring the online detail screen).
+        val request = buildRequest(
+            detailWithStreams = false,
+            withTrickplay = false,
+            mediaType = MediaType.EPISODE,
+        )
+
+        val result = delegate.executeDownload(request)
+
+        assertNotNull(result.downloadItem)
+        // Poster still bundles (the episode card thumbnail); the own backdrop
+        // download must not run.
+        assertTrue(writer.calls.contains("downloadOfflineImage(item-1,Primary)"))
+        assertTrue(!writer.calls.contains("downloadOfflineImage(item-1,Backdrop)"))
+        coVerify(exactly = 0) { playbackRepository.getBackdropUrl(any(), any()) }
+        assertTrue(writer.calls.contains("saveOfflineMediaDetail(item-1)"))
+    }
+
+    @Test
     fun `executeDownload propagates the startDownload failure verbatim`() = runTest {
         writer.startResult = Result.failure(RuntimeException("disk full"))
         val request = buildRequest(detailWithStreams = false, withTrickplay = false)
@@ -215,7 +240,11 @@ class DownloadDelegateTest {
 
     // --- helpers -------------------------------------------------------------
 
-    private fun buildRequest(detailWithStreams: Boolean, withTrickplay: Boolean): DownloadRequest {
+    private fun buildRequest(
+        detailWithStreams: Boolean,
+        withTrickplay: Boolean,
+        mediaType: MediaType = MediaType.MOVIE,
+    ): DownloadRequest {
         val streams = if (detailWithStreams) {
             listOf(MediaStream(index = 0, type = StreamType.SUBTITLE, isExternal = true))
         } else emptyList()
@@ -231,7 +260,7 @@ class DownloadDelegateTest {
         // getImageUrl). executeDownload only touches getBackdropUrl, mocked
         // per-test.
         val detail = MediaDetail(
-            item = MediaItem(id = "item-1", name = "Test", mediaType = MediaType.MOVIE),
+            item = MediaItem(id = "item-1", name = "Test", mediaType = mediaType),
             mediaSources = listOf(
                 MediaSource(
                     id = "src-1",
@@ -245,7 +274,7 @@ class DownloadDelegateTest {
         return DownloadRequest(
             mediaItemId = "item-1",
             name = "Test",
-            mediaType = MediaType.MOVIE.name,
+            mediaType = mediaType.name,
             mediaSourceId = "src-1",
             downloadUrl = "https://stream",
             imageUrl = "https://img",

@@ -6,40 +6,33 @@ import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.SecurityPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
 class SecuritySettingsViewModel @Inject constructor(
     private val store: UserPreferencesStore,
+    private val projections: com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections,
+    private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val editor: PreferencesEditor,
     private val authRepository: AuthRepository,
 ) : JellyPlayViewModel() {
 
     /** Security preference slice — recomposes this screen only on security-key writes. */
-    val securityPreferences: StateFlow<SecurityPreferences> = store.securityPreferences
+    val securityPreferences: StateFlow<SecurityPreferences> = projections.securityPreferences
 
-    val showAdvancedSettings: StateFlow<Boolean> = store.preferences
-        .map { it.showAdvancedSettings }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
+    val showAdvancedSettings: StateFlow<Boolean> = appearanceStore.showAdvancedSettings
 
     fun setShowAdvancedSettings(enabled: Boolean) =
-        editor.edit { setShowAdvancedSettings(enabled) }
+        editor.edit { appearance.setShowAdvancedSettings(enabled) }
 
     fun setPinLockEnabled(enabled: Boolean) = editor.setPinLockEnabled(enabled)
 
-    fun setPin(pin: String) {
-        editor.edit { setPin(pin) }
-    }
+    fun setPin(pin: String) = editor.setPin(pin)
 
-    fun clearPin() {
-        editor.edit { clearPin() }
-    }
+    fun clearPin() = editor.clearPin()
 
-    suspend fun verifyPin(pin: String): Boolean = store.verifyPinOffMainThread(pin)
+    suspend fun verifyPin(pin: String): Boolean = editor.verifyPin(pin)
 
     fun setBiometricLockEnabled(enabled: Boolean) = editor.setBiometricLockEnabled(enabled)
 
@@ -47,8 +40,7 @@ class SecuritySettingsViewModel @Inject constructor(
 
     fun setAutoLockTimerMs(ms: Long) = editor.setAutoLockTimerMs(ms)
 
-    fun setRemoteControlEnabled(enabled: Boolean) =
-        editor.edit { setRemoteControlEnabled(enabled) }
+    fun setRemoteControlEnabled(enabled: Boolean) = editor.setRemoteControlEnabled(enabled)
 
     fun authorizeQuickConnect(code: String, onResult: (success: Boolean, error: String?) -> Unit) {
         launch {

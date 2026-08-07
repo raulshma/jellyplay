@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="syncplay_leave_group">Salir del grupo</string>
+    <string name="syncplay_leave_group_confirm_title">¿Salir del grupo?</string>
+    <string name="syncplay_leave_group_confirm_message">Serás eliminado de la fiesta de visualización.</string>
     <string name="syncplay_retry">Reintentar</string>
     <string name="syncplay_no_active_groups">No hay grupos de SyncPlay activos</string>
     <string name="syncplay_create_group_together">Crea un grupo para ver juntos</string>

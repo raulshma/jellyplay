@@ -148,7 +148,12 @@ private fun InWindowPlayerSheet(
                 .imePadding()
                 .offset { IntOffset(0, translationY.roundToInt()) }
                 .clip(SheetTopShape)
-                .background(colorScheme.surfaceContainer),
+                .background(colorScheme.surfaceContainer)
+                // Consume taps on the sheet panel itself so a touch on non-interactive
+                // areas (titles, labels, spacers, the handle on a plain tap) does not
+                // fall through to the dismiss scrim behind it. Interactive children
+                // (sliders, buttons) still receive and consume their own events first.
+                .pointerInput(Unit) { detectTapGestures(onTap = {}) },
         ) {
             Box(
                 modifier = Modifier

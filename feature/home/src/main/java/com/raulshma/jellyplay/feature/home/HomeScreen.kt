@@ -15,6 +15,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.material3.Icon
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -44,6 +45,7 @@ import com.composables.icons.tabler.Tabler
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -52,10 +54,15 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
+import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
+import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.UndoSnackbarOverlay
+import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
@@ -67,10 +74,10 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
  * Aggregates every navigation callback the Home screen needs so that
  * (a) the public [HomeScreen] signature stays readable,
  * (b) [MainHomeContent] receives a single stable parameter (treated as skip-worthy
- *     by the Compose compiler thanks to `@Immutable`) instead of ~20 individual
- *     unstable lambda parameters, and
+ * by the Compose compiler thanks to `@Immutable`) instead of ~20 individual
+ * unstable lambda parameters, and
  * (c) the navigation call site can `remember` one instance, eliminating
- *     cascading recompositions of children on every parent state change.
+ * cascading recompositions of children on every parent state change.
  *
  * Callers should construct via `remember(navigator) { HomeCallbacks(...) }` so
  * the same instance is reused across recompositions.
@@ -85,23 +92,28 @@ data class HomeCallbacks(
     val onPlayOnClick: () -> Unit = {},
     val onOfflineLibraryClick: () -> Unit = {},
     /** Open a specific downloaded item: series go to the offline series
-     *  browser, everything else to the offline detail screen. */
+     * browser, everything else to the offline detail screen. */
     val onOfflineItemClick: (itemId: String, mediaType: com.raulshma.jellyplay.core.model.MediaType) -> Unit = { _, _ -> },
     val onSeerrItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
     val onModeChange: (HomeMode) -> Unit = {},
     val onSearchItemClick: (String) -> Unit = {},
     val onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
     /** Open a settings destination surfaced by the home search bar. The [Route]
-     *  carries its own `highlightSettingId` for deep-link scroll/highlight. */
+     * carries its own `highlightSettingId` for deep-link scroll/highlight. */
     val onSettingsSearchItemClick: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     val onNewsletterClick: () -> Unit = {},
     /** Deep-link into Settings → Home Screen Layout. Reached from the inline
-     *  section-config sheet's "Configure Home Layout" action. */
+     * section-config sheet's "Configure Home Layout" action. */
     val onConfigureHomeLayout: () -> Unit = {},
     /** Deep-link into Settings → Configure Libraries (per-library section
-     *  overrides). Reached from the inline section-config sheet when a
-     *  per-library (LATEST_MEDIA) row is being configured. */
+     * overrides). Reached from the inline section-config sheet when a
+     * per-library (LATEST_MEDIA) row is being configured. */
     val onConfigureLibraries: () -> Unit = {},
+    /** Open the full library screen for a home-section "See All" action.
+     * Carries the section [HomeSectionType], the optional per-library id (non-null
+     * only for LATEST_MEDIA), the optional per-library [collectionType] (used to
+     * reproduce the home row's leaf item type + sort), and the resolved title. */
+    val onSeeAllClick: (sectionType: HomeSectionType, libraryId: String?, collectionType: String?, title: String) -> Unit = { _, _, _, _ -> },
 )
 
 @Composable
@@ -137,6 +149,23 @@ private fun filterOfflineByMode(
     }
 }
 
+/**
+ * Which quick actions apply to a home-row item Poster cards
+ * get play / mark-watched / details; everything else (photo folders, Seerr
+ * cards) is excluded by the card renderers anyway.
+ */
+private fun homeQuickActions(item: MediaItem): List<QuickAction> = buildList {
+    when (item.mediaType) {
+        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE,
+        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST -> {
+            add(QuickAction.PLAY)
+            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
+            add(QuickAction.DETAILS)
+        }
+        else -> Unit
+    }
+}
+
 @Composable
 private fun MainHomeContent(
     state: HomeUiState,
@@ -162,8 +191,13 @@ private fun MainHomeContent(
 
     val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
+    val currentServerUsers by viewModel.currentServerUsers.collectAsStateWithLifecycle()
     var showSyncDetails by remember { mutableStateOf(false) }
     val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
+    // Stabilize the user-switch lambda so HomeTopDock stays skippable on
+    // recompositions that reach it (scroll, search focus). Mirrors the
+    // dock lambda memoization above.
+    val onUserSwitch = remember(viewModel) { { id: String -> viewModel.switchUser(id) } }
 
     val seerrCardLoadingState = rememberSeerrCardLoadingState()
     val seerrPrefetch: (Int, String, () -> Unit) -> Unit = remember(viewModel) {
@@ -218,6 +252,27 @@ private fun MainHomeContent(
     val mediaOnPlayClick = remember { { item: com.raulshma.jellyplay.core.model.MediaItem ->
         currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L, item.mediaType, item.parentId, item.name)
     } }
+
+    // Quick actions on card long-press and the TV Menu key on the focused
+    // card. Provided to every PosterCard in scope via
+    // CompositionLocal — the cards wire their own long-press.
+    val quickActionController = rememberMediaQuickActionController(
+        resolveActions = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> homeQuickActions(item) } },
+        executeAction = remember(viewModel, mediaOnItemClick, mediaOnPlayClick) {
+            { item: com.raulshma.jellyplay.core.model.MediaItem, action: QuickAction ->
+                when (action) {
+                    QuickAction.PLAY -> mediaOnPlayClick(item)
+                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item)
+                    QuickAction.MARK_UNWATCHED -> viewModel.markItemUnplayed(item)
+                    QuickAction.DETAILS -> mediaOnItemClick(item)
+                    else -> Unit
+                }
+            }
+        },
+    )
+    // TV-only: the card currently holding D-pad focus, so the Menu key can open
+    // its quick actions. Rows report via HomeContentCallbacks.
+    var tvFocusedItem by remember { mutableStateOf<com.raulshma.jellyplay.core.model.MediaItem?>(null) }
 
     val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
     // Only photo-folder items are relevant to the prefetcher (it filters to
@@ -288,7 +343,31 @@ private fun MainHomeContent(
             enabled = !isTv && !isSearchFocused,
             modifier = Modifier.fillMaxSize(),
         ) {
-        Box(modifier = Modifier.fillMaxSize().drawBehind { drawRect(backgroundColor) }) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawBehind { drawRect(backgroundColor) }
+                .onDpadKey(
+                    onMenu = {
+                        // TV remote Menu button: open the focused card's quick
+                        // actions. Rows track the focused item via
+                        // onFocusedMediaItem.
+                        val focused = tvFocusedItem
+                        if (focused != null) {
+                            quickActionController.show(focused)
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                ),
+        ) {
+            // Recovery path for search-history delete/clear. Home
+            // previously had no SnackbarHost at all; this is the single host.
+            UndoSnackbarOverlay(
+                actions = viewModel.undoActions,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
             // Ambient backdrop: the hero artwork's BlurHash, or a palette-derived
             // gradient when no hero/blurhash is available. Sits behind all content
             // and above the flat background fill. Suppressed in performance mode.
@@ -303,22 +382,23 @@ private fun MainHomeContent(
                     backgroundColor = backgroundColor,
                 ),
             )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .focusProperties {
-                        onEnter = {
-                            if (isSearchFocused) {
-                                FocusRequester.Cancel
-                            } else if (requestedFocusDirection == FocusDirection.Down && state.homeHeroEnabled && heroController.featuredItem != null) {
-                                heroFocusRequester
-                            } else {
-                                FocusRequester.Default
+            CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .focusProperties {
+                            onEnter = {
+                                if (isSearchFocused) {
+                                    FocusRequester.Cancel
+                                } else if (requestedFocusDirection == FocusDirection.Down && state.homeHeroEnabled && heroController.featuredItem != null) {
+                                    heroFocusRequester
+                                } else {
+                                    FocusRequester.Default
+                                }
                             }
                         }
-                    }
-                    .focusGroup()
-            ) {
+                        .focusGroup()
+                ) {
                 when {
                     // When an online fetch fails but we have downloads, show the offline
                     // library instead of a hard error — downloads are the
@@ -413,6 +493,8 @@ private fun MainHomeContent(
                                 onConfigureSection = onConfigureSection,
                                 onConfigureHomeLayout = onConfigureHomeLayout,
                                 onConfigureLibraries = onConfigureLibraries,
+                                onSeeAllClick = remember(callbacks) { { type, libraryId, collectionType, title -> callbacks.onSeeAllClick(type, libraryId, collectionType, title) } },
+                                onFocusedMediaItem = { item -> tvFocusedItem = item },
                             ),
                             listState = listState,
                             density = density,
@@ -497,6 +579,9 @@ private fun MainHomeContent(
                     homeHeroEnabled = state.homeHeroEnabled,
                     hasFeaturedItem = heroController.featuredItem != null,
                     isTv = isTv,
+                    currentUser = state.currentUser,
+                    currentServerUsers = currentServerUsers,
+                    onUserSwitch = onUserSwitch,
                     onModeChange = callbacks.onModeChange,
                     onSearchExpanded = dockOnSearchExpanded,
                     onSearchQueryChange = dockOnSearchQueryChange,
@@ -528,15 +613,22 @@ private fun MainHomeContent(
                 )
 
                 if (!isTv) {
+                    // Stabilize the FAB click lambdas so HomeFabMenu is skippable
+                    // — otherwise every MainHomeContent recomposition (download
+                    // count tick, sync count change, refresh flag flip, etc.)
+                    // re-runs the whole FAB tree. The sibling dock lambdas above
+                    // were already memoized; these were missed.
+                    val fabSurpriseClick = remember(heroController) { { heroController.toggleSurprise() } }
+                    val fabToggleOffline = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) } }
                     HomeFabMenu(
                         isExpanded = isFabExpanded,
                         onToggle = { isFabExpanded = it },
                         activeDownloadCount = activeDownloadCount,
                         offlineMode = state.offlineMode,
-                        onSurpriseClick = { heroController.toggleSurprise() },
+                        onSurpriseClick = fabSurpriseClick,
                         onSyncPlayClick = callbacks.onSyncPlayClick,
                         onDownloadsClick = callbacks.onDownloadsClick,
-                        onToggleOffline = { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) },
+                        onToggleOffline = fabToggleOffline,
                         isGoingOnline = state.isGoingOnline,
                         onPlayOnClick = callbacks.onPlayOnClick,
                         onSettingsClick = callbacks.onSettingsClick,
@@ -545,9 +637,13 @@ private fun MainHomeContent(
                             .clearFloatingNav(extraBottom = 0.dp),
                     )
                 }
+        } // end CompositionLocalProvider(LocalMediaQuickActionController)
         }
     }
     }
+
+    // Long-press / TV-Menu quick actions for home cards.
+    MediaQuickActionHost(quickActionController)
 
     state.seerrRequestState.requestItem?.let { item ->
         androidx.compose.runtime.LaunchedEffect(item.id) {
@@ -687,6 +783,9 @@ private fun HomeTopDockScrim(
     homeHeroEnabled: Boolean,
     hasFeaturedItem: Boolean,
     isTv: Boolean,
+    currentUser: com.raulshma.jellyplay.core.model.UserInfo?,
+    currentServerUsers: List<com.raulshma.jellyplay.core.model.UserInfo>,
+    onUserSwitch: (String) -> Unit,
     onModeChange: (HomeMode) -> Unit,
     onSearchExpanded: (Boolean) -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -720,6 +819,9 @@ private fun HomeTopDockScrim(
         activeDownloadCount = activeDownloadCount,
         pendingSyncCount = pendingSyncCount,
         showClock = showClock,
+        currentUser = currentUser,
+        currentServerUsers = currentServerUsers,
+        onUserSwitch = onUserSwitch,
         onModeChange = onModeChange,
         onSearchExpanded = onSearchExpanded,
         onSearchQueryChange = onSearchQueryChange,

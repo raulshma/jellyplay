@@ -6,6 +6,22 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import java.io.File
 
 /**
+ * User-facing message written to `DownloadEntity.errorMessage` when the server
+ * returns 401/403 mid-download, signalling the access token was revoked or
+ * expired. The Downloads UI renders `errorMessage` under the FAILED state so the
+ * user knows to sign in again. Lives here because it is a policy *output*, not
+ * a worker concern.
+ */
+const val SESSION_EXPIRED_ERROR = "Session expired — please sign in again"
+
+/**
+ * User-facing message written when the final byte count does not match the
+ * Content-Length (or the body was empty with no Content-Length), indicating a
+ * truncated/empty download — possible network truncation.
+ */
+const val SIZE_MISMATCH_ERROR = "File size mismatch — possible network truncation"
+
+/**
  * Deep module: the download failure-classification rule, plus its DAO
  * applicator. Decides — given a thrown [Throwable] caught mid-download — what
  * should happen to the `downloads` row, and exposes a sealed [Outcome] the
@@ -27,11 +43,17 @@ import java.io.File
  *   - the rule has a direct pure-JVM test instead of being asserted only
  *     transitively through a `CoroutineWorker` that needs Robolectric.
  *
- * **Scope.** Classifies *thrown exceptions* only. HTTP response-code branches
- * (416, 401/403, transient non-2xx) and integrity checks (size mismatch,
- * 0-byte result) stay inlined at their call sites — they have a `Response` or
- * a byte count in hand, not a `Throwable`, so a different input shape. Those
- * could be folded in later via a sum-type `FailureEvent`; YAGNI for now.
+ * **Scope.** Two classification entry points, both pure (no DAO, no androidx.work):
+ *   - [decide] classifies a *thrown* [Throwable] caught mid-transfer.
+ *   - [decideForStatus] classifies a non-2xx HTTP response code (401/403
+ *     "session expired", transient 5xx/429). The 416 "stale range" code is
+ *     *not* a failure — it is a recovery action (re-issue without `Range:`)
+ *     and stays in the transfer runner. Integrity failures (size mismatch,
+ *     0-byte result) are fixed outcomes built from [SIZE_MISMATCH_ERROR].
+ *
+ * Both entry points return the same sealed [Outcome] and honour the same
+ * concurrent-pause guard (`PAUSED → [Outcome.Suppress]`), so every failure
+ * path — thrown or status — converges on one applicator + [toWorkResult].
  *
  * **CancellationException is not a download failure.** It is a structured-
  * concurrency control signal and must be rethrown by the caller ahead of the
@@ -49,6 +71,14 @@ import java.io.File
  * `RandomAccessFile.seek()` offsets that can never be appended to.
  */
 object DownloadFailurePolicy {
+
+    /**
+     * True when the row's status column was flipped to PAUSED by the user
+     * while this run was failing. Both entry points honour it so a failure
+     * never clobbers the user's pause with a FAILED/PAUSED write.
+     */
+    private fun pausedConcurrently(currentStatus: String): Boolean =
+        currentStatus == DownloadStatus.PAUSED.name
 
     /**
      * Classifies [error] into an [Outcome].
@@ -72,8 +102,7 @@ object DownloadFailurePolicy {
         currentStatus: String,
         isResumablePartial: Boolean,
     ): Outcome {
-        // User paused while we were failing. Do not overwrite their PAUSED row.
-        if (currentStatus == DownloadStatus.PAUSED.name) return Outcome.Suppress
+        if (pausedConcurrently(currentStatus)) return Outcome.Suppress
 
         val isIo = error is java.io.IOException
         return when {
@@ -97,6 +126,56 @@ object DownloadFailurePolicy {
                 errorMessage = error.message ?: error::class.simpleName,
                 deletePartial = !isResumablePartial,
                 shouldRetry = false,
+            )
+        }
+    }
+
+    /**
+     * Classifies a non-2xx HTTP [responseCode] (other than 416, which the
+     * transfer runner handles as a recovery action) into an [Outcome].
+     *
+     * Parity with the pre-extraction inline branches in
+     * `DownloadWorker.performSingleConnectionDownload`:
+     *
+     * | code | inline behaviour | outcome |
+     * | ---- | ---------------- | ------- |
+     * | 401/403 | FAILED + `SESSION_EXPIRED_ERROR`, no retry (every attempt gets the same 401 and burns the budget) | [Outcome.MarkFailed] w/ message, `shouldRetry=false` |
+     * | other non-2xx (503, 429, …) | reset bytes to 0, delete partial, retry (previously re-sent a stale `Range:` and looped) | [Outcome.MarkFailed] w/ null message + `deletePartial`, `shouldRetry=true` |
+     *
+     * @param responseCode the HTTP status code from the GET response. Callers
+     *   must handle 416 (recovery) and 200/206 (success) themselves before
+     *   calling this — those are not failure codes.
+     * @param currentStatus the row's current `status` column. If `PAUSED`, the
+     *   user paused concurrently → [Outcome.Suppress] (same guard as [decide]).
+     * @param isResumablePartial strategy constant: single-connection = true
+     *   (the applicator preserves the partial on FAILED); multi-connection =
+     *   false (deletes it). Note the transient branch forces `deletePartial`
+     *   true regardless, mirroring the inline wipe-and-retry.
+     */
+    fun decideForStatus(
+        responseCode: Int,
+        currentStatus: String,
+        isResumablePartial: Boolean,
+    ): Outcome {
+        if (pausedConcurrently(currentStatus)) return Outcome.Suppress
+
+        return when (responseCode) {
+            // Auth failure: retrying is pointless (same 401 every time). Fail
+            // the row with a user-facing "session expired" message.
+            401, 403 -> Outcome.MarkFailed(
+                errorMessage = SESSION_EXPIRED_ERROR,
+                deletePartial = !isResumablePartial,
+                shouldRetry = false,
+            )
+            // Transient non-2xx (503, 429, …): wipe the partial and retry from
+            // byte 0 so the next attempt doesn't loop on a stale Range header.
+            // deletePartial is forced true even for single-connection (where the
+            // partial would otherwise be a valid prefix) — the wipe is the fix
+            // for the old "stale Range burns retries" loop.
+            else -> Outcome.MarkFailed(
+                errorMessage = null,
+                deletePartial = true,
+                shouldRetry = true,
             )
         }
     }
@@ -155,45 +234,81 @@ sealed interface Outcome {
 // ---------------------------------------------------------------------------
 
 /**
- * Single-connection applicator: preserves the partial and the bytes written
- * this run (the partial is a contiguous prefix safe to resume from).
+ * Single-connection applicator. The partial is a contiguous prefix, so by
+ * default it is kept and [preservedBytes] is written back to the row as a
+ * resume point. When the outcome carries [Outcome.MarkFailed.deletePartial]
+ * (forced true by [DownloadFailurePolicy.decideForStatus] for a transient
+ * 5xx/429, to break a stale-`Range` retry loop) the partial is *not* a safe
+ * resume point: it is deleted and the row is zeroed, exactly as the
+ * multi-connection applicator does. The two sides must agree — if the file
+ * is gone but the row still holds the old byte count, the next run sends
+ * `Range: bytes=N-`, appends a tail to a fresh file, and ships a truncated
+ * download as COMPLETED.
  *
- * @param preservedBytes the byte count to write back to the row. Inner catch
- *   passes `downloadedBytes`; outer (pre-body) catches pass `existingBytes`.
- */
-suspend fun Outcome.applyTo(
-    dao: DownloadDao,
-    downloadId: String,
-    preservedBytes: Long,
-) = applyDaoWrites(dao, downloadId, preservedBytes)
-
-/**
- * Multi-connection applicator: deletes the partial file and resets bytes to 0
- * when the outcome calls for it (the scattered RandomAccessFile offsets are
- * never a valid resume prefix). [partialFile] is the on-disk download target.
+ * @param preservedBytes the byte count to write back to the row when the
+ *   partial is kept. Inner catch passes `downloadedBytes`; outer (pre-body)
+ *   catches pass `existingBytes`.
  */
 suspend fun Outcome.applyTo(
     dao: DownloadDao,
     downloadId: String,
     partialFile: File,
+    preservedBytes: Long,
+) = applyOutcome(this, dao, downloadId, partialFile, preservedBytes, deleteOnPause = false)
+
+/**
+ * Multi-connection applicator: the scattered `RandomAccessFile` offsets are
+ * never a valid resume prefix, so the partial is deleted and bytes reset to 0
+ * on every outcome that mutates the row — including a network pause, where the
+ * single-connection path keeps its prefix. [partialFile] is the on-disk target.
+ */
+suspend fun Outcome.applyTo(
+    dao: DownloadDao,
+    downloadId: String,
+    partialFile: File,
+) = applyOutcome(this, dao, downloadId, partialFile, preservedBytes = 0L, deleteOnPause = true)
+
+/**
+ * The shared applicator core both strategies delegate to. Decides whether the
+ * partial file is wiped and what byte count is persisted, then hands the DAO
+ * writes to [applyDaoWrites].
+ *
+ * - Single-connection (`deleteOnPause = false`): the contiguous prefix is a
+ *   resume point, so a [Outcome.RecordPause] keeps it; only a
+ *   [Outcome.MarkFailed] that asks for `deletePartial` wipes + zeroes.
+ * - Multi-connection (`deleteOnPause = true`): the scattered offsets are never
+ *   resumable, so even a network pause wipes + zeroes.
+ */
+private suspend fun applyOutcome(
+    outcome: Outcome,
+    dao: DownloadDao,
+    downloadId: String,
+    partialFile: File,
+    preservedBytes: Long,
+    deleteOnPause: Boolean,
 ) {
-    // Multi-connection partial is never resumable — delete + reset even on a
-    // network pause, matching the pre-extraction behaviour. MarkFailed honours
-    // its own deletePartial flag (false only if a future caller sets it).
-    when (this) {
-        Outcome.Suppress -> Unit
-        is Outcome.RecordPause -> deletePartialFile(partialFile)
-        is Outcome.MarkFailed -> if (deletePartial) deletePartialFile(partialFile)
+    val delete = when (outcome) {
+        Outcome.Suppress -> false
+        is Outcome.RecordPause -> deleteOnPause
+        is Outcome.MarkFailed -> outcome.deletePartial
     }
-    applyDaoWrites(dao, downloadId, 0L)
+    if (delete) deletePartialFile(partialFile)
+    val bytes = if (delete) 0L else preservedBytes
+    outcome.applyDaoWrites(dao, downloadId, bytes)
 }
 
 /**
  * The shared status/reason/error/retry write sequence. Both applicators differ
- * only in the byte count they persist (single: preserved; multi: 0 after
- * delete) and whether they touch the partial file — the DAO writes are
+ * only in the byte count they persist (single: preserved unless deleted; multi:
+ * always 0) and whether they touch the partial file — the DAO writes are
  * identical, so live once here. [RecordPause] gates its retry increment on
  * [Outcome.shouldRetry] to stay symmetric with [Outcome.MarkFailed].
+ *
+ * [errorMessage] is always written, even when null: a transient retry
+ * (`MarkFailed(errorMessage = null)`) must clear a stale prior message (e.g. a
+ * SESSION_EXPIRED left from an earlier attempt) so the UI doesn't keep showing
+ * it after the row is retried. This keeps the applicator as the single owner
+ * of the error-message column — callers no longer clear it themselves.
  */
 private suspend fun Outcome.applyDaoWrites(
     dao: DownloadDao,
@@ -208,11 +323,9 @@ private suspend fun Outcome.applyDaoWrites(
             if (shouldRetry) dao.incrementRetryCount(downloadId)
         }
         is Outcome.MarkFailed -> {
-            // Single-connection partial is resumable even on FAILED (the
-            // retry decision re-evaluates via DownloadStates.resumeByteOffset).
             dao.updateProgressWithSpeed(downloadId, bytes, DownloadStatus.FAILED.name, 0L)
             dao.updatePausedReason(downloadId, null)
-            if (errorMessage != null) dao.updateErrorMessage(downloadId, errorMessage)
+            dao.updateErrorMessage(downloadId, errorMessage)
             if (shouldRetry) dao.incrementRetryCount(downloadId)
         }
     }
@@ -237,3 +350,21 @@ fun Outcome.toWorkResult(): androidx.work.ListenableWorker.Result =
     if (shouldRetry) androidx.work.ListenableWorker.Result.retry()
     else if (this is Outcome.Suppress) androidx.work.ListenableWorker.Result.success()
     else androidx.work.ListenableWorker.Result.failure()
+
+/**
+ * Applies [this] outcome to the single-connection row and maps it to a
+ * WorkManager [androidx.work.ListenableWorker.Result] in one call — the
+ * two-step every single-connection failure site used to open-code. Collapses
+ * the four divergent `applyTo` + `toWorkResult` pairs (runner non-2xx,
+ * `routeThrowable`, `sizeMismatch`, worker outer catch) onto one path, so the
+ * DAO write and the WorkManager result can't drift apart.
+ */
+suspend fun Outcome.applyAndRoute(
+    dao: DownloadDao,
+    downloadId: String,
+    partialFile: File,
+    preservedBytes: Long,
+): androidx.work.ListenableWorker.Result {
+    applyTo(dao, downloadId, partialFile, preservedBytes)
+    return toWorkResult()
+}

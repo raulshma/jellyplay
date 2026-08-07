@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
@@ -30,13 +32,17 @@ import org.junit.Test
  */
 class VideoEffectsControllerTest {
 
-    private lateinit var store: UserPreferencesStore
+    private lateinit var audioStore: AudioStore
+    private lateinit var audioEffectsStore: AudioEffectsStore
+    private lateinit var playbackStore: PlaybackStore
     private var state: VideoPlayerUiState = VideoPlayerUiState()
     private var syncCalls = 0
 
     private fun controller(scope: CoroutineScope) = VideoEffectsController(
         scope = scope,
-        preferencesStore = store,
+        audioStore = audioStore,
+        audioEffectsStore = audioEffectsStore,
+        playbackStore = playbackStore,
         getUiState = { state },
         updateUiState = { mutator -> state = mutator(state) },
         syncConfig = { syncCalls++ },
@@ -44,7 +50,9 @@ class VideoEffectsControllerTest {
 
     @Before
     fun setUp() {
-        store = mockk(relaxed = true)
+        audioStore = mockk(relaxed = true)
+        audioEffectsStore = mockk(relaxed = true)
+        playbackStore = mockk(relaxed = true)
         state = VideoPlayerUiState()
         syncCalls = 0
     }
@@ -60,7 +68,7 @@ class VideoEffectsControllerTest {
 
         assertTrue(state.nightModeEnabled)
         assertEquals(1, syncCalls)
-        coVerify { store.setNightModeEnabled(true) }
+        coVerify { audioEffectsStore.setNightModeEnabled(true) }
     }
 
     @Test
@@ -72,7 +80,7 @@ class VideoEffectsControllerTest {
 
         assertFalse(state.nightModeEnabled)
         assertEquals(1, syncCalls)
-        coVerify { store.setNightModeEnabled(false) }
+        coVerify { audioEffectsStore.setNightModeEnabled(false) }
     }
 
     @Test
@@ -82,7 +90,7 @@ class VideoEffectsControllerTest {
         c.setNightModeStrength(EffectStrength.HIGH)
 
         assertEquals(EffectStrength.HIGH, state.nightModeStrength)
-        coVerify { store.setNightModeStrength(EffectStrength.HIGH) }
+        coVerify { audioEffectsStore.setNightModeStrength(EffectStrength.HIGH) }
     }
 
     // ── Audio delay / decoder / passthrough ─────────────────────────────────────
@@ -94,7 +102,7 @@ class VideoEffectsControllerTest {
         c.setAudioDelay(250L)
 
         assertEquals(250L, state.audioDelayMs)
-        coVerify { store.setAudioDelay(250L) }
+        coVerify { audioStore.setAudioDelay(250L) }
     }
 
     @Test
@@ -104,7 +112,7 @@ class VideoEffectsControllerTest {
         c.setDecoderMode(DecoderMode.SW_ONLY)
 
         assertEquals(DecoderMode.SW_ONLY, state.decoderMode)
-        coVerify { store.setDecoderMode(DecoderMode.SW_ONLY) }
+        coVerify { playbackStore.setDecoderMode(DecoderMode.SW_ONLY) }
     }
 
     @Test
@@ -114,7 +122,7 @@ class VideoEffectsControllerTest {
         c.setAudioPassthrough(true)
 
         assertTrue(state.audioPassthrough)
-        coVerify { store.setAudioPassthrough(true) }
+        coVerify { playbackStore.setAudioPassthrough(true) }
     }
 
     // ── Audio normalization ─────────────────────────────────────────────────────
@@ -128,8 +136,8 @@ class VideoEffectsControllerTest {
         assertEquals(AudioNormalizationMode.TRACK, state.audioNormalizationMode)
         assertTrue(state.audioNormalizationEnabled)
         coVerifyOrder {
-            store.setAudioNormalizationMode(AudioNormalizationMode.TRACK)
-            store.setAudioNormalizationEnabled(true)
+            audioStore.setAudioNormalizationMode(AudioNormalizationMode.TRACK)
+            audioStore.setAudioNormalizationEnabled(true)
         }
     }
 
@@ -143,8 +151,8 @@ class VideoEffectsControllerTest {
         assertEquals(AudioNormalizationMode.NONE, state.audioNormalizationMode)
         assertFalse(state.audioNormalizationEnabled)
         coVerifyOrder {
-            store.setAudioNormalizationMode(AudioNormalizationMode.NONE)
-            store.setAudioNormalizationEnabled(false)
+            audioStore.setAudioNormalizationMode(AudioNormalizationMode.NONE)
+            audioStore.setAudioNormalizationEnabled(false)
         }
     }
 
@@ -154,11 +162,11 @@ class VideoEffectsControllerTest {
 
         c.toggleAudioNormalization()
         assertTrue(state.audioNormalizationEnabled)
-        coVerify { store.setAudioNormalizationEnabled(true) }
+        coVerify { audioStore.setAudioNormalizationEnabled(true) }
 
         c.toggleAudioNormalization()
         assertFalse(state.audioNormalizationEnabled)
-        coVerify { store.setAudioNormalizationEnabled(false) }
+        coVerify { audioStore.setAudioNormalizationEnabled(false) }
     }
 
     // ── Channel mix ─────────────────────────────────────────────────────────────
@@ -172,8 +180,8 @@ class VideoEffectsControllerTest {
         assertEquals(ChannelMixMode.SURROUND_UPMIX, state.channelMixMode)
         assertTrue(state.channelMixEnabled)
         coVerifyOrder {
-            store.setChannelMixMode(ChannelMixMode.SURROUND_UPMIX)
-            store.setChannelMixEnabled(true)
+            audioStore.setChannelMixMode(ChannelMixMode.SURROUND_UPMIX)
+            audioStore.setChannelMixEnabled(true)
         }
     }
 
@@ -187,8 +195,8 @@ class VideoEffectsControllerTest {
         assertEquals(ChannelMixMode.AUTO, state.channelMixMode)
         assertFalse(state.channelMixEnabled)
         coVerifyOrder {
-            store.setChannelMixMode(ChannelMixMode.AUTO)
-            store.setChannelMixEnabled(false)
+            audioStore.setChannelMixMode(ChannelMixMode.AUTO)
+            audioStore.setChannelMixEnabled(false)
         }
     }
 
@@ -201,7 +209,7 @@ class VideoEffectsControllerTest {
 
         c.toggleChannelMix()
         assertFalse(state.channelMixEnabled)
-        coVerify(exactly = 2) { store.setChannelMixEnabled(any()) }
+        coVerify(exactly = 2) { audioStore.setChannelMixEnabled(any()) }
     }
 
     // ── Bass boost / virtualizer ────────────────────────────────────────────────
@@ -212,7 +220,7 @@ class VideoEffectsControllerTest {
 
         c.toggleBassBoost()
         assertTrue(state.bassBoostEnabled)
-        coVerify { store.setBassBoostEnabled(true) }
+        coVerify { audioEffectsStore.setBassBoostEnabled(true) }
     }
 
     @Test
@@ -222,7 +230,7 @@ class VideoEffectsControllerTest {
         c.setBassBoostStrength(EffectStrength.LOW)
 
         assertEquals(EffectStrength.LOW, state.bassBoostStrength)
-        coVerify { store.setBassBoostStrength(EffectStrength.LOW) }
+        coVerify { audioEffectsStore.setBassBoostStrength(EffectStrength.LOW) }
     }
 
     @Test
@@ -231,7 +239,7 @@ class VideoEffectsControllerTest {
 
         c.toggleVirtualizer()
         assertTrue(state.virtualizerEnabled)
-        coVerify { store.setVirtualizerEnabled(true) }
+        coVerify { audioEffectsStore.setVirtualizerEnabled(true) }
     }
 
     @Test
@@ -241,7 +249,7 @@ class VideoEffectsControllerTest {
         c.setVirtualizerStrength(750)
 
         assertEquals(750, state.virtualizerStrength)
-        coVerify { store.setVirtualizerStrength(750) }
+        coVerify { audioEffectsStore.setVirtualizerStrength(750) }
     }
 
     // ── Reverb ──────────────────────────────────────────────────────────────────
@@ -253,7 +261,7 @@ class VideoEffectsControllerTest {
         c.setReverbPreset(ReverbPreset.LARGE_HALL)
 
         assertEquals(ReverbPreset.LARGE_HALL, state.reverbPreset)
-        coVerify { store.setReverbPreset(ReverbPreset.LARGE_HALL) }
+        coVerify { audioEffectsStore.setReverbPreset(ReverbPreset.LARGE_HALL) }
     }
 
     // ── Cross-cutting: sync-before-persist ordering ─────────────────────────────
@@ -271,6 +279,6 @@ class VideoEffectsControllerTest {
         // syncConfig runs synchronously inside the setter (no delay), so the
         // engine config is up to date in the same frame as the UI state.
         assertEquals("syncConfig must fire on every setter", before + 1, syncCalls)
-        coVerify { store.setNightModeEnabled(any()) }
+        coVerify { audioEffectsStore.setNightModeEnabled(any()) }
     }
 }

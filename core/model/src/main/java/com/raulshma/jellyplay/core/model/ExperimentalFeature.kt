@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.model
 
+import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import kotlinx.serialization.Serializable
 
 /**
@@ -46,6 +47,12 @@ enum class ExperimentalFeature {
      * while the integration stabilizes; never rename (persisted by [name]).
      */
     DIRECT_ARR_INTEGRATION,
+
+    /**
+     * Opt-in Material Design 3 Expressive Navigation Bar (Google Photos redesign style).
+     * Off by default so the classic floating navigation bar remains the default navigation.
+     */
+    EXPRESSIVE_NAVIGATION,
 }
 
 /**

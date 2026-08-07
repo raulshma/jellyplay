@@ -28,6 +28,16 @@ data class HomeSection(
      * `libraryHomeSectionOverrides` in `UserPreferences`.
      */
     val libraryId: String? = null,
+    /**
+     * For LATEST_MEDIA sections, the backing library's `collectionType`
+     * (e.g. "tvshows", "movies", "music", "boxsets", "books"). Used by the
+     * "See All" action to reproduce the same item set the home row showed —
+     * mapping collectionType to the right leaf item type and sort (tvshows →
+     * episodes by DateAdded; music/boxsets/books/folders →
+     * DateLastContentAdded; else DateAdded). `null` for every other section
+     * type.
+     */
+    val collectionType: String? = null,
 )
 
 /**
@@ -183,6 +193,22 @@ enum class LibraryViewMode {
     GRID,
     LIST,
     THUMB,
+    MASONRY,
+    ;
+
+    /**
+     * The mode the view-cycle tap advances to next: GRID → THUMB → LIST →
+     * MASONRY → GRID. Single source of truth so every surface that cycles the
+     * library view mode (the library action chip row, the appearance settings
+     * picker) stays in the same order.
+     */
+    val next: LibraryViewMode
+        get() = when (this) {
+            GRID -> THUMB
+            THUMB -> LIST
+            LIST -> MASONRY
+            MASONRY -> GRID
+        }
 }
 
 /**
@@ -202,3 +228,36 @@ fun LibraryFolder.defaultViewMode(): LibraryViewMode = when (collectionType) {
     "musicvideos", "homevideos", "trailers" -> LibraryViewMode.THUMB
     else -> LibraryViewMode.GRID
 }
+
+/**
+ * Client-side grouping key for the library / section grid. When non-NONE, the
+ * loaded items are grouped under sticky section headers by this dimension,
+ * preserving server sort within each group.
+ */
+@Immutable
+@Serializable
+enum class GroupBy {
+    NONE,
+    NAME,
+    TYPE,
+    GENRE,
+    YEAR,
+}
+
+/**
+ * Context injected into [com.raulshma.jellyplay.feature.library.LibraryViewModel]
+ * when the Library screen is opened from a home-section "See All" action. It
+ * scopes the paged query and pre-applies a sort / media-type filter without
+ * touching the persisted per-folder library state. `parentId = null` means the
+ * global catalog (e.g. a global "Recently Added" row); non-null scopes to a
+ * specific library folder (e.g. a per-library "Latest Media" row).
+ */
+@Immutable
+@Serializable
+data class LibrarySectionContext(
+    val title: String,
+    val parentId: String? = null,
+    val collectionType: String? = null,
+    val sortBy: String? = null,
+    val mediaTypes: List<MediaType> = emptyList(),
+)

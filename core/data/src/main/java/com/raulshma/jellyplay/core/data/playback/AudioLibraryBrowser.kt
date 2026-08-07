@@ -26,6 +26,7 @@ class AudioLibraryBrowser(
     private val mediaRepository: MediaRepository,
     private val downloadRepository: DownloadRepository,
     private val playbackRepository: PlaybackRepository,
+    private val playbackSourceResolver: PlaybackSourceResolver,
     private val streamingQualityProvider: () -> StreamingQuality,
     private val adaptiveBitrateSelector: AdaptiveBitrateSelector,
 ) {
@@ -388,15 +389,14 @@ class AudioLibraryBrowser(
 
     internal suspend fun buildPlayableMediaItem(itemId: String, startPositionMs: Long = 0L): MediaItem? {
         val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
-        val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
-        val file = localDownload?.let { dl ->
-            java.io.File(dl.downloadPath).takeIf { f -> f.exists() }
-        }
+        // The completed-download predicate lives once in PlaybackSourceResolver.
+        // resolveLocalSource returns the file URI + title (offlineItem name
+        // preferred) without a getMediaDetail round-trip; artist/album still
+        // come from the detail fetch above.
+        val local = playbackSourceResolver.resolveLocalSource(itemId)
 
-        if (localDownload != null && file != null &&
-            localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED
-        ) {
-            val name = detail?.item?.name ?: localDownload.name
+        if (local != null) {
+            val name = detail?.item?.name ?: local.title
             val artist = detail?.item?.albumArtist ?: detail?.item?.artistItems?.firstOrNull()?.name ?: ""
             val album = detail?.item?.album ?: ""
             val artUri = try {
@@ -406,7 +406,7 @@ class AudioLibraryBrowser(
             }
             return MediaItem.Builder()
                 .setMediaId(itemId)
-                .setUri(Uri.fromFile(file).toString())
+                .setUri(local.uri)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(name)

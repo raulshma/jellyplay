@@ -11,9 +11,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -25,7 +23,6 @@ class SeerrSettingsViewModel @Inject constructor(
 ) : JellyPlayViewModel() {
 
     val preferences = seerrPreferencesStore.preferences
-        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrPreferences())
 
     private val _serverUrl = composeState("")
     val serverUrl: String get() = _serverUrl.value

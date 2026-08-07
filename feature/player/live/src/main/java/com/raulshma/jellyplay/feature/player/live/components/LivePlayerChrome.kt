@@ -26,10 +26,12 @@ import com.composables.icons.tabler.outline.ChevronUp
 import com.composables.icons.tabler.outline.DotsVertical
 import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.PlayerSkipBack
 import com.composables.icons.tabler.outline.PlayerTrackNext
 import com.composables.icons.tabler.outline.PlayerTrackPrev
 import com.composables.icons.tabler.outline.Volume
 import com.composables.icons.tabler.outline.VolumeOff
+import com.composables.icons.tabler.outline.Video
 import com.composables.icons.tabler.outline.Menu2
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
@@ -51,8 +53,11 @@ fun LivePlayerTopBar(
     logoUrl: String?,
     isMuted: Boolean,
     playMethod: LivePlayMethod?,
+    isRecording: Boolean,
+    canRecord: Boolean,
     onBack: () -> Unit,
     onMute: () -> Unit,
+    onRecord: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -100,6 +105,19 @@ fun LivePlayerTopBar(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
             modifier = Modifier.padding(end = 12.dp),
         )
+        if (canRecord) {
+            // Record affordance. Gated on a current program —
+            // pure-live channels with no EPG have nothing to record. Tinted red
+            // while a timer is already set so the active-recording state reads
+            // at a glance. Opens the record sheet (Record / Record Series /
+            // Cancel), which mirrors the browse-tab RecordSplitButton.
+            PlayerIconButton(
+                icon = Tabler.Outline.Video,
+                contentDescription = stringResource(R.string.live_record),
+                onClick = onRecord,
+                tint = if (isRecording) MaterialTheme.colorScheme.error else androidx.compose.ui.graphics.Color.Unspecified,
+            )
+        }
         PlayerIconButton(
             icon = if (isMuted) Tabler.Outline.VolumeOff else Tabler.Outline.Volume,
             contentDescription = if (isMuted) stringResource(R.string.live_unmute) else stringResource(R.string.live_mute),
@@ -125,6 +143,7 @@ fun LivePlayerBottomBar(
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
+    onPlayFromStart: () -> Unit,
     onChannelUp: () -> Unit,
     onChannelDown: () -> Unit,
     onMore: () -> Unit,
@@ -172,6 +191,16 @@ fun LivePlayerBottomBar(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Play from start: one-tap restart of the in-progress
+            // program. Only enabled when a DVR window exists (`canSeek`); pure-live
+            // streams have no seekable start, so the action is hidden-by-disable
+            // rather than removed (keeps the transport layout stable).
+            PlayerIconButton(
+                icon = Tabler.Outline.PlayerSkipBack,
+                contentDescription = stringResource(R.string.live_play_from_start),
+                onClick = onPlayFromStart,
+                enabled = canSeek,
+            )
             PlayerIconButton(
                 icon = Tabler.Outline.PlayerTrackPrev,
                 contentDescription = stringResource(R.string.live_seek_back),

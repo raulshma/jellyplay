@@ -9,7 +9,7 @@ import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.StreamType
@@ -58,7 +58,7 @@ internal class PlayerCastController(
     private val castManager: CastManager,
     private val playbackRepository: PlaybackRepository,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
-    private val preferencesStore: UserPreferencesStore,
+    private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
     private val getEngine: () -> MediaEngine?,
     private val getCurrentPlaybackMode: () -> PlaybackMode,
     private val getSessionState: () -> PlayerSessionState,
@@ -77,7 +77,7 @@ internal class PlayerCastController(
     val castSessionEvents: SharedFlow<CastSessionEvent> get() = castManager.sessionEvents
     val isBackgroundCasting: Boolean get() = castManager.isBackgroundCasting
     val backgroundCastingEnabled: Boolean
-        get() = preferencesStore.preferences.value.backgroundCastingEnabled
+        get() = syncPlayCastStore.syncPlayCast.value.backgroundCastingEnabled
 
     // ----- Transport delegators -----
 

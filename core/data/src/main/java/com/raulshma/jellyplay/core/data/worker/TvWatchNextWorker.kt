@@ -7,7 +7,7 @@ import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.tv.TvWatchNextPublisher
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.firstOrNull
@@ -33,11 +33,11 @@ class TvWatchNextWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
-    private val preferencesStore: UserPreferencesStore,
+    private val playbackStore: PlaybackStore,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val prefs = preferencesStore.preferences.firstOrNull() ?: return Result.success()
+        val prefs = playbackStore.playback.firstOrNull() ?: return Result.success()
         val publisher = TvWatchNextPublisher(applicationContext, mediaRepository, playbackRepository)
 
         if (!prefs.androidTvWatchNextEnabled) {

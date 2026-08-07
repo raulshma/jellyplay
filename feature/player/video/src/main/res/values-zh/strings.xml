@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">音频</string>
     <string name="player_subtitles">字幕</string>
+    <string name="player_resumed_message">已从您上次离开的位置继续</string>
     <string name="player_reset_to_auto">重置为自动</string>
     <string name="player_track_default">默认</string>
     <string name="player_track_off">关闭</string>
@@ -73,6 +74,7 @@
     <string name="player_video_border_width">边框宽度：%1$s</string>
     <string name="player_video_shadow_offset">阴影偏移：%1$s</string>
     <string name="player_video_subtitle_offset">字幕偏移：%1$s</string>
+    <string name="player_video_sync_preview_reset">重置偏移</string>
     <string name="player_video_vertical_position">垂直位置：%1$d%%</string>
 
     <!-- Sleep timer sheet -->
@@ -211,18 +213,10 @@
     <string name="player_video_on">开启</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_subtitle_delay">字幕延迟</string>
     <string name="player_video_reset_both">全部重置</string>
     <string name="player_video_av_sync_audio_helper">负值：音频提前。正值：音频延后。</string>
-    <string name="player_video_av_sync_subtitle_helper">负值：字幕提前。正值：字幕延后。</string>
     <string name="player_video_av_sync_decrease">减少 %1$s</string>
     <string name="player_video_av_sync_increase">增加 %1$s</string>
-    <string name="player_video_sync_helper">同步助手</string>
-    <string name="player_video_sync_helper_hint">在说出某句台词的瞬间长按“听到语音”，在字幕出现时长按“看到文字”。</string>
-    <string name="player_video_voice_heard">🔊 听到语音</string>
-    <string name="player_video_listening">聆听中…</string>
-    <string name="player_video_text_seen">💬 看到文字</string>
-    <string name="player_video_watching">确认中…</string>
     <string name="player_video_picture_in_picture">画中画</string>
     <string name="player_video_play_next">播放下一集</string>
     <string name="player_video_turn_on_autoplay">开启自动播放</string>
@@ -237,6 +231,7 @@
     <string name="player_video_duration">时长</string>
     <string name="player_video_remember_audio_language">为此剧集记住音频语言</string>
     <string name="player_video_remember_subtitle_language">为此剧集记住字幕语言</string>
+    <string name="player_video_remember_subtitles_off">为此剧集保持字幕关闭</string>
     <string name="player_video_error_offline_file_missing">错误：离线文件缺失</string>
     <string name="player_video_error_loading_media">加载媒体出错</string>
     <string name="player_video_trickplay_thumbnail">预览缩略图</string>

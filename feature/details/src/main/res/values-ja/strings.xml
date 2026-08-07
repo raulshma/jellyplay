@@ -49,6 +49,8 @@
     <string name="detail_no_episodes_available">視聴可能なエピソードはありません</string>
     <string name="detail_spoiler">ネタバレ</string>
     <string name="detail_watched_badge">視聴済み</string>
+    <string name="detail_cd_switch_to_list">縦型エピソードリストに切り替え</string>
+    <string name="detail_cd_switch_to_cards">横型エピソードカードに切り替え</string>
     <string name="detail_time_left_format">残り %1$s</string>
 
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
@@ -137,6 +139,14 @@
     <string name="detail_msg_couldnt_mark_unplayed">未再生にできませんでした</string>
     <string name="detail_mark_season_watched">シーズンを視聴済みにする</string>
     <string name="detail_mark_season_unwatched">シーズンを未視聴にする</string>
+    <string name="detail_mark_series_watched_confirm_title">シリーズを視聴済みにしますか？</string>
+    <string name="detail_mark_series_watched_confirm_message">すべてのエピソードが視聴済みになり、すべての再開位置が消去されます。</string>
+    <string name="detail_mark_series_unwatched_confirm_title">シリーズを未視聴にしますか？</string>
+    <string name="detail_mark_series_unwatched_confirm_message">すべてのエピソードが未視聴になります。</string>
+    <string name="detail_mark_season_watched_confirm_title">シーズンを視聴済みにしますか？</string>
+    <string name="detail_mark_season_watched_confirm_message">このシーズンのすべてのエピソードが視聴済みになり、再開位置が消去されます。</string>
+    <string name="detail_mark_season_unwatched_confirm_title">シーズンを未視聴にしますか？</string>
+    <string name="detail_mark_season_unwatched_confirm_message">このシーズンのすべてのエピソードが未視聴になります。</string>
     <string name="detail_cd_season_options">シーズンを視聴済み/未視聴にする</string>
     <string name="detail_msg_no_episodes_queued">キューに追加できるエピソードはありませんでした</string>
     <string name="detail_msg_hidden_from_next_up">「次に見る」から非表示にしました</string>
@@ -254,5 +264,13 @@
     <string name="detail_seerr_country">国</string>
     <string name="detail_seerr_studios">スタジオ</string>
     <string name="detail_seerr_currently_streaming_on">現在配信中</string>
+
+    <!-- 空の状態 -->
+    <string name="detail_collection_empty_title">このコレクションは空です</string>
+    <string name="detail_collection_empty_description">このコレクションに追加されたアイテムはここに表示されます。</string>
+    <string name="detail_person_empty_title">タイトルが見つかりません</string>
+    <string name="detail_person_empty_description">この人物には現在のフィルターに一致するタイトルがありません。</string>
+    <string name="detail_season_empty_title">エピソードはありません</string>
+    <string name="detail_season_empty_description">エピソードが追加されるとここに表示されます。</string>
 
 </resources>

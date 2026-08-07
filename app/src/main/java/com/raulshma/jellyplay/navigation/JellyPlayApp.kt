@@ -99,10 +99,13 @@ import androidx.compose.ui.text.font.FontWeight
 import kotlin.math.roundToInt
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.MainViewModel
+import com.raulshma.jellyplay.core.model.MainPreferences
+import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.isExperimentalEnabled
+import com.raulshma.jellyplay.core.model.NavigationStyle
+import com.raulshma.jellyplay.navigation.components.ExpressiveFloatingNavigationBar
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -197,7 +200,7 @@ fun JellyPlayApp(
 
     LaunchedEffect(Unit) {
         if (isTv && isAuthenticated && !preferences.onboardingCompleted) {
-            viewModel.preferencesStore.setOnboardingCompleted(true)
+            viewModel.appRuntimeStateStore.setOnboardingCompleted(true)
         }
     }
 
@@ -210,9 +213,18 @@ fun JellyPlayApp(
             )
         }
         isAuthenticated -> {
+            // "Surprise Me" launcher-shortcut controller. Built
+            // once so the StateFlow reference is stable across recompositions.
+            val surpriseController = remember(viewModel) {
+                com.raulshma.jellyplay.core.ui.components.SurpriseLaunchController(
+                    armed = viewModel.surpriseOnLaunch,
+                    consume = { viewModel.consumeSurpriseOnLaunch() },
+                )
+            }
             CompositionLocalProvider(
                 com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus provides viewModel.networkMonitor.networkStatus,
                 com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides viewModel.serverHealth,
+                com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
             ) {
                 MainContent(
                     onLogout = { revoke ->
@@ -305,7 +317,7 @@ private fun OnboardingContent(
 private fun MainContent(
     onLogout: (Boolean) -> Unit,
     viewModel: MainViewModel,
-    preferences: com.raulshma.jellyplay.core.model.UserPreferences,
+    preferences: MainPreferences,
 ) {
     val homeMode = preferences.homeMode
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current
@@ -466,7 +478,7 @@ private fun MainContent(
     }
 
     val onModeChange: (HomeMode) -> Unit = { mode ->
-        scope.launch { viewModel.preferencesStore.setHomeMode(mode) }
+        scope.launch { viewModel.homeDiscoveryStore.setHomeMode(mode) }
     }
 
     val audioPlaybackManager: AudioPlaybackManager = viewModel.audioPlaybackManager
@@ -815,6 +827,8 @@ private fun MainContent(
                         videoMiniItemId = videoMiniItemId,
                         animatedNavBarColor = animatedNavBarColor,
                         showNavBarLabels = preferences.navBarShowLabels,
+                        navigationStyle = preferences.navigationStyle,
+                        isExpressiveNavExperimental = preferences.isExperimentalEnabled(ExperimentalFeature.EXPRESSIVE_NAVIGATION),
                     )
                 } else {
                     FullScreenContent(
@@ -839,82 +853,12 @@ private fun MainContent(
                 }
                 }
             } // end inner blur Box
-                androidx.compose.material3.SnackbarHost(
+                com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
                     hostState = snackbarHostState,
                     modifier = Modifier
                         .align(androidx.compose.ui.Alignment.BottomCenter)
-                        .padding(bottom = if (isFullScreenRoute) 16.dp else 96.dp)
-                ) { snackbarData ->
-                    val isError = snackbarData.visuals.duration == androidx.compose.material3.SnackbarDuration.Long
-                    val containerColor = if (isError) {
-                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
-                    }
-                    val contentColor = if (isError) {
-                        MaterialTheme.colorScheme.onErrorContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                    val iconColor = if (isError) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    }
-                    val borderColor = if (isError) {
-                        MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
-                    } else {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                    }
-                    val icon = if (isError) {
-                        Tabler.Outline.AlertCircle
-                    } else {
-                        Tabler.Outline.InfoCircle
-                    }
-
-                    androidx.compose.material3.Surface(
-                        shape = ShapeCache.smoothPill,
-                        color = containerColor,
-                        contentColor = contentColor,
-                        shadowElevation = 6.dp,
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = borderColor
-                        ),
-                        modifier = Modifier
-                            .padding(horizontal = 24.dp, vertical = 8.dp)
-                            .widthIn(max = 480.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = iconColor,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = snackbarData.visuals.message,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = contentColor
-                            )
-                            if (snackbarData.visuals.actionLabel != null) {
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = snackbarData.visuals.actionLabel!!,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = iconColor,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.clickable { snackbarData.performAction() }
-                                )
-                            }
-                        }
-                    }
-                }
+                        .padding(bottom = if (isFullScreenRoute) 16.dp else 96.dp),
+                )
             }
             // Press-and-hold peek overlay — topmost. Only composed when the user
             // has enabled the experimental feature and on phone; on TV the
@@ -1130,6 +1074,8 @@ private fun PhoneContent(
     videoMiniItemId: String?,
     animatedNavBarColor: Color,
     showNavBarLabels: Boolean,
+    navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
+    isExpressiveNavExperimental: Boolean = false,
 ) {
     val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var isBottomNavVisible by isBottomNavVisibleState
@@ -1356,18 +1302,30 @@ private fun PhoneContent(
                     )
                 }
                 if (!isExpanded) {
-                    FloatingNavigationBar(
-                        routes = activeTopLevelRoutes,
-                        currentTopLevel = currentTopLevel,
-                        onNavigate = { navigator.navigate(it) },
-                        showLabels = showNavBarLabels,
-                        containerColor = animatedNavBarColor,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = systemNavBarBottom + 4.dp)
-                            .padding(horizontal = 16.dp)
-                            .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
-                    )
+                    val navBarModifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = systemNavBarBottom + 4.dp)
+                        .padding(horizontal = 16.dp)
+                        .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
+                    if (navigationStyle == NavigationStyle.EXPRESSIVE || isExpressiveNavExperimental) {
+                        ExpressiveFloatingNavigationBar(
+                            routes = activeTopLevelRoutes,
+                            currentTopLevel = currentTopLevel,
+                            onNavigate = { navigator.navigate(it) },
+                            showLabels = showNavBarLabels,
+                            containerColor = animatedNavBarColor,
+                            modifier = navBarModifier,
+                        )
+                    } else {
+                        FloatingNavigationBar(
+                            routes = activeTopLevelRoutes,
+                            currentTopLevel = currentTopLevel,
+                            onNavigate = { navigator.navigate(it) },
+                            showLabels = showNavBarLabels,
+                            containerColor = animatedNavBarColor,
+                            modifier = navBarModifier,
+                        )
+                    }
                 }
             }
         }
@@ -1465,7 +1423,7 @@ private fun routeToIcon(route: Route): ImageVector = when (route) {
 }
 
 @Composable
-private fun NavIcon(route: Route, label: String, selected: Boolean = false, tint: Color = androidx.compose.material3.LocalContentColor.current) {
+internal fun NavIcon(route: Route, label: String, selected: Boolean = false, tint: Color = androidx.compose.material3.LocalContentColor.current) {
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (selected) 1.15f else 1.0f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),

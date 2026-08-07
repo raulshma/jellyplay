@@ -6,7 +6,8 @@ import androidx.work.Configuration
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
+import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import io.mockk.every
 import io.mockk.mockk
@@ -45,9 +46,9 @@ class NotificationSchedulerTest {
 
     @Test
     fun `scheduleOrUpdate enqueues tagged periodic work when enabled`() = runTest {
-        val preferencesStore = mockk<UserPreferencesStore>()
-        every { preferencesStore.notificationPreferences } returns MutableStateFlow(
-            NotificationPreferences(enabled = true)
+        val preferencesStore = mockk<NotificationStore>()
+        every { preferencesStore.notification } returns MutableStateFlow(
+            NotificationSlice(notificationPreferences = NotificationPreferences(enabled = true))
         )
         val scheduler = NotificationScheduler(context, preferencesStore)
 
@@ -60,9 +61,9 @@ class NotificationSchedulerTest {
 
     @Test
     fun `scheduleOrUpdate cancels work when disabled`() = runTest {
-        val preferencesStore = mockk<UserPreferencesStore>()
-        every { preferencesStore.notificationPreferences } returns MutableStateFlow(
-            NotificationPreferences(enabled = true)
+        val preferencesStore = mockk<NotificationStore>()
+        every { preferencesStore.notification } returns MutableStateFlow(
+            NotificationSlice(notificationPreferences = NotificationPreferences(enabled = true))
         )
         val scheduler = NotificationScheduler(context, preferencesStore)
 
@@ -71,8 +72,8 @@ class NotificationSchedulerTest {
         assertEquals(1, workManager.getWorkInfosForUniqueWork(NotificationScheduler.WORK_NAME).get().size)
 
         // Disable — scheduleOrUpdate() must cancel the work.
-        every { preferencesStore.notificationPreferences } returns MutableStateFlow(
-            NotificationPreferences(enabled = false)
+        every { preferencesStore.notification } returns MutableStateFlow(
+            NotificationSlice(notificationPreferences = NotificationPreferences(enabled = false))
         )
         scheduler.scheduleOrUpdate()
 

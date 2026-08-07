@@ -90,8 +90,10 @@ data class VideoPlayerUiState(
     val hasSubtitleOverride: Boolean = false,
     /** A per-series audio-language preference exists for the current series. */
     val hasSeriesAudioPref: Boolean = false,
-    /** A per-series subtitle-language preference exists for the current series. */
+    /** A per-series subtitle preference (language or "off") exists for the current series. */
     val hasSeriesSubtitlePref: Boolean = false,
+    /** A per-series "subtitles off" preference exists for the current series. */
+    val hasSeriesSubtitleOffPref: Boolean = false,
     /** A per-series dialogue-boost preference exists for the current series. */
     val hasSeriesDialogueBoostPref: Boolean = false,
     val overview: String = "",
@@ -178,6 +180,27 @@ data class VideoPlayerUiState(
     val seriesId: String? = null,
     val isInSyncPlaySession: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
+    /**
+     * Parsed cue list for the active subtitle track, for the G10 subtitle-sync
+     * preview. Sourced from either an external text track (full track, all
+     * engines, bidirectional) or, as a fallback for embedded subs, the engine's
+     * live `currentCues` accumulation (played range only). Null when neither
+     * source has cues (image subs, unsupported engines).
+     */
+    val subtitlePreviewCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>? = null,
+    /**
+     * Which source populated [subtitlePreviewCues], so the preview UI can show
+     * the right hint (external = full track; embedded = played range only).
+     */
+    val subtitlePreviewSource: SubtitlePreviewSource = SubtitlePreviewSource.NONE,
+    /**
+     * Whether the AV-sync sheet (the only consumer of [subtitlePreviewCues]) is
+     * open. The ViewModel uses this to gate pushing embedded-subtitle cues into
+     * `subtitlePreviewCues` — there's no point copying the wide UI state on
+     * every onCues tick when the preview isn't visible. Toggled by the screen
+     * as the sheet opens/dismisses; `loadActiveSubtitleCues` re-syncs on open.
+     */
+    val previewSheetVisible: Boolean = false,
     val playerError: String? = null,
     /**
      * Structured retryability verdict paired with [playerError], propagated
@@ -271,6 +294,7 @@ data class VideoPlayerUiState(
             hasAudioOverride = hasAudioOverride, hasSubtitleOverride = hasSubtitleOverride,
             hasSeriesAudioPref = hasSeriesAudioPref,
             hasSeriesSubtitlePref = hasSeriesSubtitlePref,
+            hasSeriesSubtitleOffPref = hasSeriesSubtitleOffPref,
             hasSeriesDialogueBoostPref = hasSeriesDialogueBoostPref,
         )
 
@@ -457,4 +481,15 @@ data class VideoPlayerUiState(
 
     val videoFrameRate: Float?
         get() = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }?.realFrameRate
+}
+
+/**
+ * Origin of the subtitle-sync preview's cue list. [EXTERNAL] is the full parsed
+ * track (bidirectional offset preview); [EMBEDDED] is the engine's live
+ * accumulation (played range only); [NONE] means no cues are available.
+ */
+enum class SubtitlePreviewSource {
+    NONE,
+    EXTERNAL,
+    EMBEDDED,
 }

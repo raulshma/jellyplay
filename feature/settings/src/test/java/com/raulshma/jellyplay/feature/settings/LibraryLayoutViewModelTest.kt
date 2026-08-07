@@ -2,10 +2,10 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.LibraryFolder
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.every
@@ -28,18 +28,16 @@ class LibraryLayoutViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private lateinit var store: UserPreferencesStore
+    private lateinit var homeDiscoveryStore: HomeDiscoveryStore
     private lateinit var editor: PreferencesEditor
     private lateinit var mediaRepository: MediaRepository
 
     @Before
     fun setUp() {
-        store = mockk(relaxed = true)
+        homeDiscoveryStore = mockk(relaxed = true)
         editor = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
-        every { store.preferences } returns MutableStateFlow(UserPreferences())
-        every { store.libraryHomeSectionOverridesFlow } returns MutableStateFlow(emptyMap())
-        every { store.pinnedHomeSectionsFlow } returns MutableStateFlow(emptyList())
+        every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(HomeDiscoverySlice())
         coEvery { mediaRepository.getLibraryFolders() } returns Result.success(emptyList())
     }
 
@@ -51,7 +49,7 @@ class LibraryLayoutViewModelTest {
                 LibraryFolder(id = "music", name = "Music", collectionType = "music"),
             )
         )
-        val viewModel = LibraryLayoutViewModel(store, editor, mediaRepository)
+        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository)
         advanceUntilIdle()
 
         val loaded = viewModel.libraryFolders.value
@@ -61,7 +59,7 @@ class LibraryLayoutViewModelTest {
 
     @Test
     fun `setLibrarySectionEnabled false adds type to overrides`() = runTest {
-        val viewModel = LibraryLayoutViewModel(store, editor, mediaRepository)
+        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository)
 
         viewModel.setLibrarySectionEnabled("movies", HomeSectionType.LATEST_MEDIA, enabled = false)
 
@@ -72,10 +70,10 @@ class LibraryLayoutViewModelTest {
 
     @Test
     fun `setLibrarySectionEnabled true removes type and drops empty key`() = runTest {
-        every { store.preferences } returns MutableStateFlow(
-            UserPreferences(libraryHomeSectionOverrides = mapOf("movies" to setOf(HomeSectionType.LATEST_MEDIA)))
+        every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(
+            HomeDiscoverySlice(libraryHomeSectionOverrides = mapOf("movies" to setOf(HomeSectionType.LATEST_MEDIA)))
         )
-        val viewModel = LibraryLayoutViewModel(store, editor, mediaRepository)
+        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository)
 
         viewModel.setLibrarySectionEnabled("movies", HomeSectionType.LATEST_MEDIA, enabled = true)
 
@@ -84,11 +82,10 @@ class LibraryLayoutViewModelTest {
 
     @Test
     fun `exportCurrentLayoutJson snapshots libraryHomeSectionOverrides`() = runTest {
-        val prefs = UserPreferences(
-            libraryHomeSectionOverrides = mapOf("x" to setOf(HomeSectionType.RECENTLY_ADDED))
+        every { homeDiscoveryStore.homeDiscovery } returns MutableStateFlow(
+            HomeDiscoverySlice(libraryHomeSectionOverrides = mapOf("x" to setOf(HomeSectionType.RECENTLY_ADDED)))
         )
-        every { store.preferences } returns MutableStateFlow(prefs)
-        val viewModel = LibraryLayoutViewModel(store, editor, mediaRepository)
+        val viewModel = LibraryLayoutViewModel(homeDiscoveryStore, editor, mediaRepository)
 
         val json = viewModel.exportCurrentLayoutJson()
 

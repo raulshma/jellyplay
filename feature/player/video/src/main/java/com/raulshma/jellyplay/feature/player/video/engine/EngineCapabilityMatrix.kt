@@ -56,6 +56,9 @@ object EngineCapabilityMatrix {
         supportsBorderStyles = true,
         supportsSecondarySubtitles = false,
         supportsScreenshot = true,
+        // Zoom-safe subtitle strategy is declared per-engine via
+        // [MediaEngine.zoomSafeSubtitleStrategy] (ExoPlayer = NATIVE_PINNED),
+        // not as a capability flag here.
     )
 
     /** libmpv backend. */
@@ -82,6 +85,9 @@ object EngineCapabilityMatrix {
         supportsBorderStyles = true,
         supportsSecondarySubtitles = true,
         supportsScreenshot = true,
+        // mpv's zoom-safe subtitle strategy (COMPOSE_CUE, via
+        // [MediaEngine.zoomSafeSubtitleStrategy]) is declared on the engine, not
+        // as a capability flag here.
     )
 
     /** libVLC backend. */
@@ -108,6 +114,10 @@ object EngineCapabilityMatrix {
         supportsBorderStyles = false,
         supportsSecondarySubtitles = false,
         supportsScreenshot = true,
+        // libVLC 3.7.x composites subs into a native surface with no text/event
+        // callback, so no zoom-safe path is available (strategy = DISABLED on
+        // the engine). Only unblocked by a libvlc 4.x aar, a JNI fork, or
+        // app-side subtitle demux — all out of scope.
     )
 
     /**

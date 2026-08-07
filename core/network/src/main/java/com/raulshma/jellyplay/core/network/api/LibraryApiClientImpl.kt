@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
@@ -66,6 +68,17 @@ class LibraryApiClientImpl @Inject constructor(
     private val engine: JellyfinApiEngine,
     private val lyricsApi: LyricsApi,
 ) : LibraryApiClient {
+
+    // ── Home hot-path sub-call caches ──────────────────────────────────────
+    // MediaRepositoryImpl.getHomeSections caches the whole HomeSectionsResult
+    // for 60s and the HomeViewModel's periodic refresh also runs every 60s, so
+    // without these each refresh re-fans-out one getLatestMedia per library
+    // folder + up to 5 getSimilarItems calls. Latest/recommendations change far
+    // less often than Continue Watching / Next Up, so a short TTL here skips
+    // those round-trips on back-to-back refreshes while CW/NextUp stay live.
+    // Mirrors the 2-minute TTL the repo already uses for the same concepts.
+    private val homeLatestMediaCache = TtlCache<List<MediaItem>>(ttlMs = HOME_SUBCALL_CACHE_TTL_MS)
+    private val homeSimilarCache = TtlCache<List<MediaItem>>(ttlMs = HOME_SUBCALL_CACHE_TTL_MS)
 
     override suspend fun getHomeSections(
         enabledSections: Set<HomeSectionType>,
@@ -152,7 +165,7 @@ class LibraryApiClientImpl @Inject constructor(
                             .map { folder ->
                                 async {
                                     semaphore.acquire()
-                                    try { folder to getLatestMedia(folder.id, limit = 16) }
+                                    try { folder to getLatestMediaForHome(folder.id, limit = 16) }
                                     finally { semaphore.release() }
                                 }
                             }
@@ -169,7 +182,7 @@ class LibraryApiClientImpl @Inject constructor(
                                     HomeSectionType.LATEST_MEDIA !in disabledForFolder
                                 if (latest.isNotEmpty() && latestEnabledForFolder) {
                                     val sectionId = "latest_${folder.id}"
-                                    sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest, libraryId = folder.id))
+                                    sections.add(HomeSection(sectionId, "Latest ${folder.name}", HomeSectionType.LATEST_MEDIA, latest, libraryId = folder.id, collectionType = folder.collectionType))
                                 }
                             }.onFailure {
                                 // A per-folder Latest Media 403 (e.g. a stale
@@ -269,11 +282,48 @@ class LibraryApiClientImpl @Inject constructor(
     }
 
     /**
-     * Fetches the items for each [PinnedHomeSection] concurrently (bounded by a
-     * semaphore to avoid flooding the server). Empty results are dropped so the
-     * home screen never shows an empty pinned row. Order is preserved so the
-     * caller's list order maps directly to home row order.
+     * Home-path wrapper around [getLatestMedia] that consults [homeLatestMediaCache]
+     * first. The home screen refreshes every 60s (foreground) and re-issues one
+     * `/Items/Latest` call per library folder on each refresh; latest-in-library
+     * changes less often than that, so a short TTL skips the redundant fan-out.
+     * Only the home path uses this — browse/library screens still go straight to
+     * [getLatestMedia] for fresh data.
      */
+    private suspend fun getLatestMediaForHome(parentId: String, limit: Int): Result<List<MediaItem>> {
+        val identity = currentHomeCacheIdentity()
+        val cacheKey = "${parentId}_$limit"
+        homeLatestMediaCache.get(identity, cacheKey)?.let { return Result.success(it) }
+        return getLatestMedia(parentId, limit).also { result ->
+            result.getOrNull()?.let { homeLatestMediaCache.put(identity, cacheKey, it) }
+        }
+    }
+
+    /**
+     * Home-path wrapper around [getSimilarItems] (via [getRecommendations]) that
+     * memoises each seed's similar-items list in [homeSimilarCache]. The
+     * recommendations fan-out (up to 5 concurrent `getSimilarItems` calls) is
+     * the single most expensive part of a home refresh; seeds rarely change
+     * within the TTL window, so back-to-back refreshes skip it entirely.
+     */
+    private suspend fun getSimilarItemsForHome(seedId: String, limit: Int): Result<List<MediaItem>> {
+        val identity = currentHomeCacheIdentity()
+        val cacheKey = "${seedId}_$limit"
+        homeSimilarCache.get(identity, cacheKey)?.let { return Result.success(it) }
+        return getSimilarItems(seedId, limit).also { result ->
+            result.getOrNull()?.let { homeSimilarCache.put(identity, cacheKey, it) }
+        }
+    }
+
+    /**
+     * The current `(serverId, userId)` as a [CacheIdentity], read from the
+     * engine's [StateFlow]s. The home sub-call caches are identity-keyed so a
+     * user/server switch can't serve the previous identity's latest-media /
+     * recommendations — wrong identity misses by construction, so no parallel
+     * cross-boundary clearer is needed. Falls back to [CacheIdentity.UNKNOWN]
+     * before login / after logout; nothing cached under that key can leak.
+     */
+    private fun currentHomeCacheIdentity(): CacheIdentity =
+        CacheIdentity.ofOrNull(engine.currentServer.value?.id, engine.currentUser.value?.id)
     private suspend fun fetchPinnedSections(
         pinnedSections: List<PinnedHomeSection>,
     ): List<HomeSection> {
@@ -412,9 +462,9 @@ class LibraryApiClientImpl @Inject constructor(
         tags: List<String>?,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
         minRating: Float?,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Result<SearchResult> = engine.apiResultWithRetry {
-        val sortByEnum = ItemSortBy.entries
-            .find { it.serialName.equals(sortBy, ignoreCase = true) }
+        val sortByEnums = parseItemSortList(sortBy)
         val sortOrderEnum = SortOrder.entries
             .find { it.serialName.equals(sortOrder, ignoreCase = true) }
             ?: SortOrder.ASCENDING
@@ -428,18 +478,25 @@ class LibraryApiClientImpl @Inject constructor(
                 else -> {}
             }
         }
+        // includeItemTypes / excludeItemTypes: resolve the requested kinds once,
+        // then drop SEASON/EPISODE from the exclude list when they were
+        // explicitly included. Jellyfin would otherwise receive contradictory
+        // include+exclude for the same kind (e.g. section mode for a TV library
+        // includes EPISODE to match /Items/Latest) and return an empty result.
+        val includeKinds = mediaTypes?.mapNotNull { it.toBaseItemKind() }.orEmpty()
+        val excludeKinds = buildList {
+            if (BaseItemKind.SEASON !in includeKinds) add(BaseItemKind.SEASON)
+            if (!kindFilter.includeEpisodes && BaseItemKind.EPISODE !in includeKinds) add(BaseItemKind.EPISODE)
+        }
         val response = engine.requireApi().itemsApi.getItems(
             parentId = parentId?.let { it.toUUID() },
-            includeItemTypes = mediaTypes?.mapNotNull { it.toBaseItemKind() },
-            excludeItemTypes = listOf(
-                BaseItemKind.SEASON,
-                BaseItemKind.EPISODE,
-            ),
+            includeItemTypes = includeKinds.takeIf { it.isNotEmpty() },
+            excludeItemTypes = excludeKinds,
             genres = genres,
             years = years,
             studioIds = studioIds?.mapNotNull { it.toUUID() },
             tags = tags,
-            sortBy = listOfNotNull(sortByEnum),
+            sortBy = sortByEnums.takeIf { it.isNotEmpty() },
             sortOrder = listOf(sortOrderEnum),
             startIndex = startIndex,
             limit = limit,
@@ -453,9 +510,25 @@ class LibraryApiClientImpl @Inject constructor(
                 ItemFields.GENRES,
             ),
         ).content
+        val rawItems = if (response.items.isEmpty() && parentId != null && searchTerm.isNullOrBlank()) {
+            runCatching {
+                engine.requireApi().userLibraryApi.getLatestMedia(
+                    parentId = parentId.toUUID(),
+                    limit = if (limit > 0) limit else 50,
+                    fields = listOf(
+                        ItemFields.OVERVIEW,
+                        ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
+                        ItemFields.GENRES,
+                    ),
+                ).content
+            }.getOrNull() ?: emptyList()
+        } else {
+            response.items
+        }
+        val totalCount = if (response.items.isEmpty() && rawItems.isNotEmpty()) rawItems.size else response.totalRecordCount
         SearchResult(
-            items = engine.run { response.items.map { it.toMediaItem() }.filterByParentalRating() },
-            totalRecordCount = response.totalRecordCount,
+            items = engine.run { rawItems.map { it.toMediaItem() }.filterByParentalRating() },
+            totalRecordCount = totalCount,
             startIndex = startIndex,
         )
     }
@@ -786,7 +859,15 @@ class LibraryApiClientImpl @Inject constructor(
             seedItems.map { seed ->
                 async {
                     semaphore.acquire()
-                    try { getSimilarItems(seed.id, limit = limit / seedItems.size + 2).getOrDefault(emptyList()) }
+                    try {
+                        // Routed through homeSimilarCache: recommendations are the
+                        // most expensive part of a home refresh (up to 5 concurrent
+                        // /Items/Similar calls) and seeds rarely change within the
+                        // TTL window, so back-to-back refreshes (60s cadence) skip
+                        // the fan-out. Also benefits the detail screen's re-entry.
+                        val perSeedLimit = limit / seedItems.size + 2
+                        getSimilarItemsForHome(seed.id, perSeedLimit).getOrDefault(emptyList())
+                    }
                     finally { semaphore.release() }
                 }
             }.flatMap { it.await() }
@@ -1153,5 +1234,11 @@ class LibraryApiClientImpl @Inject constructor(
         } catch (_: Exception) {
             emptyList()
         }
+    }
+
+    private companion object {
+        // Matches MediaRepositoryImpl's LATEST_CACHE_TTL_MS so the home path's
+        // sub-call caches and the repo's same-concept caches expire in lockstep.
+        private const val HOME_SUBCALL_CACHE_TTL_MS = 2 * 60 * 1000L
     }
 }

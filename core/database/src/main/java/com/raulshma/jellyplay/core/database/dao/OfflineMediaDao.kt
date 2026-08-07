@@ -130,4 +130,178 @@ interface OfflineMediaDao {
         """
     )
     suspend fun search(pattern: String, prefixPattern: String, limit: Int): List<OfflineMediaEntity>
+
+    // ---- Offline resync queries (migration 42→43) ----
+
+    /**
+     * Lightweight freshness-baseline projection for batch checks. Carries only
+     * the baseline + result columns needed by the sync comparator so a batch
+     * check over many items doesn't load full rows (no `peopleJson`, no paths).
+     */
+    @Query(
+        """
+        SELECT id, name, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature,
+               syncedMediaSourceId, syncedMediaSizeBytes, lastSyncedAt,
+               syncUpdateAvailable, syncMediaChanged, syncChecking, syncError
+        FROM offline_media
+        WHERE id IN (:ids)
+        """
+    )
+    suspend fun getSyncBaselines(ids: List<String>): List<SyncBaselineRow>
+
+    /** Single-item baseline lookup, used by the check/resync paths. */
+    @Query(
+        """
+        SELECT id, name, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature,
+               syncedMediaSourceId, syncedMediaSizeBytes, lastSyncedAt,
+               syncUpdateAvailable, syncMediaChanged, syncChecking, syncError
+        FROM offline_media
+        WHERE id = :itemId
+        """
+    )
+    suspend fun getSyncBaseline(itemId: String): SyncBaselineRow?
+
+    /**
+     * Targeted UPDATE of the freshness baseline + result flags after a check or
+     * resync completes. Avoids clobbering playback/metadata columns and is
+     * cheaper than a full upsert. Mirrors [updatePlaybackProgress].
+     */
+    @Query(
+        """
+        UPDATE offline_media
+        SET syncedPosterTag = :posterTag,
+            syncedBackdropTag = :backdropTag,
+            syncedMetadataSignature = :metadataSignature,
+            syncedMediaSourceId = :mediaSourceId,
+            syncedMediaSizeBytes = :mediaSizeBytes,
+            lastSyncedAt = :lastSyncedAt,
+            syncUpdateAvailable = :updateAvailable,
+            syncMediaChanged = :mediaChanged,
+            syncChecking = :checking,
+            syncError = :error
+        WHERE id = :itemId
+        """
+    )
+    suspend fun updateSyncBaseline(
+        itemId: String,
+        posterTag: String?,
+        backdropTag: String?,
+        metadataSignature: String?,
+        mediaSourceId: String?,
+        mediaSizeBytes: Long?,
+        lastSyncedAt: Long?,
+        updateAvailable: Int,
+        mediaChanged: Int,
+        checking: Int,
+        error: Int,
+    )
+
+    /**
+     * Lightweight flag flip for the "check in progress" marker, set before a
+     * network fetch and cleared on completion (success or failure). Decoupled
+     * from [updateSyncBaseline] so a failed check can clear the marker without
+     * touching the baseline columns.
+     */
+    @Query("UPDATE offline_media SET syncChecking = :checking WHERE id = :itemId")
+    suspend fun setSyncChecking(itemId: String, checking: Int)
+
+    /** Clears a stale `syncChecking=1` marker left by a crashed check. */
+    @Query("UPDATE offline_media SET syncChecking = 0 WHERE syncChecking = 1")
+    suspend fun clearAllCheckingFlags()
+
+    /**
+     * Items flagged as having a metadata/image update or a media-file change.
+     * Drives the per-row "update available" badge and the downloads-screen
+     * aggregate count. Reactive — re-emits as flags flip during a batch check.
+     */
+    @Query(
+        """
+        SELECT id, name, mediaType,
+               seriesName, seasonNumber, episodeNumber,
+               CASE WHEN syncMediaChanged = 1 THEN 1 ELSE 0 END AS mediaFileChanged,
+               CASE WHEN syncUpdateAvailable = 1 THEN 1 ELSE 0 END AS updateAvailable,
+               CASE WHEN syncChecking = 1 THEN 1 ELSE 0 END AS checking,
+               lastSyncedAt
+        FROM offline_media
+        WHERE syncUpdateAvailable = 1 OR syncMediaChanged = 1
+        ORDER BY lastSyncedAt DESC
+        """
+    )
+    fun getItemsWithUpdates(): Flow<List<OfflineSyncUpdateRow>>
+
+    /** Count of items with any pending update, for the appbar badge. */
+    @Query("SELECT COUNT(*) FROM offline_media WHERE syncUpdateAvailable = 1 OR syncMediaChanged = 1")
+    fun getUpdatesCount(): Flow<Int>
+
+    /** Ids of every top-level offline item (for batch freshness checks). */
+    @Query("SELECT id FROM offline_media WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC', 'EPISODE')")
+    suspend fun getDownloadedItemIds(): List<String>
+
+    /**
+     * Returns the persisted local poster/backdrop paths for an item, so a resync
+     * can preserve them when re-persisting metadata (only the image bytes are
+     * re-downloaded; the row must keep pointing at the same on-disk files).
+     */
+    @Query("SELECT posterPath, backdropPath FROM offline_media WHERE id = :itemId")
+    suspend fun getLocalImagePaths(itemId: String): OfflineImagePaths?
+
+    /**
+     * Returns `(id, peopleJson)` for every offline row. Used by cast-image
+     * cleanup after a delete to decide whether a person is still referenced by
+     * any remaining offline item before deleting their shared image file — a
+     * person can appear across multiple movies/episodes, and the
+     * `personId`-keyed image is shared by all of them. Call this *after* the
+     * deleted rows are removed so only surviving references are counted.
+     */
+    @Query("SELECT id, peopleJson FROM offline_media")
+    suspend fun getAllPeopleJson(): List<OfflinePeopleRow>
 }
+
+/** Local on-disk image path projection for resync path preservation. */
+data class OfflineImagePaths(
+    val posterPath: String?,
+    val backdropPath: String?,
+)
+
+/** `(id, peopleJson)` projection for cast-image reference counting on delete. */
+data class OfflinePeopleRow(
+    val id: String,
+    val peopleJson: String?,
+)
+
+/**
+ * Freshness-baseline projection — the persisted snapshot a check diffs a fresh
+ * [com.raulshma.jellyplay.core.model.MediaDetail] against. See
+ * [OfflineMediaDao.getSyncBaselines] / [OfflineMediaDao.getSyncBaseline].
+ */
+data class SyncBaselineRow(
+    val id: String,
+    val name: String,
+    val syncedPosterTag: String?,
+    val syncedBackdropTag: String?,
+    val syncedMetadataSignature: String?,
+    val syncedMediaSourceId: String?,
+    val syncedMediaSizeBytes: Long?,
+    val lastSyncedAt: Long?,
+    val syncUpdateAvailable: Int,
+    val syncMediaChanged: Int,
+    val syncChecking: Int,
+    val syncError: Int,
+)
+
+/**
+ * Reactive projection of items flagged for resync — drives the downloads
+ * screen's resync sheet and per-row badges without loading full rows.
+ */
+data class OfflineSyncUpdateRow(
+    val id: String,
+    val name: String,
+    val mediaType: String?,
+    val seriesName: String?,
+    val seasonNumber: Int?,
+    val episodeNumber: Int?,
+    val mediaFileChanged: Int,
+    val updateAvailable: Int,
+    val checking: Int,
+    val lastSyncedAt: Long?,
+)

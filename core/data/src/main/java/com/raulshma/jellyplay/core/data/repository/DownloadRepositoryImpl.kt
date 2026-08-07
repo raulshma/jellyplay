@@ -11,6 +11,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
+import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
@@ -18,6 +19,7 @@ import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.data.worker.awaitResponse
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -59,9 +61,16 @@ class DownloadRepositoryImpl @Inject constructor(
     private val offlineMediaDao: OfflineMediaDao,
     private val database: JellyPlayDatabase,
     private val mediaRepository: MediaRepository,
+    /**
+     * The consolidated series seasons/episodes snapshot. [downloadSeries] uses
+     * it in place of the former `mediaRepository.getSeasons` + per-season
+     * `getEpisodes` fan-out — one load per series. Online-only path, so
+     * `offline` defaults to `false`.
+     */
+    private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue,
     private val playbackRepository: PlaybackRepository,
     private val httpClient: OkHttpClient,
-    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
+    private val downloadsStore: DownloadsStore,
     private val json: Json,
     /**
      * Lazy to break the Hilt construction cycle: [downloadSeries] (below)
@@ -83,6 +92,7 @@ class DownloadRepositoryImpl @Inject constructor(
     private val storagePolicy: StoragePolicy,
     private val downloadEnqueuer: DownloadEnqueuer,
     private val storageLayout: DownloadStorageLayout,
+    private val syncComparator: com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator,
 ) : DownloadRepository {
 
     // Caps the number of episodes processed concurrently when queueing a series
@@ -159,7 +169,7 @@ class DownloadRepositoryImpl @Inject constructor(
             downloadDao.deleteDownloadById(existing.id)
         }
 
-        val prefs = preferencesStore.preferences.first()
+        val prefs = downloadsStore.downloads.first()
         // Storage cap (MB + GB): single owner is StoragePolicy. Previously
         // duplicated here and in downloadSeries; the two could drift.
         storagePolicy.enforce(precomputedCurrentBytes = precomputedCurrentBytes)
@@ -386,7 +396,7 @@ class DownloadRepositoryImpl @Inject constructor(
         episodeIds: Map<String, List<String>>?,
     ): Result<List<String>> = runCatching {
         withContext(Dispatchers.IO) {
-            val prefs = preferencesStore.preferences.first()
+            val prefs = downloadsStore.downloads.first()
             // The storage cap only needs to be evaluated once for the whole
             // enqueue batch: no bytes are actually downloaded here (the
             // DownloadWorker runs later), so every per-episode SUM(downloadedBytes)
@@ -405,7 +415,13 @@ class DownloadRepositoryImpl @Inject constructor(
             // fetched detail so the offline series screen is as rich as online.
             saveOfflineMetadataForDetail(detail, imageUrl, backdropUrl)
 
-            val seasons = mediaRepository.getSeasons(seriesId).getOrElse { emptyList() }
+            // One consolidated seasons + episodes load (single round-trip via
+            // the catalogue) replaces the former getSeasons + per-season
+            // getEpisodes fan-out. On failure, fall back to an empty snapshot so
+            // the series metadata is still persisted and the run doesn't abort.
+            val snapshot = episodeCatalogue.loadSeriesEpisodes(seriesId)
+                .getOrElse { EpisodeCatalogueSnapshot(seriesId, emptyList(), emptyMap(), emptySet(), emptyList(), 0L) }
+            val seasons = snapshot.seasons
             val targetSeasons = if (episodeIds != null) {
                 seasons.filter { it.id in episodeIds.keys }
             } else {
@@ -428,7 +444,7 @@ class DownloadRepositoryImpl @Inject constructor(
             for (season in targetSeasons) {
                 saveOfflineMetadataForItem(season, null, null)
 
-                val allEpisodes = mediaRepository.getEpisodes(seriesId, season.id).getOrElse { emptyList() }
+                val allEpisodes = snapshot.seasonEpisodes(season.id)
                 val selectedEpisodeIds = episodeIds?.get(season.id)?.toSet()
                 val episodes = if (selectedEpisodeIds != null) {
                     allEpisodes.filter { it.id in selectedEpisodeIds }
@@ -448,7 +464,7 @@ class DownloadRepositoryImpl @Inject constructor(
                                     val result = episodeDetail?.let {
                                         delegate.startOne(it, qualityMaxBitrate, budgetHint)
                                     }
-                                    result?.downloadItem?.id
+                                    result?.downloadItem?.let { it.id to it.downloadPath }
                                 } catch (ce: CancellationException) {
                                     // Preserve structured concurrency: if the parent
                                     // scope (e.g. user navigated away) is cancelled,
@@ -468,7 +484,42 @@ class DownloadRepositoryImpl @Inject constructor(
                     }.awaitAll()
                 }
 
-                episodeResults.filterNotNull().forEach { downloadIds.add(it) }
+                val enqueued = episodeResults.filterNotNull()
+                enqueued.map { it.first }.forEach { downloadIds.add(it) }
+
+                // The series row was seeded above with REMOTE poster/backdrop
+                // URLs (so the per-episode saves don't each re-download the
+                // series artwork). Persist the artwork as local files now, next
+                // to the first enqueued episode, and re-upsert the series row
+                // with those paths — otherwise the offline series screen's hero
+                // and poster depend on Coil's cache and degrade to blurHash
+                // whenever the preload raced or was evicted.
+                val firstEpisodeDir = enqueued
+                    .asSequence()
+                    .mapNotNull { it.second?.takeIf { p -> p.isNotBlank() } }
+                    .mapNotNull { File(it).parentFile }
+                    .firstOrNull()
+                if (firstEpisodeDir != null) {
+                    val localSeriesPoster = downloadImageToDisk(
+                        seriesId, "Primary", 300, firstEpisodeDir,
+                        DownloadArtifacts.posterFile(seriesId),
+                    )
+                    val localSeriesBackdrop = downloadImageToDisk(
+                        seriesId, "Backdrop", 1280, firstEpisodeDir,
+                        DownloadArtifacts.backdropFile(seriesId),
+                    )
+                    if (localSeriesPoster != null || localSeriesBackdrop != null) {
+                        // Re-persist without re-preloading cast images: the
+                        // preloads already ran for the seed above. This only
+                        // swaps the artwork columns to the local files.
+                        offlineMediaDao.upsert(
+                            detail.toOfflineMediaEntity(
+                                localSeriesPoster ?: imageUrl,
+                                localSeriesBackdrop ?: backdropUrl,
+                            )
+                        )
+                    }
+                }
             }
 
             downloadIds
@@ -685,14 +736,56 @@ class DownloadRepositoryImpl @Inject constructor(
      * the cast row without network access.
      */
     private suspend fun saveOfflineMetadataForDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
-        val entity = detail.toOfflineMediaEntity(imageUrl, backdropUrl)
+        // Preserve any existing sync-baseline columns when re-persisting metadata
+        // (resync path). The upsert below uses REPLACE, which would otherwise wipe
+        // them to defaults and briefly flip the offline-detail freshness badge to
+        // UNKNOWN before the manager's updateSyncBaseline restores them. Copying
+        // them forward keeps the row coherent across the re-persist.
+        val existing = offlineMediaDao.getById(detail.item.id)
+        val entity = detail.toOfflineMediaEntity(imageUrl, backdropUrl).let { fresh ->
+            if (existing != null) fresh.copy(
+                syncedPosterTag = existing.syncedPosterTag,
+                syncedBackdropTag = existing.syncedBackdropTag,
+                syncedMetadataSignature = existing.syncedMetadataSignature,
+                syncedMediaSourceId = existing.syncedMediaSourceId,
+                syncedMediaSizeBytes = existing.syncedMediaSizeBytes,
+                lastSyncedAt = existing.lastSyncedAt,
+                syncUpdateAvailable = existing.syncUpdateAvailable,
+                syncMediaChanged = existing.syncMediaChanged,
+                syncChecking = existing.syncChecking,
+                syncError = existing.syncError,
+            ) else fresh
+        }
         offlineMediaDao.upsert(entity)
+        // Seed the freshness baseline from the detail we just persisted so the
+        // first auto-check has a reference to diff against. Without this, a fresh
+        // download enters with a null baseline and the first check treats itself
+        // as "first contact" — swallowing a real change that happened before that
+        // first check (and always reporting CURRENT for new downloads). Only seed
+        // when no baseline existed yet, so a re-download doesn't clobber a recent
+        // check's flags; a genuine re-download is itself a fresh server snapshot.
+        if (existing == null || existing.syncedMetadataSignature == null) {
+            val baseline = syncComparator.baseline(detail)
+            offlineMediaDao.updateSyncBaseline(
+                itemId = detail.item.id,
+                posterTag = baseline.posterTag,
+                backdropTag = baseline.backdropTag,
+                metadataSignature = baseline.metadataSignature,
+                mediaSourceId = baseline.mediaSourceId,
+                mediaSizeBytes = baseline.mediaSizeBytes,
+                lastSyncedAt = System.currentTimeMillis(),
+                updateAvailable = 0,
+                mediaChanged = 0,
+                checking = 0,
+                error = 0,
+            )
+        }
         preloadImageToCache(imageUrl)
         preloadImageToCache(backdropUrl)
         // Preload up to 10 cast images so the offline cast row renders without
         // a network connection. Mirrors the poster/backdrop caching above.
         detail.people
-            .filter { (it.type == "Actor" || it.type == "Director") && !it.primaryImageTag.isNullOrBlank() }
+            .filter { it.hasCastImage() }
             .take(10)
             .forEach { person ->
                 preloadImageToCache(playbackRepository.getImageUrl(person.id, maxWidth = 200))

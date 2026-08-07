@@ -107,6 +107,8 @@
     <string name="settings_manage_addresses_cd">アドレスを管理</string>
     <string name="settings_active_cd">アクティブ</string>
     <string name="settings_remove_cd">削除</string>
+    <string name="settings_remove_server_confirm_title">サーバーを削除しますか？</string>
+    <string name="settings_remove_server_confirm_message">サーバーと、そこに保存されているすべてのユーザーが削除されます。</string>
     <string name="settings_add_address">アドレスを追加</string>
     <string name="settings_primary">プライマリ</string>
     <string name="settings_switch">切り替え</string>
@@ -400,6 +402,7 @@
     <string name="settings_library_view_grid">アイテムをグリッドで表示</string>
     <string name="settings_library_view_list">アイテムをリストで表示</string>
     <string name="settings_library_view_thumb">アイテムを横長のサムネイルで表示</string>
+    <string name="settings_library_view_masonry">アイテムをメイソンリーレイアウトで表示</string>
     <string name="settings_home_mode">ホームモード</string>
     <string name="settings_home_mode_video">動画重視のホーム画面</string>
     <string name="settings_home_mode_music">音楽重視のホーム画面</string>
@@ -693,6 +696,8 @@
     <string name="settings_exp_press_hold_preview">長押しプレビュー</string>
     <string name="settings_exp_press_hold_preview_subtitle">メディアカードを長押ししてぼかした詳細プレビューを表示、離して閉じる</string>
     <string name="settings_exp_arr_integration_subtitle">Radarr/Sonarr からリクエストのダウンロードキュー進行とホームの近日カレンダーを表示。サーバー詳細は Seerr から自動検出、*arr 設定で手動上書き</string>
+    <string name="settings_exp_expressive_nav">Material 3 エクスプレッシブナビゲーション</string>
+    <string name="settings_exp_expressive_nav_subtitle">Google フォトの新デザイン風フローティングナビゲーションカプセルと独立した検索ボタン。</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">字幕のフォントサイズ</string>
@@ -822,6 +827,8 @@
     <string name="settings_hide_watched_items_subtitle">デフォルトでライブラリから視聴済みメディアをフィルター</string>
     <string name="settings_hide_episode_thumbnails">エピソードのサムネイルを非表示</string>
     <string name="settings_hide_episode_thumbnails_subtitle">ネタバレ防止にエピソードのプレビュー画像を非表示</string>
+    <string name="settings_compact_episode_list">コンパクトなエピソードリスト</string>
+    <string name="settings_compact_episode_list_subtitle">モバイルでは横1列の代わりに縦型リストでエピソードを表示</string>
     <string name="settings_skip_special_episodes">スペシャルエピソードをスキップ</string>
     <string name="settings_skip_special_episodes_subtitle">エピソードリストからスペシャル/ボーナスを除外</string>
     <string name="settings_haptic_feedback">触覚フィードバック</string>
@@ -1136,4 +1143,9 @@
     <string name="settings_subtitles_test">テスト</string>
     <string name="settings_subtitles_testing">テスト中…</string>
     <string name="settings_subtitles_connected">接続済み</string>
+    <string name="settings_nav_style">ナビゲーションのスタイル</string>
+    <string name="settings_nav_style_expressive">エクスプレッシブ (M3)</string>
+    <string name="settings_nav_style_classic">クラシック</string>
+    <string name="settings_nav_style_expressive_subtitle">Google フォト風フローティングカプセル + 独立した検索ボタン</string>
+    <string name="settings_nav_style_classic_subtitle">従来のフローティングボトムナビゲーションバー</string>
 </resources>

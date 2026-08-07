@@ -3,6 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 17+ (API 37): required to reach servers on the local network —
+         both SSDP/DLNA discovery and direct connections to LAN hosts
+         (e.g. 192.168.x.x). Declared as a runtime permission and requested
+         from MainActivity on cold start, mirroring POST_NOTIFICATIONS.
+         See https://developer.android.com/privacy-and-security/local-network-permission -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -48,7 +54,7 @@
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.JellyPlay"
         android:usesCleartextTraffic="true"
-        tools:targetApi="36">
+        tools:targetApi="37">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -207,6 +213,7 @@
             <intent-filter>
                 <action android:name="com.raulshma.jellyplay.notification.OPEN_DETAIL" />
                 <action android:name="com.raulshma.jellyplay.notification.MARK_SEEN" />
+                <action android:name="com.raulshma.jellyplay.notification.MARK_ALL_SEEN" />
             </intent-filter>
         </receiver>
 

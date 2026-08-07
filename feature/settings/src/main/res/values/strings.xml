@@ -125,6 +125,8 @@
     <string name="settings_manage_addresses_cd">Manage addresses</string>
     <string name="settings_active_cd">Active</string>
     <string name="settings_remove_cd">Remove</string>
+    <string name="settings_remove_server_confirm_title">Remove server?</string>
+    <string name="settings_remove_server_confirm_message">This removes the server and all saved users on it.</string>
     <string name="settings_add_address">Add Address</string>
     <string name="settings_primary">Primary</string>
     <string name="settings_switch">Switch</string>
@@ -449,6 +451,7 @@
     <string name="settings_library_view_grid">Display items in a grid layout</string>
     <string name="settings_library_view_list">Display items in a list layout</string>
     <string name="settings_library_view_thumb">Display items as landscape thumbnails</string>
+    <string name="settings_library_view_masonry">Display items in a masonry layout</string>
     <string name="settings_home_mode">Home Mode</string>
     <string name="settings_home_mode_video">Video-focused home screen</string>
     <string name="settings_home_mode_music">Music-focused home screen</string>
@@ -758,6 +761,8 @@
     <string name="settings_exp_press_hold_preview">Press-and-Hold Preview</string>
     <string name="settings_exp_press_hold_preview_subtitle">Long-press a media card to peek a blurred detail preview; release to dismiss</string>
     <string name="settings_exp_arr_integration_subtitle">Show download-queue progress on Requests and a coming-soon calendar on Home from your Radarr/Sonarr. Server details are auto-discovered from Seerr; manual override in *arr settings</string>
+    <string name="settings_exp_expressive_nav">Material 3 Expressive Navigation</string>
+    <string name="settings_exp_expressive_nav_subtitle">Google Photos redesign style floating navigation capsule with separate search button.</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">Subtitle Font Size</string>
@@ -889,6 +894,8 @@
     <string name="settings_hide_watched_items_subtitle">Default-filter out watched media from libraries</string>
     <string name="settings_hide_episode_thumbnails">Hide Episode Thumbnails</string>
     <string name="settings_hide_episode_thumbnails_subtitle">Hide episode preview images to avoid spoilers</string>
+    <string name="settings_compact_episode_list">Compact Episode List</string>
+    <string name="settings_compact_episode_list_subtitle">Show episodes as a vertical list on mobile instead of a horizontal row</string>
     <string name="settings_skip_special_episodes">Skip Special Episodes</string>
     <string name="settings_skip_special_episodes_subtitle">Exclude specials/bonus episodes from episode lists</string>
     <string name="settings_haptic_feedback">Haptic Feedback</string>
@@ -1121,11 +1128,16 @@
     <!-- UserManagementScreen.kt - already mostly defined; confirm ones used inline -->
 
     <!-- Localized UI text extracted from settings screens -->
-    <string name="settings_nav_bar_title">Navigation Bar</string>
+    <string name="settings_nav_bar_title">Navigation Bar Customization</string>
     <string name="settings_nav_auto_hide">Auto-hide on scroll</string>
     <string name="settings_nav_pinned">Pinned</string>
-    <string name="settings_nav_items_summary">%1$d of %2$d items</string>
+    <string name="settings_nav_items_summary">%1$d of %2$d items visible</string>
     <string name="settings_nav_items_summary_with_scroll">%1$d of %2$d items - %3$s</string>
+    <string name="settings_nav_style">Navigation Style</string>
+    <string name="settings_nav_style_expressive">Expressive (M3)</string>
+    <string name="settings_nav_style_classic">Classic</string>
+    <string name="settings_nav_style_expressive_subtitle">Google Photos style floating pill + standalone search button</string>
+    <string name="settings_nav_style_classic_subtitle">Traditional floating bottom navigation bar</string>
     <string name="settings_nav_hide_on_scroll">Hide on Scroll</string>
     <string name="settings_nav_hide_on_scroll_on">Bar hides when scrolling down</string>
     <string name="settings_nav_hide_on_scroll_off">Bar stays visible</string>

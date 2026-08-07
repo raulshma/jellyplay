@@ -1,9 +1,6 @@
 package com.raulshma.jellyplay
 
 import android.Manifest
-import android.animation.Animator
-import android.animation.ObjectAnimator
-import android.animation.PropertyValuesHolder
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
@@ -16,8 +13,6 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.view.View
-import android.view.animation.DecelerateInterpolator
-import android.view.animation.OvershootInterpolator
 import android.graphics.Color
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -79,6 +74,15 @@ class MainActivity : FragmentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { _ -> }
 
+    // Android 17+ blocks local network access (LAN Jellyfin servers + SSDP/DLNA
+    // discovery) unless ACCESS_LOCAL_NETWORK is granted. Requested once on cold
+    // start so returning users — who never see the Add Server screen — still get
+    // prompted. On grant, the self-healing WebSocket/health monitor reconnect on
+    // their own. Mirrors the notification permission launcher above.
+    private val requestLocalNetworkPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -96,33 +100,13 @@ class MainActivity : FragmentActivity() {
             }
         }
         splashScreen.setKeepOnScreenCondition { viewModel.isRestoring.value }
-        splashScreen.setOnExitAnimationListener { splashScreenView ->
-            val iconView = splashScreenView.iconView
-            val iconPulse = if (iconView != null) {
-                ObjectAnimator.ofPropertyValuesHolder(
-                    iconView,
-                    PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.25f, 1f),
-                    PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.25f, 1f),
-                ).apply {
-                    duration = 650L
-                    interpolator = OvershootInterpolator(0.8f)
-                    start()
-                }
-            } else null
-
-            ObjectAnimator.ofFloat(splashScreenView.view, View.ALPHA, 1f, 0f).apply {
-                startDelay = 400L
-                duration = 500L
-                interpolator = DecelerateInterpolator()
-                addListener(object : android.animation.AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        iconPulse?.cancel()
-                        splashScreenView.remove()
-                    }
-                })
-                start()
-            }
-        }
+        // No custom setOnExitAnimationListener: the system default splash exit
+        // is a clean cross-fade to the first composed frame. A manual listener
+        // holds the splash view alive across an alpha fade, and because the
+        // starting window's background is the splash color, the fade revealed
+        // that color through the outgoing splash — producing a visible "splash
+        // flashes back in" artifact after Home had already rendered. Letting
+        // the system remove the splash the instant the gate releases avoids it.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
@@ -141,6 +125,18 @@ class MainActivity : FragmentActivity() {
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+
+        // Android 17+: request local network access so LAN servers and discovery
+        // work for returning users on cold start. The session restore in
+        // MainViewModel runs concurrently; on denial, connections to LAN hosts
+        // simply fail fast (and recover once the permission is later granted).
+        if (com.raulshma.jellyplay.core.network.LocalNetworkAccess.enforced &&
+            !com.raulshma.jellyplay.core.network.LocalNetworkAccess.isGranted(this)
+        ) {
+            requestLocalNetworkPermissionLauncher.launch(
+                com.raulshma.jellyplay.core.network.LocalNetworkAccess.PERMISSION
+            )
         }
 
         handleIncomingIntent(intent)
@@ -284,14 +280,14 @@ class MainActivity : FragmentActivity() {
 
             JellyPlayTheme(
                 darkTheme = darkTheme,
-                dynamicColor = preferences.dynamicTheming,
-                oledMode = preferences.oledMode,
+                dynamicColor = preferences.theme.dynamicTheming,
+                oledMode = preferences.theme.oledMode,
                 contrastLevel = preferences.contrastLevel,
                 isTv = isTv(),
                 performanceMode = preferences.performanceMode,
                 reduceMotion = preferences.reduceMotionEnabled,
-                accentColorSwatch = preferences.accentColorSwatch,
-                colorStyle = preferences.colorStyle,
+                accentColorSwatch = preferences.theme.accentColorSwatch,
+                colorStyle = preferences.theme.colorStyle,
                 synthwaveMode = preferences.synthwaveMode,
                 synthwaveAccent = preferences.synthwaveAccent,
                 soothingMode = preferences.soothingMode,
@@ -321,7 +317,7 @@ class MainActivity : FragmentActivity() {
                                 // Surface the rate-limit lockout to the user when present.
                                 val context = LocalContext.current
                                 val lockoutState = remember(preferences.pinLockoutUntilEpochMs) {
-                                    viewModel.preferencesStore.getPinLockoutState()
+                                    viewModel.pinRateLimiter.getPinLockoutState()
                                 }
                                 val now = remember { System.currentTimeMillis() }
                                 val lockoutActive = lockoutState.isLockedOut && lockoutState.lockoutUntilEpochMs > now
@@ -342,7 +338,7 @@ class MainActivity : FragmentActivity() {
                                             // may have triggered it on a previous attempt
                                             // since the last composition. This counter read
                                             // is cheap and stays on the caller thread.
-                                            val currentLockout = viewModel.preferencesStore.getPinLockoutState()
+                                            val currentLockout = viewModel.pinRateLimiter.getPinLockoutState()
                                             val currentNow = System.currentTimeMillis()
                                             if (currentLockout.isLockedOut && currentLockout.lockoutUntilEpochMs > currentNow) {
                                                 val remainingMs = currentLockout.lockoutUntilEpochMs - currentNow
@@ -354,13 +350,13 @@ class MainActivity : FragmentActivity() {
                                             // accounting and optional hash upgrade follow it.
                                             pinVerifying = true
                                             lifecycleScope.launch {
-                                                val valid = viewModel.preferencesStore.verifyPinOffMainThread(pin)
+                                                val valid = viewModel.securityStore.verifyPinOffMainThread(pin)
                                                 if (valid) {
                                                     isPinUnlocked.value = true
                                                     pinError = null
-                                                    viewModel.preferencesStore.resetPinLockout()
+                                                    viewModel.pinRateLimiter.resetPinLockout()
                                                 } else {
-                                                    val newState = viewModel.preferencesStore.recordFailedPinAttempt()
+                                                    val newState = viewModel.pinRateLimiter.recordFailedPinAttempt()
                                                     pinError = if (newState.isLockedOut) {
                                                         formatLockoutMessage(context, newState.lockoutUntilEpochMs - System.currentTimeMillis())
                                                     } else {

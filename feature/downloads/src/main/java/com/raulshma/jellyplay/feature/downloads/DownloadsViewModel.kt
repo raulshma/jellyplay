@@ -2,17 +2,27 @@ package com.raulshma.jellyplay.feature.downloads
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
+import com.raulshma.jellyplay.core.model.ResyncBatchProgress
+import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.formatEta
 import com.raulshma.jellyplay.core.model.formatSpeed
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @Immutable
@@ -26,13 +36,45 @@ data class DownloadsUiState(
     val selectionMode: Boolean = false,
 )
 
+/**
+ * A completed item eligible for a force resync, with enough episode context
+ * (series name + SxxExx) to render the same identification line the downloads
+ * list shows, so episodes are distinguishable in the force-resync picker.
+ */
+@Immutable
+data class ForceResyncCandidate(
+    val id: String,
+    val name: String,
+    val mediaType: com.raulshma.jellyplay.core.model.MediaType,
+    val seriesName: String? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
+)
+
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
+    private val offlineRepository: OfflineRepository,
+    private val syncManager: OfflineSyncManager,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState.flow
+
+    /** Live count of items flagged for a metadata/image resync — appbar badge. */
+    val updatesAvailable: StateFlow<Int> =
+        offlineRepository.getUpdatesCount().stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /** Items with updates, reactive — drives the resync sheet content. */
+    val updateRows: kotlinx.coroutines.flow.Flow<List<OfflineSyncUpdate>> =
+        offlineRepository.getItemsWithUpdates()
+
+    /** Live batch resync progress (per-item phase + aggregate counts). */
+    val resyncProgress: StateFlow<ResyncBatchProgress> = syncManager.batchProgress
+
+    /** True while a batch freshness check is running. */
+    private val _checking = MutableStateFlow(false)
+    val checking: StateFlow<Boolean> = _checking.asStateFlow()
 
     init {
         launch {
@@ -180,6 +222,89 @@ class DownloadsViewModel @Inject constructor(
             }
         }
     }
+
+    // ── Freshness check / resync ────────────────────────────────────────
+
+    /**
+     * Checks every downloaded item for available updates (TTL-gated per item).
+     * Safe to call repeatedly — items within their TTL are skipped. Sets
+     * [checking] while the batch runs so the appbar icon can spin.
+     */
+    fun checkAllForUpdates() {
+        if (_checking.value) return
+        launch {
+            _checking.value = true
+            try {
+                val ids = offlineRepository.getDownloadedItemIds()
+                syncManager.checkForUpdatesBatch(ids)
+            } finally {
+                _checking.value = false
+            }
+        }
+    }
+
+    /**
+     * Resyncs a single item's metadata/images. Progress flows through
+     * [resyncProgress]; the item's update flag clears once its baseline refreshes.
+     */
+    fun resyncOne(itemId: String) {
+        syncManager.resyncBatch(listOf(itemId))
+    }
+
+    /**
+     * Resyncs every item currently flagged for an update. Sequential to keep
+     * bandwidth predictable and avoid competing with active downloads. Resolves
+     * the flagged ids from the repository so it works even if the sheet hasn't
+     * collected [updateRows] yet.
+     */
+    fun resyncAll() {
+        launch {
+            val flagged = offlineRepository.getItemsWithUpdates().first()
+            if (flagged.isNotEmpty()) syncManager.resyncBatch(flagged.map { it.id })
+        }
+    }
+
+    /** Resyncs an explicit set of item ids (used by the sheet's per-item action). */
+    fun resyncAll(itemIds: List<String>) {
+        if (itemIds.isNotEmpty()) syncManager.resyncBatch(itemIds)
+    }
+
+    /** Clears batch progress once the resync sheet is dismissed. */
+    fun clearResyncProgress() {
+        syncManager.clearBatchProgress()
+    }
+
+    /**
+     * Force-resyncs an explicit set of completed items, refreshing only the
+     * data categories in [options]. Unlike [resyncAll], this is user-directed
+     * (any completed item, not just flagged ones) and partial (skipped
+     * categories retain their baseline). Progress flows through [resyncProgress].
+     */
+    fun forceResync(itemIds: List<String>, options: ResyncOptions) {
+        if (itemIds.isEmpty() || options.isEmpty) return
+        syncManager.resyncBatch(itemIds, options)
+    }
+
+    /**
+     * Completed downloads available for a force resync, deduplicated by media
+     * item id. Drives the item picker in the force-resync sheet. Carries the
+     * episode context (series name + SxxExx) so episodes are identifiable in
+     * the picker, mirroring the context line on the downloads list.
+     */
+    fun forceResyncCandidates(): List<ForceResyncCandidate> =
+        _uiState.value.downloads
+            .filter { it.status == DownloadStatus.COMPLETED }
+            .distinctBy { it.mediaItemId }
+            .map {
+                ForceResyncCandidate(
+                    id = it.mediaItemId,
+                    name = it.name,
+                    mediaType = it.mediaType,
+                    seriesName = it.seriesName,
+                    seasonNumber = it.seasonNumber,
+                    episodeNumber = it.episodeNumber,
+                )
+            }
 
     fun formatBytes(bytes: Long): String = bytes.formatBytes()
 

@@ -7,6 +7,32 @@
     <string name="core_reset">Reset</string>
     <string name="core_close">Close</string>
     <string name="core_done">Done</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">Confirm</string>
+    <string name="core_ok">OK</string>
+    <string name="core_apply">Apply</string>
+    <string name="core_delete">Delete</string>
+    <string name="core_clear">Clear</string>
+    <string name="core_undo">Undo</string>
+    <string name="core_clear_filters">Clear filters</string>
+    <string name="core_copy">Copy</string>
+    <string name="core_copied_to_clipboard">Copied to clipboard</string>
+    <string name="core_play_from_start">Play from start</string>
+    <string name="core_restart">Restart</string>
+    <string name="core_send_now">Send now</string>
+    <string name="core_search">Search</string>
+    <string name="core_stop_playback">Stop playback</string>
+    <string name="core_select_all">Select all</string>
+    <string name="core_mark_all_seen">Mark all as seen</string>
+    <string name="core_loading">Loading…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_quick_actions">Quick actions</string>
+    <string name="core_action_play">Play</string>
+    <string name="core_action_mark_watched">Mark as watched</string>
+    <string name="core_action_mark_unwatched">Mark as unwatched</string>
+    <string name="core_action_download">Download</string>
+    <string name="core_action_add_to_playlist">Add to playlist</string>
+    <string name="core_action_details">View details</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->
@@ -584,6 +610,44 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">Download-queue progress and a coming-soon calendar from your Radarr/Sonarr</string>
     <string name="ss_arr_settings_title">Radarr / Sonarr Servers</string>
     <string name="ss_arr_settings_subtitle">Configure direct Radarr/Sonarr server connections</string>
+    <string name="ss_sign_out_from_server_title">Sign Out from Server</string>
+    <string name="ss_sign_out_from_server_subtitle">Revoke this device\'s session on the server</string>
+    <string name="ss_screensaver_show_title_title">Show Title</string>
+    <string name="ss_screensaver_show_title_subtitle">Display media title</string>
+    <string name="ss_screensaver_categories_title">Categories</string>
+    <string name="ss_screensaver_categories_subtitle">Choose which library types appear</string>
+    <string name="ss_screensaver_slideshow_interval_title">Slideshow Interval</string>
+    <string name="ss_screensaver_slideshow_interval_subtitle">Time between image changes</string>
+    <string name="ss_screensaver_ken_burns_title">Ken Burns Effect</string>
+    <string name="ss_screensaver_ken_burns_subtitle">Pan and zoom animation</string>
+    <string name="ss_screensaver_transition_style_title">Transition Style</string>
+    <string name="ss_screensaver_transition_style_subtitle">How the screensaver switches between images</string>
+    <string name="ss_home_backdrop_title">Home Backdrop</string>
+    <string name="ss_home_backdrop_subtitle">Blur the hero artwork as an ambient background</string>
+    <string name="ss_compact_episode_list_title">Compact Episode List</string>
+    <string name="ss_compact_episode_list_subtitle">Show episodes as a vertical list on mobile instead of a horizontal row</string>
+    <string name="ss_nav_bar_customization_title">Navigation Bar</string>
+    <string name="ss_nav_bar_customization_subtitle">Show, hide, and reorder navigation bar items</string>
+    <string name="ss_nav_hide_on_scroll_title">Hide on Scroll</string>
+    <string name="ss_nav_hide_on_scroll_subtitle">Bar hides when scrolling down</string>
+    <string name="ss_newsletter_sections_title">Newsletter Layout &amp; Config</string>
+    <string name="ss_newsletter_sections_subtitle">Choose which sections appear in the newsletter</string>
+    <string name="ss_dialogue_boost_strength_title">Dialogue Boost Strength</string>
+    <string name="ss_dialogue_boost_strength_subtitle">Level of dialogue amplification</string>
+    <string name="ss_mpv_extra_config_title">Advanced Configuration</string>
+    <string name="ss_mpv_extra_config_subtitle">Raw mpv options (mpv.conf style)</string>
+    <string name="ss_reset_engine_defaults_title">Reset to Defaults</string>
+    <string name="ss_reset_engine_defaults_subtitle">Restore MPV, LibVLC, or ExoPlayer settings</string>
+    <string name="ss_audio_prefetch_backfill_title">Back-fill Count</string>
+    <string name="ss_audio_prefetch_backfill_subtitle">Recent tracks kept cached for replay</string>
+    <string name="ss_audio_cache_clear_title">Clear Audio Cache</string>
+    <string name="ss_audio_cache_clear_subtitle">Delete all cached audio bytes</string>
+    <string name="ss_subtitle_tester_title">Subtitle style tester</string>
+    <string name="ss_subtitle_tester_subtitle">Preview styles across engines</string>
+    <string name="ss_subtitle_provider_settings_title">Subtitle Providers</string>
+    <string name="ss_subtitle_provider_settings_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
+    <string name="ss_MEDIA_CARD_PEEK_title">Press-and-Hold Preview</string>
+    <string name="ss_MEDIA_CARD_PEEK_subtitle">Long-press a media card to peek a blurred detail preview; release to dismiss</string>
 
     <!-- Accessibility / media -->
     <string name="core_ui_image_placeholder">Image Placeholder</string>

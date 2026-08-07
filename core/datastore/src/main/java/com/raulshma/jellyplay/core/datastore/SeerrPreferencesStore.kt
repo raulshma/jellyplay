@@ -16,8 +16,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -49,7 +53,7 @@ class SeerrPreferencesStore @Inject constructor(
         val DISCOVER_REGION = stringPreferencesKey("seerr_discover_region")
     }
 
-    val preferences: Flow<SeerrPreferences> = context.seerrDataStore.data
+    val preferences: StateFlow<SeerrPreferences> = context.seerrDataStore.data
         .catch { _ -> emit(emptyPreferences()) }
         .map { prefs ->
             SeerrPreferences(
@@ -72,6 +76,8 @@ class SeerrPreferencesStore @Inject constructor(
                 discoverRegion = prefs[Keys.DISCOVER_REGION] ?: "US",
             )
         }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, SeerrPreferences())
 
     val isConnected: Flow<Boolean> = preferences.map { it.serverUrl.isNotBlank() }
 

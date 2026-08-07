@@ -107,6 +107,8 @@
     <string name="settings_manage_addresses_cd">Gerir endereços</string>
     <string name="settings_active_cd">Ativo</string>
     <string name="settings_remove_cd">Remover</string>
+    <string name="settings_remove_server_confirm_title">Remover servidor?</string>
+    <string name="settings_remove_server_confirm_message">Isto remove o servidor e todos os utilizadores guardados nele.</string>
     <string name="settings_add_address">Adicionar endereço</string>
     <string name="settings_primary">Principal</string>
     <string name="settings_switch">Trocar</string>
@@ -400,6 +402,7 @@
     <string name="settings_library_view_grid">Mostrar itens em disposição de grelha</string>
     <string name="settings_library_view_list">Mostrar itens em disposição de lista</string>
     <string name="settings_library_view_thumb">Mostrar itens como miniaturas horizontais</string>
+    <string name="settings_library_view_masonry">Mostrar itens em disposição de alvenaria</string>
     <string name="settings_home_mode">Modo do início</string>
     <string name="settings_home_mode_video">Ecrã inicial focado em vídeo</string>
     <string name="settings_home_mode_music">Ecrã inicial focado em música</string>
@@ -695,6 +698,8 @@
     <string name="settings_exp_press_hold_preview">Pré-visualização premir-manter</string>
     <string name="settings_exp_press_hold_preview_subtitle">Prima sem soltar um cartão de mídia para espreitar uma pré-visualização desfocada; solte para fechar</string>
     <string name="settings_exp_arr_integration_subtitle">Mostrar o progresso da fila de downloads em Pedidos e um calendário futuro no Início a partir do seu Radarr/Sonarr. Os detalhes do servidor são detetados do Seerr; substituição manual nas definições *arr</string>
+    <string name="settings_exp_expressive_nav">Navegação expressiva do Material 3</string>
+    <string name="settings_exp_expressive_nav_subtitle">Cápsula de navegação flutuante no estilo do novo design do Google Fotos com botão de pesquisa separado.</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">Tamanho da fonte das legendas</string>
@@ -824,6 +829,8 @@
     <string name="settings_hide_watched_items_subtitle">Filtrar por defeito a mídia vista das bibliotecas</string>
     <string name="settings_hide_episode_thumbnails">Ocultar miniaturas de episódios</string>
     <string name="settings_hide_episode_thumbnails_subtitle">Ocultar pré-visualizações para evitar spoilers</string>
+    <string name="settings_compact_episode_list">Lista de episódios compacta</string>
+    <string name="settings_compact_episode_list_subtitle">Mostrar episódios como uma lista vertical no telemóvel em vez de uma linha horizontal</string>
     <string name="settings_skip_special_episodes">Saltar episódios especiais</string>
     <string name="settings_skip_special_episodes_subtitle">Excluir especiais/bónus das listas de episódios</string>
     <string name="settings_haptic_feedback">Feedback háptico</string>
@@ -1138,4 +1145,9 @@
     <string name="settings_subtitles_test">Testar</string>
     <string name="settings_subtitles_testing">Testando…</string>
     <string name="settings_subtitles_connected">Conectado</string>
+    <string name="settings_nav_style">Estilo de navegação</string>
+    <string name="settings_nav_style_expressive">Expressivo (M3)</string>
+    <string name="settings_nav_style_classic">Clássico</string>
+    <string name="settings_nav_style_expressive_subtitle">Cápsula flutuante estilo Google Fotos + botão de pesquisa independente</string>
+    <string name="settings_nav_style_classic_subtitle">Barra de navegação inferior flutuante tradicional</string>
 </resources>

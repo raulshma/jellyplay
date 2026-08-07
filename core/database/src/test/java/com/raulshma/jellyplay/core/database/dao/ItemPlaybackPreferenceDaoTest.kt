@@ -133,6 +133,35 @@ class ItemPlaybackPreferenceDaoTest {
     }
 
     @Test
+    fun `subtitle disabled field round-trips`() = runTest {
+        // Proves the v41→v42 column (subtitleDisabled) exists and is read/written
+        // by the Room-generated mapping.
+        dao.upsert(
+            ItemPlaybackPreferenceEntity(
+                scope = "SERIES",
+                key = "series-1",
+                audioLanguage = null,
+                subtitleLanguage = null,
+                subtitleDisabled = true,
+                updatedAt = 1_000L,
+            )
+        )
+        val saved = dao.getByKey("SERIES", "series-1")
+        assertNotNull(saved)
+        assertEquals(true, saved!!.subtitleDisabled)
+    }
+
+    @Test
+    fun `subtitle disabled field defaults to null when omitted`() = runTest {
+        // Legacy/default behaviour: a row written without the disabled field reads
+        // null (preserves today's language-only semantics).
+        dao.upsert(pref())
+        val saved = dao.getByKey("SERIES", "series-1")
+        assertNotNull(saved)
+        assertNull(saved!!.subtitleDisabled)
+    }
+
+    @Test
     fun `remembered track fields round-trip`() = runTest {
         // Proves the v39→v40 columns (the six remembered* fields) exist and are
         // read/written by the Room-generated mapping.

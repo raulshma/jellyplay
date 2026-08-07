@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.newsletter
 
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,7 +14,7 @@ import javax.inject.Inject
 class NewsletterViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val preferencesStore: UserPreferencesStore,
+    private val notificationStore: NotificationStore,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(NewsletterUiState())
@@ -59,7 +59,7 @@ class NewsletterViewModel @Inject constructor(
 
             mediaRepository.getNewsletterData(sinceDate)
                 .onSuccess { data ->
-                    val prefs = preferencesStore.preferences.value
+                    val prefs = notificationStore.notification.value
                     val resolvedOrder = prefs.newsletterSectionOrder
                         .filter { it in prefs.enabledNewsletterSections }
                         .ifEmpty { NewsletterSectionType.DEFAULT_ORDER }
@@ -94,7 +94,7 @@ class NewsletterViewModel @Inject constructor(
 
     private fun markViewed() {
         launch {
-            preferencesStore.setNewsletterLastViewed(System.currentTimeMillis())
+            notificationStore.setNewsletterLastViewed(System.currentTimeMillis())
         }
     }
 }

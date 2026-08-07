@@ -23,9 +23,11 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -47,16 +49,22 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.feature.library.R
 
 @Composable
@@ -77,11 +85,41 @@ fun FavoritesScreen(
         viewModel.prefetchPhotoFolderChildUrls(snapshot.items)
     }
 
-    JellyPlayScreenScaffold(
-        title = stringResource(R.string.library_favorites),
-        onBack = onBack,
-        backgroundColor = backgroundColor,
-    ) { innerPadding ->
+    // Long-press / TV-Menu quick actions for favorite cards
+    val quickActionController = rememberMediaQuickActionController(
+        resolveActions = remember { { item: MediaItem -> favoritesQuickActions(item) } },
+        executeAction = remember(viewModel, onItemClick) {
+            { item: MediaItem, action: QuickAction ->
+                when (action) {
+                    QuickAction.PLAY -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
+                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
+                    QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
+                    QuickAction.DETAILS -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
+                    else -> Unit
+                }
+            }
+        },
+    )
+    // TV-only: the card currently holding D-pad focus, so the Menu key can open
+    // its quick actions.
+    var tvFocusedItem by remember { mutableStateOf<MediaItem?>(null) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onDpadKey(
+                onMenu = {
+                    tvFocusedItem?.let { quickActionController.show(it) }
+                    true
+                },
+            ),
+    ) {
+        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+        JellyPlayScreenScaffold(
+            title = stringResource(R.string.library_favorites),
+            onBack = onBack,
+            backgroundColor = backgroundColor,
+        ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -121,6 +159,7 @@ fun FavoritesScreen(
                         columns = GridCells.Adaptive(minSize = if (isTv) 180.dp else 150.dp),
                         contentType = { "mediaItem" },
                         state = gridState,
+                        onFocusedIndexChange = { index -> pagingItems[index]?.let { tvFocusedItem = it } },
                         contentPadding = PaddingValues(
                             start = if (isTv) 16.dp else 12.dp,
                             end = if (isTv) 16.dp else 12.dp,
@@ -161,9 +200,12 @@ fun FavoritesScreen(
                     }
                 }
             }
-        }
-    }
-}
+        } // close Column
+        } // close scaffold content lambda
+        } // close CompositionLocalProvider
+    } // close Box
+    MediaQuickActionHost(quickActionController)
+} // close FavoritesScreen
 
 @Composable
 private fun MediaTypeFilterRow(
@@ -229,5 +271,22 @@ private fun MediaTypeFilterRow(
                 )
             }
         }
+    }
+}
+
+/**
+ * Which quick actions apply to a favorite card Mirrors the
+ * library grid's actions: playable entries get play / mark-watched / details.
+ */
+private fun favoritesQuickActions(item: MediaItem): List<QuickAction> = buildList {
+    when (item.mediaType) {
+        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE,
+        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST,
+        MediaType.MUSIC_VIDEO, MediaType.COLLECTION, MediaType.LIVE_TV, MediaType.CHANNEL -> {
+            add(QuickAction.PLAY)
+            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
+            add(QuickAction.DETAILS)
+        }
+        else -> Unit
     }
 }

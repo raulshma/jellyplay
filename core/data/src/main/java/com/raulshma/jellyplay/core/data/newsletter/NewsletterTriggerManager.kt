@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.newsletter
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.DayOfWeek
@@ -11,9 +11,9 @@ import javax.inject.Singleton
 
 @Singleton
 class NewsletterTriggerManager @Inject constructor(
-    private val preferencesStore: UserPreferencesStore,
+    private val notificationStore: NotificationStore,
 ) {
-    fun shouldShowBanner(): Flow<Boolean> = preferencesStore.preferences.map { prefs ->
+    fun shouldShowBanner(): Flow<Boolean> = notificationStore.notification.map { prefs ->
         if (!prefs.newsletterEnabled) return@map false
 
         val configuredDay = dayOfWeekFromPref(prefs.newsletterDayOfWeek)

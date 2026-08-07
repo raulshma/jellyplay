@@ -61,7 +61,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
  * badge, info column) so online and offline series episodes look identical.
  *
  * Two offline-only differences:
- *  - the image is the locally-saved [OfflineMediaItem.backdropPath] (no server URL), and
+ *  - the image is the locally-saved [OfflineMediaItem.posterPath] (the episode
+ *    Primary image, mirroring the online card), and
  *  - a trash affordance is overlaid on the thumbnail so individual episode
  *    downloads can be removed (online episodes have no delete action).
  *
@@ -76,6 +77,7 @@ internal fun OfflineEpisodeCard(
     onDetailClick: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    sharedThumbnailModifier: Modifier = Modifier,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -145,16 +147,19 @@ internal fun OfflineEpisodeCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .then(sharedThumbnailModifier),
             contentAlignment = Alignment.Center,
         ) {
-            val thumb = episode.backdropPath ?: episode.posterPath
+            val thumb = episode.posterPath ?: episode.backdropPath
             if (!thumb.isNullOrBlank()) {
                 MediaImage(
                     url = thumb,
                     contentDescription = episode.name,
                     blurHash = episode.blurHashBackdrop ?: episode.blurHashPrimary,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (episode.isPlayed) Modifier.graphicsLayer { alpha = 0.65f } else Modifier),
                     contentScale = ContentScale.Crop,
                 )
             } else {
@@ -213,7 +218,7 @@ internal fun OfflineEpisodeCard(
             }
 
             // Watch-progress bar.
-            if (positionTicks != null && positionTicks > 0) {
+            if (positionTicks != null && positionTicks > 0 && !episode.isPlayed) {
                 val runtimeTicks = episode.runTimeTicks
                 val progress = if (runtimeTicks != null && runtimeTicks > 0) {
                     (positionTicks.toFloat() / runtimeTicks).coerceIn(0f, 1f)
@@ -227,24 +232,24 @@ internal fun OfflineEpisodeCard(
                         .height(4.dp)
                         .background(MaterialTheme.colorScheme.primary),
                 )
+            } else if (episode.isPlayed) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
+                )
             }
             // Watched badge (mirrors online logic).
             val cardPrefs = LocalCardDisplayPreferences.current
-            if (episode.isPlayed && (positionTicks == null || positionTicks <= 0) && cardPrefs.showWatchedCheckmark) {
-                Box(
+            if (episode.isPlayed && cardPrefs.showWatchedCheckmark) {
+                com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag(
+                    label = stringResource(R.string.downloads_watched),
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .clip(ShapeCache.smooth4)
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.downloads_watched),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.9f),
-                    )
-                }
+                        .align(Alignment.BottomStart)
+                        .padding(start = 6.dp, bottom = 8.dp),
+                )
             }
         }
 
@@ -320,6 +325,225 @@ internal fun OfflineEpisodeCard(
                     lineHeight = TextUnit(16f, TextUnitType.Sp),
                 )
             }
+        }
+    }
+}
+
+/**
+ * Compact, mobile-first episode row for the offline series detail's optional
+ * vertical episode list. Mirrors [OfflineEpisodeCard] semantics — tap opens the
+ * episode detail screen, the centered play icon plays the file, the trash badge
+ * deletes it — but laid out as a single-line row (thumbnail + metadata column)
+ * so a whole season scrolls vertically on a phone.
+ *
+ * Two offline-only differences from the online compact row: the thumbnail is the
+ * locally-saved [OfflineMediaItem.posterPath] (the episode Primary image, as on
+ * the online row), and a trailing trash affordance lets the user remove the
+ * downloaded file.
+ */
+@Composable
+internal fun OfflineCompactEpisodeRow(
+    episode: OfflineMediaItem,
+    isCurrentEpisode: Boolean = false,
+    onPlayClick: () -> Unit,
+    onDetailClick: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+    sharedThumbnailModifier: Modifier = Modifier,
+) {
+    val cardInteractionSource = remember { MutableInteractionSource() }
+    val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(
+        targetValue = if (isCardPressed) 0.98f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "offlineCompactEpisodeRowScale",
+    )
+    val playInteractionSource = remember { MutableInteractionSource() }
+    val isPlayPressed by playInteractionSource.collectIsPressedAsState()
+    val playScale by animateFloatAsState(
+        targetValue = if (isPlayPressed) 0.85f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "offlineCompactEpisodeRowPlayScale",
+    )
+
+    val positionTicks = episode.playbackPositionTicks
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smooth16)
+            .background(
+                if (isCurrentEpisode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+            )
+            .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
+            .combinedClickable(
+                interactionSource = cardInteractionSource,
+                indication = null,
+                onClick = onDetailClick,
+            ),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 128.dp, height = 72.dp)
+                .clip(ShapeCache.smooth16)
+                .then(sharedThumbnailModifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            val thumb = episode.posterPath ?: episode.backdropPath
+            if (!thumb.isNullOrBlank()) {
+                MediaImage(
+                    url = thumb,
+                    contentDescription = episode.name,
+                    blurHash = episode.blurHashBackdrop ?: episode.blurHashPrimary,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (episode.isPlayed) Modifier.graphicsLayer { alpha = 0.65f } else Modifier),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                )
+            }
+            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
+
+            // Centered play affordance (plays the file directly).
+            Icon(
+                Tabler.Outline.PlayerPlay,
+                contentDescription = stringResource(R.string.downloads_action_play),
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .size(32.dp)
+                    .graphicsLayer { scaleX = playScale; scaleY = playScale }
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), CircleShape)
+                    .clickable(
+                        interactionSource = playInteractionSource,
+                        indication = null,
+                        onClick = onPlayClick,
+                    )
+                    .padding(6.dp),
+            )
+
+            // Watch-progress bar.
+            if (positionTicks != null && positionTicks > 0 && !episode.isPlayed) {
+                val runtimeTicks = episode.runTimeTicks
+                val progress = if (runtimeTicks != null && runtimeTicks > 0) {
+                    (positionTicks.toFloat() / runtimeTicks).coerceIn(0f, 1f)
+                } else {
+                    (episode.playedPercentage / 100f).toFloat().coerceIn(0f, 1f)
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(progress)
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            } else if (episode.isPlayed) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
+                )
+            }
+            // Watched tag (mirrors OfflineEpisodeCard).
+            val cardPrefs = LocalCardDisplayPreferences.current
+            if (episode.isPlayed && cardPrefs.showWatchedCheckmark) {
+                com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag(
+                    label = stringResource(R.string.downloads_watched),
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 4.dp, bottom = 6.dp),
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text = buildString {
+                    episode.episodeNumber?.let { append("$it. ") }
+                    append(episode.name)
+                },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val runtimeTicks = episode.runTimeTicks
+            val hasWatchProgress = positionTicks != null && positionTicks > 0 && !episode.isPlayed
+            val remainingTime = if (hasWatchProgress && runtimeTicks != null) {
+                formatRemainingTimeFromTicks(runtimeTicks, positionTicks)
+            } else null
+            val totalTime = runtimeTicks?.takeIf { it > 0 }?.let { formatDurationFromTicks(it) }
+
+            if (remainingTime != null && totalTime != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(top = 2.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.downloads_time_left, remainingTime),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Text(
+                        text = totalTime,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else if (totalTime != null) {
+                Text(
+                    text = totalTime,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+
+        // Per-episode delete (offline only). Sits at the trailing edge of the row
+        // rather than overlaid on the thumbnail (as on the card) — the compact row
+        // has room for a dedicated affordance.
+        val deleteFocusState = rememberTvFocusState(focusedScale = 1.1f)
+        Box(
+            modifier = Modifier
+                .padding(end = 12.dp)
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.4f))
+                .then(deleteFocusState.focusModifier)
+                .then(Modifier.tvFocusIndicator(deleteFocusState, CircleShape))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDelete,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Tabler.Outline.Trash,
+                contentDescription = stringResource(R.string.downloads_delete_episode_cd),
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

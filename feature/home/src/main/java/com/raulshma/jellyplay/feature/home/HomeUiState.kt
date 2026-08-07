@@ -24,7 +24,7 @@ data class HomeUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     /** True while a manual offline→online transition is in progress, so the
-     *  Go-online affordances can show an inline spinner instead of being silent. */
+     * Go-online affordances can show an inline spinner instead of being silent. */
     val isGoingOnline: Boolean = false,
     val error: String? = null,
     /** Non-blocking notice shown when some (not all) home sections failed to load. */
@@ -45,11 +45,11 @@ data class HomeUiState(
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     val searchState: HomeSearchState = HomeSearchState(),
     /** True while the search field holds a non-blank query. This is the only
-     *  search-derived signal read at the [MainHomeContent] orchestrator level:
-     *  it flips at most twice per search session (blank↔nonblank) instead of
-     *  once per keystroke, so the ~510-line body recomposes far less. The live
-     *  query string is read separately in a leaf via the VM's `searchQuery`
-     *  StateFlow. */
+     * search-derived signal read at the [MainHomeContent] orchestrator level:
+     * it flips at most twice per search session (blank↔nonblank) instead of
+     * once per keystroke, so the ~510-line body recomposes far less. The live
+     * query string is read separately in a leaf via the VM's `searchQuery`
+     * StateFlow. */
     val isSearchActive: Boolean = false,
     /** Whether to include settings results in the home search bar. Driven by Appearance prefs. */
     val showSettingsInHomeSearch: Boolean = true,
@@ -61,6 +61,11 @@ data class HomeUiState(
     /** Whether the DIRECT_ARR_INTEGRATION experimental flag is enabled. */
     val directArrEnabled: Boolean = false,
     val currentUser: UserInfo? = null,
+    /**
+     * All users persisted for the current server. Drives the home app-bar
+     * quick user switcher : the chip only renders when there are ≥2 users.
+     */
+    val currentServerUsers: List<UserInfo> = emptyList(),
     /**
      * Mirror of the user's enabled home section types (from prefs). Consumed
      * only by the inline section-config sheet so it can show the current

@@ -14,6 +14,7 @@ import com.composables.icons.tabler.outline.ListDetails
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Playlist
 import com.composables.icons.tabler.outline.Share
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -21,7 +22,6 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isVideoType
-import com.raulshma.jellyplay.core.model.UserPreferences
 import com.raulshma.jellyplay.feature.details.R
 
 /**
@@ -52,7 +52,7 @@ internal fun rememberMediaOptions(
     isAudio: Boolean,
     isSeries: Boolean,
     seasons: List<MediaItem>,
-    preferences: UserPreferences,
+    preferences: DetailPreferences,
     activeDownload: DownloadItem?,
     isDownloading: Boolean,
     isDownloadingSeries: Boolean,

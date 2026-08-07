@@ -18,10 +18,21 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayPlaybackCore
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore
+import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
+import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import io.mockk.every
 import io.mockk.mockk
@@ -46,7 +57,6 @@ class VideoPlayerViewModelExtendedTest {
 
     private lateinit var viewModel: VideoPlayerViewModel
     private lateinit var itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository
-    private lateinit var preferencesStore: UserPreferencesStore
 
     @Before
     fun setUp() {
@@ -60,7 +70,18 @@ class VideoPlayerViewModelExtendedTest {
         val offlineRepository = mockk<OfflineRepository>(relaxed = true)
         val offlinePlaybackFacade = mockk<OfflinePlaybackFacade>(relaxed = true)
         itemPlaybackPreferenceRepository = mockk(relaxed = true)
-        preferencesStore = mockk(relaxed = true)
+        val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
+        val engineStore = mockk<PlayerEngineStore>(relaxed = true)
+        val subtitleStore = mockk<SubtitleLanguageStore>(relaxed = true)
+        val securityStore = mockk<SecurityStore>(relaxed = true)
+        val syncPlayCastStore = mockk<SyncPlayCastStore>(relaxed = true)
+        val playbackStore = mockk<PlaybackStore>(relaxed = true)
+        val audioStore = mockk<AudioStore>(relaxed = true)
+        val audioEffectsStore = mockk<AudioEffectsStore>(relaxed = true)
+        val videoPlayerStore = mockk<VideoPlayerStore>(relaxed = true)
+        val downloadsStore = mockk<DownloadsStore>(relaxed = true)
+        val appearanceStore = mockk<AppearanceStore>(relaxed = true)
+        val networkOfflineStore = mockk<NetworkOfflineStore>(relaxed = true)
         val sessionManager = mockk<PlaybackSessionManager>(relaxed = true)
         val castManager = mockk<CastManager>(relaxed = true)
         val jellyfinRemotePlayCastStrategy = mockk<com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy>(relaxed = true)
@@ -71,12 +92,47 @@ class VideoPlayerViewModelExtendedTest {
             every { isMetered } returns MutableStateFlow(false)
         }
         val activePlayerController = mockk<ActivePlayerController>(relaxed = true)
-        val playerLifecycleManager = PlayerLifecycleManager(preferencesStore)
+        val playerLifecycleManager = PlayerLifecycleManager(playbackStore)
         val pipController = com.raulshma.jellyplay.core.data.playback.PipController()
         val videoMiniPlayerState = mockk<VideoMiniPlayerState>(relaxed = true)
         val sleepTimerManager = mockk<SleepTimerManager>(relaxed = true)
 
-        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        every { aggregateStore.aggregate } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate()
+        )
+        every { engineStore.playerEngine } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice()
+        )
+        every { subtitleStore.subtitle } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice()
+        )
+        every { securityStore.security } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.security.SecuritySlice()
+        )
+        every { syncPlayCastStore.syncPlayCast } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice()
+        )
+        every { playbackStore.playback } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice()
+        )
+        every { audioStore.audio } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.audio.AudioSlice()
+        )
+        every { audioEffectsStore.audioEffects } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice()
+        )
+        every { videoPlayerStore.videoPlayer } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice()
+        )
+        every { downloadsStore.downloads } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice()
+        )
+        every { appearanceStore.appearance } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice()
+        )
+        every { networkOfflineStore.networkOffline } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice()
+        )
         every { sleepTimerManager.remainingMs } returns MutableStateFlow(0L)
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
@@ -90,8 +146,21 @@ class VideoPlayerViewModelExtendedTest {
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
             offlinePlaybackFacade = offlinePlaybackFacade,
+            playbackSourceResolver = mockk(relaxed = true),
+            episodeCatalogue = mockk(relaxed = true),
             itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
-            preferencesStore = preferencesStore,
+            aggregateStore = aggregateStore,
+            engineStore = engineStore,
+            subtitleStore = subtitleStore,
+            securityStore = securityStore,
+            syncPlayCastStore = syncPlayCastStore,
+            playbackStore = playbackStore,
+            audioStore = audioStore,
+            audioEffectsStore = audioEffectsStore,
+            videoPlayerStore = videoPlayerStore,
+            downloadsStore = downloadsStore,
+            appearanceStore = appearanceStore,
+            networkOfflineStore = networkOfflineStore,
             sessionManager = sessionManager,
             castManager = castManager,
             jellyfinRemotePlayCastStrategy = jellyfinRemotePlayCastStrategy,
@@ -112,6 +181,7 @@ class VideoPlayerViewModelExtendedTest {
             ),
             fontProvider = mockk(relaxed = true),
             savedStateHandle = androidx.lifecycle.SavedStateHandle(),
+            subtitlePreviewRepository = mockk(relaxed = true),
         )
     }
 

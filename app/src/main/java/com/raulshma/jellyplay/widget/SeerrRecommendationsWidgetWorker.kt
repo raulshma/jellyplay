@@ -7,7 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetSource
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -24,7 +24,7 @@ import java.util.Locale
 class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
-    private val userPreferencesStore: UserPreferencesStore,
+    private val widgetDataStore: WidgetDataStore,
     private val seerrPreferencesStore: SeerrPreferencesStore,
     private val seerrRepository: SeerrRepository,
 ) : CoroutineWorker(appContext, params) {
@@ -37,7 +37,7 @@ class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
             return@runCatching
         }
 
-        val config = userPreferencesStore.widgetConfig.first()
+        val config = widgetDataStore.widgetConfig.first()
         val region = seerrPrefs.discoverRegion.ifBlank { "US" }
         val response = fetch(config.seerrSource, region).getOrNull()
         val items = response?.results.orEmpty().take(MAX_ITEMS)
@@ -46,7 +46,7 @@ class SeerrRecommendationsWidgetWorker @AssistedInject constructor(
             return@runCatching
         }
         val mapped = items.map { it.toWidgetItem() }
-        WidgetPersistHelper.persistSeerrItems(applicationContext, userPreferencesStore, mapped, versionBumpOnly = false)
+        WidgetPersistHelper.persistSeerrItems(applicationContext, widgetDataStore, mapped, versionBumpOnly = false)
     }.fold(
         onSuccess = { Result.success() },
         onFailure = { e ->

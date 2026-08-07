@@ -212,4 +212,79 @@ class TtlCacheTest {
         fakeNowMs += 500L // total elapsed == ttl
         assertNull(cache.get("key"))
     }
+
+    // ── Identity-keyed isolation ──────────────────────────────────────────
+    // A different (serverId, userId) must be a guaranteed cache miss: the whole
+    // point of threading CacheIdentity into the key is that a wrong identity
+    // can never serve another identity's data within the TTL window.
+
+    private val identityA = CacheIdentity.of("server-1", "user-A")
+    private val identityB = CacheIdentity.of("server-1", "user-B")
+
+    @Test
+    fun get_identityAware_putThenGetSameIdentity_returnsValue() {
+        val cache = newCache()
+        cache.put(identityA, "key", "value")
+        assertEquals("value", cache.get(identityA, "key"))
+    }
+
+    @Test
+    fun get_identityAware_differentIdentity_returnsNull() {
+        val cache = newCache()
+        cache.put(identityA, "key", "value")
+        assertNull(cache.get(identityB, "key"))
+    }
+
+    @Test
+    fun get_identityAware_sameContentKeyUnderTwoIdentities_coexist() {
+        val cache = newCache()
+        cache.put(identityA, "key", "value-A")
+        cache.put(identityB, "key", "value-B")
+        assertEquals("value-A", cache.get(identityA, "key"))
+        assertEquals("value-B", cache.get(identityB, "key"))
+    }
+
+    @Test
+    fun remove_identityAware_onlyAffectsThatIdentity() {
+        val cache = newCache()
+        cache.put(identityA, "key", "value-A")
+        cache.put(identityB, "key", "value-B")
+
+        cache.remove(identityA, "key")
+
+        assertNull(cache.get(identityA, "key"))
+        assertEquals("value-B", cache.get(identityB, "key"))
+    }
+
+    @Test
+    fun removeByKeyPrefix_identityAware_scopedToThatIdentity() {
+        val cache = newCache()
+        cache.put(identityA, "similar_item1_5", "a1")
+        cache.put(identityA, "similar_item1_10", "a2")
+        cache.put(identityB, "similar_item1_5", "b1")
+        cache.put(identityB, "similar_item1_10", "b2")
+
+        cache.removeByKeyPrefix(identityA, "similar_item1")
+
+        assertNull(cache.get(identityA, "similar_item1_5"))
+        assertNull(cache.get(identityA, "similar_item1_10"))
+        assertEquals("b1", cache.get(identityB, "similar_item1_5"))
+        assertEquals("b2", cache.get(identityB, "similar_item1_10"))
+    }
+
+    @Test
+    fun get_identityAware_respectsTtlExpiry() {
+        val cache = newCache(ttlMs = 1_000L)
+        cache.put(identityA, "key", "value")
+        fakeNowMs += 1_000L
+        assertNull(cache.get(identityA, "key"))
+    }
+
+    @Test
+    fun get_unknownIdentity_neverServesRealIdentityData() {
+        val cache = newCache()
+        cache.put(identityA, "key", "value")
+        // Pre-login / post-logout identity can never read a real identity's entry.
+        assertNull(cache.get(CacheIdentity.UNKNOWN, "key"))
+    }
 }

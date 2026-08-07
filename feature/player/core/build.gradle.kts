@@ -24,6 +24,14 @@ android {
             isReturnDefaultValues = true
         }
     }
+    // testFixtures hosts the abstract [MediaEngineContractTest] base class so
+    // :feature:player:video test sources can extend it for the NoOp + 3 adapter
+    // specimens (NoOpEngine is `internal`, so it can only be reached from a
+    // module that already sees the engine package). AGP 9 supports testFixtures
+    // for library modules.
+    testFixtures {
+        enable = true
+    }
 }
 
 dependencies {
@@ -46,4 +54,21 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)
+
+    // testFixtures dependencies: the abstract MediaEngineContractTest base
+    // class references [MediaEngine] and its supertypes
+    // ([RemotePlayableEngine], [PlayerLifecycleCallbacks]) plus the engine
+    // data types (EngineError, TimedCue, SubtitleEvent, …). AGP's testFixtures
+    // source set does not inherit the main `implementation` classpath, so every
+    // module the base class touches must be redeclared here. Available to every
+    // consumer of this module's test fixtures (currently :feature:player:video).
+    testFixturesImplementation(project(":core:model"))
+    testFixturesImplementation(project(":core:data"))
+    testFixturesImplementation(platform(libs.compose.bom))
+    testFixturesImplementation(libs.compose.runtime)
+    testFixturesImplementation(libs.kotlinx.coroutines.android)
+    testFixturesImplementation(libs.media3.exoplayer)
+    testFixturesImplementation(libs.junit)
+    testFixturesImplementation(libs.coroutines.test)
+    testFixturesImplementation(libs.androidx.test.core)
 }

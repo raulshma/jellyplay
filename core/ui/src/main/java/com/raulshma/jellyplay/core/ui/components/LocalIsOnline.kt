@@ -24,3 +24,18 @@ val LocalNetworkStatus: ProvidableCompositionLocal<StateFlow<NetworkStatus>> =
  */
 val LocalServerHealth: ProvidableCompositionLocal<StateFlow<ServerHealth>> =
     staticCompositionLocalOf { error("LocalServerHealth not provided") }
+
+/**
+ * Holder for the "Surprise Me" launcher-shortcut signal
+ * [armed] flips to `true` when the shortcut fires; the Home hero controller
+ * observes it and calls [consume] once it has acted, so re-mounting Home
+ * (e.g. back-and-forth navigation) doesn't re-trigger the surprise pick.
+ */
+@androidx.compose.runtime.Immutable
+class SurpriseLaunchController(
+    val armed: StateFlow<Boolean>,
+    val consume: () -> Unit,
+)
+
+val LocalSurpriseOnLaunch: ProvidableCompositionLocal<SurpriseLaunchController> =
+    staticCompositionLocalOf { error("LocalSurpriseOnLaunch not provided") }

@@ -36,6 +36,7 @@
     <string name="home_downloads">Downloads</string>
     <string name="home_play_on">Reproduzir em</string>
     <string name="home_settings">Definições</string>
+    <string name="home_switch_user">Mudar de utilizador</string>
     <string name="home_going_online">A ligar…</string>
     <string name="home_go_online">Ficar online</string>
     <string name="home_go_offline">Ficar offline</string>

@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Sottotitoli</string>
+    <string name="player_resumed_message">Ripreso da dove avevi interrotto</string>
     <string name="player_reset_to_auto">Reimposta su automatico</string>
     <string name="player_track_default">Predefinito</string>
     <string name="player_track_off">Off</string>
@@ -73,6 +74,7 @@
     <string name="player_video_border_width">Larghezza bordo: %1$s</string>
     <string name="player_video_shadow_offset">Offset ombra: %1$s</string>
     <string name="player_video_subtitle_offset">Offset sottotitoli: %1$s</string>
+    <string name="player_video_sync_preview_reset">Ripristina offset</string>
     <string name="player_video_vertical_position">Posizione verticale: %1$d%%</string>
 
     <!-- Sleep timer sheet -->
@@ -211,18 +213,10 @@
     <string name="player_video_on">Attivo</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_subtitle_delay">Ritardo sottotitoli</string>
     <string name="player_video_reset_both">Ripristina entrambi</string>
     <string name="player_video_av_sync_audio_helper">Negativo: audio prima. Positivo: audio dopo.</string>
-    <string name="player_video_av_sync_subtitle_helper">Negativo: sottotitoli prima. Positivo: sottotitoli dopo.</string>
     <string name="player_video_av_sync_decrease">Diminuisci %1$s</string>
     <string name="player_video_av_sync_increase">Aumenta %1$s</string>
-    <string name="player_video_sync_helper">Assistente di sincronia</string>
-    <string name="player_video_sync_helper_hint">Tieni premuto «Voce udita» quando viene pronunciata una battuta, poi «Testo visto» quando appare il suo sottotitolo.</string>
-    <string name="player_video_voice_heard">🔊 Voce udita</string>
-    <string name="player_video_listening">In ascolto…</string>
-    <string name="player_video_text_seen">💬 Testo visto</string>
-    <string name="player_video_watching">In osservazione…</string>
     <string name="player_video_picture_in_picture">Picture-in-picture</string>
     <string name="player_video_play_next">Riproduci successivo</string>
     <string name="player_video_turn_on_autoplay">Attiva riproduzione automatica</string>
@@ -237,6 +231,7 @@
     <string name="player_video_duration">Durata</string>
     <string name="player_video_remember_audio_language">Ricorda la lingua audio per questa serie</string>
     <string name="player_video_remember_subtitle_language">Ricorda la lingua dei sottotitoli per questa serie</string>
+    <string name="player_video_remember_subtitles_off">Mantieni sottotitoli disattivati per questa serie</string>
     <string name="player_video_error_offline_file_missing">Errore: file offline mancante</string>
     <string name="player_video_error_loading_media">Errore durante il caricamento dei contenuti</string>
     <string name="player_video_trickplay_thumbnail">Miniatura trickplay</string>

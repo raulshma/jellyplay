@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="syncplay_leave_group">グループから退出</string>
+    <string name="syncplay_leave_group_confirm_title">グループから退出しますか？</string>
+    <string name="syncplay_leave_group_confirm_message">視聴パーティーから削除されます。</string>
     <string name="syncplay_retry">再試行</string>
     <string name="syncplay_no_active_groups">アクティブな SyncPlay グループがありません</string>
     <string name="syncplay_create_group_together">グループを作成して一緒に視聴しましょう</string>

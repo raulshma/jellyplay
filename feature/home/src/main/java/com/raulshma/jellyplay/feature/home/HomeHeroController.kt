@@ -21,8 +21,10 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.isTv
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
@@ -94,6 +96,18 @@ internal fun rememberHeroController(
     val isTvForRotation = remember(context) { context.isTv() }
     var autoRotateEnabled by remember { mutableStateOf(!isTvForRotation) }
     var focusInHero by remember { mutableStateOf(true) }
+
+    // Honor the "Surprise Me" launcher shortcut when the
+    // app-level signal arms, flip the same state the menu item uses, then clear
+    // the signal so re-mounting Home doesn't re-fire.
+    val surpriseController = LocalSurpriseOnLaunch.current
+    val surpriseArmed by surpriseController.armed.collectAsStateWithLifecycle()
+    LaunchedEffect(surpriseArmed) {
+        if (surpriseArmed) {
+            showSurprise = true
+            surpriseController.consume()
+        }
+    }
 
     LaunchedEffect(showSurprise) {
         if (showSurprise && featuredCandidates.isNotEmpty()) {

@@ -6,14 +6,18 @@ import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.model.Genre
+import com.raulshma.jellyplay.core.model.GroupBy
+import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryFolder
+import com.raulshma.jellyplay.core.model.LibrarySectionContext
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.defaultViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,7 +30,20 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
+/**
+ * Lenient codec for the persisted library-filter blob. `ignoreUnknownKeys`
+ * keeps decode forward-compatible when fields are added later; `encodeDefaults`
+ * guarantees a complete on-disk snapshot (matching the legacy mirror's output).
+ * Note: `ignoreUnknownKeys` does NOT suppress unknown enum constants —
+ * [selectFolder] keeps its try/catch as the resilience boundary for those.
+ */
+private val libraryJson = Json {
+    ignoreUnknownKeys = true
+    encodeDefaults = true
+}
+
 @Immutable
+@Serializable
 data class LibraryFilters(
     val mediaTypes: List<MediaType> = emptyList(),
     val genres: List<String> = emptyList(),
@@ -36,28 +53,6 @@ data class LibraryFilters(
     val tags: List<String> = emptyList(),
     val minRating: Float = 0f,
 )
-
-@Serializable
-internal data class SavedLibraryFilters(
-    val mediaTypes: List<String> = emptyList(),
-    val genres: List<String> = emptyList(),
-    val years: List<Int> = emptyList(),
-    val sortBy: String = "SORT_NAME",
-    val playedStatus: String = "ALL",
-    val tags: List<String> = emptyList(),
-    val minRating: Float = 0f,
-)
-
-enum class SortOption(val displayName: String, val apiValue: String) {
-    SORT_NAME("Name", "SortName"),
-    YEAR_DESC("Newest", "ProductionYear,SortName"),
-    YEAR_ASC("Oldest", "ProductionYear,SortName"),
-    RATING("Rating", "CommunityRating,SortName"),
-    DATE_ADDED("Recently Added", "DateCreated,SortName"),
-    RANDOM("Random", "Random"),
-    DATE_PLAYED("Recently Played", "DatePlayed,SortName"),
-    PREMIERE_DATE("Release Date", "PremiereDate,SortName"),
-}
 
 /** Projected slice of [UserPreferences] used to derive the active library view mode. */
 private data class ViewModePrefs(
@@ -76,7 +71,7 @@ class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
-    private val preferencesStore: UserPreferencesStore,
+    private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
 ) : JellyPlayViewModel() {
 
     private val _folders = stateFlow<List<LibraryFolder>>(emptyList())
@@ -106,8 +101,40 @@ class LibraryViewModel @Inject constructor(
     private val _viewMode = stateFlow(LibraryViewMode.GRID)
     val viewMode = _viewMode.flow
 
+    /**
+     * The user's explicit in-memory view-mode choice (set by [setViewMode]).
+     * While non-null, [loadViewMode]'s collector refuses to overwrite
+     * [_viewMode] — closing a race where the async store write re-emits the
+     * old persisted value (or the collectionType-derived default) and snaps the
+     * grid back to the previous mode moments after a tap. Reset on folder
+     * change so the new folder loads its own saved mode.
+     */
+    private val _userViewModeOverride = kotlinx.coroutines.flow.MutableStateFlow<LibraryViewMode?>(null)
+
     private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
     val photoFolderChildUrls = _photoFolderChildUrls.flow
+
+    /**
+     * Non-null when this VM is driving a home-section "See All" deep-link. While
+     * set, the folder chips are hidden, folder loading is skipped, and the
+     * pre-applied sort / media-type filter from the source section is used
+     * instead of the persisted per-folder state. Cleared implicitly when the VM
+     * is disposed (each route entry gets a fresh VM).
+     */
+    private val _sectionContext = stateFlow<LibrarySectionContext?>(null)
+    val sectionContext = _sectionContext.flow
+
+    /** Title to show in the toolbar. Null ⇒ the default "Library" string. */
+    private val _title = stateFlow<String?>(null)
+    val title = _title.flow
+
+    /** Poster-size multiplier persisted globally (see [LibraryStore]). */
+    private val _posterSize = stateFlow(1.0f)
+    val posterSize = _posterSize.flow
+
+    /** Client-side grouping dimension persisted globally (see [LibraryStore]). */
+    private val _groupBy = stateFlow(GroupBy.NONE)
+    val groupBy = _groupBy.flow
 
     /**
      * Per-item slice of [photoFolderChildUrls]. Lets each photo-folder card
@@ -120,21 +147,44 @@ class LibraryViewModel @Inject constructor(
             .map { it[itemId].orEmpty() }
             .distinctUntilChanged()
 
+    /**
+     * Marks the item played/unplayed on the server. Intentionally silent: the
+     * paged grid is left untouched so the user keeps their scroll position —
+     * the badge updates on the next natural data refresh.
+     */
+    fun markItemPlayed(item: MediaItem, played: Boolean) {
+        launch {
+            if (played) mediaRepository.markPlayed(item.id) else mediaRepository.markUnplayed(item.id)
+        }
+    }
+
     private val _refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val pagedItems: Flow<PagingData<MediaItem>> = combine(_selectedFolder.flow, _filters.flow, _refreshTrigger) { folder, filters, _ ->
-        folder to filters
-    }.flatMapLatest { (folder, filters) ->
+    val pagedItems: Flow<PagingData<MediaItem>> = combine(
+        _selectedFolder.flow,
+        _filters.flow,
+        _sectionContext.flow,
+        _refreshTrigger,
+    ) { folder, filters, sectionCtx, _ ->
+        Triple(folder, filters, sectionCtx)
+    }.flatMapLatest { (folder, filters, sectionCtx) ->
       mediaRepository.getMediaItemsPaged(
           parentId = folder?.id,
           mediaTypes = filters.mediaTypes.ifEmpty { null },
           genres = filters.genres.ifEmpty { null },
           years = filters.years.ifEmpty { null },
           sortBy = filters.sortBy.apiValue,
+          sortOrder = filters.sortBy.sortOrder,
           tags = filters.tags.ifEmpty { null },
           playedStatus = filters.playedStatus.takeIf { it != PlayedStatus.ALL },
           minRating = filters.minRating.takeIf { it > 0f },
+          // Section mode ("See All" from a home Latest row) must match what the
+          // home row showed. Home's /Items/Latest returns leaf items: episodes
+          // for a TV library, movies for a movie library. To reproduce that leaf
+          // set, section mode includes episodes; normal library tab browsing
+          // shows top-level items only.
+          kindFilter = if (sectionCtx == null) ItemKindFilter.TOP_LEVEL else ItemKindFilter.LEAF_ITEMS,
       )
     }
     .cachedIn(scope)
@@ -144,6 +194,57 @@ class LibraryViewModel @Inject constructor(
         loadGenres()
         loadTags()
         loadViewMode()
+        loadLayoutPrefs()
+    }
+
+    /**
+     * Section-mode entry point: called once from [LibraryScreen] when opened via
+     * [Route.LibrarySection]. Scopes the paged query to the section's library,
+     * pre-applies the section's sort / media-type filter, hides the folder chips
+     * (the section is already scoped), and skips the folder fetch.
+     */
+    fun configureSection(ctx: LibrarySectionContext) {
+        if (_sectionContext.value == ctx) return
+        _sectionContext.set(ctx)
+        _title.set(ctx.title)
+        val folder = ctx.parentId?.let { LibraryFolder(id = it, name = ctx.title, collectionType = ctx.collectionType) }
+        _selectedFolder.set(folder)
+        val sectionSort = ctx.sortBy?.let { api ->
+            SortOption.entries.firstOrNull { it.apiValue == api || it.name == api }
+        } ?: SortOption.DATE_ADDED
+        // Reproduce the home row's /Items/Latest item set:
+        // a TV library's Latest row shows episodes, so "See All" must scope to
+        // EPISODE too. Explicitly-passed ctx.mediaTypes win over the derived
+        // default. All other library types show their top-level items as the
+        // row does.
+        _userViewModeOverride.value = null
+        val sectionMediaTypes = ctx.mediaTypes.ifEmpty {
+            when (ctx.collectionType) {
+                "tvshows" -> listOf(MediaType.EPISODE)
+                "movies" -> listOf(MediaType.MOVIE)
+                "music" -> listOf(MediaType.AUDIO)
+                "musicvideos" -> listOf(MediaType.MUSIC_VIDEO)
+                else -> emptyList()
+            }
+        }
+        _filters.set(
+            LibraryFilters(
+                sortBy = sectionSort,
+                mediaTypes = sectionMediaTypes,
+            )
+        )
+    }
+
+    private fun loadLayoutPrefs() {
+        launch {
+            libraryStore.library
+                .map { it.libraryPosterSize to it.libraryGroupBy }
+                .distinctUntilChanged()
+                .collect { (posterSize, groupBy) ->
+                    _posterSize.set(posterSize)
+                    _groupBy.set(groupBy)
+                }
+        }
     }
 
     private fun loadViewMode() {
@@ -160,7 +261,7 @@ class LibraryViewModel @Inject constructor(
         // user override per-folder via the toolbar toggle.
         launch {
             combine(
-                preferencesStore.preferences
+                libraryStore.library
                     .map { ViewModePrefs(it.libraryViewMode, it.libraryViewModes) }
                     .distinctUntilChanged(),
                 _selectedFolder.flow,
@@ -171,19 +272,45 @@ class LibraryViewModel @Inject constructor(
                     }
                 }
                 perLibrary ?: folder?.defaultViewMode() ?: viewModePrefs.libraryViewMode
-            }.collect { mode -> _viewMode.set(mode) }
+            }.collect { mode ->
+                // Don't clobber an explicit user choice. A view-mode tap writes
+                // the store asynchronously; that store re-emission lands here and
+                // would otherwise snap the grid back to the stale/derived value
+                // (the "changes then switches back" bug). The override is cleared
+                // on folder change so each folder still loads its saved mode.
+                if (_userViewModeOverride.value == null) {
+                    _viewMode.set(mode)
+                }
+            }
         }
     }
 
     fun setViewMode(mode: LibraryViewMode) {
         _viewMode.set(mode)
+        // Record the choice so the loadViewMode collector yields until the store
+        // settles, then clear it — subsequent folder switches re-derive normally.
+        _userViewModeOverride.value = mode
         launch {
-            preferencesStore.setLibraryViewMode(mode)
+            libraryStore.setLibraryViewMode(mode)
             val folderId = _selectedFolder.value?.id
-            if (folderId != null) {
-                preferencesStore.setLibraryViewMode(folderId, mode.name)
+            // In section mode the synthetic folder id is the section's parentId;
+            // persisting a per-folder view-mode override there would leak the
+            // section scope into the user's real per-library settings, so only
+            // persist the global default in section mode.
+            if (folderId != null && _sectionContext.value == null) {
+                libraryStore.setLibraryViewMode(folderId, mode.name)
             }
         }
+    }
+
+    fun setPosterSize(size: Float) {
+        _posterSize.set(size)
+        launch { libraryStore.setLibraryPosterSize(size) }
+    }
+
+    fun setGroupBy(groupBy: GroupBy) {
+        _groupBy.set(groupBy)
+        launch { libraryStore.setLibraryGroupBy(groupBy) }
     }
 
     private fun loadFolders() {
@@ -242,9 +369,13 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun selectFolder(folder: LibraryFolder?) {
+        // Clear any explicit override from the previous folder so the new folder
+        // loads its own saved/derived view mode (otherwise the override would
+        // suppress the loadViewMode collector for the new selection).
+        _userViewModeOverride.value = null
         _selectedFolder.set(folder)
         if (folder != null) {
-            val prefs = preferencesStore.preferences.value
+            val prefs = libraryStore.library.value
             val savedOrder = prefs.defaultLibrarySortOrders[folder.id]
             val savedFiltersJson = prefs.libraryFilters[folder.id]
 
@@ -252,16 +383,7 @@ class LibraryViewModel @Inject constructor(
 
             if (savedFiltersJson != null) {
                 try {
-                    val saved = Json.decodeFromString<SavedLibraryFilters>(savedFiltersJson)
-                    newFilters = LibraryFilters(
-                        mediaTypes = saved.mediaTypes.mapNotNull { runCatching { MediaType.valueOf(it) }.getOrNull() },
-                        genres = saved.genres,
-                        years = saved.years,
-                        sortBy = SortOption.entries.find { it.name == saved.sortBy || it.apiValue == saved.sortBy } ?: SortOption.SORT_NAME,
-                        playedStatus = PlayedStatus.entries.find { it.name == saved.playedStatus } ?: PlayedStatus.ALL,
-                        tags = saved.tags,
-                        minRating = saved.minRating,
-                    )
+                    newFilters = libraryJson.decodeFromString<LibraryFilters>(savedFiltersJson)
                 } catch (_: Exception) {
                     newFilters = LibraryFilters()
                 }
@@ -285,20 +407,14 @@ class LibraryViewModel @Inject constructor(
 
     fun updateFilters(newFilters: LibraryFilters) {
         _filters.set(newFilters)
+        // Skip persistence in section mode: the folder id is synthetic (a
+        // section parentId) and persisting there would leak section state into
+        // the user's real per-library filter overrides.
         val folder = _selectedFolder.value
-        if (folder != null) {
+        if (folder != null && _sectionContext.value == null) {
             launch {
-                preferencesStore.setDefaultLibrarySortOrder(folder.id, newFilters.sortBy.name)
-                val saved = SavedLibraryFilters(
-                    mediaTypes = newFilters.mediaTypes.map { it.name },
-                    genres = newFilters.genres,
-                    years = newFilters.years,
-                    sortBy = newFilters.sortBy.name,
-                    playedStatus = newFilters.playedStatus.name,
-                    tags = newFilters.tags,
-                    minRating = newFilters.minRating,
-                )
-                preferencesStore.setLibraryFilters(folder.id, Json.encodeToString(saved))
+                libraryStore.setDefaultLibrarySortOrder(folder.id, newFilters.sortBy.name)
+                libraryStore.setLibraryFilters(folder.id, libraryJson.encodeToString(newFilters))
             }
         }
     }

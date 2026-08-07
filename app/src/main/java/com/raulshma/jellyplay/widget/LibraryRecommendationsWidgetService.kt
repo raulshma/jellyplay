@@ -8,7 +8,7 @@ import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -20,10 +20,10 @@ import kotlinx.coroutines.runBlocking
 /**
  * Backs the Library Recommendations widget's `GridView` with a
  * [RemoteViewsFactory] that loads cached items from
- * [UserPreferencesStore.libraryWidgetItems].
+ * [WidgetDataStore.libraryWidgetItems].
  *
  * Factory operations are synchronous, so the Hilt entry point is used
- * to grab a [UserPreferencesStore] handle and the latest list is loaded
+ * to grab a [WidgetDataStore] handle and the latest list is loaded
  * with [runBlocking] on each [onDataSetChanged] call. The
  * [LibraryRecommendationsWidget] calls
  * [AppWidgetManager.notifyAppWidgetViewDataChanged] whenever the data
@@ -34,7 +34,7 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface WidgetEntryPoint {
-        fun userPreferencesStore(): UserPreferencesStore
+        fun widgetDataStore(): WidgetDataStore
     }
 
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
@@ -46,12 +46,12 @@ class LibraryRecommendationsWidgetService : RemoteViewsService() {
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID
         )
-        return LibraryRecommendationsFactory(applicationContext, entryPoint.userPreferencesStore(), appWidgetId)
+        return LibraryRecommendationsFactory(applicationContext, entryPoint.widgetDataStore(), appWidgetId)
     }
 
     private class LibraryRecommendationsFactory(
         private val context: Context,
-        private val store: UserPreferencesStore,
+        private val store: WidgetDataStore,
         private val appWidgetId: Int,
     ) : RemoteViewsFactory {
 

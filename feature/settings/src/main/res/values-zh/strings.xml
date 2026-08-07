@@ -107,6 +107,8 @@
     <string name="settings_manage_addresses_cd">管理地址</string>
     <string name="settings_active_cd">当前使用</string>
     <string name="settings_remove_cd">移除</string>
+    <string name="settings_remove_server_confirm_title">移除服务器？</string>
+    <string name="settings_remove_server_confirm_message">这会移除该服务器及其上所有已保存的用户。</string>
     <string name="settings_add_address">添加地址</string>
     <string name="settings_primary">主要</string>
     <string name="settings_switch">切换</string>
@@ -400,6 +402,7 @@
     <string name="settings_library_view_grid">以网格布局显示项目</string>
     <string name="settings_library_view_list">以列表布局显示项目</string>
     <string name="settings_library_view_thumb">以横向缩略图显示项目</string>
+    <string name="settings_library_view_masonry">以瀑布流布局显示项目</string>
     <string name="settings_home_mode">主页模式</string>
     <string name="settings_home_mode_video">以视频为主的主页</string>
     <string name="settings_home_mode_music">以音乐为主的主页</string>
@@ -695,6 +698,8 @@
     <string name="settings_exp_press_hold_preview">长按预览</string>
     <string name="settings_exp_press_hold_preview_subtitle">长按媒体卡片以窥视模糊的详情预览；松开以关闭</string>
     <string name="settings_exp_arr_integration_subtitle">从你的 Radarr/Sonarr 在请求中显示下载队列进度，并在主页显示即将到来的日历。服务器详情从 Seerr 自动发现；在 *arr 设置中手动覆盖</string>
+    <string name="settings_exp_expressive_nav">Material 3 Expressive 表现力导航</string>
+    <string name="settings_exp_expressive_nav_subtitle">Google 相册新版设计风格悬浮导航胶囊及独立搜索按钮。</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">字幕字体大小</string>
@@ -824,6 +829,8 @@
     <string name="settings_hide_watched_items_subtitle">默认从媒体库过滤已看媒体</string>
     <string name="settings_hide_episode_thumbnails">隐藏剧集缩略图</string>
     <string name="settings_hide_episode_thumbnails_subtitle">隐藏剧集预览图以避免剧透</string>
+    <string name="settings_compact_episode_list">紧凑剧集列表</string>
+    <string name="settings_compact_episode_list_subtitle">在手机上以垂直列表而非横向一行显示剧集</string>
     <string name="settings_skip_special_episodes">跳过特别剧集</string>
     <string name="settings_skip_special_episodes_subtitle">从剧集列表排除特别篇/福利</string>
     <string name="settings_haptic_feedback">触感反馈</string>
@@ -1138,4 +1145,9 @@
     <string name="settings_subtitles_test">测试</string>
     <string name="settings_subtitles_testing">测试中…</string>
     <string name="settings_subtitles_connected">已连接</string>
+    <string name="settings_nav_style">导航样式</string>
+    <string name="settings_nav_style_expressive">Expressive 表现力 (M3)</string>
+    <string name="settings_nav_style_classic">经典</string>
+    <string name="settings_nav_style_expressive_subtitle">Google 相册风格悬浮胶囊 + 独立搜索按钮</string>
+    <string name="settings_nav_style_classic_subtitle">传统悬浮底部导航栏</string>
 </resources>

@@ -49,6 +49,8 @@
     <string name="detail_no_episodes_available">Keine Episoden verfügbar</string>
     <string name="detail_spoiler">Spoiler</string>
     <string name="detail_watched_badge">Gesehen</string>
+    <string name="detail_cd_switch_to_list">Zur vertikalen Episodenliste wechseln</string>
+    <string name="detail_cd_switch_to_cards">Zu horizontalen Episodenkarten wechseln</string>
     <string name="detail_time_left_format">noch %1$s</string>
 
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
@@ -139,6 +141,14 @@
     <string name="detail_msg_couldnt_mark_unplayed">Als ungespielt markieren fehlgeschlagen</string>
     <string name="detail_mark_season_watched">Staffel als gesehen markieren</string>
     <string name="detail_mark_season_unwatched">Staffel als ungesehen markieren</string>
+    <string name="detail_mark_series_watched_confirm_title">Serie als gesehen markieren?</string>
+    <string name="detail_mark_series_watched_confirm_message">Dadurch werden alle Folgen als gesehen markiert und alle Wiedergabepositionen gelöscht.</string>
+    <string name="detail_mark_series_unwatched_confirm_title">Serie als ungesehen markieren?</string>
+    <string name="detail_mark_series_unwatched_confirm_message">Dadurch werden alle Folgen als ungesehen markiert.</string>
+    <string name="detail_mark_season_watched_confirm_title">Staffel als gesehen markieren?</string>
+    <string name="detail_mark_season_watched_confirm_message">Dadurch werden alle Folgen dieser Staffel als gesehen markiert und ihre Wiedergabepositionen gelöscht.</string>
+    <string name="detail_mark_season_unwatched_confirm_title">Staffel als ungesehen markieren?</string>
+    <string name="detail_mark_season_unwatched_confirm_message">Dadurch werden alle Folgen dieser Staffel als ungesehen markiert.</string>
     <string name="detail_cd_season_options">Staffel als gesehen oder ungesehen markieren</string>
     <string name="detail_msg_no_episodes_queued">Es konnten keine Episoden in die Warteschlange aufgenommen werden</string>
     <string name="detail_msg_hidden_from_next_up">Aus „Als Nächstes\" ausgeblendet</string>
@@ -257,5 +267,13 @@
     <string name="detail_seerr_country">Land</string>
     <string name="detail_seerr_studios">Studios</string>
     <string name="detail_seerr_currently_streaming_on">Aktuell streambar auf</string>
+
+    <!-- Leere Zustände -->
+    <string name="detail_collection_empty_title">Diese Sammlung ist leer</string>
+    <string name="detail_collection_empty_description">Elemente in dieser Sammlung erscheinen hier.</string>
+    <string name="detail_person_empty_title">Keine Titel gefunden</string>
+    <string name="detail_person_empty_description">Diese Person hat keine Titel, die dem aktuellen Filter entsprechen.</string>
+    <string name="detail_season_empty_title">Keine Episoden verfügbar</string>
+    <string name="detail_season_empty_description">Episoden erscheinen hier, sobald sie hinzugefügt werden.</string>
 
 </resources>

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import android.content.Context
 import android.view.View
+import android.view.ViewGroup
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleCallbacks
@@ -158,6 +159,31 @@ enum class EnginePlaybackState {
     IDLE, BUFFERING, READY, ENDED, ERROR
 }
 
+/**
+ * How an engine keeps subtitles visible under pinch-zoom / crop. Declared by
+ * [MediaEngine.zoomSafeSubtitleStrategy]; the screen dispatches its zoom-safe
+ * subtitle rendering on this value rather than on a pair of capability booleans.
+ */
+enum class ZoomSafeSubtitleStrategy {
+    /** No zoom-safe path; captions scale/translate with the video (libVLC, External). */
+    DISABLED,
+
+    /**
+     * Engine reparents its native subtitle View into an app-supplied host
+     * ([MediaEngine.setExternalSubtitleHost]); full native fidelity, relocated
+     * outside the zoom transform (ExoPlayer).
+     */
+    NATIVE_PINNED,
+
+    /**
+     * Engine emits the live subtitle line via [MediaEngine.liveSubtitleCue] and
+     * toggles native rendering via [MediaEngine.setNativeSubtitlesVisible]; the
+     * screen renders a Compose overlay while zoomed (mpv — libass composites
+     * into the GPU surface and cannot be reparented).
+     */
+    COMPOSE_CUE,
+}
+
 data class MediaTrack(
     val id: String,
     val index: Int,
@@ -255,7 +281,9 @@ data class PlaybackMetadataSnapshot(
  *
  * Members declared directly here are either overrides of
  * [com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine] or
- * [PlayerLifecycleCallbacks], or special-case internal hooks.
+ * [PlayerLifecycleCallbacks], or special-case internal hooks. Identity
+ * accessors (e.g. [displayName]) live on this contract precisely so consumers
+ * never type-test a concrete adapter to recover an engine-specific value.
  */
 @Stable
 interface MediaEngine :
@@ -274,6 +302,17 @@ interface MediaEngine :
     override fun selectTrack(type: TrackType, index: Int)
     override fun setMaxVideoBitrate(bps: Int?)
     override val underlyingPlayer: androidx.media3.common.Player? get() = null
+
+    // ── Identity ──
+    /**
+     * Stable, human-readable engine name for user-facing strings (the
+     * unsupported-audio-delay toast, engine pickers, stats overlays). Every
+     * adapter returns the matching
+     * [com.raulshma.jellyplay.core.model.PlayerType.displayName]. Consumers
+     * MUST NOT type-test concrete engine classes to recover this name — read
+     * this property instead, so a new backend needs no call-site changes.
+     */
+    val displayName: String
 
     // ── Source loading & teardown ──
     fun load(request: PlaybackRequest)
@@ -298,8 +337,37 @@ interface MediaEngine :
      * [EngineError.Unknown] and the retry / switch-engine paths never fired.
      */
     val errorFlow: Flow<EngineError>
+
+    /**
+     * One-shot subtitle events (e.g. a malformed track being auto-disabled).
+     * Hot flow; collectors should treat each value as transient. Engines that
+     * never produce subtitle events expose an empty flow.
+     */
+    val subtitleEvents: Flow<SubtitleEvent>
+
     val bufferedPositionMs: StateFlow<Long>
     val videoStats: StateFlow<EngineVideoStats>
+
+    /**
+     * Accumulated subtitle cues for the active track, for the subtitle-sync
+     * preview. Populated by engines that can surface cue text as it renders
+     * (ExoPlayer via `onCues`); empty for engines with no cue-text API
+     * (libVLC) — see [EngineCapabilities.supportsCues]. These cover only the
+     * played range (no ahead-lookahead); external text subs use the full-track
+     * re-parse path in the player feature for bidirectional offset preview.
+     */
+    val currentCues: StateFlow<List<TimedCue>>
+
+    /**
+     * The currently-displayed subtitle line as plain text, or `null` when no
+     * line is active. Distinct from [currentCues] (which accumulates the played
+     * range for the sync preview): this is the single live line the screen can
+     * render in a zoom-safe Compose overlay. Only emitted by engines whose
+     * [zoomSafeSubtitleStrategy] is [ZoomSafeSubtitleStrategy.COMPOSE_CUE]
+     * (mpv, via its `sub-text` property with ASS override tags stripped);
+     * `null` forever on every other engine.
+     */
+    val liveSubtitleCue: StateFlow<CharSequence?>
 
     val pollingIntervalMs: StateFlow<Long>
     val videoStatsEnabled: StateFlow<Boolean>
@@ -326,12 +394,55 @@ interface MediaEngine :
      */
     fun setSecondarySubtitleTrack(index: Int) {}
 
+    // ── Zoom/crop-safe subtitle strategy ──
+    //
+    //    The engine declares HOW it keeps captions pinned to the screen under
+    //    pinch-zoom/crop; the screen renders from [zoomSafeSubtitleStrategy]
+    //    instead of reverse-engineering the strategy from a pair of capability
+    //    booleans. Each strategy carries its own mechanical contract:
+    //      · NATIVE_PINNED — the engine reparents its native subtitle View into
+    //        an app-supplied host ([setExternalSubtitleHost]); full native
+    //        fidelity, just relocated (ExoPlayer).
+    //      · COMPOSE_CUE    — the engine emits the live line via
+    //        [liveSubtitleCue] and toggles native rendering via
+    //        [setNativeSubtitlesVisible]; the screen renders a Compose overlay
+    //        while zoomed (mpv: libass composites into the GPU surface).
+    //      · DISABLED       — no zoom-safe path; captions scale/translate with
+    //        the video (libVLC, External). ──
+
+    /**
+     * How this engine keeps subtitles visible when the video is pinch-zoomed or
+     * cropped. The screen reads this once and dispatches on the strategy; a
+     * fourth engine added later defaults to [ZoomSafeSubtitleStrategy.DISABLED]
+     * instead of silently-wrong behaviour from two unset booleans.
+     */
+    val zoomSafeSubtitleStrategy: ZoomSafeSubtitleStrategy
+        get() = ZoomSafeSubtitleStrategy.DISABLED
+
     // ── Per-engine subtitle styling applied to the engine's native subtitle
-    //    surface (Media3 `SubtitleView` / libass / VLC freetype). Subtitles are
-    //    rendered by each engine's own native renderer; there is no in-app
-    //    Compose cue overlay (the previous `currentCues`/`MpvSubtitleOverlay`
-    //    path was reserved and never enabled, and has been removed). ──
+    //    surface (Media3 `SubtitleView` / libass / VLC freetype), and the
+    //    mechanical hooks the screen's zoom-safe strategies drive. ──
     fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
+
+    /**
+     * Optionally reparents the engine's native subtitle `View`(s) into an
+     * app-supplied [host] pinned to the screen (a sibling of the zoomed video
+     * surface, outside the pinch/crop transform), so captions stay put when the
+     * video is zoomed or cropped. Pass `null` to detach and revert to the
+     * engine's default in-frame parenting. Only meaningful for engines that
+     * advertise [ZoomSafeSubtitleStrategy.NATIVE_PINNED] (ExoPlayer); every
+     * other engine no-ops.
+     */
+    fun setExternalSubtitleHost(host: ViewGroup?) {}
+
+    /**
+     * Toggles the engine's native subtitle rendering at runtime. Used to hide
+     * native subs while the screen renders a zoom-safe Compose overlay (see
+     * [liveSubtitleCue] / [ZoomSafeSubtitleStrategy.COMPOSE_CUE]), avoiding
+     * double-drawn captions. mpv maps this to `sub-visibility`; engines without
+     * a runtime toggle no-op.
+     */
+    fun setNativeSubtitlesVisible(visible: Boolean) {}
 
     // ── Native surface creation and aspect-ratio control. ──
     fun createSurfaceView(context: Context): View

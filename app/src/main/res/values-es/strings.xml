@@ -8,6 +8,7 @@
     <!-- TV exit confirmation: shown on first back press from a top-level screen. -->
     <string name="press_back_again_to_exit">Pulsa atrás de nuevo para salir</string>
 
+
     <string name="shortcut_continue_watching_short">Continuar</string>
     <string name="shortcut_continue_watching_long">Seguir viendo</string>
     <string name="shortcut_search_short">Buscar</string>
@@ -16,6 +17,10 @@
     <string name="shortcut_play_music_long">Reproducir música</string>
     <string name="shortcut_downloads_short">Descargas</string>
     <string name="shortcut_downloads_long">Abrir descargas</string>
+    <string name="shortcut_surprise_short">Sorpresa</string>
+    <string name="shortcut_surprise_long">Sorpréndeme</string>
+    <string name="shortcut_settings_short">Ajustes</string>
+    <string name="shortcut_settings_long">Abrir ajustes</string>
 
     <string name="widget_now_playing_label">Reproduciendo ahora</string>
     <string name="widget_now_playing_description">Controla la música que estás escuchando directamente desde tu pantalla de inicio.</string>

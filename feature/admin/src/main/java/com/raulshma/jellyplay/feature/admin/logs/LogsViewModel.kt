@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.logs
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -51,7 +51,7 @@ data class LogsState(
 class LogsViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
     private val okHttpClient: OkHttpClient,
-    private val preferencesStore: UserPreferencesStore,
+    private val serverIdentityStore: ServerIdentityStore,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(LogsState())
@@ -237,7 +237,7 @@ class LogsViewModel @Inject constructor(
         if (!_state.value.isLiveStreamActive) return
         val serverUrl = apiClient.getServerUrl() ?: return
         val token = apiClient.getAccessToken() ?: return
-        val device = preferencesStore.ensureDeviceId()
+        val device = serverIdentityStore.ensureDeviceId()
 
         val wsUrl = serverUrl.trim().trimEnd('/')
             .replace("https://", "wss://")

@@ -145,13 +145,13 @@ fun ManageSeriesScreen(
         }
 
         // Snackbar host — sits above the scaffold content.
-        SnackbarHost(
+        com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(bottom = 80.dp),
-        ) { data -> Snackbar(snackbarData = data) }
+        )
     }
 
     // Delete-file confirmation dialog.

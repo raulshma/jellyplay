@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -76,9 +77,11 @@ class AudioPlaybackManager @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
+    private val playbackSourceResolver: PlaybackSourceResolver,
     private val sessionManager: PlaybackSessionManager,
-    private val preferencesStore: com.raulshma.jellyplay.core.datastore.UserPreferencesStore,
-    private val audioSettingsStore: com.raulshma.jellyplay.core.datastore.AudioPlaybackSettingsStore,
+    private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
+    private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
+    private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
     private val queuePersistenceHelper: QueuePersistenceHelper,
     private val bandwidthMonitor: com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor,
     private val adaptiveBitrateSelector: com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector,
@@ -106,14 +109,17 @@ class AudioPlaybackManager @Inject constructor(
     }
 
     private var exoPlayer: ExoPlayer? = null
-    private var currentPreferences = com.raulshma.jellyplay.core.model.UserPreferences()
+    private var currentAudio = com.raulshma.jellyplay.core.datastore.audio.AudioSlice()
+    private var currentEffects = com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice()
+    private var currentPlayback = com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice()
 
     private val libraryBrowser = AudioLibraryBrowser(
         scope = scope,
         mediaRepository = mediaRepository,
         downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
-        streamingQualityProvider = { currentPreferences.streamingQuality },
+        playbackSourceResolver = playbackSourceResolver,
+        streamingQualityProvider = { currentPlayback.streamingQuality },
         adaptiveBitrateSelector = adaptiveBitrateSelector,
     )
 
@@ -201,8 +207,8 @@ class AudioPlaybackManager @Inject constructor(
         context = context,
         effectsProcessor = effectsProcessor,
         mediaRepository = mediaRepository,
-        downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
+        playbackSourceResolver = playbackSourceResolver,
         repeatModeProvider = { _repeatMode.value },
         crossfadeDurationMsProvider = { _crossfadeDurationMs.value },
         isCrossfadingProvider = { _isCrossfading.value },
@@ -212,7 +218,7 @@ class AudioPlaybackManager @Inject constructor(
         onGetNextItem = { idx -> _queue.value.getOrNull(idx) },
         speedProvider = { _speed.value },
         audioBufferProvider = {
-            val buf = currentPreferences.audioPreloadBufferSize
+            val buf = currentAudio.audioPreloadBufferSize
             buf.minBufferMs to buf.maxBufferMs
         },
         onCrossfadeTransition = { secondary, nextIndex, nextItem ->
@@ -357,7 +363,9 @@ class AudioPlaybackManager @Inject constructor(
 
     init {
         scope.launch {
-            preferencesStore.preferences.collect { prefs ->
+            combine(audioStore.audio, audioEffectsStore.audioEffects) { audio, effects ->
+                audio to effects
+            }.collect { (audio, effects) ->
                 // The preference→effect diff lives in AudioPreferencesReducer
                 // (pure, JVM-tested). This block was previously a ~77-line
                 // hand-rolled field-by-field diff tracking 14 stale `prev*`
@@ -365,10 +373,14 @@ class AudioPlaybackManager @Inject constructor(
                 // untestable without 18 mocked collaborators. Now the manager
                 // is a thin command-dispatcher: the reducer emits the ordered
                 // command list, this `when` maps each to its effect setter.
-                val commands = AudioPreferencesReducer.diff(currentPreferences, prefs)
-                currentPreferences = prefs
+                val commands = AudioPreferencesReducer.diff(currentEffects, currentAudio, effects, audio)
+                currentAudio = audio
+                currentEffects = effects
                 commands.forEach { command -> applyEffectCommand(command) }
             }
+        }
+        scope.launch {
+            playbackStore.playback.collect { playback -> currentPlayback = playback }
         }
         // Note: there is intentionally no `_repeatMode.collect { exoPlayer?.repeatMode = ... }`
         // here. `setRepeatMode()` sets `exoPlayer.repeatMode` inline, the player
@@ -471,8 +483,8 @@ class AudioPlaybackManager @Inject constructor(
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                currentPreferences.audioPreloadBufferSize.minBufferMs,
-                currentPreferences.audioPreloadBufferSize.maxBufferMs,
+                currentAudio.audioPreloadBufferSize.minBufferMs,
+                currentAudio.audioPreloadBufferSize.maxBufferMs,
                 1_000,
                 3_000
             )
@@ -710,49 +722,50 @@ class AudioPlaybackManager @Inject constructor(
                 progressReporter.start()
             } else {
                 _playbackError.value = detailResult.exceptionOrNull()?.message ?: "Failed to load track"
-                val localDownload = downloadRepository.getDownloadByMediaItemId(itemId)
-                if (localDownload != null && localDownload.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
-                    val file = java.io.File(localDownload.downloadPath)
-                    if (file.exists()) {
-                        val offlineItem = offlineRepository.getOfflineItem(itemId)
-                        _currentPlayingItemId.value = itemId
-                        _title.value = offlineItem?.name ?: localDownload.name
-                        _artist.value = offlineItem?.seriesName ?: ""
-                        _album.value = ""
+                // Queue-only local fallback: when the server detail fetch failed
+                // but a completed download exists on disk, play the local file.
+                // resolveLocalSource performs no getMediaDetail round-trip, so the
+                // COMPLETED classification survives even though the server call
+                // failed — preserving the historical queue-only fallback.
+                val local = playbackSourceResolver.resolveLocalSource(itemId)
+                if (local != null) {
+                    _currentPlayingItemId.value = itemId
+                    _title.value = local.title
+                    _artist.value = local.offlineItem?.seriesName ?: ""
+                    _album.value = ""
 
-                        val q = _queue.value
-                        val currentIdx = _currentIndex.value
-                        val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
+                    val q = _queue.value
+                    val currentIdx = _currentIndex.value
+                    val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
 
-                        if (!isInQueue) {
-                            val queueItem = AudioQueueItem(
-                                id = itemId,
-                                name = _title.value,
-                                artist = _artist.value,
-                                album = "",
-                                imageUrl = null,
-                                mediaSourceId = localDownload.mediaSourceId,
-                            )
-                            _queue.value = _queue.value + queueItem
-                            _currentIndex.value = _queue.value.lastIndex
-                        }
-
-                        val mediaItem = MediaItem.Builder()
-                            .setMediaId(itemId)
-                            .setUri(Uri.fromFile(file).toString())
-                            .setMediaMetadata(
-                                MediaMetadata.Builder()
-                                    .setTitle(_title.value)
-                                    .setArtist(_artist.value)
-                                    .build()
-                            )
-                            .build()
-
-                        player.setMediaItem(mediaItem)
-                        player.prepare()
-                        player.playWhenReady = true
-                        startPositionTracking()
+                    if (!isInQueue) {
+                        val queueItem = AudioQueueItem(
+                            id = itemId,
+                            name = _title.value,
+                            artist = _artist.value,
+                            album = "",
+                            imageUrl = null,
+                            mediaSourceId = local.download.mediaSourceId,
+                        )
+                        _queue.value = _queue.value + queueItem
+                        _currentIndex.value = _queue.value.lastIndex
                     }
+
+                    val mediaItem = MediaItem.Builder()
+                        .setMediaId(itemId)
+                        .setUri(local.uri)
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(_title.value)
+                                .setArtist(_artist.value)
+                                .build()
+                        )
+                        .build()
+
+                    player.setMediaItem(mediaItem)
+                    player.prepare()
+                    player.playWhenReady = true
+                    startPositionTracking()
                 }
             }
             _isLoadingItemFlag = false

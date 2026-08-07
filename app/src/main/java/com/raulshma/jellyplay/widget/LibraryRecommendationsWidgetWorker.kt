@@ -8,7 +8,7 @@ import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.first
 class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
-    private val userPreferencesStore: UserPreferencesStore,
+    private val widgetDataStore: WidgetDataStore,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val authRepository: AuthRepository,
@@ -43,7 +43,7 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
             return@runCatching
         }
 
-        val config = userPreferencesStore.widgetConfig.first()
+        val config = widgetDataStore.widgetConfig.first()
         val items: List<MediaItem> = when (config.librarySource) {
             LibraryRecommendationsSource.SIMILAR_TO_RECENT -> fetchSimilarToRecent()
                 ?: fetchLatest()
@@ -61,7 +61,7 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
         }
 
         val mapped = items.take(MAX_ITEMS).map { it.toWidgetItem() }
-        WidgetPersistHelper.persistLibraryItems(applicationContext, userPreferencesStore, mapped, versionBumpOnly = false)
+        WidgetPersistHelper.persistLibraryItems(applicationContext, widgetDataStore, mapped, versionBumpOnly = false)
     }.fold(
         onSuccess = { Result.success() },
         onFailure = { e ->
@@ -75,7 +75,7 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
     )
 
     private suspend fun fetchSimilarToRecent(): List<MediaItem>? {
-        val seed = userPreferencesStore.continueWatching.first().firstOrNull() ?: return null
+        val seed = widgetDataStore.continueWatching.first().firstOrNull() ?: return null
         val result = mediaRepository.getSimilarItems(seed.id, MAX_ITEMS).getOrNull() ?: return null
         if (result.isEmpty()) return null
         return result
@@ -83,9 +83,11 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
 
     private suspend fun fetchLatest(): List<MediaItem> {
         val sectionsResult = mediaRepository.getHomeSections(
-            enabledSections = setOf(
-                com.raulshma.jellyplay.core.model.HomeSectionType.LATEST_MEDIA,
-                com.raulshma.jellyplay.core.model.HomeSectionType.RECENTLY_ADDED,
+            com.raulshma.jellyplay.core.data.repository.HomeSectionQuery(
+                enabledSections = setOf(
+                    com.raulshma.jellyplay.core.model.HomeSectionType.LATEST_MEDIA,
+                    com.raulshma.jellyplay.core.model.HomeSectionType.RECENTLY_ADDED,
+                ),
             ),
         )
         val items = sectionsResult.getOrNull()?.sections.orEmpty()

@@ -8,6 +8,32 @@
     <string name="core_reset">Zurücksetzen</string>
     <string name="core_close">Schließen</string>
     <string name="core_done">Fertig</string>
+    <!-- Additional shared action literals -->
+    <string name="core_confirm">Bestätigen</string>
+    <string name="core_ok">OK</string>
+    <string name="core_apply">Anwenden</string>
+    <string name="core_delete">Löschen</string>
+    <string name="core_clear">Leeren</string>
+    <string name="core_undo">Rückgängig</string>
+    <string name="core_clear_filters">Filter zurücksetzen</string>
+    <string name="core_copy">Kopieren</string>
+    <string name="core_copied_to_clipboard">In Zwischenablage kopiert</string>
+    <string name="core_play_from_start">Von Anfang an wiedergeben</string>
+    <string name="core_restart">Neu starten</string>
+    <string name="core_send_now">Jetzt senden</string>
+    <string name="core_search">Suchen</string>
+    <string name="core_stop_playback">Wiedergabe stoppen</string>
+    <string name="core_select_all">Alle auswählen</string>
+    <string name="core_mark_all_seen">Alle als gesehen markieren</string>
+    <string name="core_loading">Wird geladen…</string>
+    <!-- Media quick-action sheet labels -->
+    <string name="core_action_quick_actions">Schnellaktionen</string>
+    <string name="core_action_play">Wiedergeben</string>
+    <string name="core_action_mark_watched">Als gesehen markieren</string>
+    <string name="core_action_mark_unwatched">Als ungesehen markieren</string>
+    <string name="core_action_download">Herunterladen</string>
+    <string name="core_action_add_to_playlist">Zur Playlist hinzufügen</string>
+    <string name="core_action_details">Details anzeigen</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer
          and referenced by multiple feature modules). -->
@@ -576,6 +602,44 @@
     <string name="ss_DIRECT_ARR_INTEGRATION_subtitle">Download-Warteschlangen-Fortschritt und einen Kalender für kommende Inhalte von deinem Radarr/Sonarr</string>
     <string name="ss_arr_settings_title">Radarr-/Sonarr-Server</string>
     <string name="ss_arr_settings_subtitle">Direkte Radarr-/Sonarr-Serververbindungen konfigurieren</string>
+    <string name="ss_sign_out_from_server_title">Vom Server abmelden</string>
+    <string name="ss_sign_out_from_server_subtitle">Sitzung dieses Geräts auf dem Server widerrufen</string>
+    <string name="ss_screensaver_show_title_title">Titel anzeigen</string>
+    <string name="ss_screensaver_show_title_subtitle">Medientitel anzeigen</string>
+    <string name="ss_screensaver_categories_title">Kategorien</string>
+    <string name="ss_screensaver_categories_subtitle">Wähle, welche Mediathek-Typen erscheinen</string>
+    <string name="ss_screensaver_slideshow_interval_title">Diashow-Intervall</string>
+    <string name="ss_screensaver_slideshow_interval_subtitle">Zeit zwischen Bildwechseln</string>
+    <string name="ss_screensaver_ken_burns_title">Ken-Burns-Effekt</string>
+    <string name="ss_screensaver_ken_burns_subtitle">Schwenk- und Zoom-Animation</string>
+    <string name="ss_screensaver_transition_style_title">Übergangsstil</string>
+    <string name="ss_screensaver_transition_style_subtitle">So wechselt der Bildschirmschoner zwischen Bildern</string>
+    <string name="ss_home_backdrop_title">Start-Hintergrund</string>
+    <string name="ss_home_backdrop_subtitle">Hero-Artwork als ambienten Hintergrund weichzeichnen</string>
+    <string name="ss_compact_episode_list_title">Kompakte Episodenliste</string>
+    <string name="ss_compact_episode_list_subtitle">Episoden auf dem Smartphone als vertikale Liste statt in einer horizontalen Reihe anzeigen</string>
+    <string name="ss_nav_bar_customization_title">Navigationsleiste</string>
+    <string name="ss_nav_bar_customization_subtitle">Elemente der Navigationsleiste ein-, ausblenden und neu anordnen</string>
+    <string name="ss_nav_hide_on_scroll_title">Beim Scrollen ausblenden</string>
+    <string name="ss_nav_hide_on_scroll_subtitle">Leiste wird beim Scrollen nach unten ausgeblendet</string>
+    <string name="ss_newsletter_sections_title">Newsletter-Layout &amp; Konfiguration</string>
+    <string name="ss_newsletter_sections_subtitle">Wählen, welche Abschnitte im Newsletter erscheinen</string>
+    <string name="ss_dialogue_boost_strength_title">Dialog-Verstärkung Stärke</string>
+    <string name="ss_dialogue_boost_strength_subtitle">Stärke der Dialog-Verstärkung</string>
+    <string name="ss_mpv_extra_config_title">Erweiterte Konfiguration</string>
+    <string name="ss_mpv_extra_config_subtitle">Raw mpv-Optionen (mpv.conf-Stil)</string>
+    <string name="ss_reset_engine_defaults_title">Auf Standard zurücksetzen</string>
+    <string name="ss_reset_engine_defaults_subtitle">MPV-, LibVLC- oder ExoPlayer-Einstellungen wiederherstellen</string>
+    <string name="ss_audio_prefetch_backfill_title">Backfill-Anzahl</string>
+    <string name="ss_audio_prefetch_backfill_subtitle">Zuletzt gespielte Titel, die für Wiederholung gecacht bleiben</string>
+    <string name="ss_audio_cache_clear_title">Audio-Cache leeren</string>
+    <string name="ss_audio_cache_clear_subtitle">Alle gecachten Audio-Bytes löschen</string>
+    <string name="ss_subtitle_tester_title">Untertitel-Stil-Tester</string>
+    <string name="ss_subtitle_tester_subtitle">Stile engineübergreifend vorschauen</string>
+    <string name="ss_subtitle_provider_settings_title">Untertitel-Anbieter</string>
+    <string name="ss_subtitle_provider_settings_subtitle">Wyzie Subs &amp; OpenSubtitles</string>
+    <string name="ss_MEDIA_CARD_PEEK_title">Drück-Halte-Vorschau</string>
+    <string name="ss_MEDIA_CARD_PEEK_subtitle">Lange auf eine Medienkarte drücken, um eine weichgezeichnete Detailvorschau zu sehen; Loslassen zum Schließen</string>
 
     <!-- Localizable labels for MediaSegmentType / SegmentBehavior -->
     <string name="core_segment_intro">Intro</string>

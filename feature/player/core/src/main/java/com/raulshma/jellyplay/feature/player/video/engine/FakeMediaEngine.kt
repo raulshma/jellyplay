@@ -19,11 +19,15 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * Production code never instantiates this — it lives in `src/main` so both
  * `:feature:player:core` tests and (via the project dependency) `:feature:player:video`
- * tests can use it.
+ * tests can use it. It is the reference specimen for [MediaEngineContractTest]
+ * (the first backend the contract suite runs against), which is what keeps it
+ * from being dead code.
  */
 class FakeMediaEngine : MediaEngine {
 
     override var capabilities: EngineCapabilities = EngineCapabilities()
+
+    override val displayName: String = "FakeMediaEngine"
 
     // NOTE: `playbackState` and `bufferedPositionMs` are declared as covariant
     // overrides (MutableStateFlow <: StateFlow) so tests can drive `.value =`
@@ -43,6 +47,14 @@ class FakeMediaEngine : MediaEngine {
     val tracks = MutableStateFlow<List<MediaTrack>>(emptyList())
     override val availableTracks: StateFlow<List<MediaTrack>> get() = tracks.asStateFlow()
 
+    val currentCuesState = MutableStateFlow<List<TimedCue>>(emptyList())
+    override val currentCues: StateFlow<List<TimedCue>> get() = currentCuesState.asStateFlow()
+
+    // Test double for the live-subtitle line. Defaults to null (no overlay);
+    // tests of the zoom overlay path can drive `liveSubtitleCueState.value = …`.
+    val liveSubtitleCueState = MutableStateFlow<CharSequence?>(null)
+    override val liveSubtitleCue: StateFlow<CharSequence?> get() = liveSubtitleCueState.asStateFlow()
+
     private val _pollingIntervalMs = MutableStateFlow(0L)
     override val pollingIntervalMs: StateFlow<Long> get() = _pollingIntervalMs.asStateFlow()
     private val _videoStatsEnabled = MutableStateFlow(false)
@@ -55,6 +67,8 @@ class FakeMediaEngine : MediaEngine {
     val positionEmissions = MutableStateFlow(kotlinx.coroutines.flow.flowOf(0L))
     override val errorFlow: Flow<EngineError> get() = errorEmissions.asSharedFlow()
     val errorEmissions = MutableSharedFlow<EngineError>(extraBufferCapacity = 4)
+    override val subtitleEvents: Flow<SubtitleEvent> get() = subtitleEventEmissions.asSharedFlow()
+    val subtitleEventEmissions = MutableSharedFlow<SubtitleEvent>(extraBufferCapacity = 4)
     override val playbackSpeed: Float = 1f
     override val audioSessionId: Int = -1
 

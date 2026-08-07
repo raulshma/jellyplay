@@ -11,6 +11,7 @@
     <!-- Per-item notification action buttons -->
     <string name="notification_action_mark_seen">시청한 것으로 표시</string>
     <string name="notification_action_open">열기</string>
+    <string name="notification_action_mark_all_seen">모두 시청한 것으로 표시</string>
 
     <!-- Per-library notification channel -->
     <string name="notification_channel_new_in_library">%1$s 새 항목</string>

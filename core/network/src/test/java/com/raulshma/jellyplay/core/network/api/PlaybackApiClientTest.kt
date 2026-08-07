@@ -54,7 +54,7 @@ class PlaybackApiClientImplTest {
         playbackClient = PlaybackApiClientImpl(
             engine = engine,
             deviceProfileProvider = DeviceProfileProvider(DeviceCodecCapabilities()),
-            preferencesStore = mockk(relaxed = true),
+            playbackStore = mockk(relaxed = true),
         )
     }
 

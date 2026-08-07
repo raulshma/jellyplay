@@ -15,11 +15,16 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
+import com.raulshma.jellyplay.core.model.OfflineSyncState
+import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
+import com.raulshma.jellyplay.core.model.offlineSyncStateOf
+import java.io.File
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
@@ -48,13 +53,20 @@ class OfflineRepositoryImpl @Inject constructor(
             if (entity == null) {
                 flowOf(null)
             } else {
-                downloadDao.getDownloadByMediaItemIdFlow(id).map { download ->
-                    entity.toOfflineMediaItem().copy(
+                downloadDao.getDownloadByMediaItemIdFlow(id).flatMapLatest { download ->
+                    val item = entity.toOfflineMediaItem().copy(
                         downloadPath = download?.downloadPath,
                         downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
                         downloadedBytes = download?.downloadedBytes ?: 0L,
                         totalSizeBytes = download?.totalSizeBytes ?: 0L,
                     )
+                    // Resolve disk-backed local artwork for every media type so
+                    // the offline detail hero/poster render without network.
+                    // Covers legacy rows (remote URLs written before local-file
+                    // persistence) and image-write-failure fallbacks — the
+                    // resolver substitutes an existing local file when one is
+                    // beside the download, else preserves the original value.
+                    flow<OfflineMediaItem?> { emit(resolveItemArtwork(item)) }
                 }
             }
         }.distinctUntilChanged()
@@ -76,7 +88,7 @@ class OfflineRepositoryImpl @Inject constructor(
                             totalSizeBytes = download?.totalSizeBytes ?: 0L,
                         )
                     }
-                }
+                }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
             }
         }.distinctUntilChanged()
 
@@ -135,14 +147,15 @@ class OfflineRepositoryImpl @Inject constructor(
                             )
                         }
                     }
-                }
+                }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
             }
         }.distinctUntilChanged()
 
     override fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getSeasonsForSeries(seriesId).map { entities ->
             entities.map { it.toOfflineMediaItem() }
-        }.distinctUntilChanged()
+        }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
+            .distinctUntilChanged()
 
     override fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>> =
         offlineMediaDao.getEpisodesForSeason(seasonId).flatMapLatest { episodes ->
@@ -159,28 +172,43 @@ class OfflineRepositoryImpl @Inject constructor(
                         totalSizeBytes = download?.totalSizeBytes ?: 0L,
                     )
                 }
-            }
+            }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
         }.distinctUntilChanged()
 
     override suspend fun getOfflineItem(id: String): OfflineMediaItem? =
-        offlineMediaDao.getById(id)?.toOfflineMediaItem()
+        offlineMediaDao.getById(id)?.toOfflineMediaItem()?.let { resolveItemArtwork(it) }
 
     override fun getOfflineItemCount(): Flow<Int> =
         offlineMediaDao.getOfflineItemCount()
 
     override suspend fun deleteOfflineItem(id: String) {
         val download = downloadDao.getDownloadByMediaItemId(id)
+        // Capture the row + its artifact dir before the DB delete so the cast
+        // images written beside the download at fetch time can be pruned
+        // afterward. Reference counting keeps a person's shared image when
+        // another offline item still references them — a person can appear
+        // across many movies/episodes and the `personId`-keyed image serves
+        // all of them.
+        val entity = offlineMediaDao.getById(id)
+        val parentDir = download?.takeIf { it.downloadPath.isNotBlank() }
+            ?.let { File(it.downloadPath).parentFile }
         download?.let {
             if (it.downloadPath.isNotBlank()) {
-                val file = java.io.File(it.downloadPath)
+                val file = File(it.downloadPath)
                 if (file.exists()) file.delete()
-                DownloadArtifacts.cleanup(file.parentFile, it.mediaItemId)
+                DownloadArtifacts.cleanup(parentDir, it.mediaItemId)
             }
         }
         database.withTransaction {
             download?.let { downloadDao.deleteDownloadById(it.id) }
             offlineMediaDao.deleteById(id)
         }
+        // Prune cast images after the row is gone so the reference scan only
+        // counts surviving rows.
+        cleanupOrphanedCastArtwork(
+            parentDirs = listOfNotNull(parentDir),
+            candidateCastIds = entity?.let(::castIdsOf).orEmpty(),
+        )
         cleanupOrphans()
     }
 
@@ -194,11 +222,29 @@ class OfflineRepositoryImpl @Inject constructor(
             downloadDao.getDownloadsForSeriesViaOfflineMedia(seriesId)
         ).distinctBy { it.id }
         deleteArtifactsParallel(downloads)
+        // Series-scoped artwork (${seriesId}_poster.jpg / _backdrop.jpg) lives
+        // beside each downloaded episode; prune it from every episode dir now
+        // that no row references the series anymore.
+        val episodeDirs = downloads
+            .asSequence()
+            .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
+            .mapNotNull { File(it).parentFile }
+            .distinct()
+            .toList()
+        episodeDirs.forEach { DownloadArtifacts.cleanupSeriesArtwork(it, seriesId) }
+        // Capture the deleted episodes' cast ids before the rows are removed so
+        // the cast images written beside each episode at fetch time can be
+        // pruned afterward (reference scan runs post-delete).
+        val deletedCastIds = downloads.map { offlineMediaDao.getById(it.mediaItemId) }
+            .filterNotNull()
+            .flatMap(::castIdsOf)
+            .distinct()
         database.withTransaction {
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
             offlineMediaDao.deleteBySeriesId(seriesId)
         }
+        cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
         cleanupOrphans()
     }
 
@@ -208,11 +254,26 @@ class OfflineRepositoryImpl @Inject constructor(
             downloadDao.getDownloadsForSeasonViaOfflineMedia(seasonId)
         ).distinctBy { it.id }
         deleteArtifactsParallel(downloads)
+        // Capture the season's episode dirs + cast ids before the rows are
+        // removed so the cast images can be pruned afterward. The reference
+        // scan runs post-delete and counts only surviving rows, so a person
+        // still referenced by a sibling season's row keeps their shared image.
+        val episodeDirs = downloads
+            .asSequence()
+            .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
+            .mapNotNull { File(it).parentFile }
+            .distinct()
+            .toList()
+        val deletedCastIds = downloads.map { offlineMediaDao.getById(it.mediaItemId) }
+            .filterNotNull()
+            .flatMap(::castIdsOf)
+            .distinct()
         database.withTransaction {
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
             offlineMediaDao.deleteBySeasonId(seasonId)
         }
+        cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
         cleanupOrphans()
     }
 
@@ -224,7 +285,8 @@ class OfflineRepositoryImpl @Inject constructor(
      *
      * Each download's per-item poster/backdrop are scoped by [DownloadEntity.mediaItemId]
      * so deleting one item's artifacts never clobbers another item's images in
-     * the shared flat downloads dir.
+     * the shared flat downloads dir. Cast images are pruned separately via
+     * [cleanupOrphanedCastArtwork] (they are keyed by `personId`, not `mediaItemId`).
      */
     private suspend fun deleteArtifactsParallel(downloads: List<DownloadEntity>) {
         val nonBlank = downloads.filter { it.downloadPath.isNotBlank() }
@@ -232,7 +294,7 @@ class OfflineRepositoryImpl @Inject constructor(
         coroutineScope {
             nonBlank.map { entity ->
                 async(Dispatchers.IO) {
-                    val file = java.io.File(entity.downloadPath)
+                    val file = File(entity.downloadPath)
                     if (file.exists()) file.delete()
                     DownloadArtifacts.cleanup(file.parentFile, entity.mediaItemId)
                 }
@@ -291,6 +353,284 @@ class OfflineRepositoryImpl @Inject constructor(
         return offlineMediaDao
             .search(pattern = pattern, prefixPattern = prefixPattern, limit = limit)
             .map { it.toOfflineMediaItem() }
+    }
+
+    override fun getOfflineSyncState(id: String): Flow<OfflineSyncState?> =
+        offlineMediaDao.getByIdFlow(id).map { entity ->
+            // Project the persisted sync columns to a UI-facing state via the
+            // shared mapper (same one OfflineSyncManager uses) so the DB-driven
+            // badge and the check/resync-driven state agree. The reactive
+            // getByIdFlow re-emits on any row write, so a check/resync that flips
+            // a flag refreshes the badge on its own.
+            if (entity == null) null
+            else offlineSyncStateOf(
+                checking = entity.syncChecking,
+                error = entity.syncError,
+                mediaChanged = entity.syncMediaChanged,
+                updateAvailable = entity.syncUpdateAvailable,
+                lastSyncedAt = entity.lastSyncedAt,
+            )
+        }
+
+    override fun getUpdatesCount(): Flow<Int> = offlineMediaDao.getUpdatesCount()
+
+    override fun getItemsWithUpdates(): Flow<List<OfflineSyncUpdate>> =
+        offlineMediaDao.getItemsWithUpdates().map { rows ->
+            rows.map {
+                OfflineSyncUpdate(
+                    id = it.id,
+                    name = it.name,
+                    mediaFileChanged = it.mediaFileChanged == 1,
+                    // Map the raw DB string to the typed enum at the repository
+                    // boundary so the UI never compares against a magic string.
+                    // Matches DownloadRepositoryImpl's mediaType mapping.
+                    mediaType = it.mediaType?.let { mt ->
+                        com.raulshma.jellyplay.core.model.MediaType.values()
+                            .firstOrNull { e -> e.name.equals(mt, ignoreCase = true) }
+                    },
+                    seriesName = it.seriesName,
+                    seasonNumber = it.seasonNumber,
+                    episodeNumber = it.episodeNumber,
+                )
+            }
+        }
+
+    override suspend fun getDownloadedItemIds(): List<String> =
+        offlineMediaDao.getDownloadedItemIds()
+
+    /**
+     * Resolves disk-backed local artwork for an item of ANY media type so it
+     * renders without a network connection.
+     *
+     * Runs in every read path (library grid, episode lists, detail, series),
+     * not just the detail screen — otherwise rows whose persisted
+     * `posterPath`/`backdropPath` are blank or a remote URL (legacy downloads
+     * from before local-file persistence, or image-write-failure fallbacks at
+     * download time) render broken offline even when the local file sits on
+     * disk right beside the media.
+     *
+     * Resolution order per field:
+     *  1. Keep an already-local path as-is.
+     *  2. Look for the item's own artifact beside its download
+     *     (`${itemId}_poster.jpg` / `_backdrop.jpg`) — covers MOVIE/AUDIO and
+     *     per-episode posters.
+     *  3. For episodes, fall back to the parent series' artwork (series row's
+     *     local path, then the series artifact beside the episode dir) — the
+     *     online detail hero mirrors this, and Jellyfin rarely has a backdrop
+     *     for an episode.
+     *  4. For series, fall back to the artwork written beside a downloaded
+     *     episode (the series row itself has no download path).
+     *  5. Preserve the original value (a remote URL may still load online, and
+     *     a null stays null), so this never degrades a working row.
+     *
+     * Cheap: a couple of `File.exists()` stats per item; Room only re-emits on
+     * table writes, not per recomposition.
+     */
+    private suspend fun resolveItemArtwork(item: OfflineMediaItem): OfflineMediaItem {
+        // First: the item's own artifact beside its media file (all types).
+        val ownDir = item.downloadPath
+            ?.takeIf { it.isNotBlank() }
+            ?.let { File(it).parentFile }
+        val ownPoster = ownDir?.let { localArtifactOrNull(it, DownloadArtifacts.posterFile(item.id)) }
+        val ownBackdrop = ownDir?.let { localArtifactOrNull(it, DownloadArtifacts.backdropFile(item.id)) }
+        val (resolvedPoster, resolvedBackdrop) = when (item.mediaType) {
+            MediaType.EPISODE -> resolveEpisodeSeriesArtwork(item, ownPoster, ownBackdrop)
+            MediaType.SERIES -> resolveSeriesArtwork(item, ownPoster, ownBackdrop)
+            else -> ownPoster to ownBackdrop
+        }
+        val posterResolved = if (needsArtworkResolution(item.posterPath)) resolvedPoster ?: item.posterPath else item.posterPath
+        val backdropResolved = if (needsArtworkResolution(item.backdropPath)) resolvedBackdrop ?: item.backdropPath else item.backdropPath
+        // Resolve cast image paths last: cast images are written beside the same
+        // parent dir as posters/backdrops (keyed by personId), so reuse whichever
+        // artifact dir was located above. Movies/standalone items use ownDir;
+        // series rows resolve their first episode's dir; episodes inherit their
+        // parent series dir. Skipped entirely when there is no cast to resolve.
+        val castDir = castDirFor(item, ownDir)
+        val resolvedCast = if (castDir != null && item.cast.isNotEmpty()) {
+            resolveCastArtwork(item.cast, castDir)
+        } else {
+            item.cast
+        }
+        // Fast path: nothing on the row needed artwork resolution (no remote
+        // poster/backdrop and no cast, or cast but no artifact dir). Avoids a
+        // copy() allocation on the hot library-grid read path.
+        return if (posterResolved == item.posterPath &&
+            backdropResolved == item.backdropPath &&
+            resolvedCast === item.cast
+        ) {
+            item
+        } else {
+            item.copy(
+                posterPath = posterResolved,
+                backdropPath = backdropResolved,
+                cast = resolvedCast,
+            )
+        }
+    }
+
+    /**
+     * Resolves local artwork for a list of items (library grid, episode lists,
+     * album tracks). Each item that already has a local path short-circuits
+     * with zero FS work; only rows needing resolution stat the artifact files.
+     * See [resolveItemArtwork] for the per-field policy.
+     */
+    private suspend fun resolveArtworkList(items: List<OfflineMediaItem>): List<OfflineMediaItem> =
+        if (items.isEmpty()) items else items.map { resolveItemArtwork(it) }
+
+    /**
+     * Episode fallback: prefer the series' local artwork (series row's local
+     * path, then the series artifact found beside the episode dir) since
+     * Jellyfin rarely carries a backdrop per episode and the online detail
+     * hero resolves to the series backdrop. The item's own poster/backdrop
+     * (passed in) win when present.
+     */
+    private suspend fun resolveEpisodeSeriesArtwork(
+        item: OfflineMediaItem,
+        ownPoster: String?,
+        ownBackdrop: String?,
+    ): Pair<String?, String?> {
+        val seriesId = item.seriesId ?: return ownPoster to ownBackdrop
+        val seriesRow = offlineMediaDao.getById(seriesId)
+        val episodeDir = item.downloadPath
+            ?.takeIf { it.isNotBlank() }
+            ?.let { File(it).parentFile }
+        val seriesBackdrop = seriesRow?.backdropPath?.takeIf(::isLocalPath)
+            ?: episodeDir?.let { localArtifactOrNull(it, DownloadArtifacts.backdropFile(seriesId)) }
+        val seriesPoster = seriesRow?.posterPath?.takeIf(::isLocalPath)
+            ?: episodeDir?.let { localArtifactOrNull(it, DownloadArtifacts.posterFile(seriesId)) }
+        return (ownPoster ?: seriesPoster) to (ownBackdrop ?: seriesBackdrop)
+    }
+
+    /**
+     * Series fallback: the series row has no download path of its own, so its
+     * local artwork (written beside the first enqueued episode) is resolved by
+     * scanning a downloaded episode's directory. The item's own artifact
+     * (passed in) wins when present.
+     */
+    private suspend fun resolveSeriesArtwork(
+        item: OfflineMediaItem,
+        ownPoster: String?,
+        ownBackdrop: String?,
+    ): Pair<String?, String?> {
+        val seriesDir = downloadDao.getDownloadsForSeries(item.id)
+            .asSequence()
+            .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
+            .mapNotNull { File(it).parentFile }
+            .firstOrNull()
+        val seriesBackdrop = seriesDir?.let { localArtifactOrNull(it, DownloadArtifacts.backdropFile(item.id)) }
+        val seriesPoster = seriesDir?.let { localArtifactOrNull(it, DownloadArtifacts.posterFile(item.id)) }
+        return (ownPoster ?: seriesPoster) to (ownBackdrop ?: seriesBackdrop)
+    }
+
+    /** True when [path] is absent or a server URL — i.e. not a local file. */
+    private fun needsArtworkResolution(path: String?): Boolean =
+        path.isNullOrBlank() || isRemoteUrl(path)
+
+    private fun isRemoteUrl(path: String): Boolean =
+        path.startsWith("http://") || path.startsWith("https://")
+
+    /** True when [path] is an existing local file (not a server URL). */
+    private fun isLocalPath(path: String): Boolean =
+        path.isNotBlank() && !isRemoteUrl(path)
+
+    /**
+     * Stats `[dir]/[filename]` and returns its absolute path when present, else
+     * null. Collapses the repeated `File(dir, …).takeIf { it.exists() }?.absolutePath`
+     * shape that poster/backdrop/cast resolution all share.
+     */
+    private fun localArtifactOrNull(dir: File, filename: String): String? =
+        File(dir, filename).takeIf { it.exists() }?.absolutePath
+
+    /**
+     * Cast ids carried by [item]'s persisted `peopleJson`, decoded via [decodeCast].
+     * Empty when the row has no cast column (older downloads) so cast cleanup is a
+     * no-op for them.
+     */
+    private fun castIdsOf(item: OfflineMediaEntity): List<String> =
+        decodeCast(item.peopleJson).map { it.id }
+
+    /**
+     * Prunes the cast-image files for [candidateCastIds] from every [parentDirs],
+     * keeping any person still referenced by a *surviving* offline row. A person
+     * can appear across many movies/episodes and the `personId`-keyed image file
+     * serves all of them, so a file is deleted only when its person is no longer
+     * referenced anywhere. **Must be called after the deleted rows are removed
+     * from the DB** so [offlineMediaDao.getAllPeopleJson] reflects only surviving
+     * references — otherwise the just-deleted rows would still count as references
+     * and nothing would be pruned.
+     */
+    private suspend fun cleanupOrphanedCastArtwork(
+        parentDirs: List<File>,
+        candidateCastIds: List<String>,
+    ) {
+        if (parentDirs.isEmpty() || candidateCastIds.isEmpty()) return
+        val stillReferenced = referencedPersonIds()
+        val orphans = candidateCastIds.filter { it !in stillReferenced }
+        if (orphans.isEmpty()) return
+        parentDirs.forEach { DownloadArtifacts.cleanupCastArtwork(it, orphans) }
+    }
+
+    /**
+     * Person ids that still appear in any surviving offline row's `peopleJson`.
+     * A coarse scan over the decoded cast is sufficient: Jellyfin person ids are
+     * stable UUIDs, so membership means the person is still referenced and their
+     * shared image file must be kept. Reflects the post-delete state because it
+     * is called after the deletion transaction commits.
+     */
+    private suspend fun referencedPersonIds(): Set<String> {
+        val rows = offlineMediaDao.getAllPeopleJson()
+        return buildSet {
+            for (row in rows) {
+                for (person in decodeCast(row.peopleJson)) add(person.id)
+            }
+        }
+    }
+
+    /**
+     * The directory used to locate cast-image artifacts for [item]. Cast images
+     * are written beside the item's media file (movies/standalone) or beside a
+     * downloaded episode's media file (series, which have no media file of their
+     * own). Returns null when neither is available so callers can skip cast
+     * resolution rather than stat a path that cannot exist.
+     */
+    private suspend fun castDirFor(item: OfflineMediaItem, ownDir: File?): File? {
+        if (ownDir != null) return ownDir
+        // Series row: locate any downloaded episode's dir. Mirrors
+        // resolveSeriesArtwork's scan so the cast row resolves to the same
+        // shared downloads dir the series poster/backdrop already use.
+        if (item.mediaType == MediaType.SERIES) {
+            return downloadDao.getDownloadsForSeries(item.id)
+                .asSequence()
+                .mapNotNull { it.downloadPath.takeIf { p -> p.isNotBlank() } }
+                .mapNotNull { File(it).parentFile }
+                .firstOrNull()
+        }
+        return null
+    }
+
+    /**
+     * Returns [cast] with [OfflinePersonInfo.localImagePath] populated for any
+     * person whose image artifact exists beside [dir]. Persons whose file is
+     * absent keep `localImagePath = null` and the detail screen falls back to
+     * the remote URL (online) / blurHash (offline), exactly as before. Cheap:
+     * one `File.exists()` stat per cast member, only on detail reads.
+     */
+    private fun resolveCastArtwork(
+        cast: List<OfflinePersonInfo>,
+        dir: File,
+    ): List<OfflinePersonInfo> {
+        var changed = false
+        val resolved = ArrayList<OfflinePersonInfo>(cast.size)
+        for (person in cast) {
+            val localPath = localArtifactOrNull(dir, DownloadArtifacts.personImageFile(person.id))
+            if (localPath != null) {
+                changed = true
+                resolved.add(person.copy(localImagePath = localPath))
+            } else {
+                resolved.add(person)
+            }
+        }
+        return if (changed) resolved else cast
     }
 
     private fun safeMediaTypeOf(name: String): MediaType =

@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.model.NavigationStyle
+import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 
 import androidx.annotation.StringRes
@@ -57,12 +59,12 @@ private val NAV_ITEMS: List<NavItemDescriptor> = listOf(
 
 /**
  * A settings group that lets the user customize the floating navigation bar:
- * toggle individual items on/off and reorder them by drag, plus toggle the
- * hide-on-scroll behavior ().
+ * toggle individual items on/off and reorder them by drag, toggle navigation style
+ * (Expressive M3 vs Classic), plus toggle the hide-on-scroll behavior.
  *
  * Backed by [UserPreferences.hiddenNavItems] / [UserPreferences.navItemOrder] /
- * [UserPreferences.hideBottomNavOnScroll], which the nav-bar composition
- * already reads — so no further wiring is needed for changes to take effect.
+ * [UserPreferences.hideBottomNavOnScroll] / [UserPreferences.navigationStyle],
+ * which the nav-bar composition already reads — so no further wiring is needed.
  */
 @Composable
 fun NavigationCustomizationGroup(
@@ -83,8 +85,31 @@ fun NavigationCustomizationGroup(
         initiallyExpanded = true,
         modifier = modifier,
     ) {
-        val total = NAV_ITEMS.size + 1 // items + the hide-on-scroll toggle
+        val total = NAV_ITEMS.size + 2 // items + hide-on-scroll + nav-style toggle
         var idx = 0
+
+        SettingListItem(
+            icon = Tabler.Outline.Menu2,
+            title = stringResource(R.string.settings_nav_style),
+            subtitle = stringResource(
+                if (preferences.navigationStyle == NavigationStyle.EXPRESSIVE)
+                    R.string.settings_nav_style_expressive_subtitle
+                else
+                    R.string.settings_nav_style_classic_subtitle
+            ),
+            trailingText = stringResource(
+                if (preferences.navigationStyle == NavigationStyle.EXPRESSIVE)
+                    R.string.settings_nav_style_expressive
+                else
+                    R.string.settings_nav_style_classic
+            ),
+            index = idx++, count = total,
+            onClick = {
+                val nextStyle = if (preferences.navigationStyle == NavigationStyle.EXPRESSIVE)
+                    NavigationStyle.CLASSIC else NavigationStyle.EXPRESSIVE
+                viewModel.setNavigationStyle(nextStyle)
+            },
+        )
 
         SettingToggleItem(
             icon = Tabler.Outline.ArrowBarToDown,

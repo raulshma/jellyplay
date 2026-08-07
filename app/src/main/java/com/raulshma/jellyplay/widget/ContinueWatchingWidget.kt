@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.widget.RemoteViews
 import com.raulshma.jellyplay.MainActivity
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -20,12 +19,6 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 
 class ContinueWatchingWidget : AppWidgetProvider() {
-
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface WidgetEntryPoint {
-        fun preferencesStore(): UserPreferencesStore
-    }
 
     override fun onUpdate(
         context: Context,

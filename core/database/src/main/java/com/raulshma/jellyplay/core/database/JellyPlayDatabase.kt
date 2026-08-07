@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import com.raulshma.jellyplay.core.database.dao.AuditLogDao
 import com.raulshma.jellyplay.core.database.dao.AudioQueueDao
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
+import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.ItemPlaybackPreferenceDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.database.dao.MoodPlaylistDao
@@ -20,6 +21,7 @@ import com.raulshma.jellyplay.core.database.dao.UserDao
 import com.raulshma.jellyplay.core.database.entity.AudioQueueEntity
 import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
+import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
 import com.raulshma.jellyplay.core.database.entity.LyricsCacheEntity
 import com.raulshma.jellyplay.core.database.entity.MediaAuditLogEntity
@@ -52,8 +54,9 @@ import com.raulshma.jellyplay.core.database.entity.UserEntity
         SeenMediaEntity::class,
         ItemPlaybackPreferenceEntity::class,
         PlaybackOutboxEntity::class,
+        HomeSectionCacheEntity::class,
     ],
-    version = 40,
+    version = 43,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -72,4 +75,5 @@ abstract class JellyPlayDatabase : RoomDatabase() {
     abstract fun seenMediaDao(): SeenMediaDao
     abstract fun itemPlaybackPreferenceDao(): ItemPlaybackPreferenceDao
     abstract fun playbackOutboxDao(): PlaybackOutboxDao
+    abstract fun homeSectionCacheDao(): HomeSectionCacheDao
 }

@@ -151,142 +151,6 @@ data class AppearancePreferences(
     val libraryViewMode: LibraryViewMode = LibraryViewMode.GRID,
 )
 
-val UserPreferences.videoPlayer: VideoPlayerPreferences
-    get() = VideoPlayerPreferences(
-        preferredPlayer = preferredPlayer,
-        decoderMode = decoderMode,
-        audioPassthrough = audioPassthrough,
-        frameRateMatching = frameRateMatching,
-        refreshRateMode = refreshRateMode,
-        videoSeekDurationMs = videoSeekDurationMs,
-        videoDefaultOrientation = videoDefaultOrientation,
-        videoControlsTimeoutMs = videoControlsTimeoutMs,
-        videoGesturesEnabled = videoGesturesEnabled,
-        videoHoldSpeedEnabled = videoHoldSpeedEnabled,
-        videoHoldSpeedMultiplier = videoHoldSpeedMultiplier,
-        videoDefaultSpeed = videoDefaultSpeed,
-        videoDefaultAspectRatio = videoDefaultAspectRatio,
-        videoAutoplayNext = videoAutoplayNext,
-        trailerAutoplay = trailerAutoplay,
-        videoSwipeSeekMaxMs = videoSwipeSeekMaxMs,
-        videoRememberBrightness = videoRememberBrightness,
-        videoBrightnessLevel = videoBrightnessLevel,
-        videoGestureIndicatorSide = videoGestureIndicatorSide,
-        trickplayEnabled = trickplayEnabled,
-        trickplayOnSeekGesture = trickplayOnSeekGesture,
-        videoEpisodeBrowserEnabled = videoEpisodeBrowserEnabled,
-        videoShowPlaybackMetadata = videoShowPlaybackMetadata,
-        videoPreloadBufferSize = videoPreloadBufferSize,
-        keepScreenOnDuringVideo = keepScreenOnDuringVideo,
-        showTimeRemaining = showTimeRemaining,
-        pauseOnAudioFocusLoss = pauseOnAudioFocusLoss,
-        volumeBoostEnabled = volumeBoostEnabled,
-        volumeBoostGain = volumeBoostGain,
-        backgroundVideoAudioEnabled = backgroundVideoAudioEnabled,
-        autoPlayCountdownSec = autoPlayCountdownSec,
-        reduceMotionEnabled = reduceMotionEnabled,
-        preferAudioDescription = preferAudioDescription,
-        highContrastSubtitles = highContrastSubtitles,
-        blueLightFilterEnabled = blueLightFilterEnabled,
-        blueLightFilterStrength = blueLightFilterStrength,
-        tvZoomModePercent = tvZoomModePercent,
-        mpvConfig = mpvConfig,
-        libVlcConfig = libVlcConfig,
-        exoPlayerConfig = exoPlayerConfig,
-    )
-
-val UserPreferences.audioPlayer: AudioPlayerPreferences
-    get() = AudioPlayerPreferences(
-        audioDefaultSpeed = audioDefaultSpeed,
-        audioNightModeVolume = audioNightModeVolume,
-        audioNightModeGain = audioNightModeGain,
-        audioSkipPreviousThresholdMs = audioSkipPreviousThresholdMs,
-        audioAutoplayNext = audioAutoplayNext,
-        audioPreloadBufferSize = audioPreloadBufferSize,
-        audioNormalizationMode = audioNormalizationMode,
-        audioNormalizationEnabled = audioNormalizationEnabled,
-        replayGainPreAmpDb = replayGainPreAmpDb,
-        channelMixMode = channelMixMode,
-        channelMixEnabled = channelMixEnabled,
-        audioGaplessEnabled = audioGaplessEnabled,
-        audioCrossfadeDurationMs = audioCrossfadeDurationMs,
-        equalizerEnabled = equalizerEnabled,
-        equalizerSettings = equalizerSettings,
-        equalizerPreset = equalizerPreset,
-        bassBoostEnabled = bassBoostEnabled,
-        bassBoostStrength = bassBoostStrength,
-        virtualizerEnabled = virtualizerEnabled,
-        virtualizerStrength = virtualizerStrength,
-        reverbPreset = reverbPreset,
-        lrBalance = lrBalance,
-        autoEqByGenre = autoEqByGenre,
-        pitchSemitones = pitchSemitones,
-        audioDelayMs = audioDelayMs,
-        dialogueBoostEnabled = dialogueBoostEnabled,
-        dialogueBoostStrength = dialogueBoostStrength,
-        nightModeEnabled = nightModeEnabled,
-        nightModeStrength = nightModeStrength,
-        audioVisualizerEnabled = audioVisualizerEnabled,
-    )
-
-val UserPreferences.subtitle: SubtitlePreferences
-    get() = SubtitlePreferences(
-        subtitleStyle = subtitleStyle,
-        preferredSubtitleLanguage = preferredSubtitleLanguage,
-        preferredAudioLanguage = preferredAudioLanguage,
-    )
-
-val UserPreferences.security: SecurityPreferences
-    get() = SecurityPreferences(
-        pinLockEnabled = pinLockEnabled,
-        pinHash = pinHash,
-        biometricLockEnabled = biometricLockEnabled,
-        usePinForPlayerLock = usePinForPlayerLock,
-        autoLockTimerMs = autoLockTimerMs,
-        incognitoModeEnabled = incognitoModeEnabled,
-        remoteControlEnabled = remoteControlEnabled,
-    )
-
-val UserPreferences.download: DownloadPreferences
-    get() = DownloadPreferences(
-        wifiOnlyDownloads = wifiOnlyDownloads,
-        downloadConnections = downloadConnections,
-        downloadQuality = downloadQuality,
-        smartDownloadsEnabled = smartDownloadsEnabled,
-        autoDownloadNewEpisodes = autoDownloadNewEpisodes,
-        maxDownloadStorageGb = maxDownloadStorageGb,
-        downloadStorageLocation = downloadStorageLocation,
-        manualOfflineEnabled = manualOfflineEnabled,
-        autoOfflineEnabled = autoOfflineEnabled,
-    )
-
-val UserPreferences.syncPlay: SyncPlayPreferences
-    get() = SyncPlayPreferences(
-        syncPlayJoinBehavior = syncPlayJoinBehavior,
-        syncPlayToleranceMs = syncPlayToleranceMs,
-        syncPlayAutoAcceptInvites = syncPlayAutoAcceptInvites,
-    )
-
-val UserPreferences.appearance: AppearancePreferences
-    get() = AppearancePreferences(
-        dynamicTheming = dynamicTheming,
-        themeMode = themeMode,
-        contrastLevel = contrastLevel,
-        oledMode = oledMode,
-        accentColorSwatch = accentColorSwatch,
-        colorStyle = colorStyle,
-        navBarShowLabels = navBarShowLabels,
-        homeHeroEnabled = homeHeroEnabled,
-        homeBackdropEnabled = homeBackdropEnabled,
-        performanceMode = performanceMode,
-        synthwaveMode = synthwaveMode,
-        synthwaveAccent = synthwaveAccent,
-        soothingMode = soothingMode,
-        soothingAccent = soothingAccent,
-        monochromeMode = monochromeMode,
-        libraryViewMode = libraryViewMode,
-    )
-
 // ---------------------------------------------------------------------------
 // Per-screen preference slices.
 //
@@ -371,65 +235,6 @@ data class PlaybackPreferences(
     val androidTvWatchNextEnabled: Boolean = true,
 )
 
-val UserPreferences.playback: PlaybackPreferences
-    get() = PlaybackPreferences(
-        preferredPlayer = preferredPlayer,
-        decoderMode = decoderMode,
-        audioPassthrough = audioPassthrough,
-        frameRateMatching = frameRateMatching,
-        refreshRateMode = refreshRateMode,
-        videoSeekDurationMs = videoSeekDurationMs,
-        videoDefaultOrientation = videoDefaultOrientation,
-        videoControlsTimeoutMs = videoControlsTimeoutMs,
-        videoGesturesEnabled = videoGesturesEnabled,
-        videoHoldSpeedEnabled = videoHoldSpeedEnabled,
-        videoHoldSpeedMultiplier = videoHoldSpeedMultiplier,
-        videoDefaultSpeed = videoDefaultSpeed,
-        videoDefaultAspectRatio = videoDefaultAspectRatio,
-        videoAutoplayNext = videoAutoplayNext,
-        trailerAutoplay = trailerAutoplay,
-        cinemaModeEnabled = cinemaModeEnabled,
-        videoSwipeSeekMaxMs = videoSwipeSeekMaxMs,
-        videoRememberBrightness = videoRememberBrightness,
-        videoBrightnessLevel = videoBrightnessLevel,
-        videoGestureIndicatorSide = videoGestureIndicatorSide,
-        videoSkipBackOnResumeMs = videoSkipBackOnResumeMs,
-        videoPassOutProtectionHours = videoPassOutProtectionHours,
-        trickplayEnabled = trickplayEnabled,
-        trickplayOnSeekGesture = trickplayOnSeekGesture,
-        segmentBehaviors = segmentBehaviors,
-        videoEpisodeBrowserEnabled = videoEpisodeBrowserEnabled,
-        videoShowPlaybackMetadata = videoShowPlaybackMetadata,
-        videoPreloadBufferSize = videoPreloadBufferSize,
-        keepScreenOnDuringVideo = keepScreenOnDuringVideo,
-        showTimeRemaining = showTimeRemaining,
-        pauseOnAudioFocusLoss = pauseOnAudioFocusLoss,
-        duckOnTransientFocusLoss = duckOnTransientFocusLoss,
-        dialogueBoostEnabled = dialogueBoostEnabled,
-        dialogueBoostStrength = dialogueBoostStrength,
-        audioDelayMs = audioDelayMs,
-        backgroundVideoAudioEnabled = backgroundVideoAudioEnabled,
-        autoPlayCountdownSec = autoPlayCountdownSec,
-        incognitoModeEnabled = incognitoModeEnabled,
-        showClockInPlayer = showClockInPlayer,
-        tvZoomModePercent = tvZoomModePercent,
-        streamingQuality = streamingQuality,
-        liveStreamOption = liveStreamOption,
-        mpvConfig = mpvConfig,
-        libVlcConfig = libVlcConfig,
-        exoPlayerConfig = exoPlayerConfig,
-        syncPlayJoinBehavior = syncPlayJoinBehavior,
-        syncPlayToleranceMs = syncPlayToleranceMs,
-        syncPlayAutoAcceptInvites = syncPlayAutoAcceptInvites,
-        defaultCastingStrategy = defaultCastingStrategy,
-        backgroundCastingEnabled = backgroundCastingEnabled,
-        preferredRenderer = preferredRenderer,
-        dvrPrePaddingMinutes = dvrPrePaddingMinutes,
-        dvrPostPaddingMinutes = dvrPostPaddingMinutes,
-        dvrRecordingQuality = dvrRecordingQuality,
-        androidTvWatchNextEnabled = androidTvWatchNextEnabled,
-    )
-
 /** Fields read by `AudioSettingsScreen`. */
 @Immutable
 @Serializable
@@ -474,48 +279,6 @@ data class AudioPreferences(
     val volumeBoostGain: Int = 0,
 )
 
-val UserPreferences.audio: AudioPreferences
-    get() = AudioPreferences(
-        audioDefaultSpeed = audioDefaultSpeed,
-        audioNightModeVolume = audioNightModeVolume,
-        audioNightModeGain = audioNightModeGain,
-        audioSkipPreviousThresholdMs = audioSkipPreviousThresholdMs,
-        audioAutoplayNext = audioAutoplayNext,
-        audioPreloadBufferSize = audioPreloadBufferSize,
-        audioNormalizationMode = audioNormalizationMode,
-        audioNormalizationEnabled = audioNormalizationEnabled,
-        replayGainPreAmpDb = replayGainPreAmpDb,
-        channelMixMode = channelMixMode,
-        channelMixEnabled = channelMixEnabled,
-        audioGaplessEnabled = audioGaplessEnabled,
-        audioCrossfadeDurationMs = audioCrossfadeDurationMs,
-        equalizerEnabled = equalizerEnabled,
-        equalizerSettings = equalizerSettings,
-        equalizerPreset = equalizerPreset,
-        bassBoostEnabled = bassBoostEnabled,
-        bassBoostStrength = bassBoostStrength,
-        virtualizerEnabled = virtualizerEnabled,
-        virtualizerStrength = virtualizerStrength,
-        reverbPreset = reverbPreset,
-        lrBalance = lrBalance,
-        autoEqByGenre = autoEqByGenre,
-        pitchSemitones = pitchSemitones,
-        dialogueBoostEnabled = dialogueBoostEnabled,
-        dialogueBoostStrength = dialogueBoostStrength,
-        nightModeEnabled = nightModeEnabled,
-        nightModeStrength = nightModeStrength,
-        audioVisualizerEnabled = audioVisualizerEnabled,
-        audioCachingEnabled = audioCachingEnabled,
-        audioCacheSizeMb = audioCacheSizeMb,
-        audioPrefetchLookahead = audioPrefetchLookahead,
-        audioPrefetchBackfill = audioPrefetchBackfill,
-        audioCacheNetworkPolicy = audioCacheNetworkPolicy,
-        sleepTimerDurationMs = sleepTimerDurationMs,
-        preferAudioDescription = preferAudioDescription,
-        volumeBoostEnabled = volumeBoostEnabled,
-        volumeBoostGain = volumeBoostGain,
-    )
-
 /** Fields read by `StorageSettingsScreen`. */
 @Immutable
 @Serializable
@@ -546,34 +309,6 @@ data class StoragePreferences(
     val userDataSyncEnabled: Boolean = true,
 )
 
-val UserPreferences.storage: StoragePreferences
-    get() = StoragePreferences(
-        wifiOnlyDownloads = wifiOnlyDownloads,
-        downloadConnections = downloadConnections,
-        maxConcurrentDownloads = maxConcurrentDownloads,
-        downloadQuality = downloadQuality,
-        smartDownloadsEnabled = smartDownloadsEnabled,
-        autoDownloadNewEpisodes = autoDownloadNewEpisodes,
-        maxDownloadStorageGb = maxDownloadStorageGb,
-        downloadStorageLocation = downloadStorageLocation,
-        manualOfflineEnabled = manualOfflineEnabled,
-        autoOfflineEnabled = autoOfflineEnabled,
-        maxCacheSizeMb = maxCacheSizeMb,
-        autoDeleteCache = autoDeleteCache,
-        cellularDownloadSizeWarningMb = cellularDownloadSizeWarningMb,
-        downloadScheduleEnabled = downloadScheduleEnabled,
-        downloadScheduleWindow = downloadScheduleWindow,
-        streamingQuality = streamingQuality,
-        cellularStreamingQuality = cellularStreamingQuality,
-        meteredNetworkBehavior = meteredNetworkBehavior,
-        adaptiveBitrateEnabled = adaptiveBitrateEnabled,
-        manualBandwidthCap = manualBandwidthCap,
-        dataSaverEnabled = dataSaverEnabled,
-        verboseNetworkLogging = verboseNetworkLogging,
-        networkTimeoutPreset = networkTimeoutPreset,
-        userDataSyncEnabled = userDataSyncEnabled,
-    )
-
 /** Fields read by `NavigationCustomizationGroup`. */
 @Immutable
 @Serializable
@@ -581,14 +316,8 @@ data class NavigationCustomizationPreferences(
     val hiddenNavItems: Set<String> = emptySet(),
     val navItemOrder: List<String> = emptyList(),
     val hideBottomNavOnScroll: Boolean = true,
+    val navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
 )
-
-val UserPreferences.navigationCustomization: NavigationCustomizationPreferences
-    get() = NavigationCustomizationPreferences(
-        hiddenNavItems = hiddenNavItems,
-        navItemOrder = navItemOrder,
-        hideBottomNavOnScroll = hideBottomNavOnScroll,
-    )
 
 /** Fields read by `LanguageSettingsScreen`. */
 @Immutable
@@ -609,30 +338,12 @@ data class LanguagePreferences(
     val appLanguage: String? = null,
 )
 
-val UserPreferences.language: LanguagePreferences
-    get() = LanguagePreferences(
-        subtitleStyle = subtitleStyle,
-        preferredSubtitleLanguage = preferredSubtitleLanguage,
-        preferredAudioLanguage = preferredAudioLanguage,
-        subtitlesForcedOnly = subtitlesForcedOnly,
-        highContrastSubtitles = highContrastSubtitles,
-        pgsSubtitleDirectPlay = pgsSubtitleDirectPlay,
-        hdrSubtitleStyleEnabled = hdrSubtitleStyleEnabled,
-        hdrSubtitleStyle = hdrSubtitleStyle,
-        appLanguage = appLanguage,
-    )
-
 /** Fields read by `ExperimentalSettingsScreen`. */
 @Immutable
 @Serializable
 data class ExperimentalPreferences(
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),
 )
-
-val UserPreferences.experimental: ExperimentalPreferences
-    get() = ExperimentalPreferences(
-        enabledExperimentalFeatures = enabledExperimentalFeatures,
-    )
 
 /**
  * Fields read by `AppearanceSettingsScreen`. This is the broadest slice because
@@ -686,6 +397,7 @@ data class AppearanceScreenPreferences(
     val showWatchedCheckmark: Boolean = true,
     val hideEpisodeThumbnails: Boolean = false,
     val skipSpecials: Boolean = false,
+    val compactEpisodeList: Boolean = false,
     val showExternalRatings: Boolean = true,
     val showShareMediaOption: Boolean = true,
     val hideSearchHistory: Boolean = false,
@@ -704,59 +416,3 @@ data class AppearanceScreenPreferences(
     ),
     val newsletterSectionOrder: List<NewsletterSectionType> = NewsletterSectionType.DEFAULT_ORDER,
 )
-
-val UserPreferences.appearanceScreen: AppearanceScreenPreferences
-    get() = AppearanceScreenPreferences(
-        dynamicTheming = dynamicTheming,
-        themeMode = themeMode,
-        contrastLevel = contrastLevel,
-        oledMode = oledMode,
-        accentColorSwatch = accentColorSwatch,
-        colorStyle = colorStyle,
-        navBarShowLabels = navBarShowLabels,
-        homeHeroEnabled = homeHeroEnabled,
-        homeBackdropEnabled = homeBackdropEnabled,
-        performanceMode = performanceMode,
-        synthwaveMode = synthwaveMode,
-        synthwaveAccent = synthwaveAccent,
-        soothingMode = soothingMode,
-        soothingAccent = soothingAccent,
-        monochromeMode = monochromeMode,
-        libraryViewMode = libraryViewMode,
-        reduceMotionEnabled = reduceMotionEnabled,
-        blueLightFilterEnabled = blueLightFilterEnabled,
-        blueLightFilterStrength = blueLightFilterStrength,
-        appFontScale = appFontScale,
-        dateFormatPreference = dateFormatPreference,
-        colorBlindMode = colorBlindMode,
-        handMode = handMode,
-        hapticsEnabled = hapticsEnabled,
-        scheduledThemeStartHour = scheduledThemeStartHour,
-        scheduledThemeEndHour = scheduledThemeEndHour,
-        backdropThemeMusicEnabled = backdropThemeMusicEnabled,
-        homeMode = homeMode,
-        enabledHomeSectionTypes = enabledHomeSectionTypes,
-        homeSectionOrder = homeSectionOrder,
-        pinnedHomeSections = pinnedHomeSections,
-        homeLayoutPresets = homeLayoutPresets,
-        libraryHomeSectionOverrides = libraryHomeSectionOverrides,
-        hiddenCwItemIds = hiddenCwItemIds,
-        showUnwatchedBadge = showUnwatchedBadge,
-        hideWatchedItems = hideWatchedItems,
-        mergeContinueWatchingAndNextUp = mergeContinueWatchingAndNextUp,
-        nextUpMaxDays = nextUpMaxDays,
-        nextUpRewatching = nextUpRewatching,
-        continueWatchingClickBehavior = continueWatchingClickBehavior,
-        showWatchedCheckmark = showWatchedCheckmark,
-        hideEpisodeThumbnails = hideEpisodeThumbnails,
-        skipSpecials = skipSpecials,
-        showExternalRatings = showExternalRatings,
-        showShareMediaOption = showShareMediaOption,
-        hideSearchHistory = hideSearchHistory,
-        showClockOnHome = showClockOnHome,
-        showSettingsInHomeSearch = showSettingsInHomeSearch,
-        newsletterEnabled = newsletterEnabled,
-        newsletterDayOfWeek = newsletterDayOfWeek,
-        enabledNewsletterSections = enabledNewsletterSections,
-        newsletterSectionOrder = newsletterSectionOrder,
-    )

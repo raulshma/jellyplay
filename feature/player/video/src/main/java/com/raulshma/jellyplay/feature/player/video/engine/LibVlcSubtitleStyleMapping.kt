@@ -4,15 +4,62 @@ import com.raulshma.jellyplay.core.model.SubtitleBorderStyle
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 
-/** Pure FreeType typography mapping, shared by LibVLC's initial and reload paths. */
+/**
+ * Pure FreeType typography mapping, the single source for LibVLC's `:freetype-*`
+ * subtitle options. Used by both LibVLC's initial-load and reload paths — the
+ * engine's [com.raulshma.jellyplay.feature.player.video.engine.LibVlcPlayerEngine.Media.applySubtitleStyle]
+ * only delegates here, so the tested code IS the shipped code (no inline shadow).
+ *
+ * Branching on [SubtitleStyle.applyCustomStyle] lives in [freetypeOptions];
+ * [colorOptions] is the unconditional custom mapping (kept test-facing) and
+ * [defaultOptions] is the mpv-matching reset set emitted when the user has not
+ * enabled a custom style.
+ */
 internal object LibVlcSubtitleStyleMapping {
 
-    fun typefaceOptions(style: SubtitleStyle, bundledFallbackPath: String): List<String> = listOf(
-        ":freetype-bold=${style.bold}",
-        ":freetype-italic=${style.italic}",
-        ":freetype-font=${style.fontFamilyPath ?: bundledFallbackPath}",
+    /**
+     * The full `:freetype-*` color/size/opacity option list for [style],
+     * dispatching on [SubtitleStyle.applyCustomStyle]. This is the entry point
+     * engines should call; [colorOptions] and [defaultOptions] are exposed for
+     * unit testing each branch in isolation.
+     */
+    fun freetypeOptions(style: SubtitleStyle): List<String> =
+        if (style.applyCustomStyle) colorOptions(style) else defaultOptions()
+
+    /**
+     * LibVLC's native default caption style, matching the other engines'
+     * bundled-default reference (white text, transparent background, black
+     * outline + shadow, 24px reference size). Emitted when the user has not
+     * enabled a custom subtitle style.
+     */
+    fun defaultOptions(): List<String> = listOf(
+        ":freetype-color=${WHITE_RGB}", // White (0xFFFFFF)
+        ":freetype-background-color=0", // Black/transparent
+        ":freetype-background-opacity=0", // Transparent
+        ":freetype-outline-color=0", // Black
+        ":freetype-outline-thickness=2",
+        ":freetype-shadow-opacity=255",
+        // Absolute pixel size, matching the other engines' bundled-default
+        // reference size (24sp). :freetype-rel-fontsize would clamp/ignore
+        // 24 here — it is a relative-size enum, not a pixel value.
+        ":freetype-fontsize=${SubtitleDefaults.REFERENCE_FONT_SIZE}",
     )
+
+    fun typefaceOptions(style: SubtitleStyle, bundledFallbackPath: String): List<String> = if (style.applyCustomStyle) {
+        listOf(
+            ":freetype-bold=${style.bold}",
+            ":freetype-italic=${style.italic}",
+            ":freetype-font=${style.fontFamilyPath ?: bundledFallbackPath}",
+        )
+    } else {
+        listOf(
+            ":freetype-bold=false",
+            ":freetype-italic=false",
+            ":freetype-font=$bundledFallbackPath",
+        )
+    }
 
     fun colorOptions(style: SubtitleStyle): List<String> {
         val options = mutableListOf<String>()
@@ -23,7 +70,13 @@ internal object LibVlcSubtitleStyleMapping {
         options.add(":freetype-color=$fontColor")
         options.add(":freetype-background-color=$backgroundColor")
         options.add(":freetype-outline-color=$edgeColor")
-        options.add(":freetype-rel-fontsize=${style.fontSize}")
+        // freetype-fontsize is the ABSOLUTE size in pixels (non-zero overrides
+        // the relative-size enum); use it for the user's sp value. Do NOT feed
+        // sp values into :freetype-rel-fontsize — that option is a small-integer
+        // enum (Auto/Smaller/Small/Normal/Large/Larger = 0/20/18/16/12/6), so a
+        // value like 24 or style.fontSize falls outside its domain and LibVLC
+        // silently ignores it. See VLC modules/text_renderer/freetype/freetype.c.
+        options.add(":freetype-fontsize=${style.fontSize}")
 
         val bgOpacity = when (style.borderStyle) {
             SubtitleBorderStyle.OPAQUE_BOX -> 255
@@ -58,4 +111,7 @@ internal object LibVlcSubtitleStyleMapping {
         val margin = (style.verticalPosition.coerceIn(0f, 0.4f) * frameHeight).toInt()
         return ":sub-margin=$margin"
     }
+
+    /** White as a decimal RGB int (FreeType wants RGB, alpha stripped). */
+    private const val WHITE_RGB: Int = 0xFFFFFF
 }

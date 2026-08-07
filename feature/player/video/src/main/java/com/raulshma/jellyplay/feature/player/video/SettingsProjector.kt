@@ -1,10 +1,10 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 
 /**
  * Projects the user-preferences slice of [VideoPlayerUiState]: reads the latest
- * [UserPreferences] + the current uiState and applies only the fields that
+ * [VideoPlayerAggregate] + the current uiState and applies only the fields that
  * actually changed, preserving the distinct-until-changed guards the inline
  * collector previously hand-wrote per field.
  *
@@ -40,14 +40,14 @@ internal class SettingsProjector(
      * then rebuild the engine config (`updateConfigWithUiState`); every other
      * projected field has no downstream side effect.
      */
-    fun project(prefs: UserPreferences): Boolean {
+    fun project(agg: VideoPlayerAggregate): Boolean {
         val state = getUiState()
         var subtitleStyleChanged = false
 
         // Per-item audio/subtitle override flags — derived from the stored
         // selection for the current item. Skipped wholesale when unchanged
         // (the most common case: these rarely flip).
-        val stored = getItemId()?.let { prefs.mediaStreamSelections[it] }
+        val stored = getItemId()?.let { agg.engine.mediaStreamSelections[it] }
         val newAudio = stored?.audioStreamIndex != null
         val newSub = stored?.subtitleStreamIndex != null
         if (state.hasAudioOverride != newAudio || state.hasSubtitleOverride != newSub) {
@@ -57,48 +57,49 @@ internal class SettingsProjector(
         // HDR-aware subtitle style: the resolved style depends on whether the
         // current streams carry HDR, so re-derive on every prefs tick. The VM
         // must rebuild the engine config when this changes.
-        val resolvedSubtitleStyle = prefs.resolvedSubtitleStyle(
-            isHdr = prefs.isHdrFromStreams(getMediaStreams()),
+        val resolvedSubtitleStyle = resolveSubtitleStyle(
+            agg.subtitle,
+            isHdr = isHdrFromStreams(getMediaStreams()),
         )
         if (getUiState().subtitleStyle != resolvedSubtitleStyle) {
             updateUiState { it.copy(subtitleStyle = resolvedSubtitleStyle) }
             subtitleStyleChanged = true
         }
 
-        diff(prefs.sleepTimerDurationMs, VideoPlayerUiState::sleepTimerLastUsedDurationMs) {
-            it.copy(sleepTimerLastUsedDurationMs = prefs.sleepTimerDurationMs)
+        diff(agg.audio.sleepTimerDurationMs, VideoPlayerUiState::sleepTimerLastUsedDurationMs) {
+            it.copy(sleepTimerLastUsedDurationMs = agg.audio.sleepTimerDurationMs)
         }
-        diff(prefs.videoShowPlaybackMetadata, VideoPlayerUiState::showPlaybackMetadata) {
-            it.copy(showPlaybackMetadata = prefs.videoShowPlaybackMetadata)
+        diff(agg.videoPlayer.videoShowPlaybackMetadata, VideoPlayerUiState::showPlaybackMetadata) {
+            it.copy(showPlaybackMetadata = agg.videoPlayer.videoShowPlaybackMetadata)
         }
-        diff(prefs.showClockInPlayer, VideoPlayerUiState::showClock) {
-            it.copy(showClock = prefs.showClockInPlayer)
+        diff(agg.videoPlayer.showClockInPlayer, VideoPlayerUiState::showClock) {
+            it.copy(showClock = agg.videoPlayer.showClockInPlayer)
         }
-        diff(prefs.showTimeRemaining, VideoPlayerUiState::showTimeRemaining) {
-            it.copy(showTimeRemaining = prefs.showTimeRemaining)
+        diff(agg.videoPlayer.showTimeRemaining, VideoPlayerUiState::showTimeRemaining) {
+            it.copy(showTimeRemaining = agg.videoPlayer.showTimeRemaining)
         }
-        diff(prefs.tvZoomModePercent, VideoPlayerUiState::tvZoomModePercent) {
-            it.copy(tvZoomModePercent = prefs.tvZoomModePercent)
+        diff(agg.videoPlayer.tvZoomModePercent, VideoPlayerUiState::tvZoomModePercent) {
+            it.copy(tvZoomModePercent = agg.videoPlayer.tvZoomModePercent)
         }
-        diff(prefs.keepScreenOnDuringVideo, VideoPlayerUiState::keepScreenOnDuringVideo) {
-            it.copy(keepScreenOnDuringVideo = prefs.keepScreenOnDuringVideo)
+        diff(agg.playback.keepScreenOnDuringVideo, VideoPlayerUiState::keepScreenOnDuringVideo) {
+            it.copy(keepScreenOnDuringVideo = agg.playback.keepScreenOnDuringVideo)
         }
-        diff(prefs.videoPassOutProtectionHours, VideoPlayerUiState::passOutProtectionHours) {
-            it.copy(passOutProtectionHours = prefs.videoPassOutProtectionHours)
+        diff(agg.videoPlayer.videoPassOutProtectionHours, VideoPlayerUiState::passOutProtectionHours) {
+            it.copy(passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours)
         }
-        diff(prefs.autoPlayCountdownSec, VideoPlayerUiState::autoPlayCountdownSec) {
-            it.copy(autoPlayCountdownSec = prefs.autoPlayCountdownSec)
+        diff(agg.playback.autoPlayCountdownSec, VideoPlayerUiState::autoPlayCountdownSec) {
+            it.copy(autoPlayCountdownSec = agg.playback.autoPlayCountdownSec)
         }
 
         // PIN lock: two uiState fields driven by one pref + one derived flag.
-        val hasPin = prefs.pinHash != null
-        if (getUiState().usePinForPlayerLock != prefs.usePinForPlayerLock || getUiState().hasPin != hasPin) {
-            updateUiState { it.copy(usePinForPlayerLock = prefs.usePinForPlayerLock, hasPin = hasPin) }
+        val hasPin = agg.security.pinHash != null
+        if (getUiState().usePinForPlayerLock != agg.security.usePinForPlayerLock || getUiState().hasPin != hasPin) {
+            updateUiState { it.copy(usePinForPlayerLock = agg.security.usePinForPlayerLock, hasPin = hasPin) }
         }
 
         // Default the Subtitle Manager's Search-tab language to the user's
         // preferred subtitle language (ISO 639-2/3, e.g. "eng").
-        val searchLang = prefs.preferredSubtitleLanguage ?: DEFAULT_SEARCH_LANGUAGE
+        val searchLang = agg.subtitle.preferredSubtitleLanguage ?: DEFAULT_SEARCH_LANGUAGE
         if (getUiState().defaultSearchLanguage != searchLang) {
             updateUiState { it.copy(defaultSearchLanguage = searchLang) }
         }

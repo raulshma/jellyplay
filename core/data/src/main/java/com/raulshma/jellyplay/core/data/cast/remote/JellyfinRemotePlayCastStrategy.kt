@@ -6,7 +6,7 @@ import android.util.Log
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.network.api.AdminApiClient
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -32,7 +32,7 @@ import javax.inject.Singleton
 class JellyfinRemotePlayCastStrategy @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val adminApiClient: AdminApiClient,
-    private val preferencesStore: UserPreferencesStore,
+    private val serverIdentityStore: ServerIdentityStore,
     private val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,
     private val imageUrlProvider: ImageUrlProvider,
 ) : CastStrategy {
@@ -144,7 +144,7 @@ class JellyfinRemotePlayCastStrategy @Inject constructor(
         discoveryJob = scope.launch {
             while (discoveryActive) {
                 try {
-                        val ownDeviceId = preferencesStore.ensureDeviceId()
+                        val ownDeviceId = serverIdentityStore.ensureDeviceId()
                         val sessionsResult = adminApiClient.getSessions()
                         if (sessionsResult.isSuccess) {
                             val sessions = sessionsResult.getOrThrow()

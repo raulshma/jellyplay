@@ -92,6 +92,8 @@
     <string name="downloads_progress">進捗</string>
     <string name="downloads_watch_status">視聴ステータス</string>
     <string name="downloads_watched">視聴済み</string>
+    <string name="downloads_cd_switch_to_list">縦型エピソードリストに切り替え</string>
+    <string name="downloads_cd_switch_to_cards">横型エピソードカードに切り替え</string>
     <string name="downloads_watched_label">視聴済み</string>
     <string name="downloads_in_progress">視聴中</string>
     <string name="downloads_started">開始済み</string>

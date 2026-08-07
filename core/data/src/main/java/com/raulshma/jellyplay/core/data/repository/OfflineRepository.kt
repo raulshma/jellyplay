@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.OfflineSyncState
+import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import kotlinx.coroutines.flow.Flow
 
 interface OfflineRepository {
@@ -72,4 +74,21 @@ interface OfflineRepository {
      * alphabetically. Returns an empty list for blank or too-short queries.
      */
     suspend fun searchOffline(query: String, limit: Int = 20): List<OfflineMediaItem>
+
+    /**
+     * Reactive freshness state for an offline item, projected from the persisted
+     * sync-baseline columns. Drives the offline-detail "update available" badge
+     * with zero network — the flags are written by [OfflineSyncManager]'s check
+     * / resync paths and re-emit here as they flip.
+     */
+    fun getOfflineSyncState(id: String): Flow<OfflineSyncState?>
+
+    /** Reactive count of items flagged for a metadata/image resync. */
+    fun getUpdatesCount(): Flow<Int>
+
+    /** Reactive list of items flagged for resync, for the downloads resync sheet. */
+    fun getItemsWithUpdates(): Flow<List<OfflineSyncUpdate>>
+
+    /** Snapshot ids of all offline items (top-level + episodes), for batch checks. */
+    suspend fun getDownloadedItemIds(): List<String>
 }

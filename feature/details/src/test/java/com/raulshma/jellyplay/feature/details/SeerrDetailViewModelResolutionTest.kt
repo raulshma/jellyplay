@@ -4,8 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
-import com.raulshma.jellyplay.core.model.UserPreferences
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrExternalIds
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
@@ -37,7 +37,7 @@ class SeerrDetailViewModelResolutionTest {
 
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
-    private lateinit var preferencesStore: UserPreferencesStore
+    private lateinit var projections: PreferenceProjections
     private lateinit var seerrPreferencesStore: SeerrPreferencesStore
     private lateinit var mediaRepository: MediaRepository
 
@@ -47,11 +47,11 @@ class SeerrDetailViewModelResolutionTest {
     fun setUp() {
         seerrRepository = mockk(relaxed = true)
         seerrRequestDelegate = mockk(relaxed = true)
-        preferencesStore = mockk(relaxed = true)
+        projections = mockk(relaxed = true)
         seerrPreferencesStore = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
 
-        every { preferencesStore.preferences } returns MutableStateFlow(UserPreferences())
+        every { projections.seerrDetailPreferences } returns MutableStateFlow(SeerrDetailPreferences())
         every { seerrPreferencesStore.preferences } returns MutableStateFlow(SeerrPreferences())
         every { seerrRepository.isConnected() } returns flowOf(false)
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
@@ -64,7 +64,7 @@ class SeerrDetailViewModelResolutionTest {
         )
 
         viewModel = SeerrDetailViewModel(
-            seerrRepository, seerrRequestDelegate, preferencesStore, seerrPreferencesStore, mediaRepository
+            seerrRepository, seerrRequestDelegate, projections, seerrPreferencesStore, mediaRepository
         )
     }
 

@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.live.data
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -12,26 +12,26 @@ import org.junit.Test
 
 class LastChannelStoreTest {
 
-    private lateinit var userPreferencesStore: UserPreferencesStore
+    private lateinit var appRuntimeStateStore: AppRuntimeStateStore
     private lateinit var store: LastChannelStore
 
     @Before
     fun setUp() {
-        userPreferencesStore = mockk(relaxed = true)
-        store = LastChannelStore(userPreferencesStore)
+        appRuntimeStateStore = mockk(relaxed = true)
+        store = LastChannelStore(appRuntimeStateStore)
     }
 
     @Test
     fun observeLastChannelId_delegatesToPreferencesStore() {
-        every { userPreferencesStore.observeLiveTvLastChannelId() } returns flowOf("channel-10")
+        every { appRuntimeStateStore.observeLiveTvLastChannelId() } returns flowOf("channel-10")
 
         store.observeLastChannelId()
-        verify { userPreferencesStore.observeLiveTvLastChannelId() }
+        verify { appRuntimeStateStore.observeLiveTvLastChannelId() }
     }
 
     @Test
     fun setLastChannelId_delegatesToPreferencesStore() = runBlocking {
         store.setLastChannelId("channel-42")
-        coVerify { userPreferencesStore.setLiveTvLastChannelId("channel-42") }
+        coVerify { appRuntimeStateStore.setLiveTvLastChannelId("channel-42") }
     }
 }

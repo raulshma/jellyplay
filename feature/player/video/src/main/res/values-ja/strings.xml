@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">音声</string>
     <string name="player_subtitles">字幕</string>
+    <string name="player_resumed_message">前回の位置から再開しました</string>
     <string name="player_reset_to_auto">自動にリセット</string>
     <string name="player_track_default">デフォルト</string>
     <string name="player_track_off">オフ</string>
@@ -73,6 +74,7 @@
     <string name="player_video_border_width">縁取りの幅: %1$s</string>
     <string name="player_video_shadow_offset">影のオフセット: %1$s</string>
     <string name="player_video_subtitle_offset">字幕のオフセット: %1$s</string>
+    <string name="player_video_sync_preview_reset">オフセットをリセット</string>
     <string name="player_video_vertical_position">垂直位置: %1$d%%</string>
 
     <!-- Sleep timer sheet -->
@@ -211,18 +213,10 @@
     <string name="player_video_on">オン</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_subtitle_delay">字幕の遅延</string>
     <string name="player_video_reset_both">両方リセット</string>
     <string name="player_video_av_sync_audio_helper">負: 音声が早くなります。正: 音声が遅くなります。</string>
-    <string name="player_video_av_sync_subtitle_helper">負: 字幕が早くなります。正: 字幕が遅くなります。</string>
     <string name="player_video_av_sync_decrease">%1$s を減らす</string>
     <string name="player_video_av_sync_increase">%1$s を増やす</string>
-    <string name="player_video_sync_helper">同期ヘルパー</string>
-    <string name="player_video_sync_helper_hint">セリフが発せられた瞬間に「声を聞いた」を長押しし、字幕が表示された瞬間に「テキストを見た」を長押しします。</string>
-    <string name="player_video_voice_heard">🔊 声を聞いた</string>
-    <string name="player_video_listening">聞き取り中…</string>
-    <string name="player_video_text_seen">💬 テキストを見た</string>
-    <string name="player_video_watching">確認中…</string>
     <string name="player_video_picture_in_picture">ピクチャーインピクチャー</string>
     <string name="player_video_play_next">次を再生</string>
     <string name="player_video_turn_on_autoplay">自動再生をオンにする</string>
@@ -237,6 +231,7 @@
     <string name="player_video_duration">時間</string>
     <string name="player_video_remember_audio_language">このシリーズの音声言語を記憶</string>
     <string name="player_video_remember_subtitle_language">このシリーズの字幕言語を記憶</string>
+    <string name="player_video_remember_subtitles_off">このシリーズの字幕をオフのままにする</string>
     <string name="player_video_error_offline_file_missing">エラー: オフラインファイルが見つかりません</string>
     <string name="player_video_error_loading_media">メディアの読み込みエラー</string>
     <string name="player_video_trickplay_thumbnail">トリックプレイのサムネイル</string>

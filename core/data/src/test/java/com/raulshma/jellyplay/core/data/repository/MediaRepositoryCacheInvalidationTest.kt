@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.LyricsCacheDao
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -40,13 +41,21 @@ class MediaRepositoryCacheInvalidationTest {
         every { networkMonitor.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         val lrcLibApi: LrcLibApi = mockk(relaxed = true)
         val lyricsCacheDao: LyricsCacheDao = mockk(relaxed = true)
+        val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true)
         val playedStateSync: PlayedStateSync = mockk(relaxed = true)
+        val offlineRepository: OfflineRepository = mockk(relaxed = true)
+        val episodeCatalogue = com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl(
+            apiClient,
+            offlineRepository,
+        )
         return MediaRepositoryImpl(
             apiClient,
             lrcLibApi,
             lyricsCacheDao,
+            homeSectionCacheDao,
             networkMonitor,
             playedStateSync,
+            episodeCatalogue,
         )
     }
 
@@ -119,12 +128,20 @@ class MediaRepositoryCacheInvalidationTest {
     @Test
     fun `cache is NOT invalidated on first emission`() = runBlocking {
         val repository = buildRepository()
+
+        // Session restore: identity is established before the first fetch (the
+        // realistic ordering — DataStore restores server/user, then the UI
+        // loads). The observer must treat this as a restore, not a switch.
+        userFlow.value = userInfo("user-A")
+        serverFlow.value = serverInfo("server-1")
+        waitForCacheObserver()
+
         repository.getMediaDetail("item-1")
         coVerify(exactly = 1) { apiClient.getMediaDetail("item-1") }
 
-        // First non-null emission — this is session restore, not a switch.
-        userFlow.value = userInfo("user-A")
+        // Re-emit the same identity — still a restore, no invalidation expected.
         serverFlow.value = serverInfo("server-1")
+        userFlow.value = userInfo("user-A")
         waitForCacheObserver()
 
         repository.getMediaDetail("item-1")

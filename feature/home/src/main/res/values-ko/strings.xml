@@ -36,6 +36,7 @@
     <string name="home_downloads">다운로드</string>
     <string name="home_play_on">다른 기기에서 재생</string>
     <string name="home_settings">설정</string>
+    <string name="home_switch_user">사용자 전환</string>
     <string name="home_going_online">온라인으로 전환 중…</string>
     <string name="home_go_online">온라인으로 전환</string>
     <string name="home_go_offline">오프라인으로 전환</string>

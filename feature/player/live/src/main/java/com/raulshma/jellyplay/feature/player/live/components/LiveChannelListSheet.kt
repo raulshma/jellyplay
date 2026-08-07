@@ -43,10 +43,10 @@ import com.raulshma.jellyplay.feature.player.live.R
  * favorite. Initial focus lands on the currently-playing channel.
  *
  * @param currentChannelId id of the channel that's currently playing; its row
- *  gets initial focus and a "now playing" indicator.
+ * gets initial focus and a "now playing" indicator.
  * @param favorites set of favorite channel ids (for the star state).
  * @param logoUrlFor resolves the channel logo URL (null when the channel has
- *  no PRIMARY image tag).
+ * no PRIMARY image tag).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,9 +66,15 @@ fun LiveChannelListSheet(
         val listState = rememberLazyListState()
         val currentRequester = remember { FocusRequester() }
 
+        // Pin favorites first (parity with the browse channel list).
+        // Stable sort keeps server order within each group.
+        val sortedChannels = remember(channels, favorites) {
+            channels.sortedByDescending { it.id in favorites }
+        }
+
         // Scroll the current channel into view and focus its row on open.
-        LaunchedEffect(channels, currentChannelId) {
-            val index = channels.indexOfFirst { it.id == currentChannelId }.coerceAtLeast(0)
+        LaunchedEffect(sortedChannels, currentChannelId) {
+            val index = sortedChannels.indexOfFirst { it.id == currentChannelId }.coerceAtLeast(0)
             listState.scrollToItem(index)
             currentRequester.tryRequestFocus()
         }
@@ -78,7 +84,7 @@ fun LiveChannelListSheet(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(items = channels, key = { it.id }) { channel ->
+            items(items = sortedChannels, key = { it.id }) { channel ->
                 // FocusRequester must always be produced unconditionally so
                 // positional memoization holds for the whole items() block;
                 // pick the shared requester for the current channel, otherwise

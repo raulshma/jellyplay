@@ -107,6 +107,8 @@
     <string name="settings_manage_addresses_cd">Gérer les adresses</string>
     <string name="settings_active_cd">Actif</string>
     <string name="settings_remove_cd">Retirer</string>
+    <string name="settings_remove_server_confirm_title">Supprimer le serveur ?</string>
+    <string name="settings_remove_server_confirm_message">Cela supprime le serveur et tous les utilisateurs enregistrés sur celui-ci.</string>
     <string name="settings_add_address">Ajouter une adresse</string>
     <string name="settings_primary">Principale</string>
     <string name="settings_switch">Changer</string>
@@ -400,6 +402,7 @@
     <string name="settings_library_view_grid">Afficher les éléments en grille</string>
     <string name="settings_library_view_list">Afficher les éléments en liste</string>
     <string name="settings_library_view_thumb">Afficher les éléments en miniatures paysage</string>
+    <string name="settings_library_view_masonry">Afficher les éléments en disposition en maçonnerie</string>
     <string name="settings_home_mode">Mode d\'accueil</string>
     <string name="settings_home_mode_video">Écran d\'accueil axé sur la vidéo</string>
     <string name="settings_home_mode_music">Écran d\'accueil axé sur la musique</string>
@@ -695,6 +698,8 @@
     <string name="settings_exp_press_hold_preview">Aperçu appui-maintien</string>
     <string name="settings_exp_press_hold_preview_subtitle">Appuyez longuement sur une carte média pour afficher un aperçu flou ; relâchez pour fermer</string>
     <string name="settings_exp_arr_integration_subtitle">Afficher la progression de la file de téléchargement dans Demandes et un calendrier à venir sur l\'Accueil depuis votre Radarr/Sonarr. Les détails du serveur sont découverts automatiquement depuis Seerr ; remplacement manuel dans les réglages *arr</string>
+    <string name="settings_exp_expressive_nav">Navigation expressive Material 3</string>
+    <string name="settings_exp_expressive_nav_subtitle">Capsule de navigation flottante style nouveau design Google Photos avec bouton de recherche indépendant.</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">Taille de police des sous-titres</string>
@@ -824,6 +829,8 @@
     <string name="settings_hide_watched_items_subtitle">Filtrer par défaut les médias vus des bibliothèques</string>
     <string name="settings_hide_episode_thumbnails">Masquer les vignettes d\'épisodes</string>
     <string name="settings_hide_episode_thumbnails_subtitle">Masquer les aperçus d\'épisodes pour éviter les spoilers</string>
+    <string name="settings_compact_episode_list">Liste d\'épisodes compacte</string>
+    <string name="settings_compact_episode_list_subtitle">Afficher les épisodes sous forme de liste verticale sur mobile au lieu d\'une rangée horizontale</string>
     <string name="settings_skip_special_episodes">Sauter les épisodes spéciaux</string>
     <string name="settings_skip_special_episodes_subtitle">Exclure les spéciaux/bonus des listes d\'épisodes</string>
     <string name="settings_haptic_feedback">Retour haptique</string>
@@ -1138,4 +1145,9 @@
     <string name="settings_subtitles_test">Tester</string>
     <string name="settings_subtitles_testing">Test…</string>
     <string name="settings_subtitles_connected">Connecté</string>
+    <string name="settings_nav_style">Style de navigation</string>
+    <string name="settings_nav_style_expressive">Expressif (M3)</string>
+    <string name="settings_nav_style_classic">Classique</string>
+    <string name="settings_nav_style_expressive_subtitle">Capsule flottante style Google Photos + bouton de recherche indépendant</string>
+    <string name="settings_nav_style_classic_subtitle">Barre de navigation flottante inférieure traditionnelle</string>
 </resources>

@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.network
 
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.model.NetworkTimeoutPreset
 import com.raulshma.jellyplay.core.network.config.OkHttpConfig
@@ -43,12 +43,12 @@ import javax.inject.Singleton
  */
 @Singleton
 class OkHttpConfigProviderImpl @Inject constructor(
-    userPreferencesStore: UserPreferencesStore,
+    networkOfflineStore: com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore,
     @ApplicationScope private val scope: CoroutineScope,
 ) : OkHttpConfigProvider {
 
     override val config: StateFlow<OkHttpConfig> =
-        userPreferencesStore.preferences
+        networkOfflineStore.networkOffline
             .map { prefs ->
                 OkHttpConfig(
                     maxCacheSizeMb = prefs.maxCacheSizeMb,

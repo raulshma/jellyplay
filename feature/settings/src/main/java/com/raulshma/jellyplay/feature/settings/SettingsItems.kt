@@ -32,8 +32,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
@@ -206,8 +209,13 @@ internal fun SettingInfoItem(
     subtitle: String,
     index: Int = 0,
     count: Int = 1,
+    copyableValue: String? = null,
+    copyLabel: String = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_copy),
+    copiedLabel: String = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_copied_to_clipboard),
 ) {
     val shape = expressiveListShape(index, count, innerRadius = 0.dp)
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val userMessageBus = com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus.current
 
     ListItem(
         headlineContent = {
@@ -233,6 +241,32 @@ internal fun SettingInfoItem(
                 modifier = Modifier.size(22.dp),
             )
         },
+        trailingContent = if (copyableValue != null) {
+            {
+                val focusShape = androidx.compose.foundation.shape.CircleShape
+                val focusState = rememberTvFocusState(focusedScale = 1.08f)
+                IconButton(
+                    onClick = {
+                        // Copy server address/version/name to the clipboard.
+                        // Plain-text copy so it pastes into any field;
+                        // surface a snackbar so the tap isn't silent.
+                        clipboard.setText(AnnotatedString(copyableValue))
+                        userMessageBus.info(copiedLabel)
+                    },
+                    modifier = Modifier
+                        .focusIndicator(focusShape)
+                        .then(focusState.focusModifier)
+                        .tvFocusIndicator(focusState, focusShape),
+                ) {
+                    Icon(
+                        imageVector = Tabler.Outline.Copy,
+                        contentDescription = copyLabel,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        } else null,
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         ),

@@ -4,13 +4,12 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
-import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
-import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
@@ -59,7 +58,7 @@ data class RequestsUiState(
 class RequestsViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val arrRepository: ArrRepository,
-    private val userPreferencesStore: UserPreferencesStore,
+    private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(RequestsUiState())
@@ -76,8 +75,8 @@ class RequestsViewModel @Inject constructor(
      * `.value` would stay `false` forever, leaving the entire *arr
      * download-progress + queue-management feature unreachable.
      */
-    private val directArrEnabled: StateFlow<Boolean> = userPreferencesStore.preferences
-        .map { it.isExperimentalEnabled(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
+    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.experimental
+        .map { it.enabledExperimentalFeatures.contains(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
     val currentUser: StateFlow<SeerrCurrentUser?> = seerrRepository.currentUser

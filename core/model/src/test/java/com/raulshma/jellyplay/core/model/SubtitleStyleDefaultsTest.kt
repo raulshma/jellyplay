@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.model
 
+import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

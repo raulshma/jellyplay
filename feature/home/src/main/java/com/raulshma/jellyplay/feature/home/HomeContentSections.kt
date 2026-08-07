@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -107,13 +108,18 @@ internal data class HomeContentCallbacks(
     val onSeerrRequest: (com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem) -> Unit,
     val seerrPrefetch: (Int, String, () -> Unit) -> Unit,
     /** Open the inline section-config sheet for a given section. Carries the
-     *  optional [libraryId] for per-library sections (LATEST_MEDIA) so the sheet
-     *  can apply a per-library override instead of a global toggle. */
+     * optional [libraryId] for per-library sections (LATEST_MEDIA) so the sheet
+     * can apply a per-library override instead of a global toggle. */
     val onConfigureSection: (HomeSectionType, String?) -> Unit,
     /** Deep-link into Settings → Home Screen Layout (global ordering / presets). */
     val onConfigureHomeLayout: () -> Unit,
     /** Deep-link into Settings → Configure Libraries (per-library overrides). */
     val onConfigureLibraries: () -> Unit,
+    /** Open the full library screen for a home-section "See All" action. */
+    val onSeeAllClick: (sectionType: HomeSectionType, libraryId: String?, collectionType: String?, title: String) -> Unit = { _, _, _, _ -> },
+    /** TV-only: reports the D-pad-focused item so the Menu key can open its
+     * quick actions */
+    val onFocusedMediaItem: (MediaItem) -> Unit = {},
 )
 
 /**
@@ -152,7 +158,11 @@ internal fun HomeContentList(
     // Per-row focus requesters so D-pad navigation can target each content row.
     var homeFocusRow by rememberInt(-1)
     val savedRowIsValid = homeFocusRow in 0..sections.lastIndex
-    val rowFocusRequesters = remember(sections.size) { List(sections.size) { FocusRequester() } }
+    // Key on the sections list itself (part of the @Immutable HomeContentState,
+    // so structural equality is cheap) rather than on sections.size: a refresh
+    // that drops one section and adds another can produce a same-size list and
+    // reallocate these requesters, losing any attached D-pad focus.
+    val rowFocusRequesters = remember(sections) { List(sections.size) { FocusRequester() } }
     RestoreHomeRowFocus(
         listState = listState,
         savedRow = homeFocusRow,
@@ -282,14 +292,26 @@ internal fun HomeContentList(
                 // crossing (the range value changed even for items whose own
                 // visibility didn't). Reading each item's own visibility as a
                 // Boolean means only the item that entered/left recomposes.
-                val isCurrentlyVisible by remember {
+                //
+                // Keyed on sectionIndexInList: if the hero presence toggles
+                // (featuredItem becomes null, or homeHeroEnabled flips), every
+                // item's offset shifts by 1 and the captured index would
+                // otherwise track the wrong item's visibility. The key discards
+                // the stale derivedStateOf and rebuilds it for the new offset.
+                val isCurrentlyVisible by remember(sectionIndexInList) {
                     derivedStateOf {
                         listState.layoutInfo.visibleItemsInfo.any { it.index == sectionIndexInList }
                     }
                 }
 
                 var hasBeenVisible by rememberSaveable { mutableStateOf(false) }
-                if (isCurrentlyVisible && !hasBeenVisible) hasBeenVisible = true
+                // Fold the one-shot visibility latch into a LaunchedEffect so the
+                // state write happens as a side effect, not during composition —
+                // writing to MutableState during composition triggers a redundant
+                // recomposition of this item on the next frame.
+                LaunchedEffect(isCurrentlyVisible) {
+                    if (isCurrentlyVisible && !hasBeenVisible) hasBeenVisible = true
+                }
 
                 val sectionAnimation by androidx.compose.animation.core.animateFloatAsState(
                     targetValue = if (hasBeenVisible) 1f else 0f,
@@ -381,6 +403,14 @@ internal fun HomeContentList(
                         clippingEnabled = state.experimentalCardClippingEnabled,
                         showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
                         onSectionLongClick = sectionLongClick,
+                        onSeeAllClick = remember(callbacks, section.type, section.libraryId, section.collectionType, sectionTitle) {
+                            if (section.type == HomeSectionType.RECENTLY_ADDED || section.type == HomeSectionType.LATEST_MEDIA) {
+                                { callbacks.onSeeAllClick(section.type, section.libraryId, section.collectionType, sectionTitle) }
+                            } else null
+                        },
+                        onFocusedItemChange = callbacks.onFocusedMediaItem,
+                        seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
+                        seriesBackdropResolver = remember(callbacks.getBackdropUrl) { { id: String -> callbacks.getBackdropUrl(id) } },
                     )
                 }
             }
@@ -411,6 +441,7 @@ internal fun HomeContentList(
                         rowHorizontalPadding = state.contentPad,
                         spacing = discoverSpacing,
                         backgroundColor = state.backgroundColor,
+                        homeBackdropEnabled = state.homeBackdropEnabled,
                         clippingEnabled = state.experimentalCardClippingEnabled,
                         seerrCardLoadingState = seerrCardLoadingState,
                         seerrPrefetch = callbacks.seerrPrefetch,
@@ -444,6 +475,7 @@ internal fun HomeContentList(
                         rowHorizontalPadding = state.contentPad,
                         spacing = discoverSpacing,
                         backgroundColor = state.backgroundColor,
+                        homeBackdropEnabled = state.homeBackdropEnabled,
                         clippingEnabled = state.experimentalCardClippingEnabled,
                         seerrCardLoadingState = seerrCardLoadingState,
                         seerrPrefetch = callbacks.seerrPrefetch,

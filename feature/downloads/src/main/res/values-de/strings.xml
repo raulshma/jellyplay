@@ -95,6 +95,8 @@
     <string name="downloads_progress">Fortschritt</string>
     <string name="downloads_watch_status">Wiedergabestatus</string>
     <string name="downloads_watched">Angesehen</string>
+    <string name="downloads_cd_switch_to_list">Zur vertikalen Episodenliste wechseln</string>
+    <string name="downloads_cd_switch_to_cards">Zu horizontalen Episodenkarten wechseln</string>
     <string name="downloads_watched_label">Angesehen</string>
     <string name="downloads_in_progress">In Arbeit</string>
     <string name="downloads_started">Begonnen</string>

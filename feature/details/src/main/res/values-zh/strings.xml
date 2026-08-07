@@ -49,6 +49,8 @@
     <string name="detail_no_episodes_available">没有可用的剧集</string>
     <string name="detail_spoiler">剧透</string>
     <string name="detail_watched_badge">已观看</string>
+    <string name="detail_cd_switch_to_list">切换到垂直剧集列表</string>
+    <string name="detail_cd_switch_to_cards">切换到横向剧集卡片</string>
     <string name="detail_time_left_format">剩余 %1$s</string>
 
     <!-- ── Overflow / options menu ──────────────────────────────────────── -->
@@ -137,6 +139,14 @@
     <string name="detail_msg_couldnt_mark_unplayed">无法标记为未播放</string>
     <string name="detail_mark_season_watched">将整季标记为已观看</string>
     <string name="detail_mark_season_unwatched">将整季标记为未观看</string>
+    <string name="detail_mark_series_watched_confirm_title">将整部剧集标记为已观看？</string>
+    <string name="detail_mark_series_watched_confirm_message">这会将每一集标记为已观看，并清除所有续看进度。</string>
+    <string name="detail_mark_series_unwatched_confirm_title">将整部剧集标记为未观看？</string>
+    <string name="detail_mark_series_unwatched_confirm_message">这会将每一集标记为未观看。</string>
+    <string name="detail_mark_season_watched_confirm_title">将整季标记为已观看？</string>
+    <string name="detail_mark_season_watched_confirm_message">这会将本季每一集标记为已观看，并清除其续看进度。</string>
+    <string name="detail_mark_season_unwatched_confirm_title">将整季标记为未观看？</string>
+    <string name="detail_mark_season_unwatched_confirm_message">这会将本季每一集标记为未观看。</string>
     <string name="detail_cd_season_options">将整季标记为已观看或未观看</string>
     <string name="detail_msg_no_episodes_queued">无法加入任何剧集</string>
     <string name="detail_msg_hidden_from_next_up">已在「下一集」中隐藏</string>
@@ -254,5 +264,13 @@
     <string name="detail_seerr_country">国家</string>
     <string name="detail_seerr_studios">工作室</string>
     <string name="detail_seerr_currently_streaming_on">当前可在以下平台观看</string>
+
+    <!-- 空状态 -->
+    <string name="detail_collection_empty_title">此合集为空</string>
+    <string name="detail_collection_empty_description">添加到此合集的项目将显示在这里。</string>
+    <string name="detail_person_empty_title">未找到片名</string>
+    <string name="detail_person_empty_description">此人没有符合当前筛选条件的片名。</string>
+    <string name="detail_season_empty_title">没有可用的剧集</string>
+    <string name="detail_season_empty_description">添加剧集后将显示在这里。</string>
 
 </resources>

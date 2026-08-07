@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,6 +55,11 @@ fun AVSyncSheet(
     onAudioDelayChange: (Long) -> Unit,
     onSubtitleDelayChange: (Long) -> Unit,
     onDismiss: () -> Unit,
+    activeSubtitleCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>? = null,
+    subtitlePreviewSource: com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource = com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource.NONE,
+    playbackPositionMs: () -> Long = { 0L },
+    audioDelaySupported: Boolean = true,
+    subtitleDelaySupported: Boolean = true,
 ) {
     var audioDelayMs by remember { mutableLongStateOf(currentAudioDelayMs) }
     var subtitleDelayMs by remember { mutableLongStateOf(currentSubtitleDelayMs) }
@@ -75,6 +79,7 @@ fun AVSyncSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
@@ -86,35 +91,36 @@ fun AVSyncSheet(
             )
             Spacer(Modifier.height(20.dp))
 
-            DelayRow(
-                label = stringResource(R.string.player_video_audio_delay),
-                delayMs = audioDelayMs,
-                focusRequester = focusRequester,
+            if (audioDelaySupported) {
+                DelayRow(
+                    label = stringResource(R.string.player_video_audio_delay),
+                    delayMs = audioDelayMs,
+                    focusRequester = focusRequester,
+                    isTv = isTv,
+                    helperText = stringResource(R.string.player_video_av_sync_audio_helper),
+                    onValueChange = { audioDelayMs = it; onAudioDelayChange(it) },
+                )
+
+                Spacer(Modifier.height(24.dp))
+            }
+
+            // Cue-preview subtitle-offset sync helper. Shows the subtitle line
+            // active at a chosen timestamp with its previous/next neighbours,
+            // and a live offset slider that recomputes the active cue as it
+            // drags. This is the sole subtitle-offset control — when no cues can
+            // be parsed (embedded/image subs) the cue stack degrades to an
+            // "unavailable" message but the offset slider still renders.
+            SubtitleSyncPreview(
+                positionMs = playbackPositionMs,
+                currentOffsetMs = subtitleDelayMs,
+                cues = activeSubtitleCues,
+                source = subtitlePreviewSource,
                 isTv = isTv,
-                helperText = stringResource(R.string.player_video_av_sync_audio_helper),
-                onValueChange = { audioDelayMs = it; onAudioDelayChange(it) },
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            DelayRow(
-                label = stringResource(R.string.player_video_subtitle_delay),
-                delayMs = subtitleDelayMs,
-                focusRequester = null,
-                isTv = isTv,
-                helperText = stringResource(R.string.player_video_av_sync_subtitle_helper),
-                onValueChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
-            )
-
-            // G6: press-and-hold sync measurer. Hold "Voice heard" the instant a
-            // line is spoken, then "Text seen" when its subtitle appears; the gap
-            // auto-computes the delay delta (modelled on mpvKt's SubtitleDelayPanel).
-            SubtitleSyncMeasurer(
-                onDelayComputed = { delta ->
-                    val applied = com.raulshma.jellyplay.feature.player.video.SubtitleSyncCalculator
-                        .applyDelta(subtitleDelayMs, delta)
-                    subtitleDelayMs = applied
-                    onSubtitleDelayChange(applied)
+                focusRequester = if (audioDelaySupported) null else focusRequester,
+                onOffsetChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
+                onReset = {
+                    subtitleDelayMs = 0L
+                    onSubtitleDelayChange(0L)
                 },
             )
 
@@ -163,6 +169,20 @@ fun AVSyncSheet(
     }
 }
 
+/**
+ * Formats a delay/offset in ms as a signed seconds label ("0.0s", "+1.5s",
+ * "-0.5s"). Shared by the delay rows and the cue-preview slider so both show
+ * the same label for the same value.
+ */
+internal fun formatDelayLabel(delayMs: Long): String {
+    val delaySec = delayMs / 1000.0
+    return when {
+        delayMs == 0L -> "0.0s"
+        delayMs > 0 -> "+${"%.1f".format(delaySec)}s"
+        else -> "${"%.1f".format(delaySec)}s"
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DelayRow(
@@ -180,12 +200,7 @@ private fun DelayRow(
         )
         Spacer(Modifier.height(8.dp))
 
-        val delaySec = delayMs / 1000.0
-        val valueLabel = when {
-            delayMs == 0L -> "0.0s"
-            delayMs > 0 -> "+${"%.1f".format(delaySec)}s"
-            else -> "${"%.1f".format(delaySec)}s"
-        }
+        val valueLabel = formatDelayLabel(delayMs)
         Text(
             valueLabel,
             style = MaterialTheme.typography.titleMedium.copy(
@@ -203,7 +218,7 @@ private fun DelayRow(
         ) {
             if (isTv) {
                 DelayStepper(icon = Tabler.Outline.Minus, description = stringResource(R.string.player_video_av_sync_decrease, label)) {
-                    val newDelay = (delayMs - 100L).coerceIn(-5000L, 5000L)
+                    val newDelay = (delayMs - 100L).coerceIn(-30000L, 30000L)
                     onValueChange(newDelay)
                 }
             }
@@ -211,17 +226,17 @@ private fun DelayRow(
             TvOrTouchSlider(
                 value = delayMs.toFloat(),
                 onValueChange = { onValueChange((it / 50f).roundToLong() * 50) },
-                valueRange = -5000f..5000f,
+                valueRange = -30000f..30000f,
                 modifier = Modifier.weight(1f),
                 isTv = isTv,
-                steps = 199,
+                steps = 1199,
                 dpadStep = 100f,
                 focusRequester = focusRequester,
             )
 
             if (isTv) {
                 DelayStepper(icon = Tabler.Outline.Plus, description = stringResource(R.string.player_video_av_sync_increase, label)) {
-                    val newDelay = (delayMs + 100L).coerceIn(-5000L, 5000L)
+                    val newDelay = (delayMs + 100L).coerceIn(-30000L, 30000L)
                     onValueChange(newDelay)
                 }
             }
@@ -237,14 +252,15 @@ private fun DelayRow(
 }
 
 @Composable
-private fun DelayStepper(
+internal fun DelayStepper(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     description: String,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val focus = rememberTvFocusState()
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(40.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
@@ -254,112 +270,5 @@ private fun DelayStepper(
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = description, tint = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-/**
- * Press-and-hold subtitle-sync measurer (G6). Two buttons:
- *  - "🔊 Voice heard": press-and-hold the instant a spoken line is heard; the
- *    release time is recorded.
- *  - "💬 Text seen": press-and-hold the instant the matching subtitle appears;
- *    the release time is recorded.
- *
- * Releasing "Text seen" after "Voice heard" was released fires [onDelayComputed]
- * with the delta (voice release − text release). The caller applies it via
- * [SubtitleSyncCalculator.applyDelta]. Releasing voice after text is treated as
- * a re-measure start (no computation), matching the natural two-step flow.
- */
-@Composable
-private fun SubtitleSyncMeasurer(
-    onDelayComputed: (Long) -> Unit,
-) {
-    var voiceReleaseMs by remember { mutableStateOf<Long?>(null) }
-    val voiceSource = remember { MutableInteractionSource() }
-    val textSource = remember { MutableInteractionSource() }
-    val voicePressed by voiceSource.collectIsPressedAsState()
-    val textPressed by textSource.collectIsPressedAsState()
-
-    LaunchedEffect(voicePressed) {
-        if (!voicePressed) {
-            // Released — stamp the voice time.
-            voiceReleaseMs = android.os.SystemClock.elapsedRealtime()
-        }
-    }
-    LaunchedEffect(textPressed) {
-        if (!textPressed) {
-            // Released — if voice was stamped first, compute and fire.
-            val voice = voiceReleaseMs
-            if (voice != null) {
-                val textRelease = android.os.SystemClock.elapsedRealtime()
-                onDelayComputed(
-                    com.raulshma.jellyplay.feature.player.video.SubtitleSyncCalculator
-                        .computeDelayDelta(voice, textRelease)
-                )
-                voiceReleaseMs = null // one-shot; re-arm requires a fresh voice press
-            }
-        }
-    }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            stringResource(R.string.player_video_sync_helper),
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            stringResource(R.string.player_video_sync_helper_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(10.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            SyncMeasurerButton(
-                label = if (voicePressed) stringResource(R.string.player_video_listening) else stringResource(R.string.player_video_voice_heard),
-                pressed = voicePressed,
-                interactionSource = voiceSource,
-                modifier = Modifier.weight(1f),
-            )
-            SyncMeasurerButton(
-                label = if (textPressed) stringResource(R.string.player_video_watching) else stringResource(R.string.player_video_text_seen),
-                pressed = textPressed,
-                interactionSource = textSource,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun androidx.compose.foundation.layout.RowScope.SyncMeasurerButton(
-    label: String,
-    pressed: Boolean,
-    interactionSource: MutableInteractionSource,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .height(46.dp)
-            .clip(CircleShape)
-            .background(
-                if (pressed) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = {},
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (pressed) MaterialTheme.colorScheme.onPrimary
-            else MaterialTheme.colorScheme.primary,
-        )
     }
 }

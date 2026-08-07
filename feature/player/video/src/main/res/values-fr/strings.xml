@@ -2,6 +2,7 @@
 <resources>
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Sous-titres</string>
+    <string name="player_resumed_message">Repris là où vous l\'aviez laissé</string>
     <string name="player_reset_to_auto">Réinitialiser sur Auto</string>
     <string name="player_track_default">Par défaut</string>
     <string name="player_track_off">Désactivés</string>
@@ -73,6 +74,7 @@
     <string name="player_video_border_width">Largeur de bordure : %1$s</string>
     <string name="player_video_shadow_offset">Décalage d\'ombre : %1$s</string>
     <string name="player_video_subtitle_offset">Décalage des sous-titres : %1$s</string>
+    <string name="player_video_sync_preview_reset">Réinitialiser le décalage</string>
     <string name="player_video_vertical_position">Position verticale : %1$d%%</string>
 
     <!-- Sleep timer sheet -->
@@ -211,18 +213,10 @@
     <string name="player_video_on">Activé</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_subtitle_delay">Décalage des sous-titres</string>
     <string name="player_video_reset_both">Réinitialiser les deux</string>
     <string name="player_video_av_sync_audio_helper">Négatif : audio plus tôt. Positif : audio plus tard.</string>
-    <string name="player_video_av_sync_subtitle_helper">Négatif : sous-titres plus tôt. Positif : sous-titres plus tard.</string>
     <string name="player_video_av_sync_decrease">Diminuer %1$s</string>
     <string name="player_video_av_sync_increase">Augmenter %1$s</string>
-    <string name="player_video_sync_helper">Assistant de synchro</string>
-    <string name="player_video_sync_helper_hint">Maintenez « Voix entendue » lorsqu’une réplique est prononcée, puis « Texte vu » lorsque son sous-titre apparaît.</string>
-    <string name="player_video_voice_heard">🔊 Voix entendue</string>
-    <string name="player_video_listening">À l’écoute…</string>
-    <string name="player_video_text_seen">💬 Texte vu</string>
-    <string name="player_video_watching">Observation…</string>
     <string name="player_video_picture_in_picture">Incrustation d’image</string>
     <string name="player_video_play_next">Lire le suivant</string>
     <string name="player_video_turn_on_autoplay">Activer la lecture auto</string>
@@ -237,6 +231,7 @@
     <string name="player_video_duration">Durée</string>
     <string name="player_video_remember_audio_language">Mémoriser la langue audio pour cette série</string>
     <string name="player_video_remember_subtitle_language">Mémoriser la langue des sous-titres pour cette série</string>
+    <string name="player_video_remember_subtitles_off">Garder les sous-titres désactivés pour cette série</string>
     <string name="player_video_error_offline_file_missing">Erreur : fichier hors ligne manquant</string>
     <string name="player_video_error_loading_media">Erreur lors du chargement du média</string>
     <string name="player_video_trickplay_thumbnail">Vignette trickplay</string>

@@ -26,12 +26,14 @@ import com.raulshma.jellyplay.core.model.MpvHwdec
 import com.raulshma.jellyplay.core.model.MpvScaler
 import com.raulshma.jellyplay.core.model.MpvSkipLoopFilter
 import com.raulshma.jellyplay.core.model.MpvVideoOutput
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.parseMpvConfigOptions
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
@@ -90,6 +92,16 @@ class MpvPlayerEngine(
     private val isLowRamDevice by lazy { EngineDeviceProfile.isLowRamDevice(context) }
 
     override val capabilities = EngineCapabilityMatrix.MPV
+    override val zoomSafeSubtitleStrategy = ZoomSafeSubtitleStrategy.COMPOSE_CUE
+    override val displayName: String = PlayerType.MPV.displayName
+
+    // The currently-displayed subtitle line, exposed to the screen for the
+    // zoom-safe Compose overlay (zoomSafeSubtitleStrategy = COMPOSE_CUE).
+    // Distinct from the accumulated [currentCues] history: this is the single
+    // live line, cleared on blank/track-switch/stop. Driven by mpv's `sub-text`
+    // property (ASS override tags already stripped by mpv).
+    private val _liveSubtitleCue = MutableStateFlow<CharSequence?>(null)
+    override val liveSubtitleCue: StateFlow<CharSequence?> = _liveSubtitleCue.asStateFlow()
 
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
@@ -109,6 +121,9 @@ class MpvPlayerEngine(
     @Volatile private var cachedPositionMs: Long = 0L
     @Volatile private var cachedDurationMs: Long = 0L
     @Volatile private var cachedBufferedPositionMs: Long = 0L
+    // Most recent sub-start (media-time seconds) reported by mpv; pairs with
+    // the next sub-text emission to stamp a TimedCue start. -1 = no current sub.
+    @Volatile private var cachedSubStartSec: Double = -1.0
     // Server-reported total runtime, used as a fallback when the mpv demuxer
     // cannot resolve a duration for HLS/transcoded streams (where `duration`
     // is frequently 0/partial). Set from PlaybackRequest in load().
@@ -206,6 +221,7 @@ class MpvPlayerEngine(
             override fun eventProperty(property: String, value: Double) {
                 when (property) {
                     "duration" -> cachedDurationMs = (value * 1000L).toLong().coerceAtLeast(0L)
+                    "sub-start" -> cachedSubStartSec = value
                     "demuxer-cache-duration" -> {
                         // demuxer-cache-duration is relative to the current
                         // position; the ticker folds it into a downstream
@@ -242,7 +258,22 @@ class MpvPlayerEngine(
             override fun eventProperty(property: String, value: String) {
                 if (property == "sid" || property == "aid") {
                     Log.d(TAG, "MPV $property changed to ${redactSensitive(value)}")
+                    if (property == "sid") {
+                        // Subtitle track switch: reset accumulated cues so lines
+                        // from the prior track don't bleed into the preview.
+                        _currentCues.value = emptyList()
+                        // Clear the live overlay line so a stale caption from the
+                        // previous track doesn't linger while zoomed.
+                        _liveSubtitleCue.value = null
+                    }
                     refreshTracks("property:$property")
+                } else if (property == "sub-text") {
+                    accumulateMpvSubText(value)
+                    // Mirror the live line into the overlay flow. mpv fires
+                    // sub-text only on a line change and emits "" when the line
+                    // clears — surface both so the Compose overlay updates/clears
+                    // in lockstep with native rendering.
+                    _liveSubtitleCue.value = value.takeIf { it.isNotBlank() }
                 }
             }
             override fun eventProperty(property: String, value: MPVNode) {
@@ -481,6 +512,11 @@ class MpvPlayerEngine(
             mpv.observeProperty("aid", MPV.mpvFormat.MPV_FORMAT_STRING)
             mpv.observeProperty("track-list", MPV.mpvFormat.MPV_FORMAT_NODE)
             mpv.observeProperty("sub-visibility", MPV.mpvFormat.MPV_FORMAT_FLAG)
+            // G10: subtitle-sync preview for embedded subs. sub-text fires on
+            // each displayed-line change; sub-start gives its media-time start.
+            // Both together let us accumulate a TimedCue list as subs play.
+            mpv.observeProperty("sub-text", MPV.mpvFormat.MPV_FORMAT_STRING)
+            mpv.observeProperty("sub-start", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             assignAudioSessionId(mpv)
         }
 
@@ -549,6 +585,9 @@ class MpvPlayerEngine(
         cachedPositionMs = request.startPositionMs
         cachedDurationMs = 0L
         cachedBufferedPositionMs = 0L
+        cachedSubStartSec = -1.0
+        _currentCues.value = emptyList()
+        _liveSubtitleCue.value = null
         Log.d(
             TAG,
             "MPV load requested: uri=${redactSensitive(request.uri)}, start=${request.startPositionMs}ms, " +
@@ -613,9 +652,12 @@ class MpvPlayerEngine(
         _availableTracks.value = emptyList()
         _bufferedPositionMs.value = 0L
         _videoStats.value = EngineVideoStats()
+        _currentCues.value = emptyList()
+        _liveSubtitleCue.value = null
         cachedPositionMs = 0L
         cachedDurationMs = 0L
         cachedBufferedPositionMs = 0L
+        cachedSubStartSec = -1.0
         serverDurationMs = 0L
         // Recreate the scope so a re-used engine stays usable without waiting
         // for the next load(). A cancelled scope silently swallows new
@@ -1006,6 +1048,7 @@ class MpvPlayerEngine(
         try {
             val m = mpvView?.mpv ?: return
             applySubtitleStyleProperties(m, style)
+            runCatching { m.command("sub-reload") }
             logSubtitleRenderState("style")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to apply MPV subtitle style", e)
@@ -1035,8 +1078,43 @@ class MpvPlayerEngine(
         } catch (_: Exception) {}
     }
 
+    /**
+     * Toggles mpv's native subtitle rendering via the live `sub-visibility`
+     * property. The screen hides native subs (`visible = false`) while it
+     * renders the zoom-safe Compose overlay from [liveSubtitleCue], so captions
+     * aren't double-drawn, and restores them (`visible = true`) the moment zoom
+     * returns to 1 (full libass fidelity). Cheap, reversible, and already an
+     * observed property, so the toggle is consistent with mpv's own state.
+     */
+    override fun setNativeSubtitlesVisible(visible: Boolean) {
+        val m = mpvView?.mpv ?: return
+        try {
+            m.setPropertyString("sub-visibility", if (visible) "yes" else "no")
+        } catch (e: Exception) {
+            Log.w(TAG, "setNativeSubtitlesVisible($visible) failed", e)
+        }
+    }
+
     override val currentPositionMs: Long
         get() = cachedPositionMs
+
+    /**
+     * G10: folds a newly-displayed subtitle line (mpv `sub-text`) into the
+     * accumulated cue list via [mergeAccumulatedCues], so the subtitle-sync
+     * preview can render prev/active/next for embedded subs without re-fetching
+     * bytes. The start time comes from mpv's `sub-start` (cached on each
+     * `sub-start` emission); when mpv hasn't reported one yet we fall back to
+     * the current playback position. mpv fires `sub-text` only on a line
+     * *change*, and may emit an empty string when the line clears — ignored.
+     * Covers the played range only (no ahead-lookahead for forward offsets).
+     */
+    private fun accumulateMpvSubText(text: String) {
+        if (text.isBlank()) return
+        val startSec = if (cachedSubStartSec >= 0) cachedSubStartSec else cachedPositionMs / 1000.0
+        val startUs = (startSec * 1_000_000L).toLong()
+        val incoming = listOf(TimedCue(startUs, Long.MAX_VALUE, text))
+        _currentCues.value = mergeAccumulatedCues(_currentCues.value, incoming)
+    }
 
     override val durationMs: Long
         get() {
@@ -1542,13 +1620,20 @@ class MpvPlayerEngine(
         val values = subtitleStyleValues(style)
         if (style.applyCustomStyle) {
             customSubtitleStyleEntries(style, values).forEach { (k, v) -> mpv.safeSetOption(k, v) }
+            mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE).toString())
         } else {
-            mpv.safeSetOption("sub-ass-override", "no")
+            // Reset to mpv native defaults — the subset mpv needs at init time
+            // (ass-override, typeface toggles, font, scale). All reset strings
+            // and the scale magnitude come from the tested MpvStyleMapping
+            // (sourced from its single DEFAULTS table via defaultInitEntries),
+            // so this branch cannot drift from DEFAULTS and is unit-covered.
+            MpvStyleMapping.defaultInitEntries().forEach { (k, v) -> mpv.safeSetOption(k, v) }
+            mpv.safeSetOption("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetOption("sub-scale", MpvStyleMapping.defaultScale.toString())
         }
 
-        mpv.safeSetOption("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-        mpv.safeSetOption("sub-font-size", "55")
-        mpv.safeSetOption("sub-scale", (style.fontSize.toDouble() / 24.0).toString())
+        mpv.safeSetOption("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toString())
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
         mpv.safeSetOption("sub-pos", subPosValue.toString())
         mpv.safeSetOption("sub-margin-y", values.marginY.toString())
@@ -1565,22 +1650,25 @@ class MpvPlayerEngine(
             // deprecated aliases that silently no-op on some libass versions.
             mpv.safeSetPropertyDouble("sub-border-size", values.outlineSize)
             mpv.safeSetPropertyDouble("sub-shadow-offset", values.shadowOffset)
+            mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / SubtitleDefaults.REFERENCE_FONT_SIZE)
         } else {
-            // Reset to defaults
-            mpv.safeSetPropertyString("sub-color", "#FFFFFFFF")
-            mpv.safeSetPropertyString("sub-back-color", "#00000000")
-            mpv.safeSetPropertyString("sub-border-color", "#FF000000")
-            mpv.safeSetPropertyString("sub-shadow-color", "#FF000000")
-            mpv.safeSetPropertyString("sub-border-style", "outline-and-shadow")
-            mpv.safeSetPropertyString("sub-ass-override", "no")
-            mpv.safeSetPropertyBoolean("sub-ass-justify", false)
-            mpv.safeSetPropertyDouble("sub-border-size", 3.0)
-            mpv.safeSetPropertyDouble("sub-shadow-offset", 0.0)
+            // Reset to mpv native defaults — string pairs and numeric magnitudes
+            // both come from the tested MpvStyleMapping (sourced from its single
+            // DEFAULTS table), so this branch is unit-covered. sub-ass-justify is
+            // boolean-typed on mpv; the mapping emits it as a "no" string pair,
+            // applied here via the boolean setter.
+            MpvStyleMapping.defaultEntries().forEach { (k, v) ->
+                if (k == "sub-ass-justify") mpv.safeSetPropertyBoolean(k, false)
+                else mpv.safeSetPropertyString(k, v)
+            }
+            mpv.safeSetPropertyString("sub-font", fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
+            mpv.safeSetPropertyDouble("sub-border-size", MpvStyleMapping.defaultBorderSize)
+            mpv.safeSetPropertyDouble("sub-shadow-offset", MpvStyleMapping.defaultShadowOffset)
+            mpv.safeSetPropertyDouble("sub-scale", MpvStyleMapping.defaultScale)
         }
 
-        mpv.safeSetPropertyString("sub-font", style.fontFamilyName?.takeIf { it.isNotBlank() } ?: fontProvider.bundledFallbackFamilyName() ?: "sans-serif")
-        mpv.safeSetPropertyDouble("sub-font-size", 55.0)
-        mpv.safeSetPropertyDouble("sub-scale", style.fontSize.toDouble() / 24.0)
+        mpv.safeSetPropertyDouble("sub-font-size", SubtitleDefaults.MPV_LIBASS_REFERENCE_FONT_SIZE.toDouble())
         val subPosValue = (100 - (style.verticalPosition * 100).toInt()).coerceIn(0, 100)
         mpv.safeSetPropertyInt("sub-pos", subPosValue)
         mpv.safeSetPropertyInt("sub-margin-y", values.marginY)

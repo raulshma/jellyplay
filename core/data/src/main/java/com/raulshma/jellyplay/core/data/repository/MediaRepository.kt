@@ -3,13 +3,11 @@ package com.raulshma.jellyplay.core.data.repository
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
-import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import kotlinx.coroutines.flow.Flow
@@ -17,14 +15,18 @@ import kotlinx.coroutines.flow.Flow
 interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepository, PlaylistRepository, LyricsRepository {
 
     suspend fun getHomeSections(
-        enabledSections: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
-        libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
-        nextUpRewatching: Boolean = false,
-        nextUpMaxDays: Int = 0,
-        nextUpExcludedSeriesIds: Set<String> = emptySet(),
-        hiddenCwItemIds: Set<String> = emptySet(),
-        pinnedSections: List<PinnedHomeSection> = emptyList(),
+        query: HomeSectionQuery = HomeSectionQuery(),
     ): Result<HomeSectionsResult>
+
+    /**
+     * Returns the last persisted home-sections snapshot for the current
+     * (server, user) + [query], or null if none is cached. Room-only — no network.
+     * Used by the home screen to render instantly on cold open while
+     * [getHomeSections] revalidates in the background (stale-while-revalidate).
+     */
+    suspend fun getCachedHomeSections(
+        query: HomeSectionQuery = HomeSectionQuery(),
+    ): HomeSectionsResult?
 
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
 
@@ -46,6 +48,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         tags: List<String>? = null,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
         minRating: Float? = null,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
     ): Result<SearchResult>
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
@@ -94,6 +97,7 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         tags: List<String>? = null,
         playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
         minRating: Float? = null,
+        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
     ): Flow<PagingData<MediaItem>>
 
     fun searchPaged(
@@ -187,6 +191,13 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
      * series itself.
      */
     fun invalidateSeriesCache(seriesId: String)
+
+    /**
+     * Drops the TTL-cached collection-items entries for the given collection so
+     * the next call re-fetches fresh data from the server. Used by the detail
+     * screen's pull-to-refresh, which must bypass every in-memory cache.
+     */
+    fun invalidateCollectionItemsCache(collectionId: String)
 
     /**
      * Single operation for "user data for [itemId] changed" (favorite flip,

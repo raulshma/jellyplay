@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.feature.player.live.components.LiveChannelListShee
 import com.raulshma.jellyplay.feature.player.live.components.LiveErrorBanner
 import com.raulshma.jellyplay.feature.player.live.components.LivePlayerBottomBar
 import com.raulshma.jellyplay.feature.player.live.components.LivePlayerTopBar
+import com.raulshma.jellyplay.feature.player.live.components.LiveRecordSheet
 import com.raulshma.jellyplay.feature.player.live.components.LiveStreamOptionSheet
 import kotlinx.coroutines.delay
 
@@ -53,9 +54,10 @@ private const val POSITION_TICK_MS = 500L
 
 /**
  * Which bottom sheet (if any) is open over the live player. The more-menu
- * can open either the channel list or the stream-option picker.
+ * can open either the channel list or the stream-option picker; the record
+ * button opens the record sheet.
  */
-private enum class LiveSheet { Channels, StreamOption }
+private enum class LiveSheet { Channels, StreamOption, Record }
 
 @Composable
 @UnstableApi
@@ -244,13 +246,22 @@ fun LivePlayerScreen(
                 modifier = Modifier.align(Alignment.TopCenter),
             ) {
                 if (currentChannel != null) {
+                    val currentProgram = state.currentProgram
                     LivePlayerTopBar(
                         channel = currentChannel,
                         logoUrl = viewModel.logoUrlFor(currentChannel),
                         isMuted = state.isMuted,
                         playMethod = state.playMethod,
+                        // Record affordance only when a program is
+                        // airing (no program → nothing to record). Red-tinted
+                        // while a timer is already scheduled on the program.
+                        isRecording = currentProgram?.let {
+                            !it.timerId.isNullOrEmpty() || !it.seriesTimerId.isNullOrEmpty()
+                        } ?: false,
+                        canRecord = currentProgram != null,
                         onBack = onBack,
                         onMute = viewModel::toggleMute,
+                        onRecord = { activeSheet = LiveSheet.Record },
                     )
                 }
             }
@@ -276,6 +287,7 @@ fun LivePlayerScreen(
                     onSeekForward = {
                         viewModel.seekWithinDvr(state.positionMs + 10_000L)
                     },
+                    onPlayFromStart = viewModel::playFromStart,
                     onChannelUp = { viewModel.channelUp(audioStreamIndex, subtitleStreamIndex) },
                     onChannelDown = { viewModel.channelDown(audioStreamIndex, subtitleStreamIndex) },
                     onMore = { activeSheet = LiveSheet.StreamOption },
@@ -323,6 +335,16 @@ fun LivePlayerScreen(
                     LiveStreamOptionSheet(
                         currentOption = state.liveStreamOption,
                         onSelect = { viewModel.setLiveStreamOption(it) },
+                        onDismiss = { activeSheet = null },
+                    )
+                }
+                LiveSheet.Record -> {
+                    LiveRecordSheet(
+                        program = state.currentProgram,
+                        onRecordOnce = viewModel::recordCurrentProgramOnce,
+                        onRecordSeries = viewModel::recordCurrentProgramSeries,
+                        onCancelTimer = viewModel::cancelCurrentProgramTimer,
+                        onCancelSeries = viewModel::cancelCurrentProgramSeries,
                         onDismiss = { activeSheet = null },
                     )
                 }

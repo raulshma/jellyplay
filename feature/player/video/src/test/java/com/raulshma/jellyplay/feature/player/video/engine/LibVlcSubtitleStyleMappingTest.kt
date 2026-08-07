@@ -13,7 +13,7 @@ class LibVlcSubtitleStyleMappingTest {
     @Test
     fun typefaceOptions_honorBothTogglesAndBundledFallback() {
         val options = LibVlcSubtitleStyleMapping.typefaceOptions(
-            SubtitleStyle(bold = true, italic = true),
+            SubtitleStyle(applyCustomStyle = true, bold = true, italic = true),
             bundledFallbackPath = "/fonts/subfont.ttf",
         )
 
@@ -30,7 +30,7 @@ class LibVlcSubtitleStyleMappingTest {
     @Test
     fun typefaceOptions_useSelectedFontAndCanDisableBothToggles() {
         val options = LibVlcSubtitleStyleMapping.typefaceOptions(
-            SubtitleStyle(fontFamilyPath = "/fonts/custom.ttf"),
+            SubtitleStyle(applyCustomStyle = true, fontFamilyPath = "/fonts/custom.ttf"),
             bundledFallbackPath = "/fonts/subfont.ttf",
         )
 
@@ -39,6 +39,23 @@ class LibVlcSubtitleStyleMappingTest {
                 ":freetype-bold=false",
                 ":freetype-italic=false",
                 ":freetype-font=/fonts/custom.ttf",
+            ),
+            options,
+        )
+    }
+
+    @Test
+    fun typefaceOptions_resetsToDefaultsWhenApplyCustomStyleIsFalse() {
+        val options = LibVlcSubtitleStyleMapping.typefaceOptions(
+            SubtitleStyle(applyCustomStyle = false, bold = true, italic = true, fontFamilyPath = "/fonts/custom.ttf"),
+            bundledFallbackPath = "/fonts/subfont.ttf",
+        )
+
+        assertEquals(
+            listOf(
+                ":freetype-bold=false",
+                ":freetype-italic=false",
+                ":freetype-font=/fonts/subfont.ttf",
             ),
             options,
         )
@@ -64,7 +81,8 @@ class LibVlcSubtitleStyleMappingTest {
         assertEquals((0x112233).toString(), options[":freetype-color"])
         assertEquals((0x445566).toString(), options[":freetype-background-color"])
         assertEquals((0x778899).toString(), options[":freetype-outline-color"])
-        assertEquals("32", options[":freetype-rel-fontsize"])
+        // Absolute pixel size (not the relative-size enum, which rejects 32).
+        assertEquals("32", options[":freetype-fontsize"])
     }
 
     @Test
@@ -108,6 +126,50 @@ class LibVlcSubtitleStyleMappingTest {
             SubtitleStyle(edgeType = SubtitleEdgeType.DROP_SHADOW)
         )
         assertTrue("expected :freetype-shadow-opacity=255", options.any { it == ":freetype-shadow-opacity=255" })
+    }
+
+    @Test
+    fun defaultOptions_emitsMpvMatchingWhiteTransparentBlackOutline() {
+        // When applyCustomStyle is false, LibVLC ships mpv's native default
+        // caption style (white text, transparent background, black outline +
+        // shadow, 24px reference size). Previously this lived inline in the
+        // engine and bypassed the tests; now it is owned here.
+        val options = LibVlcSubtitleStyleMapping.defaultOptions().parseFreetypeOptions()
+
+        assertEquals("16777215", options[":freetype-color"]) // 0xFFFFFF white
+        assertEquals("0", options[":freetype-background-color"])
+        assertEquals("0", options[":freetype-background-opacity"]) // transparent
+        assertEquals("0", options[":freetype-outline-color"]) // black
+        assertEquals("2", options[":freetype-outline-thickness"])
+        assertEquals("255", options[":freetype-shadow-opacity"])
+        assertEquals("24", options[":freetype-fontsize"]) // SubtitleDefaults.REFERENCE_FONT_SIZE
+    }
+
+    @Test
+    fun freetypeOptions_dispatchesToCustomWhenApplyCustomStyleTrue() {
+        // Custom path resolves ARGB through SubtitleColorResolver; ARGB must win.
+        val style = SubtitleStyle(
+            applyCustomStyle = true,
+            fontColor = SubtitleColor.WHITE,
+            fontColorArgb = 0xFF112233.toInt(),
+        )
+        val options = LibVlcSubtitleStyleMapping.freetypeOptions(style).parseFreetypeOptions()
+
+        assertEquals((0x112233).toString(), options[":freetype-color"])
+    }
+
+    @Test
+    fun freetypeOptions_dispatchesToDefaultsWhenApplyCustomStyleFalse() {
+        // Non-custom path emits the mpv-matching defaults regardless of the
+        // user's color fields (mirrors the engine's pre-fold behaviour).
+        val style = SubtitleStyle(
+            applyCustomStyle = false,
+            fontColor = SubtitleColor.BLACK,
+            fontColorArgb = 0xFF000000.toInt(),
+        )
+        val options = LibVlcSubtitleStyleMapping.freetypeOptions(style).parseFreetypeOptions()
+
+        assertEquals("16777215", options[":freetype-color"]) // default white, not the user's black
     }
 
     @Test

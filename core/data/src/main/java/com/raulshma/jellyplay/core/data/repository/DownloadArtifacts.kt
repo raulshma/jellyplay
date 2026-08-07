@@ -13,15 +13,19 @@ import java.io.File
  *  - `<dir>/segments.json`                    serialized intro/outro/recap media segments
  *  - `<dir>/<itemId>_poster.jpg`              offline poster (primary) image, unique per item
  *  - `<dir>/<itemId>_backdrop.jpg`            offline backdrop image, unique per item
+ *  - `<dir>/<personId>_person.jpg`            offline cast/person image, unique per person
  *
- * The poster/backdrop are downloaded to local files at download time so the
- * offline screens can render them without a network connection (previously the
- * remote URLs were only stored, leaving blurHash as the sole offline visual).
+ * The poster/backdrop/person images are downloaded to local files at download
+ * time so the offline screens can render them without a network connection
+ * (previously the remote URLs were only stored, leaving blurHash as the sole
+ * offline visual). Person images additionally survive Coil memory-cache
+ * eviction, which was the root cause of the offline cast row failing.
  *
- * The filenames are keyed by Jellyfin `itemId` (a stable UUID) because all
- * downloads share a single flat directory (`getExternalFilesDir(MOVIES)` or
- * `filesDir/downloads`) — fixed names like `poster.jpg` would collide and
- * silently overwrite each other across episodes/movies.
+ * The filenames are keyed by Jellyfin `itemId`/`personId` (stable UUIDs)
+ * because all downloads share a single flat directory
+ * (`getExternalFilesDir(MOVIES)` or `filesDir/downloads`) — fixed names like
+ * `poster.jpg` would collide and silently overwrite each other across
+ * episodes/movies.
  */
 internal object DownloadArtifacts {
     const val TRICKPLAY_DIR = "trickplay"
@@ -34,6 +38,9 @@ internal object DownloadArtifacts {
 
     /** Per-item backdrop filename, unique within the shared downloads dir. */
     fun backdropFile(itemId: String): String = "${itemId}_backdrop.jpg"
+
+    /** Per-person cast image filename, unique within the shared downloads dir. */
+    fun personImageFile(personId: String): String = "${personId}_person.jpg"
 
     /**
      * Recursively removes all bundled extra artifacts under [parentDir].
@@ -51,6 +58,41 @@ internal object DownloadArtifacts {
         if (itemId != null) {
             File(parentDir, posterFile(itemId)).takeIf { it.exists() }?.delete()
             File(parentDir, backdropFile(itemId)).takeIf { it.exists() }?.delete()
+        }
+    }
+
+    /**
+     * Removes the series-scoped poster/backdrop files under [parentDir].
+     *
+     * Series artwork is written beside downloaded episodes (keyed by seriesId)
+     * when a series is queued or a lone episode seeds its parent row, so it
+     * must be pruned when the whole series is deleted — per-item cleanup only
+     * removes `${itemId}_*` files and would leave the series images orphaned
+     * on disk. Only whole-series deletion removes them; deleting individual
+     * episodes keeps the files because sibling episode rows still reference
+     * the same series artwork.
+     */
+    fun cleanupSeriesArtwork(parentDir: File?, seriesId: String) {
+        if (parentDir == null) return
+        File(parentDir, posterFile(seriesId)).takeIf { it.exists() }?.delete()
+        File(parentDir, backdropFile(seriesId)).takeIf { it.exists() }?.delete()
+    }
+
+    /**
+     * Removes the cast/person image files for [personIds] under [parentDir].
+     *
+     * Person images are keyed by `personId` (not the media item id), so the
+     * per-item and series cleanup paths don't touch them. Called when the
+     * owning movie/series download is deleted. A given person may appear across
+     * multiple items, but Jellyfin person ids are server-global and the image
+     * is identical for the same id, so deletion is safe once the last item
+     * referencing it is gone — the offline detail screen falls back to the
+     * remote URL online and the blurhash offline, same as a never-preloaded row.
+     */
+    fun cleanupCastArtwork(parentDir: File?, personIds: Collection<String>) {
+        if (parentDir == null) return
+        personIds.forEach { id ->
+            File(parentDir, personImageFile(id)).takeIf { it.exists() }?.delete()
         }
     }
 }
