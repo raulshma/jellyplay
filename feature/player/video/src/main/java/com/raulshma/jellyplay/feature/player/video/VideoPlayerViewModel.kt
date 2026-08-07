@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -752,7 +753,15 @@ class VideoPlayerViewModel @Inject constructor(
         // remote-action intents (play/pause/skip/next) to the active engine
         //. Cleared on reset() when playback ends.
         pipController.pipTransport = PipTransport { action ->
-            val engine = playerSessionManager.engine ?: return@PipTransport
+            val engine = playerSessionManager.engine
+            if (engine == null) {
+                // PiP bypasses the MediaSession entirely (broadcast -> PipTransport
+                // -> engine), so this silently no-ops when no engine is bound.
+                // Log so a stale transport is diagnosable instead of dead-buttons.
+                Log.w(TAG, "PiP action $action dropped: no active player engine")
+                return@PipTransport
+            }
+            Log.d(TAG, "PiP action $action -> engine")
             when (action) {
                 PipAction.PLAY -> engine.play()
                 PipAction.PAUSE -> engine.pause()
@@ -2998,5 +3007,9 @@ class VideoPlayerViewModel @Inject constructor(
             // re-derive "is this item part of a series?" at the call site.
             mediaRepository.invalidateUserDataCaches(itemId)
         }
+    }
+
+    private companion object {
+        const val TAG = "VideoPlayerViewModel"
     }
 }

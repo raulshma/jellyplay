@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
@@ -30,6 +32,20 @@ class AudioLibraryBrowser(
     private val streamingQualityProvider: () -> StreamingQuality,
     private val adaptiveBitrateSelector: AdaptiveBitrateSelector,
 ) {
+    /**
+     * Builds the [MediaLibrarySession] every audio path uses — the initial
+     * session and the post-crossfade rebuild. Both call sites share this one
+     * construction path so the media service host never sees a plain
+     * [MediaSession] downgrade: [JellyPlayPlaybackService.onGetSession] casts
+     * the active session with `as? MediaLibrarySession`, and a plain session
+     * makes the cast return null (now-playing notification + headset buttons
+     * die until app restart). Keep this the single source of truth for audio.
+     */
+    internal fun buildMediaSession(context: Context, player: Player, sessionId: String): MediaLibrarySession =
+        MediaLibrarySession.Builder(context, player, callback)
+            .setId(sessionId)
+            .build()
+
     val callback: MediaLibrarySession.Callback = object : MediaLibrarySession.Callback {
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
