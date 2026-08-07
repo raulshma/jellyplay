@@ -23,6 +23,12 @@ android {
     }
     testOptions {
         unitTests {
+            isIncludeAndroidResources = true
+            // Pure-JVM tests in this module exercise code paths that touch
+            // `android.os.SystemClock` / `android.util.Log` (TtlCache TTLs,
+            // SleepTimerManager, download workers). Return default values for
+            // unmocked Android APIs instead of throwing — matches the nine
+            // other modules that already set this flag.
             isReturnDefaultValues = true
         }
     }

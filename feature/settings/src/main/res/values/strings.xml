@@ -171,6 +171,8 @@
     <string name="settings_send_logs_chooser">Send Logs</string>
     <string name="settings_check_updates_automatically">Check for Updates Automatically</string>
     <string name="settings_check_updates_subtitle">Periodically check GitHub for new releases</string>
+    <string name="settings_download_updates_automatically">Download Updates Automatically</string>
+    <string name="settings_download_updates_subtitle">New updates download right away instead of waiting for you to tap Download</string>
     <string name="settings_checking_for_updates">Checking for updates\u2026</string>
     <string name="settings_update_available">Update available: v%1$s</string>
     <string name="settings_up_to_date">Up to date (v%1$s)</string>

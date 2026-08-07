@@ -261,10 +261,21 @@ fun JellyPlayApp(
 @Composable
 private fun UpdateSheetOverlay(viewModel: MainViewModel) {
     val state by viewModel.updateState.collectAsStateWithLifecycle()
+    val autoDownloadEnabled by viewModel.selfUpdateDownloadEnabled.collectAsStateWithLifecycle()
     if (state !is com.raulshma.jellyplay.update.UpdateState.Idle) {
         val context = LocalContext.current
         AppUpdateSheet(
             state = state,
+            autoDownloadEnabled = autoDownloadEnabled,
+            onAutoDownloadToggle = { enabled ->
+                viewModel.setSelfUpdateDownloadEnabled(enabled)
+                // Turning it ON while an update is already available should also
+                // start downloading the shown update immediately.
+                val available = state as? com.raulshma.jellyplay.update.UpdateState.UpdateAvailable
+                if (enabled && available != null) {
+                    viewModel.startUpdateDownload(available.info)
+                }
+            },
             onDownload = { info -> viewModel.startUpdateDownload(info) },
             onInstall = { intent ->
                 runCatching { context.startActivity(intent) }

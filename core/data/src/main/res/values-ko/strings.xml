@@ -19,6 +19,15 @@
     <string name="data_channel_downloads">다운로드</string>
     <string name="data_channel_downloads_desc">다운로드 진행 상황 알림</string>
 
+    <!-- Downloads notification actions -->
+    <string name="data_download_action_pause">일시 정지</string>
+    <string name="data_download_action_resume">재개</string>
+    <string name="data_download_action_cancel">취소</string>
+    <string name="data_download_paused">다운로드 일시 정지됨</string>
+    <plurals name="data_download_summary_active">
+        <item quantity="other">%1$d개 다운로드 진행 중</item>
+    </plurals>
+
     <!-- Admin statistics: content-type breakdown labels -->
     <string name="data_label_movies">영화</string>
     <string name="data_label_episodes">에피소드</string>

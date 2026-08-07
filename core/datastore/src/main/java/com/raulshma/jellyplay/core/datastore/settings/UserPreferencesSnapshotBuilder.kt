@@ -259,6 +259,7 @@ fun buildUserPreferencesSnapshot(
     hiddenNavItems = navigation.hiddenNavItems,
     navItemOrder = navigation.navItemOrder,
     selfUpdateCheckEnabled = experimental.selfUpdateCheckEnabled,
+    selfUpdateDownloadEnabled = experimental.selfUpdateDownloadEnabled,
     dismissedUpdateVersion = experimental.dismissedUpdateVersion,
     dismissedUpdateAtMs = experimental.dismissedUpdateAtMs,
     watchLaterPlaylistId = runtime.watchLaterPlaylistId,

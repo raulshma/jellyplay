@@ -8,6 +8,16 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application>
+        <receiver
+            android:name=".receiver.DownloadActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.raulshma.jellyplay.download.PAUSE" />
+                <action android:name="com.raulshma.jellyplay.download.RESUME" />
+                <action android:name="com.raulshma.jellyplay.download.CANCEL" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name=".playback.JellyPlayPlaybackService"
             android:exported="true"

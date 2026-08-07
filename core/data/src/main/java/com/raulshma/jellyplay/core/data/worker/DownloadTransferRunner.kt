@@ -59,7 +59,7 @@ internal class DownloadTransferRunner(
      */
     private val updateForeground: suspend (name: String, progress: Int, downloaded: Long, total: Long, speed: Long, notificationId: Int) -> Unit,
     /** Cancels the progress notification on completion; best-effort, swallowed by the caller. */
-    private val dismissForeground: (notificationId: Int) -> Unit,
+    private val dismissForeground: suspend (notificationId: Int) -> Unit,
 ) {
 
     /**
