@@ -77,6 +77,8 @@ import androidx.compose.ui.input.key.NativeKeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -1140,6 +1142,21 @@ fun VideoPlayerScreen(
                             .graphicsLayer {
                                 scaleX = effectiveZoom
                                 scaleY = effectiveZoom
+                            }
+                            // Track the surface's window bounds so the Activity can
+                            // supply a source-rect hint for a seamless PiP enter
+                            // animation. Stop tracking once in PiP (the system
+                            // renders the window then).
+                            .onGloballyPositioned { coords ->
+                                if (!isInPipMode) {
+                                    val r = coords.boundsInWindow()
+                                    viewModel.updatePipSourceRect(
+                                        android.graphics.Rect(
+                                            r.left.toInt(), r.top.toInt(),
+                                            r.right.toInt(), r.bottom.toInt(),
+                                        )
+                                    )
+                                }
                             },
                     )
 

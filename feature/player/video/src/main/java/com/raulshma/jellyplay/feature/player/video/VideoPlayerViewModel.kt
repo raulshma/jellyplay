@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
+import android.util.Rational
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +64,7 @@ import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
@@ -1017,19 +1019,27 @@ class VideoPlayerViewModel @Inject constructor(
                             } }
                             launch { engine.playbackState.collect { state ->
                                 val stateInt = when (state) {
-                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.IDLE -> 1
-                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> 2
-                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.READY -> 3
-                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED -> 4
-                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR -> 1
+                                    EnginePlaybackState.IDLE -> 1
+                                    EnginePlaybackState.BUFFERING -> 2
+                                    EnginePlaybackState.READY -> 3
+                                    EnginePlaybackState.ENDED -> 4
+                                    EnginePlaybackState.ERROR -> 1
                                 }
                                 syncPlayBridge.onPlaybackStateChanged(stateInt)
-                                val buffering = state == com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING
+                                val buffering = state == EnginePlaybackState.BUFFERING
                                 _uiState.update { s ->
                                     if (s.isBuffering == buffering) s else s.copy(isBuffering = buffering)
                                 }
-                                if (state == com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED) {
+                                if (state == EnginePlaybackState.ENDED) {
                                     handlePlaybackEnded()
+                                }
+                                // Auto-exit PiP when playback ends or errors so the
+                                // window does not linger on a frozen frame. Pause is
+                                // intentionally excluded — users pause to read.
+                                if (pipController.isInPipMode.value &&
+                                    (state == EnginePlaybackState.ENDED || state == EnginePlaybackState.ERROR)
+                                ) {
+                                    pipController.requestAutoExitPip()
                                 }
                             } }
                             launch { engine.availableTracks.collect { trackSelectionHelper.updateTracksFromEngine() } }
@@ -1874,6 +1884,32 @@ class VideoPlayerViewModel @Inject constructor(
             val detected = detectAspectRatio(_uiState.value.mediaStreams)
             _uiState.update { it.copy(detectedAspectRatio = detected) }
         }
+        // The PiP aspect ratio always tracks the underlying media, independent
+        // of the in-app resize mode, so it does not need re-deriving here.
+    }
+
+    /**
+     * Pushes the server-reported video stream dimensions into [PipController] as
+     * a `Rational` so the PiP window matches the content (16:9, 4:3, 21:9, …)
+     * instead of always letterboxing to 16:9. Falls back to `null` (→ 16:9 in
+     * the Activity) when the stream or its dimensions are unknown.
+     */
+    private fun updatePipAspectRatio(streams: List<com.raulshma.jellyplay.core.model.MediaStream>) {
+        val video = streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
+        val w = video?.width
+        val h = video?.height
+        pipController.setPipAspectRatio(
+            if (w != null && h != null && h != 0) Rational(w, h) else null
+        )
+    }
+
+    /**
+     * Forwards the video surface's window bounds to [PipController] as the PiP
+     * source-rect hint. Thin wrapper so the screen does not reach through the
+     * ViewModel into the controller.
+     */
+    fun updatePipSourceRect(rect: android.graphics.Rect?) {
+        pipController.updatePipSourceRect(rect)
     }
 
     fun setSubtitleStyle(style: SubtitleStyle) {
@@ -2721,6 +2757,7 @@ class VideoPlayerViewModel @Inject constructor(
             mediaStreams = streams,
             detectedAspectRatio = detectAspectRatio(streams),
         ) }
+        updatePipAspectRatio(streams)
         // Rebuild the audio/subtitle track options from the refreshed server
         // streams. A subtitle download/upload attaches a new MediaStream server-
         // side, but the engine's availableTracks flow only re-emits on an engine-
