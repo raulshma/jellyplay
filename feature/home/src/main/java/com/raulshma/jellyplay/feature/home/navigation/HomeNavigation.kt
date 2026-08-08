@@ -77,15 +77,13 @@ fun EntryProviderScope<NavKey>.homeSection(
                 onConfigureHomeLayout = { navigator.navigate(Route.AppearanceSettings("home_section_layout")) },
                 onConfigureLibraries = { navigator.navigate(Route.LibraryHomeSections("configure_libraries")) },
                 onSeeAllClick = { _, libraryId, collectionType, title ->
-                    // "See All" mirrors the home row's Recently-Added→library
-                    // mapping. Per-library sections
-                    // (LATEST_MEDIA) reproduce the home row's /Items/Latest item
-                    // set: the sort depends on the library's collectionType —
-                    // music/boxsets/books/folders sort by DateLastContentAdded
-                    // (when something was added to the library), everything else
-                    // by DateCreated (when the item itself was added). Global
-                    // Recently Added (libraryId == null) uses DateCreated.
-                    val sortBy = if (collectionType in setOf("music", "boxsets", "books", "folders")) {
+                    // Per-library "Latest X" sorts by DateLastContentAdded so a
+                    // compound item that just gained a child (a TV series with a
+                    // new episode) rises to the top — the user's mental model of
+                    // "Latest" (#113). The global Recently Added row
+                    // (libraryId == null) keeps DateCreated, since there
+                    // "recently added" genuinely means when the item was added.
+                    val sortBy = if (libraryId != null) {
                         SortOption.DATE_LAST_CONTENT_ADDED.apiValue
                     } else {
                         SortOption.DATE_ADDED.apiValue

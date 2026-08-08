@@ -970,7 +970,12 @@ fun LibraryScreen(
                     // These are infrequent navigation actions (not view/layout
                     // controls, which live in the labeled action chip row). Kept
                     // in the floating toolbar so the app bar stays clean.
-                    if (!isTv && pagedItems.itemCount > 0) {
+                    // Music-library-only on phones: these actions target music
+                    // playlists, so showing them for a video library reads as
+                    // clutter ("seems more for the music side", #113). TV keeps
+                    // the toolbar regardless of collectionType.
+                    val isMusicLibrary = selectedFolder?.collectionType == "music"
+                    if (!isTv && isMusicLibrary && pagedItems.itemCount > 0) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = true,
                             modifier = Modifier
