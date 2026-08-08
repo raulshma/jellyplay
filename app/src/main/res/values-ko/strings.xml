@@ -148,6 +148,16 @@
     <!-- TV navigation drawer -->
     <string name="nav_now_playing">지금 재생 중</string>
     <string name="nav_settings">설정</string>
+    <string name="nav_more">더보기</string>
+    <string name="nav_more_content_description">추가 옵션</string>
+    <string name="menu_settings">설정</string>
+    <string name="menu_downloads">다운로드</string>
+    <string name="menu_play_on">다른 기기에서 재생</string>
+    <string name="menu_surprise_me">무작위 추천</string>
+    <string name="menu_shortcuts">바로가기</string>
+    <string name="menu_go_online">온라인으로 전환</string>
+    <string name="menu_go_offline">오프라인으로 전환</string>
+    <string name="menu_going_online">온라인으로 전환 중…</string>
 
     <!-- Play On device sheet -->
     <string name="play_on_title">재생 위치</string>

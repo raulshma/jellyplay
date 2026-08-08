@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.navigation.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -50,30 +51,19 @@ fun ExpressiveFloatingNavigationBar(
     onNavigate: (Route) -> Unit,
     showLabels: Boolean,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    isOverflowExpanded: Boolean = false,
+    onOverflowToggle: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Separate Search route if present in top level routes
     val searchEntry = routes.entries.find { it.key is Route.Search }
     val mainRoutes = routes.filterKeys { it !is Route.Search }
 
-    androidx.compose.foundation.layout.BoxWithConstraints(
-        modifier = modifier
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        val availableWidth = maxWidth
-        val nMain = mainRoutes.size
-        val hasSearch = searchEntry != null
-
-        // Calculate width required to comfortably fit all text labels + search FAB
-        val requiredFullWidth = (90.dp * nMain) + (if (hasSearch) 55.dp else 0.dp) + 32.dp
-
-        // When screen width is constrained (< requiredFullWidth), hide unselected text labels
-        // so the main capsule pill stays compact (~180-220.dp) and the separate Search FAB remains docked beside it.
-        val canFitLabels = showLabels && availableWidth >= requiredFullWidth
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
             // ── 1. Main Navigation Capsule Pill ──
             Surface(
                 shape = ShapeCache.smoothPill,
@@ -84,13 +74,13 @@ fun ExpressiveFloatingNavigationBar(
                     width = 1.dp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                 ),
-                modifier = Modifier.height(48.dp)
+                modifier = Modifier.height(60.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
                         .fillMaxHeight()
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -112,7 +102,11 @@ fun ExpressiveFloatingNavigationBar(
                                 label = "navItemColor"
                             )
 
-                            val shouldShowLabel = selected || canFitLabels
+                            // Only the active item shows a label — unselected
+                            // items stay icon-only. Suppressed entirely when the
+                            // user has disabled nav-bar labels. Search and the
+                            // ⋮ "More" toggle below never carry a label.
+                            val shouldShowLabel = selected && showLabels
 
                             Surface(
                                 shape = CircleShape,
@@ -129,18 +123,18 @@ fun ExpressiveFloatingNavigationBar(
                                     modifier = Modifier
                                         .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
                                         .padding(
-                                            horizontal = if (shouldShowLabel) 12.dp else 10.dp,
-                                            vertical = 6.dp
+                                            horizontal = if (shouldShowLabel) 16.dp else 14.dp,
+                                            vertical = 8.dp
                                         ),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    NavIcon(route, label, selected = selected, tint = contentColor)
+                                    NavIcon(route, label, selected = selected, tint = contentColor, iconSize = 26.dp)
                                     if (shouldShowLabel) {
                                         Text(
                                             text = label,
                                             color = contentColor,
-                                            style = MaterialTheme.typography.labelMedium,
+                                            style = MaterialTheme.typography.labelLarge,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -153,56 +147,147 @@ fun ExpressiveFloatingNavigationBar(
                 }
             }
 
-            // ── 2. Standalone Circular Search Floating Button ──
+            // ── 2. Joined action pill: Search + "More" toggle ──
+            // Two circular tap targets sharing one bordered capsule container.
+            // The container stays neutral; each side highlights individually so
+            // tapping one doesn't select the whole badge (#115).
             if (searchEntry != null) {
                 val isSearchSelected = currentTopLevel is Route.Search
-                val fabColor by animateColorAsState(
-                    targetValue = if (isSearchSelected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        containerColor.copy(alpha = 0.85f)
-                    },
-                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                    label = "searchFabColor"
-                )
-                val iconTint by animateColorAsState(
+                val searchTint by animateColorAsState(
                     targetValue = if (isSearchSelected) {
                         MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },
                     animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
-                    label = "searchFabIconTint"
+                    label = "searchIconTint",
+                )
+                val moreTint by animateColorAsState(
+                    targetValue = if (isOverflowExpanded) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                    label = "moreIconTint",
+                )
+                val searchBg by animateColorAsState(
+                    targetValue = if (isSearchSelected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        Color.Transparent
+                    },
+                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                    label = "searchBg",
+                )
+                val moreBg by animateColorAsState(
+                    targetValue = if (isOverflowExpanded) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        Color.Transparent
+                    },
+                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                    label = "moreBg",
                 )
 
                 Surface(
-                    shape = CircleShape,
-                    color = fabColor,
+                    shape = ShapeCache.smoothPill,
+                    color = containerColor.copy(alpha = 0.85f),
                     tonalElevation = 3.dp,
                     shadowElevation = 6.dp,
                     border = BorderStroke(
                         width = 1.dp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                    ),
+                    modifier = Modifier.height(60.dp),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .padding(horizontal = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // Search (direct tab switch) — own highlight.
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(searchBg, CircleShape)
+                                .focusIndicator(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = { onNavigate(searchEntry.key) },
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Tabler.Outline.Search,
+                                contentDescription = searchEntry.value,
+                                tint = searchTint,
+                                modifier = Modifier.size(24.dp),
+                            )
+                        }
+                        // "More" toggle — own highlight, expands overflow.
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(moreBg, CircleShape)
+                                .focusIndicator(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = { onOverflowToggle(!isOverflowExpanded) },
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            MoreToggleIcon(
+                                isExpanded = isOverflowExpanded,
+                                tint = moreTint,
+                            )
+                        }
+                    }
+                }
+            } else {
+                // No Search route in this nav set — still expose "More".
+                val moreFabColor by animateColorAsState(
+                    targetValue = if (isOverflowExpanded) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        containerColor.copy(alpha = 0.85f)
+                    },
+                    animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+                    label = "moreFabColor",
+                )
+                Surface(
+                    shape = CircleShape,
+                    color = moreFabColor,
+                    tonalElevation = 3.dp,
+                    shadowElevation = 6.dp,
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                     ),
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(60.dp)
                         .focusIndicator(CircleShape)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = { onNavigate(searchEntry.key) }
-                        )
+                            onClick = { onOverflowToggle(!isOverflowExpanded) },
+                        ),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Tabler.Outline.Search,
-                            contentDescription = searchEntry.value,
-                            tint = iconTint,
-                            modifier = Modifier.size(20.dp)
+                        MoreToggleIcon(
+                            isExpanded = isOverflowExpanded,
+                            tint = if (isOverflowExpanded) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
                         )
                     }
                 }
             }
         }
     }
-}

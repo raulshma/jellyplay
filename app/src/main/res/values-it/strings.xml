@@ -148,6 +148,16 @@
     <!-- TV navigation drawer -->
     <string name="nav_now_playing">In riproduzione</string>
     <string name="nav_settings">Impostazioni</string>
+    <string name="nav_more">Altro</string>
+    <string name="nav_more_content_description">Altre opzioni</string>
+    <string name="menu_settings">Impostazioni</string>
+    <string name="menu_downloads">Download</string>
+    <string name="menu_play_on">Riproduci su</string>
+    <string name="menu_surprise_me">Sorprendimi</string>
+    <string name="menu_shortcuts">Scorciatoie</string>
+    <string name="menu_go_online">Vai online</string>
+    <string name="menu_go_offline">Vai offline</string>
+    <string name="menu_going_online">Connessione in corso…</string>
 
     <!-- Play On device sheet -->
     <string name="play_on_title">Riproduci su</string>

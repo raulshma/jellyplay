@@ -21,6 +21,7 @@ fun EntryProviderScope<NavKey>.homeSection(
     onPlayOnClick: () -> Unit,
     playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
     musicContent: @Composable () -> Unit,
+    surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     entry<Route.Home> {
         // Build the callbacks once per navigator lifetime so the HomeScreen subtree
@@ -81,8 +82,10 @@ fun EntryProviderScope<NavKey>.homeSection(
                     // compound item that just gained a child (a TV series with a
                     // new episode) rises to the top — the user's mental model of
                     // "Latest" (#113). The global Recently Added row
-                    // (libraryId == null) keeps DateCreated, since there
-                    // "recently added" genuinely means when the item was added.
+                    // (libraryId == null) is reproduced by the library VM via a
+                    // per-folder /Items/Latest aggregation, so the DateCreated
+                    // sortBy here is ignored for that branch — kept only so the
+                    // route stays self-describing if the branch is removed.
                     val sortBy = if (libraryId != null) {
                         SortOption.DATE_LAST_CONTENT_ADDED.apiValue
                     } else {
@@ -103,6 +106,7 @@ fun EntryProviderScope<NavKey>.homeSection(
             callbacks = callbacks,
             homeMode = homeMode,
             musicContent = musicContent,
+            surpriseRequests = surpriseRequests,
         )
     }
 }

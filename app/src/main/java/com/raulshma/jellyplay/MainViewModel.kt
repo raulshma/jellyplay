@@ -38,6 +38,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 import java.util.concurrent.atomic.AtomicBoolean
@@ -84,6 +86,46 @@ class MainViewModel @Inject constructor(
      * [com.raulshma.jellyplay.core.ui.components.ErrorScreen].
      */
     val offlineMode = offlineModeManager.offlineMode
+
+    /**
+     * Mirrors Home's offline→online in-flight flag at the app shell so the
+     * global nav overflow can show a spinner on "Go Online" (see #115). Cleared
+     * by observing [offlineMode] settling back to ONLINE below.
+     */
+    private val _isGoingOnline = stateFlow(false)
+    val isGoingOnline = _isGoingOnline.flow
+
+    init {
+        // Clear the going-online busy flag once we're actually back online.
+        scope.launch {
+            offlineMode.collect { if (it == com.raulshma.jellyplay.core.model.OfflineMode.ONLINE) _isGoingOnline.set(false) }
+        }
+    }
+
+    /**
+     * App-shell offline toggle for the global nav overflow (#115). Going online
+     * is async (preference write → mode flip → network fetch); flip the busy
+     * flag so the UI can show a spinner, mirroring [HomeViewModel]'s logic.
+     */
+    fun toggleOfflineMode() {
+        val goingOnline = offlineMode.value != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
+        if (goingOnline) _isGoingOnline.set(true)
+        offlineModeManager.toggleManualOffline()
+    }
+
+    /**
+     * One-shot signal fired by the global nav overflow's "Surprise Me" entry
+     * (#115). Home collects this and forwards it to its hero controller, since
+     * the controller lives in Home's composition (it owns the hero LazyListState
+     * + featured candidates) and can't be hoisted to the app shell.
+     */
+    private val _surpriseRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val surpriseRequests = _surpriseRequests.asSharedFlow()
+
+    /** Fire the Surprise-Me signal (see [surpriseRequests]). */
+    fun requestSurprise() {
+        _surpriseRequests.tryEmit(Unit)
+    }
 
     private val _isRestoring = stateFlow(true)
     val isRestoring = _isRestoring.flow
