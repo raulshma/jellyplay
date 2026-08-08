@@ -780,32 +780,13 @@ class VideoPlayerViewModel @Inject constructor(
     init {
         castManager.acquireConsumer()
         // Register the PiP transport bridge so the Activity can dispatch PiP
-        // remote-action intents (play/pause/skip/next) to the active engine
-        //. Cleared on reset() when playback ends.
-        pipController.pipTransport = PipTransport { action ->
-            val engine = playerSessionManager.engine
-            if (engine == null) {
-                // PiP bypasses the MediaSession entirely (broadcast -> PipTransport
-                // -> engine), so this silently no-ops when no engine is bound.
-                // Log so a stale transport is diagnosable instead of dead-buttons.
-                Log.w(TAG, "PiP action $action dropped: no active player engine")
-                return@PipTransport
-            }
-            Log.d(TAG, "PiP action $action -> engine")
-            when (action) {
-                PipAction.PLAY -> engine.play()
-                PipAction.PAUSE -> engine.pause()
-                PipAction.SKIP_FORWARD -> {
-                    val skip = _uiState.value.seekDurationMs
-                    seekTo((engine.currentPositionMs + skip).coerceAtLeast(0L))
-                }
-                PipAction.SKIP_BACKWARD -> {
-                    val skip = _uiState.value.seekDurationMs
-                    seekTo((engine.currentPositionMs - skip).coerceAtLeast(0L))
-                }
-                PipAction.NEXT -> playNextEpisode()
-            }
-        }
+        // remote-action intents (play/pause/skip/next) to the active engine.
+        // Also re-armed in initializeInternal(): this VM is Activity-scoped
+        // (Nav3 has no per-entry ViewModelStore here) and is reused across media,
+        // and release() from the screen's onDispose runs pipController.reset()
+        // which nulls the transport — but init never re-runs on the reused
+        // instance, so every load must re-arm it or PiP controls go dead.
+        registerPipTransport()
         launch {
             aggregateStore.aggregate.collect { agg ->
                 val oldAggregate = cachedAggregate
@@ -1204,6 +1185,42 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Arms the PiP transport bridge so the Activity can dispatch PiP remote-action
+     * intents (play/pause/skip/next) to the active engine. Idempotent and safe to
+     * call repeatedly: [release] → [performRelease] → [PipController.reset] nulls
+     * the transport, and because this VM is Activity-scoped (Nav3 has no per-entry
+     * ViewModelStore here) `init` does not re-run on the reused instance — so
+     * [initializeInternal] must re-arm it on every load or PiP controls go dead
+     * after the first media close.
+     */
+    private fun registerPipTransport() {
+        pipController.pipTransport = PipTransport { action ->
+            val engine = playerSessionManager.engine
+            if (engine == null) {
+                // PiP bypasses the MediaSession entirely (broadcast -> PipTransport
+                // -> engine), so this silently no-ops when no engine is bound.
+                // Log so a stale transport is diagnosable instead of dead-buttons.
+                Log.w(TAG, "PiP action $action dropped: no active player engine")
+                return@PipTransport
+            }
+            Log.d(TAG, "PiP action $action -> engine")
+            when (action) {
+                PipAction.PLAY -> engine.play()
+                PipAction.PAUSE -> engine.pause()
+                PipAction.SKIP_FORWARD -> {
+                    val skip = _uiState.value.seekDurationMs
+                    seekTo((engine.currentPositionMs + skip).coerceAtLeast(0L))
+                }
+                PipAction.SKIP_BACKWARD -> {
+                    val skip = _uiState.value.seekDurationMs
+                    seekTo((engine.currentPositionMs - skip).coerceAtLeast(0L))
+                }
+                PipAction.NEXT -> playNextEpisode()
+            }
+        }
+    }
+
     val playerEngineRef: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine? get() = playerSessionManager.engine
 
     /**
@@ -1342,6 +1359,10 @@ class VideoPlayerViewModel @Inject constructor(
         allowCinemaMode: Boolean,
     ) {
         released = false
+        // Re-arm the PiP transport: the previous media's onDispose ran release()
+        // → pipController.reset() which nulled it. init only ran once (this VM is
+        // Activity-scoped and reused), so a new load must re-register it.
+        registerPipTransport()
         autoplayController.resetForNewItem()
         _uiState.update { it.copy(autoplayCancelled = false) }
         lastSeekPositionMs = null
@@ -2924,11 +2945,12 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.release()
         playerLifecycleManager.reset()
         // Clear per-item PiP mirrors but KEEP pipTransport: it is a VM-owned
-        // bridge registered once in init and read by the Activity's PiP
-        // BroadcastReceiver. Nulling it here (as reset() does) would deaden
-        // every PiP control, because initialize() calls releaseInternals() on
-        // every item load and the transport is never re-registered. Full
-        // reset() (transport included) runs in performRelease() on teardown.
+        // bridge re-armed in init AND initializeInternal (because release() from
+        // the screen's onDispose runs pipController.reset(), nulling it). Nulling
+        // it here would deaden PiP controls mid-session, since initialize() calls
+        // releaseInternals() on every item load. The full reset() (transport
+        // included) runs in performRelease() on teardown, and the next load
+        // re-arms it.
         pipController.setPlaying(false)
         pipController.pipHasNext = false
         trickplayManager.clear()
