@@ -27,6 +27,13 @@
     <string name="settings_clear_search_cd">Clear search</string>
     <string name="settings_newsletter_cd">Newsletter</string>
     <string name="settings_advanced_badge">Adv</string>
+    <string name="settings_power_user_mode">Power User Mode</string>
+    <string name="settings_advanced_mode">Advanced Mode</string>
+    <string name="settings_advanced_on">Advanced Mode: ON</string>
+    <string name="settings_advanced_off">Advanced Mode: OFF</string>
+    <string name="settings_admin_badge">Admin</string>
+    <string name="settings_member_badge">Member</string>
+    <string name="settings_connected_server">Connected to server</string>
     <string name="settings_no_matches">No matching settings found</string>
     <string name="settings_signed_in_as_label">Signed in as</string>
     <string name="settings_account">Account</string>
