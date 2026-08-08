@@ -231,7 +231,6 @@ val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(
     Route.Library to "Library",
     Route.Search to "Search",
     Route.LiveTv to "Live TV",
-    Route.Shortcuts to "Shortcuts",
 )
 
 val MUSIC_TOP_LEVEL_ROUTES = linkedMapOf(
@@ -290,7 +289,8 @@ val Route.isModal: Boolean
         Route.ScheduledTasks,
         Route.Devices,
         Route.Logs,
-        Route.Requests -> true
+        Route.Requests,
+        Route.Shortcuts -> true
         Route.Users -> true
         Route.ArrQueue -> true
         Route.UpcomingCalendar -> true

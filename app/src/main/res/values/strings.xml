@@ -163,6 +163,23 @@
     <string name="nav_now_playing">Now Playing</string>
     <string name="nav_settings">Settings</string>
 
+    <!-- Global "More" overflow entry docked beside the navigation bar (#115). -->
+    <string name="nav_more">More</string>
+    <string name="nav_more_content_description">More options</string>
+
+    <!-- Items shared by the Home FAB menu and the global "More" overflow sheet.
+         Kept here (app module) so both the home feature and the app-level
+         overflow sheet resolve them through resource merging. -->
+    <string name="menu_settings">Settings</string>
+    <string name="menu_downloads">Downloads</string>
+    <string name="menu_syncplay" translatable="false">SyncPlay</string>
+    <string name="menu_play_on">Play On</string>
+    <string name="menu_surprise_me">Surprise Me</string>
+    <string name="menu_shortcuts">Shortcuts</string>
+    <string name="menu_go_online">Go Online</string>
+    <string name="menu_go_offline">Go Offline</string>
+    <string name="menu_going_online">Going online…</string>
+
     <!-- Play On device sheet -->
     <string name="play_on_title">Play On</string>
     <string name="play_on_no_clients">No Jellyfin clients found. Open JellyPlay or Jellyfin on another device and it will appear here.</string>

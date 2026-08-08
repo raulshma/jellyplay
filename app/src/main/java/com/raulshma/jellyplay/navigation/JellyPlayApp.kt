@@ -67,6 +67,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.ui.graphics.Color
 
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.PaddingValues
@@ -106,6 +107,7 @@ import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.NavigationStyle
 import com.raulshma.jellyplay.navigation.components.ExpressiveFloatingNavigationBar
+import com.raulshma.jellyplay.navigation.components.MoreToggleIcon
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -122,6 +124,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.shadowElevation
 import com.raulshma.jellyplay.core.designsystem.theme.tonalElevation
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
 import com.raulshma.jellyplay.core.ui.components.MiniPlayer
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavVisibility
@@ -438,6 +441,7 @@ private fun MainContent(
     // an offline-results path, Shortcuts are device-local, and MusicBrowse's
     // home surfaces the downloaded music library — all stay visible.
     val offlineMode by viewModel.offlineMode.collectAsStateWithLifecycle()
+    val isGoingOnline by viewModel.isGoingOnline.collectAsStateWithLifecycle()
     val isOffline = offlineMode != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
 
     // Memoize the route filter+reorder so it only re-runs when homeMode /
@@ -841,6 +845,16 @@ private fun MainContent(
                         showNavBarLabels = preferences.navBarShowLabels,
                         navigationStyle = preferences.navigationStyle,
                         isExpressiveNavExperimental = preferences.isExperimentalEnabled(ExperimentalFeature.EXPRESSIVE_NAVIGATION),
+                        offlineMode = offlineMode,
+                        isGoingOnline = isGoingOnline,
+                        onSurpriseClick = {
+                            // Switch to Home first so the hero controller is
+                            // composed, then fire the surprise signal it collects.
+                            navigationState.topLevelRoute.value = Route.Home
+                            viewModel.requestSurprise()
+                        },
+                        onToggleOffline = { viewModel.toggleOfflineMode() },
+                        surpriseRequests = viewModel.surpriseRequests,
                     )
                 } else {
                     FullScreenContent(
@@ -947,14 +961,22 @@ private fun TvContent(
             // frequently — it reads audio title/artist/artwork for the mini-
             // player). Re-running .map{} here would allocate a fresh list + N
             // fresh TvNavItem instances each time, invalidating the drawer.
-            val primaryNavItems = remember(activeTopLevelRoutes) {
+            // Shortcuts is no longer a top-level tab on phone (relocated to the
+            // ⋮ overflow). The TV drawer has no overflow menu, so keep Shortcuts
+            // reachable here as an explicit primary item.
+            val shortcutsLabel = stringResource(R.string.menu_shortcuts)
+            val primaryNavItems = remember(activeTopLevelRoutes, shortcutsLabel) {
                 activeTopLevelRoutes.entries.map { (route, label) ->
                     TvNavItem(
                         route = route,
                         label = label,
                         icon = routeToIcon(route),
                     )
-                }
+                } + TvNavItem(
+                    route = Route.Shortcuts,
+                    label = shortcutsLabel,
+                    icon = routeToIcon(Route.Shortcuts),
+                )
             }
             TvNavigationDrawer(
                 primaryItems = primaryNavItems,
@@ -1088,6 +1110,11 @@ private fun PhoneContent(
     showNavBarLabels: Boolean,
     navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
     isExpressiveNavExperimental: Boolean = false,
+    offlineMode: com.raulshma.jellyplay.core.model.OfflineMode = com.raulshma.jellyplay.core.model.OfflineMode.ONLINE,
+    isGoingOnline: Boolean = false,
+    onSurpriseClick: () -> Unit = {},
+    onToggleOffline: () -> Unit = {},
+    surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var isBottomNavVisible by isBottomNavVisibleState
@@ -1107,6 +1134,14 @@ private fun PhoneContent(
     androidx.compose.runtime.LaunchedEffect(showPlayOnSheet) {
         if (showPlayOnSheet) playOnViewModel.startDiscovery(playOnContext)
     }
+
+    // Global "More" overflow — a DotsVertical toggle docked in the nav bar
+    // (both Classic and Expressive styles) that expands an animated list of
+    // destinations upward, so Settings/Downloads/SyncPlay/Play On are reachable
+    // from anywhere (#115). The expanded items render as an overlay above the
+    // nav bar (see OverflowMenuItems / OverflowMenuScrim below).
+    var isOverflowExpanded by remember { mutableStateOf(false) }
+    val onOverflowToggle: (Boolean) -> Unit = { isOverflowExpanded = it }
 
     // When hide-on-scroll is disabled, keep the nav bar permanently visible
         //. The nestedScrollConnection is still constructed so its
@@ -1180,6 +1215,7 @@ private fun PhoneContent(
                         onAmbientClick = onAmbientClick,
                         onPlayOnClick = onPlayOnClick,
                         playOnStrategy = playOnViewModel.strategy,
+                        surpriseRequests = surpriseRequests,
                     )
                 }
                 if (showMiniPlayer && isExpanded) {
@@ -1313,6 +1349,53 @@ private fun PhoneContent(
                         },
                     )
                 }
+                // Global "More" overflow — a DotsVertical toggle in the nav bar
+                // (both Classic and Expressive styles) expands an animated list
+                // of destinations upward, so Settings/Downloads/SyncPlay/Play On
+                // are reachable from anywhere (#115). The items render as an
+                // overlay above the nav bar (see OverflowMenuItems below).
+                if (isOverflowExpanded) {
+                    com.raulshma.jellyplay.navigation.components.OverflowMenuScrim(
+                        onDismiss = { isOverflowExpanded = false },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                    com.raulshma.jellyplay.navigation.components.OverflowMenuItems(
+                        onSurpriseClick = {
+                            isOverflowExpanded = false
+                            onSurpriseClick()
+                        },
+                        onSyncPlayClick = {
+                            isOverflowExpanded = false
+                            navigator.navigate(Route.SyncPlay)
+                        },
+                        onDownloadsClick = {
+                            isOverflowExpanded = false
+                            navigator.navigate(Route.Downloads)
+                        },
+                        onToggleOffline = {
+                            // Guard re-taps while the offline→online transition is in flight.
+                            if (!isGoingOnline) onToggleOffline()
+                        },
+                        onPlayOnClick = {
+                            isOverflowExpanded = false
+                            onPlayOnClick()
+                        },
+                        onShortcutsClick = {
+                            isOverflowExpanded = false
+                            navigator.navigate(Route.Shortcuts)
+                        },
+                        onSettingsClick = {
+                            isOverflowExpanded = false
+                            navigator.navigate(Route.Settings)
+                        },
+                        offlineMode = offlineMode,
+                        isGoingOnline = isGoingOnline,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .clearFloatingNav(extraBottom = 0.dp)
+                            .padding(end = 16.dp, bottom = 4.dp),
+                    )
+                }
                 if (!isExpanded) {
                     val navBarModifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -1326,6 +1409,8 @@ private fun PhoneContent(
                             onNavigate = { navigator.navigate(it) },
                             showLabels = showNavBarLabels,
                             containerColor = animatedNavBarColor,
+                            isOverflowExpanded = isOverflowExpanded,
+                            onOverflowToggle = onOverflowToggle,
                             modifier = navBarModifier,
                         )
                     } else {
@@ -1335,6 +1420,8 @@ private fun PhoneContent(
                             onNavigate = { navigator.navigate(it) },
                             showLabels = showNavBarLabels,
                             containerColor = animatedNavBarColor,
+                            isOverflowExpanded = isOverflowExpanded,
+                            onOverflowToggle = onOverflowToggle,
                             modifier = navBarModifier,
                         )
                     }
@@ -1435,7 +1522,13 @@ private fun routeToIcon(route: Route): ImageVector = when (route) {
 }
 
 @Composable
-internal fun NavIcon(route: Route, label: String, selected: Boolean = false, tint: Color = androidx.compose.material3.LocalContentColor.current) {
+internal fun NavIcon(
+    route: Route,
+    label: String,
+    selected: Boolean = false,
+    tint: Color = androidx.compose.material3.LocalContentColor.current,
+    iconSize: Dp = 24.dp,
+) {
     val scale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (selected) 1.15f else 1.0f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
@@ -1445,7 +1538,9 @@ internal fun NavIcon(route: Route, label: String, selected: Boolean = false, tin
         imageVector = routeToIcon(route),
         contentDescription = label,
         tint = tint,
-        modifier = androidx.compose.ui.Modifier.scale(scale),
+        modifier = androidx.compose.ui.Modifier
+            .size(iconSize)
+            .scale(scale),
     )
 }
 
@@ -1466,6 +1561,7 @@ private fun MainNavDisplay(
     onAmbientClick: () -> Unit = {},
     onPlayOnClick: () -> Unit = {},
     playOnStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy? = null,
+    surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val currentBackStack = navigationState.backStacks[navigationState.topLevelRoute.value] ?: return
 
@@ -1553,6 +1649,7 @@ private fun MainNavDisplay(
                 onModeChange = onModeChange,
                 onPlayOnClick = onPlayOnClick,
                 playOnStrategy = playOnStrategy,
+                surpriseRequests = surpriseRequests,
                 musicContent = {
                     MusicHomeScreen(
                         onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
@@ -1642,6 +1739,8 @@ private fun FloatingNavigationBar(
     onNavigate: (Route) -> Unit,
     showLabels: Boolean,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    isOverflowExpanded: Boolean = false,
+    onOverflowToggle: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -1689,6 +1788,37 @@ private fun FloatingNavigationBar(
                             )
                         }
                     }
+                }
+            }
+            // Trailing "More" toggle — expands the overflow destinations above
+            // the nav bar (#115). Styled as a sibling of the route items.
+            val overflowTint = if (isOverflowExpanded) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
+            Row(
+                modifier = Modifier
+                    .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+                    .focusIndicator(androidx.compose.foundation.shape.CircleShape)
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = { onOverflowToggle(!isOverflowExpanded) },
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                // Fixed-size box centered like the Expressive variant — guarantees
+                // the glyph paints even if the surrounding Row collapses width.
+                Box(
+                    modifier = Modifier.size(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MoreToggleIcon(
+                        isExpanded = isOverflowExpanded,
+                        tint = overflowTint,
+                    )
                 }
             }
         }

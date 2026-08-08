@@ -121,6 +121,7 @@ fun HomeScreen(
     callbacks: HomeCallbacks,
     homeMode: HomeMode = HomeMode.VIDEO,
     musicContent: @Composable () -> Unit = {},
+    surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -130,6 +131,7 @@ fun HomeScreen(
         viewModel = viewModel,
         callbacks = callbacks,
         musicContent = musicContent,
+        surpriseRequests = surpriseRequests,
     )
 }
 
@@ -172,6 +174,7 @@ private fun MainHomeContent(
     viewModel: HomeViewModel,
     callbacks: HomeCallbacks,
     musicContent: @Composable () -> Unit,
+    surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val density = LocalDensity.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -227,6 +230,13 @@ private fun MainHomeContent(
         heroFocusRequester = heroFocusRequester,
         getBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } },
     )
+
+    // Global nav overflow "Surprise Me" (#115): the hero controller lives here
+    // (it owns the hero LazyListState + featured candidates), so the app shell
+    // emits a one-shot signal that Home forwards to it.
+    androidx.compose.runtime.LaunchedEffect(heroController, surpriseRequests) {
+        surpriseRequests.collect { heroController.toggleSurprise() }
+    }
 
     val headerHeight = rememberHeroHeight()
 
@@ -612,12 +622,14 @@ private fun MainHomeContent(
                     },
                 )
 
-                if (!isTv) {
-                    // Stabilize the FAB click lambdas so HomeFabMenu is skippable
-                    // — otherwise every MainHomeContent recomposition (download
-                    // count tick, sync count change, refresh flag flip, etc.)
-                    // re-runs the whole FAB tree. The sibling dock lambdas above
-                    // were already memoized; these were missed.
+                // Home FAB speed-dial disabled (#115): the global nav-bar "More"
+                // overflow now exposes Settings/Downloads/SyncPlay/Play On +
+                // Surprise Me + Go Online/Offline from anywhere, so the Home-only
+                // FAB is redundant. HomeFabMenu + its TODO marker are retained in
+                // HomeAppBar.kt for now; remove both once the hoisting is signed off.
+                @Suppress("KotlinConstantConditions")
+                val showHomeFab = false
+                if (!isTv && showHomeFab) {
                     val fabSurpriseClick = remember(heroController) { { heroController.toggleSurprise() } }
                     val fabToggleOffline = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) } }
                     HomeFabMenu(

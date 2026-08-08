@@ -520,6 +520,12 @@ private fun CollapsedDockContent(
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
+// TODO(#115): Remove HomeFabMenu in a future release. The global nav-bar "More"
+// overflow (OverflowMenuItems) now exposes Settings/Downloads/SyncPlay/Play On
+// from anywhere. This Home-only FAB remains only because it still hosts the
+// Home-scoped Surprise Me + Go Online/Offline actions, which need hoisting out
+// of HomeViewModel before they can move into the global overflow. Once that
+// hoisting lands, delete this composable and its call site in HomeScreen.
 fun HomeFabMenu(
     isExpanded: Boolean,
     onToggle: (Boolean) -> Unit,
