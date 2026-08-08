@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -23,6 +24,12 @@ android {
     }
     testOptions {
         unitTests {
+            isIncludeAndroidResources = true
+            // Pure-JVM tests in this module exercise code paths that touch
+            // `android.os.SystemClock` / `android.util.Log` (TtlCache TTLs,
+            // SleepTimerManager, download workers). Return default values for
+            // unmocked Android APIs instead of throwing — matches the nine
+            // other modules that already set this flag.
             isReturnDefaultValues = true
         }
     }
@@ -80,6 +87,7 @@ dependencies {
     testImplementation(libs.work.testing)
     testImplementation(libs.androidx.junit)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.okhttp.mockwebserver)
 
     // testFixtures dependencies: the shared stubMediaSessionPlayer() helper
     // builds a mockk<Player> against media3-common. AGP's testFixtures source

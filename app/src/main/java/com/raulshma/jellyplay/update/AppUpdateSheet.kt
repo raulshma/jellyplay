@@ -30,10 +30,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.MarkdownText
+import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.R
 
@@ -49,8 +52,11 @@ import com.raulshma.jellyplay.R
 @Composable
 fun AppUpdateSheet(
     state: UpdateState,
+    autoDownloadEnabled: Boolean,
+    onAutoDownloadToggle: (Boolean) -> Unit,
     onDownload: (AppUpdateInfo) -> Unit,
     onInstall: (Intent) -> Unit,
+    onRedownload: () -> Unit,
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
     buildInstallIntent: () -> Intent,
@@ -89,6 +95,8 @@ fun AppUpdateSheet(
                 )
                 is UpdateState.UpdateAvailable -> UpdateAvailableContent(
                     info = state.info,
+                    autoDownloadEnabled = autoDownloadEnabled,
+                    onAutoDownloadToggle = onAutoDownloadToggle,
                     onDownload = { onDownload(state.info) },
                     onDismiss = onDismiss,
                 )
@@ -101,6 +109,7 @@ fun AppUpdateSheet(
                 is UpdateState.Downloaded -> DownloadedContent(
                     info = state.info,
                     onInstall = { onInstall(buildInstallIntent()) },
+                    onRedownload = onRedownload,
                     onDismiss = onDismiss,
                 )
                 is UpdateState.Error -> ErrorContent(
@@ -171,6 +180,8 @@ private fun ColumnScope.NoUpdateContent(
 @Composable
 private fun UpdateAvailableContent(
     info: AppUpdateInfo,
+    autoDownloadEnabled: Boolean,
+    onAutoDownloadToggle: (Boolean) -> Unit,
     onDownload: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -201,6 +212,18 @@ private fun UpdateAvailableContent(
     }
     Spacer(Modifier.height(16.dp))
     val noApk = info.downloadAssetUrl == null
+    // Lets the user flip the auto-download preference right where they're
+    // deciding what to do with the update. Disabled when there's no matching
+    // APK for this device (nothing to auto-download).
+    SettingToggleItem(
+        icon = Tabler.Outline.Download,
+        title = stringResource(R.string.update_auto_download_label),
+        subtitle = stringResource(R.string.update_auto_download_subtitle),
+        checked = autoDownloadEnabled,
+        enabled = !noApk,
+        onCheckedChange = onAutoDownloadToggle,
+    )
+    Spacer(Modifier.height(8.dp))
     ButtonsRow {
         OutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.update_later)) }
         Spacer(Modifier.width(8.dp))
@@ -253,6 +276,7 @@ private fun DownloadingContent(
 private fun DownloadedContent(
     info: AppUpdateInfo,
     onInstall: () -> Unit,
+    onRedownload: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     Text(
@@ -269,6 +293,13 @@ private fun DownloadedContent(
     Spacer(Modifier.height(16.dp))
     ButtonsRow {
         OutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.update_later)) }
+        Spacer(Modifier.width(8.dp))
+        // Re-fetch the APK even though one is already on disk (e.g. the user
+        // suspects it's corrupt, or wants the latest patch for the same
+        // version). Overwrites the existing file + sidecar.
+        OutlinedButton(onClick = onRedownload) {
+            Text(stringResource(R.string.update_download_again))
+        }
         Spacer(Modifier.width(8.dp))
         Button(onClick = onInstall) { Text(stringResource(R.string.update_install)) }
     }

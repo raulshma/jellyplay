@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
@@ -57,13 +59,32 @@ internal fun QueueSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                stringResource(R.string.audio_queue_title),
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.audio_queue_title),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                    ),
+                )
+                // Queue position of the currently-playing track (1-based).
+                if (currentIndex in queue.indices) {
+                    Text(
+                        stringResource(
+                            R.string.audio_queue_position,
+                            currentIndex + 1,
+                            queue.size,
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             Spacer(Modifier.height(20.dp))
             LazyColumn(
                 contentPadding = PaddingValues(vertical = 4.dp),
@@ -194,10 +215,10 @@ private fun QueueItemContent(
             )
         }
         if (isCurrentItem) {
-            Text(
-                "\u25B6",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelSmall,
+            Icon(
+                imageVector = Tabler.Outline.PlayerPlay,
+                contentDescription = stringResource(R.string.audio_topbar_now_playing),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(end = 8.dp),
             )
         }

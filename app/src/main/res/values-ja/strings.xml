@@ -79,6 +79,10 @@
     <string name="widget_config_source_upcoming_movies_description">もうすぐ公開の映画</string>
     <string name="widget_config_source_upcoming_tv">放送予定のテレビ</string>
     <string name="widget_config_source_upcoming_tv_description">もうすぐ放送開始の番組</string>
+    <string name="widget_cw_item_count">表示件数</string>
+    <string name="widget_np_show_artwork">アートワークを表示</string>
+    <string name="widget_np_show_progress">進行状況を表示</string>
+    <string name="widget_config_done">完了</string>
 
     <!-- In-app self-update sheet -->
     <string name="update_checking">更新を確認中\u2026</string>
@@ -95,6 +99,7 @@
     <string name="update_ready_title">インストール準備完了 — v%1$s</string>
     <string name="update_ready_body">更新がダウンロードされました。続行するにはインストールをタップしてください。</string>
     <string name="update_install">インストール</string>
+    <string name="update_download_again">再度ダウンロード</string>
     <string name="update_failed_title">更新に失敗しました</string>
     <string name="update_close">閉じる</string>
 

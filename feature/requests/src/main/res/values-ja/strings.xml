@@ -25,6 +25,7 @@
     <string name="requests_sort_modified">変更順</string>
     <string name="requests_filter_mine">自分</string>
     <string name="requests_cd_sort_direction">並び替えの方向</string>
+    <string name="requests_search_placeholder">リクエストを検索</string>
 
     <string name="requests_status_declined">却下</string>
     <string name="requests_status_failed">失敗</string>
@@ -39,6 +40,8 @@
 
     <string name="requests_action_approve">承認</string>
     <string name="requests_action_decline">却下</string>
+    <string name="requests_selected_count">%1$d件選択中</string>
+    <string name="requests_select_all">すべて選択</string>
     <string name="requests_action_delete">削除</string>
     <string name="requests_action_delete_confirm">本当ですか？</string>
 

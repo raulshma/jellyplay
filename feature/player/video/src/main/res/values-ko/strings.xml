@@ -169,6 +169,8 @@
     <string name="player_video_set_a_point">A 지점 설정</string>
     <string name="player_video_set_b_point">B 지점 설정</string>
     <string name="player_video_clear_ab_repeat">A/B 반복 지우기</string>
+    <string name="player_audio_only">오디오 전용</string>
+    <string name="player_audio_only_on">오디오 전용 — 영상 숨김</string>
 
     <!-- Video filter sheet -->
     <string name="player_video_brightness">밝기</string>

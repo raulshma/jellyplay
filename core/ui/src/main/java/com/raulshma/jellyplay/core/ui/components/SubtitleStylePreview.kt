@@ -11,8 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -20,8 +20,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SubtitleColor
-import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.resolveAgainst
 
 /**
  * Live preview of how [style] renders over a sample video frame. Lifted from
@@ -40,11 +40,14 @@ fun SubtitleStylePreview(
     modifier: Modifier = Modifier,
     sampleText: String = "The quick brown fox\njumps over the lazy dog.",
 ) {
-    val bgColor = subtitleColorToCompose(style.backgroundColor).copy(alpha = style.backgroundOpacity)
-    val fontColor = subtitleColorToCompose(style.fontColor)
-    val edgeColor = subtitleColorToCompose(style.edgeColor)
+    // Resolve through the shared entry point so the preview matches what the
+    // player overlay renders for the same input. Previously this hand-rolled its
+    // own color/edge/weight mapping and ignored the *Argb fields + applyCustomStyle.
+    val resolved = style.resolveAgainst()
+    val bgColor = resolvedColor(resolved.backgroundColorArgb).copy(alpha = resolved.backgroundAlpha)
+    val fontColor = resolvedColor(resolved.fontColorArgb)
     // verticalPosition is a 0..0.5 fraction of the preview height from the bottom.
-    val bottomOffsetDp = (style.verticalPosition * 200f).dp
+    val bottomOffsetDp = (resolved.verticalPosition * 200f).dp
 
     Box(
         modifier = modifier
@@ -52,7 +55,7 @@ fun SubtitleStylePreview(
             .aspectRatio(2.35f)
             .clip(ShapeCache.smooth16)
             .background(
-                androidx.compose.ui.graphics.Brush.verticalGradient(
+                Brush.verticalGradient(
                     listOf(Color(0xFF1B2330), Color(0xFF0A0E16)),
                 ),
             ),
@@ -64,40 +67,19 @@ fun SubtitleStylePreview(
                 .offset(y = -bottomOffsetDp)
                 .background(bgColor, ShapeCache.smooth8)
                 .padding(
-                    horizontal = if (style.backgroundOpacity > 0f) 10.dp else 0.dp,
-                    vertical = if (style.backgroundOpacity > 0f) 4.dp else 0.dp,
+                    horizontal = if (resolved.backgroundAlpha > 0f) 10.dp else 0.dp,
+                    vertical = if (resolved.backgroundAlpha > 0f) 4.dp else 0.dp,
                 ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text = sampleText,
-                fontSize = style.fontSize.coerceIn(12, 48).sp,
+                fontSize = resolved.fontSizeSp.coerceIn(12, 48).sp,
                 color = fontColor,
                 textAlign = TextAlign.Center,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = resolvedFontWeight(resolved.bold),
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    shadow = when (style.edgeType) {
-                        SubtitleEdgeType.NONE -> null
-                        SubtitleEdgeType.OUTLINE -> androidx.compose.ui.graphics.Shadow(
-                            color = edgeColor,
-                            blurRadius = 4f,
-                        )
-                        SubtitleEdgeType.DROP_SHADOW -> androidx.compose.ui.graphics.Shadow(
-                            color = edgeColor.copy(alpha = 0.8f),
-                            blurRadius = 8f,
-                            offset = androidx.compose.ui.geometry.Offset(2f, 2f),
-                        )
-                        SubtitleEdgeType.RAISED -> androidx.compose.ui.graphics.Shadow(
-                            color = edgeColor.copy(alpha = 0.7f),
-                            blurRadius = 2f,
-                            offset = androidx.compose.ui.geometry.Offset(1.5f, 1.5f),
-                        )
-                        SubtitleEdgeType.DEPRESSED -> androidx.compose.ui.graphics.Shadow(
-                            color = edgeColor.copy(alpha = 0.7f),
-                            blurRadius = 2f,
-                            offset = androidx.compose.ui.geometry.Offset(-1.5f, -1.5f),
-                        )
-                    },
+                    shadow = resolvedShadow(resolved),
                 ),
             )
         }

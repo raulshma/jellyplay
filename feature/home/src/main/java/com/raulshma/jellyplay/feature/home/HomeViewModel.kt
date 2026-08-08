@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
+import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
@@ -118,6 +119,7 @@ class HomeViewModel @Inject constructor(
     private val arrRepository: ArrRepository,
     private val tvWatchNextScheduler: TvWatchNextScheduler,
     private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
+    private val librarySyncHook: LibrarySyncHook,
     private val timeSource: TimeSource,
 ) : JellyPlayViewModel(), DefaultLifecycleObserver {
 
@@ -1090,6 +1092,13 @@ class HomeViewModel @Inject constructor(
                         }
 
                         _uiState.update { it.copy(error = null) }
+
+                        // A successful foreground library scan is the
+                        // shared hook for the auto-download foreground drain and
+                        // the widget recommendations refresh. Wrapped in try/catch
+                        // (the impl also self-guards) so a downstream failure can
+                        // never break the home refresh.
+                        runCatching { librarySyncHook.onLibraryScanComplete() }
                     }
                     .onFailure { throwable ->
                         if (_uiState.value.sections.isEmpty()) {

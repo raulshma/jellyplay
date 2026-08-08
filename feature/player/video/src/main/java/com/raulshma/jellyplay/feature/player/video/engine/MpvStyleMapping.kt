@@ -2,10 +2,11 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 import com.raulshma.jellyplay.core.model.AssOverrideMode
 import com.raulshma.jellyplay.core.model.SubtitleBorderStyle
+import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver
-import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 
 /**
  * Pure, testable mapping from [SubtitleStyle] to mpv `sub-*` property key/value
@@ -23,26 +24,27 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 internal object MpvStyleMapping {
 
     /**
-     * mpv/libass native caption defaults — the **single source** for every
-     * default value this object emits. Both the mpv property-string reset
-     * ([defaultEntries], [defaultBorderSize], [defaultShadowOffset],
-     * [defaultScale]) and the Compose-overlay resolver ([defaultResolvedValues])
-     * derive from these constants, so the native reset path and the zoomed
-     * Compose overlay cannot drift apart (the old bug: three hand-mirrored
-     * copies of "white text, 3.0 black outline, 24px").
+     * mpv/libass native caption defaults. Color/edge/font-size/bold/italic read
+     * from the shared [SubtitleRenderDefaults] table so they cannot drift from
+     * the other engines; mpv keeps a **documented override** for border (3.0)
+     * and shadow (0.0) — libass's native outline look, thicker than the model
+     * default. Both the mpv property-string reset ([defaultEntries],
+     * [defaultBorderSize], [defaultShadowOffset], [defaultScale]) and the
+     * Compose-overlay resolver ([defaultResolvedValues]) derive from these, so
+     * the native reset path and the zoomed Compose overlay cannot drift apart.
      */
     private object DEFAULTS {
-        const val TEXT_COLOR_ARGB: Int = 0xFFFFFFFF.toInt() // white
-        const val BACKGROUND_COLOR_ARGB: Int = 0xFF000000.toInt() // black
-        const val BACKGROUND_ALPHA: Float = 0f // transparent
-        const val EDGE_COLOR_ARGB: Int = 0xFF000000.toInt() // black
-        val EDGE_TYPE: SubtitleEdgeType = SubtitleEdgeType.OUTLINE
-        const val BORDER_WIDTH: Float = 3.0f
-        const val SHADOW_OFFSET: Float = 0.0f
-        const val FONT_SIZE: Int = SubtitleDefaults.REFERENCE_FONT_SIZE
+        val TEXT_COLOR_ARGB: Int get() = SubtitleColor.WHITE.value
+        val BACKGROUND_COLOR_ARGB: Int get() = SubtitleRenderDefaults.DEFAULT.backgroundColor
+        val BACKGROUND_ALPHA: Float get() = SubtitleRenderDefaults.DEFAULT.backgroundAlpha
+        val EDGE_COLOR_ARGB: Int get() = SubtitleRenderDefaults.DEFAULT.edgeColor
+        val EDGE_TYPE: SubtitleEdgeType get() = SubtitleRenderDefaults.DEFAULT.edgeType
+        const val BORDER_WIDTH: Float = 3.0f // mpv/libass override (model default is 2.0)
+        const val SHADOW_OFFSET: Float = 0.0f // mpv/libass override (model default is 1.0)
+        val FONT_SIZE: Int get() = SubtitleRenderDefaults.REFERENCE_FONT_SIZE
         const val SCALE: Double = 1.0
-        const val BOLD: Boolean = false
-        const val ITALIC: Boolean = false
+        val BOLD: Boolean get() = SubtitleRenderDefaults.DEFAULT.bold
+        val ITALIC: Boolean get() = SubtitleRenderDefaults.DEFAULT.italic
     }
 
     /**

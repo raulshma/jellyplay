@@ -169,6 +169,8 @@
     <string name="player_video_set_a_point">Definir ponto A</string>
     <string name="player_video_set_b_point">Definir ponto B</string>
     <string name="player_video_clear_ab_repeat">Limpar repetição A/B</string>
+    <string name="player_audio_only">Som apenas</string>
+    <string name="player_audio_only_on">Som apenas — vídeo oculto</string>
 
     <!-- Video filter sheet -->
     <string name="player_video_brightness">Brilho</string>

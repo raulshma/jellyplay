@@ -38,6 +38,9 @@
     <string name="admin_stop_live_cd">停止直播</string>
     <string name="admin_start_live_cd">开始直播</string>
     <string name="admin_stop">停止</string>
+    <string name="admin_stop_session_cd">停止播放</string>
+    <string name="admin_stop_session_title">停止播放？</string>
+    <string name="admin_stop_session_body">停止“%1$s”上正在播放的媒体？</string>
     <string name="admin_run">运行</string>
 
     <!-- Relative time -->
@@ -79,11 +82,13 @@
     <string name="admin_edit_device_name_title">编辑设备名称</string>
     <string name="admin_custom_name">自定义名称</string>
     <string name="admin_no_devices">未找到设备</string>
+    <string name="admin_devices_search_placeholder">按名称或用户搜索</string>
 
     <!-- LogsScreen -->
     <string name="admin_logs_title">日志</string>
     <string name="admin_no_log_files">未找到日志文件</string>
     <string name="admin_no_activity_log">没有活动日志条目</string>
+    <string name="admin_logs_search_placeholder">筛选消息</string>
 
     <!-- Plugins -->
     <string name="admin_plugins_title">插件</string>
@@ -380,5 +385,13 @@
     <!-- Audit history row labels (batch) -->
     <string name="admin_audit_by_user">作者：%1$s</string>
     <string name="admin_audit_items_removed">已删除 %1$d 项</string>
+
+    <!-- User statistics sort & export -->
+    <string name="user_stats_sort_plays">播放次数</string>
+    <string name="user_stats_sort_time">观看时长</string>
+    <string name="user_stats_sort_name">名称</string>
+    <string name="user_stats_sort_cd">排序</string>
+    <string name="user_stats_export_cd">导出 CSV</string>
+    <string name="user_stats_export_shared">已导出</string>
 
 </resources>

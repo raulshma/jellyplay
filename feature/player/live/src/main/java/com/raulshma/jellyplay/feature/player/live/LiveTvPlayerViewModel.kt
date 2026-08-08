@@ -132,6 +132,10 @@ class LiveTvPlayerViewModel @Inject constructor(
                 )
             }
             .launchIn(viewModelScope)
+
+        lastChannelStore.observeLastChannelId()
+            .onEach { id -> _state.value = _state.value.copy(lastChannelId = id) }
+            .launchIn(viewModelScope)
     }
 
     /**

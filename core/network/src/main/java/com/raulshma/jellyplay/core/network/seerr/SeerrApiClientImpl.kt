@@ -314,11 +314,16 @@ class SeerrApiClientImpl @Inject constructor(
         sortDirection: String,
         requestedBy: Int?,
         mediaType: String?,
+        search: String?,
     ): Result<SeerrRequestListResponse> {
         val path = buildString {
             append("/request?take=$take&skip=$skip&filter=$filter&sort=$sort&sortDirection=$sortDirection")
             requestedBy?.let { append("&requestedBy=$it") }
             mediaType?.let { append("&mediaType=$it") }
+            search?.takeIf { it.isNotBlank() }?.let {
+                append("&search=")
+                append(java.net.URLEncoder.encode(it, "UTF-8"))
+            }
         }
         val request = Request.Builder()
             .url(buildUrl(baseUrl, path))

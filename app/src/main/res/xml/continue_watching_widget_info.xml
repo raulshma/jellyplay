@@ -16,5 +16,6 @@
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen|keyguard"
     android:description="@string/widget_continue_watching_description"
+    android:configure="com.raulshma.jellyplay.widget.config.ContinueWatchingWidgetConfigActivity"
     android:widgetFeatures="configuration_optional|reconfigurable"
     tools:targetApi="31" />

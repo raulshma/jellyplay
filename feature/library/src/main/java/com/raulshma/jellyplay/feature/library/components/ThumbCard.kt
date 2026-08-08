@@ -34,6 +34,7 @@ import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.animation.pressScale
+import com.raulshma.jellyplay.core.ui.components.displayTitle
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberSharedElementModifier
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -55,6 +56,7 @@ fun ThumbCard(
     progressPercent: Float = 0f,
     blurHash: String? = null,
     sharedElementKey: String? = null,
+    fallbackUrls: List<String> = emptyList(),
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -90,7 +92,8 @@ fun ThumbCard(
             ) {
                 MediaImage(
                     url = imageUrl,
-                    contentDescription = item.name,
+                    fallbackUrls = fallbackUrls,
+                    contentDescription = item.displayTitle(),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .matchParentSize()
@@ -115,7 +118,7 @@ fun ThumbCard(
                         .padding(8.dp),
                 ) {
                     Text(
-                        text = item.name,
+                        text = item.displayTitle(),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = Color.White,

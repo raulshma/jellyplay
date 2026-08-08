@@ -166,6 +166,8 @@ fun PlaylistDetailScreen(
                                 },
                                 onAddToQueue = if (isVideo) null else { { viewModel.addToQueue(item) } },
                                 onRemoveFromPlaylist = { viewModel.removeFromPlaylist(item) },
+                                onMoveUp = if (index > 0) { { viewModel.moveItem(item, index - 1) } } else null,
+                                onMoveDown = if (index < viewModel.items.lastIndex) { { viewModel.moveItem(item, index + 1) } } else null,
                             )
                         }
                     }
@@ -196,6 +198,8 @@ private fun PlaylistTrackRow(
     onClick: () -> Unit,
     onAddToQueue: (() -> Unit)? = null,
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -274,6 +278,31 @@ private fun PlaylistTrackRow(
                         )
                     },
                 )
+                // Reorder entries — works on touch + D-pad.
+                if (onMoveUp != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.music_move_up)) },
+                        onClick = {
+                            onMoveUp()
+                            showMenu = false
+                        },
+                        leadingIcon = {
+                            Icon(Tabler.Outline.ArrowUp, contentDescription = null)
+                        },
+                    )
+                }
+                if (onMoveDown != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.music_move_down)) },
+                        onClick = {
+                            onMoveDown()
+                            showMenu = false
+                        },
+                        leadingIcon = {
+                            Icon(Tabler.Outline.ArrowDown, contentDescription = null)
+                        },
+                    )
+                }
                 if (onRemoveFromPlaylist != null) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.music_remove_from_playlist), color = MaterialTheme.colorScheme.error) },

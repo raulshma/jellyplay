@@ -31,24 +31,62 @@ import androidx.paging.compose.LazyPagingItems
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.GroupBy
+import com.raulshma.jellyplay.core.model.LibraryGrouper
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.displayTitle
+import com.raulshma.jellyplay.core.ui.components.libraryListSubtitle
+import com.raulshma.jellyplay.core.ui.components.rememberSeriesImageFallback
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 
 /**
- * A group key derived from a [MediaItem] for client-side grouping. Returns the
+ * A group key derived from a [MediaItem] for the active [GroupBy] dimension. Returns the
  * header label (and a stable bucket id) for the active [GroupBy] dimension.
+ *
+ * Returns an empty string for [GroupBy.NONE] instead of throwing: although the caller
+ * only mounts this composable when grouping is active, the persisted [GroupBy] value
+ * flows in asynchronously and can transiently resolve to NONE while a grouped view is
+ * still mounted. Throwing here crashed the app on every library open once a non-NONE
+ * value had been persisted (issue #113).
+ *
+ * Delegates to the pure, tested [LibraryGrouper] — the logic was lifted out of this
+ * Composable so it can be unit-tested (it was the site of two #113 crashes).
  */
-private fun MediaItem.groupKey(groupBy: GroupBy): String = when (groupBy) {
-    GroupBy.NONE -> error("unreachable: GroupedLibraryContent requires a non-NONE GroupBy")
-    GroupBy.NAME -> (name.firstOrNull()?.uppercaseChar()?.takeIf { it in 'A'..'Z' } ?: '#').toString()
-    GroupBy.TYPE -> mediaType.name
-    GroupBy.GENRE -> genres.firstOrNull() ?: "Unknown"
-    GroupBy.YEAR -> year?.toString() ?: "Unknown"
+private fun MediaItem.groupKey(groupBy: GroupBy): String = LibraryGrouper.groupKey(this, groupBy)
+
+/**
+ * Sort comparator that orders items to match the active [GroupBy] dimension, so groups
+ * come out contiguous when building header/item rows. Without this, grouping a snapshot
+ * that is server-sorted by a different dimension (e.g. Name) scatters the same group key
+ * across the list, which produced duplicate `"header_${key}"` lazy keys and crashed the
+ * app (issue #113). Within a group, the server's existing order is preserved (stable sort).
+ */
+private fun groupComparator(groupBy: GroupBy): Comparator<MediaItem> = LibraryGrouper.groupComparator(groupBy)
+
+/**
+ * A flattened (header | item) row emitted into the grouped LazyColumn/LazyVerticalGrid.
+ *
+ * Each variant exposes a unique Compose lazy [key]: items key on their stable item id,
+ * headers key on a monotonically increasing sequence id. The sequence id guarantees key
+ * uniqueness even if the same group label appears in non-contiguous positions (which
+ * previously produced duplicate keys and crashed the app — issue #113).
+ */
+private sealed interface GroupedRow {
+    val key: Any
+
+    /** A section header. [id] is unique within a single grouping pass. */
+    data class Header(val label: String?, val id: Int) : GroupedRow {
+        override val key: Any = "header_$id"
+    }
+
+    /** A media item row. */
+    data class Item(val item: MediaItem) : GroupedRow {
+        override val key: Any = "item_${item.id}"
+    }
 }
 
 /**
@@ -80,22 +118,42 @@ fun GroupedLibraryContent(
     onFocusedItemChange: ((MediaItem?) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    require(groupBy != GroupBy.NONE) { "GroupedLibraryContent requires a non-NONE GroupBy" }
+    // NOTE: do not throw for GroupBy.NONE here. The persisted group-by flows in
+    // asynchronously (loadLayoutPrefs) and can transiently be NONE while a grouped
+    // view is mounted; throwing crashed the app (issue #113). The caller still guards
+    // `if (groupBy != GroupBy.NONE)` before composing this, but if NONE does slip
+    // through we render the items ungrouped rather than crashing.
     // Flatten the loaded snapshot into an ordered list of (header | item) rows
     // so the grid can emit header items spanning all columns. Recomputed via
     // derivedStateOf so it only re-evaluates when the snapshot actually changes.
+    //
+    // The snapshot is first sorted by the active group dimension so groups come out
+    // contiguous. Without this, grouping a snapshot that is server-sorted by a
+    // different dimension (e.g. Name) scattered the same group key across the list
+    // and produced duplicate `"header_${key}"` lazy keys → IllegalArgumentException
+    // crash (issue #113). sortedBy is stable so the server order is preserved within
+    // each group. Header rows carry a monotonically increasing sequence id so their
+    // lazy keys are unique regardless of the input order — a defensive guarantee
+    // against future regressions in the grouping logic.
     val rows by remember(pagedItems, groupBy) {
         derivedStateOf {
             val items = pagedItems.itemSnapshotList.items
-            buildList<Pair<String?, MediaItem?>> {
-                var lastHeader: String? = null
-                for (item in items) {
-                    val header = item.groupKey(groupBy)
-                    if (header != lastHeader) {
-                        add(header to null)
-                        lastHeader = header
+            if (groupBy == GroupBy.NONE) {
+                // Degenerate case: render every item with no headers.
+                items.map { item -> GroupedRow.Item(item) }
+            } else {
+                val ordered = items.sortedWith(groupComparator(groupBy))
+                buildList<GroupedRow> {
+                    var lastHeader: String? = null
+                    var headerSeq = 0
+                    for (item in ordered) {
+                        val header = item.groupKey(groupBy)
+                        if (header != lastHeader) {
+                            add(GroupedRow.Header(label = header, id = headerSeq++))
+                            lastHeader = header
+                        }
+                        add(GroupedRow.Item(item))
                     }
-                    add(null to item)
                 }
             }
         }
@@ -107,37 +165,29 @@ fun GroupedLibraryContent(
             verticalArrangement = Arrangement.spacedBy(2.dp),
             modifier = modifier.fillMaxSize(),
         ) {
-            items(count = rows.size, key = { idx ->
-                val (header, item) = rows[idx]
-                if (item != null) "item_${item.id}" else "header_${header}"
-            }, contentType = { idx -> if (rows[idx].second != null) "mediaItem" else "header" }) { idx ->
-                val (header, item) = rows[idx]
-                if (item != null) {
+            items(count = rows.size, key = { idx -> rows[idx].key }, contentType = { idx ->
+                if (rows[idx] is GroupedRow.Item) "mediaItem" else "header"
+            }) { idx ->
+                val row = rows[idx]
+                if (row is GroupedRow.Item) {
+                    val item = row.item
                     val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                         { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                     }
-                    val subtitle = remember(item.year, item.mediaType) {
-                        buildString {
-                            if (item.year != null) append("${item.year}")
-                            val typeLabel = when (item.mediaType) {
-                                MediaType.EPISODE -> "Episode"
-                                MediaType.SERIES -> "Series"
-                                MediaType.MOVIE -> "Movie"
-                                MediaType.AUDIO -> "Audio"
-                                MediaType.MUSIC -> "Music"
-                                MediaType.PHOTO, MediaType.PHOTO_FOLDER -> "Photo"
-                                else -> null
-                            }
-                            if (typeLabel != null) {
-                                if (isNotEmpty()) append(" · ")
-                                append(typeLabel)
-                            }
-                        }
+                    val subtitle = remember(item.mediaType, item.seriesName, item.seasonNumber, item.episodeNumber, item.year) {
+                        // Episodes show an SxxExx + series context line (bold tag); all
+                        // other types fall back to the year/type label. Shared with the
+                        // ungrouped list path via libraryListSubtitle.
+                        item.libraryListSubtitle()
                     }
+                    // Seasons fall back to the parent series poster when the season's
+                    // own artwork 404s (shared with the ungrouped list path).
+                    val fallbackUrls = item.rememberSeriesImageFallback(getImageUrl)
                     LibraryListItem(
-                        title = item.name,
+                        title = item.displayTitle(),
                         subtitle = subtitle,
                         imageUrl = remember(item.id) { getImageUrl(item.id) },
+                        fallbackUrls = fallbackUrls,
                         blurHash = item.blurHashes.primary,
                         onClick = memoizedClick,
                         modifier = Modifier.onFocusChanged {
@@ -145,7 +195,7 @@ fun GroupedLibraryContent(
                         },
                     )
                 } else {
-                    GroupHeader(label = header.orEmpty())
+                    GroupHeader(label = (row as GroupedRow.Header).label.orEmpty())
                 }
             }
         }
@@ -159,14 +209,14 @@ fun GroupedLibraryContent(
             verticalArrangement = Arrangement.spacedBy(spacing),
             modifier = modifier.fillMaxSize(),
         ) {
-            items(count = rows.size, key = { idx ->
-                val (header, item) = rows[idx]
-                if (item != null) "item_${item.id}" else "header_${header}"
-            }, contentType = { idx -> if (rows[idx].second != null) "mediaItem" else "header" }, span = { idx ->
-                if (rows[idx].second == null) GridItemSpan(maxLineSpan) else GridItemSpan(1)
+            items(count = rows.size, key = { idx -> rows[idx].key }, contentType = { idx ->
+                if (rows[idx] is GroupedRow.Item) "mediaItem" else "header"
+            }, span = { idx ->
+                if (rows[idx] is GroupedRow.Header) GridItemSpan(maxLineSpan) else GridItemSpan(1)
             }) { idx ->
-                val (header, item) = rows[idx]
-                if (item != null) {
+                val row = rows[idx]
+                if (row is GroupedRow.Item) {
+                    val item = row.item
                     val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                         { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                     }
@@ -191,7 +241,7 @@ fun GroupedLibraryContent(
                         },
                     )
                 } else {
-                    GroupHeader(label = header.orEmpty())
+                    GroupHeader(label = (row as GroupedRow.Header).label.orEmpty())
                 }
             }
         }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import android.util.Rational
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +49,34 @@ class PipController @Inject constructor() {
     @Volatile
     var pipHasNext: Boolean = false
 
+    /**
+     * The video's aspect ratio as a `Rational` (width:height), derived from the
+     * server-reported [com.raulshma.jellyplay.core.model.MediaStream] width/height.
+     * `null` until media streams are known; the Activity falls back to 16:9.
+     * Surfed as a flow so the Activity can re-apply params when it changes while
+     * already in PiP (resolution/track swap).
+     */
+    private val _pipAspectRatio = MutableStateFlow<Rational?>(null)
+    val pipAspectRatio: StateFlow<Rational?> = _pipAspectRatio.asStateFlow()
+
+    /**
+     * Source-rect hint for the PiP enter animation: the window bounds of the
+     * video surface in window coordinates. Transient (recomputed on every
+     * layout), so a plain `@Volatile` read at apply time is sufficient — no
+     * flow needed. `null` clears the hint.
+     */
+    @Volatile
+    var pipSourceRect: android.graphics.Rect? = null
+        private set
+
+    /**
+     * Set by the ViewModel when playback ends or errors in PiP so the Activity
+     * reuses the existing dismiss path (pause + navigate back) instead of
+     * leaving a dead PiP window up.
+     */
+    private val _autoExitPip = MutableStateFlow(false)
+    val autoExitPip: StateFlow<Boolean> = _autoExitPip.asStateFlow()
+
     fun setPipMode(inPip: Boolean) {
         _isInPipMode.value = inPip
     }
@@ -59,6 +88,29 @@ class PipController @Inject constructor() {
 
     fun requestAutoEnterPip(shouldEnter: Boolean) {
         _shouldAutoEnterPip.value = shouldEnter
+    }
+
+    /** Updates the PiP aspect ratio; `null` clears it (Activity falls back to 16:9). */
+    fun setPipAspectRatio(ratio: Rational?) {
+        _pipAspectRatio.value = ratio
+    }
+
+    /** Updates the source-rect hint; `null` clears it. */
+    fun updatePipSourceRect(rect: android.graphics.Rect?) {
+        pipSourceRect = rect
+    }
+
+    /**
+     * Requests an auto-exit from PiP. The Activity collector translates this
+     * into [notifyPipDismissed] so the existing dismiss machinery (pause +
+     * navigate back) handles the exit uniformly.
+     */
+    fun requestAutoExitPip() {
+        _autoExitPip.value = true
+    }
+
+    fun consumeAutoExitPip() {
+        _autoExitPip.value = false
     }
 
     fun notifyPipDismissed() {
@@ -77,6 +129,9 @@ class PipController @Inject constructor() {
         _isInPipMode.value = false
         _shouldAutoEnterPip.value = false
         _pipDismissed.value = false
+        _pipAspectRatio.value = null
+        pipSourceRect = null
+        _autoExitPip.value = false
     }
 }
 

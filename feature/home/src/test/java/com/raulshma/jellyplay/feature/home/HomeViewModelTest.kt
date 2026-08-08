@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
+import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
@@ -111,6 +112,7 @@ class HomeViewModelTest {
     private lateinit var arrRepository: ArrRepository
     private lateinit var tvWatchNextScheduler: TvWatchNextScheduler
     private lateinit var continueWatchingBroadcaster: ContinueWatchingBroadcaster
+    private lateinit var librarySyncHook: LibrarySyncHook
     private lateinit var playbackOutboxRepository: PlaybackOutboxRepository
     private lateinit var playbackSyncScheduler: PlaybackSyncScheduler
     private lateinit var fakeTimeSource: FakeTimeSource
@@ -153,6 +155,7 @@ class HomeViewModelTest {
         arrRepository = mockk(relaxed = true)
         tvWatchNextScheduler = mockk(relaxed = true)
         continueWatchingBroadcaster = mockk(relaxed = true)
+        librarySyncHook = mockk(relaxed = true)
         playbackOutboxRepository = mockk(relaxed = true)
         playbackSyncScheduler = mockk(relaxed = true)
         fakeTimeSource = FakeTimeSource()
@@ -204,6 +207,7 @@ class HomeViewModelTest {
         arrRepository = arrRepository,
         tvWatchNextScheduler = tvWatchNextScheduler,
         continueWatchingBroadcaster = continueWatchingBroadcaster,
+        librarySyncHook = librarySyncHook,
         timeSource = fakeTimeSource,
     )
 

@@ -25,6 +25,7 @@
     <string name="requests_sort_modified">已修改</string>
     <string name="requests_filter_mine">我的</string>
     <string name="requests_cd_sort_direction">排序方向</string>
+    <string name="requests_search_placeholder">搜索请求</string>
 
     <string name="requests_status_declined">已拒绝</string>
     <string name="requests_status_failed">失败</string>
@@ -39,6 +40,8 @@
 
     <string name="requests_action_approve">批准</string>
     <string name="requests_action_decline">拒绝</string>
+    <string name="requests_selected_count">已选择 %1$d 项</string>
+    <string name="requests_select_all">全选</string>
     <string name="requests_action_delete">删除</string>
     <string name="requests_action_delete_confirm">确定吗？</string>
 

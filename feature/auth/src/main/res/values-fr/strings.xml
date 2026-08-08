@@ -87,4 +87,9 @@
 
     <!-- auto-localized: previously translatable="false" (1) -->
     <string name="auth_quick_connect">Connexion rapide</string>
+
+    <!-- Server health indicator -->
+    <string name="server_health_healthy">En ligne</string>
+    <string name="server_health_unreachable">Hors ligne</string>
+    <string name="server_health_checking">Vérification…</string>
 </resources>

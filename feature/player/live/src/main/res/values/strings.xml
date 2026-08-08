@@ -55,4 +55,7 @@
     <string name="live_option_auto_desc">Let the server pick (direct stream when possible)</string>
     <string name="live_option_direct_desc">Read the open tuner directly (best quality)</string>
     <string name="live_option_transcode_desc">Re-encode on the server (lower bandwidth)</string>
+    <!-- Short "now playing" marker shown next to the current channel in the list. -->
+    <string name="live_now_playing_short">Now Playing</string>
+    <string name="livetv_last_watched_section">Last watched</string>
 </resources>

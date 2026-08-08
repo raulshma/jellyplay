@@ -54,6 +54,7 @@ class ExperimentalStoreTest {
         val slice = store.experimental.first()
         assertTrue(slice.enabledExperimentalFeatures.isEmpty())
         assertTrue(slice.selfUpdateCheckEnabled)
+        assertFalse(slice.selfUpdateDownloadEnabled)
         assertNull(slice.appLanguage)
         assertTrue(slice.showShareMediaOption)
         assertFalse(slice.hideSearchHistory)
@@ -85,6 +86,12 @@ class ExperimentalStoreTest {
     fun `setSelfUpdateCheckEnabled round-trips`() = runTest {
         store.setSelfUpdateCheckEnabled(false)
         assertFalse(store.experimental.first().selfUpdateCheckEnabled)
+    }
+
+    @Test
+    fun `setSelfUpdateDownloadEnabled round-trips`() = runTest {
+        store.setSelfUpdateDownloadEnabled(true)
+        assertTrue(store.experimental.first().selfUpdateDownloadEnabled)
     }
 
     @Test

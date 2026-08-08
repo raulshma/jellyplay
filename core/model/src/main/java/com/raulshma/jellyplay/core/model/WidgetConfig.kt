@@ -17,7 +17,16 @@ import kotlinx.serialization.Serializable
 data class WidgetConfig(
     val librarySource: LibraryRecommendationsSource = LibraryRecommendationsSource.LATEST,
     val seerrSource: SeerrWidgetSource = SeerrWidgetSource.TRENDING,
-)
+    val continueWatchingItemCount: Int = DEFAULT_CONTINUE_WATCHING_ITEM_COUNT,
+    val nowPlayingShowArtwork: Boolean = true,
+    val nowPlayingShowProgress: Boolean = true,
+) {
+    companion object {
+        const val DEFAULT_CONTINUE_WATCHING_ITEM_COUNT = 10
+        const val MIN_CONTINUE_WATCHING_ITEM_COUNT = 3
+        const val MAX_CONTINUE_WATCHING_ITEM_COUNT = 20
+    }
+}
 
 @Immutable
 @Serializable

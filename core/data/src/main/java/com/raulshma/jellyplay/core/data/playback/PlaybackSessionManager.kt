@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.annotation.GuardedBy
 import androidx.media3.common.Player
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -64,6 +65,14 @@ class PlaybackSessionManager @Inject constructor(
         val currentListeners: List<Listener>
         synchronized(lock) {
             oldSession = _currentSession
+            // Log the concrete session types + play states on every call so a
+            // session-type regression (MediaLibrarySession downgraded to plain
+            // MediaSession) is immediately visible in logcat.
+            Log.d(
+                TAG,
+                "setActiveSession: challenger=${sessionKind(session)} (playing=${session.player.isPlaying}), " +
+                    "holder=${oldSession?.let { sessionKind(it) }} (playing=${oldSession?.player?.isPlaying})",
+            )
             if (oldSession != null &&
                 oldSession !== session &&
                 oldSession.player.isPlaying &&
@@ -72,6 +81,11 @@ class PlaybackSessionManager @Inject constructor(
                 // refuse the eviction. Release the rejected session to avoid a leak.
                 // Log (don't swallow silently) so a rejection-time leak is diagnosable —
                 // mirrors the logging policy used by startPlaybackService below.
+                Log.w(
+                    TAG,
+                    "Rejected idle challenger ${sessionKind(session)} (playing=${session.player.isPlaying}) " +
+                        "against playing holder ${sessionKind(oldSession)} (playing=${oldSession.player.isPlaying})",
+                )
                 try {
                     session.release()
                 } catch (e: Exception) {
@@ -153,5 +167,13 @@ class PlaybackSessionManager @Inject constructor(
 
     companion object {
         private const val TAG = "PlaybackSessionManager"
+
+        /**
+         * Classifies a session as [MediaLibrarySession] vs plain [MediaSession]
+         * — the fact that matters for [JellyPlayPlaybackService.onGetSession]'s
+         * `as? MediaLibrarySession` cast, which rejects plain sessions.
+         */
+        private fun sessionKind(session: MediaSession): String =
+            if (session is MediaLibrarySession) "MediaLibrarySession" else "MediaSession"
     }
 }

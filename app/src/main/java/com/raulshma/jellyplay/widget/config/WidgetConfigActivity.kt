@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,7 +24,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,7 +43,10 @@ import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
 import com.raulshma.jellyplay.core.model.SeerrWidgetSource
+import com.raulshma.jellyplay.core.model.WidgetConfig
+import com.raulshma.jellyplay.widget.ContinueWatchingWidget
 import com.raulshma.jellyplay.widget.LibraryRecommendationsWidget
+import com.raulshma.jellyplay.widget.NowPlayingWidget
 import com.raulshma.jellyplay.widget.SeerrRecommendationsWidget
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
 import dagger.hilt.android.AndroidEntryPoint
@@ -48,18 +54,28 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Configuration activity for the Library Recommendations widget. The
- * AOSP AppWidget framework launches `android:configure` activities
- * with a fixed `APPWIDGET_CONFIGURE` action, so we keep one activity
- * per widget kind rather than a single alias-based dispatcher.
+ * Shared scaffold for the per-kind widget configuration activities. The AOSP
+ * AppWidget framework launches each `android:configure` activity with a fixed
+ * `APPWIDGET_CONFIGURE` action and an `EXTRA_APPWIDGET_ID` extra; every kind
+ * handled that identically (extract id → bail if invalid → init VM → set OK
+ * result → mount the themed [ConfigScreen]), so the base owns it once.
+ * Subclasses implement [saveAndFinish] for their kind-specific refresh side
+ * effects (push RemoteViews, notify grid, kick a scheduler, etc.).
  */
-@AndroidEntryPoint
-class LibraryWidgetConfigActivity : ComponentActivity() {
+abstract class BaseWidgetConfigActivity : ComponentActivity() {
 
-    @Inject lateinit var widgetWorkScheduler: WidgetWorkScheduler
+    protected val viewModel: WidgetConfigViewModel by viewModels()
+    protected var widgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID
+        private set
 
-    private val viewModel: WidgetConfigViewModel by viewModels()
-    private var widgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID
+    /** String resource shown as the config screen subtitle. */
+    protected abstract val titleRes: Int
+
+    /** Which options section [ConfigScreen] renders. */
+    protected abstract val kind: WidgetKind
+
+    /** Called when the user taps Save — push RemoteViews, notify grids, refresh. */
+    protected abstract suspend fun saveAndFinish()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,24 +94,34 @@ class LibraryWidgetConfigActivity : ComponentActivity() {
             JellyPlayTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     ConfigScreen(
-                        titleRes = R.string.widget_library_recommendations_title,
+                        titleRes = titleRes,
                         viewModel = viewModel,
-                        isLibraryKind = true,
-                        onSave = { saveAndFinish() },
+                        kind = kind,
+                        onSave = { lifecycleScope.launch { saveAndFinish() } },
                     )
                 }
             }
         }
     }
+}
 
-    private fun saveAndFinish() {
-        lifecycleScope.launch {
-            val manager = AppWidgetManager.getInstance(this@LibraryWidgetConfigActivity)
-            LibraryRecommendationsWidget.updateAppWidget(this@LibraryWidgetConfigActivity, manager, widgetId)
-            manager.notifyAppWidgetViewDataChanged(widgetId, R.id.lr_widget_grid)
-            widgetWorkScheduler.refreshLibraryNow()
-            finish()
-        }
+/**
+ * Configuration activity for the Library Recommendations widget.
+ */
+@AndroidEntryPoint
+class LibraryWidgetConfigActivity : BaseWidgetConfigActivity() {
+
+    @Inject lateinit var widgetWorkScheduler: WidgetWorkScheduler
+
+    override val titleRes: Int = R.string.widget_library_recommendations_title
+    override val kind: WidgetKind = WidgetKind.LIBRARY
+
+    override suspend fun saveAndFinish() {
+        val manager = AppWidgetManager.getInstance(this)
+        LibraryRecommendationsWidget.updateAppWidget(this, manager, widgetId)
+        manager.notifyAppWidgetViewDataChanged(widgetId, R.id.lr_widget_grid)
+        widgetWorkScheduler.refreshLibraryNow()
+        finish()
     }
 }
 
@@ -103,48 +129,56 @@ class LibraryWidgetConfigActivity : ComponentActivity() {
  * Configuration activity for the Seerr Recommendations widget.
  */
 @AndroidEntryPoint
-class SeerrWidgetConfigActivity : ComponentActivity() {
+class SeerrWidgetConfigActivity : BaseWidgetConfigActivity() {
 
     @Inject lateinit var widgetWorkScheduler: WidgetWorkScheduler
 
-    private val viewModel: WidgetConfigViewModel by viewModels()
-    private var widgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID
+    override val titleRes: Int = R.string.widget_seerr_recommendations_title
+    override val kind: WidgetKind = WidgetKind.SEERR
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        widgetId = intent?.getIntExtra(
-            AppWidgetManager.EXTRA_APPWIDGET_ID,
-            AppWidgetManager.INVALID_APPWIDGET_ID,
-        ) ?: AppWidgetManager.INVALID_APPWIDGET_ID
-        if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-            setResult(RESULT_CANCELED)
-            finish()
-            return
-        }
-        viewModel.initWidgetId(widgetId)
-        setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
-        setContent {
-            JellyPlayTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    ConfigScreen(
-                        titleRes = R.string.widget_seerr_recommendations_title,
-                        viewModel = viewModel,
-                        isLibraryKind = false,
-                        onSave = { saveAndFinish() },
-                    )
-                }
-            }
-        }
+    override suspend fun saveAndFinish() {
+        val manager = AppWidgetManager.getInstance(this)
+        SeerrRecommendationsWidget.updateAppWidget(this, manager, widgetId)
+        manager.notifyAppWidgetViewDataChanged(widgetId, R.id.sr_widget_grid)
+        widgetWorkScheduler.refreshSeerrNow()
+        finish()
     }
+}
 
-    private fun saveAndFinish() {
-        lifecycleScope.launch {
-            val manager = AppWidgetManager.getInstance(this@SeerrWidgetConfigActivity)
-            SeerrRecommendationsWidget.updateAppWidget(this@SeerrWidgetConfigActivity, manager, widgetId)
-            manager.notifyAppWidgetViewDataChanged(widgetId, R.id.sr_widget_grid)
-            widgetWorkScheduler.refreshSeerrNow()
-            finish()
-        }
+/**
+ * Configuration activity for the Continue Watching widget. Configures the
+ * max item count; the shelf itself is fed by the playback shelf sync, so
+ * no [WidgetWorkScheduler] refresh is triggered.
+ */
+@AndroidEntryPoint
+class ContinueWatchingWidgetConfigActivity : BaseWidgetConfigActivity() {
+
+    override val titleRes: Int = R.string.widget_continue_watching_label
+    override val kind: WidgetKind = WidgetKind.CONTINUE_WATCHING
+
+    override suspend fun saveAndFinish() {
+        val manager = AppWidgetManager.getInstance(this)
+        ContinueWatchingWidget.updateWidget(this, manager, widgetId)
+        manager.notifyAppWidgetViewDataChanged(widgetId, R.id.cw_widget_list)
+        finish()
+    }
+}
+
+/**
+ * Configuration activity for the Now Playing widget. Configures artwork /
+ * progress visibility; [NowPlayingWidget.updateAppWidget] renders directly
+ * via RemoteViews, so no grid notify or scheduler refresh is needed.
+ */
+@AndroidEntryPoint
+class NowPlayingWidgetConfigActivity : BaseWidgetConfigActivity() {
+
+    override val titleRes: Int = R.string.widget_now_playing_label
+    override val kind: WidgetKind = WidgetKind.NOW_PLAYING
+
+    override suspend fun saveAndFinish() {
+        val manager = AppWidgetManager.getInstance(this)
+        NowPlayingWidget.updateAppWidget(this, manager, widgetId)
+        finish()
     }
 }
 
@@ -152,7 +186,7 @@ class SeerrWidgetConfigActivity : ComponentActivity() {
 private fun ConfigScreen(
     titleRes: Int,
     viewModel: WidgetConfigViewModel,
-    isLibraryKind: Boolean,
+    kind: WidgetKind,
     onSave: () -> Unit,
 ) {
     val state by viewModel.getWidgetConfig().collectAsStateWithLifecycle()
@@ -176,22 +210,45 @@ private fun ConfigScreen(
                 .fillMaxWidth()
                 .weight(1f),
             contentPadding = PaddingValues(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            if (isLibraryKind) {
-                items(LibraryOptions, key = { option -> option.source.name }) { option ->
+            when (kind) {
+                WidgetKind.LIBRARY -> items(LibraryOptions, key = { option -> option.source.name }) { option ->
                     OptionRow(
                         title = stringResource(option.titleRes),
                         description = stringResource(option.descriptionRes),
                         selected = state.librarySource == option.source,
                     ) { viewModel.selectLibrarySource(option.source) }
                 }
-            } else {
-                items(SeerrOptions, key = { option -> option.source.name }) { option ->
+
+                WidgetKind.SEERR -> items(SeerrOptions, key = { option -> option.source.name }) { option ->
                     OptionRow(
                         title = stringResource(option.titleRes),
                         description = stringResource(option.descriptionRes),
                         selected = state.seerrSource == option.source,
                     ) { viewModel.selectSeerrSource(option.source) }
+                }
+
+                WidgetKind.CONTINUE_WATCHING -> item {
+                    ContinueWatchingCountRow(
+                        count = state.continueWatchingItemCount,
+                        onCountChange = { viewModel.selectContinueWatchingCount(it) },
+                    )
+                }
+
+                WidgetKind.NOW_PLAYING -> {
+                    item {
+                        SwitchRow(
+                            title = stringResource(R.string.widget_np_show_artwork),
+                            checked = state.nowPlayingShowArtwork,
+                        ) { viewModel.setNowPlayingShowArtwork(it) }
+                    }
+                    item {
+                        SwitchRow(
+                            title = stringResource(R.string.widget_np_show_progress),
+                            checked = state.nowPlayingShowProgress,
+                        ) { viewModel.setNowPlayingShowProgress(it) }
+                    }
                 }
             }
         }
@@ -201,6 +258,70 @@ private fun ConfigScreen(
         ) {
             Text(text = stringResource(R.string.widget_config_save))
         }
+    }
+}
+
+@Composable
+private fun ContinueWatchingCountRow(
+    count: Int,
+    onCountChange: (Int) -> Unit,
+) {
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.widget_cw_item_count),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Slider(
+            value = count.toFloat(),
+            onValueChange = { onCountChange(it.toInt()) },
+            valueRange = WidgetConfig.MIN_CONTINUE_WATCHING_ITEM_COUNT.toFloat()..
+                WidgetConfig.MAX_CONTINUE_WATCHING_ITEM_COUNT.toFloat(),
+            steps = WidgetConfig.MAX_CONTINUE_WATCHING_ITEM_COUNT -
+                WidgetConfig.MIN_CONTINUE_WATCHING_ITEM_COUNT - 1,
+        )
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(ShapeCache.smooth12)
+            .background(
+                if (checked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                else Color.Transparent,
+            )
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

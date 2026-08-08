@@ -23,7 +23,9 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemSortBy
@@ -177,6 +179,32 @@ class MediaInfoApiClientImpl @Inject constructor(
                 nextUp = nextUp.await(),
                 curatedPicks = curatedPicks.await(),
             )
+        }
+    }
+
+    override suspend fun sendNewsletter(): Result<Unit> = engine.apiResultWithRetry {
+        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
+        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val request = Request.Builder()
+            .url("${server}/newsletter/send")
+            .header("X-Emby-Token", token)
+            .post("".toRequestBody("application/json".toMediaType()))
+            .build()
+        engine.okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("Failed to send newsletter: ${response.code}")
+        }
+    }
+
+    override suspend fun sendTestNewsletter(): Result<Unit> = engine.apiResultWithRetry {
+        val server = engine.currentServer.value?.address ?: throw IllegalStateException("Not connected")
+        val token = engine.currentUser.value?.accessToken ?: throw IllegalStateException("Not authenticated")
+        val request = Request.Builder()
+            .url("${server}/newsletter/test")
+            .header("X-Emby-Token", token)
+            .post("".toRequestBody("application/json".toMediaType()))
+            .build()
+        engine.okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("Failed to send test newsletter: ${response.code}")
         }
     }
 

@@ -4,6 +4,16 @@
     <string name="newsletter_could_not_load">뉴스레터를 불러올 수 없습니다</string>
     <string name="newsletter_preparing_digest">다이제스트 준비 중\u2026</string>
 
+    <!-- Newsletter send actions (admin-gated; backend route required) -->
+    <string name="newsletter_send_now">지금 보내기</string>
+    <string name="newsletter_send_test">테스트 발송</string>
+    <string name="newsletter_send_confirm_title">뉴스레터를 보낼까요?</string>
+    <string name="newsletter_send_confirm_body">모든 구독자에게 뉴스레터가 발송됩니다.</string>
+    <string name="newsletter_send_success">뉴스레터를 보냈습니다</string>
+    <string name="newsletter_send_failed">뉴스레터 발송에 실패했습니다</string>
+    <string name="newsletter_test_sent">테스트 뉴스레터를 보냈습니다</string>
+    <string name="newsletter_send_admin_only">관리자 전용</string>
+
     <!-- Newsletter screens & sections -->
     <string name="newsletter_title">뉴스레터</string>
     <string name="newsletter_activity_digest">활동 요약</string>

@@ -31,6 +31,10 @@
     <string name="livetv_record_series">Gravar série</string>
     <string name="livetv_cancel_recording">Cancelar gravação</string>
     <string name="livetv_cancel_series">Cancelar série</string>
+    <string name="livetv_delete">Excluir</string>
+    <string name="livetv_delete_recording_cd">Excluir gravação</string>
+    <string name="livetv_delete_recording_title">Excluir gravação?</string>
+    <string name="livetv_delete_recording_body">Excluir \"%1$s\"? Isso não pode ser desfeito.</string>
     <string name="livetv_record_success">Gravação agendada</string>
     <string name="livetv_record_failed">Falha ao agendar gravação</string>
     <string name="livetv_record_canceled">Gravação cancelada</string>

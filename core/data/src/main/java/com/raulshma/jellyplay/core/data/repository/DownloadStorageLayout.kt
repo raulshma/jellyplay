@@ -60,16 +60,21 @@ class DownloadStorageLayout @Inject constructor(
     ): ResolvedDownloadPath {
         val isAudioType = mediaType == MediaType.AUDIO.name || mediaType == MediaType.MUSIC.name
         val dirType = if (isAudioType) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_MOVIES
-        // "EXTERNAL" prefers the primary external storage mount (still
-        // app-private externalFilesDir, scoped to MEDIA_ROOT). "INTERNAL" falls
-        // back to filesDir which is never visible to other apps and survives
-        // media scan indexing. Both remain app-private post-uninstall.
-        val useInternalStorage = storageLocationPref.equals("INTERNAL", ignoreCase = true) &&
-            storageLocationPref != "EXTERNAL"
+        // "INTERNAL" → filesDir (app-private, never media-scanned).
+        // "EXTERNAL" / "EXTERNAL_2" / "EXTERNAL_3" / ... → the Nth app-private
+        // external root from Context.getExternalFilesDirs(dirType) (plural).
+        //   - "EXTERNAL"    == primary external (backward-compat, index 0)
+        //   - "EXTERNAL_N"  == the Nth mount (1-based: EXTERNAL_2 = 2nd root).
+        // `getExternalFilesDirs` returns every app-private external root the
+        // OS will grant — primary emulated storage PLUS any inserted SD/USB
+        // mount, already scoped to this app (no SAF needed). Real removable
+        // mounts surface to the UI without reworking the download stack onto
+        // content:// URIs.
+        val pref = StorageLocationPref(storageLocationPref)
         val baseDir = when {
-            useInternalStorage && !isAudioType -> File(context.filesDir, "downloads")
-            useInternalStorage && isAudioType -> File(context.filesDir, "downloads/music")
-            else -> context.getExternalFilesDir(dirType)
+            pref.isInternal && !isAudioType -> File(context.filesDir, "downloads")
+            pref.isInternal && isAudioType -> File(context.filesDir, "downloads/music")
+            else -> externalRootForPref(pref, dirType)
                 ?: File(context.filesDir, if (isAudioType) "downloads/music" else "downloads")
         }
         if (!baseDir.exists()) baseDir.mkdirs()
@@ -87,6 +92,82 @@ class DownloadStorageLayout @Inject constructor(
             filePath = file.absolutePath,
         )
     }
+
+    /**
+     * Resolves the app-private external root selected by [pref]
+     * under [dirType]. Returns null when the requested index is out of range
+     * (e.g. the SD card was unmounted) — callers fall back to filesDir.
+     *
+     * `Context.getExternalFilesDirs` is the cleanest API for
+     * surfacing real removable mounts under app-private scoping — no SAF, no
+     * `content://`, no MediaStore. Each returned entry is a real directory the
+     * OS will let this app write into for the lifetime of the mount.
+     */
+    private fun externalRootForPref(pref: StorageLocationPref, dirType: String): File? {
+        val roots = context.getExternalFilesDirs(dirType)
+            ?.filterNotNull()
+            ?.filter { it.absolutePath.isNotBlank() }
+            ?: return null
+        if (roots.isEmpty()) return null
+        val index = pref.externalIndex.coerceIn(0, roots.lastIndex)
+        return roots[index]
+    }
+
+    /**
+     * Enumerates the storage mounts the user can pick for downloads, in a
+     * stable order: INTERNAL first, then each app-private external root from
+     * [Context.getExternalFilesDirs] (primary emulated storage, then any
+     * inserted SD / USB mount). Each entry carries the [prefValue] to persist
+     * and a [kind] the UI maps to a localized label.
+     *
+     * This is what makes "Storage location" show the *real*
+     * available mounts instead of a hardcoded INTERNAL/EXTERNAL pair — when an
+     * SD card or USB stick is inserted, it appears here as an extra
+     * [StorageMountKind.REMOVABLE] option. Stays within app-private scoped
+     * storage (no SAF rework).
+     */
+    fun availableMounts(): List<StorageMount> {
+        val options = mutableListOf<StorageMount>()
+        options.add(
+            StorageMount(
+                prefValue = "INTERNAL",
+                kind = StorageMountKind.INTERNAL,
+                availableBytes = freeBytes(context.filesDir),
+                rootPath = context.filesDir.absolutePath,
+            )
+        )
+        val externalRoots = context.getExternalFilesDirs(null)
+            ?.filterNotNull()
+            ?.filter { it.absolutePath.isNotBlank() }
+            ?: return options
+        externalRoots.forEachIndexed { index, root ->
+            val prefValue = if (index == 0) "EXTERNAL" else "EXTERNAL_${index + 1}"
+            val removable = try { Environment.isExternalStorageRemovable(root) } catch (_: Throwable) { false }
+            val kind = if (index == 0) {
+                // Primary external is emulated (built-in flash); only secondary
+                // entries are real removable mounts.
+                StorageMountKind.PRIMARY_EXTERNAL
+            } else if (removable) {
+                StorageMountKind.REMOVABLE
+            } else {
+                StorageMountKind.EXTERNAL
+            }
+            options.add(
+                StorageMount(
+                    prefValue = prefValue,
+                    kind = kind,
+                    availableBytes = freeBytes(root),
+                    rootPath = root.absolutePath,
+                )
+            )
+        }
+        return options
+    }
+
+    private fun freeBytes(dir: File): Long = try {
+        val statFs = StatFs(dir.absolutePath)
+        statFs.availableBlocksLong * statFs.blockSizeLong
+    } catch (_: Throwable) { 0L }
 
     /**
      * The download display name with characters that are unsafe on the local
@@ -139,3 +220,78 @@ data class ResolvedDownloadPath(
     val fileName: String,
     val filePath: String,
 )
+
+/**
+ * One selectable download destination surfaced by
+ * [DownloadStorageLayout.availableMounts].
+ *
+ * @property prefValue the value to persist as `downloadStorageLocation`
+ *   ("INTERNAL" / "EXTERNAL" / "EXTERNAL_N").
+ * @property kind coarse label class the UI maps to a localized string.
+ * @property availableBytes free bytes on the mount, or 0 if unavailable.
+ * @property rootPath absolute path of the app-private root (for display).
+ */
+data class StorageMount(
+    val prefValue: String,
+    val kind: StorageMountKind,
+    val availableBytes: Long,
+    val rootPath: String,
+)
+
+/**
+ * Coarse classification of a [StorageMount] for UI labeling. The settings
+ * screen maps each to a localized string (`storage_internal`, etc.).
+ */
+enum class StorageMountKind {
+    /** App-private `filesDir` (built-in flash, never media-scanned). */
+    INTERNAL,
+
+    /** Primary emulated external storage (built-in flash, app-private). */
+    PRIMARY_EXTERNAL,
+
+    /** A real removable mount (SD card / USB) reported by the OS. */
+    REMOVABLE,
+
+    /** Secondary non-removable external mount (e.g. adopted storage). */
+    EXTERNAL,
+}
+
+/**
+ * Value class around the raw `download_storage_location` preference string,
+ * so the "is this INTERNAL?" / "which external index?" parsing lives in one
+ * place instead of being re-derived at every call site.
+ *
+ * **Persistence stays `String`.** The slice is `@Serializable` and crosses the
+ * backup/restore boundary as a plain string, so this class is a parse/label
+ * helper — construct it from the stored value at the point of use.
+ *
+ * Accepted forms (case-insensitive):
+ *  - `"INTERNAL"` → app-private filesDir.
+ *  - `"EXTERNAL"` → primary external root (index 0, backward-compat).
+ *  - `"EXTERNAL_N"` → the Nth external mount (1-based: `EXTERNAL_2` = index 1).
+ *  - anything else → treated as primary external (legacy fallback).
+ *
+ * @param raw the stored preference value.
+ */
+@JvmInline
+value class StorageLocationPref(val raw: String) {
+
+    /** True iff this selects app-private internal storage (`filesDir`). */
+    val isInternal: Boolean
+        get() = raw.trim().equals("INTERNAL", ignoreCase = true) &&
+            !raw.trim().startsWith("EXTERNAL", ignoreCase = true)
+
+    /**
+     * 0-based index into `Context.getExternalFilesDirs`: `"EXTERNAL"` → 0,
+     * `"EXTERNAL_N"` → N-1. Anything unparseable → 0 (backward-compat with
+     * the legacy binary INTERNAL/EXTERNAL toggle).
+     */
+    val externalIndex: Int
+        get() {
+            val upper = raw.trim()
+            if (upper.equals("EXTERNAL", ignoreCase = true)) return 0
+            val match = Regex("^EXTERNAL_(\\d+)$", RegexOption.IGNORE_CASE).matchEntire(upper)
+                ?: return 0
+            return ((match.groupValues[1].toIntOrNull() ?: 1) - 1).coerceAtLeast(0)
+        }
+}

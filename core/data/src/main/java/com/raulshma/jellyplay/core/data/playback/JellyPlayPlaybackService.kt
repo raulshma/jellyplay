@@ -65,8 +65,14 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
         if (!player.isPlaying) {
             audioPlaybackManager.stopAndRelease()
             stopSelf()
+            // Let Media3 run its task-removed bookkeeping (clearing the
+            // media-button receiver / task description) before returning.
+            super.onTaskRemoved(rootIntent)
             return
         }
+        // Playing in the background: defer to Media3's default, which keeps the
+        // task alive while playing. This override exists only to stop + release
+        // when playback is actually paused.
     }
 
     override fun onDestroy() {

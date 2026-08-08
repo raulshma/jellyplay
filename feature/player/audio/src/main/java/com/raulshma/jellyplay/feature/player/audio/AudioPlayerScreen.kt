@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,6 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
@@ -375,6 +377,7 @@ fun AudioPlayerScreen(
                     onNightModeClick = { showMenu = false; viewModel.toggleNightMode() },
                     onNightModeStrengthChange = { viewModel.setNightModeStrength(it) },
                     onAmbientClick = { showMenu = false; onAmbientClick(uiState.albumArtUrl.ifBlank { null }, uiState.title, uiState.artist) },
+                    onAddToPlaylistClick = { showMenu = false; viewModel.openPlaylistPicker() },
                     sleepTimerActive = sleepTimer.active,
                     sleepTimerEndOfEpisode = sleepTimer.endOfEpisode,
                     sleepTimerRemainingFlow = viewModel.sleepTimerRemainingMs,
@@ -742,6 +745,64 @@ fun AudioPlayerScreen(
             onCancel = { viewModel.cancelSleepTimer() },
             onDismiss = { showSleepTimer = false },
         )
+    }
+
+    // Add-to-playlist picker.
+    if (uiState.showPlaylistPicker) {
+        com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet(
+            onDismissRequest = { viewModel.dismissPlaylistPicker() },
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
+        ) {
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp),
+            ) {
+                androidx.compose.material3.Text(
+                    stringResource(R.string.audio_playlist_picker_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                androidx.compose.foundation.layout.Spacer(Modifier.height(16.dp))
+                when {
+                    uiState.isLoadingPlaylists -> {
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator()
+                        }
+                    }
+                    uiState.playlists.isEmpty() -> {
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            androidx.compose.material3.Text(
+                                stringResource(R.string.audio_no_playlists),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    else -> {
+                        androidx.compose.foundation.layout.Column {
+                            uiState.playlists.forEach { playlist ->
+                                androidx.compose.material3.ListItem(
+                                    headlineContent = { Text(playlist.name) },
+                                    supportingContent = playlist.itemCount.takeIf { it > 0 }?.let { count ->
+                                        { Text(stringResource(R.string.audio_playlist_items_count, count)) }
+                                    },
+                                    modifier = Modifier.clickable {
+                                        viewModel.addToPlaylist(playlist)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if (showEffectsSheet) {

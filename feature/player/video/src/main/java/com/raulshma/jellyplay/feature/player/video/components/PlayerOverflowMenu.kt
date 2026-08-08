@@ -114,6 +114,8 @@ internal fun BoxScope.PlayerOverflowMenu(
     onAbRepeatSetA: () -> Unit = {},
     onAbRepeatSetB: () -> Unit = {},
     onAbRepeatClear: () -> Unit = {},
+    audioOnly: Boolean = false,
+    onToggleAudioOnly: () -> Unit = {},
 ) {
     if (!expanded) return
     var showDialogueBoostSubmenu by remember { mutableStateOf(false) }
@@ -475,6 +477,13 @@ internal fun BoxScope.PlayerOverflowMenu(
                     onClick = onAbRepeatClear,
                 )
             }
+            OverflowMenuItem(
+                icon = Tabler.Outline.Volume,
+                label = if (audioOnly) stringResource(R.string.player_audio_only_on)
+                    else stringResource(R.string.player_audio_only),
+                onClick = onToggleAudioOnly,
+                tint = if (audioOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }

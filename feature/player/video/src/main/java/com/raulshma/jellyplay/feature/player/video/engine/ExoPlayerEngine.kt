@@ -58,6 +58,8 @@ import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
@@ -92,8 +94,13 @@ import okhttp3.OkHttpClient
  * Default subtitle text size for the embedded-style path. A fixed SP value keeps
  * captions stable across orientation changes (a height-fraction scales against the
  * view height, which grows dramatically in portrait).
+ *
+ * Sourced from [SubtitleRenderDefaults.EXOPLAYER_OVERRIDE]
+ * — ExoPlayer's documented divergence from the shared 24sp default. See that
+ * override's KDoc for why ExoPlayer keeps a distinct size/edge here.
  */
-private const val DEFAULT_SUBTITLE_SIZE_SP = 18f
+private val DEFAULT_SUBTITLE_SIZE_SP =
+    SubtitleRenderDefaults.EXOPLAYER_OVERRIDE.fontSizeSp.toFloat()
 private const val TAG = "ExoPlayerEngine"
 
 class ExoPlayerEngine(
@@ -1054,12 +1061,21 @@ class ExoPlayerEngine(
                 // captions become huge, while mpv (libass, sizes against the video
                 // frame) stays correct.
                 sv.setApplyEmbeddedFontSizes(false)
+                // ExoPlayer's default branch uses the engine's documented divergence
+                // from the shared table (SubtitleRenderDefaults.EXOPLAYER_OVERRIDE):
+                // 18sp + DROP_SHADOW rather than the 24sp + OUTLINE other engines use.
+                // The divergence is a conscious Media3-specific choice (see the
+                // override's KDoc), not silent drift.
                 sv.setStyle(
                     CaptionStyleCompat(
                         Color.WHITE,
                         Color.TRANSPARENT,
                         Color.TRANSPARENT,
-                        CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
+                        when (SubtitleRenderDefaults.EXOPLAYER_OVERRIDE.edgeType) {
+                            SubtitleEdgeType.DROP_SHADOW -> CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW
+                            SubtitleEdgeType.OUTLINE -> CaptionStyleCompat.EDGE_TYPE_OUTLINE
+                            else -> CaptionStyleCompat.EDGE_TYPE_NONE
+                        },
                         Color.BLACK,
                         android.graphics.Typeface.SANS_SERIF
                     )

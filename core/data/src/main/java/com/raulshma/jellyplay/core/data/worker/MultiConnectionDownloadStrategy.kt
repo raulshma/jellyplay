@@ -74,9 +74,10 @@ internal object MultiConnectionDownloadStrategy {
         try {
             setForegroundInfo(
                 DownloadNotificationHelper.createForegroundInfo(
-                    context, notificationId, entity.name, 0, 0L, totalSize, 0L,
+                    context, downloadId, notificationId, entity.name, 0, 0L, totalSize, 0L,
                 )
             )
+            DownloadNotificationHelper.refreshSummary(context, dao.getInFlightDownloadCount())
         } catch (_: Exception) {
         }
 
@@ -110,9 +111,10 @@ internal object MultiConnectionDownloadStrategy {
                             (currentDownloaded * 100 / totalSize).toInt()
                         } else 0
                         DownloadNotificationHelper.updateNotification(
-                            context, notificationId, entity.name, progress,
+                            context, downloadId, notificationId, entity.name, progress,
                             currentDownloaded, totalSize, speedBytesPerSec,
                         )
+                        DownloadNotificationHelper.refreshSummary(context, dao.getInFlightDownloadCount())
 
                         delay(PROGRESS_UPDATE_INTERVAL_MS)
                     }
@@ -170,6 +172,7 @@ internal object MultiConnectionDownloadStrategy {
             // A successful download clears the auto-retry budget.
             dao.resetRetryCount(downloadId)
             DownloadNotificationHelper.dismissNotification(context, notificationId)
+            DownloadNotificationHelper.refreshSummary(context, dao.getInFlightDownloadCount())
             Result.success()
         } catch (e: CancellationException) {
             throw e

@@ -38,6 +38,9 @@
     <string name="admin_stop_live_cd">Ferma live</string>
     <string name="admin_start_live_cd">Avvia live</string>
     <string name="admin_stop">Ferma</string>
+    <string name="admin_stop_session_cd">Ferma riproduzione</string>
+    <string name="admin_stop_session_title">Fermare la riproduzione?</string>
+    <string name="admin_stop_session_body">Fermare il media attualmente in riproduzione su \"%1$s\"?</string>
     <string name="admin_run">Esegui</string>
 
     <!-- Relative time -->
@@ -79,11 +82,13 @@
     <string name="admin_edit_device_name_title">Modifica nome dispositivo</string>
     <string name="admin_custom_name">Nome personalizzato</string>
     <string name="admin_no_devices">Nessun dispositivo trovato</string>
+    <string name="admin_devices_search_placeholder">Cerca per nome o utente</string>
 
     <!-- LogsScreen -->
     <string name="admin_logs_title">Log</string>
     <string name="admin_no_log_files">Nessun file di log trovato</string>
     <string name="admin_no_activity_log">Nessuna voce nel log attività</string>
+    <string name="admin_logs_search_placeholder">Filtra messaggi</string>
 
     <!-- Plugins -->
     <string name="admin_plugins_title">Plugin</string>
@@ -380,5 +385,13 @@
     <!-- Audit history row labels (batch) -->
     <string name="admin_audit_by_user">di %1$s</string>
     <string name="admin_audit_items_removed">%1$d elementi rimossi</string>
+
+    <!-- User statistics sort & export -->
+    <string name="user_stats_sort_plays">Riproduzioni</string>
+    <string name="user_stats_sort_time">Tempo di visione</string>
+    <string name="user_stats_sort_name">Nome</string>
+    <string name="user_stats_sort_cd">Ordina</string>
+    <string name="user_stats_export_cd">Esporta CSV</string>
+    <string name="user_stats_export_shared">Statistiche esportate</string>
 
 </resources>

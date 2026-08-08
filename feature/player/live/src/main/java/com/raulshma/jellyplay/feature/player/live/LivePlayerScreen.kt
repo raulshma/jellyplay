@@ -322,6 +322,7 @@ fun LivePlayerScreen(
                         channels = state.channels,
                         currentChannelId = state.currentChannel?.id,
                         favorites = state.favorites,
+                        lastChannelId = state.lastChannelId,
                         logoUrlFor = viewModel::logoUrlFor,
                         onChannelSelected = { id ->
                             viewModel.selectChannelById(id)

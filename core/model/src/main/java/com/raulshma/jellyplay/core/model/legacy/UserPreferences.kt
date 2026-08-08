@@ -263,6 +263,11 @@ data class UserPreferences(
     val navItemOrder: List<String> = emptyList(),
     val selfUpdateCheckEnabled: Boolean = true,
     /**
+     * When enabled, an available update's APK downloads immediately after a
+     * check instead of waiting for the user to tap Download on the prompt.
+     */
+    val selfUpdateDownloadEnabled: Boolean = false,
+    /**
      * Version of the last update the user dismissed via "Later"/"Close", plus
      * the wall-clock millis at which it was dismissed. Used to suppress the
      * launch-time auto-prompt for the same version for 24 hours. Manual checks

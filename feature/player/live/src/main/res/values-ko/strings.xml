@@ -46,4 +46,6 @@
     <string name="live_option_auto_desc">서버가 선택하도록 허용 (가능하면 다이렉트 스트림)</string>
     <string name="live_option_direct_desc">열린 튜너를 직접 읽기 (최고 화질)</string>
     <string name="live_option_transcode_desc">서버에서 재인코딩 (대역폭 절약)</string>
+    <string name="live_now_playing_short">재생 중</string>
+    <string name="livetv_last_watched_section">최근 시청</string>
 </resources>

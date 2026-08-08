@@ -46,4 +46,6 @@
     <string name="live_option_auto_desc">Lascia scegliere al server (flusso diretto quando possibile)</string>
     <string name="live_option_direct_desc">Leggi direttamente il tuner aperto (qualità migliore)</string>
     <string name="live_option_transcode_desc">Ricodifica sul server (minore larghezza di banda)</string>
+    <string name="live_now_playing_short">In riproduzione</string>
+    <string name="livetv_last_watched_section">Visto di recente</string>
 </resources>

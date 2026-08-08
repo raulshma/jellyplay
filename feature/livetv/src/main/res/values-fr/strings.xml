@@ -31,6 +31,10 @@
     <string name="livetv_record_series">Enregistrer la série</string>
     <string name="livetv_cancel_recording">Annuler l\'enregistrement</string>
     <string name="livetv_cancel_series">Annuler la série</string>
+    <string name="livetv_delete">Supprimer</string>
+    <string name="livetv_delete_recording_cd">Supprimer l\'enregistrement</string>
+    <string name="livetv_delete_recording_title">Supprimer l\'enregistrement ?</string>
+    <string name="livetv_delete_recording_body">Supprimer « %1$s » ? Action irréversible.</string>
     <string name="livetv_record_success">Enregistrement programmé</string>
     <string name="livetv_record_failed">Échec de la programmation de l\'enregistrement</string>
     <string name="livetv_record_canceled">Enregistrement annulé</string>

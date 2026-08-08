@@ -6,11 +6,8 @@ import androidx.compose.runtime.Immutable
  * Which nested media kinds a library item query excludes by default.
  *
  * Library browsing shows top-level items (movies, shows) — seasons and
- * episodes are both excluded. Section mode ("See All" from a home Latest row)
- * must reproduce what the home `/Items/Latest` row showed, which is leaf
- * items: episodes included, seasons still excluded. The two exclusions travel
- * together for every caller, so they're bundled here instead of being two
- * loose booleans.
+ * episodes are both excluded. The two exclusions travel together for every
+ * caller, so they're bundled here instead of being two loose booleans.
  */
 @Immutable
 data class ItemKindFilter(
@@ -24,8 +21,5 @@ data class ItemKindFilter(
     companion object {
         /** Top-level library browsing: seasons and episodes both excluded. */
         val TOP_LEVEL = ItemKindFilter()
-
-        /** Leaf items: episodes included, seasons still excluded. */
-        val LEAF_ITEMS = ItemKindFilter(includeEpisodes = true)
     }
 }

@@ -87,4 +87,9 @@
 
     <!-- auto-localized: previously translatable="false" (1) -->
     <string name="auth_quick_connect">クイック接続</string>
+
+    <!-- Server health indicator -->
+    <string name="server_health_healthy">オンライン</string>
+    <string name="server_health_unreachable">オフライン</string>
+    <string name="server_health_checking">確認中…</string>
 </resources>
