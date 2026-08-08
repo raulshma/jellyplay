@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.navigation.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -9,15 +10,12 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -25,11 +23,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Apps
@@ -41,25 +42,22 @@ import com.composables.icons.tabler.outline.Wand
 import com.composables.icons.tabler.outline.Wifi
 import com.composables.icons.tabler.outline.WifiOff
 import com.raulshma.jellyplay.R
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.model.OfflineMode
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
 
 /**
  * Animated list of overflow destinations that expands upward from the nav bar's
- * "More" toggle (#115).
+ * "More" (⋮) 3-dot toggle (#115).
  *
- * Mirrors the Home FAB speed-dial's full option set (Surprise Me, SyncPlay,
- * Downloads, Go Online/Offline, Play On, Shortcuts, Settings) so every Home-FAB action is
- * reachable from anywhere. Each item matches the Material3
- * `FloatingActionButtonMenuItem` look — a full-rounded pill on
- * `secondaryContainer`, 24dp leading/trailing padding, a 24dp icon + `titleMedium`
- * label, 56dp tall — so the two menus read as one design language.
+ * Designed using Material Design 3 Expressive Navigation and Library action chip
+ * standards — pills feature interactive press scale, smooth shape morphing,
+ * adaptive surface container colors, TV D-pad focus glow, and 22dp Tabler icons
+ * paired with semi-bold typography.
  *
  * Items enter with a staggered slide-up + fade + scale-in (anchored at the
  * bottom, nearest the toggle first). Items compose bottom-up: the last declared
  * entry sits closest to the toggle.
- *
- * Driven entirely by callbacks; the caller owns visibility via composition.
  */
 @Composable
 fun OverflowMenuItems(
@@ -74,30 +72,58 @@ fun OverflowMenuItems(
     isGoingOnline: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val isOfflineActive = offlineMode != OfflineMode.ONLINE
+
     // Ordered nearest-to-toggle first (bottom of the column). Index drives the
     // stagger delay so the item closest to the toggle rises in first.
     val items = listOf(
-        OverflowEntry(Tabler.Outline.Wand, R.string.menu_surprise_me, onSurpriseClick),
-        OverflowEntry(Tabler.Outline.Users, R.string.menu_syncplay, onSyncPlayClick),
-        OverflowEntry(Tabler.Outline.Download, R.string.menu_downloads, onDownloadsClick),
         OverflowEntry(
-            icon = if (offlineMode != OfflineMode.ONLINE) Tabler.Outline.Wifi else Tabler.Outline.WifiOff,
+            icon = Tabler.Outline.Wand,
+            label = R.string.menu_surprise_me,
+            onClick = onSurpriseClick,
+            isHighlighted = true,
+        ),
+        OverflowEntry(
+            icon = Tabler.Outline.Users,
+            label = R.string.menu_syncplay,
+            onClick = onSyncPlayClick,
+        ),
+        OverflowEntry(
+            icon = Tabler.Outline.Download,
+            label = R.string.menu_downloads,
+            onClick = onDownloadsClick,
+        ),
+        OverflowEntry(
+            icon = if (isOfflineActive) Tabler.Outline.Wifi else Tabler.Outline.WifiOff,
             label = when {
                 isGoingOnline -> R.string.menu_going_online
-                offlineMode != OfflineMode.ONLINE -> R.string.menu_go_online
+                isOfflineActive -> R.string.menu_go_online
                 else -> R.string.menu_go_offline
             },
             onClick = onToggleOffline,
             isGoingOnline = isGoingOnline,
+            isHighlighted = isOfflineActive,
         ),
-        OverflowEntry(Tabler.Outline.Cast, R.string.menu_play_on, onPlayOnClick),
-        OverflowEntry(Tabler.Outline.Apps, R.string.menu_shortcuts, onShortcutsClick),
-        OverflowEntry(Tabler.Outline.Settings, R.string.menu_settings, onSettingsClick),
+        OverflowEntry(
+            icon = Tabler.Outline.Cast,
+            label = R.string.menu_play_on,
+            onClick = onPlayOnClick,
+        ),
+        OverflowEntry(
+            icon = Tabler.Outline.Apps,
+            label = R.string.menu_shortcuts,
+            onClick = onShortcutsClick,
+        ),
+        OverflowEntry(
+            icon = Tabler.Outline.Settings,
+            label = R.string.menu_settings,
+            onClick = onSettingsClick,
+        ),
     )
 
     Column(
         horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom),
+        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom),
         modifier = modifier,
     ) {
         items.forEachIndexed { index, entry ->
@@ -125,6 +151,7 @@ fun OverflowMenuItems(
                     label = stringResource(entry.label),
                     onClick = entry.onClick,
                     isGoingOnline = entry.isGoingOnline,
+                    isHighlighted = entry.isHighlighted,
                 )
             }
         }
@@ -136,6 +163,7 @@ private data class OverflowEntry(
     val label: Int,
     val onClick: () -> Unit,
     val isGoingOnline: Boolean = false,
+    val isHighlighted: Boolean = false,
 )
 
 @Composable
@@ -144,46 +172,74 @@ private fun OverflowPill(
     label: String,
     onClick: () -> Unit,
     isGoingOnline: Boolean = false,
+    isHighlighted: Boolean = false,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
+    val isLight = LocalIsLightTheme.current
+    val containerColor = if (isHighlighted) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f)
+    } else if (isLight) {
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.90f)
+    }
+
+    val contentColor by animateColorAsState(
+        targetValue = if (isHighlighted) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "overflowPillContentColor",
+    )
+
     Surface(
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        tonalElevation = 3.dp,
+        color = Color.Transparent,
+        tonalElevation = 2.dp,
         shadowElevation = 6.dp,
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-        ),
-        modifier = Modifier
-            .focusIndicator(CircleShape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-            ),
-    ) {
-        Row(
-            modifier = Modifier
-                .sizeIn(minHeight = 56.dp)
-                .height(56.dp)
-                .padding(start = 24.dp, end = 24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        ) {
-            if (isGoingOnline) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp,
-                )
+            color = if (isHighlighted) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
             } else {
-                Icon(imageVector = icon, contentDescription = null)
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+            },
+        ),
+    ) {
+        ExpressiveChipContainer(
+            onClick = onClick,
+            containerColor = containerColor,
+            forceActive = isHighlighted,
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (isGoingOnline) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = contentColor,
+                    )
+                } else {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = contentColor,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
             }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium,
-            )
         }
     }
 }
+
