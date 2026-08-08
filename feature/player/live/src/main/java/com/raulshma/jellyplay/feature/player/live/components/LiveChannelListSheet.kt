@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.feature.player.live.R
 fun LiveChannelListSheet(
     channels: List<LiveTvChannel>,
     currentChannelId: String?,
+    lastChannelId: String? = null,
     favorites: Set<String>,
     logoUrlFor: (LiveTvChannel) -> String?,
     onChannelSelected: (String) -> Unit,
@@ -72,10 +73,24 @@ fun LiveChannelListSheet(
             channels.sortedByDescending { it.id in favorites }
         }
 
+        // Pinned last-watched channel. Skipped when it is the currently-playing
+        // channel — no point pinning what's already live.
+        val lastWatchedChannel = remember(channels, lastChannelId, currentChannelId) {
+            val lw = lastChannelId?.let { id -> channels.firstOrNull { it.id == id } }
+            if (lw != null && lw.id != currentChannelId) lw else null
+        }
+        val displayChannels = remember(sortedChannels, lastWatchedChannel) {
+            if (lastWatchedChannel != null) sortedChannels.filter { it.id != lastWatchedChannel.id }
+            else sortedChannels
+        }
+
         // Scroll the current channel into view and focus its row on open.
-        LaunchedEffect(sortedChannels, currentChannelId) {
-            val index = sortedChannels.indexOfFirst { it.id == currentChannelId }.coerceAtLeast(0)
-            listState.scrollToItem(index)
+        // The pinned last-watched section (header + row) sits above the list,
+        // so account for its 2-item height in the target index.
+        LaunchedEffect(displayChannels, currentChannelId, lastWatchedChannel) {
+            val baseIndex = displayChannels.indexOfFirst { it.id == currentChannelId }.coerceAtLeast(0)
+            val headerOffset = if (lastWatchedChannel != null) 2 else 0
+            listState.scrollToItem(baseIndex + headerOffset)
             currentRequester.tryRequestFocus()
         }
 
@@ -84,7 +99,35 @@ fun LiveChannelListSheet(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(items = sortedChannels, key = { it.id }) { channel ->
+            val lastWatched = lastWatchedChannel
+            if (lastWatched != null) {
+                item(key = "last_watched_header") {
+                    Text(
+                        text = stringResource(R.string.livetv_last_watched_section),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                item(key = "last_watched_${lastWatched.id}") {
+                    val rowFocusRequester = remember(lastWatched.id) { FocusRequester() }
+                    val onClick = remember(lastWatched.id) {
+                        { onChannelSelected(lastWatched.id); onDismiss() }
+                    }
+                    val onToggleFavorite = remember(lastWatched.id) { { onToggleFavorite(lastWatched.id) } }
+                    ChannelRow(
+                        channel = lastWatched,
+                        logoUrl = logoUrlFor(lastWatched),
+                        isCurrent = false,
+                        isFavorite = lastWatched.id in favorites,
+                        focusRequester = rowFocusRequester,
+                        onClick = onClick,
+                        onToggleFavorite = onToggleFavorite,
+                    )
+                }
+            }
+            items(items = displayChannels, key = { it.id }) { channel ->
                 // FocusRequester must always be produced unconditionally so
                 // positional memoization holds for the whole items() block;
                 // pick the shared requester for the current channel, otherwise
@@ -192,9 +235,9 @@ private fun ChannelRow(
         }
         if (isCurrent) {
             Text(
-                text = "▶",
+                text = stringResource(R.string.live_now_playing_short),
                 color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.labelSmall,
             )
         }
     }

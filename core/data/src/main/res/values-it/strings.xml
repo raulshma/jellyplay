@@ -20,6 +20,17 @@
     <string name="data_channel_downloads">Download</string>
     <string name="data_channel_downloads_desc">Notifiche sull\'avanzamento dei download</string>
 
+    <!-- Downloads notification actions -->
+    <string name="data_download_action_pause">Pausa</string>
+    <string name="data_download_action_resume">Riprendi</string>
+    <string name="data_download_action_cancel">Annulla</string>
+    <string name="data_download_paused">Download in pausa</string>
+    <string name="data_download_queued">In coda\u2026</string>
+    <plurals name="data_download_summary_active">
+        <item quantity="one">%1$d download in corso</item>
+        <item quantity="other">%1$d download in corso</item>
+    </plurals>
+
     <!-- Admin statistics: content-type breakdown labels -->
     <string name="data_label_movies">Film</string>
     <string name="data_label_episodes">Episodi</string>

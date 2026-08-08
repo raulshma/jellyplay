@@ -75,12 +75,20 @@ class DownloadWorker @AssistedInject constructor(
         val maxConcurrent = downloadsStore.downloads.value.maxConcurrentDownloads
         concurrencyLimiter.configure(maxConcurrent)
 
-        val notificationId = downloadId.hashCode() and 0x7FFFFFFF
+        val notificationId = DownloadNotificationHelper.notificationIdFor(downloadId)
+        val existingBytes = entity.downloadedBytes
+        // Mark the row QUEUED while it waits for a concurrency slot so the UI
+        // can show a distinct indicator instead of a stalled DOWNLOADING row.
+        dao.updateProgress(downloadId, existingBytes, DownloadStatus.QUEUED.name)
         try {
             setForeground(
-                DownloadNotificationHelper.createForegroundInfo(
-                    applicationContext, notificationId, entity.name, 0, 0L, entity.totalSizeBytes, 0L,
+                DownloadNotificationHelper.createQueuedForegroundInfo(
+                    applicationContext, downloadId, notificationId, entity.name,
                 )
+            )
+            DownloadNotificationHelper.dismissPausedNotification(applicationContext, downloadId)
+            DownloadNotificationHelper.refreshSummary(
+                applicationContext, dao.getInFlightDownloadCount(),
             )
         } catch (e: Exception) {
             // On Android 12+ a background-launched worker cannot promote itself
@@ -97,11 +105,6 @@ class DownloadWorker @AssistedInject constructor(
             // OEMs): fall through and attempt the download as a background
             // worker — best-effort.
         }
-
-        val existingBytes = entity.downloadedBytes
-        // Mark the row QUEUED while it waits for a concurrency slot so the UI
-        // can show a distinct indicator instead of a stalled DOWNLOADING row.
-        dao.updateProgress(downloadId, existingBytes, DownloadStatus.QUEUED.name)
 
         val activeUserId = serverIdentityStore.activeUserId.firstOrNull()
         val accessToken = activeUserId?.let { uid ->
@@ -130,12 +133,18 @@ class DownloadWorker @AssistedInject constructor(
                     updateForeground = { name, progress, downloaded, total, speed, notifId ->
                         setForeground(
                             DownloadNotificationHelper.createForegroundInfo(
-                                applicationContext, notifId, name, progress, downloaded, total, speed,
+                                applicationContext, downloadId, notifId, name, progress, downloaded, total, speed,
                             )
+                        )
+                        DownloadNotificationHelper.refreshSummary(
+                            applicationContext, dao.getInFlightDownloadCount(),
                         )
                     },
                     dismissForeground = { notifId ->
                         DownloadNotificationHelper.dismissNotification(applicationContext, notifId)
+                        DownloadNotificationHelper.refreshSummary(
+                            applicationContext, dao.getInFlightDownloadCount(),
+                        )
                     },
                 )
                 if (existingBytes > 0L) {

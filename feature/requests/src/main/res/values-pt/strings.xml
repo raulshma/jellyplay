@@ -25,6 +25,7 @@
     <string name="requests_sort_modified">Modificados</string>
     <string name="requests_filter_mine">Meus</string>
     <string name="requests_cd_sort_direction">Direção da ordenação</string>
+    <string name="requests_search_placeholder">Pesquisar pedidos</string>
 
     <string name="requests_status_declined">Recusado</string>
     <string name="requests_status_failed">Falhou</string>
@@ -39,6 +40,8 @@
 
     <string name="requests_action_approve">Aprovar</string>
     <string name="requests_action_decline">Recusar</string>
+    <string name="requests_selected_count">%1$d selecionado(s)</string>
+    <string name="requests_select_all">Selecionar tudo</string>
     <string name="requests_action_delete">Excluir</string>
     <string name="requests_action_delete_confirm">Certeza?</string>
 

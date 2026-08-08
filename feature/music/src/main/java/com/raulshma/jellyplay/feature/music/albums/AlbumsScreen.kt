@@ -75,7 +75,7 @@ fun AlbumsScreen(
                     modifier = Modifier.then(sortFocusState.focusModifier).tvFocusIndicator(sortFocusState, CircleShape),
                 ) {
                     Text(
-                        text = selectedSort.label,
+                        text = stringResource(selectedSort.labelRes),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -84,9 +84,9 @@ fun AlbumsScreen(
                     expanded = showSortMenu,
                     onDismissRequest = { showSortMenu = false },
                 ) {
-                    AlbumSortOption.entries.forEach { option ->
+                    MusicSortOption.entries.forEach { option ->
                         DropdownMenuItem(
-                            text = { Text(option.label) },
+                            text = { Text(stringResource(option.labelRes)) },
                             onClick = {
                                 viewModel.setSort(option)
                                 showSortMenu = false

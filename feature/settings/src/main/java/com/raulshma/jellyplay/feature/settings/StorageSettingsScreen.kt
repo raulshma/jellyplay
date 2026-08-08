@@ -63,7 +63,7 @@ private fun streamingQualityLabelRes(quality: StreamingQuality): Int = when (qua
 
 private val STORAGE_CACHE_GROUP_IDS = setOf("clear_cache", "clear_image_cache", "wifi_only_downloads", "download_connections", "max_concurrent_downloads", "auto_delete_cache", "max_cache_size")
 private val STORAGE_NETWORK_GROUP_IDS = setOf("offline_mode", "auto_offline", "adaptive_bitrate", "bandwidth_cap", "metered_network_behavior", "cellular_streaming_quality", "cellular_download_warning", "data_saver", "network_timeout", "verbose_logging", "user_data_sync")
-private val STORAGE_DOWNLOADS_GROUP_IDS = setOf("download_quality", "smart_downloads", "auto_download_new_episodes", "download_schedule", "download_schedule_start", "download_schedule_end", "download_schedule_wifi_only", "max_download_storage_limit", "download_storage_location")
+private val STORAGE_DOWNLOADS_GROUP_IDS = setOf("download_quality", "smart_downloads", "auto_download_new_episodes", "download_schedule", "download_schedule_start", "download_schedule_end", "download_schedule_wifi_only", "max_download_storage_limit", "download_storage_location", "auto_delete_after_watch")
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -495,7 +495,7 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    val downloadTotal = 7
+                    val downloadTotal = 8
                     var downloadIdx = 0
 
                     val downloadQualityTitle = stringResource(R.string.settings_download_quality)
@@ -624,23 +624,62 @@ fun StorageSettingsScreen(
 
                     val internalLabel = stringResource(R.string.settings_storage_internal)
                     val externalLabel = stringResource(R.string.settings_storage_external)
+                    val sdCardLabel = stringResource(R.string.storage_sd_card)
                     val storageLocationTitle = stringResource(R.string.settings_download_storage_location)
+                    // Build the picker from the *real*
+                    // available mounts (primary + any SD/USB) instead of the
+                    // hardcoded INTERNAL/EXTERNAL pair. Falls back to the
+                    // legacy pair if mount enumeration hasn't resolved yet.
+                    // NOTE: string resolution happens here in the @Composable
+                    // body; the lambda below only closes over the resolved
+                    // CharSequences so it can be invoked from non-composable
+                    // callbacks (onClick) too.
+                    val mounts = viewModel.storageMounts
+                    val mountLabel = { kind: com.raulshma.jellyplay.core.data.repository.StorageMountKind ->
+                        when (kind) {
+                            com.raulshma.jellyplay.core.data.repository.StorageMountKind.INTERNAL -> internalLabel
+                            com.raulshma.jellyplay.core.data.repository.StorageMountKind.PRIMARY_EXTERNAL -> externalLabel
+                            com.raulshma.jellyplay.core.data.repository.StorageMountKind.REMOVABLE -> sdCardLabel
+                            com.raulshma.jellyplay.core.data.repository.StorageMountKind.EXTERNAL -> externalLabel
+                        }
+                    }
+                    val selectedMountLabel = mounts.firstOrNull { it.prefValue == preferences.downloadStorageLocation }
+                        ?.let { mountLabel(it.kind) }
+                        ?: if (preferences.downloadStorageLocation == "INTERNAL") internalLabel else externalLabel
                     SettingListItem(
                         icon = Tabler.Outline.Folder,
                         title = storageLocationTitle,
                         subtitle = stringResource(R.string.settings_download_storage_location_subtitle),
-                        trailingText = if (preferences.downloadStorageLocation == "INTERNAL") internalLabel else externalLabel,
+                        trailingText = selectedMountLabel,
                         highlighted = highlightSettingId == "download_storage_location",
-                        index = downloadIdx, count = downloadTotal,
+                        index = downloadIdx++, count = downloadTotal,
                         onClick = {
+                            val items = if (mounts.isNotEmpty()) mounts else emptyList()
                             activePicker = PickerState.List(
                                 title = storageLocationTitle,
-                                items = listOf("INTERNAL", "EXTERNAL"),
-                                label = { if (it == "INTERNAL") internalLabel else externalLabel },
-                                isSelected = { it == preferences.downloadStorageLocation },
-                                onSelect = { viewModel.setDownloadStorageLocation(it) },
+                                items = items,
+                                label = { mount ->
+                                    val label = mountLabel(mount.kind)
+                                    if (mount.availableBytes > 0L) {
+                                        "$label (${mount.availableBytes / (1024L * 1024 * 1024)} GB)"
+                                    } else {
+                                        label
+                                    }
+                                },
+                                isSelected = { it.prefValue == preferences.downloadStorageLocation },
+                                onSelect = { viewModel.setDownloadStorageLocation(it.prefValue) },
                             )
                         }
+                    )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Trash,
+                        title = stringResource(R.string.downloads_auto_delete_after_watch),
+                        subtitle = stringResource(R.string.downloads_auto_delete_after_watch_subtitle),
+                        checked = preferences.autoDeleteAfterWatch,
+                        highlighted = highlightSettingId == "auto_delete_after_watch",
+                        index = downloadIdx, count = downloadTotal,
+                        onCheckedChange = { viewModel.setAutoDeleteAfterWatch(it) }
                     )
                 }
             }

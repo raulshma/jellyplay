@@ -169,6 +169,8 @@
     <string name="player_video_set_a_point">Imposta punto A</string>
     <string name="player_video_set_b_point">Imposta punto B</string>
     <string name="player_video_clear_ab_repeat">Cancella ripetizione A/B</string>
+    <string name="player_audio_only">Solo audio</string>
+    <string name="player_audio_only_on">Solo audio — video nascosto</string>
 
     <!-- Video filter sheet -->
     <string name="player_video_brightness">Luminosità</string>

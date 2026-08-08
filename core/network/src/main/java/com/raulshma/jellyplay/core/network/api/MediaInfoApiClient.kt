@@ -13,6 +13,16 @@ import com.raulshma.jellyplay.core.model.WatchedMediaItem
 
 interface MediaInfoApiClient {
     suspend fun getNewsletterData(sinceDate: String, limit: Int = 20): Result<NewsletterData>
+
+    // NOTE: JellyPlay backend route required — `POST /newsletter/send` is not yet
+    // implemented server-side. This wires up the client so the feature lights up
+    // once the route lands; until then the call 404s and Result.failure surfaces it.
+    suspend fun sendNewsletter(): Result<Unit>
+
+    // NOTE: JellyPlay backend route required — `POST /newsletter/test` is not yet
+    // implemented server-side. This wires up the client so the feature lights up
+    // once the route lands; until then the call 404s and Result.failure surfaces it.
+    suspend fun sendTestNewsletter(): Result<Unit>
     suspend fun getUsers(): Result<List<JellyfinUser>>
     suspend fun getUserPlayedItemCount(userId: String, includeItemTypes: List<String>? = null): Result<Int>
     suspend fun getUserUnplayedItemCount(userId: String, includeItemTypes: List<String>? = null): Result<Int>

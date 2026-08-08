@@ -16,7 +16,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -511,9 +510,9 @@ class AudioPlaybackManager @Inject constructor(
         player.repeatMode = getExoPlayerRepeatMode(_repeatMode.value)
 
         exoPlayer = player
-        val session = MediaLibrarySession.Builder(context, player, libraryBrowser.callback)
-            .setId(playSessionId)
-            .build()
+        // Same construction path as the crossfade rebuild, via the shared
+        // audio-session builder (AudioLibraryBrowser owns the library callback).
+        val session = libraryBrowser.buildMediaSession(context, player, playSessionId)
         mediaSession = session
         sessionManager.setActiveSession(session)
 
@@ -1418,9 +1417,15 @@ class AudioPlaybackManager @Inject constructor(
         _albumArtUrl.value = nextItem.imageUrl ?: ""
 
         mediaSession?.release()
-        val newSession = MediaSession.Builder(context, secondary)
-            .setId(playSessionId)
-            .build()
+        // Rebuild via the shared audio-session builder (AudioLibraryBrowser is
+        // the single construction path for both the initial session and the
+        // crossfade rebuild). JellyPlayPlaybackService.onGetSession casts the
+        // active session to MediaLibrarySession; a plain MediaSession rebuild
+        // — the pre-fix behaviour — cast to null, so the service rejected
+        // controller connections, killing the now-playing notification and
+        // headset buttons until app restart. Mirrors the video fix
+        // (MediaSessionController).
+        val newSession = libraryBrowser.buildMediaSession(context, secondary, playSessionId)
         mediaSession = newSession
         sessionManager.setActiveSession(newSession)
 

@@ -46,6 +46,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.TriStateCheckbox
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.episodeContextLine
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -65,10 +66,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.state.ToggleableState
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -860,43 +858,6 @@ private fun SelectionHintRow() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-    }
-}
-
-/**
- * Builds the single-line episode context ("**SXXEXX** · Series Name") used by the
- * downloads list row and both resync sheets, so episodes are identifiable in a
- * flat list. The SxxExx tag is bolded and the series name follows in the
- * default weight — exactly the styling the main downloads list row uses, so the
- * sheets match it visually (not just textually).
- *
- * Returns null when the item carries no episode context (movies/standalone
- * items or a non-episode type), so callers can omit the line entirely. The
- * single source of truth for the SxxExx + " · " + series shape — the downloads
- * list row, the resync sheet rows and the force-resync picker all render it via
- * this helper so a format change edits one place.
- */
-private fun episodeContextLine(
-    mediaType: com.raulshma.jellyplay.core.model.MediaType?,
-    seriesName: String?,
-    seasonNumber: Int?,
-    episodeNumber: Int?,
-): androidx.compose.ui.text.AnnotatedString? {
-    if (mediaType != com.raulshma.jellyplay.core.model.MediaType.EPISODE) return null
-    val tag = seasonNumber?.let { s ->
-        episodeNumber?.let { e ->
-            "S${s.toString().padStart(2, '0')}E${e.toString().padStart(2, '0')}"
-        }
-    }
-    val series = seriesName?.takeIf { it.isNotBlank() } ?: return tag?.let { plainTag ->
-        buildAnnotatedString { withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(plainTag) } }
-    }
-    return buildAnnotatedString {
-        if (tag != null) {
-            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(tag) }
-            append(" · ")
-        }
-        append(series)
     }
 }
 

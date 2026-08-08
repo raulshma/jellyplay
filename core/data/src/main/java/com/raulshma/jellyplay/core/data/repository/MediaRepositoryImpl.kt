@@ -992,6 +992,9 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getRecordings(limit: Int?, isInProgress: Boolean?): Result<List<LiveTvRecording>> =
         apiClient.getRecordings(limit, isInProgress)
 
+    override suspend fun deleteRecording(recordingId: String): Result<Unit> =
+        apiClient.deleteItem(recordingId)
+
     override suspend fun getTimers(isActive: Boolean?, isScheduled: Boolean?): Result<List<DvrTimer>> =
         apiClient.getTimers(isActive, isScheduled)
 
@@ -1091,6 +1094,12 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getNewsletterData(sinceDate: String, limit: Int): Result<NewsletterData> =
         apiClient.getNewsletterData(sinceDate, limit)
+
+    override suspend fun sendNewsletter(): Result<Unit> =
+        apiClient.sendNewsletter()
+
+    override suspend fun sendTestNewsletter(): Result<Unit> =
+        apiClient.sendTestNewsletter()
 
     companion object {
         private const val PAGE_SIZE = 50

@@ -62,22 +62,36 @@ class WidgetConfigViewModel @Inject constructor(
         }
     }
 
-    fun selectLibrarySource(source: LibraryRecommendationsSource) {
-        viewModelScope.launch {
-            val current = getWidgetConfig().first()
-            val updated = current.copy(librarySource = source)
-            if (appWidgetId != -1) {
-                widgetDataStore.setWidgetConfigForId(appWidgetId, updated)
-            } else {
-                widgetDataStore.setWidgetConfig(updated)
-            }
-        }
+    fun selectLibrarySource(source: LibraryRecommendationsSource) =
+        update { it.copy(librarySource = source) }
+
+    fun selectSeerrSource(source: SeerrWidgetSource) =
+        update { it.copy(seerrSource = source) }
+
+    fun selectContinueWatchingCount(count: Int) = update {
+        it.copy(
+            continueWatchingItemCount = count.coerceIn(
+                WidgetConfig.MIN_CONTINUE_WATCHING_ITEM_COUNT,
+                WidgetConfig.MAX_CONTINUE_WATCHING_ITEM_COUNT,
+            ),
+        )
     }
 
-    fun selectSeerrSource(source: SeerrWidgetSource) {
+    fun setNowPlayingShowArtwork(show: Boolean) =
+        update { it.copy(nowPlayingShowArtwork = show) }
+
+    fun setNowPlayingShowProgress(show: Boolean) =
+        update { it.copy(nowPlayingShowProgress = show) }
+
+    /**
+     * One home for the read-copy-write + per-widget-or-global persist shape that
+     * every setter above used to duplicate. Routes the updated [WidgetConfig]
+     * to the per-instance store when [appWidgetId] is set, otherwise to the
+     * global default.
+     */
+    private fun update(transform: (WidgetConfig) -> WidgetConfig) {
         viewModelScope.launch {
-            val current = getWidgetConfig().first()
-            val updated = current.copy(seerrSource = source)
+            val updated = getWidgetConfig().first().let(transform)
             if (appWidgetId != -1) {
                 widgetDataStore.setWidgetConfigForId(appWidgetId, updated)
             } else {
@@ -94,5 +108,7 @@ class WidgetConfigViewModel @Inject constructor(
 enum class WidgetKind {
     LIBRARY,
     SEERR,
+    CONTINUE_WATCHING,
+    NOW_PLAYING,
     ;
 }

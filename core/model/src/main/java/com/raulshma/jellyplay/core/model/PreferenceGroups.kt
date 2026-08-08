@@ -291,6 +291,7 @@ data class StoragePreferences(
     val autoDownloadNewEpisodes: Boolean = false,
     val maxDownloadStorageGb: Int = 0,
     val downloadStorageLocation: String = "INTERNAL",
+    val autoDeleteAfterWatch: Boolean = false,
     val manualOfflineEnabled: Boolean = false,
     val autoOfflineEnabled: Boolean = true,
     val maxCacheSizeMb: Int = 0,
@@ -398,6 +399,8 @@ data class AppearanceScreenPreferences(
     val hideEpisodeThumbnails: Boolean = false,
     val skipSpecials: Boolean = false,
     val compactEpisodeList: Boolean = false,
+    /** Whether the library "Reset" pill shows a confirmation dialog before clearing. */
+    val confirmLibraryReset: Boolean = true,
     val showExternalRatings: Boolean = true,
     val showShareMediaOption: Boolean = true,
     val hideSearchHistory: Boolean = false,

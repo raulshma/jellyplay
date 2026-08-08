@@ -31,6 +31,10 @@
     <string name="livetv_record_series">Grabar serie</string>
     <string name="livetv_cancel_recording">Cancelar grabación</string>
     <string name="livetv_cancel_series">Cancelar serie</string>
+    <string name="livetv_delete">Eliminar</string>
+    <string name="livetv_delete_recording_cd">Eliminar grabación</string>
+    <string name="livetv_delete_recording_title">¿Eliminar grabación?</string>
+    <string name="livetv_delete_recording_body">¿Eliminar \"%1$s\"? Esta acción no se puede deshacer.</string>
     <string name="livetv_record_success">Grabación programada</string>
     <string name="livetv_record_failed">No se pudo programar la grabación</string>
     <string name="livetv_record_canceled">Grabación cancelada</string>

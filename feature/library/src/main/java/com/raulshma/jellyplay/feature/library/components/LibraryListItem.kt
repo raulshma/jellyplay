@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,12 +36,13 @@ import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 @Composable
 fun LibraryListItem(
     title: String,
-    subtitle: String?,
+    subtitle: AnnotatedString?,
     imageUrl: String?,
     blurHash: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     sharedElementKey: String? = null,
+    fallbackUrls: List<String> = emptyList(),
 ) {
     var isFocused by remember { mutableStateOf(false) }
     Row(
@@ -63,6 +65,7 @@ fun LibraryListItem(
             if (imageUrl != null) {
                 MediaImage(
                     url = imageUrl,
+                    fallbackUrls = fallbackUrls,
                     contentDescription = title,
                     modifier = Modifier.matchParentSize(),
                     blurHash = blurHash,

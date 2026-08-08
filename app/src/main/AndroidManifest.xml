@@ -62,7 +62,8 @@
             android:theme="@style/Theme.JellyPlay.Starting"
             android:windowSoftInputMode="adjustResize"
             android:supportsPictureInPicture="true"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize">
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|keyboard|keyboardHidden|navigation">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -103,17 +104,6 @@
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="com.raulshma.jellyplay.cast.JellyPlayCastOptionsProvider" />
-
-        <service
-            android:name="com.raulshma.jellyplay.core.data.playback.JellyPlayPlaybackService"
-            android:exported="true"
-            android:foregroundServiceType="mediaPlayback"
-            tools:ignore="Instantiatable">
-            <intent-filter>
-                <action android:name="androidx.media3.session.MediaLibraryService" />
-                <action android:name="android.media.browse.MediaBrowserService" />
-            </intent-filter>
-        </service>
 
         <service
             android:name=".floating.FloatingPlayerService"
@@ -201,6 +191,26 @@
             android:exported="true"
             android:theme="@style/Theme.JellyPlay.Starting"
             android:label="@string/widget_seerr_recommendations_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.config.ContinueWatchingWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.JellyPlay.Starting"
+            android:label="@string/widget_continue_watching_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widget.config.NowPlayingWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.JellyPlay.Starting"
+            android:label="@string/widget_now_playing_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

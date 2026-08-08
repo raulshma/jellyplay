@@ -79,6 +79,10 @@
     <string name="widget_config_source_upcoming_movies_description">Film in uscita a breve</string>
     <string name="widget_config_source_upcoming_tv">Serie TV in arrivo</string>
     <string name="widget_config_source_upcoming_tv_description">Serie TV in anteprima a breve</string>
+    <string name="widget_cw_item_count">Elementi da mostrare</string>
+    <string name="widget_np_show_artwork">Mostra copertina</string>
+    <string name="widget_np_show_progress">Mostra avanzamento</string>
+    <string name="widget_config_done">Fatto</string>
 
     <!-- In-app self-update sheet -->
     <string name="update_checking">Controllo aggiornamenti\u2026</string>
@@ -95,6 +99,7 @@
     <string name="update_ready_title">Pronto da installare — v%1$s</string>
     <string name="update_ready_body">L\'aggiornamento è stato scaricato. Tocca Installa per continuare.</string>
     <string name="update_install">Installa</string>
+    <string name="update_download_again">Scarica di nuovo</string>
     <string name="update_failed_title">Aggiornamento non riuscito</string>
     <string name="update_close">Chiudi</string>
 

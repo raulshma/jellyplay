@@ -4,6 +4,16 @@
     <string name="newsletter_could_not_load">Impossibile caricare la newsletter</string>
     <string name="newsletter_preparing_digest">Preparazione del riepilogo\u2026</string>
 
+    <!-- Newsletter send actions (admin-gated; backend route required) -->
+    <string name="newsletter_send_now">Invia ora</string>
+    <string name="newsletter_send_test">Invia test</string>
+    <string name="newsletter_send_confirm_title">Inviare la newsletter?</string>
+    <string name="newsletter_send_confirm_body">Questo invierà la newsletter a tutti gli iscritti.</string>
+    <string name="newsletter_send_success">Newsletter inviata</string>
+    <string name="newsletter_send_failed">Invio della newsletter non riuscito</string>
+    <string name="newsletter_test_sent">Newsletter di test inviata</string>
+    <string name="newsletter_send_admin_only">Solo admin</string>
+
     <!-- Newsletter screens & sections -->
     <string name="newsletter_title">Newsletter</string>
     <string name="newsletter_activity_digest">Riepilogo attività</string>

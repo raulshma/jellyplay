@@ -54,11 +54,15 @@ class AboutViewModel @Inject constructor(
     var selfUpdateCheckEnabled by composeState(true)
         private set
 
+    var selfUpdateDownloadEnabled by composeState(false)
+        private set
+
     init {
         loadServerInfo()
         launch {
             experimentalStore.experimental.collect { prefs ->
                 selfUpdateCheckEnabled = prefs.selfUpdateCheckEnabled
+                selfUpdateDownloadEnabled = prefs.selfUpdateDownloadEnabled
             }
         }
     }
@@ -93,6 +97,10 @@ class AboutViewModel @Inject constructor(
 
     fun updateSelfUpdateCheckPref(enabled: Boolean) {
         launch { experimentalStore.setSelfUpdateCheckEnabled(enabled) }
+    }
+
+    fun updateSelfUpdateDownloadPref(enabled: Boolean) {
+        launch { experimentalStore.setSelfUpdateDownloadEnabled(enabled) }
     }
 
     private fun collectLogs(): Uri? {

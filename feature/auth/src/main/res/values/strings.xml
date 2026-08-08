@@ -80,6 +80,11 @@
     <string name="auth_remove_server_message">This removes \"%1$s\" and every saved user on it. This can\'t be undone.</string>
     <string name="auth_remove">Remove</string>
 
+    <!-- Server health indicator -->
+    <string name="server_health_healthy">Online</string>
+    <string name="server_health_unreachable">Offline</string>
+    <string name="server_health_checking">Checking…</string>
+
     <!-- User selection screen -->
     <string name="auth_loading_users">Loading users…</string>
     <string name="auth_no_users_title">No users on this server</string>

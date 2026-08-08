@@ -4,6 +4,16 @@
     <string name="newsletter_could_not_load">Newsletter konnte nicht geladen werden</string>
     <string name="newsletter_preparing_digest">Deine Zusammenfassung wird vorbereitet\u2026</string>
 
+    <!-- Newsletter send actions (admin-gated; backend route required) -->
+    <string name="newsletter_send_now">Jetzt senden</string>
+    <string name="newsletter_send_test">Test senden</string>
+    <string name="newsletter_send_confirm_title">Newsletter senden?</string>
+    <string name="newsletter_send_confirm_body">Dadurch wird der Newsletter an alle Abonnenten gesendet.</string>
+    <string name="newsletter_send_success">Newsletter gesendet</string>
+    <string name="newsletter_send_failed">Newsletter konnte nicht gesendet werden</string>
+    <string name="newsletter_test_sent">Test-Newsletter gesendet</string>
+    <string name="newsletter_send_admin_only">Nur Admin</string>
+
     <!-- Newsletter screens & sections -->
     <string name="newsletter_title">Newsletter</string>
     <string name="newsletter_activity_digest">Aktivitätsverlauf</string>

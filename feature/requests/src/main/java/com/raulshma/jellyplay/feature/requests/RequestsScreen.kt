@@ -45,6 +45,7 @@ import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.ChevronLeft
 import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.Inbox
+import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
@@ -86,17 +87,14 @@ fun RequestsScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 RequestsFilterBar(
-                    currentFilter = state.filter,
-                    currentMediaType = state.mediaType,
-                    currentSort = state.sort,
-                    currentSortDirection = state.sortDirection,
-                    showMyRequestsOnly = state.showMyRequestsOnly,
+                    filters = state.filters,
                     isAdmin = isAdmin,
                     onFilterChange = { viewModel.setFilter(it) },
                     onMediaTypeChange = { viewModel.setMediaType(it) },
                     onSortChange = { viewModel.setSort(it) },
                     onSortDirectionToggle = { viewModel.toggleSortDirection() },
                     onMyRequestsToggle = { viewModel.toggleMyRequestsOnly() },
+                    onSearchChange = { viewModel.setSearchQuery(it) },
                 )
 
                 PullToRefreshBox(
@@ -177,11 +175,17 @@ fun RequestsScreen(
                                     mediaInfo = state.mediaInfo[request.media.tmdbId],
                                     isAdmin = isAdmin,
                                     actionInProgress = state.actionInProgress,
+                                    selectionMode = state.selectionMode,
+                                    isSelected = request.id in state.selectedRequestIds,
                                     onApprove = { viewModel.approveRequest(request.id) },
                                     onDecline = { viewModel.declineRequest(request.id) },
                                     onRetry = { viewModel.retryRequest(request.id) },
                                     onDelete = { viewModel.deleteRequest(request.id) },
-                                    onClick = { selectedRequest = request },
+                                    onClick = {
+                                        if (state.selectionMode) viewModel.toggleSelection(request)
+                                        else selectedRequest = request
+                                    },
+                                    onLongClick = { viewModel.toggleSelection(request) },
                                 )
                             }
                             item {
@@ -292,6 +296,80 @@ fun RequestsScreen(
                         onNavigateToDetail(tmdbId, mediaType)
                         selectedRequest = null
                     },
+                )
+            }
+
+            // Bulk-selection action bar.
+            if (state.selectionMode) {
+                SelectionActionBar(
+                    selectedCount = state.selectedRequestIds.size,
+                    actionInProgress = state.actionInProgress,
+                    onSelectAll = { viewModel.selectAll() },
+                    onClear = { viewModel.clearSelection() },
+                    onApprove = { viewModel.approveSelected() },
+                    onDecline = { viewModel.declineSelected() },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectionActionBar(
+    selectedCount: Int,
+    actionInProgress: Boolean,
+    onSelectAll: () -> Unit,
+    onClear: () -> Unit,
+    onApprove: () -> Unit,
+    onDecline: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    androidx.compose.material3.Surface(
+        modifier = modifier,
+        shape = ShapeCache.smooth16,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 3.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.requests_selected_count, selectedCount),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            androidx.compose.material3.TextButton(onClick = onSelectAll, enabled = !actionInProgress) {
+                Text(stringResource(R.string.requests_select_all))
+            }
+            androidx.compose.material3.FilledTonalButton(
+                onClick = onApprove,
+                enabled = !actionInProgress && selectedCount > 0,
+            ) {
+                Text(stringResource(R.string.requests_action_approve))
+            }
+            androidx.compose.material3.FilledTonalButton(
+                onClick = onDecline,
+                enabled = !actionInProgress && selectedCount > 0,
+                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                ),
+            ) {
+                Text(stringResource(R.string.requests_action_decline))
+            }
+            androidx.compose.material3.IconButton(onClick = onClear, enabled = !actionInProgress) {
+                Icon(
+                    Tabler.Outline.X,
+                    contentDescription = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
                 )
             }
         }

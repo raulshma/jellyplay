@@ -88,6 +88,10 @@
     <string name="widget_config_source_upcoming_movies_description">Movies releasing soon</string>
     <string name="widget_config_source_upcoming_tv">Upcoming TV</string>
     <string name="widget_config_source_upcoming_tv_description">Shows premiering soon</string>
+    <string name="widget_cw_item_count">Items to show</string>
+    <string name="widget_np_show_artwork">Show artwork</string>
+    <string name="widget_np_show_progress">Show progress</string>
+    <string name="widget_config_done">Done</string>
 
     <!-- In-app self-update sheet -->
     <string name="update_checking">Checking for updates\u2026</string>
@@ -106,8 +110,11 @@
     <string name="update_ready_title">Ready to install — v%1$s</string>
     <string name="update_ready_body">The update has been downloaded. Tap Install to continue.</string>
     <string name="update_install">Install</string>
+    <string name="update_download_again">Download again</string>
     <string name="update_failed_title">Update failed</string>
     <string name="update_close">Close</string>
+    <string name="update_auto_download_label">Download updates automatically</string>
+    <string name="update_auto_download_subtitle">New updates download right away for this device</string>
 
     <!-- Shared media transport (content descriptions & labels) -->
     <string name="media_play">Play</string>

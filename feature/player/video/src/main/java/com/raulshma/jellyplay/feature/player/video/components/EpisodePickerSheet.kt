@@ -192,6 +192,13 @@ internal fun EpisodePickerSheet(
                     }
                 }
 
+                // Resolve the current episode once in an O(n) pass instead of an
+                // O(n^2) re-scan (episodes.none { it.id == ... }) per row.
+                val currentEpisodeIndex = remember(episodes, currentEpisodeId) {
+                    episodes.indexOfFirst { it.id == currentEpisodeId }
+                }
+                val focusTargetIndex = if (currentEpisodeIndex >= 0) currentEpisodeIndex else 0
+
                 LazyColumn {
                     itemsIndexed(
                         episodes,
@@ -199,12 +206,15 @@ internal fun EpisodePickerSheet(
                         contentType = { _, _ -> "episode" },
                     ) { index, episode ->
                         val isCurrent = episode.id == currentEpisodeId
-                        val isFirstOrCurrent = isCurrent || (episodes.none { it.id == currentEpisodeId } && index == 0)
+                        val isFirstOrCurrent = index == focusTargetIndex
+                        // Memoize the thumbnail URL per episode id so it isn't
+                        // rebuilt for every visible row on each recomposition.
+                        val imageUrl = remember(episode.id) { getImageUrl(episode.id) }
 
                         EpisodeRow(
                             episode = episode,
                             isCurrent = isCurrent,
-                            imageUrl = getImageUrl(episode.id),
+                            imageUrl = imageUrl,
                             onClick = { onEpisodeSelect(episode) },
                             modifier = Modifier.ifElse(isFirstOrCurrent, Modifier.focusRequester(episodeFocusRequester))
                         )

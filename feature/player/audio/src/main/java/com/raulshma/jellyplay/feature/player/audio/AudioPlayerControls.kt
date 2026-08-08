@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.audio
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,6 +40,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalView
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.*
 import com.composables.icons.tabler.outline.*
@@ -353,6 +355,7 @@ internal fun PixelPlayPauseButton(
     focusRequester: FocusRequester? = null,
 ) {
     val focusState = rememberTvFocusState()
+    val view = LocalView.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -377,6 +380,14 @@ internal fun PixelPlayPauseButton(
     val buttonBg = MaterialTheme.colorScheme.primaryContainer
     val iconColor = MaterialTheme.colorScheme.onPrimaryContainer
 
+    // Light confirmation haptic on play/pause toggle (matches video player).
+    val hapticOnClick: () -> Unit = remember(onClick, view) {
+        {
+            onClick()
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        }
+    }
+
     Box(
         modifier = Modifier
             .then(sharedModifier)
@@ -387,11 +398,11 @@ internal fun PixelPlayPauseButton(
             .tvFocusIndicator(focusState, ShapeCache.smooth20)
             .clip(ShapeCache.smooth20)
             .background(buttonBg)
-            
+
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick,
+                onClick = hapticOnClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -422,6 +433,7 @@ private fun IconButtonWithPressAnimation(
     modifier: Modifier = Modifier,
 ) {
     val focusState = rememberTvFocusState()
+    val view = LocalView.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -430,8 +442,17 @@ private fun IconButtonWithPressAnimation(
         label = "transportScale",
     )
 
+    // Light confirmation haptic on every transport tap (consistent with the
+    // video player). Respects the system haptic setting.
+    val hapticOnClick: () -> Unit = remember(onClick, view) {
+        {
+            onClick()
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        }
+    }
+
     IconButton(
-        onClick = onClick,
+        onClick = hapticOnClick,
         modifier = modifier
             .size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }

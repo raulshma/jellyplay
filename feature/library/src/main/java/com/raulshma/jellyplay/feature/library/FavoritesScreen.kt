@@ -212,12 +212,14 @@ private fun MediaTypeFilterRow(
     selectedType: MediaType?,
     onTypeSelected: (MediaType?) -> Unit,
 ) {
+    // (type, string resource) pairs — labels resolved at render time so they
+    // follow the active locale. Reuses the shared core media-type strings.
     val filterTypes = remember {
-        listOf<Pair<MediaType?, String>>(
-            null to "All",
-            MediaType.MOVIE to "Movies",
-            MediaType.SERIES to "TV Shows",
-            MediaType.EPISODE to "Episodes",
+        listOf<Pair<MediaType?, Int>>(
+            null to R.string.library_all,
+            MediaType.MOVIE to com.raulshma.jellyplay.core.ui.R.string.core_media_movie_plural,
+            MediaType.SERIES to com.raulshma.jellyplay.core.ui.R.string.core_media_series_plural,
+            MediaType.EPISODE to com.raulshma.jellyplay.core.ui.R.string.core_media_episode_plural,
         )
     }
 
@@ -227,8 +229,9 @@ private fun MediaTypeFilterRow(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        filterTypes.forEach { (type, label) ->
+        filterTypes.forEach { (type, labelRes) ->
             val isSelected = selectedType == type
+            val label = stringResource(labelRes)
             val containerColor by animateColorAsState(
                 targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),

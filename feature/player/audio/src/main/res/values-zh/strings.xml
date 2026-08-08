@@ -36,6 +36,7 @@
     <string name="audio_menu_night_mode">夜间模式</string>
     <string name="audio_menu_night_mode_with_strength">夜间模式 · %1$s</string>
     <string name="audio_menu_ambient_mode">氛围模式</string>
+    <string name="audio_menu_add_to_playlist">添加到播放列表</string>
     <string name="audio_menu_sleep_timer">睡眠定时器</string>
     <string name="audio_menu_sleep_timer_active">睡眠定时器 · %1$s</string>
     <string name="audio_menu_karaoke_mode">卡拉OK 模式</string>
@@ -96,6 +97,13 @@
     <!-- Queue sheet -->
     <string name="audio_queue_title">队列</string>
     <string name="audio_queue_remove">从队列中移除</string>
+    <string name="audio_queue_position">%1$d / %2$d</string>
+
+    <!-- Add to playlist picker -->
+    <string name="audio_playlist_picker_title">添加到播放列表</string>
+    <string name="audio_added_to_playlist">已添加到“%1$s”</string>
+    <string name="audio_no_playlists">暂无播放列表</string>
+    <string name="audio_playlist_items_count">%1$d 项</string>
 
     <!-- Speed picker -->
     <string name="audio_speed_title">播放速度</string>

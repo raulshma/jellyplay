@@ -78,6 +78,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.SearchField
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -162,28 +163,57 @@ fun LogsScreen(
                 }
             }
 
+            // Message-text filter. Applies to whichever tab is active.
+            var searchQuery by remember { mutableStateOf("") }
+            SearchField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = stringResource(R.string.admin_logs_search_placeholder),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+
+            // Resolve the filtered list once per recomposition.
+            val query = searchQuery.trim()
             when (state.selectedTabIndex) {
-                0 -> LogFilesTab(
-                    logFiles = state.logFiles,
-                    selectedLogFileName = state.selectedLogFileName,
-                    selectedLogFileLines = state.selectedLogFileLines,
-                    isLoadingContent = state.isLoadingLogContent,
-                    isPollingActive = state.isLogPollingActive,
-                    onTogglePolling = { viewModel.toggleLogPolling() },
-                    onFileClick = { viewModel.loadLogFile(it) },
-                    onBackToList = { viewModel.clearSelectedLogFile() },
-                    bottomPadding = adaptiveInfo.bottomPadding(isTv),
-                    listFocusRequester = listFocusRequester,
-                )
-                1 -> ActivityLogTab(
-                    entries = state.activityEntries,
-                    isLiveActive = state.isLiveStreamActive,
-                    liveEntryIds = state.liveEntryIds,
-                    isLoadingMore = false,
-                    onLoadMore = { viewModel.loadMoreActivity() },
-                    bottomPadding = adaptiveInfo.bottomPadding(isTv),
-                    listFocusRequester = listFocusRequester,
-                )
+                0 -> {
+                    val filteredLines = remember(state.selectedLogFileLines, query) {
+                        if (query.isEmpty()) state.selectedLogFileLines
+                        else state.selectedLogFileLines.filter { query in it.text }
+                    }
+                    val filteredFiles = remember(state.logFiles, query) {
+                        if (query.isEmpty()) state.logFiles
+                        else state.logFiles.filter { query in it.name }
+                    }
+                    LogFilesTab(
+                        logFiles = filteredFiles,
+                        selectedLogFileName = state.selectedLogFileName,
+                        selectedLogFileLines = filteredLines,
+                        isLoadingContent = state.isLoadingLogContent,
+                        isPollingActive = state.isLogPollingActive,
+                        onTogglePolling = { viewModel.toggleLogPolling() },
+                        onFileClick = { viewModel.loadLogFile(it) },
+                        onBackToList = { viewModel.clearSelectedLogFile() },
+                        bottomPadding = adaptiveInfo.bottomPadding(isTv),
+                        listFocusRequester = listFocusRequester,
+                    )
+                }
+                1 -> {
+                    val filteredEntries = remember(state.activityEntries, query) {
+                        if (query.isEmpty()) state.activityEntries
+                        else state.activityEntries.filter { entry ->
+                            query in entry.name || (entry.overview?.contains(query) == true) || query in entry.type
+                        }
+                    }
+                    ActivityLogTab(
+                        entries = filteredEntries,
+                        isLiveActive = state.isLiveStreamActive,
+                        liveEntryIds = state.liveEntryIds,
+                        isLoadingMore = false,
+                        onLoadMore = { viewModel.loadMoreActivity() },
+                        bottomPadding = adaptiveInfo.bottomPadding(isTv),
+                        listFocusRequester = listFocusRequester,
+                    )
+                }
             }
         }
     }

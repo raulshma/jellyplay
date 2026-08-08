@@ -36,6 +36,7 @@
     <string name="audio_menu_night_mode">ナイトモード</string>
     <string name="audio_menu_night_mode_with_strength">ナイトモード · %1$s</string>
     <string name="audio_menu_ambient_mode">アンビエントモード</string>
+    <string name="audio_menu_add_to_playlist">プレイリストに追加</string>
     <string name="audio_menu_sleep_timer">スリープタイマー</string>
     <string name="audio_menu_sleep_timer_active">スリープタイマー · %1$s</string>
     <string name="audio_menu_karaoke_mode">カラオケモード</string>
@@ -96,6 +97,13 @@
     <!-- Queue sheet -->
     <string name="audio_queue_title">キュー</string>
     <string name="audio_queue_remove">キューから削除</string>
+    <string name="audio_queue_position">%1$d / %2$d</string>
+
+    <!-- Add to playlist picker -->
+    <string name="audio_playlist_picker_title">プレイリストに追加</string>
+    <string name="audio_added_to_playlist">「%1$s」に追加しました</string>
+    <string name="audio_no_playlists">プレイリストがまだありません</string>
+    <string name="audio_playlist_items_count">%1$d 件</string>
 
     <!-- Speed picker -->
     <string name="audio_speed_title">再生速度</string>

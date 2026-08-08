@@ -6,6 +6,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.BackupSliceKey
 import com.raulshma.jellyplay.core.datastore.LegacySettingsBackup
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
@@ -46,6 +47,7 @@ class SettingsViewModel @Inject constructor(
     private val preferencesStore: UserPreferencesStore,
     private val projections: PreferenceProjections,
     private val authRepository: AuthRepository,
+    private val seerrRepository: SeerrRepository,
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
     private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {
@@ -82,6 +84,9 @@ class SettingsViewModel @Inject constructor(
     val currentServerAddress = authRepository.currentServer
         .map { it?.address ?: "" }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val pendingRequestCount: kotlinx.coroutines.flow.StateFlow<Int> = seerrRepository.pendingRequestCount
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     var activeSessions by composeState<List<com.raulshma.jellyplay.core.model.SessionInfo>>(emptyList())
         private set
@@ -122,6 +127,7 @@ class SettingsViewModel @Inject constructor(
                 isLoadingUsers = false
             }
         }
+        seerrRepository.startPolling()
     }
 
     /**
@@ -212,6 +218,7 @@ class SettingsViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         sessionRefreshJob?.cancel()
+        seerrRepository.stopPolling()
     }
 
     fun setShowAdvancedSettings(enabled: Boolean) {

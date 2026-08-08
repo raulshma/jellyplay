@@ -180,6 +180,7 @@ interface SeerrApiClient {
         sortDirection: String = "desc",
         requestedBy: Int? = null,
         mediaType: String? = null,
+        search: String? = null,
     ): Result<SeerrRequestListResponse>
 
     suspend fun getRequest(

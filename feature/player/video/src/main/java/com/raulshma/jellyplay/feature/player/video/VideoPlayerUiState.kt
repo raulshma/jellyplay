@@ -267,6 +267,14 @@ data class VideoPlayerUiState(
      * silently transcodes high-bitrate sources even on AUTO quality.
      */
     val isConnectionMetered: Boolean = false,
+    /**
+     * In-player "Audio only" toggle: hides the video surface (see the
+     * AndroidView mount in VideoPlayerScreen) while keeping playback alive via
+     * the existing media session. ExoPlayer audio is independent of the surface,
+     * so collapsing the view does not interrupt the engine. Purely a UI/surface
+     * gate — does NOT touch the engine or PlayerLifecycleManager.
+     */
+    val audioOnly: Boolean = false,
 ) {
 
     // ── Cohesive sub-state projections ────────────────────────────────────

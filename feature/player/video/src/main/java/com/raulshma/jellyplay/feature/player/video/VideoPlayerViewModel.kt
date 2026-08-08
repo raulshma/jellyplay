@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.player.video
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
+import android.util.Rational
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,6 +64,7 @@ import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
@@ -116,6 +119,16 @@ private const val SAVED_KEY_POSITION_MS = "video_player.saved_position_ms"
 private const val SAVED_KEY_PLAY_SESSION_ID = "video_player.saved_play_session_id"
 private const val SAVED_KEY_POSITION_PERSISTED_AT = "video_player.saved_position_persisted_at"
 private const val POSITION_PERSIST_MIN_INTERVAL_MS = 5_000L
+/**
+ * Quiet-period for coalescing the *offline-mirror* DB write during rapid
+ * scrubbing: [seekTo] fires one per seek gesture, and the immediate
+ * `recordProgress` launches would queue against Room's executor. Only the DB
+ * mirror is coalesced — the SavedStateHandle writes stay immediate so explicit
+ * seek positions still survive process death. The position tick's throttled
+ * mirror write (`persistPlaybackPosition(force=false)`) catches up within
+ * seconds, so a dropped coalesced write is never lost for long.
+ */
+private const val SEEK_PROGRESS_COALESCE_MS = 500L
 /**
  * A persisted position older than this is treated as stale on a process-death
  * restore and ignored: the user backgrounded the app long enough that
@@ -380,6 +393,11 @@ class VideoPlayerViewModel @Inject constructor(
     private var playSessionId: String = java.util.UUID.randomUUID().toString()
     // Last position (ms) written to savedStateHandle; used to throttle writes.
     private var lastPersistedPositionMs: Long = Long.MIN_VALUE
+    /**
+     * Single-flight coalescing job for the offline-mirror DB write during seek
+     * scrubbing. Cancelled+relaunched per [seekTo]; see [scheduleCoalescedSeekProgress].
+     */
+    private var pendingSeekProgressJob: Job? = null
 
     /**
      * Single resolved playback-session id. The server issues its own id
@@ -564,8 +582,21 @@ class VideoPlayerViewModel @Inject constructor(
         _currentPositionMs.value = positionMs
         playerSessionManager.engine?.seekTo(positionMs)
         // Explicit seeks are the most important position to survive process
-        // death; persist immediately rather than waiting for the throttle.
-        persistPlaybackPosition(positionMs, force = true)
+        // death; persist the SavedStateHandle snapshot immediately rather than
+        // waiting for the throttle.
+        val itemId = playerSessionManager.sessionState.value.currentItemId
+        if (itemId != null) {
+            lastPersistedPositionMs = positionMs
+            savedStateHandle[SAVED_KEY_ITEM_ID] = itemId
+            savedStateHandle[SAVED_KEY_POSITION_MS] = positionMs
+            savedStateHandle[SAVED_KEY_PLAY_SESSION_ID] = currentPlaySessionId
+            savedStateHandle[SAVED_KEY_POSITION_PERSISTED_AT] = System.currentTimeMillis()
+            // The DB mirror is coalesced: rapid scrubbing no longer queues one
+            // recordProgress per seek. SavedStateHandle above is already
+            // immediate, and the throttled tick mirror catches up regardless.
+            val durationMs = playerSessionManager.engine?.durationMs ?: 0L
+            scheduleCoalescedSeekProgress(itemId, positionMs, durationMs)
+        }
     }
 
     /**
@@ -749,24 +780,13 @@ class VideoPlayerViewModel @Inject constructor(
     init {
         castManager.acquireConsumer()
         // Register the PiP transport bridge so the Activity can dispatch PiP
-        // remote-action intents (play/pause/skip/next) to the active engine
-        //. Cleared on reset() when playback ends.
-        pipController.pipTransport = PipTransport { action ->
-            val engine = playerSessionManager.engine ?: return@PipTransport
-            when (action) {
-                PipAction.PLAY -> engine.play()
-                PipAction.PAUSE -> engine.pause()
-                PipAction.SKIP_FORWARD -> {
-                    val skip = _uiState.value.seekDurationMs
-                    seekTo((engine.currentPositionMs + skip).coerceAtLeast(0L))
-                }
-                PipAction.SKIP_BACKWARD -> {
-                    val skip = _uiState.value.seekDurationMs
-                    seekTo((engine.currentPositionMs - skip).coerceAtLeast(0L))
-                }
-                PipAction.NEXT -> playNextEpisode()
-            }
-        }
+        // remote-action intents (play/pause/skip/next) to the active engine.
+        // Also re-armed in initializeInternal(): this VM is Activity-scoped
+        // (Nav3 has no per-entry ViewModelStore here) and is reused across media,
+        // and release() from the screen's onDispose runs pipController.reset()
+        // which nulls the transport — but init never re-runs on the reused
+        // instance, so every load must re-arm it or PiP controls go dead.
+        registerPipTransport()
         launch {
             aggregateStore.aggregate.collect { agg ->
                 val oldAggregate = cachedAggregate
@@ -980,19 +1000,27 @@ class VideoPlayerViewModel @Inject constructor(
                             } }
                             launch { engine.playbackState.collect { state ->
                                 val stateInt = when (state) {
-                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.IDLE -> 1
-                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING -> 2
-                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.READY -> 3
-                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED -> 4
-                                    com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ERROR -> 1
+                                    EnginePlaybackState.IDLE -> 1
+                                    EnginePlaybackState.BUFFERING -> 2
+                                    EnginePlaybackState.READY -> 3
+                                    EnginePlaybackState.ENDED -> 4
+                                    EnginePlaybackState.ERROR -> 1
                                 }
                                 syncPlayBridge.onPlaybackStateChanged(stateInt)
-                                val buffering = state == com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.BUFFERING
+                                val buffering = state == EnginePlaybackState.BUFFERING
                                 _uiState.update { s ->
                                     if (s.isBuffering == buffering) s else s.copy(isBuffering = buffering)
                                 }
-                                if (state == com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.ENDED) {
+                                if (state == EnginePlaybackState.ENDED) {
                                     handlePlaybackEnded()
+                                }
+                                // Auto-exit PiP when playback ends or errors so the
+                                // window does not linger on a frozen frame. Pause is
+                                // intentionally excluded — users pause to read.
+                                if (pipController.isInPipMode.value &&
+                                    (state == EnginePlaybackState.ENDED || state == EnginePlaybackState.ERROR)
+                                ) {
+                                    pipController.requestAutoExitPip()
                                 }
                             } }
                             launch { engine.availableTracks.collect { trackSelectionHelper.updateTracksFromEngine() } }
@@ -1157,6 +1185,42 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Arms the PiP transport bridge so the Activity can dispatch PiP remote-action
+     * intents (play/pause/skip/next) to the active engine. Idempotent and safe to
+     * call repeatedly: [release] → [performRelease] → [PipController.reset] nulls
+     * the transport, and because this VM is Activity-scoped (Nav3 has no per-entry
+     * ViewModelStore here) `init` does not re-run on the reused instance — so
+     * [initializeInternal] must re-arm it on every load or PiP controls go dead
+     * after the first media close.
+     */
+    private fun registerPipTransport() {
+        pipController.pipTransport = PipTransport { action ->
+            val engine = playerSessionManager.engine
+            if (engine == null) {
+                // PiP bypasses the MediaSession entirely (broadcast -> PipTransport
+                // -> engine), so this silently no-ops when no engine is bound.
+                // Log so a stale transport is diagnosable instead of dead-buttons.
+                Log.w(TAG, "PiP action $action dropped: no active player engine")
+                return@PipTransport
+            }
+            Log.d(TAG, "PiP action $action -> engine")
+            when (action) {
+                PipAction.PLAY -> engine.play()
+                PipAction.PAUSE -> engine.pause()
+                PipAction.SKIP_FORWARD -> {
+                    val skip = _uiState.value.seekDurationMs
+                    seekTo((engine.currentPositionMs + skip).coerceAtLeast(0L))
+                }
+                PipAction.SKIP_BACKWARD -> {
+                    val skip = _uiState.value.seekDurationMs
+                    seekTo((engine.currentPositionMs - skip).coerceAtLeast(0L))
+                }
+                PipAction.NEXT -> playNextEpisode()
+            }
+        }
+    }
+
     val playerEngineRef: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine? get() = playerSessionManager.engine
 
     /**
@@ -1265,6 +1329,27 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Coalesces the offline-mirror DB write during seek scrubbing: cancels any
+     * in-flight pending write and schedules a fresh one [SEEK_PROGRESS_COALESCE_MS]
+     * later, so rapid seeks emit at most one `recordProgress` per quiet window.
+     * The SavedStateHandle snapshot is already written synchronously by [seekTo],
+     * and the throttled position tick (`persistPlaybackPosition(force=false)`)
+     * re-writes the mirror every [POSITION_PERSIST_MIN_INTERVAL_MS], so a dropped
+     * coalesced write is recovered within seconds.
+     */
+    private fun scheduleCoalescedSeekProgress(itemId: String, positionMs: Long, durationMs: Long) {
+        pendingSeekProgressJob?.cancel()
+        pendingSeekProgressJob = launch {
+            delay(SEEK_PROGRESS_COALESCE_MS)
+            val positionTicks = positionMs * 10_000L // ms → ticks
+            val percentage = if (durationMs > 0L) {
+                (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
+            } else 0.0
+            offlinePlaybackFacade.recordProgress(itemId, positionTicks, percentage, isPlayed = false)
+        }
+    }
+
     private fun initializeInternal(
         itemId: String,
         mediaSourceId: String?,
@@ -1274,6 +1359,10 @@ class VideoPlayerViewModel @Inject constructor(
         allowCinemaMode: Boolean,
     ) {
         released = false
+        // Re-arm the PiP transport: the previous media's onDispose ran release()
+        // → pipController.reset() which nulled it. init only ran once (this VM is
+        // Activity-scoped and reused), so a new load must re-register it.
+        registerPipTransport()
         autoplayController.resetForNewItem()
         _uiState.update { it.copy(autoplayCancelled = false) }
         lastSeekPositionMs = null
@@ -1370,6 +1459,8 @@ class VideoPlayerViewModel @Inject constructor(
             java.util.UUID.randomUUID().toString()
         }
         lastPersistedPositionMs = Long.MIN_VALUE
+        pendingSeekProgressJob?.cancel()
+        pendingSeekProgressJob = null
         trickplayManager.clear()
 
         if (wasInSyncPlay) {
@@ -1814,6 +1905,32 @@ class VideoPlayerViewModel @Inject constructor(
             val detected = detectAspectRatio(_uiState.value.mediaStreams)
             _uiState.update { it.copy(detectedAspectRatio = detected) }
         }
+        // The PiP aspect ratio always tracks the underlying media, independent
+        // of the in-app resize mode, so it does not need re-deriving here.
+    }
+
+    /**
+     * Pushes the server-reported video stream dimensions into [PipController] as
+     * a `Rational` so the PiP window matches the content (16:9, 4:3, 21:9, …)
+     * instead of always letterboxing to 16:9. Falls back to `null` (→ 16:9 in
+     * the Activity) when the stream or its dimensions are unknown.
+     */
+    private fun updatePipAspectRatio(streams: List<com.raulshma.jellyplay.core.model.MediaStream>) {
+        val video = streams.firstOrNull { it.type == com.raulshma.jellyplay.core.model.StreamType.VIDEO }
+        val w = video?.width
+        val h = video?.height
+        pipController.setPipAspectRatio(
+            if (w != null && h != null && h != 0) Rational(w, h) else null
+        )
+    }
+
+    /**
+     * Forwards the video surface's window bounds to [PipController] as the PiP
+     * source-rect hint. Thin wrapper so the screen does not reach through the
+     * ViewModel into the controller.
+     */
+    fun updatePipSourceRect(rect: android.graphics.Rect?) {
+        pipController.updatePipSourceRect(rect)
     }
 
     fun setSubtitleStyle(style: SubtitleStyle) {
@@ -2661,6 +2778,7 @@ class VideoPlayerViewModel @Inject constructor(
             mediaStreams = streams,
             detectedAspectRatio = detectAspectRatio(streams),
         ) }
+        updatePipAspectRatio(streams)
         // Rebuild the audio/subtitle track options from the refreshed server
         // streams. A subtitle download/upload attaches a new MediaStream server-
         // side, but the engine's availableTracks flow only re-emits on an engine-
@@ -2762,6 +2880,10 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.engine?.setVideoStatsEnabled(newValue)
     }
 
+    fun toggleAudioOnly() {
+        _uiState.update { it.copy(audioOnly = !it.audioOnly) }
+    }
+
     fun toggleMute() {
         val engine = playerSessionManager.engine ?: return
         val currentlyMuted = _uiState.value.isMuted
@@ -2823,11 +2945,12 @@ class VideoPlayerViewModel @Inject constructor(
         playerSessionManager.release()
         playerLifecycleManager.reset()
         // Clear per-item PiP mirrors but KEEP pipTransport: it is a VM-owned
-        // bridge registered once in init and read by the Activity's PiP
-        // BroadcastReceiver. Nulling it here (as reset() does) would deaden
-        // every PiP control, because initialize() calls releaseInternals() on
-        // every item load and the transport is never re-registered. Full
-        // reset() (transport included) runs in performRelease() on teardown.
+        // bridge re-armed in init AND initializeInternal (because release() from
+        // the screen's onDispose runs pipController.reset(), nulling it). Nulling
+        // it here would deaden PiP controls mid-session, since initialize() calls
+        // releaseInternals() on every item load. The full reset() (transport
+        // included) runs in performRelease() on teardown, and the next load
+        // re-arms it.
         pipController.setPlaying(false)
         pipController.pipHasNext = false
         trickplayManager.clear()
@@ -2951,6 +3074,16 @@ class VideoPlayerViewModel @Inject constructor(
         pipController.reset()
         castManager.releaseConsumer()
         activePlayerController.clearEngine()
+        // Belt-and-suspenders: flush a pending coalesced seek-mirror write so the
+        // offline store doesn't lag the final position on release. The write is
+        // moved onto the release scope (IO + NonCancellable) so it survives the
+        // viewModelScope being cancelled on clear().
+        val pendingSeek = pendingSeekProgressJob
+        if (pendingSeek != null && itemId != null) {
+            releaseScope.launch(NonCancellable) {
+                pendingSeek.join()
+            }
+        }
         // Skip the second Stop if reportCurrentPlaybackStopped already
         // sent one for this session — duplicate Stop reports confuse the
         // server's resume/progress bookkeeping.
@@ -2994,5 +3127,9 @@ class VideoPlayerViewModel @Inject constructor(
             // re-derive "is this item part of a series?" at the call site.
             mediaRepository.invalidateUserDataCaches(itemId)
         }
+    }
+
+    private companion object {
+        const val TAG = "VideoPlayerViewModel"
     }
 }

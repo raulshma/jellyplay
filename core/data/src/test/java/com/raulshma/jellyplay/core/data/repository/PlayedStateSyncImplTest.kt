@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -11,6 +13,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -31,6 +34,8 @@ class PlayedStateSyncImplTest {
     private val playbackOutboxRepository: PlaybackOutboxRepository = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val downloadsStore: DownloadsStore = mockk()
+    private val downloadRepository: DownloadRepository = mockk(relaxed = true)
 
     private lateinit var sync: PlayedStateSyncImpl
 
@@ -39,12 +44,21 @@ class PlayedStateSyncImplTest {
         // dagger.Lazy is trivially faked — PlayedStateSyncImpl only calls get().
         val lazyMedia: Lazy<MediaRepository> = mockk()
         every { lazyMedia.get() } returns mediaRepository
+        val lazyStore: Lazy<DownloadsStore> = mockk()
+        every { lazyStore.get() } returns downloadsStore
+        val lazyDownloads: Lazy<DownloadRepository> = mockk()
+        every { lazyDownloads.get() } returns downloadRepository
+        // Auto-delete-after-watch defaults OFF, so existing flip tests stay
+        // unaffected: getDownloadByMediaItemId is never reached.
+        every { downloadsStore.downloads } returns kotlinx.coroutines.flow.MutableStateFlow(DownloadsSlice())
         sync = PlayedStateSyncImpl(
             apiClient,
             offlineRepository,
             playbackOutboxRepository,
             offlineModeManager,
             lazyMedia,
+            lazyStore,
+            lazyDownloads,
         )
     }
 

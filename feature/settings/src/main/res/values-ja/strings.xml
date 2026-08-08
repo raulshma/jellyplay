@@ -750,6 +750,16 @@
     <string name="settings_storage_internal">内部ストレージ</string>
     <string name="settings_storage_external">外部 SD カード</string>
 
+    <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
+    <string name="downloads_auto_delete_after_watch">視聴後に削除</string>
+    <string name="downloads_auto_delete_after_watch_subtitle">視聴完了したダウンロードを削除します</string>
+
+    <!-- StorageSettingsScreen.kt: real storage mounts -->
+    <string name="storage_internal">内部ストレージ</string>
+    <string name="storage_sd_card">SDカード</string>
+    <string name="storage_usb">USBストレージ</string>
+    <string name="storage_external">外部ストレージ</string>
+
     <!-- AudioSettingsScreen.kt -->
     <string name="settings_sleep_timer_duration">スリープタイマーの時間</string>
     <string name="settings_sleep_timer_15_min">15 分</string>

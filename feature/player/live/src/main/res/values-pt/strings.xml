@@ -46,4 +46,6 @@
     <string name="live_option_auto_desc">Deixar o servidor escolher (transmissão direta quando possível)</string>
     <string name="live_option_direct_desc">Ler o sintonizador aberto diretamente (melhor qualidade)</string>
     <string name="live_option_transcode_desc">Recodificar no servidor (menor largura de banda)</string>
+    <string name="live_now_playing_short">Reproduzindo</string>
+    <string name="livetv_last_watched_section">Visto recentemente</string>
 </resources>

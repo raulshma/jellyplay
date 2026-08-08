@@ -4,6 +4,16 @@
     <string name="newsletter_could_not_load">无法加载简报</string>
     <string name="newsletter_preparing_digest">正在为你准备摘要\u2026</string>
 
+    <!-- Newsletter send actions (admin-gated; backend route required) -->
+    <string name="newsletter_send_now">立即发送</string>
+    <string name="newsletter_send_test">发送测试</string>
+    <string name="newsletter_send_confirm_title">发送通讯？</string>
+    <string name="newsletter_send_confirm_body">这会将通讯发送给所有订阅者。</string>
+    <string name="newsletter_send_success">通讯已发送</string>
+    <string name="newsletter_send_failed">发送通讯失败</string>
+    <string name="newsletter_test_sent">测试通讯已发送</string>
+    <string name="newsletter_send_admin_only">仅管理员</string>
+
     <!-- Newsletter screens & sections -->
     <string name="newsletter_title">通讯</string>
     <string name="newsletter_activity_digest">活动摘要</string>

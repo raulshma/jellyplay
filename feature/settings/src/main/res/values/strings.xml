@@ -171,6 +171,8 @@
     <string name="settings_send_logs_chooser">Send Logs</string>
     <string name="settings_check_updates_automatically">Check for Updates Automatically</string>
     <string name="settings_check_updates_subtitle">Periodically check GitHub for new releases</string>
+    <string name="settings_download_updates_automatically">Download Updates Automatically</string>
+    <string name="settings_download_updates_subtitle">New updates download right away instead of waiting for you to tap Download</string>
     <string name="settings_checking_for_updates">Checking for updates\u2026</string>
     <string name="settings_update_available">Update available: v%1$s</string>
     <string name="settings_up_to_date">Up to date (v%1$s)</string>
@@ -817,6 +819,16 @@
     <string name="settings_storage_internal">Internal Storage</string>
     <string name="settings_storage_external">External SD Card</string>
 
+    <!-- DownloadsSettingsScreen.kt: auto-delete after watching -->
+    <string name="downloads_auto_delete_after_watch">Auto-delete after watching</string>
+    <string name="downloads_auto_delete_after_watch_subtitle">Remove downloads once fully watched</string>
+
+    <!-- StorageSettingsScreen.kt: real storage mounts -->
+    <string name="storage_internal">Internal storage</string>
+    <string name="storage_sd_card">SD card</string>
+    <string name="storage_usb">USB storage</string>
+    <string name="storage_external">External storage</string>
+
     <!-- AudioSettingsScreen.kt -->
     <string name="settings_sleep_timer_duration">Sleep Timer Duration</string>
     <string name="settings_sleep_timer_15_min">15 minutes</string>
@@ -896,6 +908,8 @@
     <string name="settings_hide_episode_thumbnails_subtitle">Hide episode preview images to avoid spoilers</string>
     <string name="settings_compact_episode_list">Compact Episode List</string>
     <string name="settings_compact_episode_list_subtitle">Show episodes as a vertical list on mobile instead of a horizontal row</string>
+    <string name="settings_confirm_library_reset">Confirm Library Reset</string>
+    <string name="settings_confirm_library_reset_subtitle">Show a confirmation dialog before resetting the library to defaults</string>
     <string name="settings_skip_special_episodes">Skip Special Episodes</string>
     <string name="settings_skip_special_episodes_subtitle">Exclude specials/bonus episodes from episode lists</string>
     <string name="settings_haptic_feedback">Haptic Feedback</string>

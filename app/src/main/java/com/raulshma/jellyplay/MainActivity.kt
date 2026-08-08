@@ -9,9 +9,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.graphics.Color
 import androidx.activity.SystemBarStyle
@@ -56,6 +58,8 @@ import com.raulshma.jellyplay.core.ui.components.colorBlindFilter
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -144,14 +148,25 @@ class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
         ) {
+            // One collector drives param application for both the pre-arm path
+            // (not yet in PiP: setAutoEnterEnabled + aspect + source rect, no
+            // actions) and the in-PiP refresh path (resolution/track swap while
+            // already in PiP: actions + aspect). Branching here avoids a second
+            // aspect collector that would double-apply params on a track change.
             lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    pipController.shouldAutoEnterPip.collect { shouldAutoEnter ->
-                        val params = PictureInPictureParams.Builder()
-                            .setAutoEnterEnabled(shouldAutoEnter)
-                            .build()
-                        setPictureInPictureParams(params)
-                    }
+                    combine(
+                        pipController.shouldAutoEnterPip,
+                        pipController.pipAspectRatio,
+                    ) { shouldAutoEnter, aspect -> shouldAutoEnter to aspect }
+                        .distinctUntilChanged()
+                        .collect {
+                            if (isInPictureInPictureMode) {
+                                applyPipParams(includeActions = true)
+                            } else {
+                                applyPipParams(includeActions = false)
+                            }
+                        }
                 }
             }
             // Keep the PiP play/pause action icon in sync with playback state.
@@ -159,6 +174,19 @@ class MainActivity : FragmentActivity() {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     pipController.isPlaying.collect {
                         refreshPipActions()
+                    }
+                }
+            }
+            // Auto-exit: when the ViewModel signals END/ERROR in PiP, reuse the
+            // existing dismiss path (pause + navigate back) so no new exit
+            // plumbing is needed.
+            lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    pipController.autoExitPip.collect { exit ->
+                        if (exit && isInPictureInPictureMode) {
+                            pipController.consumeAutoExitPip()
+                            pipController.notifyPipDismissed()
+                        }
                     }
                 }
             }
@@ -515,29 +543,81 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    fun enterPipMode(aspectRatio: Rational? = null) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
-
-        val shouldAutoEnter = pipController.shouldAutoEnterPip.value
+    fun enterPipMode() {
+        if (!isPipCapable()) return
 
         registerPipActionReceiver()
 
-        val params = PictureInPictureParams.Builder().apply {
-            val ratio = aspectRatio ?: Rational(16, 9)
-            val clamped = clampAspectRatio(ratio)
-            setAspectRatio(clamped)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                setAutoEnterEnabled(shouldAutoEnter)
-                setSeamlessResizeEnabled(shouldAutoEnter)
-            }
-            // PiP remote actions require API 26+ (RemoteAction itself); the actions
-            // list is accepted on all PiP-capable versions but only rendered by the
-            // system on API 26+.
-            setActions(buildPipActions())
-        }.build()
+        val params = buildPipParams(preArm = false, includeActions = true)
+        // Wrap the system call: some OEMs/ROMs throw IllegalArgumentException on
+        // out-of-range aspect ratios or malformed source rects even after our
+        // clamping. Fail open (no entry) rather than crashing — VLC's defense.
+        runCatching { enterPictureInPictureMode(params) }
+            .onFailure { Log.w(TAG, "PiP enter failed", it) }
+    }
 
-        enterPictureInPictureMode(params)
+    private fun isPipCapable(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    /**
+     * Builds [PictureInPictureParams] from the live [PipController] state: the
+     * video aspect ratio (from server streams, clamped to the legal range), the
+     * source-rect hint (from the surface's window bounds, for a smooth enter
+     * animation), seamless resize, auto-enter flag, and remote actions.
+     *
+     * @param preArm `true` for the pre-arm path (not yet in PiP): sets
+     *  `setAutoEnterEnabled`/`setSeamlessResizeEnabled` from the controller so
+     *  the system can auto-enter on a home gesture; omits actions (only
+     *  rendered once in PiP). `false` for an explicit enter or an in-PiP
+     *  refresh, where actions are attached.
+     * @param includeActions whether to attach the play/pause/skip/next
+     *  RemoteActions. Omitted during pre-arm; attached on enter and refresh.
+     */
+    private fun buildPipParams(
+        preArm: Boolean,
+        includeActions: Boolean,
+    ): PictureInPictureParams = PictureInPictureParams.Builder().apply {
+        val ratio = pipController.pipAspectRatio.value ?: Rational(16, 9)
+        setAspectRatio(clampAspectRatio(ratio))
+        // Source-rect hint: the video surface's window bounds. Gives the system
+        // the crop source for a seamless enter animation (Jellyfin's pattern).
+        // Only set when the surface is laid out and within the window; a hint
+        // outside the window bounds is ignored or can throw on some ROMs.
+        pipController.pipSourceRect?.let { src ->
+            if (isValidSourceRect(src)) setSourceRectHint(src)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val autoEnter = if (preArm) pipController.shouldAutoEnterPip.value else false
+            setAutoEnterEnabled(autoEnter)
+            setSeamlessResizeEnabled(autoEnter)
+        }
+        if (includeActions) setActions(buildPipActions())
+    }.build()
+
+    /**
+     * A source-rect hint is valid only when it has non-zero area and is fully
+     * within the visible window bounds (off-screen edges can cause the system to
+     * drop the hint or throw).
+     */
+    private fun isValidSourceRect(src: Rect): Boolean {
+        if (src.width() <= 0 || src.height() <= 0) return false
+        if (src.left < 0 || src.top < 0) return false
+        val w = window.decorView.width
+        val h = window.decorView.height
+        return w <= 0 || h <= 0 || (src.right <= w && src.bottom <= h)
+    }
+
+    /**
+     * Re-applies the current PiP params via [setPictureInPictureParams]. Used
+     * both for pre-arming (when auto-enter/aspect change) and for live updates
+     * while in PiP. Guarded against [IllegalArgumentException].
+     */
+    private fun applyPipParams(includeActions: Boolean) {
+        if (!isPipCapable()) return
+        val params = buildPipParams(preArm = !isInPictureInPictureMode, includeActions = includeActions)
+        runCatching { setPictureInPictureParams(params) }
+            .onFailure { Log.w(TAG, "PiP setPictureInPictureParams failed", it) }
     }
 
     /**
@@ -595,12 +675,8 @@ class MainActivity : FragmentActivity() {
      * playback state changes while in PiP. No-op outside PiP.
      */
     fun refreshPipActions() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (!isInPictureInPictureMode) return
-        val params = PictureInPictureParams.Builder()
-            .setActions(buildPipActions())
-            .build()
-        runCatching { setPictureInPictureParams(params) }
+        applyPipParams(includeActions = true)
     }
 
     private fun registerPipActionReceiver() {
@@ -617,7 +693,14 @@ class MainActivity : FragmentActivity() {
                     PIP_ACTION_NEXT -> PipAction.NEXT
                     else -> return
                 }
-                pipController.pipTransport?.handle(action)
+                val transport = pipController.pipTransport
+                if (transport == null) {
+                    // A stale/unregistered transport silently drops PiP actions.
+                    // Log so it's diagnosable instead of dead PIP buttons.
+                    Log.w(TAG, "PiP action $action dropped: pipTransport is null")
+                } else {
+                    transport.handle(action)
+                }
                 // The play/pause toggle changes the icon — refresh immediately.
                 refreshPipActions()
             }
@@ -647,6 +730,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private companion object {
+        const val TAG = "MainActivity"
         const val PIP_ACTION_BROADCAST = "com.raulshma.jellyplay.PIP_ACTION"
         const val PIP_ACTION_EXTRA = "pip_action_id"
         const val PIP_ACTION_PLAY = 1

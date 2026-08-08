@@ -173,6 +173,8 @@
     <string name="player_video_set_a_point">Set A Point</string>
     <string name="player_video_set_b_point">Set B Point</string>
     <string name="player_video_clear_ab_repeat">Clear A/B Repeat</string>
+    <string name="player_audio_only">Audio only</string>
+    <string name="player_audio_only_on">Audio only on — video hidden</string>
 
     <!-- Video filter sheet -->
     <string name="player_video_brightness">Brightness</string>

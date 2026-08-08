@@ -31,6 +31,10 @@
     <string name="livetv_record_series">시리즈 녹화</string>
     <string name="livetv_cancel_recording">녹화 취소</string>
     <string name="livetv_cancel_series">시리즈 취소</string>
+    <string name="livetv_delete">삭제</string>
+    <string name="livetv_delete_recording_cd">녹화 삭제</string>
+    <string name="livetv_delete_recording_title">녹화를 삭제하시겠습니까?</string>
+    <string name="livetv_delete_recording_body">\"%1$s\"을(를) 삭제하시겠습니까? 되돌릴 수 없습니다.</string>
     <string name="livetv_record_success">녹화가 예약되었습니다</string>
     <string name="livetv_record_failed">녹화를 설정하지 못했습니다</string>
     <string name="livetv_record_canceled">녹화가 취소되었습니다</string>

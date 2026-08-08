@@ -4,6 +4,16 @@
     <string name="newsletter_could_not_load">ニュースレターを読み込めませんでした</string>
     <string name="newsletter_preparing_digest">ダイジェストを準備中\u2026</string>
 
+    <!-- Newsletter send actions (admin-gated; backend route required) -->
+    <string name="newsletter_send_now">今すぐ送信</string>
+    <string name="newsletter_send_test">テスト送信</string>
+    <string name="newsletter_send_confirm_title">ニュースレターを送信しますか？</string>
+    <string name="newsletter_send_confirm_body">すべての購読者にニュースレターが送信されます。</string>
+    <string name="newsletter_send_success">ニュースレターを送信しました</string>
+    <string name="newsletter_send_failed">ニュースレターを送信できませんでした</string>
+    <string name="newsletter_test_sent">テストニュースレターを送信しました</string>
+    <string name="newsletter_send_admin_only">管理者のみ</string>
+
     <!-- Newsletter screens & sections -->
     <string name="newsletter_title">ニュースレター</string>
     <string name="newsletter_activity_digest">アクティビティの要約</string>
