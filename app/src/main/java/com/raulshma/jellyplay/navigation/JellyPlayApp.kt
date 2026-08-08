@@ -782,6 +782,7 @@ private fun MainContent(
                     tvDrawerState = tvDrawerState,
                     tvDrawerListState = tvDrawerListState,
                     libraryFolders = libraryFolders,
+                    hiddenNavItems = preferences.hiddenNavItems,
                     nowPlayingTitle = audioTitle.takeIf { audioItemId != null },
                     nowPlayingEnabled = audioItemId != null,
                     showMiniPlayer = showMiniPlayer,
@@ -922,6 +923,7 @@ private fun TvContent(
     tvDrawerState: androidx.tv.material3.DrawerState,
     tvDrawerListState: androidx.compose.foundation.lazy.LazyListState,
     libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
+    hiddenNavItems: Set<String> = emptySet(),
     nowPlayingTitle: String?,
     nowPlayingEnabled: Boolean,
     showMiniPlayer: Boolean,
@@ -965,18 +967,23 @@ private fun TvContent(
             // ⋮ overflow). The TV drawer has no overflow menu, so keep Shortcuts
             // reachable here as an explicit primary item.
             val shortcutsLabel = stringResource(R.string.menu_shortcuts)
-            val primaryNavItems = remember(activeTopLevelRoutes, shortcutsLabel) {
-                activeTopLevelRoutes.entries.map { (route, label) ->
+            val primaryNavItems = remember(activeTopLevelRoutes, shortcutsLabel, hiddenNavItems) {
+                val baseItems = activeTopLevelRoutes.entries.map { (route, label) ->
                     TvNavItem(
                         route = route,
                         label = label,
                         icon = routeToIcon(route),
                     )
-                } + TvNavItem(
-                    route = Route.Shortcuts,
-                    label = shortcutsLabel,
-                    icon = routeToIcon(Route.Shortcuts),
-                )
+                }
+                if (Route.Shortcuts::class.simpleName !in hiddenNavItems) {
+                    baseItems + TvNavItem(
+                        route = Route.Shortcuts,
+                        label = shortcutsLabel,
+                        icon = routeToIcon(Route.Shortcuts),
+                    )
+                } else {
+                    baseItems
+                }
             }
             TvNavigationDrawer(
                 primaryItems = primaryNavItems,
