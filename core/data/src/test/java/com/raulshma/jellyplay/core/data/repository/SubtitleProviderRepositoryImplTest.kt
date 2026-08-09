@@ -133,13 +133,13 @@ class SubtitleProviderRepositoryImplTest {
     }
 
     @Test
-    fun `searchAll merges results and surfaces errors alongside them`() = runTest {
+    fun `searchAllStreaming merges results and surfaces errors alongside them`() = runTest {
         coEvery { wyzie.search(any(), any()) } returns Result.failure(IllegalStateException("wyzie down"))
         coEvery { openSubtitles.search(any(), any()) } returns Result.success(listOf(row(SubtitleProviderKind.OPENSUBTITLES)))
 
         val merged = newRepository(
             mapOf(SubtitleProviderKind.WYZIE to wyzie, SubtitleProviderKind.OPENSUBTITLES to openSubtitles),
-        ).searchAll(query, itemId = "item-1", language = "eng")
+        ).searchAllStreaming(query, itemId = "item-1", language = "eng") { }
 
         // OpenSubtitles row present, Wyzie error surfaced — neither hides the other.
         assertEquals(1, merged.results.size)
@@ -186,18 +186,17 @@ class SubtitleProviderRepositoryImplTest {
     }
 
     @Test
-    fun `searchAllStreaming final snapshot matches single-shot searchAll`() = runTest {
+    fun `searchAllStreaming final snapshot merges all providers in stable order`() = runTest {
         coEvery { wyzie.search(any(), any()) } returns Result.success(listOf(row(SubtitleProviderKind.WYZIE)))
         coEvery { openSubtitles.search(any(), any()) } returns Result.success(listOf(row(SubtitleProviderKind.OPENSUBTITLES)))
 
-        val repo = newRepository(
+        val merged = newRepository(
             mapOf(SubtitleProviderKind.WYZIE to wyzie, SubtitleProviderKind.OPENSUBTITLES to openSubtitles),
-        )
+        ).searchAllStreaming(query, itemId = "item-1", language = "eng") { }
 
-        val singleShot = repo.searchAll(query, itemId = "item-1", language = "eng")
-        val streamed = repo.searchAllStreaming(query, itemId = "item-1", language = "eng") { }
-
-        assertEquals(singleShot.results, streamed.results)
-        assertEquals(singleShot.errors, streamed.errors)
+        // Both providers present in the final snapshot, ordered by provider ordinal.
+        val providers = merged.results.map { it.provider }
+        assertEquals(listOf(SubtitleProviderKind.WYZIE, SubtitleProviderKind.OPENSUBTITLES), providers)
+        assertTrue(merged.errors.isEmpty())
     }
 }

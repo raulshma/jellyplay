@@ -392,7 +392,7 @@ internal class SubtitleManager(
             // playback start); only hit the network when it is missing. This
             // keeps external-provider search working when the Jellyfin server is
             // unreachable — the snapshot carries the TMDB/IMDb/title the
-            // external providers need, and [SubtitleProviderRepositoryImpl.searchAll]
+            // external providers need, and [SubtitleProviderRepositoryImpl.searchAllStreaming]
             // already isolates a Jellyfin failure (returns empty rather than
             // aborting) so a server outage only surfaces as an empty Jellyfin
             // section, not a blank result. The previous logic bailed out here
@@ -410,8 +410,7 @@ internal class SubtitleManager(
 
             // Centralized Jellyfin + external merge + sort. Streaming: each
             // provider's results/errors land in state the instant it resolves, so
-            // a slow/retrying provider can no longer gate its siblings. The final
-            // snapshot is identical to the old single-shot searchAll.
+            // a slow/retrying provider can no longer gate its siblings.
             val merged = subtitleProviderRepository.searchAllStreaming(
                 query.copy(languages = listOf(language)),
                 itemId,

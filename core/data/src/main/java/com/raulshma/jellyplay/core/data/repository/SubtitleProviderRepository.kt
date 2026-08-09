@@ -16,9 +16,11 @@ import kotlinx.coroutines.flow.Flow
  *
  * - [search] — fans out across every **configured external** provider
  *   concurrently. Jellyfin cannot participate (it lacks the server `itemId`
- *   here), so callers that want a merged Jellyfin + external list use [searchAll].
- * - [searchAll] — merges [searchJellyfin] with [search] into one ordered list
- *   with per-provider error messages; this is the player/editor entry point.
+ *   here), so callers that want a merged Jellyfin + external list use
+ *   [searchAllStreaming].
+ * - [searchAllStreaming] — merges [searchJellyfin] with [search] into one
+ *   ordered list with per-provider error messages, streaming partials as each
+ *   provider resolves; this is the player/editor entry point.
  * - [searchProvider] — probes a **single** provider by credentials alone
  *   (ignores the enable toggle), used by the *Test* button so a freshly pasted
  *   key can be verified before the user flips the Switch on.
@@ -41,7 +43,7 @@ interface SubtitleProviderRepository {
     /**
      * Searches every configured **external** provider concurrently. Jellyfin is
      * intentionally absent — it is `itemId`-scoped and cannot participate in a
-     * provider-agnostic [SubtitleQuery]; use [searchAll] for the merged list.
+     * provider-agnostic [SubtitleQuery]; use [searchAllStreaming] for the merged list.
      *
      * @return a map keyed by provider, where each value is either the merged
      *   list of results (on success) or an error message. The UI renders the
@@ -62,26 +64,18 @@ interface SubtitleProviderRepository {
     /**
      * Merges Jellyfin results ([searchJellyfin]) with every configured external
      * provider ([search]) into one stable-ordered list plus a per-provider error
-     * map. This is the player/editor entry point: it centralizes the merge +
-     * sort that callers used to duplicate.
-     */
-    suspend fun searchAll(
-        query: SubtitleQuery,
-        itemId: String,
-        language: String,
-    ): MergedSubtitleSearch
-
-    /**
-     * Streaming variant of [searchAll]: same final [MergedSubtitleSearch], but
-     * [onPartial] is invoked once per provider as each resolves (Jellyfin +
-     * every external provider), carrying the merged snapshot *so far*. This
-     * removes the all-or-nothing barrier: a slow/retrying provider can no longer
-     * gate its siblings' results, because each provider's rows/errors land in
-     * the UI the instant that provider resolves.
+     * map, streaming partial snapshots as each provider resolves. This is the
+     * player/editor entry point: it centralizes the merge + sort that callers
+     * used to duplicate.
+     *
+     * [onPartial] is invoked once per provider as each resolves (Jellyfin + every
+     * external provider), carrying the merged snapshot *so far*. This removes
+     * the all-or-nothing barrier: a slow/retrying provider can no longer gate
+     * its siblings' results, because each provider's rows/errors land in the UI
+     * the instant that provider resolves.
      *
      * [onPartial] may fire from background coroutines; callers must marshal onto
-     * their own dispatcher if they touch UI state from it. The final snapshot
-     * returned by this function is identical to what [searchAll] would produce.
+     * their own dispatcher if they touch UI state from it.
      */
     suspend fun searchAllStreaming(
         query: SubtitleQuery,
