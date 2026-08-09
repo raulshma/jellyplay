@@ -12,21 +12,17 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.feature.library.R
 
 /**
  * Shared shell for the per-filter selection sheets. Renders a
@@ -44,29 +40,29 @@ fun FilterSelectionSheet(
     content: @Composable () -> Unit,
 ) {
     val isTv = LocalTvMode.current
-    val isLight = LocalIsLightTheme.current
-    val sheetContainerColor = if (isLight) {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerHigh
-    }
+    // Sheet container matches the app/screen background tier: colorScheme.surface
+    // (pure #000 in OLED — identical to the Library screen — instead of the old
+    // light=Low / dark=High split that drifted from the other sheets).
+    val sheetContainerColor = MaterialTheme.colorScheme.surface
 
     val body: @Composable () -> Unit = {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(vertical = 16.dp),
-            )
-            content()
+            // SheetHeader carries the standard title treatment (titleLarge /
+            // SemiBold, leading-icon slot) and its own horizontal padding, so the
+            // body no longer pads horizontally here — content() keeps its own.
+            SheetHeader(title = title)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+            ) {
+                content()
+            }
         }
     }
 
