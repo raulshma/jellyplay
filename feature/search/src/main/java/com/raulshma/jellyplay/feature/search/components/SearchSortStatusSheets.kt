@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SortOption
@@ -118,9 +117,9 @@ private fun SearchSelectionSheet(
     content: @Composable () -> Unit,
 ) {
     val isTv = LocalTvMode.current
-    val isLight = LocalIsLightTheme.current
-    val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow
-    else MaterialTheme.colorScheme.surfaceContainerHigh
+    // Sheet container matches the app/screen background: colorScheme.surface
+    // (pure #000 in OLED) rather than the old light=Low / dark=High split.
+    val sheetContainerColor = MaterialTheme.colorScheme.surface
 
     if (isTv) {
         TvSafeSheet(onDismissRequest = onDismiss) {

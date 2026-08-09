@@ -156,8 +156,12 @@ private fun MobileBottomSheet(
         modifier = modifier,
         sheetState = sheetState,
         shape = ShapeCache.smoothTop28,
-        containerColor = colorScheme.surfaceContainer,
+        // surface (not surfaceContainer) so the sheet matches the app/screen
+        // background in every mode — pure #000 in OLED, identical to Library /
+        // MediaDetail, instead of the slightly-lifted surfaceContainer #111.
+        containerColor = colorScheme.surface,
         contentColor = colorScheme.onSurface,
+        tonalElevation = 0.dp,
         dragHandle = { SheetDragHandle() },
     ) {
         MaterialTheme(

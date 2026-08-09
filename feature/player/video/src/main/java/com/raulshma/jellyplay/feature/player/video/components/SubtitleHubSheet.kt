@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,6 +36,7 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.core.ui.components.SheetTabRow
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusState
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -168,7 +168,7 @@ internal fun SubtitleHubSheet(
             modifier = Modifier
                 .fillMaxWidth(),
         ) {
-            PrimaryTabRow(selectedTabIndex = safeIndex) {
+            SheetTabRow(selectedTabIndex = safeIndex) {
                 visibleTabs.forEachIndexed { index, tab ->
                     Tab(
                         selected = safeIndex == index,
@@ -225,6 +225,7 @@ internal fun SubtitleHubSheet(
                         onPickFont = onPickFont,
                         showOverrideToggle = true,
                         onReset = { onStyleChange(SubtitleStyle(applyCustomStyle = true)) },
+                        modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
                 SubtitleHubTab.GET -> SubtitleManagerSection(

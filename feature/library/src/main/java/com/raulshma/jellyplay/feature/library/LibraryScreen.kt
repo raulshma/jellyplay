@@ -1210,7 +1210,10 @@ fun LibraryScreen(
             title = stringResource(R.string.library_group_by),
             onDismiss = { showGroupBySheet = false },
         ) {
-            androidx.compose.foundation.layout.FlowRow {
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 GroupBy.entries.forEach { option ->
                     com.raulshma.jellyplay.core.ui.components.GlassFilterChip(
                         label = groupByLabel(option),

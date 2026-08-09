@@ -29,7 +29,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -65,6 +64,7 @@ import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadState
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetTabRow
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusState
 import com.raulshma.jellyplay.core.ui.tv.ifElse
@@ -229,7 +229,7 @@ internal fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSecti
             .fillMaxWidth()
             .padding(bottom = 16.dp),
     ) {
-        PrimaryTabRow(
+        SheetTabRow(
             selectedTabIndex = selectedTab,
         ) {
             tabs.forEachIndexed { index, tab ->

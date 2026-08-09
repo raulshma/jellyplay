@@ -74,8 +74,9 @@ fun SearchFilterSheet(
     val isTv = LocalTvMode.current
 
     val isLight = LocalIsLightTheme.current
-    val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow
-    else MaterialTheme.colorScheme.surfaceContainerHigh
+    // Sheet container matches the app/screen background: colorScheme.surface
+    // (pure #000 in OLED) rather than the old light=Low / dark=High split.
+    val sheetContainerColor = MaterialTheme.colorScheme.surface
     val glassBg = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
     val contentColor = MaterialTheme.colorScheme.onSurface
     val contentColorMedium = MaterialTheme.colorScheme.onSurfaceVariant

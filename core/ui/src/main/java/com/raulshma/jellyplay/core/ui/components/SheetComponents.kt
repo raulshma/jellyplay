@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -41,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
  * [MaterialTheme] color/typography/motion + [ShapeCache] — no new design tokens.
  *
  *  - [SheetHeader]      — title row with optional tinted icon, subtitle, close.
+ *  - [SheetTabRow]      — a [PrimaryTabRow] tuned to sit flush on a sheet body.
  *  - [SheetSection]     — the non-collapsible sibling of `SettingsGroup`: a
  *                         `smooth24` container on `surfaceContainerLow`.
  *  - [SheetDragHandle]  — the single drag handle both sheet wrappers use.
@@ -155,6 +158,41 @@ fun SheetHeader(
 }
 
 /**
+ * A [PrimaryTabRow] tuned to sit flush on a sheet body.
+ *
+ * The default [PrimaryTabRow] container is [TabRowDefaults.primaryContainerColor],
+ * which resolves to `colorScheme.surface` — so on a sheet painted at
+ * `surfaceContainer` the tab strip renders as a disjoint band (in OLED the tabs
+ * are pure #000 over the sheet's #111). Since sheets now paint at `surface` too,
+ * passing [Color.Transparent] keeps the tab strip perfectly flush with the body
+ * and lets the [MaterialTheme.colorScheme.primary] indicator + selected text
+ * carry the active state — the same active/inactive idiom the expressive nav bar
+ * uses (`primary`/`onPrimaryContainer` active, `onSurfaceVariant` inactive).
+ *
+ * The caller builds the `Tab`s in [tabs] exactly as it would for [PrimaryTabRow].
+ *
+ * @param selectedTabIndex the current selected tab index.
+ * @param tabs the row of [androidx.compose.material3.Tab]s, as for [PrimaryTabRow].
+ */
+@Composable
+fun SheetTabRow(
+    selectedTabIndex: Int,
+    modifier: Modifier = Modifier,
+    tabs: @Composable () -> Unit,
+) {
+    PrimaryTabRow(
+        selectedTabIndex = selectedTabIndex,
+        modifier = modifier,
+        containerColor = Color.Transparent,
+        // The default indicator is already a primary 3dp pill — keep it; only the
+        // divider is dropped so the flush tab strip doesn't draw a separator line
+        // against the sheet body.
+        divider = {},
+        tabs = tabs,
+    )
+}
+
+/**
  * A non-collapsible grouped-content container — the `SettingsGroup` look without
  * the expand affordance. Use inside a sheet body to cluster related controls
  * (e.g. an AV-sync sheet's delay rows, a filter sheet's chip groups) so the
@@ -163,6 +201,11 @@ fun SheetHeader(
  * Container: `clip(smooth24).background(surfaceContainerLow)` with
  * `horizontal=16 / vertical=14` padding, content spaced `4.dp` apart — the same
  * recipe [com.raulshma.jellyplay.feature.settings.SettingsGroup] uses.
+ *
+ * On a sheet painted at `colorScheme.surface` this `surfaceContainerLow` tier
+ * reads as a correctly-elevated grouped container (e.g. #0A0A0A over the OLED
+ * #000 body) — the inverse of the old `surfaceContainer` sheet where sections
+ * sank below the body.
  *
  * @param title optional section header; when present renders a compact row with
  *   the optional [icon] in a tinted `smooth12` container and a `titleMedium`

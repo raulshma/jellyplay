@@ -94,7 +94,10 @@ fun LibraryFilterSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val isLight = LocalIsLightTheme.current
-    val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerHigh
+    // Sheet container matches the app/screen background tier: colorScheme.surface
+    // (pure #000 in OLED — identical to the Library screen — instead of the old
+    // light=Low / dark=High split that drifted from the other sheets).
+    val sheetContainerColor = MaterialTheme.colorScheme.surface
 
     val isTv = LocalTvMode.current
 
