@@ -29,7 +29,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,8 +51,8 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.Download
-import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
@@ -93,35 +92,12 @@ fun SeriesDownloadSheet(
             .imePadding()
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.detail_download_series_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = stringResource(R.string.detail_download_series_subtitle),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconToggleButton(
-                checked = false,
-                onCheckedChange = { onDismiss() },
-                modifier = Modifier.size(40.dp),
-            ) {
-                Icon(
-                    imageVector = Tabler.Outline.X,
-                    contentDescription = stringResource(R.string.detail_cd_close),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
+        SheetHeader(
+            title = stringResource(R.string.detail_download_series_title),
+            subtitle = stringResource(R.string.detail_download_series_subtitle),
+            icon = Tabler.Outline.Download,
+            onClose = onDismiss,
+        )
 
         Spacer(Modifier.height(12.dp))
 

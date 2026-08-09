@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -42,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.AspectRatio
 import com.composables.icons.tabler.outline.Check
 
 enum class AspectRatio(val displayName: String, val ratio: Float?) {
@@ -81,12 +83,9 @@ fun AspectRatioSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                text = stringResource(R.string.player_video_aspect_ratio),
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                modifier = Modifier.padding(horizontal = 24.dp),
+            SheetHeader(
+                title = stringResource(R.string.player_video_aspect_ratio),
+                icon = Tabler.Outline.AspectRatio,
             )
             if (detectedRatio != null && detectedRatio != AspectRatio.FIT) {
                 Spacer(modifier = Modifier.height(4.dp))

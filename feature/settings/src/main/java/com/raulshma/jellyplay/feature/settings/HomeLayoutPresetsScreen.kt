@@ -54,6 +54,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -436,11 +437,7 @@ private fun SavePresetSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                stringResource(R.string.settings_save_current_layout),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            )
-            Spacer(Modifier.height(16.dp))
+            SheetHeader(title = stringResource(R.string.settings_save_current_layout), icon = Tabler.Outline.DeviceFloppy)
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -486,11 +483,7 @@ private fun ImportPresetSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                stringResource(R.string.settings_import_preset),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            )
-            Spacer(Modifier.height(8.dp))
+            SheetHeader(title = stringResource(R.string.settings_import_preset), icon = Tabler.Outline.Download)
             Text(
                 stringResource(R.string.settings_import_paste_description),
                 style = MaterialTheme.typography.bodySmall,
@@ -548,12 +541,7 @@ private fun PresetActionSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                preset.name,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
-            Spacer(Modifier.height(12.dp))
+            SheetHeader(title = preset.name, icon = Tabler.Outline.DotsVertical)
             LazyColumn {
                 items(actions.size, key = { actions[it].second }, contentType = { "preset_action" }) { index ->
                     val (icon, title, subtitle) = actions[index]

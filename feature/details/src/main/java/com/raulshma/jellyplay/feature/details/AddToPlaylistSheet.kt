@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,16 +27,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Bookmark
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.Plus
-import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 
 /**
@@ -70,29 +68,11 @@ fun AddToPlaylistSheet(
             .imePadding()
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.detail_playlist_picker_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            IconToggleButton(
-                checked = false,
-                onCheckedChange = { onDismiss() },
-                modifier = Modifier.size(40.dp),
-            ) {
-                Icon(
-                    imageVector = Tabler.Outline.X,
-                    contentDescription = stringResource(R.string.detail_cd_close),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
+        SheetHeader(
+            title = stringResource(R.string.detail_playlist_picker_title),
+            icon = Tabler.Outline.Bookmark,
+            onClose = onDismiss,
+        )
 
         Spacer(Modifier.height(12.dp))
 

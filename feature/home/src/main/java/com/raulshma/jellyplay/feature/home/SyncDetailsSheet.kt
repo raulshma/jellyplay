@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -90,44 +91,16 @@ internal fun SyncDetailsSheet(
                 .padding(bottom = 16.dp),
         ) {
             // ── Summary header: status icon + count + status line ──────────
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 14.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(ShapeCache.smooth14)
-                        .background(colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = if (isDraining) Tabler.Outline.Refresh else Tabler.Outline.CloudOff,
-                        contentDescription = null,
-                        tint = colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = stringResource(R.string.sync_items_queued, count),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = when {
-                            count == 0 -> stringResource(R.string.sync_up_to_date)
-                            isDraining -> stringResource(R.string.syncing)
-                            else -> stringResource(R.string.sync_will_sync_when_online)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            SheetHeader(
+                title = stringResource(R.string.sync_items_queued, count),
+                subtitle = when {
+                    count == 0 -> stringResource(R.string.sync_up_to_date)
+                    isDraining -> stringResource(R.string.syncing)
+                    else -> stringResource(R.string.sync_will_sync_when_online)
+                },
+                icon = if (isDraining) Tabler.Outline.Refresh else Tabler.Outline.CloudOff,
+                modifier = Modifier.padding(bottom = 14.dp),
+            )
 
             HorizontalDivider(
                 color = colorScheme.outlineVariant.copy(alpha = 0.4f),

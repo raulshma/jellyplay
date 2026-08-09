@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
@@ -118,8 +117,8 @@ fun LibraryFilterSheet(
             ) {
                 Text(
                     text = stringResource(R.string.library_filters),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
                     color = contentColor,
                 )
                 val resetFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -456,7 +455,8 @@ fun LibraryFilterSheet(
             sheetState = sheetState,
             containerColor = sheetContainerColor,
             tonalElevation = 0.dp,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            shape = ShapeCache.smoothTop28,
+            dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
         ) {
             filterContent()
         }

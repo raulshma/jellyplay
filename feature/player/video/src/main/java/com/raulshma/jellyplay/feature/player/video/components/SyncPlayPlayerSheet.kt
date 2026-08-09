@@ -48,6 +48,8 @@ import androidx.compose.material3.DropdownMenuItem
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.core.ui.components.SheetSection
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -90,19 +92,17 @@ fun SyncPlayPlayerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                stringResource(R.string.player_video_syncplay),
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
+            SheetHeader(
+                title = stringResource(R.string.player_video_syncplay),
+                icon = Tabler.Outline.Users,
             )
 
             val statusColor = if (isSynced) SyncStatusColors.synced else SyncStatusColors.else_
             Surface(
+                modifier = Modifier.padding(horizontal = 16.dp),
                 shape = ShapeCache.smooth16,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.2f)),
@@ -166,144 +166,146 @@ fun SyncPlayPlayerSheet(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                val toggleFocus = rememberTvFocusState()
-                FilledTonalButton(
-                    onClick = onTogglePlayPause,
-                    modifier = Modifier
-                        .weight(1f)
-                        .ifElse(isTv, Modifier.focusRequester(focusRequester))
-                        .then(toggleFocus.focusModifier)
-                        .tvFocusIndicator(toggleFocus, ShapeCache.smoothPill),
-                    shape = ShapeCache.smoothPill,
+            SheetSection(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(
-                        if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (isPlaying) stringResource(R.string.player_video_pause) else stringResource(R.string.player_video_play))
-                }
-                val stopFocus = rememberTvFocusState()
-                FilledTonalButton(
-                    onClick = onStop,
-                    modifier = Modifier
-                        .then(stopFocus.focusModifier)
-                        .tvFocusIndicator(stopFocus, ShapeCache.smoothPill),
-                    shape = ShapeCache.smoothPill,
-                ) {
-                    Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(R.string.player_video_stop), modifier = Modifier.size(18.dp))
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                var repeatExpanded by remember { mutableStateOf(false) }
-                val repeatFocus = rememberTvFocusState()
-                Box(modifier = Modifier.weight(1f)) {
+                    val toggleFocus = rememberTvFocusState()
                     FilledTonalButton(
-                        onClick = {
-                            if (isTv) {
-                                val nextMode = when (repeatMode) {
-                                    SyncPlayRepeatMode.REPEAT_NONE -> SyncPlayRepeatMode.REPEAT_ONE
-                                    SyncPlayRepeatMode.REPEAT_ONE -> SyncPlayRepeatMode.REPEAT_ALL
-                                    SyncPlayRepeatMode.REPEAT_ALL -> SyncPlayRepeatMode.REPEAT_NONE
-                                }
-                                onRepeatModeChange(nextMode)
-                            } else {
-                                repeatExpanded = true
-                            }
-                        },
+                        onClick = onTogglePlayPause,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .then(repeatFocus.focusModifier)
-                            .tvFocusIndicator(repeatFocus, ShapeCache.smoothPill),
+                            .weight(1f)
+                            .ifElse(isTv, Modifier.focusRequester(focusRequester))
+                            .then(toggleFocus.focusModifier)
+                            .tvFocusIndicator(toggleFocus, ShapeCache.smoothPill),
                         shape = ShapeCache.smoothPill,
                     ) {
-                        Icon(Tabler.Outline.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            if (isPlaying) Tabler.Outline.PlayerPause else Tabler.Outline.PlayerPlay,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
                         Spacer(Modifier.width(6.dp))
-                        val label = when (repeatMode) {
-                            SyncPlayRepeatMode.REPEAT_ONE -> stringResource(R.string.player_video_repeat_one)
-                            SyncPlayRepeatMode.REPEAT_ALL -> stringResource(R.string.player_video_repeat_all)
-                            SyncPlayRepeatMode.REPEAT_NONE -> stringResource(R.string.player_video_repeat_none)
-                        }
-                        Text(label)
+                        Text(if (isPlaying) stringResource(R.string.player_video_pause) else stringResource(R.string.player_video_play))
                     }
-                    if (!isTv) {
-                        DropdownMenu(
-                            expanded = repeatExpanded,
-                            onDismissRequest = { repeatExpanded = false },
-                        ) {
-                            SyncPlayRepeatMode.entries.forEach { mode ->
-                                val label = when (mode) {
-                                    SyncPlayRepeatMode.REPEAT_ONE -> stringResource(R.string.player_video_repeat_one)
-                                    SyncPlayRepeatMode.REPEAT_ALL -> stringResource(R.string.player_video_repeat_all)
-                                    SyncPlayRepeatMode.REPEAT_NONE -> stringResource(R.string.player_video_repeat_none)
-                                }
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        onRepeatModeChange(mode)
-                                        repeatExpanded = false
-                                    },
-                                )
-                            }
-                        }
+                    val stopFocus = rememberTvFocusState()
+                    FilledTonalButton(
+                        onClick = onStop,
+                        modifier = Modifier
+                            .then(stopFocus.focusModifier)
+                            .tvFocusIndicator(stopFocus, ShapeCache.smoothPill),
+                        shape = ShapeCache.smoothPill,
+                    ) {
+                        Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(R.string.player_video_stop), modifier = Modifier.size(18.dp))
                     }
                 }
 
-                var shuffleExpanded by remember { mutableStateOf(false) }
-                val shuffleFocus = rememberTvFocusState()
-                Box(modifier = Modifier.weight(1f)) {
-                    FilledTonalButton(
-                        onClick = {
-                            if (isTv) {
-                                val nextMode = when (shuffleMode) {
-                                    SyncPlayShuffleMode.SORTED -> SyncPlayShuffleMode.SHUFFLE
-                                    SyncPlayShuffleMode.SHUFFLE -> SyncPlayShuffleMode.SORTED
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    var repeatExpanded by remember { mutableStateOf(false) }
+                    val repeatFocus = rememberTvFocusState()
+                    Box(modifier = Modifier.weight(1f)) {
+                        FilledTonalButton(
+                            onClick = {
+                                if (isTv) {
+                                    val nextMode = when (repeatMode) {
+                                        SyncPlayRepeatMode.REPEAT_NONE -> SyncPlayRepeatMode.REPEAT_ONE
+                                        SyncPlayRepeatMode.REPEAT_ONE -> SyncPlayRepeatMode.REPEAT_ALL
+                                        SyncPlayRepeatMode.REPEAT_ALL -> SyncPlayRepeatMode.REPEAT_NONE
+                                    }
+                                    onRepeatModeChange(nextMode)
+                                } else {
+                                    repeatExpanded = true
                                 }
-                                onShuffleModeChange(nextMode)
-                            } else {
-                                shuffleExpanded = true
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(shuffleFocus.focusModifier)
-                            .tvFocusIndicator(shuffleFocus, ShapeCache.smoothPill),
-                        shape = ShapeCache.smoothPill,
-                    ) {
-                        Icon(Tabler.Outline.ArrowsShuffle, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        val label = when (shuffleMode) {
-                            SyncPlayShuffleMode.SHUFFLE -> stringResource(R.string.player_video_shuffle)
-                            SyncPlayShuffleMode.SORTED -> stringResource(R.string.player_video_sorted)
-                        }
-                        Text(label)
-                    }
-                    if (!isTv) {
-                        DropdownMenu(
-                            expanded = shuffleExpanded,
-                            onDismissRequest = { shuffleExpanded = false },
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(repeatFocus.focusModifier)
+                                .tvFocusIndicator(repeatFocus, ShapeCache.smoothPill),
+                            shape = ShapeCache.smoothPill,
                         ) {
-                            SyncPlayShuffleMode.entries.forEach { mode ->
-                                val label = when (mode) {
-                                    SyncPlayShuffleMode.SHUFFLE -> stringResource(R.string.player_video_shuffle)
-                                    SyncPlayShuffleMode.SORTED -> stringResource(R.string.player_video_sorted)
+                            Icon(Tabler.Outline.Repeat, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            val label = when (repeatMode) {
+                                SyncPlayRepeatMode.REPEAT_ONE -> stringResource(R.string.player_video_repeat_one)
+                                SyncPlayRepeatMode.REPEAT_ALL -> stringResource(R.string.player_video_repeat_all)
+                                SyncPlayRepeatMode.REPEAT_NONE -> stringResource(R.string.player_video_repeat_none)
+                            }
+                            Text(label)
+                        }
+                        if (!isTv) {
+                            DropdownMenu(
+                                expanded = repeatExpanded,
+                                onDismissRequest = { repeatExpanded = false },
+                            ) {
+                                SyncPlayRepeatMode.entries.forEach { mode ->
+                                    val label = when (mode) {
+                                        SyncPlayRepeatMode.REPEAT_ONE -> stringResource(R.string.player_video_repeat_one)
+                                        SyncPlayRepeatMode.REPEAT_ALL -> stringResource(R.string.player_video_repeat_all)
+                                        SyncPlayRepeatMode.REPEAT_NONE -> stringResource(R.string.player_video_repeat_none)
+                                    }
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            onRepeatModeChange(mode)
+                                            repeatExpanded = false
+                                        },
+                                    )
                                 }
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        onShuffleModeChange(mode)
-                                        shuffleExpanded = false
-                                    },
-                                )
+                            }
+                        }
+                    }
+
+                    var shuffleExpanded by remember { mutableStateOf(false) }
+                    val shuffleFocus = rememberTvFocusState()
+                    Box(modifier = Modifier.weight(1f)) {
+                        FilledTonalButton(
+                            onClick = {
+                                if (isTv) {
+                                    val nextMode = when (shuffleMode) {
+                                        SyncPlayShuffleMode.SORTED -> SyncPlayShuffleMode.SHUFFLE
+                                        SyncPlayShuffleMode.SHUFFLE -> SyncPlayShuffleMode.SORTED
+                                    }
+                                    onShuffleModeChange(nextMode)
+                                } else {
+                                    shuffleExpanded = true
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(shuffleFocus.focusModifier)
+                                .tvFocusIndicator(shuffleFocus, ShapeCache.smoothPill),
+                            shape = ShapeCache.smoothPill,
+                        ) {
+                            Icon(Tabler.Outline.ArrowsShuffle, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            val label = when (shuffleMode) {
+                                SyncPlayShuffleMode.SHUFFLE -> stringResource(R.string.player_video_shuffle)
+                                SyncPlayShuffleMode.SORTED -> stringResource(R.string.player_video_sorted)
+                            }
+                            Text(label)
+                        }
+                        if (!isTv) {
+                            DropdownMenu(
+                                expanded = shuffleExpanded,
+                                onDismissRequest = { shuffleExpanded = false },
+                            ) {
+                                SyncPlayShuffleMode.entries.forEach { mode ->
+                                    val label = when (mode) {
+                                        SyncPlayShuffleMode.SHUFFLE -> stringResource(R.string.player_video_shuffle)
+                                        SyncPlayShuffleMode.SORTED -> stringResource(R.string.player_video_sorted)
+                                    }
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            onShuffleModeChange(mode)
+                                            shuffleExpanded = false
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -314,6 +316,7 @@ fun SyncPlayPlayerSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
                     .clip(ShapeCache.smooth12)
                     .then(ignoreWaitFocus.focusModifier)
                     .tvFocusIndicator(ignoreWaitFocus, ShapeCache.smooth12)
@@ -344,6 +347,7 @@ fun SyncPlayPlayerSheet(
                 onClick = onLeave,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
                     .then(leaveFocus.focusModifier)
                     .tvFocusIndicator(leaveFocus, ShapeCache.smoothPill),
                 shape = ShapeCache.smoothPill,

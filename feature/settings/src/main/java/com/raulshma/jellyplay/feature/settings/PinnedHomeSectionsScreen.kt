@@ -55,6 +55,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -391,12 +392,10 @@ private fun AddPinnedSectionSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                if (selectedType == null) stringResource(R.string.settings_add_pinned_section) else stringResource(R.string.settings_choose_x, selectedType!!.displayName),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.padding(horizontal = 24.dp),
+            SheetHeader(
+                title = if (selectedType == null) stringResource(R.string.settings_add_pinned_section) else stringResource(R.string.settings_choose_x, selectedType!!.displayName),
+                icon = Tabler.Outline.Pin,
             )
-            Spacer(Modifier.height(12.dp))
 
             val currentType = selectedType
             val favoritesTitle = stringResource(R.string.settings_favorites)

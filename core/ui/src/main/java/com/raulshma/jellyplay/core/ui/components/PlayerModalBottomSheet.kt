@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SheetState
@@ -180,16 +178,9 @@ private fun InWindowPlayerSheet(
                                 liveDrag = 0f
                             },
                         )
-                    }
-                    .padding(top = 12.dp, bottom = 8.dp),
-                contentAlignment = Alignment.Center,
+                    },
             ) {
-                Box(
-                    Modifier
-                        .size(width = 40.dp, height = 4.dp)
-                        .clip(CircleShape)
-                        .background(colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
-                )
+                SheetDragHandle()
             }
 
             MaterialTheme(

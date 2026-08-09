@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -110,50 +111,43 @@ internal fun androidx.compose.foundation.layout.ColumnScope.TrackPickerSection(
             .fillMaxWidth()
             .padding(bottom = 16.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-            )
-            if (onReset != null) {
-                val resetFocusState = rememberTvFocusState(focusedScale = 1.04f)
-                Row(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .then(resetFocusState.focusModifier)
-                        .tvFocusIndicator(resetFocusState, CircleShape)
-                        .clickable {
-                            onReset()
-                            onPickDismiss()
-                        }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        Tabler.Outline.Rotate,
-                        contentDescription = stringResource(R.string.player_reset_to_auto),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.player_reset_to_auto),
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+        val resetAction = onReset
+        SheetHeader(
+            title = title,
+            icon = Tabler.Outline.Subtitles,
+            trailing = if (resetAction != null) {
+                {
+                    val resetFocusState = rememberTvFocusState(focusedScale = 1.04f)
+                    Row(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .then(resetFocusState.focusModifier)
+                            .tvFocusIndicator(resetFocusState, CircleShape)
+                            .clickable {
+                                resetAction()
+                                onPickDismiss()
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            Tabler.Outline.Rotate,
+                            contentDescription = stringResource(R.string.player_reset_to_auto),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.player_reset_to_auto),
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
-            }
-        }
+            } else null,
+        )
         Spacer(Modifier.height(12.dp))
         LazyColumn(modifier = Modifier.verticalWrapAround().weight(1f, fill = false)) {
             itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->

@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
@@ -134,6 +135,8 @@ private fun SearchSelectionSheet(
         sheetState = sheetState,
         containerColor = sheetContainerColor,
         tonalElevation = 0.dp,
+        shape = ShapeCache.smoothTop28,
+        dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
     ) {
         SheetBody(title = title, content = content)
     }
@@ -152,8 +155,8 @@ private fun SheetBody(
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 16.dp),
         )

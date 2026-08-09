@@ -158,6 +158,7 @@ private fun MobileBottomSheet(
         shape = ShapeCache.smoothTop28,
         containerColor = colorScheme.surfaceContainer,
         contentColor = colorScheme.onSurface,
+        dragHandle = { SheetDragHandle() },
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

@@ -61,8 +61,8 @@ fun FilterSelectionSheet(
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(vertical = 16.dp),
             )
@@ -97,6 +97,8 @@ fun FilterSelectionSheet(
             sheetState = sheetState,
             containerColor = sheetContainerColor,
             tonalElevation = 0.dp,
+            shape = ShapeCache.smoothTop28,
+            dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
         ) {
             body()
         }

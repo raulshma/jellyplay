@@ -26,11 +26,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.WaveSine
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.core.ui.components.SheetSection
 import com.raulshma.jellyplay.feature.player.audio.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,20 +57,10 @@ internal fun EqualizerSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.audio_equalizer_title),
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                    ),
-                )
-                Row {
+            SheetHeader(
+                title = stringResource(R.string.audio_equalizer_title),
+                    icon = Tabler.Outline.WaveSine,
+                trailing = {
                     TextButton(onClick = onReset) {
                         Text(stringResource(R.string.audio_reset))
                     }
@@ -75,8 +68,8 @@ internal fun EqualizerSheet(
                         checked = enabled,
                         onCheckedChange = { onToggle() },
                     )
-                }
-            }
+                },
+            )
             Spacer(Modifier.height(20.dp))
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 24.dp),
@@ -108,34 +101,36 @@ internal fun EqualizerSheet(
             // Frequency bands are wrapped in a scrollable, height-constrained column so the
             // sheet content never overflows on small screens (10 bands can't all fit at once).
             val frequencies = listOf("60Hz", "170Hz", "310Hz", "600Hz", "1kHz", "3kHz", "6kHz", "12kHz", "14kHz", "16kHz")
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                frequencies.forEachIndexed { index, freq ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            freq,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.width(48.dp),
-                        )
-                        Slider(
-                            value = bandLevels.getOrElse(index) { 0 }.toFloat(),
-                            onValueChange = { onBandChange(index, it.toInt()) },
-                            valueRange = -1500f..1500f,
-                            steps = 30,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            "${(bandLevels.getOrElse(index) { 0 } / 100.0)}dB",
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.width(48.dp),
-                        )
+            SheetSection(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    frequencies.forEachIndexed { index, freq ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                freq,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.width(48.dp),
+                            )
+                            Slider(
+                                value = bandLevels.getOrElse(index) { 0 }.toFloat(),
+                                onValueChange = { onBandChange(index, it.toInt()) },
+                                valueRange = -1500f..1500f,
+                                steps = 30,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                "${(bandLevels.getOrElse(index) { 0 } / 100.0)}dB",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.width(48.dp),
+                            )
+                        }
                     }
                 }
             }
