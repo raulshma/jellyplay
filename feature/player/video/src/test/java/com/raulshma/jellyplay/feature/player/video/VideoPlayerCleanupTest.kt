@@ -242,6 +242,7 @@ class VideoPlayerCleanupTest {
             mediaRepository = mediaRepository,
             playbackRepository = playbackRepository,
             subtitleProviderRepository = mockk(relaxed = true),
+            streamingSubtitleStore = noOpStreamingSubtitleStore(),
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,

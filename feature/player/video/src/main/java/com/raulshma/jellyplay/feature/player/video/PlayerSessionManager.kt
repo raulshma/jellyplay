@@ -75,6 +75,7 @@ class PlayerSessionManager(
     private val adaptiveBitrateManager: com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager,
     private val playerEngineFactory: PlayerEngineFactory,
     private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
+    private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
 ) {
     private val _sessionState = MutableStateFlow(PlayerSessionState())
     val sessionState: StateFlow<PlayerSessionState> = _sessionState.asStateFlow()
@@ -378,7 +379,40 @@ class PlayerSessionManager(
         }
 
         initializeEngine(playerType, detail, source, url, startPositionTicks, agg, playMethod)
+
+        // Re-attach subtitles previously saved from an external provider
+        // (OpenSubtitles/Wyzie) for this streaming item. These persist across
+        // replays on-device, so a subtitle downloaded once (even offline) is
+        // available on the next playback without a server round-trip.
+        loadStreamingSubtitles(itemId)
+
         _sessionState.update { it.copy(isReady = true) }
+    }
+
+    /**
+     * Side-loads subtitles previously persisted by `SubtitleManager` into the
+     * durable streaming-subtitle store. Mirrors [loadOfflineSubtitles] but for
+     * streaming (non-downloaded) items — keyed by `itemId`, not a media-file
+     * path. Files missing on disk are silently skipped.
+     */
+    private suspend fun loadStreamingSubtitles(itemId: String) {
+        val saved = streamingSubtitleStore.loadAll(itemId)
+        for (entry in saved) {
+            val file = streamingSubtitleStore.fileFor(itemId, entry)
+            if (!file.exists()) continue
+            addExternalSubtitle(
+                SubtitleSource(
+                    url = Uri.fromFile(file).toString(),
+                    label = entry.language ?: entry.fileName,
+                    language = entry.language,
+                    mimeType = null,
+                    codec = entry.codec,
+                    isDefault = false,
+                    isForced = entry.isForced,
+                    id = "streaming:${entry.provider}:${entry.providerSubtitleId}",
+                ),
+            )
+        }
     }
 
     private fun initializeEngine(

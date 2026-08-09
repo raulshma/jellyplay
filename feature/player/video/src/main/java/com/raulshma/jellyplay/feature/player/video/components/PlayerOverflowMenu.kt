@@ -87,7 +87,7 @@ internal fun BoxScope.PlayerOverflowMenu(
     channelMixEnabled: Boolean = false,
     sleepTimerActive: Boolean = false,
     sleepTimerDisplayText: String = "",
-    onSubtitleStyleClick: () -> Unit,
+    onSubtitleHubClick: () -> Unit,
     onDialogueBoostClick: () -> Unit,
     onDialogueBoostStrengthChange: (EffectStrength) -> Unit,
     onNightModeClick: () -> Unit,
@@ -97,7 +97,6 @@ internal fun BoxScope.PlayerOverflowMenu(
     onPlaybackModeClick: () -> Unit = {},
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
-    onSubtitleDownloadClick: () -> Unit,
     onVideoStatsClick: () -> Unit = {},
     onAudioNormalizationClick: () -> Unit = {},
     onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
@@ -206,13 +205,14 @@ internal fun BoxScope.PlayerOverflowMenu(
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 8.dp),
         ) {
-            if (supportsSubtitleStyle) {
-                OverflowMenuItem(
-                    icon = Tabler.Outline.Subtitles,
-                    label = stringResource(R.string.player_video_subtitle_style),
-                    onClick = onSubtitleStyleClick,
-                )
-            }
+            // Single "Subtitles" entry opens the unified subtitle hub (tracks /
+            // style / get / delay). Replaces the former separate "Subtitle Style"
+            // and "Get Subtitles" overflow items that were buried apart.
+            OverflowMenuItem(
+                icon = Tabler.Outline.Subtitles,
+                label = stringResource(R.string.player_video_subtitles),
+                onClick = onSubtitleHubClick,
+            )
 
             if (supportsDialogueBoost) {
                 if (showDialogueBoostSubmenu) {
@@ -394,7 +394,10 @@ internal fun BoxScope.PlayerOverflowMenu(
                     )
                 }
             }
-            if (supportsAudioDelay || supportsSubtitleDelay) {
+            // A/V Sync now hosts audio delay only — subtitle delay moved into
+            // the unified subtitle hub's "Delay" tab, so this item gates on
+            // audio delay alone.
+            if (supportsAudioDelay) {
                 OverflowMenuItem(
                     icon = Tabler.Outline.Adjustments,
                     label = stringResource(R.string.player_video_av_sync),
@@ -422,11 +425,6 @@ internal fun BoxScope.PlayerOverflowMenu(
                     tint = if (audioPassthrough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
-            OverflowMenuItem(
-                icon = Tabler.Outline.DotsVertical,
-                label = stringResource(R.string.player_video_get_subtitles),
-                onClick = onSubtitleDownloadClick,
-            )
             OverflowMenuItem(
                 icon = Tabler.Outline.InfoCircle,
                 label = if (showVideoStats) stringResource(R.string.player_video_stats_for_nerds_on) else stringResource(R.string.player_video_stats_for_nerds),

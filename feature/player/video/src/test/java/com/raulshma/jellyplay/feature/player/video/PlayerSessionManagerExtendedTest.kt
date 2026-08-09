@@ -77,6 +77,7 @@ class PlayerSessionManagerExtendedTest {
                 mockk<com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider>(relaxed = true),
             ),
             playbackSourceResolver = playbackSourceResolver,
+            streamingSubtitleStore = noOpStreamingSubtitleStore(),
         )
     }
 

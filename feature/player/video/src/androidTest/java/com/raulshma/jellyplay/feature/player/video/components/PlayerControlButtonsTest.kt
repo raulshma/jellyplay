@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Rule
 import org.junit.Test
+import com.raulshma.jellyplay.core.ui.player.PlayerIconButton
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 

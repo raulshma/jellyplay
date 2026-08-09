@@ -8,15 +8,20 @@ sealed class PlayerSheet {
     data object None : PlayerSheet() { override val key = "None" }
     data object Speed : PlayerSheet() { override val key = "Speed" }
     data object Audio : PlayerSheet() { override val key = "Audio" }
-    data object Subtitle : PlayerSheet() { override val key = "Subtitle" }
     data object Chapter : PlayerSheet() { override val key = "Chapter" }
     data object PlaybackInfo : PlayerSheet() { override val key = "PlaybackInfo" }
     data object AspectRatio : PlayerSheet() { override val key = "AspectRatio" }
-    data object SubtitleStyle : PlayerSheet() { override val key = "SubtitleStyle" }
+
+    /**
+     * The unified subtitle hub — consolidates the former `Subtitle` (track
+     * picker), `SubtitleStyle`, and `SubtitleDownload` sheets, and pulls
+     * subtitle delay out of [AVSync] (audio delay remains there). See
+     * `SubtitleHubSheet`.
+     */
+    data object SubtitleHub : PlayerSheet() { override val key = "SubtitleHub" }
 
     data object AVSync : PlayerSheet() { override val key = "AVSync" }
     data object Decoder : PlayerSheet() { override val key = "Decoder" }
-    data object SubtitleDownload : PlayerSheet() { override val key = "SubtitleDownload" }
     data object Episodes : PlayerSheet() { override val key = "Episodes" }
     data object SyncPlay : PlayerSheet() { override val key = "SyncPlay" }
     data object Quality : PlayerSheet() { override val key = "Quality" }
@@ -42,14 +47,12 @@ private val ALL_SHEETS: List<PlayerSheet> = listOf(
     PlayerSheet.None,
     PlayerSheet.Speed,
     PlayerSheet.Audio,
-    PlayerSheet.Subtitle,
     PlayerSheet.Chapter,
     PlayerSheet.PlaybackInfo,
     PlayerSheet.AspectRatio,
-    PlayerSheet.SubtitleStyle,
+    PlayerSheet.SubtitleHub,
     PlayerSheet.AVSync,
     PlayerSheet.Decoder,
-    PlayerSheet.SubtitleDownload,
     PlayerSheet.Episodes,
     PlayerSheet.SyncPlay,
     PlayerSheet.Quality,

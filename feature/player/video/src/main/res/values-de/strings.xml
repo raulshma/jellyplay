@@ -137,6 +137,11 @@
     <string name="player_video_more_options">Weitere Optionen</string>
     <string name="player_video_audio">Audio</string>
     <string name="player_video_subtitles">Untertitel</string>
+    <string name="player_video_subtitle_hub_section_tracks">Spuren</string>
+    <string name="player_video_subtitle_hub_section_style">Stil</string>
+    <string name="player_video_subtitle_hub_section_get">Abrufen</string>
+    <string name="player_video_subtitle_hub_section_delay">Verzögerung</string>
+    <string name="player_video_subtitle_downloaded_device_only">Nur auf Gerät gespeichert (offline)</string>
     <string name="player_video_chapters">Kapitel</string>
     <string name="player_video_episodes">Episoden</string>
     <string name="player_video_syncplay">SyncPlay</string>

@@ -43,19 +43,19 @@ internal fun RememberPreferenceToggle(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 2.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.primary.copy(alpha = if (checked) 0.10f else 0.04f))
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, CircleShape)
             .clickable { onToggle(!checked) }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge.copy(
+            style = MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal,
             ),
             color = if (checked) MaterialTheme.colorScheme.primary

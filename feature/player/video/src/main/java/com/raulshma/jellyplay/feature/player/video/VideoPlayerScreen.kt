@@ -135,6 +135,8 @@ import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialo
 import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackModeSheet
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubSheet
+import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleManagerSheet
 import com.raulshma.jellyplay.feature.player.video.components.CastIndicatorOverlay
 import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard
@@ -1532,8 +1534,24 @@ fun VideoPlayerScreen(
             val onSeekPositionChange by remember { mutableStateOf({ positionMs: Long -> seekPositionMs = positionMs }) }
             val onSpeedClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Speed }) }
             val onAudioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Audio }) }
-            val onSubtitleClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Subtitle }) }
-            val onSubtitleStyleClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SubtitleStyle }) }
+            // Primary subtitle button opens the hub on the Tracks tab.
+            val onSubtitleClick by remember { mutableStateOf({
+                viewModel.loadRemoteSubtitles()
+                viewModel.loadSubtitleCultures()
+                viewModel.loadConfiguredSubtitleProviders()
+                currentSheet = PlayerSheet.SubtitleHub
+            }) }
+            // Overflow "Subtitles" entry opens the hub on the Get tab (the
+            // former "Get Subtitles" entry point's most useful landing spot).
+            val onSubtitleHubClick by remember { mutableStateOf({
+                // Reset search/cultures state from any previous item before
+                // loading fresh data, so stale results don't leak across items.
+                viewModel.resetSubtitleManagerState()
+                viewModel.loadRemoteSubtitles()
+                viewModel.loadSubtitleCultures()
+                viewModel.loadConfiguredSubtitleProviders()
+                currentSheet = PlayerSheet.SubtitleHub
+            }) }
             val onChapterClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Chapter }) }
             val onInfoClick by remember { mutableStateOf({ currentSheet = PlayerSheet.PlaybackInfo }) }
             val onAspectRatioClick by remember { mutableStateOf({ currentSheet = PlayerSheet.AspectRatio }) }
@@ -1547,15 +1565,6 @@ fun VideoPlayerScreen(
             // `uiState.audioPassthrough` is read at invocation time — no key
             // needed and the lambda never goes stale.
             val onPassthroughClick by remember { mutableStateOf({ viewModel.setAudioPassthrough(!uiState.audioPassthrough) }) }
-            val onSubtitleDownloadClick by remember { mutableStateOf({
-                // Reset search/cultures state from any previous item before
-                // loading fresh data, so stale results don't leak across items.
-                viewModel.resetSubtitleManagerState()
-                viewModel.loadRemoteSubtitles()
-                viewModel.loadSubtitleCultures()
-                viewModel.loadConfiguredSubtitleProviders()
-                currentSheet = PlayerSheet.SubtitleDownload
-            }) }
             val onEpisodesClick by remember { mutableStateOf({ currentSheet = PlayerSheet.Episodes }) }
             val onSyncPlayClick by remember { mutableStateOf({ currentSheet = PlayerSheet.SyncPlay }) }
             val onPipClick by remember(onEnterPip) { mutableStateOf({ onEnterPip() }) }
@@ -1670,7 +1679,7 @@ fun VideoPlayerScreen(
                 onSpeedClick = onSpeedClick,
                 onAudioClick = onAudioClick,
                 onSubtitleClick = onSubtitleClick,
-                onSubtitleStyleClick = onSubtitleStyleClick,
+                onSubtitleHubClick = onSubtitleHubClick,
                 onChapterClick = onChapterClick,
                 onInfoClick = onInfoClick,
                 onAspectRatioClick = onAspectRatioClick,
@@ -1681,7 +1690,6 @@ fun VideoPlayerScreen(
                 onAVSyncClick = onAVSyncClick,
                 onDecoderClick = onDecoderClick,
                 onPassthroughClick = onPassthroughClick,
-                onSubtitleDownloadClick = onSubtitleDownloadClick,
                 onEpisodesClick = onEpisodesClick,
                 onSyncPlayClick = onSyncPlayClick,
                 onPipClick = onPipClick,
@@ -2068,14 +2076,22 @@ private fun PlayerSheetRouter(
                 } else null,
             )
         }
-        is PlayerSheet.Subtitle -> {
-            TrackPickerSheet(
-                title = stringResource(R.string.player_subtitles),
-                tracks = uiState.subtitleTracks,
-                onSelect = { viewModel.selectSubtitleTrack(it) },
-                onReset = if (uiState.hasSubtitleOverride) { { viewModel.resetSubtitleTrack() } } else null,
+        is PlayerSheet.SubtitleHub -> {
+            LaunchedEffect(Unit) {
+                viewModel.loadRemoteSubtitles()
+                viewModel.loadSubtitleCultures()
+                viewModel.loadConfiguredSubtitleProviders()
+            }
+            SubtitleHubSheet(
+                initialTab = com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab.TRACKS,
                 onDismiss = dismissSheet,
-                footer = if (uiState.seriesId != null) {
+                // Tracks tab
+                subtitleTracks = uiState.subtitleTracks,
+                onSelectSubtitleTrack = { viewModel.selectSubtitleTrack(it) },
+                onResetSubtitleTrack = if (uiState.hasSubtitleOverride) {
+                    { viewModel.resetSubtitleTrack() }
+                } else null,
+                tracksFooter = if (uiState.seriesId != null) {
                     {
                         // Per-series subtitle preference toggle. With a real track
                         // selected it saves that track's language + role so every
@@ -2096,29 +2112,59 @@ private fun PlayerSheetRouter(
                             onToggle = { remember ->
                                 val sel = uiState.subtitleTracks.firstOrNull { it.isSelected }
                                 if (sel != null && sel.index < 0) {
-                                    // Off row selected: toggle the "subtitles off"
-                                    // intent rather than a language.
                                     viewModel.setSeriesSubtitleDisabled(remember)
                                 } else if (remember) {
                                     viewModel.setSeriesSubtitlePreference(
                                         language = sel?.language,
-                                        // A role is only pinned when present: selecting a
-                                        // plain track passes null ("don't care") so the
-                                        // restore matcher relaxes to any same-language
-                                        // track instead of strictly excluding forced/SDH
-                                        // tracks whose badges vary episode-to-episode.
                                         forced = sel?.badges?.contains(TrackBadge.FORCED)?.takeIf { it },
                                         hearingImpaired = sel?.badges?.contains(TrackBadge.SDH)?.takeIf { it },
                                     )
                                 } else {
-                                    // A real track was selected and the user turned
-                                    // the toggle off: forget the language preference.
                                     viewModel.setSeriesSubtitlePreference(language = null)
                                 }
                             },
                         )
                     }
                 } else null,
+                // Style tab
+                subtitleStyle = uiState.subtitleStyle,
+                onStyleChange = { viewModel.setSubtitleStyle(it) },
+                onPickFont = onPickFont,
+                onOpenTester = onOpenSubtitleTester,
+                capabilities = uiState.engineCapabilities,
+                // Get tab
+                downloadSubtitles = uiState.remoteSubtitles,
+                isDownloading = uiState.isLoadingRemoteSubtitles,
+                onDownload = { viewModel.downloadSubtitle(it) },
+                onLoadLocalFile = onLoadLocalSubtitle,
+                searchResults = uiState.searchedSubtitles,
+                isSearching = uiState.isSearchingSubtitles,
+                hasSearched = uiState.hasSearchedSubtitles,
+                searchError = uiState.subtitleSearchError,
+                cultures = uiState.subtitleCultures,
+                defaultLanguage = uiState.defaultSearchLanguage,
+                onSearch = { viewModel.searchRemoteSubtitles(it) },
+                onDownloadSearched = { viewModel.downloadSubtitle(it) },
+                providerSearchResults = uiState.providerSearchResults,
+                providerSearchErrors = uiState.providerSearchErrors,
+                configuredProviders = uiState.configuredSubtitleProviders,
+                onSearchAllProviders = { viewModel.searchAllSubtitleProviders(it) },
+                onDownloadProviderSubtitle = { viewModel.downloadProviderSubtitle(it) },
+                downloadingSubtitles = uiState.downloadingSubtitles,
+                // "Use" affordance: the hub switches to its Tracks tab itself;
+                // this callback is a no-op placeholder for the host.
+                onUseSubtitle = {},
+                isUploading = uiState.isUploadingSubtitle,
+                onUpload = { uri, fileName, language, isForced, isHearingImpaired ->
+                    viewModel.uploadSubtitle(uri, fileName, language, isForced, isHearingImpaired)
+                    onSheetChange(PlayerSheet.None)
+                },
+                // Delay tab
+                currentSubtitleDelayMs = uiState.subtitleStyle.offsetMs,
+                onSubtitleDelayChange = { viewModel.setSubtitleDelay(it) },
+                activeSubtitleCues = uiState.subtitlePreviewCues,
+                subtitlePreviewSource = uiState.subtitlePreviewSource,
+                playbackPositionMs = { viewModel.currentPositionMs.value },
             )
         }
         is PlayerSheet.Chapter -> {
@@ -2174,16 +2220,6 @@ private fun PlayerSheetRouter(
                 onDismiss = dismissSheet,
             )
         }
-        is PlayerSheet.SubtitleStyle -> {
-            SubtitleStyleSheet(
-                currentStyle = uiState.subtitleStyle,
-                onStyleChange = { viewModel.setSubtitleStyle(it) },
-                onPickFont = onPickFont,
-                onDismiss = dismissSheet,
-                onOpenTester = onOpenSubtitleTester,
-                capabilities = uiState.engineCapabilities,
-            )
-        }
         is PlayerSheet.AVSync -> {
             AVSyncSheet(
                 currentAudioDelayMs = uiState.audioDelayMs,
@@ -2202,48 +2238,6 @@ private fun PlayerSheetRouter(
             DecoderPickerSheet(
                 currentMode = uiState.decoderMode,
                 onSelect = { viewModel.setDecoderMode(it) },
-                onDismiss = dismissSheet,
-            )
-        }
-        is PlayerSheet.SubtitleDownload -> {
-            SubtitleManagerSheet(
-                // Download tab
-                downloadSubtitles = uiState.remoteSubtitles,
-                isDownloading = uiState.isLoadingRemoteSubtitles,
-                onDownload = {
-                    // Keep the sheet open so the row can show a per-subtitle
-                    // spinner / ✓-Downloaded / "Use" affordance instead of closing
-                    // immediately and leaving the user with no download feedback.
-                    viewModel.downloadSubtitle(it)
-                },
-                onLoadLocalFile = onLoadLocalSubtitle,
-                // Search tab
-                searchResults = uiState.searchedSubtitles,
-                isSearching = uiState.isSearchingSubtitles,
-                hasSearched = uiState.hasSearchedSubtitles,
-                searchError = uiState.subtitleSearchError,
-                cultures = uiState.subtitleCultures,
-                defaultLanguage = uiState.defaultSearchLanguage,
-                onSearch = { viewModel.searchRemoteSubtitles(it) },
-                onDownloadSearched = {
-                    viewModel.downloadSubtitle(it)
-                },
-                // Shared per-subtitle download status + the "Use" affordance that
-                // opens the subtitle track picker once a download has surfaced.
-                downloadingSubtitles = uiState.downloadingSubtitles,
-                onUseSubtitle = { onSheetChange(PlayerSheet.Subtitle) },
-                // Multi-provider search (Jellyfin + Wyzie + OpenSubtitles).
-                providerSearchResults = uiState.providerSearchResults,
-                providerSearchErrors = uiState.providerSearchErrors,
-                configuredProviders = uiState.configuredSubtitleProviders,
-                onSearchAllProviders = { viewModel.searchAllSubtitleProviders(it) },
-                onDownloadProviderSubtitle = { viewModel.downloadProviderSubtitle(it) },
-                // Upload tab
-                isUploading = uiState.isUploadingSubtitle,
-                onUpload = { uri, fileName, language, isForced, isHearingImpaired ->
-                    viewModel.uploadSubtitle(uri, fileName, language, isForced, isHearingImpaired)
-                    onSheetChange(PlayerSheet.None)
-                },
                 onDismiss = dismissSheet,
             )
         }

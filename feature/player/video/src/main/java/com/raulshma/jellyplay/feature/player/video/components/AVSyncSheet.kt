@@ -272,3 +272,52 @@ internal fun DelayStepper(
         Icon(icon, contentDescription = description, tint = MaterialTheme.colorScheme.onSurface)
     }
 }
+
+/**
+ * Subtitle-delay-only section for the unified subtitle hub's "Delay" tab.
+ *
+ * This is the subtitle half of [AVSyncSheet]: the cue-preview sync helper plus
+ * its reset affordance. Audio delay is intentionally NOT included — it stays in
+ * [AVSyncSheet] (reached via the overflow "A/V Sync" item), since the hub is
+ * subtitle-scoped. Reuses [SubtitleSyncPreview] verbatim.
+ */
+@OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+internal fun SubtitleDelaySection(
+    currentSubtitleDelayMs: Long,
+    onSubtitleDelayChange: (Long) -> Unit,
+    activeSubtitleCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>?,
+    subtitlePreviewSource: com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource =
+        com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource.NONE,
+    playbackPositionMs: () -> Long = { 0L },
+    isTv: Boolean = false,
+) {
+    var subtitleDelayMs by remember(currentSubtitleDelayMs) { mutableLongStateOf(currentSubtitleDelayMs) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isTv) {
+        if (isTv) focusRequester.tryRequestFocus("subtitle-delay")
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 16.dp),
+    ) {
+        SubtitleSyncPreview(
+            positionMs = playbackPositionMs,
+            currentOffsetMs = subtitleDelayMs,
+            cues = activeSubtitleCues,
+            source = subtitlePreviewSource,
+            isTv = isTv,
+            focusRequester = focusRequester,
+            onOffsetChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
+            onReset = {
+                subtitleDelayMs = 0L
+                onSubtitleDelayChange(0L)
+            },
+        )
+    }
+}

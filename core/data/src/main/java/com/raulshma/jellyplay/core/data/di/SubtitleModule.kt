@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.data.di
 
+import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
+import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStoreImpl
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepositoryImpl
 import dagger.Binds
@@ -18,6 +20,10 @@ import javax.inject.Singleton
  * Jellyfin server search; callers that need it inject
  * [SubtitleProviderRepositoryImpl] directly, while the rest inject the
  * interface.
+ *
+ * [StreamingSubtitleStore] — durable per-item subtitle storage for streaming
+ * (non-downloaded) items — is bound here too since it's part of the same
+ * subtitle-storage surface.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -28,4 +34,10 @@ abstract class SubtitleModule {
     abstract fun bindSubtitleProviderRepository(
         impl: SubtitleProviderRepositoryImpl,
     ): SubtitleProviderRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindStreamingSubtitleStore(
+        impl: StreamingSubtitleStoreImpl,
+    ): StreamingSubtitleStore
 }

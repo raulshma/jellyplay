@@ -21,13 +21,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
@@ -112,16 +111,16 @@ fun SubtitleManagerSheet(
     // Multi-provider search (Jellyfin + Wyzie + OpenSubtitles). When external
     // providers are configured, the Search tab merges these into one list with
     // provider filter chips; otherwise only the legacy Jellyfin list shows.
-    providerSearchResults: List<com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult>,
-    providerSearchErrors: Map<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind, String>,
-    configuredProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind>,
-    onSearchAllProviders: (String) -> Unit,
-    onDownloadProviderSubtitle: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit,
+    providerSearchResults: List<com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult> = emptyList(),
+    providerSearchErrors: Map<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind, String> = emptyMap(),
+    configuredProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind> = setOf(com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind.JELLYFIN),
+    onSearchAllProviders: (String) -> Unit = {},
+    onDownloadProviderSubtitle: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit = {},
     // Shared: per-subtitle-id download status (spinner / ✓-Downloaded / delayed /
     // failed) for both Download + Search rows, and the "Use" affordance that opens
     // the subtitle track picker once a download has surfaced.
-    downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
-    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
+    downloadingSubtitles: Map<String, SubtitleDownloadStatus> = emptyMap(),
+    onUseSubtitle: (RemoteSubtitleInfo) -> Unit = {},
     // Upload tab
     isUploading: Boolean,
     onUpload: (Uri, String, String?, Boolean, Boolean) -> Unit,
@@ -131,7 +130,6 @@ fun SubtitleManagerSheet(
     // selectedTabIndex is remembered *saveably* so a config change (rotation,
     // locale switch) while the sheet is open restores the active tab.
     var selectedTab by rememberSaveable { mutableIntStateOf(SubtitleManagerTab.DOWNLOAD.ordinal) }
-    val tabs = SubtitleManagerTab.entries
     // One focus requester per tab's primary action so D-pad focus lands on a
     // real, on-screen target whenever the tab changes — not just the Download
     // tab. Without this the Search/Upload tabs are unreachable on a TV remote.
@@ -140,9 +138,84 @@ fun SubtitleManagerSheet(
     val uploadFocus = remember { FocusRequester() }
     val loadBtnFocus = rememberTvFocusState()
 
+    PlayerModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+    ) {
+        SubtitleManagerSection(
+            downloadSubtitles = downloadSubtitles,
+            isDownloading = isDownloading,
+            onDownload = onDownload,
+            onLoadLocalFile = onLoadLocalFile,
+            searchResults = searchResults,
+            isSearching = isSearching,
+            hasSearched = hasSearched,
+            searchError = searchError,
+            cultures = cultures,
+            defaultLanguage = defaultLanguage,
+            onSearch = onSearch,
+            onDownloadSearched = onDownloadSearched,
+            providerSearchResults = providerSearchResults,
+            providerSearchErrors = providerSearchErrors,
+            configuredProviders = configuredProviders,
+            onSearchAllProviders = onSearchAllProviders,
+            onDownloadProviderSubtitle = onDownloadProviderSubtitle,
+            downloadingSubtitles = downloadingSubtitles,
+            onUseSubtitle = onUseSubtitle,
+            isUploading = isUploading,
+            onUpload = onUpload,
+            isTv = isTv,
+            selectedTab = selectedTab,
+            onTabChange = { selectedTab = it },
+            downloadFocus = downloadFocus,
+            searchFocus = searchFocus,
+            uploadFocus = uploadFocus,
+            loadBtnFocus = loadBtnFocus,
+        )
+    }
+}
+
+/**
+ * The body of [SubtitleManagerSheet] (Download / Search / Upload tabbed
+ * content) without its own sheet chrome, for embedding inside the unified
+ * subtitle hub's "Get" tab. The host owns the selected-tab state + focus
+ * requesters so it can hoist them when needed.
+ */
+@Composable
+internal fun androidx.compose.foundation.layout.ColumnScope.SubtitleManagerSection(
+    downloadSubtitles: List<RemoteSubtitleInfo>,
+    isDownloading: Boolean,
+    onDownload: (RemoteSubtitleInfo) -> Unit,
+    onLoadLocalFile: () -> Unit,
+    searchResults: List<RemoteSubtitleInfo>,
+    isSearching: Boolean,
+    hasSearched: Boolean,
+    searchError: String?,
+    cultures: List<CultureInfo>,
+    defaultLanguage: String,
+    onSearch: (String) -> Unit,
+    onDownloadSearched: (RemoteSubtitleInfo) -> Unit,
+    providerSearchResults: List<com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult>,
+    providerSearchErrors: Map<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind, String>,
+    configuredProviders: Set<com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind>,
+    onSearchAllProviders: (String) -> Unit,
+    onDownloadProviderSubtitle: (com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult) -> Unit,
+    downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
+    onUseSubtitle: (RemoteSubtitleInfo) -> Unit,
+    isUploading: Boolean,
+    onUpload: (Uri, String, String?, Boolean, Boolean) -> Unit,
+    isTv: Boolean,
+    selectedTab: Int,
+    onTabChange: (Int) -> Unit,
+    downloadFocus: FocusRequester,
+    searchFocus: FocusRequester,
+    uploadFocus: FocusRequester,
+    loadBtnFocus: TvFocusState,
+) {
+    val tabs = SubtitleManagerTab.entries
+
     LaunchedEffect(isTv, selectedTab) {
         if (!isTv) return@LaunchedEffect
-        // Restore focus to the active tab's primary action on every tab change.
         val requester = when (tabs.getOrElse(selectedTab) { SubtitleManagerTab.DOWNLOAD }) {
             SubtitleManagerTab.DOWNLOAD -> downloadFocus
             SubtitleManagerTab.SEARCH -> searchFocus
@@ -151,92 +224,75 @@ fun SubtitleManagerSheet(
         requester.tryRequestFocus("sheet")
     }
 
-    PlayerModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(),
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 32.dp),
+        PrimaryTabRow(
+            selectedTabIndex = selectedTab,
         ) {
-            Text(
-                stringResource(R.string.player_video_get_subtitles),
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                modifier = Modifier.padding(horizontal = 24.dp),
+            tabs.forEachIndexed { index, tab ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { onTabChange(index) },
+                    text = {
+                        Text(
+                            when (tab) {
+                                SubtitleManagerTab.DOWNLOAD -> stringResource(R.string.player_video_download)
+                                SubtitleManagerTab.SEARCH -> stringResource(R.string.player_video_search)
+                                SubtitleManagerTab.UPLOAD -> stringResource(R.string.player_video_upload)
+                            },
+                            fontWeight = if (selectedTab == index) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                    },
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+
+        when (tabs.getOrElse(selectedTab) { SubtitleManagerTab.DOWNLOAD }) {
+            SubtitleManagerTab.DOWNLOAD -> DownloadTab(
+                modifier = Modifier.weight(1f, fill = false),
+                subtitles = downloadSubtitles,
+                isLoading = isDownloading,
+                onDownload = onDownload,
+                onLoadLocalFile = onLoadLocalFile,
+                downloadingSubtitles = downloadingSubtitles,
+                onUseSubtitle = onUseSubtitle,
+                isTv = isTv,
+                focusRequester = downloadFocus,
+                loadBtnFocus = loadBtnFocus,
             )
-            Spacer(Modifier.height(8.dp))
-
-            PrimaryTabRow(
-                selectedTabIndex = selectedTab,
-            ) {
-                tabs.forEachIndexed { index, tab ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = {
-                            Text(
-                                when (tab) {
-                                    SubtitleManagerTab.DOWNLOAD -> stringResource(R.string.player_video_download)
-                                    SubtitleManagerTab.SEARCH -> stringResource(R.string.player_video_search)
-                                    SubtitleManagerTab.UPLOAD -> stringResource(R.string.player_video_upload)
-                                },
-                                fontWeight = if (selectedTab == index) FontWeight.SemiBold else FontWeight.Normal,
-                            )
-                        },
-                    )
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-
-            when (tabs.getOrElse(selectedTab) { SubtitleManagerTab.DOWNLOAD }) {
-                SubtitleManagerTab.DOWNLOAD -> DownloadTab(
-                    // weight(fill = false) bounds the tab — and its list — to the
-                    // space left after the title/tab row, so the LazyColumn scrolls
-                    // instead of overflowing the sheet and clipping its last rows.
-                    modifier = Modifier.weight(1f, fill = false),
-                    subtitles = downloadSubtitles,
-                    isLoading = isDownloading,
-                    onDownload = onDownload,
-                    onLoadLocalFile = onLoadLocalFile,
-                    downloadingSubtitles = downloadingSubtitles,
-                    onUseSubtitle = onUseSubtitle,
-                    isTv = isTv,
-                    focusRequester = downloadFocus,
-                    loadBtnFocus = loadBtnFocus,
-                )
-                SubtitleManagerTab.SEARCH -> SearchTab(
-                    modifier = Modifier.weight(1f, fill = false),
-                    cultures = cultures,
-                    defaultLanguage = defaultLanguage,
-                    results = searchResults,
-                    isLoading = isSearching,
-                    hasSearched = hasSearched,
-                    searchError = searchError,
-                    onSearch = onSearch,
-                    onDownload = onDownloadSearched,
-                    downloadingSubtitles = downloadingSubtitles,
-                    onUseSubtitle = onUseSubtitle,
-                    isTv = isTv,
-                    focusRequester = searchFocus,
-                    providerSearchResults = providerSearchResults,
-                    providerSearchErrors = providerSearchErrors,
-                    configuredProviders = configuredProviders,
-                    onSearchAllProviders = onSearchAllProviders,
-                    onDownloadProviderSubtitle = onDownloadProviderSubtitle,
-                )
-                SubtitleManagerTab.UPLOAD -> UploadTab(
-                    modifier = Modifier.weight(1f, fill = false),
-                    cultures = cultures,
-                    defaultLanguage = defaultLanguage,
-                    isUploading = isUploading,
-                    onUpload = onUpload,
-                    isTv = isTv,
-                    focusRequester = uploadFocus,
-                )
-            }
+            SubtitleManagerTab.SEARCH -> SearchTab(
+                modifier = Modifier.weight(1f, fill = false),
+                cultures = cultures,
+                defaultLanguage = defaultLanguage,
+                results = searchResults,
+                isLoading = isSearching,
+                hasSearched = hasSearched,
+                searchError = searchError,
+                onSearch = onSearch,
+                onDownload = onDownloadSearched,
+                downloadingSubtitles = downloadingSubtitles,
+                onUseSubtitle = onUseSubtitle,
+                isTv = isTv,
+                focusRequester = searchFocus,
+                providerSearchResults = providerSearchResults,
+                providerSearchErrors = providerSearchErrors,
+                configuredProviders = configuredProviders,
+                onSearchAllProviders = onSearchAllProviders,
+                onDownloadProviderSubtitle = onDownloadProviderSubtitle,
+            )
+            SubtitleManagerTab.UPLOAD -> UploadTab(
+                modifier = Modifier.weight(1f, fill = false),
+                cultures = cultures,
+                defaultLanguage = defaultLanguage,
+                isUploading = isUploading,
+                onUpload = onUpload,
+                isTv = isTv,
+                focusRequester = uploadFocus,
+            )
         }
     }
 }
@@ -452,6 +508,34 @@ private fun SubtitleDownloadStatusSlot(
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.primary,
+            )
+            FilledTonalButton(
+                onClick = onUse,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 12.dp,
+                    vertical = 0.dp,
+                ),
+            ) {
+                Text(stringResource(R.string.player_video_use), style = MaterialTheme.typography.labelLarge)
+            }
+        }
+        SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // Subtitle is usable on-device but not synced to the server — badge
+            // it with the device-only note + a "Use" affordance (the durable
+            // copy still backs the side-load).
+            Icon(
+                imageVector = Tabler.Outline.DeviceMobile,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                stringResource(R.string.player_video_subtitle_downloaded_device_only),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             FilledTonalButton(
                 onClick = onUse,
@@ -997,12 +1081,37 @@ private fun UploadTab(
 
 // region Shared language dropdown -------------------------------------------
 
+private val DEFAULT_SUBTITLE_CULTURES = listOf(
+    CultureInfo(name = "eng", displayName = "English", twoLetterISOLanguageName = "en", threeLetterISOLanguageName = "eng"),
+    CultureInfo(name = "spa", displayName = "Spanish", twoLetterISOLanguageName = "es", threeLetterISOLanguageName = "spa"),
+    CultureInfo(name = "fre", displayName = "French", twoLetterISOLanguageName = "fr", threeLetterISOLanguageName = "fre"),
+    CultureInfo(name = "ger", displayName = "German", twoLetterISOLanguageName = "de", threeLetterISOLanguageName = "ger"),
+    CultureInfo(name = "ita", displayName = "Italian", twoLetterISOLanguageName = "it", threeLetterISOLanguageName = "ita"),
+    CultureInfo(name = "por", displayName = "Portuguese", twoLetterISOLanguageName = "pt", threeLetterISOLanguageName = "por"),
+    CultureInfo(name = "rus", displayName = "Russian", twoLetterISOLanguageName = "ru", threeLetterISOLanguageName = "rus"),
+    CultureInfo(name = "zho", displayName = "Chinese", twoLetterISOLanguageName = "zh", threeLetterISOLanguageName = "zho"),
+    CultureInfo(name = "jpn", displayName = "Japanese", twoLetterISOLanguageName = "ja", threeLetterISOLanguageName = "jpn"),
+    CultureInfo(name = "kor", displayName = "Korean", twoLetterISOLanguageName = "ko", threeLetterISOLanguageName = "kor"),
+    CultureInfo(name = "dut", displayName = "Dutch", twoLetterISOLanguageName = "nl", threeLetterISOLanguageName = "dut"),
+    CultureInfo(name = "pol", displayName = "Polish", twoLetterISOLanguageName = "pl", threeLetterISOLanguageName = "pol"),
+    CultureInfo(name = "ara", displayName = "Arabic", twoLetterISOLanguageName = "ar", threeLetterISOLanguageName = "ara"),
+    CultureInfo(name = "hin", displayName = "Hindi", twoLetterISOLanguageName = "hi", threeLetterISOLanguageName = "hin"),
+    CultureInfo(name = "tur", displayName = "Turkish", twoLetterISOLanguageName = "tr", threeLetterISOLanguageName = "tur"),
+    CultureInfo(name = "swe", displayName = "Swedish", twoLetterISOLanguageName = "sv", threeLetterISOLanguageName = "swe"),
+)
+
 /**
  * Editable language field backed by the server's [CultureInfo] list, mirroring
  * the editor's subtitle sheets. Free text is still allowed so users can type a
  * code the server didn't return.
+ *
+ * Uses the basic [DropdownMenu] rather than `ExposedDropdownMenuBox`. The
+ * exposed-menu position provider crashes inside the constrained bottom sheet
+ * when the IME inset animation shrinks the available vertical space below its
+ * margin floor (IllegalArgumentException: Cannot coerce value to an empty
+ * range). The anchored [DropdownMenu] positions relative to the field bounds
+ * and is unaffected.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LanguageDropdown(
     language: String,
@@ -1012,36 +1121,53 @@ private fun LanguageDropdown(
     label: String = stringResource(R.string.player_video_language),
 ) {
     var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier,
-    ) {
-        OutlinedTextField(
-            value = language,
-            onValueChange = onLanguageChange,
-            label = { Text(label) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
-            singleLine = true,
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
+    val effectiveCultures = remember(cultures) {
+        if (cultures.isNotEmpty()) cultures else DEFAULT_SUBTITLE_CULTURES
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            cultures.forEach { culture ->
-                DropdownMenuItem(
-                    text = { Text("${culture.displayName} (${culture.name})") },
-                    onClick = {
-                        onLanguageChange(culture.name)
-                        expanded = false
-                    },
-                )
+            OutlinedTextField(
+                value = language,
+                onValueChange = onLanguageChange,
+                label = { Text(label) },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+            )
+            Box {
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        imageVector = Tabler.Outline.ChevronDown,
+                        contentDescription = stringResource(R.string.player_video_language),
+                    )
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.heightIn(max = 300.dp),
+                ) {
+                    effectiveCultures.forEach { culture ->
+                        val textToShow = if (culture.displayName.isNotBlank()) {
+                            "${culture.displayName} (${culture.name})"
+                        } else {
+                            culture.name
+                        }
+                        DropdownMenuItem(
+                            text = { Text(textToShow) },
+                            onClick = {
+                                onLanguageChange(culture.name)
+                                expanded = false
+                            },
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 // endregion
+
