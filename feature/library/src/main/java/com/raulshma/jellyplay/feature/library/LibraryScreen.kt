@@ -14,6 +14,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -102,12 +103,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.ui.util.safeItemKey
+import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.defaultEffectsTween
@@ -116,6 +119,7 @@ import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.PosterCard
@@ -135,8 +139,10 @@ import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.model.GroupBy
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayedStatus
+import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.GroupedLibraryContent
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterChipRow
@@ -150,6 +156,7 @@ import com.raulshma.jellyplay.feature.library.components.TagFilterSheet
 import com.raulshma.jellyplay.feature.library.components.YearRangeFilterSheet
 import com.raulshma.jellyplay.feature.library.components.LibraryListItem
 import com.raulshma.jellyplay.feature.library.components.LibraryResetConfirmDialog
+import com.raulshma.jellyplay.feature.library.components.SelectionIndicatorOverlay
 import com.raulshma.jellyplay.feature.library.components.ThumbCard
 import com.raulshma.jellyplay.core.ui.animation.animateContentSizeNoClip
 import com.raulshma.jellyplay.core.ui.animation.isReducedMotion
@@ -159,6 +166,7 @@ import com.composables.icons.tabler.outline.*
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.raulshma.jellyplay.feature.library.R
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 @OptIn(
@@ -201,6 +209,12 @@ fun LibraryScreen(
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val showFilters by viewModel.showFilters.collectAsStateWithLifecycle()
     val resetDialogVisible by viewModel.resetDialogVisible.collectAsStateWithLifecycle()
+    // Multi-select state — kept in its own flow in the VM so toggling it never
+    // re-creates the paging query. selectionMode gates card clicks; selectedIds
+    // drives the per-card selection visual and the action-bar count.
+    val selectionState by viewModel.selectionState.collectAsStateWithLifecycle()
+    val selectionMode = selectionState.selectionMode
+    val selectedIds = selectionState.selectedIds
 
     // Section mode: configure the VM once with the injected context. Idempotent
     // (configureSection early-returns on an equal context) so recomposition is
@@ -263,10 +277,13 @@ fun LibraryScreen(
         }
     }
     val isAnySheetOpen = openFilterSheet != null || showPosterSizeSheet || showGroupBySheet
-    val backHandlerEnabled = showFilters || isAnySheetOpen || resetDialogVisible || (!inSectionMode && hasActiveFilters)
+    val backHandlerEnabled = selectionMode || showFilters || isAnySheetOpen || resetDialogVisible || (!inSectionMode && hasActiveFilters)
 
     BackHandler(enabled = backHandlerEnabled) {
         when {
+            // Exit selection mode first — matches Downloads (back clears the
+            // selection rather than navigating away).
+            selectionMode -> viewModel.clearSelection()
             resetDialogVisible -> viewModel.dismissResetDialog()
             showFilters -> viewModel.toggleShowFilters() // closes when open
             openFilterSheet != null -> openFilterSheet = null
@@ -277,13 +294,20 @@ fun LibraryScreen(
     }
 
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember { { item: MediaItem -> libraryQuickActions(item) } },
+        resolveActions = remember { { item: MediaItem -> item.quickActions(MediaQuickActionScope.LIBRARY, includeDownload = true, includeAddToPlaylist = true) } },
         executeAction = remember(viewModel, onItemClick) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
                     QuickAction.PLAY -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
                     QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
+                    // DOWNLOAD and ADD_TO_PLAYLIST navigate to the detail screen
+                    // rather than triggering the action inline. The full download
+                    // flow needs a resolved detail (mediaSources, quality, path)
+                    // and the playlist picker lives in feature/details, which this
+                    // module doesn't depend on — so the detail screen owns both.
+                    QuickAction.DOWNLOAD, QuickAction.ADD_TO_PLAYLIST ->
+                        onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     QuickAction.DETAILS -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     else -> Unit
                 }
@@ -313,6 +337,17 @@ fun LibraryScreen(
     // grid needs a larger min cell width than the poster (2:3) grid to avoid
     // rendering tiny cards. Scaled from the same adaptive baseline.
     val thumbCellSize = adaptiveInfo.gridCellSize(isTv) / browser.posterSize * (16f / 9f) * (3f / 4f)
+
+    // Selection action-bar clearance: the bar must clear the app's floating
+    // navigation bar (painted above content at BottomCenter). Mirrors
+    // DownloadsScreen — canonical nav height + system nav-bar inset, and the
+    // nav's hide animation offset (LocalFloatingNavOffset returns 0f where the
+    // nav is absent — TV/expanded/full-screen).
+    val navOffsetPx = LocalFloatingNavOffset.current
+    val navBarBottomInset = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+    val selectionBarClearance = Dimensions.floatingNavHeight + navBarBottomInset
 
     Box(
         modifier = Modifier
@@ -411,6 +446,28 @@ fun LibraryScreen(
                                         style = MaterialTheme.typography.labelLarge,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                            }
+                            // "Select" entry into multi-select mode. Long-press
+                            // on a card is already claimed by the quick-action
+                            // sheet, so a dedicated affordance is the non-
+                            // conflicting way in. Hidden once selection is active
+                            // (the bottom action bar then owns exit/clear) and in
+                            // section mode (matches the Reset pill's gate).
+                            if (!inSectionMode && !selectionMode && pagedItems.itemCount > 0) {
+                                val selectFocus = rememberTvFocusState(focusedScale = 1.1f)
+                                IconButton(
+                                    onClick = { viewModel.enterSelectionMode() },
+                                    modifier = Modifier
+                                        .padding(start = 4.dp)
+                                        .then(selectFocus.focusModifier)
+                                        .tvFocusIndicator(selectFocus, CircleShape),
+                                ) {
+                                    Icon(
+                                        Tabler.Outline.Checks,
+                                        contentDescription = stringResource(R.string.library_select),
+                                        tint = MaterialTheme.colorScheme.onSurface,
                                     )
                                 }
                             }
@@ -730,9 +787,17 @@ fun LibraryScreen(
                                                 val item = pagedItems[index]
                                                 if (item != null) {
                                                     val placementSpec = lazyItemPlacementSpec()
+                                                    val isItemSelected = item.id in selectedIds
                                                     val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                         { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                     }
+                                                    // In selection mode a tap toggles selection instead of
+                                                    // opening the item. The card's own click handler receives
+                                                    // this gated lambda — no wrapper clickable, to avoid a
+                                                    // double-fire with the card's internal clickable.
+                                                    val cardClick = if (selectionMode) {
+                                                        remember(item.id) { { viewModel.toggleSelection(item.id) } }
+                                                    } else memoizedClick
                                                     val subtitle = remember(item.mediaType, item.seriesName, item.seasonNumber, item.episodeNumber, item.year) {
                                                         // Episodes show an SxxExx + series context line (bold tag);
                                                         // other types keep the year/type label. Shared with the
@@ -742,16 +807,22 @@ fun LibraryScreen(
                                                     // Seasons fall back to the parent series poster when the
                                                     // season's own artwork 404s (shared with the grouped list).
                                                     val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
-                                                    LibraryListItem(
-                                                        title = item.displayTitle(),
-                                                        subtitle = subtitle,
-                                                        imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                        fallbackUrls = fallbackUrls,
-                                                        blurHash = item.blurHashes.primary,
-                                                        onClick = memoizedClick,
-                                                        modifier = Modifier.animateItem(placementSpec = placementSpec),
-                                                        sharedElementKey = "poster_${item.id}",
-                                                    )
+                                                    Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                                                        LibraryListItem(
+                                                            title = item.displayTitle(),
+                                                            subtitle = subtitle,
+                                                            imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                            fallbackUrls = fallbackUrls,
+                                                            blurHash = item.blurHashes.primary,
+                                                            onClick = cardClick,
+                                                            modifier = Modifier,
+                                                            sharedElementKey = "poster_${item.id}",
+                                                        )
+                                                        SelectionIndicatorOverlay(
+                                                            selected = isItemSelected,
+                                                            modifier = Modifier.align(Alignment.CenterStart),
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -774,30 +845,40 @@ fun LibraryScreen(
                                         ) { index, itemModifier ->
                                             val item = pagedItems[index]
                                             if (item != null) {
+                                                val isItemSelected = item.id in selectedIds
                                                 val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                     { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
+                                                val cardClick = if (selectionMode) {
+                                                    remember(item.id) { { viewModel.toggleSelection(item.id) } }
+                                                } else memoizedClick
                                                 val itemProgress = item.progressFraction()
                                                 // Seasons fall back to the parent series poster when the
                                                 // season's own artwork 404s in the thumb view too.
                                                 val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
-                                                ThumbCard(
-                                                    item = item,
-                                                    imageUrl = remember(item.id, item.blurHashes.backdrop) {
-                                                        if (item.blurHashes.backdrop != null) {
-                                                            viewModel.getBackdropUrl(item.id)
-                                                        } else {
-                                                            viewModel.getImageUrl(item.id)
-                                                        }
-                                                    },
-                                                    fallbackUrls = fallbackUrls,
-                                                    onClick = memoizedClick,
-                                                    showProgress = itemProgress != null && itemProgress > 0f,
-                                                    progressPercent = itemProgress ?: 0f,
-                                                    blurHash = item.blurHashes.backdrop ?: item.blurHashes.primary,
-                                                    modifier = itemModifier,
-                                                    sharedElementKey = "poster_${item.id}",
-                                                )
+                                                Box(modifier = itemModifier) {
+                                                    ThumbCard(
+                                                        item = item,
+                                                        imageUrl = remember(item.id, item.blurHashes.backdrop) {
+                                                            if (item.blurHashes.backdrop != null) {
+                                                                viewModel.getBackdropUrl(item.id)
+                                                            } else {
+                                                                viewModel.getImageUrl(item.id)
+                                                            }
+                                                        },
+                                                        fallbackUrls = fallbackUrls,
+                                                        onClick = cardClick,
+                                                        showProgress = itemProgress != null && itemProgress > 0f,
+                                                        progressPercent = itemProgress ?: 0f,
+                                                        blurHash = item.blurHashes.backdrop ?: item.blurHashes.primary,
+                                                        modifier = Modifier,
+                                                        sharedElementKey = "poster_${item.id}",
+                                                    )
+                                                    SelectionIndicatorOverlay(
+                                                        selected = isItemSelected,
+                                                        modifier = Modifier.align(Alignment.TopEnd),
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -816,9 +897,13 @@ fun LibraryScreen(
                                         ) { index, itemModifier ->
                                             val item = pagedItems[index]
                                             if (item != null) {
+                                                val isItemSelected = item.id in selectedIds
                                                 val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                     { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                 }
+                                                val cardClick = if (selectionMode) {
+                                                    remember(item.id) { { viewModel.toggleSelection(item.id) } }
+                                                } else memoizedClick
                                                 val itemProgress = item.progressFraction()
                                                 // Per-item collection: only photo-folder cards subscribe,
                                                 // and only the affected card recomposes on a prefetch merge.
@@ -836,19 +921,25 @@ fun LibraryScreen(
                                                     itemImageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                     seriesPosterResolver = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
                                                 )
-                                                PosterCard(
-                                                    item = item,
-                                                    imageUrl = cardImage.imageUrl,
-                                                    fallbackUrls = cardImage.fallbackUrls,
-                                                    onClick = memoizedClick,
-                                                    showProgress = itemProgress != null && itemProgress > 0f,
-                                                    progressPercent = itemProgress ?: 0f,
-                                                    blurHash = cardImage.blurHash,
-                                                    sharedElementKey = "poster_${item.id}",
-                                                    photoFolderChildImageUrls = photoFolderChildImageUrls,
-                                                    showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                                                    modifier = itemModifier,
-                                                )
+                                                Box(modifier = itemModifier) {
+                                                    PosterCard(
+                                                        item = item,
+                                                        imageUrl = cardImage.imageUrl,
+                                                        fallbackUrls = cardImage.fallbackUrls,
+                                                        onClick = cardClick,
+                                                        showProgress = itemProgress != null && itemProgress > 0f,
+                                                        progressPercent = itemProgress ?: 0f,
+                                                        blurHash = cardImage.blurHash,
+                                                        sharedElementKey = "poster_${item.id}",
+                                                        photoFolderChildImageUrls = photoFolderChildImageUrls,
+                                                        showEpisodeSeriesBadge = cardImage.showSeriesBadge,
+                                                        modifier = Modifier,
+                                                    )
+                                                    SelectionIndicatorOverlay(
+                                                        selected = isItemSelected,
+                                                        modifier = Modifier.align(Alignment.TopEnd),
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -876,26 +967,36 @@ fun LibraryScreen(
                                             ) { index ->
                                                 val item = pagedItems[index]
                                                 if (item != null) {
+                                                    val isItemSelected = item.id in selectedIds
                                                     val memoizedClick = remember(item.id, item.mediaType, item.parentId, item.name) {
                                                         { onItemClick(item.id, item.mediaType, item.parentId, item.name) }
                                                     }
+                                                    val cardClick = if (selectionMode) {
+                                                        remember(item.id) { { viewModel.toggleSelection(item.id) } }
+                                                    } else memoizedClick
                                                     val itemProgress = item.progressFraction()
                                                     val cardImage = com.raulshma.jellyplay.core.ui.components.rememberEpisodeCardImage(
                                                         item = item,
                                                         itemImageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                         seriesPosterResolver = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
                                                     )
-                                                    PosterCard(
-                                                        item = item,
-                                                        imageUrl = cardImage.imageUrl,
-                                                        fallbackUrls = cardImage.fallbackUrls,
-                                                        onClick = memoizedClick,
-                                                        showProgress = itemProgress != null && itemProgress > 0f,
-                                                        progressPercent = itemProgress ?: 0f,
-                                                        blurHash = cardImage.blurHash,
-                                                        sharedElementKey = "poster_${item.id}",
-                                                        showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                                                    )
+                                                    Box(modifier = Modifier) {
+                                                        PosterCard(
+                                                            item = item,
+                                                            imageUrl = cardImage.imageUrl,
+                                                            fallbackUrls = cardImage.fallbackUrls,
+                                                            onClick = cardClick,
+                                                            showProgress = itemProgress != null && itemProgress > 0f,
+                                                            progressPercent = itemProgress ?: 0f,
+                                                            blurHash = cardImage.blurHash,
+                                                            sharedElementKey = "poster_${item.id}",
+                                                            showEpisodeSeriesBadge = cardImage.showSeriesBadge,
+                                                        )
+                                                        SelectionIndicatorOverlay(
+                                                            selected = isItemSelected,
+                                                            modifier = Modifier.align(Alignment.TopEnd),
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -1098,6 +1199,34 @@ fun LibraryScreen(
             }
         }
         } // close CompositionLocalProvider
+
+        // Selection-mode bottom action bar (mirrors DownloadsScreen). Floats
+        // over the grid at BottomCenter while selection is active, clearing the
+        // floating nav. Actions: Mark Watched / Mark Unwatched / Select All /
+        // Clear. Drives the VM's bulk mark-played path.
+        if (selectionMode) {
+            LibrarySelectionActionBar(
+                selectedCount = selectedIds.size,
+                onSelectAll = {
+                    viewModel.selectAll(pagedItems.itemSnapshotList.items.map { it.id })
+                },
+                onClear = { viewModel.clearSelection() },
+                onMarkWatched = { viewModel.markSelectedPlayed(played = true) },
+                onMarkUnwatched = { viewModel.markSelectedPlayed(played = false) },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    // Sit above the floating nav (clearance) and slide up in
+                    // lockstep when the nav hides itself.
+                    .padding(bottom = selectionBarClearance)
+                    .offset {
+                        val maxOffset = Dimensions.floatingNavHeight.toPx()
+                        val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
+                        IntOffset(x = 0, y = yOffset.roundToInt())
+                    },
+            )
+        }
     }
     MediaQuickActionHost(quickActionController)
 
@@ -1139,6 +1268,12 @@ fun LibraryScreen(
             current = filters.playedStatus,
             onApply = { viewModel.updateFilters(filters.copy(playedStatus = it)) },
             onDismiss = { openFilterSheet = null },
+            isResumable = filters.isResumable == true,
+            onToggleResumable = {
+                viewModel.updateFilters(
+                    filters.copy(isResumable = !(filters.isResumable == true))
+                )
+            },
         )
         FilterSheetKind.GENRES -> GenreFilterSheet(
             current = filters.genres,
@@ -1633,21 +1768,55 @@ private fun groupByLabel(groupBy: GroupBy): String = when (groupBy) {
 }
 
 /**
- * Which quick actions apply to a library grid item Non-playable
- * entries (photos, photo folders) and group headers get none. The library grid
- * has no inline play affordance, so PLAY and DETAILS both flow through
- * [LibraryScreen.onItemClick].
+ * Bottom floating action bar for library multi-select (mirrors
+ * DownloadsScreen.SelectionActionBar). Shows the selection count and offers
+ * Mark Watched / Mark Unwatched / Select All / Clear. Pinned above the
+ * floating nav via the caller-supplied [modifier] (clearance + slide offset).
  */
-private fun libraryQuickActions(item: MediaItem): List<QuickAction> = buildList {
-    when (item.mediaType) {
-        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE,
-        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST,
-        MediaType.MUSIC_VIDEO, MediaType.COLLECTION, MediaType.LIVE_TV, MediaType.CHANNEL -> {
-            add(QuickAction.PLAY)
-            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
-            add(QuickAction.DETAILS)
+@Composable
+private fun LibrarySelectionActionBar(
+    selectedCount: Int,
+    onSelectAll: () -> Unit,
+    onClear: () -> Unit,
+    onMarkWatched: () -> Unit,
+    onMarkUnwatched: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = ShapeCache.smooth12,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 8.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            // Count text takes remaining width and ellipsizes; the icon
+            // actions keep their intrinsic width so the bar stays one line.
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                stringResource(R.string.library_n_selected, selectedCount),
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            IconButton(onClick = onMarkWatched, enabled = selectedCount > 0) {
+                Icon(Tabler.Outline.Eye, contentDescription = stringResource(R.string.library_mark_watched), modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = onMarkUnwatched, enabled = selectedCount > 0) {
+                Icon(Tabler.Outline.EyeOff, contentDescription = stringResource(R.string.library_mark_unwatched), modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = onSelectAll) {
+                Icon(Tabler.Outline.Check, contentDescription = stringResource(R.string.library_select_all), modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = onClear) {
+                Icon(Tabler.Outline.X, contentDescription = stringResource(R.string.library_clear_selection), modifier = Modifier.size(20.dp))
+            }
         }
-        else -> Unit
     }
 }
 

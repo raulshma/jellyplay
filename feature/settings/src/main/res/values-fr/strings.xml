@@ -523,6 +523,14 @@
     <string name="settings_clear_cache_subtitle">Libérer de l\'espace de stockage (conserve le cache d\'images)</string>
     <string name="settings_clear_image_cache">Vider le cache d\'images</string>
     <string name="settings_clear_image_cache_subtitle">Recharge toutes les affiches et images</string>
+    <!-- Privacy & Data hub (enhancements §7.5) -->
+    <string name="settings_privacy_data">Confidentialité et données</string>
+    <string name="settings_privacy_data_subtitle">Cache, historique et données du compte</string>
+    <string name="settings_clear_search_history">Effacer l\'historique de recherche</string>
+    <string name="settings_clear_search_history_subtitle">Supprimer les termes de recherche récents</string>
+    <string name="settings_cache_cleared">Cache effacé</string>
+    <string name="settings_image_cache_cleared">Cache d\'images effacé</string>
+    <string name="settings_search_history_cleared">Historique de recherche effacé</string>
     <string name="settings_wifi_only">Wi-Fi uniquement</string>
     <string name="settings_wifi_only_on">Téléchargements uniquement sur les réseaux non facturés</string>
     <string name="settings_wifi_only_off">Téléchargements sur n\'importe quel réseau</string>
@@ -895,6 +903,9 @@
     <string name="settings_newsletter_curated_picks_desc">Recommandations spéciales pour vous</string>
     <string name="settings_reset_appearance_title">Réinitialiser les réglages d\'apparence</string>
     <string name="settings_reset_appearance_message">Cela réinitialisera tous les réglages d\'apparence à leurs valeurs par défaut. Cette action est irréversible.</string>
+    <string name="settings_reset_playback_cd">Réinitialiser les réglages de lecture</string>
+    <string name="settings_reset_playback_title">Réinitialiser les réglages de lecture</string>
+    <string name="settings_reset_playback_message">Cela réinitialisera tous les réglages de lecture et de moteur à leurs valeurs par défaut. Cette action est irréversible.</string>
 
     <!-- PlaybackSettingsScreen.kt -->
     <string name="settings_preferred_player">Lecteur préféré</string>

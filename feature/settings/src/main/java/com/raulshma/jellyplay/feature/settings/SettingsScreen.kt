@@ -173,6 +173,7 @@ data class SettingsCallbacks(
     val onNotificationSettings: (String?) -> Unit = {},
     val onStorageSettings: (String?) -> Unit = {},
     val onSecuritySettings: (String?) -> Unit = {},
+    val onPrivacyData: (String?) -> Unit = {},
     val onBackupSettings: (String?) -> Unit = {},
     val onExperimentalSettings: (String?) -> Unit = {},
     val onOpenSubtitleTester: () -> Unit = {},
@@ -209,6 +210,7 @@ fun SettingsScreen(
     val onNotificationSettings = callbacks.onNotificationSettings
     val onStorageSettings = callbacks.onStorageSettings
     val onSecuritySettings = callbacks.onSecuritySettings
+    val onPrivacyData = callbacks.onPrivacyData
     val onBackupSettings = callbacks.onBackupSettings
     val onExperimentalSettings = callbacks.onExperimentalSettings
     val onOpenSubtitleTester = callbacks.onOpenSubtitleTester
@@ -1083,8 +1085,23 @@ fun SettingsScreen(
                             }
                         }
 
-                        item(key = "item_backup") {
+                        item(key = "item_privacy_data") {
                             AnimatedSettingsEntrance(11) {
+                                SettingListItem(
+                                    icon = Tabler.Outline.ShieldLock,
+                                    title = stringResource(R.string.settings_privacy_data),
+                                    subtitle = stringResource(R.string.settings_privacy_data_subtitle),
+                                    index = 0, count = 1,
+                                    onClick = {
+                                        lastClickedSettingId = "privacy_data"
+                                        onPrivacyData(null)
+                                    },
+                                )
+                            }
+                        }
+
+                        item(key = "item_backup") {
+                            AnimatedSettingsEntrance(12) {
                                 SettingListItem(
                                     icon = Tabler.Outline.DatabaseExport,
                                     title = stringResource(R.string.settings_backup_restore),
@@ -1100,7 +1117,7 @@ fun SettingsScreen(
 
                         if (isTv) {
                             item(key = "group_screensaver") {
-                                AnimatedSettingsEntrance(12) {
+                                AnimatedSettingsEntrance(13) {
                                     SettingsGroup(
                                         icon = Tabler.Outline.Moon,
                                         title = stringResource(R.string.settings_screensaver),
@@ -1212,7 +1229,7 @@ fun SettingsScreen(
                         }
 
                         item(key = "item_experimental") {
-                            AnimatedSettingsEntrance(if (isTv) 13 else 12) {
+                            AnimatedSettingsEntrance(if (isTv) 14 else 13) {
                                 SettingListItem(
                                     icon = Tabler.Outline.Flask,
                                     title = stringResource(R.string.settings_experimental),
@@ -1227,7 +1244,7 @@ fun SettingsScreen(
                         }
 
                         item(key = "item_integrations") {
-                            AnimatedSettingsEntrance(if (isTv) 14 else 13) {
+                            AnimatedSettingsEntrance(if (isTv) 15 else 14) {
                                 SettingListItem(
                                     icon = Tabler.Outline.PlugConnected,
                                     title = stringResource(R.string.settings_integrations),
@@ -1242,7 +1259,7 @@ fun SettingsScreen(
                         }
 
                         item(key = "item_about") {
-                            AnimatedSettingsEntrance(if (isTv) 15 else 14) {
+                            AnimatedSettingsEntrance(if (isTv) 16 else 15) {
                                 SettingListItem(
                                     icon = Tabler.Outline.InfoCircle,
                                     title = stringResource(R.string.settings_about),

@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
@@ -35,6 +36,8 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.tabler.icons.outline)
     implementation(libs.tabler.icons.filled)
+
+    implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)

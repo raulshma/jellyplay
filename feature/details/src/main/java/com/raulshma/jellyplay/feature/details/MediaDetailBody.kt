@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -248,7 +250,8 @@ internal fun DetailContentBody(
                         style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.semantics { heading() },
                     )
                 }
 
@@ -448,7 +451,8 @@ internal fun DetailContentBody(
                     Text(
                         text = stringResource(R.string.detail_section_tracks),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.semantics { heading() },
                     )
                 }
                 Spacer(Modifier.height(12.dp))
@@ -528,7 +532,9 @@ internal fun DetailContentBody(
                         Text(
                             text = stringResource(R.string.detail_section_items),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier.padding(horizontal = bodyContentPad),
+                            modifier = Modifier
+                                .padding(horizontal = bodyContentPad)
+                                .semantics { heading() },
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -565,7 +571,9 @@ internal fun DetailContentBody(
                         Text(
                             text = stringResource(R.string.detail_section_cast_crew),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier.padding(horizontal = bodyContentPad),
+                            modifier = Modifier
+                                .padding(horizontal = bodyContentPad)
+                                .semantics { heading() },
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -605,7 +613,9 @@ internal fun DetailContentBody(
                         Text(
                             text = stringResource(R.string.detail_section_more_like_this),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier.padding(horizontal = bodyContentPad),
+                            modifier = Modifier
+                                .padding(horizontal = bodyContentPad)
+                                .semantics { heading() },
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -696,7 +706,9 @@ internal fun SeerrItemsRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.padding(horizontal = bodyContentPad),
+                modifier = Modifier
+                    .padding(horizontal = bodyContentPad)
+                    .semantics { heading() },
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
@@ -765,7 +777,9 @@ private fun VideosSection(
             Text(
                 text = stringResource(R.string.detail_section_videos),
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.padding(horizontal = bodyContentPad),
+                modifier = Modifier
+                    .padding(horizontal = bodyContentPad)
+                    .semantics { heading() },
                 color = MaterialTheme.colorScheme.onSurface
             )
         }

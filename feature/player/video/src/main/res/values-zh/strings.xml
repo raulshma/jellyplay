@@ -302,4 +302,11 @@
     <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
     <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
     <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
+
+    <!-- 无障碍：亮度/音量手势区域的屏幕阅读器语义 (P5 §3.1) -->
+    <string name="a11y_gesture_controls">亮度和音量控制</string>
+    <string name="a11y_brightness_increase">提高亮度</string>
+    <string name="a11y_brightness_decrease">降低亮度</string>
+    <string name="a11y_volume_increase">提高音量</string>
+    <string name="a11y_volume_decrease">降低音量</string>
 </resources>

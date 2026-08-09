@@ -86,6 +86,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.offset
@@ -190,6 +191,8 @@ import com.raulshma.jellyplay.update.AppUpdateSheet
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+
+private const val ExitConfirmationTimeoutMs = 2000L
 
 @Composable
 fun JellyPlayApp(
@@ -708,6 +711,7 @@ private fun MainContent(
         LocalJellyPlayUi provides uiEnvironment,
         LocalTvTypography provides tvTypography,
         LocalPerformanceMode provides preferences.performanceMode,
+        com.raulshma.jellyplay.core.ui.feedback.LocalHapticsEnabled provides preferences.hapticsEnabled,
         LocalFloatingNavVisibility provides isBottomNavVisibleState,
         LocalUserMessageBus provides userMessageBus,
         com.raulshma.jellyplay.core.ui.preview.LocalMediaPreviewController provides mediaPreviewController,
@@ -803,11 +807,28 @@ private fun MainContent(
             } else {
                 if (!isFullScreenRoute) {
                     // Wire the system/gesture back button to in-app navigation so back
-                    // from a deep screen returns to the tab root before exiting the app
-                    //. At a tab root, fall through to the OS (exit). The
-                    // full-screen player is excluded — it owns its own BackHandler.
-                    BackHandler(enabled = !navigator.isAtTabRoot()) {
-                        navigator.goBack()
+                    // from a deep screen returns to the tab root. At a tab root, mirror
+                    // the TV path: prompt with a toast and only exit on a second press
+                    // within ExitConfirmationTimeoutMs. The full-screen player is
+                    // excluded — it owns its own BackHandler.
+                    var lastBackPressTime by remember { mutableLongStateOf(0L) }
+                    BackHandler(enabled = true) {
+                        if (!navigator.isAtTabRoot()) {
+                            navigator.goBack()
+                        } else {
+                            val now = System.currentTimeMillis()
+                            if (now - lastBackPressTime < ExitConfirmationTimeoutMs) {
+                                lastBackPressTime = 0L
+                                (context as? android.app.Activity)?.moveTaskToBack(true)
+                            } else {
+                                lastBackPressTime = now
+                                android.widget.Toast.makeText(
+                                    context,
+                                    context.getString(R.string.press_back_again_to_exit),
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        }
                     }
                     PhoneContent(
                         navigationState = navigationState,

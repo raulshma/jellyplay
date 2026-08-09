@@ -53,7 +53,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -82,6 +87,12 @@ private fun applySensitivityCurve(rawDelta: Float): Float {
     val curved = (magnitude / 0.5f).pow(0.8f) * 0.5f
     return sign * curved.coerceIn(0f, 0.5f)
 }
+
+// a11y step magnitude for the brightness/volume custom actions. Brightness and
+// volume are both normalized 0f..1f, and the drag handler feeds the curved delta
+// straight to the gesture callbacks; a fixed ~10% step matches a moderate drag
+// and gives TalkBack/Switch Access users a predictable increment per invocation.
+private const val A11Y_STEP_DELTA = 0.1f
 
 @Composable
 internal fun GestureOverlay(
@@ -112,6 +123,8 @@ internal fun GestureOverlay(
     val currentOnStartGesture by rememberUpdatedState(onStartGesture)
     val currentOnCancelOverlays by rememberUpdatedState(onCancelOverlays)
 
+    val context = LocalContext.current
+
     val edgeThresholdPx = with(LocalDensity.current) { 40.dp.toPx() }
     val deadZonePx = with(LocalDensity.current) { 30.dp.toPx() }
 
@@ -122,6 +135,49 @@ internal fun GestureOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            // a11y: the vertical-drag gesture surface previously carried no
+            // semantics, so TalkBack/Switch Access users could not adjust
+            // brightness (left half) or volume (right half). Two adjustable
+            // values share one surface, so setProgress alone is ambiguous —
+            // expose four custom actions (increase/decrease per value) that
+            // drive the same gesture callbacks the drag uses. Each action
+            // applies a fixed ~10% step (A11Y_STEP_DELTA). The pointerInput
+            // gesture handling below is left intact; semantics are additive.
+            .semantics {
+                contentDescription = context.getString(
+                    com.raulshma.jellyplay.feature.player.video.R.string.a11y_gesture_controls
+                )
+                customActions = listOf(
+                    CustomAccessibilityAction(
+                        label = context.getString(
+                            com.raulshma.jellyplay.feature.player.video.R.string.a11y_brightness_increase
+                        ),
+                    ) {
+                        currentOnBrightnessGesture(A11Y_STEP_DELTA); true
+                    },
+                    CustomAccessibilityAction(
+                        label = context.getString(
+                            com.raulshma.jellyplay.feature.player.video.R.string.a11y_brightness_decrease
+                        ),
+                    ) {
+                        currentOnBrightnessGesture(-A11Y_STEP_DELTA); true
+                    },
+                    CustomAccessibilityAction(
+                        label = context.getString(
+                            com.raulshma.jellyplay.feature.player.video.R.string.a11y_volume_increase
+                        ),
+                    ) {
+                        currentOnVolumeGesture(A11Y_STEP_DELTA); true
+                    },
+                    CustomAccessibilityAction(
+                        label = context.getString(
+                            com.raulshma.jellyplay.feature.player.video.R.string.a11y_volume_decrease
+                        ),
+                    ) {
+                        currentOnVolumeGesture(-A11Y_STEP_DELTA); true
+                    },
+                )
+            }
             .then(
                 if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs, showControls, edgeThresholdPx, deadZonePx) {
                     awaitEachGesture {

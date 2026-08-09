@@ -303,4 +303,11 @@
     <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
     <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
     <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
+
+    <!-- Accessibilité : sémantique du lecteur d\'écran pour la zone de gestes luminosité/volume (P5 §3.1) -->
+    <string name="a11y_gesture_controls">Contrôles de luminosité et de volume</string>
+    <string name="a11y_brightness_increase">Augmenter la luminosité</string>
+    <string name="a11y_brightness_decrease">Diminuer la luminosité</string>
+    <string name="a11y_volume_increase">Augmenter le volume</string>
+    <string name="a11y_volume_decrease">Diminuer le volume</string>
 </resources>

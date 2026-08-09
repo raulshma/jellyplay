@@ -48,7 +48,6 @@ import com.raulshma.jellyplay.feature.player.live.components.LiveRecordSheet
 import com.raulshma.jellyplay.feature.player.live.components.LiveStreamOptionSheet
 import kotlinx.coroutines.delay
 
-private const val CONTROLS_AUTO_HIDE_MS = 4_000L
 private const val ZAP_TOAST_MS = 3_000L
 private const val POSITION_TICK_MS = 500L
 
@@ -151,10 +150,13 @@ fun LivePlayerScreen(
         }
     }
 
-    // Controls auto-hide: 4s after showing, unless the sheet is open.
-    LaunchedEffect(overlayVisible, state.currentIndex) {
+    // Controls auto-hide: delay sourced from the user's
+    // `videoControlsTimeoutMs` preference (mirrors the VOD player), doubled on
+    // TV. Hidden while a sheet is open.
+    LaunchedEffect(overlayVisible, state.currentIndex, state.controlsTimeoutMs) {
         if (overlayVisible && activeSheet == null) {
-            delay(CONTROLS_AUTO_HIDE_MS)
+            val timeout = if (isTv) state.controlsTimeoutMs * 2 else state.controlsTimeoutMs
+            delay(timeout)
             overlayVisible = false
         }
     }

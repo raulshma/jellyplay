@@ -33,9 +33,10 @@ class DreamImageProvider(
         if (mediaTypes.isEmpty()) return@withContext emptyList()
 
         val result = apiClient.getMediaItems(
-            mediaTypes = mediaTypes,
-            sortBy = "Random",
-            sortOrder = "Ascending",
+            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                mediaTypes = mediaTypes,
+                sortBy = com.raulshma.jellyplay.core.model.SortOption.RANDOM,
+            ),
             limit = count,
         )
 

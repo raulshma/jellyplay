@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.admin.statistics
 
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -84,6 +83,7 @@ fun UserStatisticsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val context = LocalContext.current
+    val userMessageBus = com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus.current
     var showSortMenu by remember { mutableStateOf(false) }
 
     // TV focus-on-launch: focus the first user card once data arrives so D-pad input lands on
@@ -98,7 +98,7 @@ fun UserStatisticsScreen(
     if (state.shareRequested) {
         LaunchedEffect(state.shareRequested) {
             shareUserStatsCsv(context, state.users)
-            Toast.makeText(context, context.getString(R.string.user_stats_export_shared), Toast.LENGTH_SHORT).show()
+            userMessageBus.info(context.getString(R.string.user_stats_export_shared))
             viewModel.consumeExportRequest()
         }
     }

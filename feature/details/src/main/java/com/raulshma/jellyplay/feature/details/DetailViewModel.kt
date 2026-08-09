@@ -616,6 +616,7 @@ class DetailViewModel @Inject constructor(
             episode = episode,
             label = label,
             startPositionTicks = startPositionTicks,
+            primaryImageUrl = imageUrlProvider.getImageUrl(episode.id),
         )
     }
 

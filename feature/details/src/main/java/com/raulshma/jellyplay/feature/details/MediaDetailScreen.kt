@@ -34,6 +34,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.MediaQuickActionScope
+import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
@@ -113,7 +115,7 @@ fun MediaDetailScreen(
     // TV Menu key on the focused card. The controller is
     // provided to every PosterCard/EpisodeCard below via CompositionLocal.
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel) { { item: MediaItem -> detailQuickActions(item) } },
+        resolveActions = remember(viewModel) { { item: MediaItem -> item.quickActions(MediaQuickActionScope.DETAIL) } },
         executeAction = remember(viewModel, onPlayClick, onItemClick) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
@@ -557,20 +559,4 @@ fun MediaDetailScreen(
         // Long-press / TV-Menu quick actions for row cards.
         MediaQuickActionHost(quickActionController)
     } // Box
-}
-
-/**
- * Which quick actions apply to a row item on the detail screen
- * Series/movies/episodes get play/mark-watched/details; anything else (people,
- * videos) is excluded by the card renderers anyway.
- */
-private fun detailQuickActions(item: MediaItem): List<QuickAction> = buildList {
-    when (item.mediaType) {
-        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE -> {
-            add(QuickAction.PLAY)
-            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
-            add(QuickAction.DETAILS)
-        }
-        else -> Unit
-    }
 }

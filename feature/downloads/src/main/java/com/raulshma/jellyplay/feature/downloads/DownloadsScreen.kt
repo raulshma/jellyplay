@@ -45,6 +45,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TriStateCheckbox
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
+import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.episodeContextLine
 import androidx.compose.material3.MaterialTheme
@@ -147,6 +148,11 @@ fun DownloadsScreen(
             it.status == DownloadStatus.DOWNLOADING ||
             it.status == DownloadStatus.PAUSED
     }
+    // Global action predicates: the app-bar Pause All / Retry all failed
+    // buttons are only enabled when the matching status exists anywhere in the
+    // list, so neither offers a no-op (mirrors the selection-bar predicates).
+    val hasAnyDownloading = downloads.any { it.status == DownloadStatus.DOWNLOADING }
+    val hasAnyFailed = downloads.any { it.status == DownloadStatus.FAILED }
 
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
@@ -164,6 +170,39 @@ fun DownloadsScreen(
         onBack = onBack,
         backgroundColor = backgroundColor,
         actions = {
+            // Global actions (reachable without entering selection mode).
+            // Pause All halts every active transfer; Retry all failed
+            // re-queues every Failed download. Each is disabled when there's
+            // nothing to act on so neither offers a no-op, mirroring the
+            // selection-bar predicates.
+            if (hasAnyDownloading) {
+                val pauseFocus = rememberTvFocusState()
+                IconButton(
+                    onClick = { viewModel.pauseAll() },
+                    modifier = Modifier
+                        .then(pauseFocus.focusModifier)
+                        .tvFocusIndicator(pauseFocus, CircleShape),
+                ) {
+                    Icon(
+                        Tabler.Outline.PlayerPause,
+                        contentDescription = stringResource(R.string.downloads_pause_all),
+                    )
+                }
+            }
+            if (hasAnyFailed) {
+                val retryFocus = rememberTvFocusState()
+                IconButton(
+                    onClick = { viewModel.retryAllFailed() },
+                    modifier = Modifier
+                        .then(retryFocus.focusModifier)
+                        .tvFocusIndicator(retryFocus, CircleShape),
+                ) {
+                    Icon(
+                        Tabler.Outline.Refresh,
+                        contentDescription = stringResource(R.string.downloads_retry_failed),
+                    )
+                }
+            }
             // Resync action: checks every download for available updates and
             // opens the resync sheet. The badge dot appears when any item is
             // flagged, so the user knows updates are waiting without opening
@@ -180,9 +219,8 @@ fun DownloadsScreen(
                         .tvFocusIndicator(syncFocus, CircleShape),
                 ) {
                     if (checking) {
-                        androidx.compose.material3.CircularProgressIndicator(
+                        JellyPlayCircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
                         )
                     } else {
                         Icon(
@@ -828,7 +866,6 @@ private fun CompactIconButton(
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(40.dp),
     ) {
         content()
     }
@@ -908,8 +945,8 @@ private fun DownloadsResyncSheet(
 
             when {
                 checking -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp), strokeWidth = 2.dp,
+                    JellyPlayCircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
@@ -999,7 +1036,7 @@ private fun ResyncSheetRow(
     ) {
         when (phase) {
             com.raulshma.jellyplay.core.model.ResyncPhase.WORKING ->
-                androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                JellyPlayCircularProgressIndicator(modifier = Modifier.size(18.dp))
             com.raulshma.jellyplay.core.model.ResyncPhase.DONE ->
                 Icon(Tabler.Outline.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             com.raulshma.jellyplay.core.model.ResyncPhase.ERROR ->
@@ -1125,7 +1162,7 @@ private fun ForceResyncSheet(
             if (showRunning) {
                 // Running phase: mirror the regular resync sheet's aggregate line.
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    JellyPlayCircularProgressIndicator(modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(12.dp))
                     Text(
                         stringResource(R.string.downloads_force_resync_in_progress, progress.completed, progress.total),

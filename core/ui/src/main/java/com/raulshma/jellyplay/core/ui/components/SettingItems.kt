@@ -46,6 +46,7 @@ import com.composables.icons.tabler.outline.ChevronRight
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -343,6 +344,7 @@ private fun SettingToggleItemImpl(
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
     val interactionSource = remember { MutableInteractionSource() }
+    val confirmHaptic = rememberConfirmHaptic()
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
@@ -442,6 +444,6 @@ private fun SettingToggleItemImpl(
                 interactionSource = interactionSource,
                 indication = null,
                 enabled = enabled,
-            ) { onClick?.invoke() ?: onCheckedChange(!checked) },
+            ) { confirmHaptic(); onClick?.invoke() ?: onCheckedChange(!checked) },
     )
 }

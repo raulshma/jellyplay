@@ -523,6 +523,14 @@
     <string name="settings_clear_cache_subtitle">Libera spazio di archiviazione (mantiene la cache delle immagini)</string>
     <string name="settings_clear_image_cache">Cancella cache immagini</string>
     <string name="settings_clear_image_cache_subtitle">Ricarica tutti i poster e le immagini</string>
+    <!-- Privacy & Data hub (enhancements §7.5) -->
+    <string name="settings_privacy_data">Privacy e dati</string>
+    <string name="settings_privacy_data_subtitle">Cache, cronologia e dati dell\'account</string>
+    <string name="settings_clear_search_history">Cancella cronologia di ricerca</string>
+    <string name="settings_clear_search_history_subtitle">Rimuovi i termini di ricerca recenti</string>
+    <string name="settings_cache_cleared">Cache cancellata</string>
+    <string name="settings_image_cache_cleared">Cache delle immagini cancellata</string>
+    <string name="settings_search_history_cleared">Cronologia di ricerca cancellata</string>
     <string name="settings_wifi_only">Solo Wi-Fi</string>
     <string name="settings_wifi_only_on">Download solo su reti non a consumo</string>
     <string name="settings_wifi_only_off">Download su qualsiasi rete</string>
@@ -895,6 +903,9 @@
     <string name="settings_newsletter_curated_picks_desc">Raccomandazioni speciali per te</string>
     <string name="settings_reset_appearance_title">Ripristina impostazioni aspetto</string>
     <string name="settings_reset_appearance_message">Verranno ripristinate tutte le impostazioni di aspetto ai valori predefiniti. Questa azione non può essere annullata.</string>
+    <string name="settings_reset_playback_cd">Ripristina impostazioni di riproduzione</string>
+    <string name="settings_reset_playback_title">Ripristina impostazioni di riproduzione</string>
+    <string name="settings_reset_playback_message">Verranno ripristinate tutte le impostazioni di riproduzione e del motore ai valori predefiniti. Questa azione non può essere annullata.</string>
 
     <!-- PlaybackSettingsScreen.kt -->
     <string name="settings_preferred_player">Player preferito</string>

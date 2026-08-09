@@ -234,6 +234,10 @@ fun VideoPlayerScreen(
     // one-tap "Restart" so the user isn't forced to scrub back.
     val resumedMessage = stringResource(R.string.player_resumed_message)
     val restartLabel = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_restart)
+    // Resume-position marker on the seekbar (§2.2). Mirrors the resume chip:
+    // the value comes from viewModel.resumeReminder, collected once per screen.
+    var resumePositionMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) { viewModel.resumeReminder.collect { resumePositionMs = it } }
     LaunchedEffect(viewModel) {
         viewModel.resumeReminder.collect {
             // Specified as a 3s chip. SnackbarDuration has no 3s
@@ -1624,6 +1628,7 @@ fun VideoPlayerScreen(
                 nightModeStrength = uiState.nightModeStrength,
                 audioPassthrough = uiState.audioPassthrough,
                 segments = uiState.segments,
+                resumePositionMs = resumePositionMs,
                 playMethod = uiState.playMethod,
                 hdrType = uiState.hdrType,
                 mediaStreams = uiState.mediaStreams,

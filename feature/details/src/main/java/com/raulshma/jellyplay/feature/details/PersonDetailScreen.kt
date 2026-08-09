@@ -54,7 +54,9 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextOverflow
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.quickActions
 
 private enum class PersonFilmographyFilter(val label: String, val match: (MediaItem) -> Boolean) {
     ALL("All", { true }),
@@ -212,7 +214,7 @@ fun PersonDetailScreen(
 
     // Long-press / TV-Menu quick actions for filmography cards
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember { { item: MediaItem -> personQuickActions(item) } },
+        resolveActions = remember { { item: MediaItem -> item.quickActions(MediaQuickActionScope.DETAIL) } },
         executeAction = remember(viewModel, onItemClick) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
@@ -300,19 +302,3 @@ fun PersonDetailScreen(
     } // close Box
     MediaQuickActionHost(quickActionController)
 } // close PersonDetailScreen
-
-/**
- * Which quick actions apply to a filmography card Movies,
- * series and episodes get play / mark-watched / details; other entries are
- * excluded.
- */
-private fun personQuickActions(item: MediaItem): List<QuickAction> = buildList {
-    when (item.mediaType) {
-        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE -> {
-            add(QuickAction.PLAY)
-            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
-            add(QuickAction.DETAILS)
-        }
-        else -> Unit
-    }
-}

@@ -303,4 +303,11 @@
     <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
     <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
     <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
+
+    <!-- Barrierefreiheit: Screen-Reader-Semantik für das Helligkeits-/Lautstärke-Gestenfeld (P5 §3.1) -->
+    <string name="a11y_gesture_controls">Helligkeits- und Lautstärkeregelung</string>
+    <string name="a11y_brightness_increase">Helligkeit erhöhen</string>
+    <string name="a11y_brightness_decrease">Helligkeit verringern</string>
+    <string name="a11y_volume_increase">Lautstärke erhöhen</string>
+    <string name="a11y_volume_decrease">Lautstärke verringern</string>
 </resources>

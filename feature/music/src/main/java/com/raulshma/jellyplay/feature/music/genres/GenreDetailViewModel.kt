@@ -27,9 +27,11 @@ class GenreDetailViewModel @Inject constructor(
     private val genreName: String = savedStateHandle[Route.GenreDetail::genreName.name] ?: ""
 
     val tracks: Flow<PagingData<MediaItem>> = mediaRepository.getMediaItemsPaged(
-        mediaTypes = listOf(MediaType.AUDIO),
-        genres = listOf(genreName),
-        sortBy = "SortName",
+        filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+            mediaTypes = listOf(MediaType.AUDIO),
+            genres = listOf(genreName),
+            sortBy = com.raulshma.jellyplay.core.model.SortOption.SORT_NAME,
+        ),
     ).cachedIn(scope)
 
     fun getImageUrl(itemId: String): String =

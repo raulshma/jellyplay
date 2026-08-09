@@ -523,6 +523,14 @@
     <string name="settings_clear_cache_subtitle">Libera espacio de almacenamiento (conserva la caché de imágenes)</string>
     <string name="settings_clear_image_cache">Borrar caché de imágenes</string>
     <string name="settings_clear_image_cache_subtitle">Vuelve a cargar todos los pósters e imágenes</string>
+    <!-- Privacy & Data hub (enhancements §7.5) -->
+    <string name="settings_privacy_data">Privacidad y datos</string>
+    <string name="settings_privacy_data_subtitle">Caché, historial y datos de la cuenta</string>
+    <string name="settings_clear_search_history">Borrar historial de búsqueda</string>
+    <string name="settings_clear_search_history_subtitle">Eliminar términos de búsqueda recientes</string>
+    <string name="settings_cache_cleared">Caché borrada</string>
+    <string name="settings_image_cache_cleared">Caché de imágenes borrada</string>
+    <string name="settings_search_history_cleared">Historial de búsqueda borrado</string>
     <string name="settings_wifi_only">Solo con WiFi</string>
     <string name="settings_wifi_only_on">Descargas solo en redes no medidas</string>
     <string name="settings_wifi_only_off">Descargas en cualquier red</string>
@@ -895,6 +903,9 @@
     <string name="settings_newsletter_curated_picks_desc">Recomendaciones especiales para ti</string>
     <string name="settings_reset_appearance_title">Restablecer ajustes de apariencia</string>
     <string name="settings_reset_appearance_message">Se restablecerán todos los ajustes de apariencia a sus valores predeterminados. Esta acción no se puede deshacer.</string>
+    <string name="settings_reset_playback_cd">Restablecer ajustes de reproducción</string>
+    <string name="settings_reset_playback_title">Restablecer ajustes de reproducción</string>
+    <string name="settings_reset_playback_message">Se restablecerán todos los ajustes de reproducción y de motor a sus valores predeterminados. Esta acción no se puede deshacer.</string>
 
     <!-- PlaybackSettingsScreen.kt -->
     <string name="settings_preferred_player">Reproductor preferido</string>

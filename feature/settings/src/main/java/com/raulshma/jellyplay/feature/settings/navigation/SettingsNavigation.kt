@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.feature.settings.HomeLayoutPresetsScreen
 import com.raulshma.jellyplay.feature.settings.LibraryHomeSectionsScreen
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsScreen
 import com.raulshma.jellyplay.feature.settings.PinnedHomeSectionsScreen
+import com.raulshma.jellyplay.feature.settings.PrivacyDataScreen
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SecuritySettingsScreen
@@ -66,6 +67,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
                 onNotificationSettings = { id -> navigator.navigate(Route.NotificationSettings(id)) },
                 onStorageSettings = { id -> navigator.navigate(Route.StorageSettings(id)) },
                 onSecuritySettings = { id -> navigator.navigate(Route.SecuritySettings(id)) },
+                onPrivacyData = { id -> navigator.navigate(Route.PrivacyData(id)) },
                 onBackupSettings = { id -> navigator.navigate(Route.BackupSettings(id)) },
                 onExperimentalSettings = { id -> navigator.navigate(Route.ExperimentalSettings(id)) },
                 onOpenSubtitleTester = { navigator.navigate(Route.SubtitleTester) },
@@ -166,6 +168,13 @@ fun EntryProviderScope<NavKey>.settingsSection(
         StorageSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.PrivacyData> {
+        PrivacyDataScreen(
+            onBack = { navigator.goBack() },
+            onLogout = onLogout,
         )
     }
 

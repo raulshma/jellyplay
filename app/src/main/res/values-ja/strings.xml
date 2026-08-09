@@ -178,4 +178,9 @@
 
     <!-- Now-playing snackbar -->
     <string name="snackbar_now_playing">再生中: %1$s</string>
+
+    <!-- Player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">再生速度を指定</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">再生速度を調整</string>
 </resources>

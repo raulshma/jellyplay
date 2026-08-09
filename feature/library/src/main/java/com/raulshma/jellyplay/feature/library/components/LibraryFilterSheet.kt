@@ -87,6 +87,10 @@ fun LibraryFilterSheet(
     var selectedPlayedStatus by remember { mutableStateOf(currentFilters.playedStatus) }
     var selectedTags by remember { mutableStateOf(currentFilters.tags.toSet()) }
     var selectedMinRating by remember { mutableFloatStateOf(currentFilters.minRating) }
+    // Resumable filter mirrors LibraryFilters.isResumable: tri-state surfaced as
+    // a single toggle (null/false = off, true = only items with a resume
+    // position). Initialized from the persisted filter blob.
+    var selectedIsResumable by remember { mutableStateOf(currentFilters.isResumable == true) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -148,6 +152,7 @@ fun LibraryFilterSheet(
                                 selectedPlayedStatus = PlayedStatus.ALL
                                 selectedTags = emptySet()
                                 selectedMinRating = 0f
+                                selectedIsResumable = false
                             }
                         )
                         .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -245,6 +250,23 @@ fun LibraryFilterSheet(
                         }
                     }) {}
                 }
+            }
+
+            // ── Resumable (In Progress) toggle ──
+            // A single chip that restricts the grid to items with a playback
+            // position (Jellyfin ItemFilter.IsResumable). Pairs naturally with
+            // the "In Progress" sort but is independently composable with any
+            // status / sort selection.
+            Spacer(modifier = Modifier.height(12.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                GlassFilterChip(
+                    label = stringResource(R.string.library_filter_resumable),
+                    selected = selectedIsResumable,
+                    onClick = { selectedIsResumable = !selectedIsResumable },
+                )
             }
 
             // ── Genres ──
@@ -389,6 +411,7 @@ fun LibraryFilterSheet(
                                     playedStatus = selectedPlayedStatus,
                                     tags = selectedTags.toList(),
                                     minRating = selectedMinRating,
+                                    isResumable = selectedIsResumable.takeIf { it },
                                 )
                             )
                         }

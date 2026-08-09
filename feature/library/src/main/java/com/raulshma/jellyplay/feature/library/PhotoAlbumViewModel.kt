@@ -43,9 +43,10 @@ class PhotoAlbumViewModel @Inject constructor(
     }.flatMapLatest { (parentId, sort) ->
         mediaRepository.getMediaItemsPaged(
             parentId = parentId,
-            mediaTypes = listOf(MediaType.PHOTO),
-            sortBy = sort.option.apiValue,
-            sortOrder = sort.option.sortOrder,
+            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                mediaTypes = listOf(MediaType.PHOTO),
+                sortBy = sort.option,
+            ),
         )
     }.cachedIn(scope)
 

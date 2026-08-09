@@ -176,6 +176,12 @@ internal fun DetailContent(
             } else {
                 DelayedLoadingScreen(modifier = Modifier.fillMaxSize())
             }
+        } else if (state.error != null && !contentVisible) {
+            com.raulshma.jellyplay.core.ui.components.ScreenErrorState(
+                message = state.error,
+                onRetry = callbacks.onRetry,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
 
         DetailBackdrop(

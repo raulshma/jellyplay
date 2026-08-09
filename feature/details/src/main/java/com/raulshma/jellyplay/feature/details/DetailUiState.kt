@@ -98,5 +98,8 @@ data class DetailUiState(
         val episode: MediaItem,
         val label: String,
         val startPositionTicks: Long,
+        // Primary image URL for the targeted episode, precomputed in the VM so the
+        // Up Next card can render a thumbnail without an image-url dependency.
+        val primaryImageUrl: String? = null,
     )
 }

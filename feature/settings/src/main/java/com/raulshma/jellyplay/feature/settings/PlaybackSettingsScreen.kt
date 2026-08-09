@@ -6,8 +6,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +55,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
+import com.raulshma.jellyplay.core.ui.components.SettingsItemList
+import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.model.localizedDescription
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
@@ -134,6 +142,7 @@ fun PlaybackSettingsScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
+    var showResetDialog by remember { mutableStateOf(false) }
     val backgroundColor = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor()
 
     val focusRequester = remember { FocusRequester() }
@@ -201,6 +210,16 @@ fun PlaybackSettingsScreen(
                 showAdvanced = showAdvanced,
                 onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },
             )
+            IconButton(
+                onClick = { showResetDialog = true },
+                modifier = Modifier.focusIndicator(CircleShape),
+            ) {
+                Icon(
+                    Tabler.Outline.Refresh,
+                    contentDescription = stringResource(R.string.settings_reset_playback_cd),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         },
     ) { innerPadding ->
         // Center a highlighted (search-navigated) setting in the viewport instead of parking it
@@ -230,9 +249,7 @@ fun PlaybackSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = true,
                 ) {
-                    var idx = 0
-                    val total = if (showAdvanced) 30 else 11
-
+                    SettingsItemList(total = if (showAdvanced) 30 else 11) {
                     val preferredPlayerTitle = stringResource(R.string.settings_preferred_player)
                     SettingListItem(
                         icon = Tabler.Outline.PlayerPlay,
@@ -240,7 +257,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(R.string.settings_player_engine_subtitle),
                         trailingText = preferences.preferredPlayer.displayName,
                         highlighted = highlightSettingId == "player_engine",
-                        index = idx++, count = total,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = preferredPlayerTitle,
@@ -259,7 +275,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(R.string.settings_seek_duration_subtitle),
                         trailingText = "${preferences.videoSeekDurationMs / 1000}s",
                         highlighted = highlightSettingId == "seek_duration",
-                        index = idx++, count = total,
                         onClick = {
                             val durations = listOf(5_000L, 10_000L, 15_000L, 20_000L, 30_000L, 60_000L)
                             activePicker = pickerChip(
@@ -278,7 +293,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(R.string.settings_orientation_subtitle),
                         trailingText = preferences.videoDefaultOrientation.displayName,
                         highlighted = highlightSettingId == "orientation",
-                        index = idx++, count = total,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = orientationTitle,
@@ -296,7 +310,6 @@ fun PlaybackSettingsScreen(
                         subtitle = if (preferences.videoGesturesEnabled) stringResource(R.string.settings_gestures_on) else stringResource(R.string.settings_gestures_off),
                         checked = preferences.videoGesturesEnabled,
                         highlighted = highlightSettingId == "gestures",
-                        index = idx++, count = total,
                         onCheckedChange = { viewModel.setVideoGesturesEnabled(it) },
                     )
                     val gestureIndicatorTitle = stringResource(R.string.settings_gesture_indicator_side)
@@ -307,7 +320,6 @@ fun PlaybackSettingsScreen(
                             stringResource(R.string.settings_gesture_indicator_opposite) else stringResource(R.string.settings_gesture_indicator_same),
                         trailingText = preferences.videoGestureIndicatorSide.displayName,
                         highlighted = highlightSettingId == "gesture_indicator_side",
-                        index = idx++, count = total,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = gestureIndicatorTitle,
@@ -325,7 +337,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(R.string.settings_default_speed_subtitle),
                         trailingText = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
                         highlighted = highlightSettingId == "default_speed",
-                        index = idx++, count = total,
                         onClick = {
                             val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
                             activePicker = pickerChip(
@@ -343,7 +354,6 @@ fun PlaybackSettingsScreen(
                         subtitle = if (preferences.videoHoldSpeedEnabled) stringResource(R.string.settings_hold_to_seek_on) else stringResource(R.string.settings_disabled),
                         checked = preferences.videoHoldSpeedEnabled,
                         highlighted = highlightSettingId == "hold_speed",
-                        index = idx++, count = total,
                         onCheckedChange = { viewModel.setVideoHoldSpeedEnabled(it) },
                     )
                     val holdToSeekSpeedTitle = stringResource(R.string.settings_hold_to_seek_speed)
@@ -353,7 +363,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(R.string.settings_hold_to_seek_speed_subtitle),
                         trailingText = "${preferences.videoHoldSpeedMultiplier}x",
                         highlighted = highlightSettingId == "hold_speed_multiplier",
-                        index = idx++, count = total,
                         onClick = {
                             val multipliers = listOf(1.5f, 2.0f, 2.5f, 3.0f, 4.0f)
                             activePicker = pickerChip(
@@ -373,7 +382,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(R.string.settings_default_aspect_subtitle),
                         trailingText = preferences.videoDefaultAspectRatio,
                         highlighted = highlightSettingId == "default_aspect",
-                        index = idx++, count = total,
                         onClick = {
                             val aspectRatios = listOf("AUTO", "FIT", "FILL", "CROP", "16:9", "4:3", "21:9")
                             activePicker = PickerState.List(
@@ -391,7 +399,6 @@ fun PlaybackSettingsScreen(
                         subtitle = if (preferences.videoAutoplayNext) stringResource(R.string.settings_auto_play_next_on) else stringResource(R.string.settings_auto_play_next_off),
                         checked = preferences.videoAutoplayNext,
                         highlighted = highlightSettingId == "video_autoplay_next",
-                        index = idx++, count = total,
                         onCheckedChange = { viewModel.setVideoAutoplayNext(it) },
                     )
                     val offLabel = stringResource(R.string.settings_off)
@@ -405,7 +412,6 @@ fun PlaybackSettingsScreen(
                         subtitle = stringResource(R.string.settings_auto_play_countdown_subtitle),
                         trailingText = countdownLabel,
                         highlighted = highlightSettingId == "autoplay_countdown",
-                        index = idx++, count = total,
                         onClick = {
                             val options = listOf(0, 5, 10, 15)
                             activePicker = PickerState.List(
@@ -426,7 +432,6 @@ fun PlaybackSettingsScreen(
                             subtitle = stringResource(R.string.settings_controls_timeout_subtitle),
                             trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
                             highlighted = highlightSettingId == "controls_timeout",
-                            index = idx++, count = total,
                             onClick = {
                                 val timeouts = listOf(3_000L, 5_000L, 10_000L, 15_000L, 20_000L, 30_000L)
                                 activePicker = pickerChip(
@@ -446,7 +451,6 @@ fun PlaybackSettingsScreen(
                             subtitle = stringResource(R.string.settings_skip_back_on_resume_subtitle),
                             trailingText = skipBackLabel,
                             highlighted = highlightSettingId == "skip_back_on_resume",
-                            index = idx++, count = total,
                             onClick = {
                                 val durations = listOf(0L, 3_000L, 5_000L, 10_000L, 15_000L, 30_000L)
                                 activePicker = pickerChip(
@@ -466,7 +470,6 @@ fun PlaybackSettingsScreen(
                             subtitle = stringResource(R.string.settings_pass_out_protection_subtitle),
                             trailingText = passOutLabel,
                             highlighted = highlightSettingId == "pass_out_protection",
-                            index = idx++, count = total,
                             onClick = {
                                 val hours = listOf(0, 1, 2, 3, 4, 6, 8)
                                 activePicker = pickerChip(
@@ -484,7 +487,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.trailerAutoplay) stringResource(R.string.settings_autoplay_trailers_on) else stringResource(R.string.settings_autoplay_trailers_off),
                             checked = preferences.trailerAutoplay,
                             highlighted = highlightSettingId == "autoplay_trailers",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setTrailerAutoplay(it) },
                         )
                         SettingToggleItem(
@@ -493,7 +495,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.cinemaModeEnabled) stringResource(R.string.settings_cinema_mode_on) else stringResource(R.string.settings_cinema_mode_off),
                             checked = preferences.cinemaModeEnabled,
                             highlighted = highlightSettingId == "cinema_mode",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setCinemaModeEnabled(it) },
                         )
                         if (isTv) {
@@ -503,7 +504,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (preferences.androidTvWatchNextEnabled) stringResource(R.string.settings_watch_next_row_on) else stringResource(R.string.settings_watch_next_row_off),
                                 checked = preferences.androidTvWatchNextEnabled,
                                 highlighted = highlightSettingId == "android_tv_watch_next",
-                                index = idx++, count = total,
                                 onCheckedChange = { viewModel.setAndroidTvWatchNextEnabled(it) },
                             )
                             val tvZoomTitle = stringResource(R.string.settings_tv_zoom_mode)
@@ -517,7 +517,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = stringResource(R.string.settings_tv_zoom_mode_subtitle),
                                 trailingText = if (preferences.tvZoomModePercent == 0f) offLabel else "${preferences.tvZoomModePercent.toInt()}%",
                                 highlighted = highlightSettingId == "tv_zoom_mode",
-                                index = idx++, count = total,
                                 onClick = {
                                     val percents = listOf(0f, 5f, 10f, 15f, 20f, 25f, 33f, 50f)
                                     activePicker = PickerState.List(
@@ -537,7 +536,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.videoEpisodeBrowserEnabled) stringResource(R.string.settings_episode_browser_on) else stringResource(R.string.settings_episode_browser_off),
                             checked = preferences.videoEpisodeBrowserEnabled,
                             highlighted = highlightSettingId == "episode_browser",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setVideoEpisodeBrowserEnabled(it) },
                         )
                         SettingToggleItem(
@@ -546,7 +544,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.videoShowPlaybackMetadata) stringResource(R.string.settings_playback_metadata_on) else stringResource(R.string.settings_playback_metadata_off),
                             checked = preferences.videoShowPlaybackMetadata,
                             highlighted = highlightSettingId == "playback_metadata",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setVideoShowPlaybackMetadata(it) },
                         )
                         val swipeSeekRangeTitle = stringResource(R.string.settings_swipe_seek_range)
@@ -556,7 +553,6 @@ fun PlaybackSettingsScreen(
                             subtitle = stringResource(R.string.settings_swipe_seek_range_subtitle),
                             trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
                             highlighted = highlightSettingId == "swipe_seek_range",
-                            index = idx++, count = total,
                             onClick = {
                                 val ranges = listOf(30_000L, 60_000L, 90_000L, 120_000L, 180_000L, 300_000L)
                                 activePicker = pickerChip(
@@ -574,7 +570,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.videoRememberBrightness) stringResource(R.string.settings_remember_brightness_on) else stringResource(R.string.settings_remember_brightness_off),
                             checked = preferences.videoRememberBrightness,
                             highlighted = highlightSettingId == "remember_brightness",
-                            index = idx++, count = total,
                             onCheckedChange = { enabled ->
                                 viewModel.setVideoRememberBrightness(enabled)
                             },
@@ -586,7 +581,6 @@ fun PlaybackSettingsScreen(
                             subtitle = stringResource(R.string.settings_default_brightness_level_subtitle),
                             trailingText = "${(preferences.videoBrightnessLevel * 100).toInt()}%",
                             highlighted = highlightSettingId == "default_brightness_level",
-                            index = idx++, count = total,
                             onClick = {
                                 activePicker = PickerState.Slider(
                                     title = defaultBrightnessTitle,
@@ -606,7 +600,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.trickplayEnabled) stringResource(R.string.settings_trickplay_preview_on) else stringResource(R.string.settings_trickplay_preview_off),
                             checked = preferences.trickplayEnabled,
                             highlighted = highlightSettingId == "trickplay_preview",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setTrickplayEnabled(it) },
                         )
                         SettingToggleItem(
@@ -615,7 +608,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.trickplayOnSeekGesture) stringResource(R.string.settings_trickplay_on_gestures_on) else stringResource(R.string.settings_trickplay_on_gestures_off),
                             checked = preferences.trickplayOnSeekGesture,
                             highlighted = highlightSettingId == "trickplay_on_gestures",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setTrickplayOnSeekGesture(it) },
                         )
                         val preloadBufferTitle = stringResource(R.string.settings_preload_buffer)
@@ -625,7 +617,6 @@ fun PlaybackSettingsScreen(
                             subtitle = stringResource(R.string.settings_preload_buffer_subtitle),
                             trailingText = preferences.videoPreloadBufferSize.displayName,
                             highlighted = highlightSettingId == "preload_buffer",
-                            index = idx++, count = total,
                             onClick = {
                                 activePicker = PickerState.List(
                                     title = preloadBufferTitle,
@@ -643,7 +634,6 @@ fun PlaybackSettingsScreen(
                             subtitle = stringResource(R.string.settings_background_audio_subtitle),
                             checked = preferences.backgroundVideoAudioEnabled,
                             highlighted = highlightSettingId == "background_audio",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setBackgroundVideoAudioEnabled(it) },
                         )
                         SettingToggleItem(
@@ -652,7 +642,6 @@ fun PlaybackSettingsScreen(
                             subtitle = stringResource(R.string.settings_keep_screen_on_subtitle),
                             checked = preferences.keepScreenOnDuringVideo,
                             highlighted = highlightSettingId == "keep_screen_on",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setKeepScreenOnDuringVideo(it) },
                         )
                         SettingToggleItem(
@@ -661,7 +650,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.incognitoModeEnabled) stringResource(R.string.settings_incognito_mode_on) else stringResource(R.string.settings_incognito_mode_off),
                             checked = preferences.incognitoModeEnabled,
                             highlighted = highlightSettingId == "incognito_mode",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setIncognitoModeEnabled(it) },
                         )
                         SettingToggleItem(
@@ -670,7 +658,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.showTimeRemaining) stringResource(R.string.settings_show_time_remaining_on) else stringResource(R.string.settings_show_time_remaining_off),
                             checked = preferences.showTimeRemaining,
                             highlighted = highlightSettingId == "show_time_remaining",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setShowTimeRemaining(it) },
                         )
                         SettingToggleItem(
@@ -679,7 +666,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.showClockInPlayer) stringResource(R.string.settings_show_clock_player_on) else stringResource(R.string.settings_show_clock_player_off),
                             checked = preferences.showClockInPlayer,
                             highlighted = highlightSettingId == "show_clock_player",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setShowClockInPlayer(it) },
                         )
                         SettingToggleItem(
@@ -688,7 +674,6 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.pauseOnAudioFocusLoss) stringResource(R.string.settings_pause_on_focus_loss_on) else stringResource(R.string.settings_pause_on_focus_loss_off),
                             checked = preferences.pauseOnAudioFocusLoss,
                             highlighted = highlightSettingId == "pause_on_focus_loss",
-                            index = idx, count = total,
                             onCheckedChange = { viewModel.setPauseOnAudioFocusLoss(it) },
                         )
                         SettingToggleItem(
@@ -697,9 +682,9 @@ fun PlaybackSettingsScreen(
                             subtitle = if (preferences.duckOnTransientFocusLoss) stringResource(R.string.settings_duck_on_phone_call_on) else stringResource(R.string.settings_duck_on_phone_call_off),
                             checked = preferences.duckOnTransientFocusLoss,
                             highlighted = highlightSettingId == "duck_on_transient_focus_loss",
-                            index = idx++, count = total,
                             onCheckedChange = { viewModel.setDuckOnTransientFocusLoss(it) },
                         )
+                    }
                     }
                 }
             }
@@ -715,16 +700,13 @@ fun PlaybackSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in PLAYBACK_ADVANCED_GROUP_IDS,
                 ) {
-                    val total = 6 + (if (preferences.dialogueBoostEnabled) 1 else 0)
-
-                    var idx = 0
+                    SettingsItemList(total = 6 + (if (preferences.dialogueBoostEnabled) 1 else 0)) {
                     SettingToggleItem(
                         icon = Tabler.Outline.Microphone2,
                         title = stringResource(R.string.settings_dialogue_boost),
                         subtitle = if (preferences.dialogueBoostEnabled) preferences.dialogueBoostStrength.displayName else offLabel2,
                         checked = preferences.dialogueBoostEnabled,
                         highlighted = highlightSettingId == "dialogue_boost",
-                        index = idx++, count = total,
                         onCheckedChange = { viewModel.setDialogueBoostEnabled(it) },
                     )
                     if (preferences.dialogueBoostEnabled) {
@@ -734,7 +716,6 @@ fun PlaybackSettingsScreen(
                             title = stringResource(R.string.settings_dialogue_boost_strength),
                             subtitle = preferences.dialogueBoostStrength.displayName,
                             trailingText = preferences.dialogueBoostStrength.displayName,
-                            index = idx++, count = total,
                             onClick = {
                                 val strengths = EffectStrength.entries
                                 activePicker = pickerChip(
@@ -754,7 +735,6 @@ fun PlaybackSettingsScreen(
                         subtitle = preferences.decoderMode.displayName,
                         trailingText = preferences.decoderMode.displayName.split(" ").first(),
                         highlighted = highlightSettingId == "decoder",
-                        index = idx++, count = total,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = decoderTitle,
@@ -771,7 +751,6 @@ fun PlaybackSettingsScreen(
                         subtitle = if (preferences.audioPassthrough) stringResource(R.string.settings_audio_passthrough_on) else stringResource(R.string.settings_audio_passthrough_off),
                         checked = preferences.audioPassthrough,
                         highlighted = highlightSettingId == "audio_passthrough",
-                        index = idx++, count = total,
                         onCheckedChange = { viewModel.setAudioPassthrough(it) },
                     )
                     val refreshRateSubtitles = com.raulshma.jellyplay.core.model.RefreshRateMode.entries.associateWith {
@@ -797,7 +776,6 @@ fun PlaybackSettingsScreen(
                                 " $resSwitchSuffix" else "",
                         trailingText = refreshRateSubtitles[preferences.refreshRateMode] ?: preferences.refreshRateMode.displayName,
                         highlighted = highlightSettingId == "frame_rate_matching",
-                        index = idx++, count = total,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = refreshRateMatchingTitle,
@@ -818,7 +796,6 @@ fun PlaybackSettingsScreen(
                         subtitle = qualityLabels[preferences.streamingQuality] ?: preferences.streamingQuality.name,
                         trailingText = qualityShorts[preferences.streamingQuality] ?: preferences.streamingQuality.name,
                         highlighted = highlightSettingId == "streaming_quality",
-                        index = idx++, count = total,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = streamingQualityTitle,
@@ -837,7 +814,6 @@ fun PlaybackSettingsScreen(
                         subtitle = liveLabels[preferences.liveStreamOption] ?: preferences.liveStreamOption.displayName,
                         trailingText = preferences.liveStreamOption.displayName,
                         highlighted = highlightSettingId == "live_stream_option",
-                        index = idx++, count = total,
                         onClick = {
                             activePicker = PickerState.List(
                                 title = liveTvStreamTitle,
@@ -857,7 +833,6 @@ fun PlaybackSettingsScreen(
                         subtitle = if (preferences.audioDelayMs == 0L) noAudioDelay else stringResource(R.string.settings_audio_delay_value, preferences.audioDelayMs),
                         trailingText = if (preferences.audioDelayMs == 0L) offLabel2 else "${preferences.audioDelayMs}ms",
                         highlighted = highlightSettingId == "audio_delay",
-                        index = idx, count = total,
                         onClick = {
                             activePicker = PickerState.Slider(
                                 title = audioDelayTitle,
@@ -871,6 +846,7 @@ fun PlaybackSettingsScreen(
                             )
                         },
                     )
+                    }
                 }
             }
 
@@ -887,9 +863,7 @@ fun PlaybackSettingsScreen(
                         PlayerType.MPV -> {
                             val mpvCfg = preferences.mpvConfig
                             val mpvDefault = MpvEngineConfig()
-                            val mpvTotal = 12
-                            var mpvIdx = 0
-
+                            SettingsItemList(total = 12) {
                             val videoOutputTitle = stringResource(R.string.settings_video_output)
                             SettingListItem(
                                 icon = Tabler.Outline.Video,
@@ -897,7 +871,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${mpvCfg.videoOutput.displayName} (${mpvCfg.videoOutput.key})",
                                 trailingText = mpvCfg.videoOutput.key,
                                 highlighted = highlightSettingId == "mpv_video_output",
-                                index = mpvIdx++, count = mpvTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = videoOutputTitle,
@@ -916,7 +889,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${mpvCfg.scaler.displayName} (${mpvCfg.scaler.key})",
                                 trailingText = mpvCfg.scaler.key,
                                 highlighted = highlightSettingId == "mpv_scaler",
-                                index = mpvIdx++, count = mpvTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = scalerTitle,
@@ -934,7 +906,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (mpvCfg.deband) stringResource(R.string.settings_debanding_on) else stringResource(R.string.settings_debanding_off),
                                 checked = mpvCfg.deband,
                                 highlighted = highlightSettingId == "mpv_debanding",
-                                index = mpvIdx++, count = mpvTotal,
                                 onCheckedChange = { viewModel.setMpvConfig(mpvCfg.copy(deband = it)) },
                             )
                             SettingToggleItem(
@@ -943,7 +914,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = if (mpvCfg.interpolation) stringResource(R.string.settings_interpolation_on) else stringResource(R.string.settings_interpolation_off),
                                 checked = mpvCfg.interpolation,
                                 highlighted = highlightSettingId == "mpv_interpolation",
-                                index = mpvIdx++, count = mpvTotal,
                                 onCheckedChange = { viewModel.setMpvConfig(mpvCfg.copy(interpolation = it)) },
                             )
                             val audioOutputTitle = stringResource(R.string.settings_audio_output)
@@ -953,7 +923,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${mpvCfg.audioOutput.displayName} (${mpvCfg.audioOutput.key})",
                                 trailingText = mpvCfg.audioOutput.key,
                                 highlighted = highlightSettingId == "mpv_audio_output",
-                                index = mpvIdx++, count = mpvTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = audioOutputTitle,
@@ -974,7 +943,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = mpvCfg.audioFallback?.displayName ?: noneLabel,
                                 trailingText = mpvCfg.audioFallback?.key ?: noneLabel,
                                 highlighted = highlightSettingId == "mpv_audio_fallback",
-                                index = mpvIdx++, count = mpvTotal,
                                 onClick = {
                                     val options = listOf(null) + MpvAudioOutput.entries
                                     activePicker = PickerState.List(
@@ -994,7 +962,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${mpvCfg.demuxerMaxBytes.displayName} (${mpvCfg.demuxerMaxBytes.key})",
                                 trailingText = mpvCfg.demuxerMaxBytes.key,
                                 highlighted = highlightSettingId == "mpv_buffer_size",
-                                index = mpvIdx++, count = mpvTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = bufferSizeTitle,
@@ -1014,7 +981,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = mpvCfg.hwdecOverride?.displayName ?: hwdecUniversal,
                                 trailingText = mpvCfg.hwdecOverride?.key ?: stringResource(R.string.settings_streaming_quality_auto),
                                 highlighted = highlightSettingId == "mpv_hwdec_override",
-                                index = mpvIdx++, count = mpvTotal,
                                 onClick = {
                                     val options = listOf(null) + MpvHwdec.entries
                                     activePicker = PickerState.List(
@@ -1034,7 +1000,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${mpvCfg.skipLoopFilter.displayName} (${mpvCfg.skipLoopFilter.key})",
                                 trailingText = mpvCfg.skipLoopFilter.key,
                                 highlighted = highlightSettingId == "mpv_skip_loop_filter",
-                                index = mpvIdx++, count = mpvTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = skipLoopFilterTitle,
@@ -1053,7 +1018,6 @@ fun PlaybackSettingsScreen(
                                 subtitle = "${mpvCfg.frameDrop.displayName} (${mpvCfg.frameDrop.key})",
                                 trailingText = mpvCfg.frameDrop.key,
                                 highlighted = highlightSettingId == "mpv_frame_drop",
-                                index = mpvIdx++, count = mpvTotal,
                                 onClick = {
                                     activePicker = PickerState.List(
                                         title = frameDropTitle,
@@ -1078,7 +1042,6 @@ fun PlaybackSettingsScreen(
                                 },
                                 trailingText = "mpv.conf",
                                 highlighted = highlightSettingId == "mpv_extra_config",
-                                index = mpvIdx++, count = mpvTotal,
                                 onClick = {
                                     activePicker = PickerState.Text(
                                         title = advancedMpvConfigTitle,
@@ -1092,9 +1055,9 @@ fun PlaybackSettingsScreen(
                                 icon = Tabler.Outline.Refresh,
                                 title = stringResource(R.string.settings_reset_to_defaults),
                                 subtitle = stringResource(R.string.settings_reset_mpv),
-                                index = mpvIdx, count = mpvTotal,
                                 onClick = { viewModel.setMpvConfig(mpvDefault) },
                             )
+                            }
                         }
                         PlayerType.LIBVLC -> {
                             val vlcCfg = preferences.libVlcConfig
@@ -1671,6 +1634,27 @@ fun PlaybackSettingsScreen(
             }
         }
         }
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text(stringResource(R.string.settings_reset_playback_title)) },
+            text = { Text(stringResource(R.string.settings_reset_playback_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.resetPlaybackSettings()
+                    showResetDialog = false
+                }) {
+                    Text(stringResource(R.string.settings_reset), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text(stringResource(R.string.settings_cancel))
+                }
+            },
+        )
     }
 
     SettingsPickerDialog(

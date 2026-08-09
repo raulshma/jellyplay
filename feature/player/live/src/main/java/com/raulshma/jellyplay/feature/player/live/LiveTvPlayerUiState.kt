@@ -34,6 +34,9 @@ data class LiveTvPlayerUiState(
      *  Transcode), surfaced as a badge in the player chrome. Null until the
      *  first stream resolves. */
     val playMethod: LivePlayMethod? = null,
+    /** Controls auto-hide delay sourced from the user's `videoControlsTimeoutMs`
+     *  preference (mirrors the VOD player). Doubled on TV in the screen. */
+    val controlsTimeoutMs: Long = 5_000L,
 ) {
     val hasNext: Boolean get() = currentIndex < channels.lastIndex
     val hasPrevious: Boolean get() = currentIndex > 0

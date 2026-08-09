@@ -32,6 +32,7 @@
     <string name="auth_connect">Conectar</string>
     <string name="auth_connecting">Conectando…</string>
     <string name="auth_server_address">Dirección del servidor</string>
+    <string name="auth_server_address_invalid">Introduce una URL válida (p. ej., https://host:puerto)</string>
 
     <!-- Server connection errors -->
     <string name="auth_error_server_address_required">Introduce una dirección de servidor</string>

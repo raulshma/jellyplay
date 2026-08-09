@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -450,39 +451,37 @@ class LibraryApiClientImpl @Inject constructor(
 
     override suspend fun getMediaItems(
         parentId: String?,
-        mediaTypes: List<MediaType>?,
-        genres: List<String>?,
-        years: List<Int>?,
+        filters: LibraryFilters,
         studioIds: List<String>?,
-        sortBy: String,
-        sortOrder: String,
         startIndex: Int,
         limit: Int,
         searchTerm: String?,
-        tags: List<String>?,
-        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
-        minRating: Float?,
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Result<SearchResult> = engine.apiResultWithRetry {
-        val sortByEnums = parseItemSortList(sortBy)
+        val sortByEnums = parseItemSortList(filters.sortBy.apiValue)
         val sortOrderEnum = SortOrder.entries
-            .find { it.serialName.equals(sortOrder, ignoreCase = true) }
+            .find { it.serialName.equals(filters.sortBy.sortOrder, ignoreCase = true) }
             ?: SortOrder.ASCENDING
         // Played-status maps onto Jellyfin's ItemFilter (IsPlayed/IsUnplayed).
         // Previously these chips toggled + persisted but never reached the query,
         // so the grid silently ignored them (analysis F1).
         val itemFilters = buildList {
-            when (playedStatus) {
+            when (filters.playedStatus.takeIf { it != com.raulshma.jellyplay.core.model.PlayedStatus.ALL }) {
                 com.raulshma.jellyplay.core.model.PlayedStatus.PLAYED -> add(ItemFilter.IS_PLAYED)
                 com.raulshma.jellyplay.core.model.PlayedStatus.UNPLAYED -> add(ItemFilter.IS_UNPLAYED)
                 else -> {}
             }
+            // IsResumable restricts to items with a playback position
+            // (UserData.PlaybackPositionTicks > 0). Composes with played-status
+            // and powers the "In Progress" library filter / sort.
+            if (filters.isResumable == true) add(ItemFilter.IS_RESUMABLE)
         }
         // includeItemTypes / excludeItemTypes: resolve the requested kinds once,
         // then drop SEASON/EPISODE from the exclude list when they were
         // explicitly included. Jellyfin would otherwise receive contradictory
         // include+exclude for the same kind (e.g. section mode for a TV library
         // includes EPISODE to match /Items/Latest) and return an empty result.
+        val mediaTypes = filters.mediaTypes.takeIf { it.isNotEmpty() }
         val includeKinds = mediaTypes?.mapNotNull { it.toBaseItemKind() }.orEmpty()
         val excludeKinds = buildList {
             if (BaseItemKind.SEASON !in includeKinds) add(BaseItemKind.SEASON)
@@ -492,10 +491,10 @@ class LibraryApiClientImpl @Inject constructor(
             parentId = parentId?.let { it.toUUID() },
             includeItemTypes = includeKinds.takeIf { it.isNotEmpty() },
             excludeItemTypes = excludeKinds,
-            genres = genres,
-            years = years,
+            genres = filters.genres.takeIf { it.isNotEmpty() },
+            years = filters.years.takeIf { it.isNotEmpty() },
             studioIds = studioIds?.mapNotNull { it.toUUID() },
-            tags = tags,
+            tags = filters.tags.takeIf { it.isNotEmpty() },
             sortBy = sortByEnums.takeIf { it.isNotEmpty() },
             sortOrder = listOf(sortOrderEnum),
             startIndex = startIndex,
@@ -503,7 +502,7 @@ class LibraryApiClientImpl @Inject constructor(
             recursive = true,
             searchTerm = searchTerm?.takeIf { it.isNotBlank() },
             filters = itemFilters.takeIf { it.isNotEmpty() },
-            minCommunityRating = minRating?.toDouble(),
+            minCommunityRating = filters.minRating.takeIf { it > 0f }?.toDouble(),
             fields = listOf(
                 ItemFields.OVERVIEW,
                 ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,

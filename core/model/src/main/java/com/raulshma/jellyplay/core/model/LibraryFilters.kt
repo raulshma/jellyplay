@@ -28,4 +28,11 @@ data class LibraryFilters(
     val playedStatus: PlayedStatus = PlayedStatus.ALL,
     val tags: List<String> = emptyList(),
     val minRating: Float = 0f,
+    // Resumable filter: when non-null, restricts the query to items with a
+    // playback position (Jellyfin's ItemFilter.IsResumable). A separate boolean
+    // dimension from [playedStatus] so it composes with any played-status chip
+    // and stays backward-compatible with the persisted filter blob (defaults to
+    // null = "off"). Pair with [SortOption.IN_PROGRESS] for the classic
+    // "In Progress" view, but usable independently.
+    val isResumable: Boolean? = null,
 )

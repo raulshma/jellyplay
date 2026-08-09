@@ -12,12 +12,13 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.PasswordTextField
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedButton
@@ -32,12 +33,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.feature.auth.R
@@ -53,6 +57,13 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+/**
+ * Which credential field (if any) a login error is attached to. Ambiguous auth
+ * failures (e.g. HTTP 401) use [SERVER] so neither field is reddened while the
+ * message still surfaces in the error banner.
+ */
+enum class LoginFieldError { USERNAME, PASSWORD, SERVER }
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LoginScreen(
@@ -65,9 +76,26 @@ fun LoginScreen(
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var isLoggingIn by rememberSaveable { mutableStateOf(false) }
-    var error by rememberSaveable { mutableStateOf<String?>(null) }
+    // Typed login error: which field is at fault + the message to show in the
+    // banner. Stored as two saveables (enum name + message) so the pair survives
+    // config changes without needing a Parcelable/Serializable on the enum.
+    var errorField by rememberSaveable { mutableStateOf<String?>(null) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    val error: Pair<LoginFieldError, String>? = run {
+        val msg = errorMessage
+        val field = errorField?.let { f -> LoginFieldError.entries.firstOrNull { it.name == f } }
+        if (msg != null && field != null) field to msg else null
+    }
+    fun setError(field: LoginFieldError, message: String) {
+        errorField = field.name
+        errorMessage = message
+    }
+    fun clearError() {
+        errorField = null
+        errorMessage = null
+    }
     var contentVisible by rememberSaveable { mutableStateOf(false) }
-    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(Unit) {
         contentVisible = true
@@ -86,6 +114,26 @@ fun LoginScreen(
 
         LaunchedEffect(Unit) {
             if (isTv) usernameFocusRequester.tryRequestFocus("login_username")
+        }
+
+        fun submit() {
+            if (username.isBlank()) {
+                setError(LoginFieldError.USERNAME, usernameRequiredError)
+                return
+            }
+            isLoggingIn = true
+            clearError()
+            keyboardController?.hide()
+            viewModel.login(serverAddress, username, password) { result ->
+                isLoggingIn = false
+                result.onSuccess {
+                    onLoginSuccess()
+                }.onFailure {
+                    // Ambiguous auth failure (likely credentials/server); surface
+                    // the message but don't redden a specific field.
+                    setError(LoginFieldError.SERVER, it.message ?: loginFailedError)
+                }
+            }
         }
 
         Column(
@@ -132,12 +180,16 @@ fun LoginScreen(
                     value = username,
                     onValueChange = {
                         username = it
-                        error = null
+                        clearError()
                     },
                     label = { Text(stringResource(R.string.auth_username)) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth().focusRequester(usernameFocusRequester),
-                    isError = error != null,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(usernameFocusRequester)
+                        .semantics { contentType = ContentType.Username },
+                    isError = error?.first == LoginFieldError.USERNAME,
                 )
             }
 
@@ -150,26 +202,18 @@ fun LoginScreen(
                     animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 ),
             ) {
-                OutlinedTextField(
+                PasswordTextField(
                     value = password,
                     onValueChange = {
                         password = it
-                        error = null
+                        clearError()
                     },
                     label = { Text(stringResource(R.string.auth_password)) },
-                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    isError = error != null,
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(
-                                imageVector = if (passwordVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
-                                contentDescription = stringResource(if (passwordVisible) R.string.auth_hide_password else R.string.auth_show_password),
-                            )
-                        }
-                    },
+                    isError = error?.first == LoginFieldError.PASSWORD,
+                    imeAction = ImeAction.Done,
+                    keyboardActions = KeyboardActions(onDone = { submit(); keyboardController?.hide() }),
+                    contentType = ContentType.Password,
                 )
             }
 
@@ -184,7 +228,7 @@ fun LoginScreen(
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
                     ) {
                         Text(
-                            error!!,
+                            error!!.second,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -204,22 +248,7 @@ fun LoginScreen(
             ) {
                 val signInFocusState = rememberTvFocusState(focusedScale = 1.04f)
                 Button(
-                    onClick = {
-                        if (username.isBlank()) {
-                            error = usernameRequiredError
-                            return@Button
-                        }
-                        isLoggingIn = true
-                        error = null
-                        viewModel.login(serverAddress, username, password) { result ->
-                            isLoggingIn = false
-                            result.onSuccess {
-                                onLoginSuccess()
-                            }.onFailure {
-                                error = it.message ?: loginFailedError
-                            }
-                        }
-                    },
+                    onClick = { submit() },
                     enabled = !isLoggingIn,
                     modifier = Modifier.fillMaxWidth()
                         .then(signInFocusState.focusModifier)

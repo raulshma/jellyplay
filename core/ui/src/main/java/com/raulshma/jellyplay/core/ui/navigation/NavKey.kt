@@ -94,6 +94,14 @@ sealed class Route : NavKey {
     @Serializable data class NotificationSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class StorageSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class SecuritySettings(val highlightSettingId: String? = null) : Route()
+    /**
+     * Privacy & Data hub — consolidates scattered destructive data actions
+     * (clear cache, clear image cache, clear search history, factory reset,
+     * sign out) into a single discoverable screen. Re-exposes the same
+     * actions the dedicated screens already perform; it does not move or
+     * delete them.
+     */
+    @Serializable data class PrivacyData(val highlightSettingId: String? = null) : Route()
     @Serializable data class BackupSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class ExperimentalSettings(val highlightSettingId: String? = null) : Route()
 

@@ -172,59 +172,6 @@ fun ArrQueueScreen(
                         .padding(16.dp),
                 )
             }
-
-            // Inline action error toast-ish row.
-            val actionError = state.actionError
-            if (actionError != null) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp),
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    shape = ShapeCache.smooth12,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = actionError,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(onClick = { viewModel.clearActionError() }) {
-                            Text(stringResource(R.string.arrqueue_dismiss))
-                        }
-                    }
-                }
-            }
-
-            val actionSuccess = state.actionSuccess
-            if (actionSuccess != null) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = ShapeCache.smooth12,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = actionSuccess,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(onClick = { viewModel.clearActionSuccess() }) {
-                            Text(stringResource(R.string.arrqueue_ok))
-                        }
-                    }
-                }
-            }
         }
     }
 

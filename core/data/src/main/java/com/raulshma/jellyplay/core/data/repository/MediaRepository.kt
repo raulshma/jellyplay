@@ -4,6 +4,7 @@ import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -37,17 +38,17 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
 
     suspend fun getMediaItems(
         parentId: String? = null,
-        mediaTypes: List<MediaType>? = null,
-        genres: List<String>? = null,
-        years: List<Int>? = null,
+        /**
+         * Bundles the filter/sort dimensions that always travel together
+         * (mediaTypes, genres, years, tags, sortBy, playedStatus, minRating,
+         * isResumable). Replaces a long primitive parameter list so adding a
+         * dimension is a single field on [LibraryFilters] instead of a signature
+         * edit across repository → paging source → network client.
+         */
+        filters: LibraryFilters = LibraryFilters(),
         studioIds: List<String>? = null,
-        sortBy: String = "SortName",
-        sortOrder: String = "Ascending",
         startIndex: Int = 0,
         limit: Int = 50,
-        tags: List<String>? = null,
-        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
-        minRating: Float? = null,
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
     ): Result<SearchResult>
 
@@ -62,13 +63,9 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
 
     suspend fun search(
         query: String,
-        mediaTypes: List<MediaType>? = null,
-        genres: List<String>? = null,
-        years: List<Int>? = null,
-        tags: List<String>? = null,
+        filters: LibraryFilters = LibraryFilters(),
         limit: Int = 50,
         startIndex: Int = 0,
-        minRating: Float? = null,
     ): Result<SearchResult>
 
     /**
@@ -88,25 +85,14 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
 
     fun getMediaItemsPaged(
         parentId: String? = null,
-        mediaTypes: List<MediaType>? = null,
-        genres: List<String>? = null,
-        years: List<Int>? = null,
+        filters: LibraryFilters = LibraryFilters(),
         studioIds: List<String>? = null,
-        sortBy: String = "SortName",
-        sortOrder: String = "Ascending",
-        tags: List<String>? = null,
-        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
-        minRating: Float? = null,
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
     ): Flow<PagingData<MediaItem>>
 
     fun searchPaged(
         query: String,
-        mediaTypes: List<MediaType>? = null,
-        genres: List<String>? = null,
-        years: List<Int>? = null,
-        tags: List<String>? = null,
-        minRating: Float? = null,
+        filters: LibraryFilters = LibraryFilters(),
     ): Flow<PagingData<MediaItem>>
 
     suspend fun getGenres(parentId: String? = null): Result<List<Genre>>

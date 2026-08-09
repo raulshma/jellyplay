@@ -29,6 +29,8 @@
     <string name="library_sort_by">排序方式</string>
     <string name="library_media_type">媒体类型</string>
     <string name="library_status">状态</string>
+    <string name="library_sort_in_progress">进行中</string>
+    <string name="library_filter_resumable">进行中</string>
     <string name="library_genres">类型</string>
     <string name="library_year_range">年份范围</string>
     <string name="library_tags">标签</string>
@@ -72,4 +74,14 @@
     <string name="library_cd_adjust">调整</string>
     <string name="library_cd_previous">上一张</string>
     <string name="library_cd_next">下一张</string>
+
+    <!-- ── Multi-select (enhancements §8.1) ─────────────────────────────── -->
+    <string name="library_select">选择</string>
+    <string name="library_select_all">全选</string>
+    <string name="library_n_selected">已选择 %1$d 个</string>
+    <string name="library_mark_watched">标记为已观看</string>
+    <string name="library_mark_unwatched">标记为未观看</string>
+    <string name="library_clear_selection">清除选择</string>
+    <string name="library_marked_watched_message">已标记为已观看</string>
+    <string name="library_marked_unwatched_message">已标记为未观看</string>
 </resources>
