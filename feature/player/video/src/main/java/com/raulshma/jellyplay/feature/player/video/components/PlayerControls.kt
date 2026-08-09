@@ -173,7 +173,7 @@ internal fun PlayerControls(
     onSpeedClick: () -> Unit,
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
-    onSubtitleStyleClick: () -> Unit,
+    onSubtitleHubClick: () -> Unit,
     onChapterClick: () -> Unit,
     onInfoClick: () -> Unit,
     onAspectRatioClick: () -> Unit,
@@ -184,7 +184,6 @@ internal fun PlayerControls(
     onAVSyncClick: () -> Unit,
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
-    onSubtitleDownloadClick: () -> Unit,
     onEpisodesClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
     onPipClick: () -> Unit = {},
@@ -734,9 +733,9 @@ internal fun PlayerControls(
             audioNormalizationEnabled = audioNormalizationEnabled,
             channelMixMode = channelMixMode,
             channelMixEnabled = channelMixEnabled,
-            onSubtitleStyleClick = {
+            onSubtitleHubClick = {
                 showOverflow = false
-                onSubtitleStyleClick()
+                onSubtitleHubClick()
             },
             onDialogueBoostClick = {
                 showOverflow = false
@@ -764,10 +763,6 @@ internal fun PlayerControls(
             onPassthroughClick = {
                 showOverflow = false
                 onPassthroughClick()
-            },
-            onSubtitleDownloadClick = {
-                showOverflow = false
-                onSubtitleDownloadClick()
             },
             onVideoStatsClick = {
                 showOverflow = false

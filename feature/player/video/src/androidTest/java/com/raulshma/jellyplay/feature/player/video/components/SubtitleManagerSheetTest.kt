@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.raulshma.jellyplay.core.model.CultureInfo
@@ -196,6 +197,15 @@ class SubtitleManagerSheetTest {
         composeTestRule.onNodeWithText("Search").performClick() // tab
         composeTestRule.onNodeWithText("English").performClick()
         assertEquals("1", downloaded!!.id)
+    }
+
+    @Test
+    fun subtitleManagerSheet_searchTab_emptyCultures_showsFallbackDropdownOnChevronClick() {
+        setContent(cultures = emptyList())
+        composeTestRule.onNodeWithText("Search").performClick() // tab
+        composeTestRule.onNodeWithContentDescription("Language").performClick() // chevron
+        composeTestRule.onNodeWithText("English (eng)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Spanish (spa)").assertIsDisplayed()
     }
 
     // endregion

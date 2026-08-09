@@ -137,6 +137,11 @@
     <string name="player_video_more_options">Mais opções</string>
     <string name="player_video_audio">Áudio</string>
     <string name="player_video_subtitles">Legendas</string>
+    <string name="player_video_subtitle_hub_section_tracks">Faixas</string>
+    <string name="player_video_subtitle_hub_section_style">Estilo</string>
+    <string name="player_video_subtitle_hub_section_get">Obter</string>
+    <string name="player_video_subtitle_hub_section_delay">Atraso</string>
+    <string name="player_video_subtitle_downloaded_device_only">Salvo apenas no dispositivo (offline)</string>
     <string name="player_video_chapters">Capítulos</string>
     <string name="player_video_episodes">Episódios</string>
     <string name="player_video_syncplay">SyncPlay</string>

@@ -140,14 +140,12 @@ class PlayerSheetNavigationTest {
 
         openSheet(PlayerSheet.Speed)
         openSheet(PlayerSheet.Audio)
-        openSheet(PlayerSheet.Subtitle)
+        openSheet(PlayerSheet.SubtitleHub)
         openSheet(PlayerSheet.Chapter)
         openSheet(PlayerSheet.PlaybackInfo)
         openSheet(PlayerSheet.AspectRatio)
-        openSheet(PlayerSheet.SubtitleStyle)
         openSheet(PlayerSheet.AVSync)
         openSheet(PlayerSheet.Decoder)
-        openSheet(PlayerSheet.SubtitleDownload)
     }
 
     @Test

@@ -73,77 +73,108 @@ internal fun TrackPickerSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {
-        Column(
+        TrackPickerSection(
+            title = title,
+            tracks = tracks,
+            onSelect = onSelect,
+            onReset = onReset,
+            onPickDismiss = onDismiss,
+            footer = footer,
+            focusRequester = focusRequester,
+        )
+    }
+}
+
+/**
+ * The body of [TrackPickerSheet] without its own sheet chrome, for embedding
+ * inside the unified subtitle hub. [onPickDismiss] is invoked after a track is
+ * selected so the host (sheet or hub) can close/navigate as needed; the hub
+ * passes a no-op since it owns its own dismissal.
+ *
+ * Declared as a [ColumnScope] extension so the inner `LazyColumn.weight` (used
+ * to bound the scroll height inside the sheet/hub) resolves.
+ */
+@Composable
+internal fun androidx.compose.foundation.layout.ColumnScope.TrackPickerSection(
+    title: String,
+    tracks: List<TrackOption>,
+    onSelect: (TrackOption) -> Unit,
+    onReset: (() -> Unit)? = null,
+    onPickDismiss: () -> Unit = {},
+    footer: @Composable (() -> Unit)? = null,
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp),
+    ) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 32.dp),
+                .padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                    ),
-                )
-                if (onReset != null) {
-                    val resetFocusState = rememberTvFocusState(focusedScale = 1.04f)
-                    Row(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .then(resetFocusState.focusModifier)
-                            .tvFocusIndicator(resetFocusState, CircleShape)
-                            .clickable {
-                                onReset()
-                                onDismiss()
-                            }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            Tabler.Outline.Rotate,
-                            contentDescription = stringResource(R.string.player_reset_to_auto),
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Text(
-                            text = stringResource(R.string.player_reset_to_auto),
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            LazyColumn(modifier = Modifier.verticalWrapAround().weight(1f, fill = false)) {
-                itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->
-                    val isSelected = track.isSelected
-                    val isFirst = index == 0
-                    val isTarget = isSelected || (tracks.none { it.isSelected } && isFirst)
-                    TrackItem(
-                        track = track,
-                        isLast = index == tracks.lastIndex,
-                        itemCount = tracks.size,
-                        onSelect = {
-                            onSelect(track)
-                            onDismiss()
-                        },
-                        modifier = Modifier.ifElse(isTarget, Modifier.focusRequester(focusRequester)),
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                ),
+            )
+            if (onReset != null) {
+                val resetFocusState = rememberTvFocusState(focusedScale = 1.04f)
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .then(resetFocusState.focusModifier)
+                        .tvFocusIndicator(resetFocusState, CircleShape)
+                        .clickable {
+                            onReset()
+                            onPickDismiss()
+                        }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Tabler.Outline.Rotate,
+                        contentDescription = stringResource(R.string.player_reset_to_auto),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.player_reset_to_auto),
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
-            if (footer != null) {
-                Spacer(Modifier.height(8.dp))
-                footer()
+        }
+        Spacer(Modifier.height(12.dp))
+        LazyColumn(modifier = Modifier.verticalWrapAround().weight(1f, fill = false)) {
+            itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->
+                val isSelected = track.isSelected
+                val isFirst = index == 0
+                val isTarget = isSelected || (tracks.none { it.isSelected } && isFirst)
+                TrackItem(
+                    track = track,
+                    isLast = index == tracks.lastIndex,
+                    itemCount = tracks.size,
+                    onSelect = {
+                        onSelect(track)
+                        onPickDismiss()
+                    },
+                    modifier = Modifier.ifElse(isTarget, Modifier.focusRequester(focusRequester)),
+                )
             }
+        }
+        if (footer != null) {
+            Spacer(Modifier.height(8.dp))
+            footer()
         }
     }
 }

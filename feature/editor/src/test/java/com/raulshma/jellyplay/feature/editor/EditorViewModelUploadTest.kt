@@ -58,7 +58,33 @@ class EditorViewModelUploadTest {
         coEvery { apiClient.getRemoteImageProviders(any()) } returns Result.success(emptyList())
         coEvery { apiClient.setItemImage(any(), any(), any()) } returns Result.success(Unit)
 
-        viewModel = EditorViewModel(apiClient, authRepository, subtitleProviderRepository, context)
+        viewModel = EditorViewModel(
+            apiClient,
+            authRepository,
+            subtitleProviderRepository,
+            // No-op streaming subtitle store — upload tests don't exercise the
+            // durable subtitle path. Mirrors the player's TestStreamingSubtitleStore.
+            object : com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore {
+                override suspend fun save(
+                    itemId: String,
+                    provider: com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind,
+                    providerSubtitleId: String,
+                    fileName: String,
+                    language: String?,
+                    codec: String?,
+                    isForced: Boolean,
+                    isHearingImpaired: Boolean,
+                    bytes: ByteArray,
+                ) = com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle(
+                    provider, providerSubtitleId, fileName, language, codec, isForced, isHearingImpaired, fileName,
+                )
+                override suspend fun loadAll(itemId: String) = emptyList<com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle>()
+                override suspend fun fileFor(itemId: String, saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle) = java.io.File(saved.fileRelativePath)
+                override suspend fun delete(itemId: String, saved: com.raulshma.jellyplay.core.model.subtitle.SavedSubtitle) = Unit
+                override suspend fun clear(itemId: String) = Unit
+            },
+            context,
+        )
     }
 
     @Test

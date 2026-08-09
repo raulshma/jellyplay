@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
@@ -23,7 +24,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * Owns the in-player "Subtitle Manager" workflow: downloading server-default
@@ -53,6 +53,7 @@ internal class SubtitleManager(
     private val playbackRepository: PlaybackRepository,
     private val mediaRepository: MediaRepository,
     private val subtitleProviderRepository: SubtitleProviderRepository,
+    private val streamingSubtitleStore: StreamingSubtitleStore,
     private val userMessageBus: UserMessageBus,
     private val scope: CoroutineScope,
     private val addExternalSubtitle: (SubtitleSource) -> Unit,
@@ -438,13 +439,30 @@ internal class SubtitleManager(
                     ensureActive()
                     fileResult.fold(
                         onSuccess = { file ->
-                            // Side-load immediately so the subtitle is usable in
-                            // this playback session without waiting for the server
-                            // round-trip (kept from the original flow).
-                            val saved = persistSubtitle(itemId, result, file)
                             val codec = codecForFormat(file.format)
+                            // Persist durably (filesDir, survives replay) so the
+                            // subtitle is usable on-device even when the server is
+                            // unreachable. The returned SavedSubtitle resolves to
+                            // the on-disk durable file we side-load below — the
+                            // previous disposable cache copy is no longer needed.
+                            val saved = streamingSubtitleStore.save(
+                                itemId = itemId,
+                                provider = result.provider,
+                                providerSubtitleId = result.id,
+                                fileName = file.fileName,
+                                language = file.language ?: result.language,
+                                codec = codec ?: file.format,
+                                isForced = result.isForced,
+                                isHearingImpaired = result.isHearingImpaired,
+                                bytes = file.bytes,
+                            )
+                            val durableFile = streamingSubtitleStore.fileFor(itemId, saved)
+                            ensureActive()
+                            // Side-load the durable copy immediately so the subtitle
+                            // is usable in this playback session without waiting for
+                            // the server round-trip.
                             val source = SubtitleSource(
-                                url = saved.toURI().toString(),
+                                url = durableFile.toURI().toString(),
                                 label = result.displayName,
                                 language = result.language,
                                 mimeType = mimeForCodec(codec),
@@ -455,11 +473,12 @@ internal class SubtitleManager(
                             )
                             addExternalSubtitle(source)
 
-                            // Upload to the Jellyfin server so the subtitle is
-                            // persisted as a MediaStream — otherwise it only
-                            // exists in the disposable cache file / one-shot
-                            // side-load above and disappears on replay. Matches
-                            // the editor's provider-download path.
+                            // Best-effort: upload to the Jellyfin server so the
+                            // subtitle is also persisted as a MediaStream (and thus
+                            // available across devices / future sessions without the
+                            // local durable copy). Failure here is NOT fatal — the
+                            // durable on-device copy still backs the side-load and
+                            // survives replay via the streaming-subtitle store.
                             val base64 = android.util.Base64.encodeToString(file.bytes, android.util.Base64.NO_WRAP)
                             val uploadResult = playbackRepository.uploadSubtitle(
                                 itemId = itemId,
@@ -487,9 +506,16 @@ internal class SubtitleManager(
                                     markProviderDownloadStatus(statusKey, SubtitleDownloadState.DOWNLOADED)
                                 },
                                 onFailure = { e ->
-                                    val msg = e.message ?: "Save failed"
-                                    userMessageBus.error("Subtitle save failed: $msg")
-                                    markProviderDownloadStatus(statusKey, SubtitleDownloadState.FAILED, msg)
+                                    // Server unreachable / upload failed — the subtitle
+                                    // is still usable on-device. Surface a softer
+                                    // device-only status rather than a hard failure.
+                                    val msg = e.message ?: "Server unavailable"
+                                    userMessageBus.info("Saved to device only: $msg")
+                                    markProviderDownloadStatus(
+                                        statusKey,
+                                        SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY,
+                                        msg,
+                                    )
                                 },
                             )
                         },
@@ -502,27 +528,6 @@ internal class SubtitleManager(
                 }
             }
         }
-    }
-
-    /**
-     * Writes the downloaded subtitle bytes to a per-item cache file under the
-     * app cache dir. Using cache (not files) because the only durable copy is
-     * the one uploaded to the Jellyfin server (see [downloadProviderSubtitle]);
-     * this file is just the source for the immediate in-session side-load.
-     * Naming mirrors the offline-subtitle convention.
-     */
-    private suspend fun persistSubtitle(
-        itemId: String,
-        result: SubtitleSearchResult,
-        file: com.raulshma.jellyplay.core.model.subtitle.SubtitleFile,
-    ): File = withContext(Dispatchers.IO) {
-        val ext = file.format?.takeIf { it.isNotBlank() }
-            ?: result.format
-            ?: result.fileName?.substringAfterLast('.', "")
-            ?: "srt"
-        val dir = File(context.cacheDir, "subtitles/providers/$itemId").apply { mkdirs() }
-        val safeId = "${result.provider.name.lowercase()}_${result.id}".replace(Regex("[^A-Za-z0-9_-]"), "")
-        File(dir, "$safeId.$ext").apply { writeBytes(file.bytes) }
     }
 
     private fun codecForFormat(format: String?): String? = when (format?.lowercase()) {

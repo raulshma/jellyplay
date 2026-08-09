@@ -90,6 +90,7 @@ class EditorViewModel @Inject constructor(
     private val apiClient: JellyfinApiClient,
     authRepository: AuthRepository,
     private val subtitleProviderRepository: SubtitleProviderRepository,
+    private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
     @ApplicationContext private val context: Context,
 ) : JellyPlayViewModel() {
 
@@ -431,6 +432,21 @@ class EditorViewModel @Inject constructor(
                 _uiState.update { it.copy(isDownloadingProviderSubtitle = true) }
                 subtitleProviderRepository.downloadExternal(result)
                     .onSuccess { file ->
+                        // Persist durably on-device first so the subtitle survives
+                        // even if the server upload fails (e.g. offline). Mirrors
+                        // the player's SubtitleManager provider-download path.
+                        val codec = file.format
+                        streamingSubtitleStore.save(
+                            itemId = itemId,
+                            provider = result.provider,
+                            providerSubtitleId = result.id,
+                            fileName = file.fileName,
+                            language = file.language ?: result.language,
+                            codec = codec,
+                            isForced = result.isForced,
+                            isHearingImpaired = result.isHearingImpaired,
+                            bytes = file.bytes,
+                        )
                         val base64 = Base64.encodeToString(file.bytes, Base64.NO_WRAP)
                         apiClient.uploadSubtitle(
                             itemId,
@@ -440,7 +456,14 @@ class EditorViewModel @Inject constructor(
                             result.isForced,
                             result.isHearingImpaired,
                         ).onSuccess { loadEditorData(itemId) }
-                            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+                            // Best-effort: the durable on-device copy already backs
+                            // this subtitle, so an upload failure (server offline)
+                            // is surfaced as an info note rather than a hard error.
+                            .onFailure { e ->
+                                _uiState.update {
+                                    it.copy(error = "Saved to device only: ${e.message}")
+                                }
+                            }
                     }
                     .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
                 _uiState.update { it.copy(isDownloadingProviderSubtitle = false) }

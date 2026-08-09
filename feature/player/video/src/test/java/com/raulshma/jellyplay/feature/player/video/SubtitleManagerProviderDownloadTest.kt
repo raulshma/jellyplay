@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import android.content.Context
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -37,14 +38,18 @@ import org.robolectric.RobolectricTestRunner
  * file; Robolectric supplies a working Base64 and a real cache dir.
  *
  * Verifies, for a successful external download:
- *  1. the bytes are side-loaded into the live engine (`addExternalSubtitle`);
- *  2. the bytes are uploaded to the Jellyfin server (`uploadSubtitle`);
- *  3. the media-detail cache is invalidated and re-fetched so the new stream
+ *  1. the bytes are persisted durably to the on-device streaming-subtitle store;
+ *  2. the bytes are side-loaded into the live engine (`addExternalSubtitle`);
+ *  3. the bytes are uploaded to the Jellyfin server (`uploadSubtitle`);
+ *  4. the media-detail cache is invalidated and re-fetched so the new stream
  *     surfaces (`invalidateDetailCache` + `onMediaDetailRefreshed`);
- *  4. the per-id status lands on [SubtitleDownloadState.DOWNLOADED].
+ *  5. the per-id status lands on [SubtitleDownloadState.DOWNLOADED].
  *
- * And for the failure branches: an upload failure marks the id FAILED and
- * surfaces an error, without performing the refresh.
+ * And for the failure branches: an upload failure (e.g. server unreachable) is
+ * non-fatal — the durable on-device copy still backs the subtitle, so the id is
+ * marked [SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY] and a warning is surfaced
+ * (no refresh, since no server stream surfaced). A download failure still marks
+ * the id FAILED.
  */
 @RunWith(RobolectricTestRunner::class)
 class SubtitleManagerProviderDownloadTest {
@@ -53,6 +58,7 @@ class SubtitleManagerProviderDownloadTest {
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var mediaRepository: MediaRepository
     private lateinit var subtitleProviderRepository: SubtitleProviderRepository
+    private lateinit var streamingSubtitleStore: StreamingSubtitleStore
     private lateinit var userMessageBus: UserMessageBus
     private lateinit var addedSubtitles: MutableList<SubtitleSource>
     private lateinit var refreshedDetails: MutableList<MediaDetail>
@@ -88,6 +94,11 @@ class SubtitleManagerProviderDownloadTest {
         playbackRepository = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
         subtitleProviderRepository = mockk(relaxed = true)
+        // No-op store: the durable persistence contract (save/load round-trip,
+        // manifest survival) is covered by StreamingSubtitleStoreImplTest in
+        // core:data. These tests focus on the SubtitleManager status/upload
+        // contract, so a no-op store keeps them free of the serialization dep.
+        streamingSubtitleStore = noOpStreamingSubtitleStore()
         userMessageBus = mockk(relaxed = true)
         addedSubtitles = mutableListOf()
         refreshedDetails = mutableListOf()
@@ -99,6 +110,7 @@ class SubtitleManagerProviderDownloadTest {
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
         subtitleProviderRepository = subtitleProviderRepository,
+        streamingSubtitleStore = streamingSubtitleStore,
         userMessageBus = userMessageBus,
         scope = scope,
         addExternalSubtitle = { addedSubtitles += it },
@@ -122,14 +134,19 @@ class SubtitleManagerProviderDownloadTest {
         manager().downloadProviderSubtitle(result)
         drain()
 
-        // 1. Side-loaded into the live engine for immediate in-session use.
+        // 1. Persisted durably to the on-device store (survives replay/offline).
+        //    (Persistence round-trip is covered by StreamingSubtitleStoreImplTest;
+        //    here we verify the save call was made via the store hook.)
+        assertEquals(1, streamingSubtitleStore.loadAll("item-1").size)
+
+        // 2. Side-loaded into the live engine for immediate in-session use.
         assertEquals(1, addedSubtitles.size)
         val sideLoaded = addedSubtitles.single()
         assertEquals("eng", sideLoaded.language)
         assertEquals("Movie.en", sideLoaded.label)
         assertEquals("srt", sideLoaded.codec)
 
-        // 2. Uploaded to the Jellyfin server as a persisted MediaStream.
+        // 3. Uploaded to the Jellyfin server as a persisted MediaStream.
         coVerify(exactly = 1) {
             playbackRepository.uploadSubtitle(
                 itemId = "item-1",
@@ -141,13 +158,13 @@ class SubtitleManagerProviderDownloadTest {
             )
         }
 
-        // 3. Cache invalidated then re-fetched so the stream surfaces; the
+        // 4. Cache invalidated then re-fetched so the stream surfaces; the
         //    refreshed detail is handed back to the VM to rebuild mediaStreams.
         io.mockk.verify(atLeast = 1) { mediaRepository.invalidateDetailCache("item-1") }
         coVerify(atLeast = 1) { mediaRepository.getMediaDetail("item-1") }
         assertEquals(listOf(detail), refreshedDetails)
 
-        // 4. Per-id status reflects success. Status is keyed on the composite
+        // 5. Per-id status reflects success. Status is keyed on the composite
         //    "provider:id".
         val status = state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
         assertEquals(SubtitleDownloadState.DOWNLOADED, status?.state)
@@ -156,7 +173,7 @@ class SubtitleManagerProviderDownloadTest {
     }
 
     @Test
-    fun downloadProviderSubtitle_uploadFailure_marksFailedAndSkipsRefresh() = runBlocking {
+    fun downloadProviderSubtitle_uploadFailure_marksDeviceOnlyAndPersists() = runBlocking {
         coEvery { subtitleProviderRepository.downloadExternal(result) } returns Result.success(file)
         coEvery { playbackRepository.uploadSubtitle(any(), any(), any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("server rejected"))
@@ -164,17 +181,20 @@ class SubtitleManagerProviderDownloadTest {
         manager().downloadProviderSubtitle(result)
         drain()
 
-        // Still side-loaded (immediate use), but not persisted.
+        // Still side-loaded (immediate use)…
         assertEquals(1, addedSubtitles.size)
-        // No refresh should run on failure.
+        // …and persisted durably, so the subtitle survives even though the
+        // server upload failed (the offline/offline-first contract).
+        assertEquals(1, streamingSubtitleStore.loadAll("item-1").size)
+        // No refresh should run: no server stream surfaced.
         io.mockk.verify(exactly = 0) { mediaRepository.invalidateDetailCache(any()) }
         assertTrue(refreshedDetails.isEmpty())
         coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
-        // Error surfaced to the user; per-id status FAILED.
+        // Non-fatal: device-only status + info note (not a hard error).
         val status = state.value.downloadingSubtitles["OPENSUBTITLES:os-42"]
-        assertEquals(SubtitleDownloadState.FAILED, status?.state)
+        assertEquals(SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY, status?.state)
         assertEquals("server rejected", status?.errorMessage)
-        coVerify { userMessageBus.error(any<String>()) }
+        coVerify { userMessageBus.info(any<String>()) }
     }
 
     @Test
@@ -185,8 +205,9 @@ class SubtitleManagerProviderDownloadTest {
         manager().downloadProviderSubtitle(result)
         drain()
 
-        // Nothing side-loaded, nothing uploaded, nothing refreshed.
+        // Nothing side-loaded, nothing uploaded, nothing refreshed, nothing persisted.
         assertTrue(addedSubtitles.isEmpty())
+        assertTrue(streamingSubtitleStore.loadAll("item-1").isEmpty())
         coVerify(exactly = 0) {
             playbackRepository.uploadSubtitle(any(), any(), any(), any(), any(), any())
         }

@@ -141,6 +141,13 @@
     <string name="player_video_more_options">More options</string>
     <string name="player_video_audio">Audio</string>
     <string name="player_video_subtitles">Subtitles</string>
+    <!-- Unified subtitle hub: tab labels. -->
+    <string name="player_video_subtitle_hub_section_tracks">Tracks</string>
+    <string name="player_video_subtitle_hub_section_style">Style</string>
+    <string name="player_video_subtitle_hub_section_get">Get</string>
+    <string name="player_video_subtitle_hub_section_delay">Delay</string>
+    <!-- Shown when a subtitle was downloaded and saved on-device but the server upload failed (offline). -->
+    <string name="player_video_subtitle_downloaded_device_only">Saved to device only (offline)</string>
     <string name="player_video_chapters">Chapters</string>
     <string name="player_video_episodes">Episodes</string>
     <string name="player_video_syncplay">SyncPlay</string>

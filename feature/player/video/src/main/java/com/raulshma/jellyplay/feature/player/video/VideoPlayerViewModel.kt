@@ -246,6 +246,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
     private val subtitleProviderRepository: com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository,
+    private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
@@ -382,6 +383,7 @@ class VideoPlayerViewModel @Inject constructor(
         playerEngineFactory = playerEngineFactory,
         pipController = pipController,
         playbackSourceResolver = playbackSourceResolver,
+        streamingSubtitleStore = streamingSubtitleStore,
     )
 
     // @Volatile: written from launched coroutines (applyMediaDetail) and read
@@ -450,6 +452,7 @@ class VideoPlayerViewModel @Inject constructor(
         playbackRepository = playbackRepository,
         mediaRepository = mediaRepository,
         subtitleProviderRepository = subtitleProviderRepository,
+        streamingSubtitleStore = streamingSubtitleStore,
         userMessageBus = userMessageBus,
         scope = scope,
         addExternalSubtitle = { playerSessionManager.addExternalSubtitle(it) },

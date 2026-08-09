@@ -137,6 +137,11 @@
     <string name="player_video_more_options">更多选项</string>
     <string name="player_video_audio">音频</string>
     <string name="player_video_subtitles">字幕</string>
+    <string name="player_video_subtitle_hub_section_tracks">轨道</string>
+    <string name="player_video_subtitle_hub_section_style">样式</string>
+    <string name="player_video_subtitle_hub_section_get">获取</string>
+    <string name="player_video_subtitle_hub_section_delay">延迟</string>
+    <string name="player_video_subtitle_downloaded_device_only">仅保存到设备（离线）</string>
     <string name="player_video_chapters">章节</string>
     <string name="player_video_episodes">剧集</string>
     <string name="player_video_syncplay">SyncPlay</string>
