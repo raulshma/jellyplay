@@ -446,6 +446,7 @@ private fun MainContent(
     // home surfaces the downloaded music library — all stay visible.
     val offlineMode by viewModel.offlineMode.collectAsStateWithLifecycle()
     val isGoingOnline by viewModel.isGoingOnline.collectAsStateWithLifecycle()
+    val downloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
     val isOffline = offlineMode != com.raulshma.jellyplay.core.model.OfflineMode.ONLINE
 
     // Memoize the route filter+reorder so it only re-runs when homeMode /
@@ -870,6 +871,7 @@ private fun MainContent(
                         isExpressiveNavExperimental = preferences.isExperimentalEnabled(ExperimentalFeature.EXPRESSIVE_NAVIGATION),
                         offlineMode = offlineMode,
                         isGoingOnline = isGoingOnline,
+                        downloadCount = downloadCount,
                         onSurpriseClick = {
                             // Switch to Home first so the hero controller is
                             // composed, then fire the surprise signal it collects.
@@ -1141,6 +1143,7 @@ private fun PhoneContent(
     isExpressiveNavExperimental: Boolean = false,
     offlineMode: com.raulshma.jellyplay.core.model.OfflineMode = com.raulshma.jellyplay.core.model.OfflineMode.ONLINE,
     isGoingOnline: Boolean = false,
+    downloadCount: Int = 0,
     onSurpriseClick: () -> Unit = {},
     onToggleOffline: () -> Unit = {},
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
@@ -1419,6 +1422,7 @@ private fun PhoneContent(
                         },
                         offlineMode = offlineMode,
                         isGoingOnline = isGoingOnline,
+                        downloadCount = downloadCount,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .clearFloatingNav(extraBottom = 0.dp)
@@ -1440,6 +1444,7 @@ private fun PhoneContent(
                             containerColor = animatedNavBarColor,
                             isOverflowExpanded = isOverflowExpanded,
                             onOverflowToggle = onOverflowToggle,
+                            downloadCount = downloadCount,
                             modifier = navBarModifier,
                         )
                     } else {
@@ -1451,6 +1456,7 @@ private fun PhoneContent(
                             containerColor = animatedNavBarColor,
                             isOverflowExpanded = isOverflowExpanded,
                             onOverflowToggle = onOverflowToggle,
+                            downloadCount = downloadCount,
                             modifier = navBarModifier,
                         )
                     }
@@ -1770,6 +1776,7 @@ private fun FloatingNavigationBar(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     isOverflowExpanded: Boolean = false,
     onOverflowToggle: (Boolean) -> Unit = {},
+    downloadCount: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -1847,6 +1854,7 @@ private fun FloatingNavigationBar(
                     MoreToggleIcon(
                         isExpanded = isOverflowExpanded,
                         tint = overflowTint,
+                        badgeCount = downloadCount,
                     )
                 }
             }

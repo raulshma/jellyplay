@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -70,6 +72,7 @@ fun OverflowMenuItems(
     onSettingsClick: () -> Unit,
     offlineMode: OfflineMode,
     isGoingOnline: Boolean,
+    downloadCount: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val isOfflineActive = offlineMode != OfflineMode.ONLINE
@@ -92,6 +95,7 @@ fun OverflowMenuItems(
             icon = Tabler.Outline.Download,
             label = R.string.menu_downloads,
             onClick = onDownloadsClick,
+            badgeCount = downloadCount,
         ),
         OverflowEntry(
             icon = if (isOfflineActive) Tabler.Outline.Wifi else Tabler.Outline.WifiOff,
@@ -152,6 +156,7 @@ fun OverflowMenuItems(
                     onClick = entry.onClick,
                     isGoingOnline = entry.isGoingOnline,
                     isHighlighted = entry.isHighlighted,
+                    badgeCount = entry.badgeCount,
                 )
             }
         }
@@ -164,6 +169,7 @@ private data class OverflowEntry(
     val onClick: () -> Unit,
     val isGoingOnline: Boolean = false,
     val isHighlighted: Boolean = false,
+    val badgeCount: Int = 0,
 )
 
 @Composable
@@ -173,6 +179,7 @@ private fun OverflowPill(
     onClick: () -> Unit,
     isGoingOnline: Boolean = false,
     isHighlighted: Boolean = false,
+    badgeCount: Int = 0,
 ) {
     val isLight = LocalIsLightTheme.current
     val containerColor = if (isHighlighted) {
@@ -223,6 +230,19 @@ private fun OverflowPill(
                         strokeWidth = 2.dp,
                         color = contentColor,
                     )
+                } else if (badgeCount > 0) {
+                    BadgedBox(
+                        badge = {
+                            Badge { Text(badgeCount.coerceAtMost(99).toString()) }
+                        },
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = contentColor,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
                 } else {
                     Icon(
                         imageVector = icon,

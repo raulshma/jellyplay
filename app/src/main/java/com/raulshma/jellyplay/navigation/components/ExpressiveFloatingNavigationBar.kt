@@ -53,6 +53,7 @@ fun ExpressiveFloatingNavigationBar(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     isOverflowExpanded: Boolean = false,
     onOverflowToggle: (Boolean) -> Unit = {},
+    downloadCount: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     // Separate Search route if present in top level routes
@@ -244,6 +245,7 @@ fun ExpressiveFloatingNavigationBar(
                             MoreToggleIcon(
                                 isExpanded = isOverflowExpanded,
                                 tint = moreTint,
+                                badgeCount = downloadCount,
                             )
                         }
                     }
@@ -285,6 +287,7 @@ fun ExpressiveFloatingNavigationBar(
                             } else {
                                 MaterialTheme.colorScheme.onSurface
                             },
+                            badgeCount = downloadCount,
                         )
                     }
                 }

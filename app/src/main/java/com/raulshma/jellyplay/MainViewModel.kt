@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
@@ -67,6 +68,7 @@ class MainViewModel @Inject constructor(
     private val deepLinkHandler: DeepLinkHandler,
     private val mediaRepository: MediaRepository,
     private val playbackRepository: PlaybackRepository,
+    private val downloadRepository: DownloadRepository,
     private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
     private val offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager,
     val userMessageBus: UserMessageBus,
@@ -86,6 +88,14 @@ class MainViewModel @Inject constructor(
      * [com.raulshma.jellyplay.core.ui.components.ErrorScreen].
      */
     val offlineMode = offlineModeManager.offlineMode
+
+    /**
+     * Count of downloads actively in flight (PENDING/QUEUED/DOWNLOADING/PAUSED).
+     * Surfaced to the app-shell nav so the ⋮ "More" toggle and the "Downloads"
+     * overflow item can badge themselves while transfers are running.
+     */
+    val activeDownloadCount = downloadRepository.getActiveDownloadCount()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /**
      * Mirrors Home's offline→online in-flight flag at the app shell so the

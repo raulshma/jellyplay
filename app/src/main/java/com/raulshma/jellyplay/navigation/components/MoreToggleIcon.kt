@@ -1,7 +1,10 @@
 package com.raulshma.jellyplay.navigation.components
 
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,6 +25,12 @@ import com.raulshma.jellyplay.R
  *
  * Callers own the container (Row / Box / Surface), its highlight color, and the
  * surrounding tap target — those vary per nav style. This only renders the glyph.
+ *
+ * When [badgeCount] is positive, a Material 3 [Badge] showing the count (capped
+ * at 99) is layered over the glyph via [BadgedBox]. The badge only appears while
+ * the toggle is collapsed (showing ⋮); once expanded the user sees the per-item
+ * "Downloads" badge in the overflow list instead, so duplicating it here would
+ * just clutter.
  */
 @Composable
 fun MoreToggleIcon(
@@ -29,11 +38,26 @@ fun MoreToggleIcon(
     tint: Color,
     modifier: Modifier = Modifier,
     iconSize: Dp = 24.dp,
+    badgeCount: Int = 0,
 ) {
-    Icon(
-        imageVector = if (isExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
-        contentDescription = stringResource(R.string.nav_more_content_description),
-        tint = tint,
-        modifier = modifier.size(iconSize),
-    )
+    val icon = @Composable {
+        Icon(
+            imageVector = if (isExpanded) Tabler.Outline.X else Tabler.Outline.DotsVertical,
+            contentDescription = stringResource(R.string.nav_more_content_description),
+            tint = tint,
+            modifier = Modifier.size(iconSize),
+        )
+    }
+    if (!isExpanded && badgeCount > 0) {
+        BadgedBox(
+            badge = {
+                Badge { Text(badgeCount.coerceAtMost(99).toString()) }
+            },
+            modifier = modifier,
+        ) {
+            icon()
+        }
+    } else {
+        icon()
+    }
 }
