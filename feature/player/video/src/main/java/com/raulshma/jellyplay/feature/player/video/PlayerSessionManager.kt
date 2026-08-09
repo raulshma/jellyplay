@@ -307,6 +307,13 @@ class PlayerSessionManager(
         // Attach external subtitles bundled with the download (offline subs).
         loadOfflineSubtitles(downloadPath)
 
+        // Re-attach provider-sourced subtitles (OpenSubtitles/Wyzie) persisted
+        // for this item in the streaming-subtitle store. `SubtitleManager`
+        // always writes provider downloads there regardless of online/offline
+        // playback, so offline (downloaded) media must restore them too —
+        // otherwise a subtitle downloaded once vanishes on reopen.
+        loadStreamingSubtitles(itemId)
+
         val trickplayDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
             .getLocalTrickplayDir(downloadPath)
 
