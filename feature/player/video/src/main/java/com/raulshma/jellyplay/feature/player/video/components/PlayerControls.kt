@@ -884,7 +884,7 @@ private fun PrimaryMediaControls(
     }
     if (hasEpisodes && episodeBrowserEnabled) {
         PlayerIconButton(
-            icon = Tabler.Outline.Video,
+            icon = Tabler.Outline.ListNumbers,
             contentDescription = stringResource(R.string.player_video_episodes),
             onClick = onEpisodesClick,
         )
