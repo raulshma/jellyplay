@@ -30,7 +30,7 @@ import javax.inject.Singleton
  * Resolves the configured providers from the preferences + credential stores,
  * then fans out search across the external providers concurrently via the Hilt
  * `Map<SubtitleProviderKind, SubtitleProvider>`. Jellyfin is searched through
- * [searchJellyfin]/[searchAll] (server-mediated via [PlaybackRepository],
+ * [searchJellyfin]/[searchAllStreaming] (server-mediated via [PlaybackRepository],
  * returns [RemoteSubtitleInfo] wrapped with [SubtitleSearchResult.jellyfinInfo]);
  * it is intentionally not part of [search] (it is `itemId`-scoped, while
  * [search] takes a provider-agnostic [SubtitleQuery]).
@@ -129,12 +129,6 @@ class SubtitleProviderRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun searchAll(
-        query: SubtitleQuery,
-        itemId: String,
-        language: String,
-    ): MergedSubtitleSearch = searchAllStreaming(query, itemId, language) { /* no-op */ }
-
     /**
      * Streaming merge of Jellyfin + external providers. Unlike the old
      * barrier-based implementation (which buffered every provider behind
@@ -146,10 +140,9 @@ class SubtitleProviderRepositoryImpl @Inject constructor(
      * Each provider runs in its own [launch]; on completion it writes its
      * outcome into the shared accumulator under [accumulatorMutex], then invokes
      * [onPartial] with the current merged + sorted snapshot. [joinAll] gates the
-     * final return until everyone is done. The final snapshot is identical to
-     * what the old [searchAll] produced (same [mergeOutcomes] + sort), so the
-     * isolation contract is preserved: one bad provider degrades to an
-     * [ProviderSearchOutcome.Error] in its slot and never cancels its siblings.
+     * final return until everyone is done. The isolation contract is preserved:
+     * one bad provider degrades to an [ProviderSearchOutcome.Error] in its slot
+     * and never cancels its siblings.
      */
     override suspend fun searchAllStreaming(
         query: SubtitleQuery,
@@ -229,8 +222,8 @@ class SubtitleProviderRepositoryImpl @Inject constructor(
 
     /**
      * Merges [jellyfinResults] with the per-provider [outcomes] into one
-     * stable-ordered list + error map. Shared by [searchAll] so the player and
-     * editor use identical merge + sort semantics.
+     * stable-ordered list + error map. Shared by [searchAllStreaming] so the
+     * player and editor use identical merge + sort semantics.
      */
     private fun mergeOutcomes(
         jellyfinResults: List<SubtitleSearchResult>,
