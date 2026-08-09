@@ -673,6 +673,8 @@ class OfflineRepositoryImpl @Inject constructor(
             ?.filter { it.isNotEmpty() } ?: emptyList(),
         tagline = tagline,
         cast = decodeCast(peopleJson),
+        providerIds = decodeProviderIds(providerIdsJson),
+        externalUrls = decodeExternalUrls(externalUrlsJson),
         createdAt = createdAt,
     )
 }
@@ -694,4 +696,28 @@ private fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> {
 /** Encodes a cast list into the persisted JSON column form. */
 internal fun encodeCast(people: List<OfflinePersonInfo>): String =
     offlineJson.encodeToString(people)
+
+/** Encodes provider ids into the persisted JSON column form. */
+internal fun encodeProviderIds(providerIds: Map<String, String>): String =
+    offlineJson.encodeToString(providerIds)
+
+/** Encodes external URLs into the persisted JSON column form. */
+internal fun encodeExternalUrls(urls: List<com.raulshma.jellyplay.core.model.ExternalUrl>): String =
+    offlineJson.encodeToString(urls)
+
+/** Decodes a [providerIdsJson] blob into a map, tolerating null/garbage. */
+private fun decodeProviderIds(providerIdsJson: String?): Map<String, String> {
+    if (providerIdsJson.isNullOrBlank()) return emptyMap()
+    return runCatching {
+        offlineJson.decodeFromString<Map<String, String>>(providerIdsJson)
+    }.getOrDefault(emptyMap())
+}
+
+/** Decodes an [externalUrlsJson] blob into a URL list, tolerating null/garbage. */
+private fun decodeExternalUrls(externalUrlsJson: String?): List<com.raulshma.jellyplay.core.model.ExternalUrl> {
+    if (externalUrlsJson.isNullOrBlank()) return emptyList()
+    return runCatching {
+        offlineJson.decodeFromString<List<com.raulshma.jellyplay.core.model.ExternalUrl>>(externalUrlsJson)
+    }.getOrDefault(emptyList())
+}
 

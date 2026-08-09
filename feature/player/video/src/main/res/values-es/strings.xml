@@ -137,6 +137,11 @@
     <string name="player_video_more_options">Más opciones</string>
     <string name="player_video_audio">Audio</string>
     <string name="player_video_subtitles">Subtítulos</string>
+    <string name="player_video_subtitle_hub_section_tracks">Pistas</string>
+    <string name="player_video_subtitle_hub_section_style">Estilo</string>
+    <string name="player_video_subtitle_hub_section_get">Obtener</string>
+    <string name="player_video_subtitle_hub_section_delay">Retardo</string>
+    <string name="player_video_subtitle_downloaded_device_only">Guardado solo en el dispositivo (sin conexión)</string>
     <string name="player_video_chapters">Capítulos</string>
     <string name="player_video_episodes">Episodios</string>
     <string name="player_video_syncplay">SyncPlay</string>
@@ -303,4 +308,11 @@
     <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
     <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
     <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
+
+    <!-- Accesibilidad: semántica de lector de pantalla para el panel de gestos de brillo/volumen (P5 §3.1) -->
+    <string name="a11y_gesture_controls">Controles de brillo y volumen</string>
+    <string name="a11y_brightness_increase">Aumentar brillo</string>
+    <string name="a11y_brightness_decrease">Reducir brillo</string>
+    <string name="a11y_volume_increase">Aumentar volumen</string>
+    <string name="a11y_volume_decrease">Reducir volumen</string>
 </resources>

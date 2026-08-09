@@ -567,6 +567,7 @@ class PreferenceProjections @Inject constructor(
             hideEpisodeThumbnails = library.hideEpisodeThumbnails,
             episodesDescending = library.episodesDescending,
             compactEpisodeList = library.compactEpisodeList,
+            showDetailUpNext = library.showDetailUpNext,
         )
     }.distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailPreferences())
@@ -689,6 +690,7 @@ class PreferenceProjections @Inject constructor(
             contrastLevel = g1.appearance.contrastLevel,
             performanceMode = g1.appearance.performanceMode,
             reduceMotionEnabled = g1.appearance.reduceMotionEnabled,
+            hapticsEnabled = g1.appearance.hapticsEnabled,
             synthwaveMode = g1.appearance.synthwaveMode,
             synthwaveAccent = g1.appearance.synthwaveAccent,
             soothingMode = g1.appearance.soothingMode,

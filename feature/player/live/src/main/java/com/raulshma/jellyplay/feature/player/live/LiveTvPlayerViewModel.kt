@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -36,8 +37,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -78,6 +81,7 @@ class LiveTvPlayerViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val appRuntimeStateStore: AppRuntimeStateStore,
     private val playbackStore: PlaybackStore,
+    private val aggregateStore: VideoPlayerAggregateStore,
     private val lastChannelStore: LastChannelStore,
     private val engineFactory: LiveEngineFactory,
     private val imageUrlProvider: ImageUrlProvider,
@@ -135,6 +139,15 @@ class LiveTvPlayerViewModel @Inject constructor(
 
         lastChannelStore.observeLastChannelId()
             .onEach { id -> _state.value = _state.value.copy(lastChannelId = id) }
+            .launchIn(viewModelScope)
+
+        // Controls auto-hide delay comes from the same `videoControlsTimeoutMs`
+        // preference the VOD player reads (via VideoPlayerAggregateStore), so a
+        // user's choice applies consistently across live and VOD players.
+        aggregateStore.aggregate
+            .map { it.videoPlayer.videoControlsTimeoutMs }
+            .distinctUntilChanged()
+            .onEach { ms -> _state.value = _state.value.copy(controlsTimeoutMs = ms) }
             .launchIn(viewModelScope)
     }
 

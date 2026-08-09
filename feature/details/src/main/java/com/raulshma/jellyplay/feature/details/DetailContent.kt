@@ -139,6 +139,8 @@ internal fun DetailContent(
         onShowFromNextUp = callbacks.onShowFromNextUp,
         onHideFromContinueWatching = callbacks.onHideFromContinueWatching,
         onShowFromContinueWatching = callbacks.onShowFromContinueWatching,
+        onHideDetailUpNext = callbacks.onHideDetailUpNext,
+        onShowDetailUpNext = callbacks.onShowDetailUpNext,
         onManageSeries = callbacks.onManageSeries,
         onTechnicalInfo = { callbacks.onNavigate(Route.MediaInfo(state.itemId)) },
         onAddToPlaylist = callbacks.onAddToPlaylist,
@@ -176,6 +178,12 @@ internal fun DetailContent(
             } else {
                 DelayedLoadingScreen(modifier = Modifier.fillMaxSize())
             }
+        } else if (state.error != null && !contentVisible) {
+            com.raulshma.jellyplay.core.ui.components.ScreenErrorState(
+                message = state.error,
+                onRetry = callbacks.onRetry,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
 
         DetailBackdrop(

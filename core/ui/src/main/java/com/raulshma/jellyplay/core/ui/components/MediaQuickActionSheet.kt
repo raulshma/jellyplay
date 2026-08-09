@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,18 +39,34 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
  * after any action fires. "Add to playlist" is a plain callback — the host
  * then shows its own playlist picker (e.g. `feature/details/AddToPlaylistSheet`)
  * so the picker stays out of `core/ui`.
+ *
+ * [QuickAction] identity lives in `core/model` (pure, no UI coupling) so
+ * predicate logic can sit next to the model. Presentation (label + icon) is
+ * attached here as extensions.
  */
-enum class QuickAction(
-    val labelRes: Int,
-    val icon: ImageVector,
-) {
-    PLAY(R.string.core_action_play, Tabler.Outline.PlayerPlay),
-    MARK_WATCHED(R.string.core_action_mark_watched, Tabler.Outline.Eye),
-    MARK_UNWATCHED(R.string.core_action_mark_unwatched, Tabler.Outline.EyeOff),
-    DOWNLOAD(R.string.core_action_download, Tabler.Outline.Download),
-    ADD_TO_PLAYLIST(R.string.core_action_add_to_playlist, Tabler.Outline.Bookmark),
-    DETAILS(R.string.core_action_details, Tabler.Outline.InfoCircle),
-}
+typealias QuickAction = com.raulshma.jellyplay.core.model.QuickAction
+
+/** @see QuickAction */
+val QuickAction.labelRes: Int
+    get() = when (this) {
+        QuickAction.PLAY -> R.string.core_action_play
+        QuickAction.MARK_WATCHED -> R.string.core_action_mark_watched
+        QuickAction.MARK_UNWATCHED -> R.string.core_action_mark_unwatched
+        QuickAction.DOWNLOAD -> R.string.core_action_download
+        QuickAction.ADD_TO_PLAYLIST -> R.string.core_action_add_to_playlist
+        QuickAction.DETAILS -> R.string.core_action_details
+    }
+
+/** @see QuickAction */
+val QuickAction.icon: ImageVector
+    get() = when (this) {
+        QuickAction.PLAY -> Tabler.Outline.PlayerPlay
+        QuickAction.MARK_WATCHED -> Tabler.Outline.Eye
+        QuickAction.MARK_UNWATCHED -> Tabler.Outline.EyeOff
+        QuickAction.DOWNLOAD -> Tabler.Outline.Download
+        QuickAction.ADD_TO_PLAYLIST -> Tabler.Outline.Bookmark
+        QuickAction.DETAILS -> Tabler.Outline.InfoCircle
+    }
 
 /**
  * @param actions The ordered actions to offer.
@@ -70,22 +85,20 @@ fun MediaQuickActionSheet(
     TvSafeSheet(
         onDismissRequest = onDismiss,
         modifier = modifier,
-        title = title,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            actions.forEachIndexed { index, action ->
-                QuickActionRow(action = action, onClick = { onAction(action) })
-                if (index < actions.lastIndex) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                    )
+            SheetHeader(
+                title = title,
+                onClose = onDismiss,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                actions.forEach { action ->
+                    QuickActionRow(action = action, onClick = { onAction(action) })
                 }
             }
         }

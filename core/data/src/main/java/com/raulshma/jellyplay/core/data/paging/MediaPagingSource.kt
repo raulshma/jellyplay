@@ -4,21 +4,14 @@ import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.ItemKindFilter
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaType
 
 class MediaPagingSource(
     private val mediaRepository: MediaRepository,
     private val parentId: String? = null,
-    private val mediaTypes: List<MediaType>? = null,
-    private val genres: List<String>? = null,
-    private val years: List<Int>? = null,
+    private val filters: LibraryFilters = LibraryFilters(),
     private val studioIds: List<String>? = null,
-    private val sortBy: String = "SortName",
-    private val sortOrder: String = "Ascending",
-    private val tags: List<String>? = null,
-    private val playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
-    private val minRating: Float? = null,
     private val kindFilter: ItemKindFilter = ItemKindFilter.TOP_LEVEL,
 ) : PagingSource<Int, MediaItem>() {
 
@@ -36,17 +29,10 @@ class MediaPagingSource(
         return try {
             val result = mediaRepository.getMediaItems(
                 parentId = parentId,
-                mediaTypes = mediaTypes,
-                genres = genres,
-                years = years,
+                filters = filters,
                 studioIds = studioIds,
-                sortBy = sortBy,
-                sortOrder = sortOrder,
                 startIndex = startIndex,
                 limit = pageSize,
-                tags = tags,
-                playedStatus = playedStatus,
-                minRating = minRating,
                 kindFilter = kindFilter,
             )
 

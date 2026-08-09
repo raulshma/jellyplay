@@ -1,9 +1,13 @@
 package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -21,10 +25,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -38,6 +46,7 @@ import com.composables.icons.tabler.outline.ChevronRight
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
+import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -54,6 +63,74 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
  * + [tvFocusIndicator]; callers do NOT pass focus modifiers. Pass `highlighted = true` to grab
  * focus and scroll the item into view (used by deep-link/highlight flows).
  */
+
+/**
+ * Drives the one-shot highlight glow used by [SettingListItemImpl] / [SettingToggleItemImpl]:
+ * snaps to full intensity on `highlighted`, then animates down through a fixed keyframe curve so
+ * the item pulses to draw attention for deep-link/scroll-into-view flows. Once animated it does
+ * not re-fire until `highlighted` toggles back to false, so re-composition is cheap.
+ *
+ * Returns the current glow alpha in `0f..1f`; callers apply it to shadow/background/border.
+ */
+@Composable
+private fun rememberHighlightGlow(highlighted: Boolean): Float {
+    val highlightProgress = remember { Animatable(0f) }
+    var hasAnimatedHighlight by rememberSaveable(highlighted) { mutableStateOf(false) }
+    LaunchedEffect(highlighted) {
+        if (highlighted && !hasAnimatedHighlight) {
+            hasAnimatedHighlight = true
+            highlightProgress.snapTo(1f)
+            highlightProgress.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 2500
+                    1f at 0 using FastOutSlowInEasing
+                    0.65f at 600 using FastOutSlowInEasing
+                    0.9f at 1200 using FastOutSlowInEasing
+                    0.4f at 1800 using FastOutSlowInEasing
+                    0f at 2500
+                }
+            )
+        } else if (!highlighted) {
+            hasAnimatedHighlight = false
+            highlightProgress.snapTo(0f)
+        }
+    }
+    return highlightProgress.value
+}
+
+/**
+ * The shadow + background + border modifiers that visualize [rememberHighlightGlow]'s alpha.
+ * Pass the glow alpha and the clip [shape]; returns [Modifier] (identity when `glowAlpha <= 0f`).
+ */
+private fun Modifier.highlightGlow(glowAlpha: Float, shape: androidx.compose.ui.graphics.Shape, primaryColor: Color): Modifier =
+    this
+        .then(
+            if (glowAlpha > 0f) {
+                Modifier.shadow(
+                    elevation = 14.dp * glowAlpha,
+                    shape = shape,
+                    clip = false,
+                    ambientColor = primaryColor.copy(alpha = 0.6f * glowAlpha),
+                    spotColor = primaryColor.copy(alpha = 0.5f * glowAlpha),
+                )
+            } else Modifier
+        )
+        .clip(shape)
+        .background(
+            if (glowAlpha > 0f) primaryColor.copy(alpha = 0.2f * glowAlpha)
+            else Color.Transparent
+        )
+        .then(
+            if (glowAlpha > 0f) {
+                Modifier.border(
+                    width = 2.dp,
+                    color = primaryColor.copy(alpha = glowAlpha),
+                    shape = shape,
+                )
+            } else Modifier
+        )
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SettingListItem(
@@ -127,19 +204,8 @@ private fun SettingListItemImpl(
 
     val focusRequester = remember { FocusRequester() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val highlightColor = remember { androidx.compose.animation.Animatable(Color.Transparent) }
     val primaryColor = MaterialTheme.colorScheme.primary
-    val highlightFadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Color>()
-
-    LaunchedEffect(highlighted) {
-        if (highlighted) {
-            highlightColor.snapTo(primaryColor.copy(alpha = 0.25f))
-            highlightColor.animateTo(
-                targetValue = Color.Transparent,
-                animationSpec = highlightFadeSpec
-            )
-        }
-    }
+    val glowAlpha = rememberHighlightGlow(highlighted)
 
     LaunchedEffect(highlighted) {
         if (highlighted) {
@@ -214,8 +280,7 @@ private fun SettingListItemImpl(
                 scaleY = scale
                 this.alpha = pressAlpha
             }
-            .clip(shape)
-            .background(highlightColor.value)
+            .highlightGlow(glowAlpha, shape, primaryColor)
             .focusRequester(focusRequester)
             .bringIntoViewRequester(bringIntoViewRequester)
             .then(tvFocusState.focusModifier)
@@ -279,6 +344,7 @@ private fun SettingToggleItemImpl(
 ) {
     val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
     val interactionSource = remember { MutableInteractionSource() }
+    val confirmHaptic = rememberConfirmHaptic()
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
@@ -304,19 +370,8 @@ private fun SettingToggleItemImpl(
 
     val focusRequester = remember { FocusRequester() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val highlightColor = remember { androidx.compose.animation.Animatable(Color.Transparent) }
     val primaryColor = MaterialTheme.colorScheme.primary
-    val highlightFadeSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Color>()
-
-    LaunchedEffect(highlighted) {
-        if (highlighted) {
-            highlightColor.snapTo(primaryColor.copy(alpha = 0.25f))
-            highlightColor.animateTo(
-                targetValue = Color.Transparent,
-                animationSpec = highlightFadeSpec
-            )
-        }
-    }
+    val glowAlpha = rememberHighlightGlow(highlighted)
 
     LaunchedEffect(highlighted) {
         if (highlighted) {
@@ -380,8 +435,7 @@ private fun SettingToggleItemImpl(
                 scaleY = scale
                 this.alpha = pressAlpha
             }
-            .clip(shape)
-            .background(highlightColor.value)
+            .highlightGlow(glowAlpha, shape, primaryColor)
             .focusRequester(focusRequester)
             .bringIntoViewRequester(bringIntoViewRequester)
             .then(tvFocusState.focusModifier)
@@ -390,6 +444,6 @@ private fun SettingToggleItemImpl(
                 interactionSource = interactionSource,
                 indication = null,
                 enabled = enabled,
-            ) { onClick?.invoke() ?: onCheckedChange(!checked) },
+            ) { confirmHaptic(); onClick?.invoke() ?: onCheckedChange(!checked) },
     )
 }

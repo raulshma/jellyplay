@@ -69,6 +69,13 @@
     <string name="onboarding_security_biometric_unlock">Fingerabdruck oder Gesichtsentsperrung verwenden</string>
     <string name="onboarding_security_biometric_setup_hint">Richte in den Android-Einstellungen einen Fingerabdruck oder ein Gesicht ein, um zu aktivieren</string>
     <string name="onboarding_security_auto_lock_timer">Auto-Sperre-Timer</string>
+    <string name="onboarding_security_lock_never">Nie</string>
+    <string name="onboarding_security_lock_15s">15s</string>
+    <string name="onboarding_security_lock_30s">30s</string>
+    <string name="onboarding_security_lock_1m">1m</string>
+    <string name="onboarding_security_lock_5m">5m</string>
+    <string name="onboarding_show_password">Passwort anzeigen</string>
+    <string name="onboarding_hide_password">Passwort ausblenden</string>
 
     <!-- HomeLayoutStep -->
     <string name="onboarding_home_layout_title">Startlayout</string>

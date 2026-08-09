@@ -598,7 +598,8 @@ fun SeerrRequestDialog(
             onDismissRequest = { if (!isRequesting) onDismiss() },
             sheetState = sheetState,
             shape = ShapeCache.smoothTop28,
-            containerColor = colorScheme.surfaceContainer.copy(alpha = 0.95f),
+            containerColor = colorScheme.surfaceContainer,
+            dragHandle = { SheetDragHandle() },
             content = content,
         )
     }

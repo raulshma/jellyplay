@@ -36,12 +36,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.core.ui.components.SheetSection
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Adjustments
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Minus
 import com.composables.icons.tabler.outline.Plus
 import com.composables.icons.tabler.outline.Refresh
@@ -80,28 +83,26 @@ fun AVSyncSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                stringResource(R.string.player_video_av_sync),
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
+            SheetHeader(
+                title = stringResource(R.string.player_video_av_sync),
+                icon = Tabler.Outline.Adjustments,
             )
-            Spacer(Modifier.height(20.dp))
 
             if (audioDelaySupported) {
-                DelayRow(
-                    label = stringResource(R.string.player_video_audio_delay),
-                    delayMs = audioDelayMs,
-                    focusRequester = focusRequester,
-                    isTv = isTv,
-                    helperText = stringResource(R.string.player_video_av_sync_audio_helper),
-                    onValueChange = { audioDelayMs = it; onAudioDelayChange(it) },
-                )
+                SheetSection(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    DelayRow(
+                        label = stringResource(R.string.player_video_audio_delay),
+                        delayMs = audioDelayMs,
+                        focusRequester = focusRequester,
+                        isTv = isTv,
+                        helperText = stringResource(R.string.player_video_av_sync_audio_helper),
+                        onValueChange = { audioDelayMs = it; onAudioDelayChange(it) },
+                    )
+                }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(16.dp))
             }
 
             // Cue-preview subtitle-offset sync helper. Shows the subtitle line
@@ -110,58 +111,60 @@ fun AVSyncSheet(
             // drags. This is the sole subtitle-offset control — when no cues can
             // be parsed (embedded/image subs) the cue stack degrades to an
             // "unavailable" message but the offset slider still renders.
-            SubtitleSyncPreview(
-                positionMs = playbackPositionMs,
-                currentOffsetMs = subtitleDelayMs,
-                cues = activeSubtitleCues,
-                source = subtitlePreviewSource,
-                isTv = isTv,
-                focusRequester = if (audioDelaySupported) null else focusRequester,
-                onOffsetChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
-                onReset = {
-                    subtitleDelayMs = 0L
-                    onSubtitleDelayChange(0L)
-                },
-            )
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                SubtitleSyncPreview(
+                    positionMs = playbackPositionMs,
+                    currentOffsetMs = subtitleDelayMs,
+                    cues = activeSubtitleCues,
+                    source = subtitlePreviewSource,
+                    isTv = isTv,
+                    focusRequester = if (audioDelaySupported) null else focusRequester,
+                    onOffsetChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
+                    onReset = {
+                        subtitleDelayMs = 0L
+                        onSubtitleDelayChange(0L)
+                    },
+                )
 
-            Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(20.dp))
 
-            val resetFocus = rememberTvFocusState()
-            val anyOffset = audioDelayMs != 0L || subtitleDelayMs != 0L
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                        .then(resetFocus.focusModifier)
-                        .tvFocusIndicator(resetFocus, CircleShape)
-                        .clickable(enabled = anyOffset) {
-                            audioDelayMs = 0L
-                            subtitleDelayMs = 0L
-                            onAudioDelayChange(0L)
-                            onSubtitleDelayChange(0L)
-                        }
-                        .padding(horizontal = 18.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
+                val resetFocus = rememberTvFocusState()
+                val anyOffset = audioDelayMs != 0L || subtitleDelayMs != 0L
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Tabler.Outline.Refresh,
-                            contentDescription = null,
-                            tint = if (anyOffset) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.size(8.dp))
-                        Text(
-                            stringResource(R.string.player_video_reset_both),
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = if (anyOffset) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                        )
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .then(resetFocus.focusModifier)
+                            .tvFocusIndicator(resetFocus, CircleShape)
+                            .clickable(enabled = anyOffset) {
+                                audioDelayMs = 0L
+                                subtitleDelayMs = 0L
+                                onAudioDelayChange(0L)
+                                onSubtitleDelayChange(0L)
+                            }
+                            .padding(horizontal = 18.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Tabler.Outline.Refresh,
+                                contentDescription = null,
+                                tint = if (anyOffset) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text(
+                                stringResource(R.string.player_video_reset_both),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = if (anyOffset) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                            )
+                        }
                     }
                 }
             }
@@ -270,5 +273,54 @@ internal fun DelayStepper(
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = description, tint = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/**
+ * Subtitle-delay-only section for the unified subtitle hub's "Delay" tab.
+ *
+ * This is the subtitle half of [AVSyncSheet]: the cue-preview sync helper plus
+ * its reset affordance. Audio delay is intentionally NOT included — it stays in
+ * [AVSyncSheet] (reached via the overflow "A/V Sync" item), since the hub is
+ * subtitle-scoped. Reuses [SubtitleSyncPreview] verbatim.
+ */
+@OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+internal fun SubtitleDelaySection(
+    currentSubtitleDelayMs: Long,
+    onSubtitleDelayChange: (Long) -> Unit,
+    activeSubtitleCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>?,
+    subtitlePreviewSource: com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource =
+        com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource.NONE,
+    playbackPositionMs: () -> Long = { 0L },
+    isTv: Boolean = false,
+) {
+    var subtitleDelayMs by remember(currentSubtitleDelayMs) { mutableLongStateOf(currentSubtitleDelayMs) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isTv) {
+        if (isTv) focusRequester.tryRequestFocus("subtitle-delay")
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 16.dp),
+    ) {
+        SubtitleSyncPreview(
+            positionMs = playbackPositionMs,
+            currentOffsetMs = subtitleDelayMs,
+            cues = activeSubtitleCues,
+            source = subtitlePreviewSource,
+            isTv = isTv,
+            focusRequester = focusRequester,
+            onOffsetChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
+            onReset = {
+                subtitleDelayMs = 0L
+                onSubtitleDelayChange(0L)
+            },
+        )
     }
 }

@@ -148,6 +148,16 @@
     <!-- TV navigation drawer -->
     <string name="nav_now_playing">正在播放</string>
     <string name="nav_settings">设置</string>
+    <string name="nav_more">更多</string>
+    <string name="nav_more_content_description">更多选项</string>
+    <string name="menu_settings">设置</string>
+    <string name="menu_downloads">下载</string>
+    <string name="menu_play_on">投屏播放</string>
+    <string name="menu_surprise_me">随机推荐</string>
+    <string name="menu_shortcuts">快捷方式</string>
+    <string name="menu_go_online">联网</string>
+    <string name="menu_go_offline">离线</string>
+    <string name="menu_going_online">正在联网…</string>
 
     <!-- Play On device sheet -->
     <string name="play_on_title">播放到</string>
@@ -168,4 +178,9 @@
 
     <!-- Now-playing snackbar -->
     <string name="snackbar_now_playing">正在播放：%1$s</string>
+
+    <!-- Player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">自定义速度</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">调整播放速度</string>
 </resources>

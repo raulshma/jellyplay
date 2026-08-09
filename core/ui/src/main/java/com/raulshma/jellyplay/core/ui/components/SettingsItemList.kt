@@ -65,3 +65,17 @@ val LocalSettingsItemIndex = compositionLocalOf<androidx.compose.runtime.Mutable
 
 /** Total row count, supplied to [SettingsItemList] by the caller. */
 val LocalSettingsItemCount = compositionLocalOf { 1 }
+
+/**
+ * Advances the [LocalSettingsItemIndex] counter by one, for rows that are part
+ * of the [SettingsItemList] count but do not render a [SettingListItem] /
+ * [SettingToggleItem] (which bump the counter themselves). Call this inside a
+ * picker or custom row that occupies a slot, so subsequent list items get the
+ * correct index for `expressiveListShape(index, count)`.
+ *
+ * No-op outside a [SettingsItemList].
+ */
+@Composable
+fun ConsumeSettingsItemIndex() {
+    LocalSettingsItemIndex.current?.let { it.intValue += 1 }
+}

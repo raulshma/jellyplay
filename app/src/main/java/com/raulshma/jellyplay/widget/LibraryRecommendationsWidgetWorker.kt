@@ -96,9 +96,10 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
             .take(MAX_ITEMS)
         if (items.isNotEmpty()) return items
         return mediaRepository.getMediaItems(
-            mediaTypes = VIDEO_MEDIA_TYPES,
-            sortBy = "DateCreated",
-            sortOrder = "Descending",
+            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                mediaTypes = VIDEO_MEDIA_TYPES,
+                sortBy = com.raulshma.jellyplay.core.model.SortOption.DATE_ADDED,
+            ),
             limit = MAX_ITEMS,
         ).getOrDefault(EMPTY_RESULT).items
     }
@@ -112,9 +113,10 @@ class LibraryRecommendationsWidgetWorker @AssistedInject constructor(
 
     private suspend fun fetchSurprise(): List<MediaItem> {
         return mediaRepository.getMediaItems(
-            mediaTypes = VIDEO_MEDIA_TYPES,
-            sortBy = "Random",
-            sortOrder = "Ascending",
+            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                mediaTypes = VIDEO_MEDIA_TYPES,
+                sortBy = com.raulshma.jellyplay.core.model.SortOption.RANDOM,
+            ),
             limit = MAX_ITEMS,
         ).getOrDefault(EMPTY_RESULT).items
     }

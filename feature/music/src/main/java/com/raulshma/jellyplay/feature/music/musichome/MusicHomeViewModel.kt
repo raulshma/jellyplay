@@ -10,9 +10,11 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.HomeMode
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -90,25 +92,28 @@ class MusicHomeViewModel @Inject constructor(
                     }
                     val latestAlbums = async {
                         mediaRepository.getMediaItems(
-                            mediaTypes = listOf(MediaType.ALBUM),
-                            sortBy = "DateCreated",
-                            sortOrder = "Descending",
+                            filters = LibraryFilters(
+                                mediaTypes = listOf(MediaType.ALBUM),
+                                sortBy = SortOption.DATE_ADDED,
+                            ),
                             limit = 20,
                         ).getOrNull()?.items
                     }
                     val recentlyPlayed = async {
                         mediaRepository.getMediaItems(
-                            mediaTypes = listOf(MediaType.AUDIO),
-                            sortBy = "DatePlayed",
-                            sortOrder = "Descending",
+                            filters = LibraryFilters(
+                                mediaTypes = listOf(MediaType.AUDIO),
+                                sortBy = SortOption.DATE_PLAYED,
+                            ),
                             limit = 20,
                         ).getOrNull()?.items
                     }
                     val topRatedAlbums = async {
                         mediaRepository.getMediaItems(
-                            mediaTypes = listOf(MediaType.ALBUM),
-                            sortBy = "CommunityRating",
-                            sortOrder = "Descending",
+                            filters = LibraryFilters(
+                                mediaTypes = listOf(MediaType.ALBUM),
+                                sortBy = SortOption.RATING,
+                            ),
                             limit = 20,
                         ).getOrNull()?.items
                     }
@@ -163,8 +168,10 @@ class MusicHomeViewModel @Inject constructor(
     fun surpriseMe(callback: (String) -> Unit) {
         launch {
             mediaRepository.getMediaItems(
-                mediaTypes = listOf(MediaType.AUDIO),
-                sortBy = "Random",
+                filters = LibraryFilters(
+                    mediaTypes = listOf(MediaType.AUDIO),
+                    sortBy = SortOption.RANDOM,
+                ),
                 limit = 1,
             ).onSuccess { result ->
                 result.items.firstOrNull()?.let { callback(it.id) }

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings
 import com.raulshma.jellyplay.core.model.NavigationStyle
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Spacer
@@ -30,7 +31,10 @@ import com.composables.icons.tabler.outline.LayoutList
 import com.composables.icons.tabler.outline.Menu2
 import com.composables.icons.tabler.outline.Search
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
 import com.raulshma.jellyplay.feature.settings.R
+
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 /**
  * Describes a single floating-navigation-bar item for the customization UI.
@@ -54,7 +58,7 @@ private val NAV_ITEMS: List<NavItemDescriptor> = listOf(
     NavItemDescriptor("Search", R.string.settings_nav_item_search, Tabler.Outline.Search, R.string.settings_nav_item_search_subtitle),
     NavItemDescriptor("LiveTv", R.string.settings_nav_item_live_tv, Tabler.Outline.DeviceTv, R.string.settings_nav_item_live_tv_subtitle),
     NavItemDescriptor("MusicBrowse", R.string.settings_nav_item_browse, Tabler.Outline.Disc, R.string.settings_nav_item_browse_subtitle),
-    NavItemDescriptor("Shortcuts", R.string.settings_nav_item_shortcuts, Tabler.Outline.Apps, R.string.settings_nav_item_shortcuts_subtitle),
+    NavItemDescriptor(SHORTCUTS_NAV_KEY, R.string.settings_nav_item_shortcuts, Tabler.Outline.Apps, R.string.settings_nav_item_shortcuts_subtitle),
 )
 
 /**
@@ -72,22 +76,25 @@ fun NavigationCustomizationGroup(
     viewModel: AppearanceSettingsViewModel,
     modifier: Modifier = Modifier,
 ) {
+    val isTv = LocalTvMode.current
+    val navItems = remember(isTv) {
+        if (isTv) NAV_ITEMS else NAV_ITEMS.filter { it.key != SHORTCUTS_NAV_KEY }
+    }
+
     SettingsGroup(
         icon = Tabler.Outline.Menu2,
         title = stringResource(R.string.settings_nav_bar_title),
         summary = {
-            val visible = NAV_ITEMS.count { it.key !in preferences.hiddenNavItems }
+            val visible = navItems.count { it.key !in preferences.hiddenNavItems }
             val scroll = stringResource(
                 if (preferences.hideBottomNavOnScroll) R.string.settings_nav_auto_hide else R.string.settings_nav_pinned,
             )
-            stringResource(R.string.settings_nav_items_summary_with_scroll, visible, NAV_ITEMS.size, scroll)
+            stringResource(R.string.settings_nav_items_summary_with_scroll, visible, navItems.size, scroll)
         },
         initiallyExpanded = true,
         modifier = modifier,
     ) {
-        val total = NAV_ITEMS.size + 2 // items + hide-on-scroll + nav-style toggle
-        var idx = 0
-
+        SettingsItemList(total = navItems.size + 2) {
         SettingListItem(
             icon = Tabler.Outline.Menu2,
             title = stringResource(R.string.settings_nav_style),
@@ -103,7 +110,6 @@ fun NavigationCustomizationGroup(
                 else
                     R.string.settings_nav_style_classic
             ),
-            index = idx++, count = total,
             onClick = {
                 val nextStyle = if (preferences.navigationStyle == NavigationStyle.EXPRESSIVE)
                     NavigationStyle.CLASSIC else NavigationStyle.EXPRESSIVE
@@ -118,7 +124,6 @@ fun NavigationCustomizationGroup(
                 if (preferences.hideBottomNavOnScroll) R.string.settings_nav_hide_on_scroll_on else R.string.settings_nav_hide_on_scroll_off,
             ),
             checked = preferences.hideBottomNavOnScroll,
-            index = idx++, count = total,
             onCheckedChange = { viewModel.setHideBottomNavOnScroll(it) },
         )
 
@@ -126,8 +131,8 @@ fun NavigationCustomizationGroup(
         // Order is driven by a local mutable list seeded from the stored order,
         // reconciled whenever the stored order changes and no drag is in flight
         // (mirrors the Home Screen Layout reorder pattern).
-        val navItemOrder = remember(preferences.navItemOrder) {
-            resolveOrder(preferences.navItemOrder).toMutableStateList()
+        val navItemOrder = remember(preferences.navItemOrder, navItems) {
+            resolveOrder(preferences.navItemOrder, navItems).toMutableStateList()
         }
         val itemHeights = remember { mutableStateMapOf<String, Int>() }
         var draggingKey by remember { mutableStateOf<String?>(null) }
@@ -177,7 +182,7 @@ fun NavigationCustomizationGroup(
         Spacer(Modifier.height(8.dp))
 
         navItemOrder.forEachIndexed { index, key ->
-            val descriptor = NAV_ITEMS.first { it.key == key }
+            val descriptor = navItems.first { it.key == key }
             val enabled = key !in preferences.hiddenNavItems
             SettingReorderableToggleItem(
                 icon = descriptor.icon,
@@ -196,18 +201,18 @@ fun NavigationCustomizationGroup(
                 onDragStart = { draggingKey = key; dragOffsetY = 0f },
                 onDragEnd = { draggingKey = null; persistOrder() },
             )
-            idx++
+        }
         }
     }
 }
 
 /**
- * Resolves the stored nav-item order against the known [NAV_ITEMS]: known items
+ * Resolves the stored nav-item order against the available [navItems]: known items
  * in their stored position, then any known items missing from the stored order
  * in their default order. Unknown stored keys are dropped.
  */
-private fun resolveOrder(storedOrder: List<String>): List<String> {
-    val known = NAV_ITEMS.map { it.key }
+private fun resolveOrder(storedOrder: List<String>, navItems: List<NavItemDescriptor>): List<String> {
+    val known = navItems.map { it.key }
     val ordered = storedOrder.filter { it in known }
     val missing = known.filter { it !in ordered }
     return ordered + missing

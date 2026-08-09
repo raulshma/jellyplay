@@ -49,6 +49,16 @@
     <string name="search_filter_rating_plus">%1$.1f+</string>
     <string name="search_apply_filters">应用筛选</string>
 
+    <!-- Sort (parity with Library's sort options) -->
+    <string name="search_sort">排序</string>
+    <string name="search_sort_by">排序方式</string>
+
+    <!-- Played-status filter (localizable labels for PlayedStatus) -->
+    <string name="search_filter_status">状态</string>
+    <string name="search_filter_played_all">全部</string>
+    <string name="search_filter_played_played">已播放</string>
+    <string name="search_filter_played_unplayed">未播放</string>
+
     <!-- auto-localized: previously translatable="false" (2) -->
     <string name="search_request_via_seerr">通过 Seerr 请求</string>
     <string name="search_seerr_search_failed">Seerr 搜索失败</string>

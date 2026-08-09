@@ -39,6 +39,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import androidx.compose.runtime.Composable
@@ -94,6 +95,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.ScreenErrorState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -222,6 +224,7 @@ fun WatchProgressHeatmapScreen(
             }
         },
     ) { innerPadding ->
+        val isTv = LocalTvMode.current
         if (state.isLoading) {
             ScreenLoadingState(
                 message = stringResource(R.string.insights_loading),
@@ -229,91 +232,39 @@ fun WatchProgressHeatmapScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             )
-        } else {
-            if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .tvFocusRestorer()
-                        .focusGroup()
-                        .focusRequester(contentFocusRequester)
-                        .padding(innerPadding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp),
-                ) {
-                    if (!state.isPluginAvailable) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = ShapeCache.smooth8,
-                            color = MaterialTheme.colorScheme.errorContainer,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.insights_plugin_missing_message),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(12.dp),
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-
-                    if (state.dailyActivities.isEmpty()) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = ShapeCache.smooth8,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.insights_no_activity_for_year, state.year),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(12.dp),
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-
-                    YearSelector(
-                        year = state.year,
-                        onYearChange = { viewModel.onEvent(HeatmapEvent.SetYear(it)) },
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    StreakStats(streakInfo = state.streakInfo)
-
-                    Spacer(Modifier.height(16.dp))
-
-                    FilterChips(
-                        currentFilter = state.filter,
-                        onFilterChange = { viewModel.onEvent(HeatmapEvent.SetFilter(it)) },
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    HeatmapGrid(
-                        year = state.year,
-                        dailyActivities = state.dailyActivities,
-                        minActivityDate = state.minActivityDate,
-                        onDayClick = { viewModel.onEvent(HeatmapEvent.SelectDay(it)) },
-                    )
-                }
+        } else if (state.error != null && state.dailyActivities.isEmpty()) {
+            val content: @Composable (Modifier) -> Unit = { mod ->
+                ScreenErrorState(
+                    message = state.error!!,
+                    onRetry = { viewModel.refresh() },
+                    modifier = mod.fillMaxSize(),
+                )
+            }
+            if (isTv) {
+                content(Modifier.padding(innerPadding))
             } else {
-                Row(
+                PullToRefreshBox(
+                    isRefreshing = state.isLoading,
+                    onRefresh = { viewModel.refresh() },
                     modifier = Modifier
                         .fillMaxSize()
-                        .tvFocusRestorer()
-                        .focusGroup()
-                        .focusRequester(contentFocusRequester)
-                        .padding(innerPadding)
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                        .padding(innerPadding),
                 ) {
+                    content(Modifier)
+                }
+            }
+        } else {
+            val heatmapContent: @Composable () -> Unit = {
+                if (adaptiveInfo.windowSizeClass == WindowSizeClass.Compact) {
                     Column(
                         modifier = Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                            .fillMaxSize()
+                            .tvFocusRestorer()
+                            .focusGroup()
+                            .focusRequester(contentFocusRequester)
+                            .padding(innerPadding)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
                     ) {
                         if (!state.isPluginAvailable) {
                             Surface(
@@ -322,12 +273,13 @@ fun WatchProgressHeatmapScreen(
                                 color = MaterialTheme.colorScheme.errorContainer,
                             ) {
                                 Text(
-                                    text = "Install the Playback Reporting plugin on your Jellyfin server for detailed heatmap data. Showing basic activity from watch history.",
+                                    text = stringResource(R.string.insights_plugin_missing_message),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     modifier = Modifier.padding(12.dp),
                                 )
                             }
+                            Spacer(Modifier.height(8.dp))
                         }
 
                         if (state.dailyActivities.isEmpty()) {
@@ -343,6 +295,7 @@ fun WatchProgressHeatmapScreen(
                                     modifier = Modifier.padding(12.dp),
                                 )
                             }
+                            Spacer(Modifier.height(8.dp))
                         }
 
                         YearSelector(
@@ -350,25 +303,18 @@ fun WatchProgressHeatmapScreen(
                             onYearChange = { viewModel.onEvent(HeatmapEvent.SetYear(it)) },
                         )
 
+                        Spacer(Modifier.height(12.dp))
+
                         StreakStats(streakInfo = state.streakInfo)
+
+                        Spacer(Modifier.height(16.dp))
 
                         FilterChips(
                             currentFilter = state.filter,
                             onFilterChange = { viewModel.onEvent(HeatmapEvent.SetFilter(it)) },
                         )
-                    }
 
-                    Column(
-                        modifier = Modifier
-                            .weight(1.5f)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.insights_activity_grid),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        Spacer(Modifier.height(12.dp))
 
                         HeatmapGrid(
                             year = state.year,
@@ -377,6 +323,99 @@ fun WatchProgressHeatmapScreen(
                             onDayClick = { viewModel.onEvent(HeatmapEvent.SelectDay(it)) },
                         )
                     }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusRestorer()
+                            .focusGroup()
+                            .focusRequester(contentFocusRequester)
+                            .padding(innerPadding)
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            if (!state.isPluginAvailable) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = ShapeCache.smooth8,
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.insights_plugin_missing_message),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.padding(12.dp),
+                                    )
+                                }
+                            }
+
+                            if (state.dailyActivities.isEmpty()) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = ShapeCache.smooth8,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.insights_no_activity_for_year, state.year),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(12.dp),
+                                    )
+                                }
+                            }
+
+                            YearSelector(
+                                year = state.year,
+                                onYearChange = { viewModel.onEvent(HeatmapEvent.SetYear(it)) },
+                            )
+
+                            StreakStats(streakInfo = state.streakInfo)
+
+                            FilterChips(
+                                currentFilter = state.filter,
+                                onFilterChange = { viewModel.onEvent(HeatmapEvent.SetFilter(it)) },
+                            )
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1.5f)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.insights_activity_grid),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+
+                            HeatmapGrid(
+                                year = state.year,
+                                dailyActivities = state.dailyActivities,
+                                minActivityDate = state.minActivityDate,
+                                onDayClick = { viewModel.onEvent(HeatmapEvent.SelectDay(it)) },
+                            )
+                        }
+                    }
+                }
+            }
+            if (isTv) {
+                heatmapContent()
+            } else {
+                PullToRefreshBox(
+                    isRefreshing = state.isLoading,
+                    onRefresh = { viewModel.refresh() },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                ) {
+                    heatmapContent()
                 }
             }
         }

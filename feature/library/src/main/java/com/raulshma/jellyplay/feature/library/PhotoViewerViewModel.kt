@@ -100,7 +100,9 @@ class PhotoViewerViewModel @Inject constructor(
             if (parentId != null) {
                 val siblingsResult = mediaRepository.getMediaItems(
                     parentId = parentId,
-                    mediaTypes = listOf(MediaType.PHOTO),
+                    filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                        mediaTypes = listOf(MediaType.PHOTO),
+                    ),
                     limit = 200,
                 )
                 val items = siblingsResult.getOrNull()?.items ?: emptyList()

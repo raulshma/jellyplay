@@ -56,6 +56,8 @@ import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.components.ConsumeSettingsItemIndex
+import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
@@ -268,9 +270,7 @@ fun AppearanceSettingsScreen(
                             }
                         }
                     }
-                    val totalCount = appearanceItems.size
-                    var currentIdx = 0
-
+                    SettingsItemList(total = appearanceItems.size) {
                     appearanceItems.forEach { item ->
                         when (item) {
                             "theme_mode" -> {
@@ -297,7 +297,6 @@ fun AppearanceSettingsScreen(
                                     },
                                     trailingText = if (preferences.synthwaveMode) "-" else if (preferences.soothingMode) "-" else if (preferences.monochromeMode) "-" else preferences.themeMode.name,
                                     highlighted = highlightSettingId in THEME_HIGHLIGHT_IDS,
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         if (!preferences.synthwaveMode && !preferences.soothingMode && !preferences.monochromeMode) {
                                             val themeLabels = mapOf(
@@ -324,16 +323,15 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_synthwave_mode_subtitle),
                                     checked = preferences.synthwaveMode,
                                     highlighted = highlightSettingId == "synthwave_mode",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setSynthwaveMode(it) },
                                 )
                             }
                             "synthwave_accent" -> {
+                                ConsumeSettingsItemIndex()
                                 com.raulshma.jellyplay.core.ui.components.SynthwaveAccentPicker(
                                     selectedAccent = preferences.synthwaveAccent,
                                     onAccentSelected = { viewModel.setSynthwaveAccent(it) },
                                 )
-                                currentIdx++
                             }
                             "soothing_mode" -> {
                                 SettingToggleItem(
@@ -342,16 +340,15 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_soothing_mode_subtitle),
                                     checked = preferences.soothingMode,
                                     highlighted = highlightSettingId == "soothing_mode",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setSoothingMode(it) },
                                 )
                             }
                             "soothing_accent" -> {
+                                ConsumeSettingsItemIndex()
                                 com.raulshma.jellyplay.core.ui.components.SoothingAccentPicker(
                                     selectedAccent = preferences.soothingAccent,
                                     onAccentSelected = { viewModel.setSoothingAccent(it) },
                                 )
-                                currentIdx++
                             }
                             "monochrome_mode" -> {
                                 SettingToggleItem(
@@ -360,23 +357,22 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_monochrome_mode_subtitle),
                                     checked = preferences.monochromeMode,
                                     highlighted = highlightSettingId == "monochrome_mode",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setMonochromeMode(it) },
                                 )
                             }
                             "accent_color" -> {
+                                ConsumeSettingsItemIndex()
                                 com.raulshma.jellyplay.core.ui.components.AccentColorPicker(
                                     selectedSwatch = preferences.accentColorSwatch,
                                     onSwatchSelected = { viewModel.setAccentColorSwatch(it) },
                                 )
-                                currentIdx++
                             }
                             "color_style" -> {
+                                ConsumeSettingsItemIndex()
                                 com.raulshma.jellyplay.core.ui.components.ColorStylePicker(
                                     selectedStyle = preferences.colorStyle,
                                     onStyleSelected = { viewModel.setColorStyle(it) },
                                 )
-                                currentIdx++
                             }
                             "dynamic_theming" -> {
                                 SettingToggleItem(
@@ -385,7 +381,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_dynamic_theming_subtitle),
                                     checked = preferences.dynamicTheming,
                                     highlighted = highlightSettingId == "dynamic_theming",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setDynamicTheming(it) },
                                 )
                             }
@@ -396,7 +391,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_oled_mode_subtitle),
                                     checked = preferences.oledMode,
                                     highlighted = highlightSettingId == "oled_mode",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setOledMode(it) },
                                 )
                             }
@@ -411,7 +405,6 @@ fun AppearanceSettingsScreen(
                                     },
                                     trailingText = preferences.contrastLevel.name,
                                     highlighted = highlightSettingId == "contrast",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         val next = when (preferences.contrastLevel) {
                                             ContrastLevel.DEFAULT -> ContrastLevel.MEDIUM
@@ -434,7 +427,6 @@ fun AppearanceSettingsScreen(
                                     },
                                     trailingText = preferences.libraryViewMode.name,
                                     highlighted = highlightSettingId == "library_view_mode",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         viewModel.setLibraryViewMode(preferences.libraryViewMode.next)
                                     },
@@ -447,7 +439,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.homeMode == HomeMode.VIDEO) stringResource(R.string.settings_home_mode_video) else stringResource(R.string.settings_home_mode_music),
                                     trailingText = preferences.homeMode.name,
                                     highlighted = highlightSettingId == "home_mode",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         val next = if (preferences.homeMode == HomeMode.VIDEO) HomeMode.MUSIC else HomeMode.VIDEO
                                         viewModel.setHomeMode(next)
@@ -461,7 +452,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.homeHeroEnabled) stringResource(R.string.settings_show_hero_on) else stringResource(R.string.settings_show_hero_off),
                                     checked = preferences.homeHeroEnabled,
                                     highlighted = highlightSettingId == "hero_section",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setHomeHeroEnabled(it) },
                                 )
                             }
@@ -472,7 +462,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.homeBackdropEnabled) stringResource(R.string.settings_home_backdrop_on) else stringResource(R.string.settings_home_backdrop_off),
                                     checked = preferences.homeBackdropEnabled,
                                     highlighted = highlightSettingId == "home_backdrop",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setHomeBackdropEnabled(it) },
                                 )
                             }
@@ -483,7 +472,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.showClockOnHome) stringResource(R.string.settings_show_clock_on) else stringResource(R.string.settings_show_clock_off),
                                     checked = preferences.showClockOnHome,
                                     highlighted = highlightSettingId == "clock_home",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setShowClockOnHome(it) },
                                 )
                             }
@@ -494,7 +482,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.showSettingsInHomeSearch) stringResource(R.string.settings_show_settings_in_home_search_on) else stringResource(R.string.settings_show_settings_in_home_search_off),
                                     checked = preferences.showSettingsInHomeSearch,
                                     highlighted = highlightSettingId == "settings_in_home_search",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setShowSettingsInHomeSearch(it) },
                                 )
                             }
@@ -506,7 +493,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_continue_watching_tap_subtitle),
                                     trailingText = preferences.continueWatchingClickBehavior.displayName,
                                     highlighted = highlightSettingId == "continue_watching_click",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         activePicker = PickerState.List(
                                             title = cwTitle,
@@ -524,7 +510,6 @@ fun AppearanceSettingsScreen(
                                     title = stringResource(R.string.settings_unhide_continue_watching),
                                     subtitle = stringResource(R.string.settings_unhide_continue_watching_subtitle, preferences.hiddenCwItemIds.size),
                                     highlighted = highlightSettingId == "unhide_cw",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = { viewModel.unhideAllCwItems() },
                                 )
                             }
@@ -535,7 +520,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.mergeContinueWatchingAndNextUp) stringResource(R.string.settings_merge_continue_next_up_on) else stringResource(R.string.settings_merge_continue_next_up_off),
                                     checked = preferences.mergeContinueWatchingAndNextUp,
                                     highlighted = highlightSettingId == "merge_continue_next_up",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setMergeContinueWatchingAndNextUp(it) },
                                 )
                             }
@@ -557,7 +541,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_next_up_time_window_subtitle),
                                     trailingText = dayLabels[preferences.nextUpMaxDays] ?: xDaysFormat.format(preferences.nextUpMaxDays),
                                     highlighted = highlightSettingId == "next_up_max_days",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         activePicker = PickerState.List(
                                             title = nextUpTitle,
@@ -576,7 +559,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.nextUpRewatching) stringResource(R.string.settings_rewatching_next_up_on) else stringResource(R.string.settings_rewatching_next_up_off),
                                     checked = preferences.nextUpRewatching,
                                     highlighted = highlightSettingId == "next_up_rewatching",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setNextUpRewatching(it) },
                                 )
                             }
@@ -587,7 +569,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.backdropThemeMusicEnabled) stringResource(R.string.settings_backdrop_theme_music_on) else stringResource(R.string.settings_backdrop_theme_music_off),
                                     checked = preferences.backdropThemeMusicEnabled,
                                     highlighted = highlightSettingId == "theme_music",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setBackdropThemeMusicEnabled(it) },
                                 )
                             }
@@ -598,7 +579,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = if (preferences.navBarShowLabels) stringResource(R.string.settings_nav_labels_on) else stringResource(R.string.settings_nav_labels_off),
                                     checked = preferences.navBarShowLabels,
                                     highlighted = highlightSettingId == "nav_labels",
-                                    index = currentIdx++, count = totalCount,
                                     onCheckedChange = { viewModel.setNavBarShowLabels(it) },
                                 )
                             }
@@ -610,7 +590,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_date_format_subtitle),
                                     trailingText = preferences.dateFormatPreference.displayName,
                                     highlighted = highlightSettingId == "date_format",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         activePicker = PickerState.List(
                                             title = dateFormatTitle,
@@ -630,7 +609,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_font_size_app_subtitle),
                                     trailingText = preferences.appFontScale.displayName,
                                     highlighted = highlightSettingId == "font_scale",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         activePicker = PickerState.List(
                                             title = fontSizeTitle,
@@ -650,7 +628,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_night_starts_at_subtitle),
                                     trailingText = "${preferences.scheduledThemeStartHour}:00",
                                     highlighted = highlightSettingId == "scheduled_start",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         activePicker = PickerState.List(
                                             title = nightStartsTitle,
@@ -670,7 +647,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_morning_starts_at_subtitle),
                                     trailingText = "${preferences.scheduledThemeEndHour}:00",
                                     highlighted = highlightSettingId == "scheduled_end",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         activePicker = PickerState.List(
                                             title = morningStartsTitle,
@@ -690,7 +666,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_color_blind_mode_subtitle),
                                     trailingText = preferences.colorBlindMode.displayName,
                                     highlighted = highlightSettingId == "color_blind_mode",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         activePicker = PickerState.List(
                                             title = colorBlindTitle,
@@ -710,7 +685,6 @@ fun AppearanceSettingsScreen(
                                     subtitle = stringResource(R.string.settings_handedness_subtitle),
                                     trailingText = preferences.handMode.displayName,
                                     highlighted = highlightSettingId == "hand_mode",
-                                    index = currentIdx++, count = totalCount,
                                     onClick = {
                                         activePicker = PickerState.List(
                                             title = handednessTitle,
@@ -723,6 +697,7 @@ fun AppearanceSettingsScreen(
                                 )
                             }
                         }
+                    }
                     }
                 }
             }
@@ -1140,17 +1115,15 @@ fun AppearanceSettingsScreen(
                         }
                     }
 
-                    val totalCount = newsletterSections.size + 2
+                    SettingsItemList(total = newsletterSections.size + 2) {
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Mail,
                         title = stringResource(R.string.settings_enable_newsletter),
                         subtitle = stringResource(R.string.settings_enable_newsletter_subtitle),
                         checked = preferences.newsletterEnabled,
-                        highlighted = highlightSettingId == "newsletter_enabled",
-                        index = 0,
-                        count = totalCount,
-                        onCheckedChange = { viewModel.setNewsletterEnabled(it) }
+                                    highlighted = highlightSettingId == "newsletter_enabled",
+                                    onCheckedChange = { viewModel.setNewsletterEnabled(it) }
                     )
 
                     val daysOfWeek = listOf(
@@ -1170,8 +1143,6 @@ fun AppearanceSettingsScreen(
                         subtitle = stringResource(R.string.settings_newsletter_delivery_day_subtitle),
                         trailingText = dayLabel,
                         highlighted = highlightSettingId == "newsletter_delivery_day",
-                        index = 1,
-                        count = totalCount,
                         onClick = {
                             val currentIdx = daysOfWeek.indexOfFirst { it.first == preferences.newsletterDayOfWeek }
                             val nextIdx = (currentIdx + 1) % daysOfWeek.size
@@ -1212,7 +1183,7 @@ fun AppearanceSettingsScreen(
                                 subtitle = sectionDesc,
                                 checked = enabled,
                                 index = index + 2,
-                                count = totalCount,
+                                count = newsletterSections.size + 2,
                                 modifier = Modifier.onSizeChanged { itemHeights[sectionType] = it.height },
                                 onCheckedChange = { checked ->
                                     val current = preferences.enabledNewsletterSections.toMutableSet()
@@ -1224,6 +1195,7 @@ fun AppearanceSettingsScreen(
                                 onDragEnd = { draggingSection = null; persistNewsletterSectionOrder() },
                             )
                         }
+                    }
                     }
                 }
             }

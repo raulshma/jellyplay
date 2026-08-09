@@ -23,7 +23,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -68,7 +70,7 @@ fun StudioDetailScreen(
 
     // Long-press / TV-Menu quick actions for studio cards
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember { { item: MediaItem -> studioQuickActions(item) } },
+        resolveActions = remember { { item: MediaItem -> item.quickActions(MediaQuickActionScope.LIBRARY) } },
         executeAction = remember(viewModel, onItemClick) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
@@ -191,20 +193,3 @@ fun StudioDetailScreen(
     } // close Box
     MediaQuickActionHost(quickActionController)
 } // close StudioDetailScreen
-
-/**
- * Which quick actions apply to a studio card Playable entries
- * get play / mark-watched / details.
- */
-private fun studioQuickActions(item: MediaItem): List<QuickAction> = buildList {
-    when (item.mediaType) {
-        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE,
-        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST,
-        MediaType.MUSIC_VIDEO, MediaType.COLLECTION, MediaType.LIVE_TV, MediaType.CHANNEL -> {
-            add(QuickAction.PLAY)
-            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
-            add(QuickAction.DETAILS)
-        }
-        else -> Unit
-    }
-}

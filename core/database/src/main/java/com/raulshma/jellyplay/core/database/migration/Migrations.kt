@@ -731,7 +731,21 @@ val MIGRATION_42_43 = object : Migration(42, 43) {
 }
 
 /**
- * The complete, correctly-ordered v1→v43 migration chain, with the
+ * Persists provider ids (tmdb/imdb/…) and external URLs on offline_media so the
+ * offline subtitle search (Wyzie/OpenSubtitles) can resolve a TMDB/IMDb id
+ * without a server round-trip. Both columns are nullable JSON blobs: existing
+ * rows stay null and the subtitle search degrades to a title query until the
+ * item is re-downloaded. Mirrors the `peopleJson` blob pattern from 29→30.
+ */
+val MIGRATION_43_44 = object : Migration(43, 44) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN providerIdsJson TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN externalUrlsJson TEXT")
+    }
+}
+
+/**
+ * The complete, correctly-ordered v1→v44 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -782,4 +796,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_40_41,
         MIGRATION_41_42,
         MIGRATION_42_43,
+        MIGRATION_43_44,
     )

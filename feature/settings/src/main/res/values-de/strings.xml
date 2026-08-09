@@ -523,6 +523,14 @@
     <string name="settings_clear_cache_subtitle">Speicherplatz freigeben (behält Bildercache)</string>
     <string name="settings_clear_image_cache">Bildercache leeren</string>
     <string name="settings_clear_image_cache_subtitle">Lädt alle Poster und Bilder neu</string>
+    <!-- Privacy & Data hub (enhancements §7.5) -->
+    <string name="settings_privacy_data">Datenschutz &amp; Daten</string>
+    <string name="settings_privacy_data_subtitle">Cache, Verlauf und Kontodaten</string>
+    <string name="settings_clear_search_history">Suchverlauf löschen</string>
+    <string name="settings_clear_search_history_subtitle">Letzte Suchbegriffe entfernen</string>
+    <string name="settings_cache_cleared">Cache geleert</string>
+    <string name="settings_image_cache_cleared">Bild-Cache geleert</string>
+    <string name="settings_search_history_cleared">Suchverlauf gelöscht</string>
     <string name="settings_wifi_only">Nur WLAN</string>
     <string name="settings_wifi_only_on">Downloads nur über ungetaktete Netzwerke</string>
     <string name="settings_wifi_only_off">Downloads über jedes Netzwerk</string>
@@ -895,6 +903,9 @@
     <string name="settings_newsletter_curated_picks_desc">Besondere Empfehlungen für dich</string>
     <string name="settings_reset_appearance_title">Erscheinungsbild-Einstellungen zurücksetzen</string>
     <string name="settings_reset_appearance_message">Dadurch werden alle Erscheinungsbild-Einstellungen auf ihre Standardwerte zurückgesetzt. Diese Aktion kann nicht rückgängig gemacht werden.</string>
+    <string name="settings_reset_playback_cd">Wiedergabeeinstellungen zurücksetzen</string>
+    <string name="settings_reset_playback_title">Wiedergabeeinstellungen zurücksetzen</string>
+    <string name="settings_reset_playback_message">Dadurch werden alle Wiedergabe- und Engine-Einstellungen auf ihre Standardwerte zurückgesetzt. Diese Aktion kann nicht rückgängig gemacht werden.</string>
 
     <!-- PlaybackSettingsScreen.kt -->
     <string name="settings_preferred_player">Bevorzugter Player</string>

@@ -32,6 +32,7 @@
     <string name="auth_connect">连接</string>
     <string name="auth_connecting">正在连接…</string>
     <string name="auth_server_address">服务器地址</string>
+    <string name="auth_server_address_invalid">请输入有效的 URL（例如 https://host:port）</string>
 
     <!-- Server connection errors -->
     <string name="auth_error_server_address_required">请输入服务器地址</string>

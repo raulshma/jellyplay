@@ -616,6 +616,7 @@ class DetailViewModel @Inject constructor(
             episode = episode,
             label = label,
             startPositionTicks = startPositionTicks,
+            primaryImageUrl = imageUrlProvider.getImageUrl(episode.id),
         )
     }
 
@@ -848,6 +849,12 @@ class DetailViewModel @Inject constructor(
         launch {
             homeDiscoveryStore.unhideCwItem(item.id)
             _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_shown_in_continue_watching)))
+        }
+    }
+
+    fun setShowDetailUpNext(enabled: Boolean) {
+        launch {
+            libraryStore.setShowDetailUpNext(enabled)
         }
     }
 

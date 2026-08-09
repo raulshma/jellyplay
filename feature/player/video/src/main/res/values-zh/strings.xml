@@ -137,6 +137,11 @@
     <string name="player_video_more_options">更多选项</string>
     <string name="player_video_audio">音频</string>
     <string name="player_video_subtitles">字幕</string>
+    <string name="player_video_subtitle_hub_section_tracks">轨道</string>
+    <string name="player_video_subtitle_hub_section_style">样式</string>
+    <string name="player_video_subtitle_hub_section_get">获取</string>
+    <string name="player_video_subtitle_hub_section_delay">延迟</string>
+    <string name="player_video_subtitle_downloaded_device_only">仅保存到设备（离线）</string>
     <string name="player_video_chapters">章节</string>
     <string name="player_video_episodes">剧集</string>
     <string name="player_video_syncplay">SyncPlay</string>
@@ -302,4 +307,11 @@
     <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
     <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
     <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
+
+    <!-- 无障碍：亮度/音量手势区域的屏幕阅读器语义 (P5 §3.1) -->
+    <string name="a11y_gesture_controls">亮度和音量控制</string>
+    <string name="a11y_brightness_increase">提高亮度</string>
+    <string name="a11y_brightness_decrease">降低亮度</string>
+    <string name="a11y_volume_increase">提高音量</string>
+    <string name="a11y_volume_decrease">降低音量</string>
 </resources>

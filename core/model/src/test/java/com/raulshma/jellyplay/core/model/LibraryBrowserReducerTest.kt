@@ -132,6 +132,28 @@ class LibraryBrowserReducerTest {
     }
 
     @Test
+    fun `configureSection resets groupBy to NONE`() {
+        // A leftover "Group by Year" from a previous section must not shadow the
+        // latest-first sort on the next "Latest X" open (#113).
+        val next = LibraryBrowserReducer.configureSection(
+            LibraryBrowserState(groupBy = GroupBy.YEAR),
+            LibrarySectionContext(title = "Latest Shows", parentId = "lib-tv", collectionType = "tvshows", sortBy = SortOption.DATE_LAST_CONTENT_ADDED.apiValue),
+        )
+        assertEquals(GroupBy.NONE, next.groupBy)
+    }
+
+    @Test
+    fun `configureSection falls back to Recently Added Content when sortBy is null`() {
+        // Compound items (series that just gained an episode) must rise to the top
+        // even when no explicit sort is carried by the section context (#113).
+        val next = LibraryBrowserReducer.configureSection(
+            LibraryBrowserState(),
+            LibrarySectionContext(title = "Latest", parentId = "lib-1"),
+        )
+        assertEquals(SortOption.DATE_LAST_CONTENT_ADDED, next.filters.sortBy)
+    }
+
+    @Test
     fun `clearSectionMode is a no-op when not in section`() {
         val state = LibraryBrowserState(folder = LibraryFolder("lib-1", "Movies"))
         val next = LibraryBrowserReducer.clearSectionMode(state)

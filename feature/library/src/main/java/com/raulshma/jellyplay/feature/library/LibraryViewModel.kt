@@ -16,8 +16,8 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibrarySectionContext
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -59,6 +59,7 @@ class LibraryViewModel @Inject constructor(
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
+    private val userMessageBus: UserMessageBus,
 ) : JellyPlayViewModel() {
 
     // ---- Browser state: one value type owning {folder, filters, viewMode, ----
@@ -151,14 +152,7 @@ class LibraryViewModel @Inject constructor(
     }.flatMapLatest { (folder, filters) ->
       mediaRepository.getMediaItemsPaged(
           parentId = folder?.id,
-          mediaTypes = filters.mediaTypes.ifEmpty { null },
-          genres = filters.genres.ifEmpty { null },
-          years = filters.years.ifEmpty { null },
-          sortBy = filters.sortBy.apiValue,
-          sortOrder = filters.sortBy.sortOrder,
-          tags = filters.tags.ifEmpty { null },
-          playedStatus = filters.playedStatus.takeIf { it != PlayedStatus.ALL },
-          minRating = filters.minRating.takeIf { it > 0f },
+          filters = filters,
           // Section mode ("See All" from a home Latest row) shows the same
           // top-level items as the default library tab — series for a TV library,
           // movies for a movie library — just sorted by latest. (Previously this

@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -34,18 +35,19 @@ interface LibraryApiClient {
 
     suspend fun getMediaItems(
         parentId: String? = null,
-        mediaTypes: List<MediaType>? = null,
-        genres: List<String>? = null,
-        years: List<Int>? = null,
+        /**
+         * Bundles the filter/sort dimensions that always travel together
+         * (mediaTypes, genres, years, tags, [com.raulshma.jellyplay.core.model.SortOption],
+         * [com.raulshma.jellyplay.core.model.PlayedStatus], minRating, isResumable).
+         * Replaces the long primitive parameter list so adding a dimension is a
+         * single field on [LibraryFilters] instead of a signature edit here.
+         * Defaults to the library landing sort (newest first, no filters).
+         */
+        filters: LibraryFilters = LibraryFilters(),
         studioIds: List<String>? = null,
-        sortBy: String = "SortName",
-        sortOrder: String = "Ascending",
         startIndex: Int = 0,
         limit: Int = 50,
         searchTerm: String? = null,
-        tags: List<String>? = null,
-        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus? = null,
-        minRating: Float? = null,
         /**
          * Controls which nested media kinds the query excludes. Library browsing
          * and section mode ("See All" from a home Latest row) both use the

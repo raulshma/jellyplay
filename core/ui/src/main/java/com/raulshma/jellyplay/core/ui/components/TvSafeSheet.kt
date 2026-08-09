@@ -3,7 +3,6 @@ package com.raulshma.jellyplay.core.ui.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -157,20 +156,14 @@ private fun MobileBottomSheet(
         modifier = modifier,
         sheetState = sheetState,
         shape = ShapeCache.smoothTop28,
-        containerColor = colorScheme.surfaceContainer,
+        // surface (not surfaceContainer) so the sheet matches the app/screen
+        // background in every mode — pure #000 in OLED, identical to Library /
+        // MediaDetail, instead of the slightly-lifted surfaceContainer #111.
+        containerColor = colorScheme.surface,
         contentColor = colorScheme.onSurface,
-        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+        tonalElevation = 0.dp,
+        dragHandle = { SheetDragHandle() },
     ) {
-        val view = LocalView.current
-        LaunchedEffect(view) {
-            val window = (view.parent as? DialogWindowProvider)?.window
-            window?.let {
-                val controller = WindowCompat.getInsetsController(it, it.decorView)
-                controller.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                controller.hide(WindowInsetsCompat.Type.systemBars())
-            }
-        }
         MaterialTheme(
             colorScheme = colorScheme,
             typography = typography,

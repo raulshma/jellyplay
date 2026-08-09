@@ -64,6 +64,13 @@
     <string name="onboarding_security_biometric_unlock">指紋または顔認証を使用</string>
     <string name="onboarding_security_biometric_setup_hint">有効にするにはAndroidの設定で指紋または顔を登録してください</string>
     <string name="onboarding_security_auto_lock_timer">自動ロックタイマー</string>
+    <string name="onboarding_security_lock_never">なし</string>
+    <string name="onboarding_security_lock_15s">15秒</string>
+    <string name="onboarding_security_lock_30s">30秒</string>
+    <string name="onboarding_security_lock_1m">1分</string>
+    <string name="onboarding_security_lock_5m">5分</string>
+    <string name="onboarding_show_password">パスワードを表示</string>
+    <string name="onboarding_hide_password">パスワードを隠す</string>
 
     <!-- HomeLayoutStep -->
     <string name="onboarding_home_layout_title">ホームレイアウト</string>

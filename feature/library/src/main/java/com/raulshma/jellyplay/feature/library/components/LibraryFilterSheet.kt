@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
@@ -87,11 +86,18 @@ fun LibraryFilterSheet(
     var selectedPlayedStatus by remember { mutableStateOf(currentFilters.playedStatus) }
     var selectedTags by remember { mutableStateOf(currentFilters.tags.toSet()) }
     var selectedMinRating by remember { mutableFloatStateOf(currentFilters.minRating) }
+    // Resumable filter mirrors LibraryFilters.isResumable: tri-state surfaced as
+    // a single toggle (null/false = off, true = only items with a resume
+    // position). Initialized from the persisted filter blob.
+    var selectedIsResumable by remember { mutableStateOf(currentFilters.isResumable == true) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val isLight = LocalIsLightTheme.current
-    val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerHigh
+    // Sheet container matches the app/screen background tier: colorScheme.surface
+    // (pure #000 in OLED — identical to the Library screen — instead of the old
+    // light=Low / dark=High split that drifted from the other sheets).
+    val sheetContainerColor = MaterialTheme.colorScheme.surface
 
     val isTv = LocalTvMode.current
 
@@ -114,8 +120,8 @@ fun LibraryFilterSheet(
             ) {
                 Text(
                     text = stringResource(R.string.library_filters),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
                     color = contentColor,
                 )
                 val resetFocusState = rememberTvFocusState(focusedScale = 1.05f)
@@ -148,6 +154,7 @@ fun LibraryFilterSheet(
                                 selectedPlayedStatus = PlayedStatus.ALL
                                 selectedTags = emptySet()
                                 selectedMinRating = 0f
+                                selectedIsResumable = false
                             }
                         )
                         .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -245,6 +252,23 @@ fun LibraryFilterSheet(
                         }
                     }) {}
                 }
+            }
+
+            // ── Resumable (In Progress) toggle ──
+            // A single chip that restricts the grid to items with a playback
+            // position (Jellyfin ItemFilter.IsResumable). Pairs naturally with
+            // the "In Progress" sort but is independently composable with any
+            // status / sort selection.
+            Spacer(modifier = Modifier.height(12.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                GlassFilterChip(
+                    label = stringResource(R.string.library_filter_resumable),
+                    selected = selectedIsResumable,
+                    onClick = { selectedIsResumable = !selectedIsResumable },
+                )
             }
 
             // ── Genres ──
@@ -389,6 +413,7 @@ fun LibraryFilterSheet(
                                     playedStatus = selectedPlayedStatus,
                                     tags = selectedTags.toList(),
                                     minRating = selectedMinRating,
+                                    isResumable = selectedIsResumable.takeIf { it },
                                 )
                             )
                         }
@@ -433,7 +458,8 @@ fun LibraryFilterSheet(
             sheetState = sheetState,
             containerColor = sheetContainerColor,
             tonalElevation = 0.dp,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            shape = ShapeCache.smoothTop28,
+            dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
         ) {
             filterContent()
         }

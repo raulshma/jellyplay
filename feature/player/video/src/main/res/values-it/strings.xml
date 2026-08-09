@@ -137,6 +137,11 @@
     <string name="player_video_more_options">Altre opzioni</string>
     <string name="player_video_audio">Audio</string>
     <string name="player_video_subtitles">Sottotitoli</string>
+    <string name="player_video_subtitle_hub_section_tracks">Tracce</string>
+    <string name="player_video_subtitle_hub_section_style">Stile</string>
+    <string name="player_video_subtitle_hub_section_get">Ottieni</string>
+    <string name="player_video_subtitle_hub_section_delay">Ritardo</string>
+    <string name="player_video_subtitle_downloaded_device_only">Salvato solo sul dispositivo (offline)</string>
     <string name="player_video_chapters">Capitoli</string>
     <string name="player_video_episodes">Episodi</string>
     <string name="player_video_syncplay">SyncPlay</string>
@@ -303,4 +308,11 @@
     <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
     <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
     <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
+
+    <!-- Accessibilità: semantica per lettore di schermo del pannello gesti luminosità/volume (P5 §3.1) -->
+    <string name="a11y_gesture_controls">Controlli luminosità e volume</string>
+    <string name="a11y_brightness_increase">Aumenta luminosità</string>
+    <string name="a11y_brightness_decrease">Riduci luminosità</string>
+    <string name="a11y_volume_increase">Aumenta volume</string>
+    <string name="a11y_volume_decrease">Riduci volume</string>
 </resources>

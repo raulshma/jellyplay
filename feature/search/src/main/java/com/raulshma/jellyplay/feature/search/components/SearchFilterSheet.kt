@@ -40,6 +40,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PlayedStatus
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -50,16 +52,16 @@ import com.raulshma.jellyplay.core.ui.components.YearPresetSelection
 import com.raulshma.jellyplay.core.ui.components.toggleYearPreset
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.feature.search.SearchFilters
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchFilterSheet(
-    currentFilters: SearchFilters,
+    currentFilters: LibraryFilters,
     genres: List<Genre>,
     availableTags: List<String> = emptyList(),
-    onApply: (SearchFilters) -> Unit,
+    onApply: (LibraryFilters) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selectedMediaTypes by remember { mutableStateOf(currentFilters.mediaTypes) }
@@ -72,8 +74,9 @@ fun SearchFilterSheet(
     val isTv = LocalTvMode.current
 
     val isLight = LocalIsLightTheme.current
-    val sheetContainerColor = if (isLight) MaterialTheme.colorScheme.surfaceContainerLow
-    else MaterialTheme.colorScheme.surfaceContainerHigh
+    // Sheet container matches the app/screen background: colorScheme.surface
+    // (pure #000 in OLED) rather than the old light=Low / dark=High split.
+    val sheetContainerColor = MaterialTheme.colorScheme.surface
     val glassBg = if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
     val contentColor = MaterialTheme.colorScheme.onSurface
     val contentColorMedium = MaterialTheme.colorScheme.onSurfaceVariant
@@ -97,6 +100,8 @@ fun SearchFilterSheet(
                 onSelectMinRating = { selectedMinRating = it },
                 genres = genres,
                 availableTags = availableTags,
+                currentSortBy = currentFilters.sortBy,
+                currentPlayedStatus = currentFilters.playedStatus,
                 onApply = onApply,
             )
         }
@@ -108,6 +113,8 @@ fun SearchFilterSheet(
         sheetState = sheetState,
         containerColor = sheetContainerColor,
         tonalElevation = 0.dp,
+        shape = ShapeCache.smoothTop28,
+        dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
     ) {
         SearchFilterSheetBody(
             contentColor = contentColor,
@@ -125,6 +132,8 @@ fun SearchFilterSheet(
             onSelectMinRating = { selectedMinRating = it },
             genres = genres,
             availableTags = availableTags,
+            currentSortBy = currentFilters.sortBy,
+            currentPlayedStatus = currentFilters.playedStatus,
             onApply = onApply,
         )
     }
@@ -147,7 +156,9 @@ private fun ColumnScope.SearchFilterSheetBody(
     onSelectMinRating: (Float) -> Unit,
     genres: List<Genre>,
     availableTags: List<String>,
-    onApply: (SearchFilters) -> Unit,
+    currentSortBy: SortOption,
+    currentPlayedStatus: PlayedStatus,
+    onApply: (LibraryFilters) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -155,23 +166,17 @@ private fun ColumnScope.SearchFilterSheetBody(
             .padding(horizontal = 24.dp)
             .padding(bottom = 32.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.search_filters_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = contentColor,
-                )
+            Text(
+                text = stringResource(R.string.search_filters_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor,
+            )
                 val resetFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 val resetInteractionSource = remember { MutableInteractionSource() }
                 val isResetPressed by resetInteractionSource.collectIsPressedAsState()
@@ -348,12 +353,17 @@ private fun ColumnScope.SearchFilterSheetBody(
                         indication = null,
                         onClick = {
                             onApply(
-                                SearchFilters(
+                                LibraryFilters(
                                     mediaTypes = selectedMediaTypes,
                                     genres = selectedGenres,
                                     years = selectedYears.toList(),
                                     tags = selectedTags.toList(),
                                     minRating = selectedMinRating,
+                                    // Preserve the sort/played-status chosen via the
+                                    // dedicated chips so applying this multi-dimension
+                                    // sheet doesn't silently reset them to defaults.
+                                    sortBy = currentSortBy,
+                                    playedStatus = currentPlayedStatus,
                                 ),
                             )
                         },
@@ -367,7 +377,6 @@ private fun ColumnScope.SearchFilterSheetBody(
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             }
-        }
     }
 }
 

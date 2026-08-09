@@ -4,7 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,12 +30,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -193,6 +198,8 @@ fun ModeSwitch(
     val isTv = LocalTvMode.current
     val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
     val tvFocusState = rememberTvFocusState(focusedScale = 1.08f)
+    val musicModeLabel = stringResource(R.string.a11y_mode_music)
+    val videoModeLabel = stringResource(R.string.a11y_mode_video)
 
     val width = 76.dp
     val height = 36.dp
@@ -207,13 +214,23 @@ fun ModeSwitch(
             .shadow(elevation = 1.dp, shape = CircleShape)
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, CircleShape)
-            .clickable(
+            // a11y: previously a bare .clickable with no role/state, so TalkBack
+            // announced this Video/Music switch as an unlabeled button. Use
+            // toggleable with Role.Switch (announces as a switch + on/off state)
+            // preserving the existing interactionSource (so ripple/focus behavior
+            // is unchanged) and a stateDescription naming the active mode.
+            .toggleable(
+                value = isMusic,
+                role = Role.Switch,
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = {
+                onValueChange = {
                     onModeChange(if (isMusic) HomeMode.VIDEO else HomeMode.MUSIC)
-                }
+                },
             )
+            .semantics {
+                stateDescription = if (isMusic) musicModeLabel else videoModeLabel
+            }
             .padding(4.dp),
         contentAlignment = Alignment.CenterStart
     ) {

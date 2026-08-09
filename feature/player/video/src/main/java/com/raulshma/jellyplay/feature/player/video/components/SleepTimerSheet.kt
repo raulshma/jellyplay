@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.core.ui.components.SheetSection
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -86,12 +88,9 @@ internal fun SleepTimerSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                stringResource(R.string.player_video_sleep_timer),
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                modifier = Modifier.padding(horizontal = 24.dp),
+            SheetHeader(
+                title = stringResource(R.string.player_video_sleep_timer),
+                icon = Tabler.Outline.MoonStars,
             )
             Spacer(Modifier.height(20.dp))
 
@@ -238,40 +237,42 @@ internal fun SleepTimerSheet(
                     )
                     Spacer(Modifier.height(8.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        PRESET_DURATIONS.forEach { durationMs ->
-                            val isSelected = !isEndOfEpisodeMode && isActive && remainingMs == durationMs
-                            val isLastUsed = !isActive && durationMs == lastUsedDurationMs
-                            SleepTimerChip(
-                                label = formatDurationLabel(durationMs),
-                                isSelected = isSelected || isLastUsed,
-                                onClick = { onSelectDuration(durationMs); onDismiss() },
-                                modifier = Modifier.weight(1f),
-                            )
+                    SheetSection {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            PRESET_DURATIONS.forEach { durationMs ->
+                                val isSelected = !isEndOfEpisodeMode && isActive && remainingMs == durationMs
+                                val isLastUsed = !isActive && durationMs == lastUsedDurationMs
+                                SleepTimerChip(
+                                    label = formatDurationLabel(durationMs),
+                                    isSelected = isSelected || isLastUsed,
+                                    onClick = { onSelectDuration(durationMs); onDismiss() },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
                         }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        SleepTimerChip(
+                            label = stringResource(R.string.player_video_custom_ellipsis),
+                            isSelected = false,
+                            onClick = { showCustomDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        val isEndSelected = isActive && isEndOfEpisodeMode
+                        SleepTimerChip(
+                            label = stringResource(R.string.player_video_end_of_episode),
+                            isSelected = isEndSelected,
+                            onClick = { onSelectEndOfEpisode(); onDismiss() },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    SleepTimerChip(
-                        label = stringResource(R.string.player_video_custom_ellipsis),
-                        isSelected = false,
-                        onClick = { showCustomDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    val isEndSelected = isActive && isEndOfEpisodeMode
-                    SleepTimerChip(
-                        label = stringResource(R.string.player_video_end_of_episode),
-                        isSelected = isEndSelected,
-                        onClick = { onSelectEndOfEpisode(); onDismiss() },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
                 }
 
                 if (showCustomDialog) {

@@ -684,4 +684,19 @@
     <string name="core_preview_series">Series</string>
     <string name="core_preview_new_format">%1$d new</string>
 
+    <!-- Shared player speed-picker custom-value labels (§2.3). Referenced by
+         both the video and audio SpeedPickerSheet composables. -->
+    <string name="player_speed_custom">Custom speed</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">Adjust playback speed</string>
+
+    <!-- Accessibility: Video/Music mode switch semantics (P5 §3.2) -->
+    <string name="a11y_mode_video">Video mode</string>
+    <string name="a11y_mode_music">Music mode</string>
+
+    <!-- Shared password/secret text field toggle labels (§2.4). Used by
+         PasswordTextField in core/ui and its call sites across features. -->
+    <string name="core_show_password">Show password</string>
+    <string name="core_hide_password">Hide password</string>
+
 </resources>

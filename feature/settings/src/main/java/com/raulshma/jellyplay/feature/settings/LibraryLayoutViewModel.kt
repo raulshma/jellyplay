@@ -145,7 +145,9 @@ class LibraryLayoutViewModel @Inject constructor(
                 when (type) {
                     PinnedSectionType.COLLECTION ->
                         mediaRepository.getMediaItems(
-                            mediaTypes = listOf(MediaType.COLLECTION),
+                            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                                mediaTypes = listOf(MediaType.COLLECTION),
+                            ),
                             limit = 100,
                         ).getOrDefault(SearchResult(emptyList(), 0, 0))
                             .items.map { PinnableOption(it.id, it.name) }

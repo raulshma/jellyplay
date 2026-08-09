@@ -29,6 +29,8 @@
     <string name="library_sort_by">並べ替え</string>
     <string name="library_media_type">メディアの種類</string>
     <string name="library_status">状態</string>
+    <string name="library_sort_in_progress">進行中</string>
+    <string name="library_filter_resumable">進行中</string>
     <string name="library_genres">ジャンル</string>
     <string name="library_year_range">公開年</string>
     <string name="library_tags">タグ</string>

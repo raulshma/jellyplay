@@ -64,6 +64,13 @@
     <string name="onboarding_security_biometric_unlock">使用指纹或面部解锁</string>
     <string name="onboarding_security_biometric_setup_hint">请在 Android 设置中设置指纹或面部以启用</string>
     <string name="onboarding_security_auto_lock_timer">自动锁定计时器</string>
+    <string name="onboarding_security_lock_never">从不</string>
+    <string name="onboarding_security_lock_15s">15秒</string>
+    <string name="onboarding_security_lock_30s">30秒</string>
+    <string name="onboarding_security_lock_1m">1分钟</string>
+    <string name="onboarding_security_lock_5m">5分钟</string>
+    <string name="onboarding_show_password">显示密码</string>
+    <string name="onboarding_hide_password">隐藏密码</string>
 
     <!-- HomeLayoutStep -->
     <string name="onboarding_home_layout_title">主屏幕布局</string>

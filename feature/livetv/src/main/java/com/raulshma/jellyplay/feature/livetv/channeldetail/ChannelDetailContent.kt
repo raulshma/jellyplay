@@ -55,6 +55,7 @@ import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.livetv.R
@@ -288,13 +289,18 @@ private fun RecordSplitButton(
 @Composable
 private fun NowPlayingHero(program: LiveTvProgram) {
     val progress = rememberLiveProgress(program)
+    val reducedMotion = LocalReducedMotion.current
     val infinite = rememberInfiniteTransition(label = "liveDot")
-    val dotAlpha by infinite.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(animation = tween(900), repeatMode = RepeatMode.Reverse),
-        label = "dotAlpha",
-    )
+    val dotAlpha by if (reducedMotion) {
+        androidx.compose.runtime.mutableStateOf(1f)
+    } else {
+        infinite.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(animation = tween(900), repeatMode = RepeatMode.Reverse),
+            label = "dotAlpha",
+        )
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()

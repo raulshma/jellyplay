@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -51,7 +53,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -543,6 +548,21 @@ private fun ManualEntrySection(
 ) {
     val isTv = LocalTvMode.current
     val addressFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val addressInvalid = stringResource(R.string.auth_server_address_invalid)
+
+    // Live URL validation — mirrors the ServerManagementScreen "add address"
+    // sheet. Considers the address valid once it has a non-blank host with no
+    // spaces, tolerating an optional scheme and trailing path.
+    val isAddressValid = remember(uiState.manualAddress) {
+        val trimmed = uiState.manualAddress.trim()
+        if (trimmed.isBlank()) false
+        else runCatching {
+            val host = trimmed.substringAfter("://", trimmed).substringBefore('/')
+            host.isNotBlank() && !host.contains(' ')
+        }.getOrDefault(false)
+    }
+    val showInvalid = uiState.manualAddress.isNotBlank() && !isAddressValid
 
     LaunchedEffect(Unit) {
         if (isTv) addressFocusRequester.tryRequestFocus("manual_address")
@@ -555,9 +575,22 @@ private fun ManualEntrySection(
             label = { Text(stringResource(R.string.auth_server_address)) },
             placeholder = { Text(stringResource(R.string.auth_server_address_hint)) },
             singleLine = true,
+            isError = uiState.connectError != null || showInvalid,
+            supportingText = when {
+                showInvalid -> { { Text(addressInvalid) } }
+                uiState.connectError != null -> { { Text(uiState.connectError!!) } }
+                else -> null
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    if (!uiState.isConnecting && uiState.manualAddress.isNotBlank() && isAddressValid) {
+                        keyboardController?.hide()
+                        onConnect()
+                    }
+                },
+            ),
             modifier = Modifier.fillMaxWidth().focusRequester(addressFocusRequester),
-            isError = uiState.connectError != null,
-            supportingText = uiState.connectError?.let { { Text(it) } },
             enabled = !uiState.isConnecting,
         )
 
@@ -566,7 +599,7 @@ private fun ManualEntrySection(
         val connectFocusState = rememberTvFocusState(focusedScale = 1.04f)
         Button(
             onClick = onConnect,
-            enabled = !uiState.isConnecting && uiState.manualAddress.isNotBlank(),
+            enabled = !uiState.isConnecting && uiState.manualAddress.isNotBlank() && isAddressValid,
             modifier = Modifier.fillMaxWidth()
                 .then(connectFocusState.focusModifier)
                 .tvFocusIndicator(connectFocusState, ShapeCache.smooth12),

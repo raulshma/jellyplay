@@ -148,6 +148,8 @@
     <string name="admin_no_users">Keine Benutzer</string>
     <string name="admin_new_user_title">Neuer Benutzer</string>
     <string name="admin_password_optional">Passwort (optional)</string>
+    <string name="admin_show_password">Passwort anzeigen</string>
+    <string name="admin_hide_password">Passwort ausblenden</string>
     <string name="admin_create">Erstellen</string>
     <string name="admin_delete_user_title">Benutzer löschen</string>
     <string name="admin_delete_user_body">„%1$s\" löschen? Dies kann nicht rückgängig gemacht werden.</string>

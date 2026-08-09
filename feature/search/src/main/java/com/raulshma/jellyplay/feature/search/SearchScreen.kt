@@ -82,7 +82,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PlayedStatus
+import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
@@ -90,6 +94,7 @@ import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.GlassDismissTag
+import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.PosterCard
@@ -116,6 +121,9 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.feature.search.components.SearchFilterSheet
+import com.raulshma.jellyplay.feature.search.components.SearchSortSheet
+import com.raulshma.jellyplay.feature.search.components.SearchStatusSheet
+import com.raulshma.jellyplay.feature.search.components.playedStatusLabel
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import java.util.Locale
 import com.composables.icons.tabler.Tabler
@@ -177,11 +185,27 @@ fun SearchScreen(
 
     val headerStatus = com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus(
         isLoading = isRefreshing,
-        hasError = false,
+        hasError = pagedResults.loadState.refresh is LoadState.Error,
         networkStatus = networkStatus,
     )
 
-    val hasActiveFilters = filters.mediaTypes.isNotEmpty() || filters.genres.isNotEmpty()
+    // Active-filter detection covers every dimension (parity with the Library
+    // filter chip row) so the badge, BackHandler guard, and "Clear all" affordance
+    // all reflect the full filter set — not just mediaTypes/genres.
+    val hasNonDefaultSort = filters.sortBy != SortOption.YEAR_DESC
+    val hasActiveFilters = filters.mediaTypes.isNotEmpty() ||
+        filters.genres.isNotEmpty() ||
+        filters.years.isNotEmpty() ||
+        filters.tags.isNotEmpty() ||
+        filters.minRating > 0f ||
+        filters.playedStatus != PlayedStatus.ALL ||
+        hasNonDefaultSort
+
+    // Which immediate-apply single-select sheet is open (Sort / Status). The full
+    // multi-dimension sheet is still driven by [showFilters] below; these are the
+    // two always-visible chips that mirror the Library filter chip row.
+    var openSortSheet by remember { mutableStateOf(false) }
+    var openStatusSheet by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -243,7 +267,7 @@ fun SearchScreen(
     // controller is provided to every PosterCard below via
     // CompositionLocal; the TV Menu key opens the focused card's actions.
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember { { item: MediaItem -> searchQuickActions(item) } },
+        resolveActions = remember { { item: MediaItem -> item.quickActions(MediaQuickActionScope.LIBRARY) } },
         executeAction = remember(viewModel, onItemClick) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
@@ -455,6 +479,36 @@ fun SearchScreen(
                     ) { }
                 }
 
+                // ── Sort + Status chip row (parity with Library's filter chip row) ──
+                // Always-visible immediate-apply chips: Sort shows the active sort
+                // (highlighted when non-default), Status shows the active played
+                // status (highlighted when not ALL). Tapping each opens its single-
+                // select sheet. The full multi-dimension filter sheet is still
+                // reachable via the toolbar filter icon.
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    GlassFilterChip(
+                        label = filters.sortBy.displayName,
+                        selected = hasNonDefaultSort,
+                        onClick = { openSortSheet = true },
+                    )
+                    GlassFilterChip(
+                        label = if (filters.playedStatus == PlayedStatus.ALL) {
+                            stringResource(R.string.search_filter_status)
+                        } else {
+                            filters.playedStatus.playedStatusLabel()
+                        },
+                        selected = filters.playedStatus != PlayedStatus.ALL,
+                        onClick = { openStatusSheet = true },
+                    )
+                }
+
                 // ── Active filters bar (dismissible glass tags) ──
                 AnimatedVisibility(
                     visible = hasActiveFilters,
@@ -471,7 +525,7 @@ fun SearchScreen(
                     ) {
                         filters.mediaTypes.forEach { mediaType ->
                             GlassDismissTag(
-                                label = mediaType.name,
+                                label = mediaType.mediaTypeDisplayName(),
                                 onDismiss = { viewModel.toggleMediaType(mediaType) },
                             )
                         }
@@ -483,6 +537,40 @@ fun SearchScreen(
                                         filters.copy(genres = filters.genres - genre)
                                     )
                                 },
+                            )
+                        }
+                        filters.years.forEach { year ->
+                            GlassDismissTag(
+                                label = year.toString(),
+                                onDismiss = {
+                                    viewModel.updateFilters(
+                                        filters.copy(years = filters.years - year)
+                                    )
+                                },
+                            )
+                        }
+                        filters.tags.forEach { tag ->
+                            GlassDismissTag(
+                                label = tag,
+                                onDismiss = {
+                                    viewModel.updateFilters(
+                                        filters.copy(tags = filters.tags - tag)
+                                    )
+                                },
+                            )
+                        }
+                        if (filters.minRating > 0f) {
+                            GlassDismissTag(
+                                label = stringResource(R.string.search_filter_rating_plus, filters.minRating),
+                                onDismiss = {
+                                    viewModel.updateFilters(filters.copy(minRating = 0f))
+                                },
+                            )
+                        }
+                        if (filters.playedStatus != PlayedStatus.ALL) {
+                            GlassDismissTag(
+                                label = filters.playedStatus.playedStatusLabel(),
+                                onDismiss = { viewModel.setPlayedStatus(PlayedStatus.ALL) },
                             )
                         }
                         val clearAllFocusState = rememberTvFocusState()
@@ -1049,6 +1137,22 @@ fun SearchScreen(
         )
     }
 
+    if (openSortSheet) {
+        SearchSortSheet(
+            current = filters.sortBy,
+            onApply = { viewModel.setSortBy(it) },
+            onDismiss = { openSortSheet = false },
+        )
+    }
+
+    if (openStatusSheet) {
+        SearchStatusSheet(
+            current = filters.playedStatus,
+            onApply = { viewModel.setPlayedStatus(it) },
+            onDismiss = { openStatusSheet = false },
+        )
+    }
+
     if (showClearHistoryDialog) {
         AlertDialog(
             onDismissRequest = { showClearHistoryDialog = false },
@@ -1283,23 +1387,5 @@ private fun OfflineSearchCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-}
-}
-
-/**
- * Which quick actions apply to a search result card
- * Playable entries get play / mark-watched / details, mirroring the library
- * grid's actions.
- */
-private fun searchQuickActions(item: MediaItem): List<QuickAction> = buildList {
-    when (item.mediaType) {
-        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE,
-        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST,
-        MediaType.MUSIC_VIDEO, MediaType.COLLECTION, MediaType.LIVE_TV, MediaType.CHANNEL -> {
-            add(QuickAction.PLAY)
-            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
-            add(QuickAction.DETAILS)
-        }
-        else -> Unit
     }
 }

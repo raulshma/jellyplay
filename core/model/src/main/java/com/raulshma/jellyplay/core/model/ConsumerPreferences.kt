@@ -72,6 +72,7 @@ data class DetailPreferences(
     val hideEpisodeThumbnails: Boolean = false,
     val episodesDescending: Boolean = true,
     val compactEpisodeList: Boolean = false,
+    val showDetailUpNext: Boolean = true,
 )
 
 /** Fields read by `OnboardingViewModel` across the multi-step onboarding flow. */
@@ -144,6 +145,7 @@ data class MainPreferences(
     val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     val performanceMode: Boolean = false,
     val reduceMotionEnabled: Boolean = false,
+    val hapticsEnabled: Boolean = true,
     val synthwaveMode: Boolean = false,
     val synthwaveAccent: String = "magenta",
     val soothingMode: Boolean = false,

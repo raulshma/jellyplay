@@ -148,6 +148,16 @@
     <!-- TV navigation drawer -->
     <string name="nav_now_playing">再生中</string>
     <string name="nav_settings">設定</string>
+    <string name="nav_more">その他</string>
+    <string name="nav_more_content_description">その他のオプション</string>
+    <string name="menu_settings">設定</string>
+    <string name="menu_downloads">ダウンロード</string>
+    <string name="menu_play_on">デバイスで再生</string>
+    <string name="menu_surprise_me">おまかせ</string>
+    <string name="menu_shortcuts">ショートカット</string>
+    <string name="menu_go_online">オンラインにする</string>
+    <string name="menu_go_offline">オフラインにする</string>
+    <string name="menu_going_online">オンラインに切り替え中…</string>
 
     <!-- Play On device sheet -->
     <string name="play_on_title">再生先</string>
@@ -168,4 +178,9 @@
 
     <!-- Now-playing snackbar -->
     <string name="snackbar_now_playing">再生中: %1$s</string>
+
+    <!-- Player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">再生速度を指定</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">再生速度を調整</string>
 </resources>

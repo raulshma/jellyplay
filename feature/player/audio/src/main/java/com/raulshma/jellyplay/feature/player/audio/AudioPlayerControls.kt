@@ -45,6 +45,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.*
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.feedback.LocalHapticsEnabled
 import com.raulshma.jellyplay.feature.player.audio.R
 import com.raulshma.jellyplay.feature.player.audio.components.WaveformSeekBar
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
@@ -356,6 +357,7 @@ internal fun PixelPlayPauseButton(
 ) {
     val focusState = rememberTvFocusState()
     val view = LocalView.current
+    val hapticsEnabled = LocalHapticsEnabled.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -381,10 +383,11 @@ internal fun PixelPlayPauseButton(
     val iconColor = MaterialTheme.colorScheme.onPrimaryContainer
 
     // Light confirmation haptic on play/pause toggle (matches video player).
-    val hapticOnClick: () -> Unit = remember(onClick, view) {
+    // Gated by the in-app `hapticsEnabled` preference.
+    val hapticOnClick: () -> Unit = remember(onClick, view, hapticsEnabled) {
         {
             onClick()
-            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            if (hapticsEnabled) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         }
     }
 
@@ -434,6 +437,7 @@ private fun IconButtonWithPressAnimation(
 ) {
     val focusState = rememberTvFocusState()
     val view = LocalView.current
+    val hapticsEnabled = LocalHapticsEnabled.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -443,11 +447,11 @@ private fun IconButtonWithPressAnimation(
     )
 
     // Light confirmation haptic on every transport tap (consistent with the
-    // video player). Respects the system haptic setting.
-    val hapticOnClick: () -> Unit = remember(onClick, view) {
+    // video player). Respects the in-app `hapticsEnabled` preference.
+    val hapticOnClick: () -> Unit = remember(onClick, view, hapticsEnabled) {
         {
             onClick()
-            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            if (hapticsEnabled) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         }
     }
 

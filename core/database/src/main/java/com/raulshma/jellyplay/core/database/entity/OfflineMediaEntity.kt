@@ -61,6 +61,12 @@ data class OfflineMediaEntity(
     val studios: String? = null,
     val tagline: String? = null,
     val peopleJson: String? = null,
+    // Provider ids (tmdb/imdb/…) and external URLs persisted as JSON blobs at
+    // download time so the offline subtitle search can resolve a TMDB/IMDb id
+    // without a server round-trip. Nullable so existing rows degrade
+    // gracefully until re-download. Added in migration 43→44.
+    val providerIdsJson: String? = null,
+    val externalUrlsJson: String? = null,
     // ---- Offline resync baseline + result columns (migration 42→43) ----
     // Persisted snapshot of the server's image tags / metadata hash / media source
     // captured at download time and after every resync. Lets a freshness check

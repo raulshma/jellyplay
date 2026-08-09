@@ -17,6 +17,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,7 +30,7 @@ import javax.inject.Singleton
  * Resolves the configured providers from the preferences + credential stores,
  * then fans out search across the external providers concurrently via the Hilt
  * `Map<SubtitleProviderKind, SubtitleProvider>`. Jellyfin is searched through
- * [searchJellyfin]/[searchAll] (server-mediated via [PlaybackRepository],
+ * [searchJellyfin]/[searchAllStreaming] (server-mediated via [PlaybackRepository],
  * returns [RemoteSubtitleInfo] wrapped with [SubtitleSearchResult.jellyfinInfo]);
  * it is intentionally not part of [search] (it is `itemId`-scoped, while
  * [search] takes a provider-agnostic [SubtitleQuery]).
@@ -125,30 +129,101 @@ class SubtitleProviderRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun searchAll(
+    /**
+     * Streaming merge of Jellyfin + external providers. Unlike the old
+     * barrier-based implementation (which buffered every provider behind
+     * `awaitAll` and returned a single snapshot), this emits a partial
+     * [MergedSubtitleSearch] through [onPartial] the instant each provider
+     * resolves — so a slow/retrying provider (e.g. Wyzie exhausting its
+     * [RetryPolicy] backoff) can no longer hide a fast provider's results.
+     *
+     * Each provider runs in its own [launch]; on completion it writes its
+     * outcome into the shared accumulator under [accumulatorMutex], then invokes
+     * [onPartial] with the current merged + sorted snapshot. [joinAll] gates the
+     * final return until everyone is done. The isolation contract is preserved:
+     * one bad provider degrades to an [ProviderSearchOutcome.Error] in its slot
+     * and never cancels its siblings.
+     */
+    override suspend fun searchAllStreaming(
         query: SubtitleQuery,
         itemId: String,
         language: String,
-    ): MergedSubtitleSearch {
+        onPartial: (MergedSubtitleSearch) -> Unit,
+    ): MergedSubtitleSearch = coroutineScope {
+        val prefs = preferencesStore.preferences.first()
+        val creds = credentialsSnapshot()
+        val configured = configuredProvidersSnapshot(prefs, creds)
+
+        // Accumulator for the incremental merge. Guarded so concurrent
+        // provider completions never produce a torn snapshot.
+        val mutex = Mutex()
+        var jellyfinResults: List<SubtitleSearchResult> = emptyList()
+        val outcomes = mutableMapOf<SubtitleProviderKind, ProviderSearchOutcome>()
+
+        suspend fun emitPartial() {
+            val snapshot = mutex.withLock { mergeOutcomes(jellyfinResults, outcomes.toMap()) }
+            onPartial(snapshot)
+        }
+
+        val jobs = mutableListOf<kotlinx.coroutines.Job>()
+
         // Jellyfin: server-scoped language search (tolerate failure → empty).
-        val jellyfinResults = searchJellyfin(itemId, language).getOrElse { emptyList() }
+        jobs += launch {
+            val result = runCatching { searchJellyfin(itemId, language) }
+                .getOrElse { e ->
+                    Log.e(TAG, "searchJellyfin threw, isolating: ${e.javaClass.simpleName}: ${e.message}", e)
+                    Result.failure(e)
+                }
+            val rows = result.getOrElse { emptyList() }
+            mutex.withLock { jellyfinResults = rows }
+            Log.d(TAG, "searchAllStreaming jellyfin: ${rows.size} result(s)")
+            emitPartial()
+        }
+
         // External providers: TMDB/IMDb/title-keyed fan-out.
-        val outcomes = search(query)
-        val merged = mergeOutcomes(jellyfinResults, outcomes)
+        externalProviders.keys.filter { it in configured }.forEach { kind ->
+            jobs += launch {
+                val provider = externalProviders.getValue(kind)
+                val cred = creds[kind]
+                if (cred == null) {
+                    Log.d(TAG, "search $kind skipped: no credentials")
+                }
+                // A raw throw escaping provider.search()/searchExternal must
+                // never cancel siblings — degrade to an Error outcome instead.
+                val outcome = runCatching { searchExternal(provider, query, cred) }
+                    .getOrElse { e ->
+                        Log.e(TAG, "search $kind threw, isolating: ${e.javaClass.simpleName}: ${e.message}", e)
+                        ProviderSearchOutcome.Error(e.message ?: "$kind search failed")
+                    }
+                mutex.withLock { outcomes[kind] = outcome }
+                when (outcome) {
+                    is ProviderSearchOutcome.Success ->
+                        Log.d(TAG, "search $kind success: ${outcome.results.size} result(s)")
+                    is ProviderSearchOutcome.Error ->
+                        Log.w(TAG, "search $kind error: ${outcome.message}")
+                    is ProviderSearchOutcome.Skipped ->
+                        Log.d(TAG, "search $kind skipped")
+                }
+                emitPartial()
+            }
+        }
+
+        jobs.joinAll()
+        val final = mutex.withLock { mergeOutcomes(jellyfinResults, outcomes.toMap()) }
         Log.d(
             TAG,
-            "searchAll merged: ${merged.results.size} result(s), " +
-                "${merged.errors.size} provider error(s)" +
-                (merged.errors.takeIf { it.isNotEmpty() }?.entries?.joinToString { "${it.key}=${it.value}" }
+            "searchAllStreaming merged: ${final.results.size} result(s), " +
+                "${final.errors.size} provider error(s)" +
+                (final.errors.takeIf { it.isNotEmpty() }?.entries?.joinToString { "${it.key}=${it.value}" }
                     ?.let { " [$it]" } ?: ""),
         )
-        return MergedSubtitleSearch(results = merged.results, errors = merged.errors)
+        MergedSubtitleSearch(results = final.results, errors = final.errors)
     }
 
     /**
      * Merges [jellyfinResults] with the per-provider [outcomes] into one
-     * stable-ordered list + error map. Shared by [searchAll] so the player and
-     * editor use identical merge + sort semantics.
+     * stable-ordered list + error map. Shared by [searchAllStreaming] so the
+     * player and editor use identical merge + sort semantics.
      */
     private fun mergeOutcomes(
         jellyfinResults: List<SubtitleSearchResult>,

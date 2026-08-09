@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,6 +39,7 @@ import com.composables.icons.tabler.outline.ArrowUp
 import com.composables.icons.tabler.outline.Settings
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.rememberHomeSectionIcon
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -100,7 +100,6 @@ internal fun HomeSectionConfigSheet(
 
     TvSafeSheet(
         onDismissRequest = onDismiss,
-        title = sectionType.displayName,
     ) {
         Column(
             modifier = Modifier
@@ -108,41 +107,12 @@ internal fun HomeSectionConfigSheet(
                 .padding(bottom = if (isTv) 8.dp else 16.dp),
         ) {
             // ── Header: section icon + title + description ───────────────
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 14.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(ShapeCache.smooth14)
-                        .background(colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = sectionIcon,
-                        contentDescription = null,
-                        tint = colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = sectionType.displayName,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.size(2.dp))
-                    Text(
-                        text = sectionType.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            SheetHeader(
+                title = sectionType.displayName,
+                subtitle = sectionType.description,
+                icon = sectionIcon,
+                modifier = Modifier.padding(bottom = 14.dp),
+            )
 
             // ── Action card: visibility toggle (+ move up/down for global) ─
             Column(

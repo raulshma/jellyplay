@@ -94,6 +94,8 @@ internal data class DetailContentCallbacks(
     val onShowFromNextUp: () -> Unit,
     val onHideFromContinueWatching: () -> Unit,
     val onShowFromContinueWatching: () -> Unit,
+    val onShowDetailUpNext: () -> Unit = {},
+    val onHideDetailUpNext: () -> Unit = {},
     val onManageSeries: () -> Unit,
     val onAddToPlaylist: () -> Unit,
     /** Open the quick-action sheet for a row item */

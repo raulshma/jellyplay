@@ -15,9 +15,13 @@ import androidx.compose.runtime.Immutable
  * 1. [DOWNLOADING] — the API call is in flight, then the server is processing.
  * 2. [DOWNLOADED] — the new subtitle stream surfaced in the media info; the row
  *    shows a "Use" affordance to apply it.
- * 3. [DELAYED] — the poll budget elapsed without the stream appearing (the
+ * 3. [DOWNLOADED_DEVICE_ONLY] — the external-provider subtitle was downloaded
+ *    and saved durably on-device but the Jellyfin server upload failed (e.g. the
+ *    server is unreachable). Usable this session and on replay via the
+ *    streaming-subtitle store; not synced to the server.
+ * 4. [DELAYED] — the poll budget elapsed without the stream appearing (the
  *    server may still be processing). Non-fatal — the user can retry.
- * 4. [FAILED] — the download API call itself failed (network / server error).
+ * 5. [FAILED] — the download API call itself failed (network / server error).
  *
  * Keyed by `RemoteSubtitleInfo.id` in [VideoPlayerUiState.downloadingSubtitles].
  */
@@ -25,6 +29,7 @@ import androidx.compose.runtime.Immutable
 enum class SubtitleDownloadState {
     DOWNLOADING,
     DOWNLOADED,
+    DOWNLOADED_DEVICE_ONLY,
     DELAYED,
     FAILED,
 }

@@ -49,6 +49,16 @@
     <string name="search_filter_rating_plus">%1$.1f以上</string>
     <string name="search_apply_filters">フィルターを適用</string>
 
+    <!-- Sort (parity with Library's sort options) -->
+    <string name="search_sort">並べ替え</string>
+    <string name="search_sort_by">並べ替え基準</string>
+
+    <!-- Played-status filter (localizable labels for PlayedStatus) -->
+    <string name="search_filter_status">ステータス</string>
+    <string name="search_filter_played_all">すべて</string>
+    <string name="search_filter_played_played">再生済み</string>
+    <string name="search_filter_played_unplayed">未再生</string>
+
     <!-- auto-localized: previously translatable="false" (2) -->
     <string name="search_request_via_seerr">Seerr 経由でリクエスト</string>
     <string name="search_seerr_search_failed">Seerr 検索に失敗しました</string>

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -48,6 +47,7 @@ fun SecurityStep(
     var pinError by remember { mutableStateOf<String?>(null) }
     var showPinSetup by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+    val pinsDoNotMatch = stringResource(R.string.onboarding_security_pins_do_not_match)
 
     Column(
         modifier = modifier
@@ -116,7 +116,7 @@ fun SecurityStep(
                                     onPinLockEnabledChange(true)
                                     showPinSetup = false
                                 } else {
-                                    pinError = "PINs do not match"
+                                    pinError = pinsDoNotMatch
                                 }
                             },
                         ) {
@@ -131,9 +131,9 @@ fun SecurityStep(
             OnboardingToggleRow(
                 title = stringResource(R.string.onboarding_security_biometric_lock),
                 subtitle = if (biometricAvailable) {
-                    "Use fingerprint or face unlock"
+                    stringResource(R.string.onboarding_security_biometric_unlock)
                 } else {
-                    "Set up a fingerprint or face in Android Settings to enable"
+                    stringResource(R.string.onboarding_security_biometric_setup_hint)
                 },
                 checked = biometricLockEnabled,
                 onCheckedChange = onBiometricLockEnabledChange,
@@ -157,11 +157,11 @@ fun SecurityStep(
                     val selected = duration == autoLockTimerMs
                     OnboardingOptionCard(
                         label = when (duration) {
-                            0L -> "Never"
-                            15_000L -> "15s"
-                            30_000L -> "30s"
-                            60_000L -> "1m"
-                            300_000L -> "5m"
+                            0L -> stringResource(R.string.onboarding_security_lock_never)
+                            15_000L -> stringResource(R.string.onboarding_security_lock_15s)
+                            30_000L -> stringResource(R.string.onboarding_security_lock_30s)
+                            60_000L -> stringResource(R.string.onboarding_security_lock_1m)
+                            300_000L -> stringResource(R.string.onboarding_security_lock_5m)
                             else -> "?"
                         },
                         selected = selected,

@@ -9,14 +9,13 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.network.api.ApiException
-import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
@@ -65,9 +64,32 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
 
     override val kind: SubtitleProviderKind = SubtitleProviderKind.OPENSUBTITLES
 
-    private val json = SeerrApiClientImpl.lenientJson
+    /**
+     * Dedicated [Json] for OpenSubtitles. Deliberately does **not** set
+     * `isLenient`: the shared Seerr `lenientJson` parses unquoted barewords as
+     * string values, so a non-JSON 2xx body like the plain-text error
+     * `Invalid API key` parsed the first token (`Invalid`, 7 chars) as a value
+     * and then failed at offset 7 with the misleading "Expected EOF after
+     * parsing" message. A strict parser fails at offset 0 instead, which is
+     * easier to map to a clean "unexpected response" error below.
+     */
+    private val json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
     private val rateLimiter = SubtitleRateLimiter(SubtitleRateLimiter.OPENSUBTITLES_MIN_INTERVAL_MS)
     private val loginMutex = Mutex()
+
+    /**
+     * Base URL. The production endpoint (`https://api.opensubtitles.com`) is
+     * fixed at compile time; `internal` so unit tests can point it at a
+     * MockWebServer via [setBaseUrlForTest].
+     */
+    internal var baseUrl: String = BASE
+        private set
+
+    /** Test-only: redirect the provider at a MockWebServer root. */
+    internal fun setBaseUrlForTest(url: String) { baseUrl = url }
 
     override suspend fun search(
         query: SubtitleQuery,
@@ -80,7 +102,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
         return rateLimiter.acquire {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val urlBuilder = "$BASE/api/v1/subtitles".toHttpUrl().newBuilder()
+                    val urlBuilder = "$baseUrl/api/v1/subtitles".toHttpUrl().newBuilder()
                     query.tmdbId?.let { urlBuilder.addQueryParameter("tmdb_id", it.toString()) }
                     query.imdbId?.takeIf { it.isNotBlank() }?.let {
                         // OpenSubtitles expects the bare numeric IMDb id (strip the 'tt').
@@ -102,6 +124,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
                         .url(urlBuilder.build())
                         .header("Api-Key", os.apiKey)
                         .header("User-Agent", USER_AGENT)
+                        .header("Accept", "application/json")
                         .apply { token?.let { header("Authorization", "Bearer $it") } }
                         .build()
                     val body = execute(request)
@@ -133,20 +156,22 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
                         .toString()
                         .toRequestBody(JSON_MEDIA)
                     val downloadRequest = Request.Builder()
-                        .url("$BASE/api/v1/download".toHttpUrl())
+                        .url("$baseUrl/api/v1/download".toHttpUrl())
                         .header("Api-Key", os.apiKey)
                         .header("User-Agent", USER_AGENT)
+                        .header("Accept", "application/json")
                         .header("Content-Type", "application/json")
                         .apply { token?.let { header("Authorization", "Bearer $it") } }
                         .post(payload)
                         .build()
                     val downloadBody = execute(downloadRequest)
-                    val download = json.decodeFromString<OpenSubtitlesDownloadDto>(downloadBody)
-                    val fileUrl = download.link
+                    val download = parseJsonObject(downloadBody)
+                    val fileUrl = download["link"]?.jsonPrimitive?.content
                         ?: throw ApiException(false, message = "OpenSubtitles returned no download link")
+                    val remaining = download["remaining"]?.jsonPrimitive?.intOrNull
 
                     // Hard quota exhaustion — do not let the resilient wrapper retry.
-                    if (download.remaining == 0) {
+                    if (remaining == 0) {
                         throw ApiException(
                             isRetryable = false,
                             message = "OpenSubtitles daily download limit reached",
@@ -210,15 +235,17 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
             put("password", password)
         }.toString().toRequestBody(JSON_MEDIA)
         val request = Request.Builder()
-            .url("$BASE/api/v1/login".toHttpUrl())
+            .url("$baseUrl/api/v1/login".toHttpUrl())
             .header("Api-Key", apiKey)
             .header("User-Agent", USER_AGENT)
+            .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .post(payload)
             .build()
         val body = execute(request)
-        val dto = json.decodeFromString<OpenSubtitlesLoginDto>(body)
-        return dto.token ?: throw ApiException(false, message = "OpenSubtitles login returned no token")
+        val dto = parseJsonObject(body)
+        return dto["token"]?.jsonPrimitive?.content
+            ?: throw ApiException(false, message = "OpenSubtitles login returned no token")
     }
 
     /**
@@ -231,12 +258,58 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
         // JWT base64url (no padding). Pad to a multiple of 4 for android.util.Base64.
         val padded = payload + "=".repeat((4 - payload.length % 4) % 4)
         val decoded = android.util.Base64.decode(padded, android.util.Base64.URL_SAFE)
-        val element = SeerrApiClientImpl.lenientJson.parseToJsonElement(String(decoded)).jsonObject
+        val element = json.parseToJsonElement(String(decoded)).jsonObject
         element["exp"]?.jsonPrimitive?.long?.times(1000L)
     }.getOrNull()
 
+    /**
+     * Parses an OpenSubtitles response body to a JSON object. On failure it
+     * logs a trimmed copy of the raw body and throws a clean [ApiException] —
+     * a non-JSON body is never an API-key problem, it's one of:
+     *  - An ISP/network block page (e.g. an Indian court-order interstitial
+     *    served in place of `api.opensubtitles.com`). The body is HTML.
+     *  - A captive portal / proxy error page (also HTML).
+     *  - A gateway-rendered plain-text error (e.g. "Invalid API key").
+     * Leaking the raw `JsonDecodingException` ("Unexpected JSON token at offset
+     * 7: Expected EOF after parsing...") to the settings Test chip is useless;
+     * we classify the body and surface a truthful message instead.
+     */
+    private fun parseJsonObject(body: String): JsonObject =
+        try {
+            json.parseToJsonElement(body).jsonObject
+        } catch (e: kotlinx.serialization.SerializationException) {
+            Log.w(TAG, "Unparseable OpenSubtitles response: ${body.take(500)}", e)
+            throw ApiException(
+                isRetryable = false,
+                message = friendlyParseError(body),
+                cause = e,
+            )
+        }
+
+    /**
+     * Maps an unparseable response body to a user-facing message. Detects HTML
+     * (the signature of an injected ISP/captive-portal block page) so the user
+     * isn't told to "verify your API key" when the real cause is their network
+     * blocking `api.opensubtitles.com`.
+     */
+    private fun friendlyParseError(body: String): String {
+        val head = body.take(200).trimStart()
+        val looksLikeHtml = head.startsWith("<", ignoreCase = true) ||
+            body.contains("<html", ignoreCase = true) ||
+            body.contains("<iframe", ignoreCase = true) ||
+            body.contains("<!doctype html", ignoreCase = true)
+        return if (looksLikeHtml) {
+            "OpenSubtitles is unreachable — your network returned a block page " +
+                "instead of the API. The site may be blocked by your ISP or region; " +
+                "try a different network or a VPN."
+        } else {
+            "OpenSubtitles returned an unexpected response. Verify your API key " +
+                "and credentials."
+        }
+    }
+
     private fun parseSearchResponse(body: String): List<SubtitleSearchResult> {
-        val root = json.parseToJsonElement(body).jsonObject
+        val root = parseJsonObject(body)
         val data = root["data"]?.jsonArray ?: return emptyList()
         // De-duplicate by file_id: OpenSubtitles returns multiple file entries per
         // feature (different releases); the attributes.file_id is the download handle.
@@ -293,6 +366,10 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
         val friendly = when (e) {
             is java.net.UnknownHostException -> "Unable to reach OpenSubtitles. Check your connection."
             is java.net.SocketTimeoutException -> "OpenSubtitles request timed out."
+            // Raw serialization failures (e.g. a non-JSON 2xx body) should never
+            // leak "Unexpected JSON token at offset N" to the user — reword them.
+            is kotlinx.serialization.SerializationException ->
+                "OpenSubtitles returned an unexpected response. Verify your API key and credentials."
             else -> e.message ?: "OpenSubtitles request failed"
         }
         return ApiException.fromNetwork(e, friendly)
@@ -319,18 +396,6 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
 
     private fun isTruthy(element: JsonElement): Boolean =
         (element as? JsonPrimitive)?.content?.let { it == "1" || it.equals("true", ignoreCase = true) } ?: false
-
-    @Serializable
-    private data class OpenSubtitlesLoginDto(
-        @SerialName("token") val token: String? = null,
-    )
-
-    @Serializable
-    private data class OpenSubtitlesDownloadDto(
-        @SerialName("link") val link: String? = null,
-        @SerialName("file_name") val fileName: String? = null,
-        @SerialName("remaining") val remaining: Int? = null,
-    )
 
     companion object {
         private const val BASE = "https://api.opensubtitles.com"

@@ -148,6 +148,8 @@
     <string name="admin_no_users">ユーザーなし</string>
     <string name="admin_new_user_title">新規ユーザー</string>
     <string name="admin_password_optional">パスワード（任意）</string>
+    <string name="admin_show_password">パスワードを表示</string>
+    <string name="admin_hide_password">パスワードを隠す</string>
     <string name="admin_create">作成</string>
     <string name="admin_delete_user_title">ユーザーを削除</string>
     <string name="admin_delete_user_body">「%1$s」を削除しますか？元に戻せません。</string>

@@ -255,7 +255,6 @@ private fun ChannelCard(
         IconButton(
             onClick = onFavoriteToggle,
             modifier = Modifier
-                .size(40.dp)
                 .focusIndicator(CircleShape),
             colors = IconButtonDefaults.iconButtonColors(
                 contentColor = if (isFavorite) {

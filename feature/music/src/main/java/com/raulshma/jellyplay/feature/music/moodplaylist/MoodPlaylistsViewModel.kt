@@ -120,9 +120,11 @@ class MoodPlaylistsViewModel @Inject constructor(
             _error.value = null
             _selectedPlaylist.value = playlist
             mediaRepository.getMediaItems(
-                mediaTypes = listOf(MediaType.AUDIO),
+                filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                    mediaTypes = listOf(MediaType.AUDIO),
+                    sortBy = com.raulshma.jellyplay.core.model.SortOption.RANDOM,
+                ),
                 limit = 300,
-                sortBy = "Random",
             ).onSuccess { result ->
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                     var items = result.items

@@ -14,14 +14,12 @@ class PlayerSheetExtendedTest {
         val allSheets = listOf(
             PlayerSheet.Speed,
             PlayerSheet.Audio,
-            PlayerSheet.Subtitle,
             PlayerSheet.Chapter,
             PlayerSheet.PlaybackInfo,
             PlayerSheet.AspectRatio,
-            PlayerSheet.SubtitleStyle,
+            PlayerSheet.SubtitleHub,
             PlayerSheet.AVSync,
             PlayerSheet.Decoder,
-            PlayerSheet.SubtitleDownload,
             PlayerSheet.Episodes,
             PlayerSheet.SyncPlay,
             PlayerSheet.Quality,
@@ -39,14 +37,12 @@ class PlayerSheetExtendedTest {
             PlayerSheet.None,
             PlayerSheet.Speed,
             PlayerSheet.Audio,
-            PlayerSheet.Subtitle,
             PlayerSheet.Chapter,
             PlayerSheet.PlaybackInfo,
             PlayerSheet.AspectRatio,
-            PlayerSheet.SubtitleStyle,
+            PlayerSheet.SubtitleHub,
             PlayerSheet.AVSync,
             PlayerSheet.Decoder,
-            PlayerSheet.SubtitleDownload,
             PlayerSheet.Episodes,
             PlayerSheet.SyncPlay,
             PlayerSheet.Quality,
@@ -60,13 +56,15 @@ class PlayerSheetExtendedTest {
 
     @Test
     fun playerSheet_hasExpectedVariantCount() {
-        // 16 variants as of current PlayerSheet.kt (None + 15 functional sheets)
-        val expected = 16
+        // 14 variants as of current PlayerSheet.kt (None + 13 functional sheets).
+        // The former Subtitle / SubtitleStyle / SubtitleDownload sheets collapsed
+        // into the unified SubtitleHub.
+        val expected = 14
         val actual = listOf(
             PlayerSheet.None, PlayerSheet.Speed, PlayerSheet.Audio,
-            PlayerSheet.Subtitle, PlayerSheet.Chapter, PlayerSheet.PlaybackInfo,
-            PlayerSheet.AspectRatio, PlayerSheet.SubtitleStyle, PlayerSheet.AVSync,
-            PlayerSheet.Decoder, PlayerSheet.SubtitleDownload, PlayerSheet.Episodes,
+            PlayerSheet.Chapter, PlayerSheet.PlaybackInfo,
+            PlayerSheet.AspectRatio, PlayerSheet.SubtitleHub, PlayerSheet.AVSync,
+            PlayerSheet.Decoder, PlayerSheet.Episodes,
             PlayerSheet.SyncPlay, PlayerSheet.Quality, PlayerSheet.SleepTimer,
             PlayerSheet.VideoFilter,
         ).size

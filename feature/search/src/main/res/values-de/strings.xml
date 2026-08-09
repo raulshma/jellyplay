@@ -50,6 +50,16 @@
     <string name="search_filter_rating_plus">%1$.1f+</string>
     <string name="search_apply_filters">Filter anwenden</string>
 
+    <!-- Sort (parity with Library's sort options) -->
+    <string name="search_sort">Sortieren</string>
+    <string name="search_sort_by">Sortieren nach</string>
+
+    <!-- Played-status filter (localizable labels for PlayedStatus) -->
+    <string name="search_filter_status">Status</string>
+    <string name="search_filter_played_all">Alle</string>
+    <string name="search_filter_played_played">Gespielt</string>
+    <string name="search_filter_played_unplayed">Nicht gespielt</string>
+
     <!-- auto-localized: previously translatable="false" (2) -->
     <string name="search_request_via_seerr">Über Seerr anfordern</string>
     <string name="search_seerr_search_failed">Seerr-Suche fehlgeschlagen</string>

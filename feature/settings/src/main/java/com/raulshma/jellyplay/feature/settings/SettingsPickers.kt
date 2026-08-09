@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 
 import androidx.compose.foundation.background
@@ -67,14 +68,7 @@ internal fun SettingsChipPickerSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
-            Spacer(Modifier.height(if (useVertical) 12.dp else 20.dp))
+            SheetHeader(title = title)
             if (useVertical) {
                 LazyColumn {
                     itemsIndexed(
@@ -223,14 +217,7 @@ internal fun <T> SettingsListPickerSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
-            Spacer(Modifier.height(12.dp))
+            SheetHeader(title = title)
             LazyColumn {
                 itemsIndexed(items, key = { _, item -> label(item) }, contentType = { _, _ -> "option" }) { index, item ->
                     val selected = isSelected(item)
@@ -323,13 +310,7 @@ internal fun SettingsSliderSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-            )
-            Spacer(Modifier.height(20.dp))
+            SheetHeader(title = title)
             Text(
                 valueLabel(sliderValue),
                 style = MaterialTheme.typography.headlineMedium,
@@ -392,11 +373,7 @@ internal fun SettingsTextPickerSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            )
-            Spacer(Modifier.height(8.dp))
+            SheetHeader(title = title)
             if (helperText.isNotEmpty()) {
                 Text(
                     helperText,

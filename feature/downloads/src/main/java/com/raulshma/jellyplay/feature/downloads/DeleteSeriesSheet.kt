@@ -27,7 +27,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,13 +48,13 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.Trash
-import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.rememberMultiEpisodeSelectionForDelete
 
 /**
@@ -112,35 +111,12 @@ fun DeleteSeriesSheet(
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
         // ── Header ──
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.downloads_delete_downloads_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = stringResource(R.string.downloads_select_episodes_to_remove),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconToggleButton(
-                checked = false,
-                onCheckedChange = { onDismiss() },
-                modifier = Modifier.size(40.dp),
-            ) {
-                Icon(
-                    imageVector = Tabler.Outline.X,
-                    contentDescription = stringResource(R.string.downloads_close),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
+        SheetHeader(
+            title = stringResource(R.string.downloads_delete_downloads_title),
+            subtitle = stringResource(R.string.downloads_select_episodes_to_remove),
+            icon = Tabler.Outline.Trash,
+            onClose = onDismiss,
+        )
 
         Spacer(Modifier.height(12.dp))
 
