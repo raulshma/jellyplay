@@ -12,7 +12,7 @@ import org.junit.Test
 /**
  * JVM tests for [GestureSeekController] using fake lambdas (no Compose, no
  * Android `Window`/`AudioManager`). Pins the commit-vs-cancel asymmetry and the
- * cast-volume persistence fix.
+ * live volume/brightness gesture behavior.
  *
  * Uses the default [runTest] dispatcher (StandardTestDispatcher) so the
  * dismiss-delay coroutine launched by `onClearOverlays` doesn't run eagerly —
@@ -42,7 +42,6 @@ class GestureSeekControllerTest {
         io: FakeIo = FakeIo(),
         doSeekTo: (Long) -> Unit = {},
         saveBrightness: (Float) -> Unit = {},
-        saveVolume: (Float) -> Unit = {},
         setCastVolume: (Float) -> Unit = {},
     ) = GestureSeekController(
         scope = scope,
@@ -60,7 +59,6 @@ class GestureSeekControllerTest {
         writeStreamVolume = { steps -> io.streamCurrent = steps },
         doSeekTo = doSeekTo,
         saveBrightness = saveBrightness,
-        saveVolume = saveVolume,
         setCastVolume = setCastVolume,
         dismissDelayMs = 800L,
     )
@@ -101,34 +99,6 @@ class GestureSeekControllerTest {
         c.onClearOverlays()
 
         assertEquals(null, savedBrightness)
-    }
-
-    @Test
-    fun `onClearOverlays local volume persists normalized stream volume`() = runTest {
-        val engine = engine()
-        val io = FakeIo(streamCurrent = 5, streamMax = 10)
-        var savedVolume: Float? = null
-        val c = controller(this, engine, io = io, saveVolume = { savedVolume = it })
-
-        c.onVolumeGesture(0.3f) // ~3 steps up → streamCurrent 8
-        c.onClearOverlays()
-
-        // After the gesture, streamCurrent advanced to 8/10.
-        assertEquals(0.8f, savedVolume!!, 0.0001f)
-    }
-
-    @Test
-    fun `onClearOverlays cast volume persists volumeOverlay via saveVolume`() = runTest {
-        // Behavior fix: previously the cast branch re-read AudioManager (a no-op)
-        // and never persisted the cast session's volume. Now it persists volumeOverlay.
-        val engine = engine()
-        var savedVolume: Float? = null
-        val c = controller(this, engine, castConnected = true, castVolume = 0.4f, saveVolume = { savedVolume = it })
-
-        c.onVolumeGesture(0.3f) // 0.4 + 0.3 = 0.7
-        c.onClearOverlays()
-
-        assertEquals(0.7f, savedVolume!!, 0.0001f)
     }
 
     @Test

@@ -83,8 +83,6 @@ class VideoPlayerStore @Inject constructor(
         val VIDEO_SWIPE_SEEK_MAX_MS = longPreferencesKey("video_swipe_seek_max_ms")
         val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey("video_remember_brightness")
         val VIDEO_BRIGHTNESS_LEVEL = floatPreferencesKey("video_brightness_level")
-        val VIDEO_REMEMBER_VOLUME = booleanPreferencesKey("video_remember_volume")
-        val VIDEO_VOLUME_LEVEL = floatPreferencesKey("video_volume_level")
         val VIDEO_AUTO_SKIP_INTRO = booleanPreferencesKey("video_auto_skip_intro")
         val VIDEO_AUTO_SKIP_OUTRO = booleanPreferencesKey("video_auto_skip_outro")
         val VIDEO_REMEMBER_MUTED = booleanPreferencesKey("video_remember_muted")
@@ -145,8 +143,6 @@ class VideoPlayerStore @Inject constructor(
         videoSwipeSeekMaxMs = PreferenceCodec.readLong(prefs, Keys.VIDEO_SWIPE_SEEK_MAX_MS, "video_swipe_seek_max_ms", 120_000L),
         videoRememberBrightness = PreferenceCodec.readBool(prefs, Keys.VIDEO_REMEMBER_BRIGHTNESS, "video_remember_brightness", true),
         videoBrightnessLevel = PreferenceCodec.readFloat(prefs, Keys.VIDEO_BRIGHTNESS_LEVEL, "video_brightness_level", 0.5f),
-        videoRememberVolume = PreferenceCodec.readBool(prefs, Keys.VIDEO_REMEMBER_VOLUME, "video_remember_volume", true),
-        videoVolumeLevel = PreferenceCodec.readFloat(prefs, Keys.VIDEO_VOLUME_LEVEL, "video_volume_level", 1.0f),
         videoAutoSkipIntro = PreferenceCodec.readBool(prefs, Keys.VIDEO_AUTO_SKIP_INTRO, "video_auto_skip_intro", false),
         videoAutoSkipOutro = PreferenceCodec.readBool(prefs, Keys.VIDEO_AUTO_SKIP_OUTRO, "video_auto_skip_outro", false),
         videoRememberMuted = PreferenceCodec.readBool(prefs, Keys.VIDEO_REMEMBER_MUTED, "video_remember_muted", true),
@@ -310,14 +306,6 @@ class VideoPlayerStore @Inject constructor(
         dataStore.edit { it[Keys.VIDEO_BRIGHTNESS_LEVEL] = level }
     }
 
-    suspend fun setVideoRememberVolume(enabled: Boolean) {
-        dataStore.edit { it[Keys.VIDEO_REMEMBER_VOLUME] = enabled }
-    }
-
-    suspend fun setVideoVolumeLevel(level: Float) {
-        dataStore.edit { it[Keys.VIDEO_VOLUME_LEVEL] = level }
-    }
-
     suspend fun setVideoAutoSkipIntro(enabled: Boolean) {
         dataStore.edit { it[Keys.VIDEO_AUTO_SKIP_INTRO] = enabled }
     }
@@ -419,8 +407,6 @@ class VideoPlayerStore @Inject constructor(
         Keys.VIDEO_SWIPE_SEEK_MAX_MS,
         Keys.VIDEO_REMEMBER_BRIGHTNESS,
         Keys.VIDEO_BRIGHTNESS_LEVEL,
-        Keys.VIDEO_REMEMBER_VOLUME,
-        Keys.VIDEO_VOLUME_LEVEL,
         Keys.VIDEO_AUTO_SKIP_INTRO,
         Keys.VIDEO_AUTO_SKIP_OUTRO,
         Keys.VIDEO_REMEMBER_MUTED,
@@ -466,8 +452,6 @@ class VideoPlayerStore @Inject constructor(
             Keys.VIDEO_SWIPE_SEEK_MAX_MS,
             Keys.VIDEO_REMEMBER_BRIGHTNESS,
             Keys.VIDEO_BRIGHTNESS_LEVEL,
-            Keys.VIDEO_REMEMBER_VOLUME,
-            Keys.VIDEO_VOLUME_LEVEL,
             Keys.VIDEO_AUTO_SKIP_INTRO,
             Keys.VIDEO_AUTO_SKIP_OUTRO,
             Keys.VIDEO_REMEMBER_MUTED,
@@ -518,8 +502,6 @@ class VideoPlayerStore @Inject constructor(
             prefs[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = userPreferences.videoSwipeSeekMaxMs
             prefs[Keys.VIDEO_REMEMBER_BRIGHTNESS] = userPreferences.videoRememberBrightness
             prefs[Keys.VIDEO_BRIGHTNESS_LEVEL] = userPreferences.videoBrightnessLevel
-            prefs[Keys.VIDEO_REMEMBER_VOLUME] = userPreferences.videoRememberVolume
-            prefs[Keys.VIDEO_VOLUME_LEVEL] = userPreferences.videoVolumeLevel
             prefs[Keys.VIDEO_AUTO_SKIP_INTRO] = userPreferences.videoAutoSkipIntro
             prefs[Keys.VIDEO_AUTO_SKIP_OUTRO] = userPreferences.videoAutoSkipOutro
             prefs[Keys.VIDEO_REMEMBER_MUTED] = userPreferences.videoRememberMuted
@@ -564,8 +546,6 @@ class VideoPlayerStore @Inject constructor(
             prefs[Keys.VIDEO_SWIPE_SEEK_MAX_MS] = slice.videoSwipeSeekMaxMs
             prefs[Keys.VIDEO_REMEMBER_BRIGHTNESS] = slice.videoRememberBrightness
             prefs[Keys.VIDEO_BRIGHTNESS_LEVEL] = slice.videoBrightnessLevel
-            prefs[Keys.VIDEO_REMEMBER_VOLUME] = slice.videoRememberVolume
-            prefs[Keys.VIDEO_VOLUME_LEVEL] = slice.videoVolumeLevel
             prefs[Keys.VIDEO_AUTO_SKIP_INTRO] = slice.videoAutoSkipIntro
             prefs[Keys.VIDEO_AUTO_SKIP_OUTRO] = slice.videoAutoSkipOutro
             prefs[Keys.VIDEO_REMEMBER_MUTED] = slice.videoRememberMuted
@@ -612,8 +592,6 @@ data class VideoPlayerSlice(
     val videoSwipeSeekMaxMs: Long = 120_000L,
     val videoRememberBrightness: Boolean = true,
     val videoBrightnessLevel: Float = 0.5f,
-    val videoRememberVolume: Boolean = true,
-    val videoVolumeLevel: Float = 1.0f,
     val videoAutoSkipIntro: Boolean = false,
     val videoAutoSkipOutro: Boolean = false,
     val videoRememberMuted: Boolean = true,

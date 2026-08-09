@@ -108,8 +108,6 @@ fun buildUserPreferencesSnapshot(
     videoSwipeSeekMaxMs = videoPlayer.videoSwipeSeekMaxMs,
     videoRememberBrightness = videoPlayer.videoRememberBrightness,
     videoBrightnessLevel = videoPlayer.videoBrightnessLevel,
-    videoRememberVolume = videoPlayer.videoRememberVolume,
-    videoVolumeLevel = videoPlayer.videoVolumeLevel,
     videoAutoSkipIntro = videoPlayer.videoAutoSkipIntro,
     videoAutoSkipOutro = videoPlayer.videoAutoSkipOutro,
     videoRememberMuted = videoPlayer.videoRememberMuted,

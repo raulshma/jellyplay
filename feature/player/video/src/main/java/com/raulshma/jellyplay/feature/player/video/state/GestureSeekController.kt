@@ -29,14 +29,12 @@ import kotlinx.coroutines.launch
  * point of the extraction. (Gestures don't span config changes by design.)
  *
  * **Critical asymmetry** (pinned by `GestureSeekControllerTest`):
- *  - [onClearOverlays] **commits** — seeks, persists brightness/volume.
+ *  - [onClearOverlays] **commits** — seeks, persists brightness. Volume
+ *    gestures write the system stream / cast volume live via [onVolumeGesture]
+ *    (Android persists STREAM_MUSIC across sessions itself), so no volume
+ *    persistence is needed on commit.
  *  - [onCancelOverlays] **discards** — restores the pre-gesture brightness and
  *    seeks nowhere. Multi-touch (pinch-zoom) cancels.
- *
- * **Cast-volume fix:** [onClearOverlays] branches on [isCastConnected] so a cast
- * session persists [volumeOverlay] via [saveVolume] (the old code re-read
- * `AudioManager` for a cast session, which was a no-op re-read and never
- * persisted the cast volume). Flagged as a behavior fix.
  */
 internal class GestureSeekController(
     private val scope: CoroutineScope,
@@ -53,7 +51,6 @@ internal class GestureSeekController(
     // Side-effect callbacks into the VM:
     private val doSeekTo: (Long) -> Unit,
     private val saveBrightness: (Float) -> Unit,
-    private val saveVolume: (Float) -> Unit,
     private val setCastVolume: (Float) -> Unit,
     private val dismissDelayMs: Long = GESTURE_BARS_DISMISS_MS,
 ) {
@@ -146,18 +143,6 @@ internal class GestureSeekController(
         val brightness = _brightnessOverlay.value
         if (brightness in 0f..1f) {
             saveBrightness(brightness)
-        }
-        val volume = _volumeOverlay.value
-        if (volume in 0f..1f) {
-            if (isCastConnected()) {
-                // Behavior fix: persist the cast session's volumeOverlay directly.
-                // The old code re-read AudioManager here even on a cast session,
-                // which was a no-op re-read and never persisted the cast volume.
-                saveVolume(volume)
-            } else {
-                val (current, max) = readStreamVolume()
-                if (max > 0) saveVolume(current.toFloat() / max)
-            }
         }
         resetGestureState()
         // Hide the visual indicators after a short delay (persist already happened

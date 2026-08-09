@@ -172,8 +172,6 @@ private fun playbackFields(prefs: UserPreferences, factory: UserPreferences): Li
     PreferenceField("Trailer Autoplay", prefs.trailerAutoplay.onOff(), factory.trailerAutoplay.onOff()),
     PreferenceField("Cinema Mode", prefs.cinemaModeEnabled.onOff(), factory.cinemaModeEnabled.onOff()),
     PreferenceField("Remember Brightness", prefs.videoRememberBrightness.onOff(), factory.videoRememberBrightness.onOff()),
-    PreferenceField("Remember Volume", prefs.videoRememberVolume.onOff(), factory.videoRememberVolume.onOff()),
-    PreferenceField("Volume Level", prefs.videoVolumeLevel.pct(), factory.videoVolumeLevel.pct()),
     PreferenceField("Auto Skip Intro", prefs.videoAutoSkipIntro.onOff(), factory.videoAutoSkipIntro.onOff()),
     PreferenceField("Auto Skip Outro", prefs.videoAutoSkipOutro.onOff(), factory.videoAutoSkipOutro.onOff()),
     PreferenceField("Remember Muted", prefs.videoRememberMuted.onOff(), factory.videoRememberMuted.onOff()),

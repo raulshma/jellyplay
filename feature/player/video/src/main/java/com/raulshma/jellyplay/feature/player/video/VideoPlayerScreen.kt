@@ -815,7 +815,6 @@ fun VideoPlayerScreen(
             },
             doSeekTo = doSeekTo,
             saveBrightness = viewModel::saveBrightness,
-            saveVolume = viewModel::saveVolume,
             setCastVolume = viewModel::setCastVolume,
         )
     }
