@@ -79,8 +79,6 @@ data class UserPreferences(
     val videoSwipeSeekMaxMs: Long = 120_000L,
     val videoRememberBrightness: Boolean = true,
     val videoBrightnessLevel: Float = 0.5f,
-    val videoRememberVolume: Boolean = true,
-    val videoVolumeLevel: Float = 1.0f,
     val videoAutoSkipIntro: Boolean = false,
     val videoAutoSkipOutro: Boolean = false,
     val videoRememberMuted: Boolean = true,

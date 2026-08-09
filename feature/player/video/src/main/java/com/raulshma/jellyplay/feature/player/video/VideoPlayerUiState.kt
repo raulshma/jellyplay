@@ -169,8 +169,6 @@ data class VideoPlayerUiState(
     val swipeSeekMaxMs: Long = 120_000L,
     val rememberBrightness: Boolean = false,
     val brightnessLevel: Float = 0.5f,
-    val rememberVolume: Boolean = true,
-    val volumeLevel: Float = 1.0f,
     val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
     val frameRateMatching: Boolean = false,
     val refreshRateMode: com.raulshma.jellyplay.core.model.RefreshRateMode = com.raulshma.jellyplay.core.model.RefreshRateMode.OFF,

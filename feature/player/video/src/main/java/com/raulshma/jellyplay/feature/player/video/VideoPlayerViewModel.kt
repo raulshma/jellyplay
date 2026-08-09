@@ -1547,23 +1547,12 @@ class VideoPlayerViewModel @Inject constructor(
                 playbackMode = agg.playback.playbackMode,
                 videoAutoplayNext = agg.videoPlayer.videoAutoplayNext,
                 autoPlayCountdownSec = agg.playback.autoPlayCountdownSec,
-                rememberVolume = agg.videoPlayer.videoRememberVolume,
-                volumeLevel = agg.videoPlayer.videoVolumeLevel,
             ) }
             autoplayController.setEnabled(agg.videoPlayer.videoAutoplayNext)
 
-            // Reapply persisted volume/mute to the active engine when remembered.
-            if (agg.videoPlayer.videoRememberVolume) {
-                val am = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-                if (am != null) {
-                    val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
-                    am.setStreamVolume(
-                        android.media.AudioManager.STREAM_MUSIC,
-                        (agg.videoPlayer.videoVolumeLevel * max).toInt().coerceIn(0, max),
-                        0,
-                    )
-                }
-            }
+            // Volume is driven by the device media stream, which Android itself
+            // persists across sessions — no app-level restore needed. Mute is
+            // still reapplied below when "remember muted" is on.
             if (agg.videoPlayer.videoRememberMuted && agg.videoPlayer.videoMuted) {
                 _uiState.update { it.copy(isMuted = true) }
                 playerSessionManager.engine?.setMuted(true)
@@ -2499,18 +2488,6 @@ class VideoPlayerViewModel @Inject constructor(
             launch {
                 videoPlayerStore.setVideoBrightnessLevel(level)
             }
-        }
-    }
-
-    /**
-     * Persist the gesture-adjusted system volume (0..1) when "remember volume"
-     * is on. Mirrors [saveBrightness]; the engine itself doesn't store
-     * volume — the value is reapplied to STREAM_MUSIC on next-session restore.
-     */
-    fun saveVolume(normalizedLevel: Float) {
-        _uiState.update { it.copy(volumeLevel = normalizedLevel) }
-        if (_uiState.value.rememberVolume) {
-            launch { videoPlayerStore.setVideoVolumeLevel(normalizedLevel) }
         }
     }
 
