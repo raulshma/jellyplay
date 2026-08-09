@@ -460,6 +460,7 @@ class VideoPlayerViewModel @Inject constructor(
         updateUiState = { transform -> _uiState.update(transform) },
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         onMediaDetailRefreshed = { detail -> applyMediaDetailAndSourceState(detail) },
+        getCurrentMediaDetail = { mediaDetail },
     )
     private val sleepTimerController = SleepTimerController(
         sleepTimerManager = sleepTimerManager,

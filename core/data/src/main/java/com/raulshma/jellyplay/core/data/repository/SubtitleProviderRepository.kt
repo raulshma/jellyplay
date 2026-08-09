@@ -72,6 +72,25 @@ interface SubtitleProviderRepository {
     ): MergedSubtitleSearch
 
     /**
+     * Streaming variant of [searchAll]: same final [MergedSubtitleSearch], but
+     * [onPartial] is invoked once per provider as each resolves (Jellyfin +
+     * every external provider), carrying the merged snapshot *so far*. This
+     * removes the all-or-nothing barrier: a slow/retrying provider can no longer
+     * gate its siblings' results, because each provider's rows/errors land in
+     * the UI the instant that provider resolves.
+     *
+     * [onPartial] may fire from background coroutines; callers must marshal onto
+     * their own dispatcher if they touch UI state from it. The final snapshot
+     * returned by this function is identical to what [searchAll] would produce.
+     */
+    suspend fun searchAllStreaming(
+        query: SubtitleQuery,
+        itemId: String,
+        language: String,
+        onPartial: (MergedSubtitleSearch) -> Unit,
+    ): MergedSubtitleSearch
+
+    /**
      * Searches the Jellyfin server for [itemId] in [language] (ISO 639-3) and
      * wraps the native [com.raulshma.jellyplay.core.model.RemoteSubtitleInfo]
      * rows as [SubtitleSearchResult]s so the player/editor can render them in

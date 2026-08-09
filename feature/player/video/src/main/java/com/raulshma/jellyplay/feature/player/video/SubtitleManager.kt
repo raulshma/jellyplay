@@ -61,6 +61,15 @@ internal class SubtitleManager(
     private val updateUiState: ((VideoPlayerUiState) -> VideoPlayerUiState) -> Unit,
     private val getCurrentItemId: () -> String?,
     private val onMediaDetailRefreshed: (MediaDetail) -> Unit,
+    /**
+     * In-memory [MediaDetail] snapshot held by the VM (populated at playback
+     * start). Preferred over a fresh [mediaRepository.getMediaDetail] round-trip
+     * so subtitle search keeps working when the Jellyfin server is unreachable
+     * — the external providers (Wyzie/OpenSubtitles) only need the item's
+     * TMDB/IMDb/title, all of which are present on this snapshot. See
+     * [searchAllProviders].
+     */
+    private val getCurrentMediaDetail: () -> MediaDetail?,
 ) {
     /**
      * In-flight remote-search job. A slow "en" query landing after a
@@ -379,21 +388,42 @@ internal class SubtitleManager(
             )
         }
         providerSearchJob = scope.launch {
-            val detail = mediaRepository.getMediaDetail(itemId).getOrNull()
-            if (detail == null) {
+            // Prefer the in-memory detail snapshot held by the VM (loaded at
+            // playback start); only hit the network when it is missing. This
+            // keeps external-provider search working when the Jellyfin server is
+            // unreachable — the snapshot carries the TMDB/IMDb/title the
+            // external providers need, and [SubtitleProviderRepositoryImpl.searchAll]
+            // already isolates a Jellyfin failure (returns empty rather than
+            // aborting) so a server outage only surfaces as an empty Jellyfin
+            // section, not a blank result. The previous logic bailed out here
+            // with "Could not load item details", needlessly blocking Wyzie and
+            // OpenSubtitles.
+            val detail = getCurrentMediaDetail()
+                ?: mediaRepository.getMediaDetail(itemId).getOrNull()
+            val query = detail?.let { SubtitleProviderIds.buildQuery(it) }
+                // No detail at all (e.g. playback started without one and the
+                // fetch failed): search external providers by title only. With
+                // no ids/title the providers return empty, but we still reach
+                // them so a misconfigured-but-reachable Jellyfin never masks a
+                // reachable Wyzie/OpenSubtitles.
+                ?: SubtitleQuery(query = null)
+
+            // Centralized Jellyfin + external merge + sort. Streaming: each
+            // provider's results/errors land in state the instant it resolves, so
+            // a slow/retrying provider can no longer gate its siblings. The final
+            // snapshot is identical to the old single-shot searchAll.
+            val merged = subtitleProviderRepository.searchAllStreaming(
+                query.copy(languages = listOf(language)),
+                itemId,
+                language,
+            ) { partial ->
                 updateUiState {
                     it.copy(
-                        isSearchingSubtitles = false,
-                        hasSearchedSubtitles = true,
-                        providerSearchErrors = mapOf(SubtitleProviderKind.JELLYFIN to "Could not load item details"),
+                        providerSearchResults = partial.results,
+                        providerSearchErrors = partial.errors,
                     )
                 }
-                return@launch
             }
-            val query = SubtitleProviderIds.buildQuery(detail).copy(languages = listOf(language))
-
-            // Centralized Jellyfin + external merge + sort.
-            val merged = subtitleProviderRepository.searchAll(query, itemId, language)
             updateUiState {
                 it.copy(
                     isSearchingSubtitles = false,

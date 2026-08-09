@@ -995,6 +995,17 @@ class DetailViewModelTest {
         seasonId = "season1",
     )
 
+    @Test
+    fun setShowDetailUpNext_delegatesToLibraryStore() = runTest(mainDispatcherRule.testDispatcher) {
+        viewModel.setShowDetailUpNext(false)
+        advanceUntilIdle()
+        coVerify { libraryStore.setShowDetailUpNext(false) }
+
+        viewModel.setShowDetailUpNext(true)
+        advanceUntilIdle()
+        coVerify { libraryStore.setShowDetailUpNext(true) }
+    }
+
     /**
      * Awaits a [DetailUiState.SmartPlayTarget] matching [predicate].
      *

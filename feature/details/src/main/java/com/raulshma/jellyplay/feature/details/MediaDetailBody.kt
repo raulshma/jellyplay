@@ -1,8 +1,12 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,7 +49,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.CircleShape
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Star
@@ -525,6 +531,22 @@ internal fun DetailContentBody(
             }
         }
 
+        if (showContent && item.mediaType == MediaType.SERIES && state.smartPlayTarget != null && state.preferences.showDetailUpNext) {
+            StaggeredDetailSection(visible = showContent, delayIndex = 6) {
+                Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
+                    UpNextSection(
+                        target = state.smartPlayTarget,
+                        onPlayClick = {
+                            val target = state.smartPlayTarget
+                            val sourceId = null
+                            callbacks.onPlayClick(target.episode.id, sourceId, target.startPositionTicks)
+                        },
+                        onHideClick = callbacks.onHideDetailUpNext,
+                    )
+                }
+            }
+        }
+
         StaggeredDetailSection(visible = showContent, delayIndex = 7) {
             if (item.mediaType == MediaType.COLLECTION && state.collectionItems.isNotEmpty()) {
                 Column {
@@ -863,6 +885,248 @@ private fun VideosSection(
                             )
                         }
                     }
+        }
+    }
+}
+
+@Composable
+internal fun UpNextSection(
+    target: DetailUiState.SmartPlayTarget,
+    onPlayClick: () -> Unit,
+    onHideClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val cardInteractionSource = remember { MutableInteractionSource() }
+    val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(
+        targetValue = if (isCardPressed) 0.98f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "upNextCardScale",
+    )
+    val playInteractionSource = remember { MutableInteractionSource() }
+    val isPlayPressed by playInteractionSource.collectIsPressedAsState()
+    val playScale by animateFloatAsState(
+        targetValue = if (isPlayPressed) 0.85f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "upNextPlayScale",
+    )
+
+    val isSynthwave = LocalIsSynthwave.current
+    val isSoothing = LocalIsSoothingTheme.current
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val outlineColor = MaterialTheme.colorScheme.outline
+    val borderModifier = remember(isSynthwave, isSoothing, primaryColor, secondaryColor, outlineColor) {
+        when {
+            isSynthwave -> Modifier.border(
+                width = 1.5.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(primaryColor, secondaryColor)
+                ),
+                shape = ShapeCache.smooth16,
+            )
+            isSoothing -> Modifier.border(
+                width = 0.8.dp,
+                color = outlineColor.copy(alpha = 0.35f),
+                shape = ShapeCache.smooth16,
+            )
+            else -> Modifier
+        }
+    }
+
+    val cardFocusState = rememberTvFocusState(focusedScale = 1.02f)
+    val hideFocusState = rememberTvFocusState(focusedScale = 1.1f)
+    val confirmHaptic = com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic()
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        FadingItem {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.detail_up_next),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { heading() },
+                )
+                androidx.compose.material3.Surface(
+                    modifier = Modifier
+                        .clip(ShapeCache.smooth16)
+                        .then(hideFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(hideFocusState, ShapeCache.smooth16))
+                        .clickable {
+                            confirmHaptic()
+                            onHideClick()
+                        },
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shape = ShapeCache.smooth16,
+                ) {
+                    Icon(
+                        imageVector = Tabler.Outline.EyeOff,
+                        contentDescription = stringResource(R.string.detail_cd_hide_up_next),
+                        modifier = Modifier.padding(8.dp).size(20.dp),
+                    )
+                }
+            }
+        }
+
+        FadingItem {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(borderModifier)
+                    .clip(ShapeCache.smooth16)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                    .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
+                    .then(cardFocusState.focusModifier)
+                    .then(Modifier.tvFocusIndicator(cardFocusState, ShapeCache.smooth16))
+                    .clickable(
+                        interactionSource = cardInteractionSource,
+                        indication = null,
+                        onClick = {
+                            confirmHaptic()
+                            onPlayClick()
+                        },
+                    ),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 160.dp, height = 90.dp)
+                        .clip(ShapeCache.smooth16),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MediaImage(
+                        url = target.primaryImageUrl ?: "",
+                        contentDescription = target.episode.name,
+                        blurHash = target.episode.blurHashes.primary,
+                        size = coil3.size.Size(480, 270),
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
+                    val epPlayFocusState = rememberTvFocusState(focusedScale = 1.15f)
+                    Icon(
+                        Tabler.Outline.PlayerPlay,
+                        contentDescription = stringResource(R.string.detail_cd_episode_play),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .graphicsLayer { scaleX = playScale; scaleY = playScale }
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f), CircleShape)
+                            .then(epPlayFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(epPlayFocusState, CircleShape))
+                            .clickable(
+                                interactionSource = playInteractionSource,
+                                indication = null,
+                                onClick = {
+                                    confirmHaptic()
+                                    onPlayClick()
+                                },
+                            )
+                            .padding(8.dp),
+                    )
+                    val t = target.startPositionTicks
+                    val rt = target.episode.runTimeTicks
+                    if (t > 0 && rt != null && rt > 0) {
+                        val progress = (t.toFloat() / rt).coerceIn(0f, 1f)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth(progress)
+                                .height(4.dp)
+                                .background(MaterialTheme.colorScheme.primary),
+                        )
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(ShapeCache.smooth8)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    ) {
+                        Text(
+                            text = target.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = target.episode.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val runtimeTicks = target.episode.runTimeTicks
+                    val positionTicks = target.startPositionTicks
+                    val hasWatchProgress = positionTicks > 0
+                    val remainingTime = if (hasWatchProgress && runtimeTicks != null && runtimeTicks > 0) {
+                        com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks(runtimeTicks, positionTicks)
+                    } else null
+                    val totalTime = if (runtimeTicks != null) {
+                        com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks(runtimeTicks)
+                    } else null
+
+                    if (remainingTime != null && totalTime != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(top = 2.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.detail_time_left_format, remainingTime),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = "•",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
+                            Text(
+                                text = totalTime,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else if (totalTime != null) {
+                        Text(
+                            text = totalTime,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+
+                    target.episode.overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = overview,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            lineHeight = androidx.compose.ui.unit.TextUnit(16f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        )
+                    }
+                }
+            }
         }
     }
 }

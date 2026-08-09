@@ -406,7 +406,17 @@ class EditorViewModel @Inject constructor(
                 )
             }
             val query = SubtitleProviderIds.buildQuery(detail).copy(languages = listOf(language))
-            val merged = subtitleProviderRepository.searchAll(query, itemId, language)
+            // Streaming: each provider's results/errors land in state the instant
+            // it resolves, so a slow/retrying provider can no longer gate its
+            // siblings. The final snapshot is identical to single-shot searchAll.
+            val merged = subtitleProviderRepository.searchAllStreaming(query, itemId, language) { partial ->
+                _uiState.update {
+                    it.copy(
+                        providerSubtitleResults = partial.results,
+                        providerSubtitleErrors = partial.errors,
+                    )
+                }
+            }
             _uiState.update {
                 it.copy(
                     isSearchingProviderSubtitles = false,

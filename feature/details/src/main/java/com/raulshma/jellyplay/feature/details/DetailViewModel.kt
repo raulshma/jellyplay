@@ -852,6 +852,12 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    fun setShowDetailUpNext(enabled: Boolean) {
+        launch {
+            libraryStore.setShowDetailUpNext(enabled)
+        }
+    }
+
     fun startDownload() {
         val detail = _uiState.value.detail ?: run {
             launch { _messages.emit(DetailMessage.Text(context.getString(R.string.detail_error_details_not_loaded))) }

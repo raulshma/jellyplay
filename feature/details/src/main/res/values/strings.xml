@@ -47,6 +47,7 @@
     <string name="detail_cd_expand">Expand</string>
     <string name="detail_cd_sort_oldest_first">Sort oldest first</string>
     <string name="detail_cd_sort_newest_first">Sort newest first</string>
+    <string name="detail_cd_hide_up_next">Hide Up Next section</string>
 
     <!-- ── Episode / season card labels ─────────────────────────────────── -->
     <string name="detail_season_format">Season %1$d</string>
@@ -70,6 +71,8 @@
     <string name="detail_option_hide_from_continue_watching">Hide from Continue Watching</string>
     <string name="detail_option_show_in_next_up">Show in Next Up</string>
     <string name="detail_option_show_in_continue_watching">Show in Continue Watching</string>
+    <string name="detail_option_hide_detail_up_next">Hide Up Next Section</string>
+    <string name="detail_option_show_detail_up_next">Show Up Next Section</string>
     <string name="detail_option_technical_info">Technical Info</string>
 
     <!-- ── Series download sheet ────────────────────────────────────────── -->

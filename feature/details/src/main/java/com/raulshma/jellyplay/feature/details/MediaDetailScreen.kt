@@ -369,6 +369,8 @@ fun MediaDetailScreen(
                         onShowFromNextUp = { viewModel.showFromNextUp() },
                         onHideFromContinueWatching = { viewModel.hideFromContinueWatching() },
                         onShowFromContinueWatching = { viewModel.showFromContinueWatching() },
+                        onShowDetailUpNext = { viewModel.setShowDetailUpNext(true) },
+                        onHideDetailUpNext = { viewModel.setShowDetailUpNext(false) },
                         onManageSeries = { onManageSeries(itemId) },
                         onAddToPlaylist = { viewModel.openPlaylistPicker() },
                         onMediaQuickActions = { item -> quickActionController.show(item) },

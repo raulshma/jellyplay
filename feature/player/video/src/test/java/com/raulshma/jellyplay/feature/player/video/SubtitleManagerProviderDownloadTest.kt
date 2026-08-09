@@ -118,6 +118,7 @@ class SubtitleManagerProviderDownloadTest {
         updateUiState = { transform -> state.value = transform(state.value) },
         getCurrentItemId = { "item-1" },
         onMediaDetailRefreshed = { refreshedDetails += it },
+        getCurrentMediaDetail = { null },
     )
 
     @Test
