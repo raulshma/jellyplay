@@ -302,4 +302,11 @@
     <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
     <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
     <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
+
+    <!-- 접근성: 밝기/볼륨 제스처 영역의 화면 읽기 의미 (P5 §3.1) -->
+    <string name="a11y_gesture_controls">밝기 및 볼륨 컨트롤</string>
+    <string name="a11y_brightness_increase">밝기 높이기</string>
+    <string name="a11y_brightness_decrease">밝기 낮추기</string>
+    <string name="a11y_volume_increase">볼륨 높이기</string>
+    <string name="a11y_volume_decrease">볼륨 낮추기</string>
 </resources>

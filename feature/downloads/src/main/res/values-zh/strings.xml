@@ -43,6 +43,8 @@
     <string name="downloads_action_move_to_front">移到最前</string>
     <string name="downloads_action_select_all">全选</string>
     <string name="downloads_action_clear_selection">清除选择</string>
+    <string name="downloads_pause_all">全部暂停</string>
+    <string name="downloads_retry_failed">重试所有失败项</string>
     <string name="downloads_select_all">全选</string>
     <string name="downloads_deselect_all">取消全选</string>
     <string name="downloads_clear_cd">清除</string>
@@ -68,6 +70,8 @@
     <string name="downloads_episodes_selected_with_freed">已选 %1$d / %2$d 集 · %3$s</string>
     <string name="downloads_delete_count">删除 %1$d</string>
     <string name="downloads_delete_count_with_freed">删除 %1$d · %2$s</string>
+    <string name="downloads_deleted">已删除</string>
+    <string name="downloads_deleted_message">下载已移除</string>
 
     <!-- Download statuses -->
     <string name="downloads_status_queued">已排队</string>

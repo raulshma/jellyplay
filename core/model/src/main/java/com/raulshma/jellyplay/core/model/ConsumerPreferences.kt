@@ -144,6 +144,7 @@ data class MainPreferences(
     val contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     val performanceMode: Boolean = false,
     val reduceMotionEnabled: Boolean = false,
+    val hapticsEnabled: Boolean = true,
     val synthwaveMode: Boolean = false,
     val synthwaveAccent: String = "magenta",
     val soothingMode: Boolean = false,

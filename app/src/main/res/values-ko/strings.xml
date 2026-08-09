@@ -178,4 +178,9 @@
 
     <!-- Now-playing snackbar -->
     <string name="snackbar_now_playing">재생 중: %1$s</string>
+
+    <!-- Player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">사용자 지정 속도</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">재생 속도 조정</string>
 </resources>

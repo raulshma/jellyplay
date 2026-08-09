@@ -148,6 +148,8 @@
     <string name="admin_no_users">Aucun utilisateur</string>
     <string name="admin_new_user_title">Nouvel utilisateur</string>
     <string name="admin_password_optional">Mot de passe (facultatif)</string>
+    <string name="admin_show_password">Afficher le mot de passe</string>
+    <string name="admin_hide_password">Masquer le mot de passe</string>
     <string name="admin_create">Créer</string>
     <string name="admin_delete_user_title">Supprimer l\'utilisateur</string>
     <string name="admin_delete_user_body">Supprimer « %1$s » ? Action irréversible.</string>

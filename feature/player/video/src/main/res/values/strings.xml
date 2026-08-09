@@ -311,4 +311,11 @@
     <!-- Localized error messages -->
     <string name="player_video_font_invalid_format">Selected file isn\'t a .ttf or .otf font.</string>
 
+    <!-- Accessibility: screen-reader semantics for the brightness/volume gesture overlay (P5 §3.1) -->
+    <string name="a11y_gesture_controls">Brightness and volume controls</string>
+    <string name="a11y_brightness_increase">Increase brightness</string>
+    <string name="a11y_brightness_decrease">Decrease brightness</string>
+    <string name="a11y_volume_increase">Increase volume</string>
+    <string name="a11y_volume_decrease">Decrease volume</string>
+
 </resources>

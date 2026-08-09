@@ -673,4 +673,13 @@
     <string name="core_preview_series">Serie</string>
     <string name="core_preview_new_format">%1$d nuovo</string>
 
+    <!-- Shared player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">Velocità personalizzata</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">Regola la velocità di riproduzione</string>
+
+    <!-- Accessibilità: interruttore modalità Video/Musica (P5 §3.2) -->
+    <string name="a11y_mode_video">Modalità video</string>
+    <string name="a11y_mode_music">Modalità musica</string>
+
 </resources>

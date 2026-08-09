@@ -580,6 +580,14 @@
     <string name="settings_clear_cache_subtitle">Free up storage space (keeps image cache)</string>
     <string name="settings_clear_image_cache">Clear Image Cache</string>
     <string name="settings_clear_image_cache_subtitle">Reloads all posters and images</string>
+    <!-- Privacy & Data hub (enhancements §7.5) -->
+    <string name="settings_privacy_data">Privacy &amp; Data</string>
+    <string name="settings_privacy_data_subtitle">Cache, history, and account data</string>
+    <string name="settings_clear_search_history">Clear Search History</string>
+    <string name="settings_clear_search_history_subtitle">Remove recent search terms</string>
+    <string name="settings_cache_cleared">Cache cleared</string>
+    <string name="settings_image_cache_cleared">Image cache cleared</string>
+    <string name="settings_search_history_cleared">Search history cleared</string>
     <string name="settings_wifi_only">WiFi Only</string>
     <string name="settings_wifi_only_on">Downloads only on unmetered networks</string>
     <string name="settings_wifi_only_off">Downloads on any network</string>
@@ -968,6 +976,9 @@
     <string name="settings_newsletter_curated_picks_desc">Special recommendations for you</string>
     <string name="settings_reset_appearance_title">Reset Appearance Settings</string>
     <string name="settings_reset_appearance_message">This will reset all appearance settings to their default values. This action cannot be undone.</string>
+    <string name="settings_reset_playback_cd">Reset playback settings</string>
+    <string name="settings_reset_playback_title">Reset Playback Settings</string>
+    <string name="settings_reset_playback_message">This will reset all playback and engine settings to their default values. This action cannot be undone.</string>
 
     <!-- PlaybackSettingsScreen.kt -->
     <string name="settings_preferred_player">Preferred Player</string>

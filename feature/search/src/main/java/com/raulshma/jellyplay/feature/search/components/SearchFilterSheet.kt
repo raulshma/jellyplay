@@ -40,6 +40,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PlayedStatus
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.ui.components.GlassFilterChip
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -50,16 +52,16 @@ import com.raulshma.jellyplay.core.ui.components.YearPresetSelection
 import com.raulshma.jellyplay.core.ui.components.toggleYearPreset
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.feature.search.SearchFilters
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchFilterSheet(
-    currentFilters: SearchFilters,
+    currentFilters: LibraryFilters,
     genres: List<Genre>,
     availableTags: List<String> = emptyList(),
-    onApply: (SearchFilters) -> Unit,
+    onApply: (LibraryFilters) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selectedMediaTypes by remember { mutableStateOf(currentFilters.mediaTypes) }
@@ -97,6 +99,8 @@ fun SearchFilterSheet(
                 onSelectMinRating = { selectedMinRating = it },
                 genres = genres,
                 availableTags = availableTags,
+                currentSortBy = currentFilters.sortBy,
+                currentPlayedStatus = currentFilters.playedStatus,
                 onApply = onApply,
             )
         }
@@ -125,6 +129,8 @@ fun SearchFilterSheet(
             onSelectMinRating = { selectedMinRating = it },
             genres = genres,
             availableTags = availableTags,
+            currentSortBy = currentFilters.sortBy,
+            currentPlayedStatus = currentFilters.playedStatus,
             onApply = onApply,
         )
     }
@@ -147,7 +153,9 @@ private fun ColumnScope.SearchFilterSheetBody(
     onSelectMinRating: (Float) -> Unit,
     genres: List<Genre>,
     availableTags: List<String>,
-    onApply: (SearchFilters) -> Unit,
+    currentSortBy: SortOption,
+    currentPlayedStatus: PlayedStatus,
+    onApply: (LibraryFilters) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -348,12 +356,17 @@ private fun ColumnScope.SearchFilterSheetBody(
                         indication = null,
                         onClick = {
                             onApply(
-                                SearchFilters(
+                                LibraryFilters(
                                     mediaTypes = selectedMediaTypes,
                                     genres = selectedGenres,
                                     years = selectedYears.toList(),
                                     tags = selectedTags.toList(),
                                     minRating = selectedMinRating,
+                                    // Preserve the sort/played-status chosen via the
+                                    // dedicated chips so applying this multi-dimension
+                                    // sheet doesn't silently reset them to defaults.
+                                    sortBy = currentSortBy,
+                                    playedStatus = currentPlayedStatus,
                                 ),
                             )
                         },

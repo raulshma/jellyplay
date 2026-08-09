@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,7 +30,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.filled.Heart
@@ -40,6 +44,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.ui.components.progressFraction
+import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
+import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -152,6 +158,11 @@ internal fun DetailActionButtons(
             modifier = modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (isSeries && target != null) {
+                FadingItem {
+                    UpNextCard(target = target, onClick = onPlay)
+                }
+            }
             FadingItem {
                 PlayButton(
                     style = PlayButtonStyle.Vertical,
@@ -194,12 +205,21 @@ internal fun DetailActionButtons(
             }
         }
     } else {
-        Row(
+        Column(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.Start),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (isSeries && target != null) {
+                FadingItem {
+                    UpNextCard(target = target, onClick = onPlay)
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.Start),
+            ) {
             val playHFocusState = rememberTvFocusState(focusedScale = 1.05f)
             val markHFocusState = rememberTvFocusState(focusedScale = 1.08f)
             val favoriteHFocusState = rememberTvFocusState(focusedScale = 1.08f)
@@ -237,6 +257,7 @@ internal fun DetailActionButtons(
                     focusState = favoriteHFocusState,
                     onClick = callbacks.onToggleFavorite,
                 )
+            }
             }
         }
     }
@@ -328,6 +349,7 @@ private fun MarkWatchedButton(
     focusState: com.raulshma.jellyplay.core.ui.tv.TvFocusState,
     onClick: () -> Unit,
 ) {
+    val confirmHaptic = rememberConfirmHaptic()
     val isTv = LocalTvMode.current
     val shape = if (style == IconButtonStyle.Vertical) ShapeCache.smooth12 else ShapeCache.smooth16
     val baseModifier = if (style == IconButtonStyle.Vertical) {
@@ -344,7 +366,7 @@ private fun MarkWatchedButton(
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(focusState.focusModifier)
             .then(Modifier.tvFocusIndicator(focusState, shape))
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+            .clickable(interactionSource = interactionSource, indication = null, onClick = { confirmHaptic(); onClick() }),
     ) {
         val contentDescription = if (isPlayed) {
             stringResource(R.string.detail_cd_mark_as_unwatched)
@@ -368,6 +390,7 @@ private fun FavoriteButton(
     focusState: com.raulshma.jellyplay.core.ui.tv.TvFocusState,
     onClick: () -> Unit,
 ) {
+    val confirmHaptic = rememberConfirmHaptic()
     val shape = if (style == IconButtonStyle.Vertical) ShapeCache.smooth12 else ShapeCache.smooth16
     val baseModifier = if (style == IconButtonStyle.Vertical) {
         Modifier.fillMaxWidth().height(48.dp)
@@ -383,12 +406,81 @@ private fun FavoriteButton(
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(focusState.focusModifier)
             .then(Modifier.tvFocusIndicator(focusState, shape))
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+            .clickable(interactionSource = interactionSource, indication = null, onClick = { confirmHaptic(); onClick() }),
     ) {
         Icon(
             if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
             contentDescription = stringResource(R.string.detail_cd_favorite),
             tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
+    }
+}
+
+@Composable
+private fun UpNextCard(
+    target: DetailUiState.SmartPlayTarget,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.03f)
+    val shape = ShapeCache.smooth14
+    val confirmHaptic = rememberConfirmHaptic()
+
+    Surface(
+        shape = shape,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 2.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .then(focusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(focusState, shape))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { confirmHaptic(); onClick() },
+            ),
+    ) {
+        Row(modifier = Modifier.padding(8.dp)) {
+            MediaImage(
+                url = target.primaryImageUrl ?: "",
+                contentDescription = target.episode.name,
+                blurHash = target.episode.blurHashes.primary,
+                modifier = Modifier
+                    .width(128.dp)
+                    .aspectRatio(16f / 9f)
+                    .clip(ShapeCache.smooth8),
+                contentScale = ContentScale.Crop,
+            )
+            Spacer(Modifier.size(12.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    stringResource(R.string.detail_up_next),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.size(2.dp))
+                Text(
+                    "${target.label} · ${target.episode.name}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val overview = target.episode.overview
+                if (!overview.isNullOrEmpty()) {
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        overview,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
     }
 }

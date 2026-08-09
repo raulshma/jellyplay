@@ -43,6 +43,8 @@
     <string name="downloads_action_move_to_front">맨 앞으로 이동</string>
     <string name="downloads_action_select_all">모두 선택</string>
     <string name="downloads_action_clear_selection">선택 해제</string>
+    <string name="downloads_pause_all">모두 일시정지</string>
+    <string name="downloads_retry_failed">실패한 항목 모두 재시도</string>
     <string name="downloads_select_all">모두 선택</string>
     <string name="downloads_deselect_all">모두 선택 해제</string>
     <string name="downloads_clear_cd">지우기</string>
@@ -68,6 +70,8 @@
     <string name="downloads_episodes_selected_with_freed">에피소드 %2$d개 중 %1$d개 선택됨 · %3$s</string>
     <string name="downloads_delete_count">%1$d개 삭제</string>
     <string name="downloads_delete_count_with_freed">%1$d개 삭제 · %2$s</string>
+    <string name="downloads_deleted">삭제됨</string>
+    <string name="downloads_deleted_message">다운로드가 삭제되었습니다</string>
 
     <!-- Download statuses -->
     <string name="downloads_status_queued">대기 중</string>

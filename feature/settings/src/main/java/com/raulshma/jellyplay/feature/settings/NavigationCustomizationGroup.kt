@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings
 import com.raulshma.jellyplay.core.model.NavigationStyle
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Spacer
@@ -93,9 +94,7 @@ fun NavigationCustomizationGroup(
         initiallyExpanded = true,
         modifier = modifier,
     ) {
-        val total = navItems.size + 2 // items + hide-on-scroll + nav-style toggle
-        var idx = 0
-
+        SettingsItemList(total = navItems.size + 2) {
         SettingListItem(
             icon = Tabler.Outline.Menu2,
             title = stringResource(R.string.settings_nav_style),
@@ -111,7 +110,6 @@ fun NavigationCustomizationGroup(
                 else
                     R.string.settings_nav_style_classic
             ),
-            index = idx++, count = total,
             onClick = {
                 val nextStyle = if (preferences.navigationStyle == NavigationStyle.EXPRESSIVE)
                     NavigationStyle.CLASSIC else NavigationStyle.EXPRESSIVE
@@ -126,7 +124,6 @@ fun NavigationCustomizationGroup(
                 if (preferences.hideBottomNavOnScroll) R.string.settings_nav_hide_on_scroll_on else R.string.settings_nav_hide_on_scroll_off,
             ),
             checked = preferences.hideBottomNavOnScroll,
-            index = idx++, count = total,
             onCheckedChange = { viewModel.setHideBottomNavOnScroll(it) },
         )
 
@@ -204,7 +201,7 @@ fun NavigationCustomizationGroup(
                 onDragStart = { draggingKey = key; dragOffsetY = 0f },
                 onDragEnd = { draggingKey = null; persistOrder() },
             )
-            idx++
+        }
         }
     }
 }

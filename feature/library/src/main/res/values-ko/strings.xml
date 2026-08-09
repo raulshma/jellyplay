@@ -29,6 +29,8 @@
     <string name="library_sort_by">정렬 기준</string>
     <string name="library_media_type">미디어 유형</string>
     <string name="library_status">상태</string>
+    <string name="library_sort_in_progress">재생 중</string>
+    <string name="library_filter_resumable">재생 중</string>
     <string name="library_genres">장르</string>
     <string name="library_year_range">연도 범위</string>
     <string name="library_tags">태그</string>
@@ -72,4 +74,14 @@
     <string name="library_cd_adjust">조정</string>
     <string name="library_cd_previous">이전</string>
     <string name="library_cd_next">다음</string>
+
+    <!-- ── Multi-select (enhancements §8.1) ─────────────────────────────── -->
+    <string name="library_select">선택</string>
+    <string name="library_select_all">모두 선택</string>
+    <string name="library_n_selected">%1$d개 선택됨</string>
+    <string name="library_mark_watched">시청한 것으로 표시</string>
+    <string name="library_mark_unwatched">시청하지 않은 것으로 표시</string>
+    <string name="library_clear_selection">선택 해제</string>
+    <string name="library_marked_watched_message">시청한 것으로 표시됨</string>
+    <string name="library_marked_unwatched_message">시청하지 않은 것으로 표시됨</string>
 </resources>

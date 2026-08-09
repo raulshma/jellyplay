@@ -32,6 +32,7 @@
     <string name="auth_connect">연결</string>
     <string name="auth_connecting">연결 중…</string>
     <string name="auth_server_address">서버 주소</string>
+    <string name="auth_server_address_invalid">유효한 URL을 입력하세요 (예: https://host:port)</string>
 
     <!-- Server connection errors -->
     <string name="auth_error_server_address_required">서버 주소를 입력하세요</string>

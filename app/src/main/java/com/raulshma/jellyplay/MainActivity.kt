@@ -247,7 +247,7 @@ class MainActivity : FragmentActivity() {
 
             androidx.compose.runtime.LaunchedEffect(viewModel) {
                 viewModel.globalMessage.collect { msg ->
-                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                    viewModel.userMessageBus.info(msg)
                 }
             }
 

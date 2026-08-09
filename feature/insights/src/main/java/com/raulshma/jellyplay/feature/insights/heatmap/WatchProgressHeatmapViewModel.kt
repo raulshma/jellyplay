@@ -28,6 +28,7 @@ data class WatchProgressHeatmapUiState(
     val shareRequested: Boolean = false,
     val isPluginAvailable: Boolean = false,
     val minActivityDate: LocalDate? = null,
+    val error: String? = null,
 )
 
 @Immutable
@@ -95,25 +96,43 @@ class WatchProgressHeatmapViewModel @Inject constructor(
         }
     }
 
+    /** Force a fresh fetch (e.g. pull-to-refresh or error retry). */
+    fun refresh() {
+        _uiState.update { it.copy(isLoading = true) }
+        loadHeatmapData()
+    }
+
     private fun loadHeatmapData() {
         launch {
             val state = _uiState.value
             val year = state.year
             val filter = state.filter
 
-            val activities = watchHistoryRepository.getDailyActivity(year, filter)
-            val streaks = calculateStreaks(activities)
+            try {
+                val activities = watchHistoryRepository.getDailyActivity(year, filter)
+                val streaks = calculateStreaks(activities)
 
-            val isPluginAvailable = watchHistoryRepository.playbackReportingStatus.value ==
-                com.raulshma.jellyplay.core.model.PlaybackReportingStatus.AVAILABLE
+                val isPluginAvailable = watchHistoryRepository.playbackReportingStatus.value ==
+                    com.raulshma.jellyplay.core.model.PlaybackReportingStatus.AVAILABLE
 
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    dailyActivities = activities,
-                    streakInfo = streaks,
-                    isPluginAvailable = isPluginAvailable,
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        dailyActivities = activities,
+                        streakInfo = streaks,
+                        isPluginAvailable = isPluginAvailable,
+                        error = null,
+                    )
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = e.localizedMessage ?: e.message ?: "",
+                    )
+                }
             }
         }
     }

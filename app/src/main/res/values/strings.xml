@@ -182,4 +182,9 @@
     <string name="play_on_title">Play On</string>
     <string name="play_on_no_clients">No Jellyfin clients found. Open JellyPlay or Jellyfin on another device and it will appear here.</string>
     <string name="play_on_jellyfin_session">Jellyfin session</string>
+
+    <!-- Player speed-picker custom-value labels (§2.3). Shared by video/audio SpeedPickerSheet. -->
+    <string name="player_speed_custom">Custom speed</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">Adjust playback speed</string>
 </resources>

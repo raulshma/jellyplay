@@ -24,6 +24,9 @@
     <string name="detail_play_no_episodes_available">視聴可能なエピソードはありません</string>
     <string name="detail_play_no_episodes">エピソードがありません</string>
 
+    <!-- ── Up Next card label ───────────────────────────────────────────── -->
+    <string name="detail_up_next">次のエピソード</string>
+
     <!-- ── Smart-play templates (verb + S#:E#) ────────────────────────────
          Positional args: %1$d = season number, %2$d = episode number. -->
     <string name="detail_resume_episode">S%1$d:E%2$d を再開</string>

@@ -16,16 +16,20 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibrarySectionContext
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.ui.feedback.UiText
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
@@ -53,12 +57,26 @@ private data class ViewModePrefs(
  */
 private const val FILTER_RETRY_DELAY_MS: Long = 800
 
+/**
+ * Selection-mode state for the library grid. Kept deliberately separate from
+ * [LibraryBrowserState] so selection mutations never trip the browser-state
+ * `flatMapLatest` that re-creates the Pager (which would reset scroll and
+ * re-fetch). Mirrors the `selectedIds`/`selectionMode` pair on
+ * `DownloadsUiState`, but as its own flow because the library browser state is
+ * a single reductive unit (see [LibraryBrowserState]).
+ */
+data class LibrarySelectionState(
+    val selectedIds: Set<String> = emptySet(),
+    val selectionMode: Boolean = false,
+)
+
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val libraryStore: com.raulshma.jellyplay.core.datastore.library.LibraryStore,
+    private val userMessageBus: UserMessageBus,
 ) : JellyPlayViewModel() {
 
     // ---- Browser state: one value type owning {folder, filters, viewMode, ----
@@ -87,6 +105,14 @@ class LibraryViewModel @Inject constructor(
 
     private val _showFilters = stateFlow(false)
     val showFilters = _showFilters.flow
+
+    // ---- Selection state (multi-select) ----
+    // Separate from _browserState on purpose: selection toggles must NOT
+    // re-create the Pager (which the browser-state flatMapLatest would do,
+    // resetting scroll and re-fetching). Mirrors DownloadsViewModel's
+    // selectedIds/selectionMode pair, exposed as its own StateFlow.
+    private val _selectionState = MutableStateFlow(LibrarySelectionState())
+    val selectionState = _selectionState.asStateFlow()
 
     private val _photoFolderChildUrls = stateFlow<Map<String, List<String>>>(emptyMap())
     val photoFolderChildUrls = _photoFolderChildUrls.flow
@@ -140,6 +166,69 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    // ── Multi-select ──────────────────────────────────────────────────────
+    // Mirrors DownloadsViewModel's selection API. Toggles route through
+    // _selectionState (not _browserState) so the paged query is never
+    // re-created mid-selection. Bulk actions loop the same repo fns
+    // (markPlayed/markUnplayed) that [markItemPlayed] uses, then clear the
+    // selection once.
+
+    fun toggleSelection(id: String) {
+        _selectionState.update {
+            val next = if (id in it.selectedIds) it.selectedIds - id else it.selectedIds + id
+            // Once in selection mode, stay in it even if the set empties out
+            // (so the action bar doesn't dismiss mid-edit). Exiting is via
+            // [clearSelection], driven by the bar's Clear button or back.
+            it.copy(selectedIds = next, selectionMode = it.selectionMode || next.isNotEmpty())
+        }
+    }
+
+    /**
+     * Enters selection mode without preselecting any item. Entry affordance for
+     * the top-bar "Select" button — the library cards can't use long-press to
+     * enter selection (that gesture opens the quick-action sheet), so a
+     * dedicated action is the non-conflicting way in.
+     */
+    fun enterSelectionMode() {
+        _selectionState.update { it.copy(selectionMode = true) }
+    }
+
+    fun clearSelection() {
+        _selectionState.update { it.copy(selectedIds = emptySet(), selectionMode = false) }
+    }
+
+    fun selectAll(allIds: List<String>) {
+        if (allIds.isEmpty()) return
+        _selectionState.update { it.copy(selectedIds = allIds.toSet(), selectionMode = true) }
+    }
+
+    /**
+     * Bulk mark-played/unplayed over the current selection. Loops the repo fns
+     * directly (same path as [markItemPlayed]) and bumps the paging refresh
+     * trigger once after the loop so the grid picks up the new played state
+     * without re-fetching per item. Clears the selection and posts a
+     * confirmation via [UserMessageBus].
+     */
+    fun markSelectedPlayed(played: Boolean) {
+        val ids = _selectionState.value.selectedIds
+        if (ids.isEmpty()) return
+        launch {
+            ids.forEach { id ->
+                if (played) mediaRepository.markPlayed(id) else mediaRepository.markUnplayed(id)
+            }
+            // A single refresh after the loop — not per-item — so the badge
+            // updates everywhere without N re-fetches.
+            _refreshTrigger.value++
+            clearSelection()
+            userMessageBus.info(
+                UiText.Resource(
+                    if (played) R.string.library_marked_watched_message
+                    else R.string.library_marked_unwatched_message,
+                ),
+            )
+        }
+    }
+
     private val _refreshTrigger = kotlinx.coroutines.flow.MutableStateFlow(0)
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -151,14 +240,7 @@ class LibraryViewModel @Inject constructor(
     }.flatMapLatest { (folder, filters) ->
       mediaRepository.getMediaItemsPaged(
           parentId = folder?.id,
-          mediaTypes = filters.mediaTypes.ifEmpty { null },
-          genres = filters.genres.ifEmpty { null },
-          years = filters.years.ifEmpty { null },
-          sortBy = filters.sortBy.apiValue,
-          sortOrder = filters.sortBy.sortOrder,
-          tags = filters.tags.ifEmpty { null },
-          playedStatus = filters.playedStatus.takeIf { it != PlayedStatus.ALL },
-          minRating = filters.minRating.takeIf { it > 0f },
+          filters = filters,
           // Section mode ("See All" from a home Latest row) shows the same
           // top-level items as the default library tab — series for a TV library,
           // movies for a movie library — just sorted by latest. (Previously this

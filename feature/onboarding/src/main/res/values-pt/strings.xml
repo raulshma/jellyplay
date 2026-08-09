@@ -64,6 +64,13 @@
     <string name="onboarding_security_biometric_unlock">Usar impressão digital ou desbloqueio facial</string>
     <string name="onboarding_security_biometric_setup_hint">Configure uma impressão digital ou rosto nas Definições do Android para ativar</string>
     <string name="onboarding_security_auto_lock_timer">Temporizador de bloqueio automático</string>
+    <string name="onboarding_security_lock_never">Nunca</string>
+    <string name="onboarding_security_lock_15s">15s</string>
+    <string name="onboarding_security_lock_30s">30s</string>
+    <string name="onboarding_security_lock_1m">1m</string>
+    <string name="onboarding_security_lock_5m">5m</string>
+    <string name="onboarding_show_password">Mostrar palavra-passe</string>
+    <string name="onboarding_hide_password">Ocultar palavra-passe</string>
 
     <!-- HomeLayoutStep -->
     <string name="onboarding_home_layout_title">Esquema do início</string>

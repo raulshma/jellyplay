@@ -21,9 +21,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.player.SpeedSlider
 import com.raulshma.jellyplay.feature.player.audio.R
+import com.raulshma.jellyplay.core.ui.R as CoreUiR
 
-private val SPEED_OPTIONS = floatArrayOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+private val SPEED_OPTIONS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,6 +83,8 @@ internal fun SpeedPickerSheet(
                     )
                 }
             }
+            Spacer(Modifier.height(20.dp))
+            SpeedSlider(currentSpeed = currentSpeed, onSelect = onSelect)
         }
     }
 }

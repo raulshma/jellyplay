@@ -57,6 +57,7 @@ import com.raulshma.jellyplay.feature.player.audio.R
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import com.raulshma.jellyplay.feature.player.audio.sheets.AudioEffectsSheet
 import com.raulshma.jellyplay.feature.player.audio.sheets.AudioSleepTimerSheet
 import com.raulshma.jellyplay.feature.player.audio.sheets.EqualizerSheet
@@ -68,6 +69,8 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.ui.focus.FocusRequester
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+
+private const val DOUBLE_TAP_SEEK_MS = 10_000L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -340,6 +343,31 @@ fun AudioPlayerScreen(
                             null -> {}
                         }
                     }
+                }
+                // Double-tap to seek (±10s) on the left/right thirds and
+                // toggle play/pause on the middle third. Mirrors the video
+                // player's gesture; audio exposes an absolute seek only, so
+                // compute (currentPosition ± delta).coerceIn(0, duration).
+                .pointerInput(Unit) {
+                    val width = size.width
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            when {
+                                offset.x < width * 0.35f -> {
+                                    val target = (viewModel.currentPositionState.value - DOUBLE_TAP_SEEK_MS)
+                                        .coerceAtLeast(0L)
+                                    viewModel.seekTo(target)
+                                }
+                                offset.x > width * 0.65f -> {
+                                    val duration = uiState.duration
+                                    val target = (viewModel.currentPositionState.value + DOUBLE_TAP_SEEK_MS)
+                                        .coerceAtMost(duration)
+                                    viewModel.seekTo(target)
+                                }
+                                else -> viewModel.togglePlayPause()
+                            }
+                        },
+                    )
                 }
                 .graphicsLayer {
                     translationY = swipeDismissOffset.value

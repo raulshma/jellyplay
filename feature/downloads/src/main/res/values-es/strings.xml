@@ -47,6 +47,8 @@
     <string name="downloads_action_move_to_front">Mover al principio</string>
     <string name="downloads_action_select_all">Seleccionar todo</string>
     <string name="downloads_action_clear_selection">Borrar selección</string>
+    <string name="downloads_pause_all">Pausar todo</string>
+    <string name="downloads_retry_failed">Reintentar todos los fallidos</string>
     <string name="downloads_select_all">Seleccionar todo</string>
     <string name="downloads_deselect_all">Deseleccionar todo</string>
     <string name="downloads_clear_cd">Borrar</string>
@@ -74,6 +76,8 @@
     <string name="downloads_episodes_selected_with_freed">%1$d de %2$d episodios seleccionados · %3$s</string>
     <string name="downloads_delete_count">Eliminar %1$d</string>
     <string name="downloads_delete_count_with_freed">Eliminar %1$d · %2$s</string>
+    <string name="downloads_deleted">Eliminado</string>
+    <string name="downloads_deleted_message">Descarga eliminada</string>
 
     <!-- Download statuses -->
     <string name="downloads_status_queued">En cola</string>

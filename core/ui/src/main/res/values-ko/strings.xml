@@ -673,4 +673,13 @@
     <string name="core_preview_series">시리즈</string>
     <string name="core_preview_new_format">새 %1$d개</string>
 
+    <!-- Shared player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">사용자 지정 속도</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">재생 속도 조정</string>
+
+    <!-- 접근성: 비디오/음악 모드 전환 (P5 §3.2) -->
+    <string name="a11y_mode_video">비디오 모드</string>
+    <string name="a11y_mode_music">음악 모드</string>
+
 </resources>

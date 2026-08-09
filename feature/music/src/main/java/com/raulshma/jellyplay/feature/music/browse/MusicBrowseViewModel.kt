@@ -37,25 +37,28 @@ class MusicBrowseViewModel @Inject constructor(
 
     val artists: Flow<PagingData<MediaItem>> = artistSortFlow.flatMapLatest { sort ->
         mediaRepository.getMediaItemsPaged(
-            mediaTypes = listOf(MediaType.ARTIST),
-            sortBy = sort.option.apiValue,
-            sortOrder = sort.option.sortOrder,
+            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                mediaTypes = listOf(MediaType.ARTIST),
+                sortBy = sort.option,
+            ),
         )
     }.cachedIn(scope)
 
     val albums: Flow<PagingData<MediaItem>> = albumSortFlow.flatMapLatest { sort ->
         mediaRepository.getMediaItemsPaged(
-            mediaTypes = listOf(MediaType.ALBUM),
-            sortBy = sort.option.apiValue,
-            sortOrder = sort.option.sortOrder,
+            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                mediaTypes = listOf(MediaType.ALBUM),
+                sortBy = sort.option,
+            ),
         )
     }.cachedIn(scope)
 
     val tracks: Flow<PagingData<MediaItem>> = trackSortFlow.flatMapLatest { sort ->
         mediaRepository.getMediaItemsPaged(
-            mediaTypes = listOf(MediaType.AUDIO),
-            sortBy = sort.option.apiValue,
-            sortOrder = sort.option.sortOrder,
+            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                mediaTypes = listOf(MediaType.AUDIO),
+                sortBy = sort.option,
+            ),
         )
     }.cachedIn(scope)
 

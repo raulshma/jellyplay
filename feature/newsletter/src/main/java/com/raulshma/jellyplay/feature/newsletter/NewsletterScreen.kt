@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.newsletter
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -22,10 +24,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -110,14 +114,25 @@ fun NewsletterScreen(
                         )
                     }
                     else -> {
-                        NewsletterContent(
-                            state = state,
-                            viewModel = viewModel,
-                            onItemClick = onItemClick,
-                            onPlayClick = onPlayClick,
-                            onViewAllFreshPicks = onViewAllFreshPicks,
-                            listFocusRequester = listFocusRequester,
-                        )
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            if (state.error != null) {
+                                AppendErrorFooter(
+                                    message = state.error!!,
+                                    onRetry = { viewModel.onEvent(NewsletterUiEvent.Refresh) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                )
+                            }
+                            NewsletterContent(
+                                state = state,
+                                viewModel = viewModel,
+                                onItemClick = onItemClick,
+                                onPlayClick = onPlayClick,
+                                onViewAllFreshPicks = onViewAllFreshPicks,
+                                listFocusRequester = listFocusRequester,
+                            )
+                        }
                     }
                 }
             }

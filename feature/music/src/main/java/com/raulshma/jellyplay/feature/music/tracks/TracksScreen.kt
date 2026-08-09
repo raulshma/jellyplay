@@ -29,6 +29,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -203,10 +204,10 @@ fun TracksScreen(
                     )
                 }
                 is LoadState.Error -> {
-                    Text(
-                        text = appendState.error.localizedMessage ?: stringResource(R.string.music_failed_load_more),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
+                    AppendErrorFooter(
+                        message = appendState.error.localizedMessage
+                            ?: stringResource(R.string.music_failed_load_more),
+                        onRetry = { tracks.retry() },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(16.dp),

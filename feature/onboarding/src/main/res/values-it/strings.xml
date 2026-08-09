@@ -64,6 +64,13 @@
     <string name="onboarding_security_biometric_unlock">Usa impronta digitale o sblocco facciale</string>
     <string name="onboarding_security_biometric_setup_hint">Configura un\'impronta o un volto nelle Impostazioni di Android per attivarlo</string>
     <string name="onboarding_security_auto_lock_timer">Timer di blocco automatico</string>
+    <string name="onboarding_security_lock_never">Mai</string>
+    <string name="onboarding_security_lock_15s">15s</string>
+    <string name="onboarding_security_lock_30s">30s</string>
+    <string name="onboarding_security_lock_1m">1m</string>
+    <string name="onboarding_security_lock_5m">5m</string>
+    <string name="onboarding_show_password">Mostra password</string>
+    <string name="onboarding_hide_password">Nascondi password</string>
 
     <!-- HomeLayoutStep -->
     <string name="onboarding_home_layout_title">Layout della home</string>

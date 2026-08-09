@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.search
 
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
@@ -15,8 +14,11 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.PlayedStatus
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
@@ -27,8 +29,8 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -39,18 +41,22 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
-@Immutable
-data class SearchFilters(
-    val mediaTypes: List<MediaType> = emptyList(),
-    val genres: List<String> = emptyList(),
-    val years: List<Int> = emptyList(),
-    val tags: List<String> = emptyList(),
-    val minRating: Float = 0f,
-)
+/**
+ * Lenient codec for the persisted search-filter blob. `ignoreUnknownKeys`
+ * keeps decode forward-compatible when fields are added later; `encodeDefaults`
+ * guarantees a complete on-disk snapshot. Mirrors [LibraryViewModel]'s
+ * `libraryJson` codec shape so the two feature modules stay consistent.
+ */
+private val searchJson = Json {
+    ignoreUnknownKeys = true
+    encodeDefaults = true
+}
 
 /**
+ * Maximum number of offline items to surface in the "On-device" search row.
  * Maximum number of offline items to surface in the "On-device" search row.
  * Kept small because the row is supplementary to the paginated library grid.
  */
@@ -80,6 +86,7 @@ class SearchViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
     private val experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
     private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore,
+    private val searchFiltersStore: com.raulshma.jellyplay.core.datastore.search.SearchFiltersStore,
 ) : JellyPlayViewModel() {
 
     private val _query = composeState("")
@@ -87,8 +94,8 @@ class SearchViewModel @Inject constructor(
         get() = _query.value
         private set(value) { _query.value = value }
 
-    private val _filters = stateFlow(SearchFilters())
-    val filters: StateFlow<SearchFilters> = _filters.flow
+    private val _filters = stateFlow(LibraryFilters())
+    val filters: StateFlow<LibraryFilters> = _filters.flow
 
     private val _genres = stateFlow<List<Genre>>(emptyList())
     val genres: StateFlow<List<Genre>> = _genres.flow
@@ -156,11 +163,7 @@ class SearchViewModel @Inject constructor(
                 launch { searchOffline(currentQuery) }
                 mediaRepository.searchPaged(
                     query = currentQuery,
-                    mediaTypes = filters.mediaTypes.ifEmpty { null },
-                    genres = filters.genres.ifEmpty { null },
-                    years = filters.years.ifEmpty { null },
-                    tags = filters.tags.ifEmpty { null },
-                    minRating = filters.minRating.takeIf { it > 0f },
+                    filters = filters,
                 )
             }
         }
@@ -171,6 +174,33 @@ class SearchViewModel @Inject constructor(
         loadTags()
         loadSearchHistory()
         loadSuggestions()
+        loadPersistedFilters()
+    }
+
+    /**
+     * Seeds [_filters] from the persisted snapshot (single-key JSON blob in the
+     * shared DataStore). Decode failures fall back to the default filter set so a
+     * corrupt or forward-incompatible blob never blocks search. Mirrors how
+     * [LibraryViewModel.selectFolder] decodes its per-folder filter blob.
+     */
+    private fun loadPersistedFilters() {
+        launch {
+            val raw = searchFiltersStore.searchFiltersJson.first() ?: return@launch
+            val restored = runCatching { searchJson.decodeFromString<LibraryFilters>(raw) }
+                .getOrNull() ?: return@launch
+            _filters.set(restored)
+        }
+    }
+
+    /**
+     * Writes the current filter snapshot to the DataStore. Best-effort: a write
+     * failure is swallowed so a preference-store hiccup never disrupts the
+     * in-memory search session.
+     */
+    private fun persistFilters(filters: LibraryFilters) {
+        launch {
+            runCatching { searchFiltersStore.setSearchFilters(searchJson.encodeToString(filters)) }
+        }
     }
 
     /**
@@ -257,8 +287,9 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    fun updateFilters(newFilters: SearchFilters) {
+    fun updateFilters(newFilters: LibraryFilters) {
         _filters.set(newFilters)
+        persistFilters(newFilters)
     }
 
     fun toggleMediaType(mediaType: MediaType) {
@@ -268,6 +299,25 @@ class SearchViewModel @Inject constructor(
                 mediaTypes = if (mediaType in types) types - mediaType else types + mediaType,
             )
         }
+        persistFilters(_filters.value)
+    }
+
+    /**
+     * Single-select sort setter (mirrors [LibraryViewModel.updateFilters]' sort
+     * handling). Persists the new sort option so it survives navigation/restart.
+     */
+    fun setSortBy(sortBy: SortOption) {
+        _filters.update { it.copy(sortBy = sortBy) }
+        persistFilters(_filters.value)
+    }
+
+    /**
+     * Single-select played-status setter (mirrors Library's Status filter).
+     * Persists the new status so it survives navigation/restart.
+     */
+    fun setPlayedStatus(status: PlayedStatus) {
+        _filters.update { it.copy(playedStatus = status) }
+        persistFilters(_filters.value)
     }
 
     fun toggleShowFilters() {
@@ -275,7 +325,8 @@ class SearchViewModel @Inject constructor(
     }
 
     fun clearFilters() {
-        _filters.set(SearchFilters())
+        _filters.set(LibraryFilters())
+        launch { runCatching { searchFiltersStore.clearSearchFilters() } }
     }
 
     private fun loadGenres() {

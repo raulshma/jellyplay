@@ -83,7 +83,11 @@ fun LibraryFilterChipRow(
                     filters.playedStatus.displayName
                 },
                 onClick = { onOpenSheet(FilterSheetKind.STATUS) },
-                highlight = filters.playedStatus != PlayedStatus.ALL,
+                // Highlight when either the played-status chip or the resumable
+                // (In Progress) toggle departs from its default, since both live
+                // behind this chip's sheet.
+                highlight = filters.playedStatus != PlayedStatus.ALL ||
+                    filters.isResumable == true,
             )
         }
         if (genres.isNotEmpty()) {
@@ -208,6 +212,8 @@ fun StatusFilterSheet(
     current: PlayedStatus,
     onApply: (PlayedStatus) -> Unit,
     onDismiss: () -> Unit,
+    isResumable: Boolean = false,
+    onToggleResumable: () -> Unit = {},
 ) {
     FilterSelectionSheet(title = stringResource(R.string.library_status), onDismiss = onDismiss) {
         FlowRow(
@@ -224,6 +230,14 @@ fun StatusFilterSheet(
                     },
                 )
             }
+            // Resumable (In Progress) toggle — restricts to items with a
+            // playback position. Lives in the Status sheet so all playback-state
+            // filters share one home, and composes with any played-status chip.
+            GlassFilterChip(
+                label = stringResource(R.string.library_filter_resumable),
+                selected = isResumable,
+                onClick = onToggleResumable,
+            )
         }
     }
 }

@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -326,31 +327,17 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun getMediaItems(
         parentId: String?,
-        mediaTypes: List<MediaType>?,
-        genres: List<String>?,
-        years: List<Int>?,
+        filters: LibraryFilters,
         studioIds: List<String>?,
-        sortBy: String,
-        sortOrder: String,
         startIndex: Int,
         limit: Int,
-        tags: List<String>?,
-        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
-        minRating: Float?,
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Result<SearchResult> = apiClient.getMediaItems(
         parentId = parentId,
-        mediaTypes = mediaTypes,
-        genres = genres,
-        years = years,
+        filters = filters,
         studioIds = studioIds,
-        sortBy = sortBy,
-        sortOrder = sortOrder,
         startIndex = startIndex,
         limit = limit,
-        tags = tags,
-        playedStatus = playedStatus,
-        minRating = minRating,
         kindFilter = kindFilter,
     )
 
@@ -448,32 +435,31 @@ class MediaRepositoryImpl @Inject constructor(
 
     override suspend fun search(
         query: String,
-        mediaTypes: List<MediaType>?,
-        genres: List<String>?,
-        years: List<Int>?,
-        tags: List<String>?,
+        filters: LibraryFilters,
         limit: Int,
         startIndex: Int,
-        minRating: Float?,
     ): Result<SearchResult> {
         // The Jellyfin /Search/Hints endpoint doesn't accept genre/year/tags/rating
-        // filters, so when any are present fall through to the filtered items query.
-        return if (genres.isNullOrEmpty() && years.isNullOrEmpty() && tags.isNullOrEmpty() && minRating == null) {
-            apiClient.getSearchHints(query, mediaTypes, limit, startIndex)
-        } else {
+        // filters (nor sort/played-status), so when any are present fall through to
+        // the filtered items query — which honours sortBy/sortOrder/playedStatus.
+        val hasAdvancedFilters = filters.genres.isNotEmpty() || filters.years.isNotEmpty() ||
+            filters.tags.isNotEmpty() || filters.minRating > 0f ||
+            filters.playedStatus != com.raulshma.jellyplay.core.model.PlayedStatus.ALL
+        return if (hasAdvancedFilters) {
             apiClient.getMediaItems(
                 parentId = null,
-                mediaTypes = mediaTypes,
-                genres = genres,
-                years = years,
+                filters = filters,
                 studioIds = null,
-                sortBy = "SortName",
-                sortOrder = "Ascending",
                 startIndex = startIndex,
                 limit = limit,
                 searchTerm = query,
-                tags = tags,
-                minRating = minRating,
+            )
+        } else {
+            apiClient.getSearchHints(
+                query,
+                filters.mediaTypes.takeIf { it.isNotEmpty() },
+                limit,
+                startIndex,
             )
         }
     }
@@ -486,15 +472,8 @@ class MediaRepositoryImpl @Inject constructor(
 
     override fun getMediaItemsPaged(
         parentId: String?,
-        mediaTypes: List<MediaType>?,
-        genres: List<String>?,
-        years: List<Int>?,
+        filters: LibraryFilters,
         studioIds: List<String>?,
-        sortBy: String,
-        sortOrder: String,
-        tags: List<String>?,
-        playedStatus: com.raulshma.jellyplay.core.model.PlayedStatus?,
-        minRating: Float?,
         kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter,
     ): Flow<PagingData<MediaItem>> = Pager(
         config = PagingConfig(
@@ -506,15 +485,8 @@ class MediaRepositoryImpl @Inject constructor(
             MediaPagingSource(
                 mediaRepository = this,
                 parentId = parentId,
-                mediaTypes = mediaTypes,
-                genres = genres,
-                years = years,
+                filters = filters,
                 studioIds = studioIds,
-                sortBy = sortBy,
-                sortOrder = sortOrder,
-                tags = tags,
-                playedStatus = playedStatus,
-                minRating = minRating,
                 kindFilter = kindFilter,
             )
         },
@@ -522,11 +494,7 @@ class MediaRepositoryImpl @Inject constructor(
 
     override fun searchPaged(
         query: String,
-        mediaTypes: List<MediaType>?,
-        genres: List<String>?,
-        years: List<Int>?,
-        tags: List<String>?,
-        minRating: Float?,
+        filters: LibraryFilters,
     ): Flow<PagingData<MediaItem>> = Pager(
         config = PagingConfig(
             pageSize = PAGE_SIZE,
@@ -537,11 +505,7 @@ class MediaRepositoryImpl @Inject constructor(
             SearchPagingSource(
                 mediaRepository = this,
                 query = query,
-                mediaTypes = mediaTypes,
-                genres = genres,
-                years = years,
-                tags = tags,
-                minRating = minRating,
+                filters = filters,
             )
         },
     ).flow
@@ -592,7 +556,7 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getMusicVideos(parentId: String, limit: Int): Result<List<MediaItem>> =
         apiClient.getMediaItems(
             parentId = parentId,
-            mediaTypes = listOf(MediaType.MUSIC_VIDEO),
+            filters = LibraryFilters(mediaTypes = listOf(MediaType.MUSIC_VIDEO)),
             limit = limit,
         ).map { it.items }
 

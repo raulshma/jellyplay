@@ -31,7 +31,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.feature.details.R
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.LayoutGrid
@@ -84,7 +86,7 @@ fun CollectionDetailScreen(
 
     // Long-press / TV-Menu quick actions for collection cards
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember { { item: MediaItem -> collectionQuickActions(item) } },
+        resolveActions = remember { { item: MediaItem -> item.quickActions(MediaQuickActionScope.DETAIL) } },
         executeAction = remember(viewModel, onItemClick) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
@@ -232,18 +234,3 @@ fun CollectionDetailScreen(
     } // close Box
     MediaQuickActionHost(quickActionController)
 } // close CollectionDetailScreen
-
-/**
- * Which quick actions apply to a collection card Movies and
- * series get play / mark-watched / details; other entries are excluded.
- */
-private fun collectionQuickActions(item: MediaItem): List<QuickAction> = buildList {
-    when (item.mediaType) {
-        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE -> {
-            add(QuickAction.PLAY)
-            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
-            add(QuickAction.DETAILS)
-        }
-        else -> Unit
-    }
-}

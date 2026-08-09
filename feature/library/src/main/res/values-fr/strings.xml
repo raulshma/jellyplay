@@ -30,6 +30,8 @@
     <string name="library_sort_by">Trier par</string>
     <string name="library_media_type">Type de média</string>
     <string name="library_status">Statut</string>
+    <string name="library_sort_in_progress">En cours</string>
+    <string name="library_filter_resumable">En cours</string>
     <string name="library_genres">Genres</string>
     <string name="library_year_range">Plage d\'années</string>
     <string name="library_tags">Étiquettes</string>
@@ -73,4 +75,14 @@
     <string name="library_cd_adjust">Ajuster</string>
     <string name="library_cd_previous">Précédent</string>
     <string name="library_cd_next">Suivant</string>
+
+    <!-- ── Multi-select (enhancements §8.1) ─────────────────────────────── -->
+    <string name="library_select">Sélectionner</string>
+    <string name="library_select_all">Tout sélectionner</string>
+    <string name="library_n_selected">%1$d sélectionné(s)</string>
+    <string name="library_mark_watched">Marquer comme vu</string>
+    <string name="library_mark_unwatched">Marquer comme non vu</string>
+    <string name="library_clear_selection">Effacer la sélection</string>
+    <string name="library_marked_watched_message">Marqué comme vu</string>
+    <string name="library_marked_unwatched_message">Marqué comme non vu</string>
 </resources>

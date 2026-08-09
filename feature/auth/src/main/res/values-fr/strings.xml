@@ -32,6 +32,7 @@
     <string name="auth_connect">Se connecter</string>
     <string name="auth_connecting">Connexion en cours…</string>
     <string name="auth_server_address">Adresse du serveur</string>
+    <string name="auth_server_address_invalid">Saisissez une URL valide (ex. https://hôte:port)</string>
 
     <!-- Server connection errors -->
     <string name="auth_error_server_address_required">Veuillez saisir une adresse de serveur</string>

@@ -3,17 +3,13 @@ package com.raulshma.jellyplay.core.data.paging
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaType
 
 class SearchPagingSource(
     private val mediaRepository: MediaRepository,
     private val query: String,
-    private val mediaTypes: List<MediaType>? = null,
-    private val genres: List<String>? = null,
-    private val years: List<Int>? = null,
-    private val tags: List<String>? = null,
-    private val minRating: Float? = null,
+    private val filters: LibraryFilters = LibraryFilters(),
 ) : PagingSource<Int, MediaItem>() {
 
     override fun getRefreshKey(state: PagingState<Int, MediaItem>): Int? {
@@ -38,13 +34,9 @@ class SearchPagingSource(
         return try {
             val result = mediaRepository.search(
                 query = query,
-                mediaTypes = mediaTypes,
-                genres = genres,
-                years = years,
-                tags = tags,
+                filters = filters,
                 limit = pageSize,
                 startIndex = startIndex,
-                minRating = minRating,
             )
 
             result.fold(

@@ -67,6 +67,7 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
+import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
@@ -345,14 +346,16 @@ private fun SyncStatusIcon(
     onClick: () -> Unit,
 ) {
     val syncFocusState = rememberTvFocusState()
+    val reducedMotion = LocalReducedMotion.current
     // The draining rotation only applies while isDraining. When the icon is
     // shown offline with queued events (isDraining = false), the icon is
     // visually static, so gate the sole infinite-transition child on it. An
     // InfiniteTransition with no children stops its frame clock, eliminating a
     // continuous ~60Hz recomposition of this composable while idle — the same
-    // gating pattern used for the hero pulse animations (HomeHero.kt).
+    // gating pattern used for the hero pulse animations (HomeHero.kt). Honor
+    // reduced-motion/performance mode by holding the icon static.
     val infiniteTransition = rememberInfiniteTransition(label = "sync_draining")
-    val rotation by if (isDraining) {
+    val rotation by if (isDraining && !reducedMotion) {
         infiniteTransition.animateFloat(
             initialValue = 0f,
             targetValue = 360f,
