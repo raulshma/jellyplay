@@ -68,6 +68,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
                 onSecuritySettings = { id -> navigator.navigate(Route.SecuritySettings(id)) },
                 onBackupSettings = { id -> navigator.navigate(Route.BackupSettings(id)) },
                 onExperimentalSettings = { id -> navigator.navigate(Route.ExperimentalSettings(id)) },
+                onOpenSubtitleTester = { navigator.navigate(Route.SubtitleTester) },
             )
         }
         SettingsScreen(
