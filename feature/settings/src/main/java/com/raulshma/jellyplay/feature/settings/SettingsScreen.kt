@@ -120,6 +120,17 @@ import com.composables.icons.tabler.outline.*
 
 private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 
+// Registry ids of the screensaver (dream) group rendered on the main Settings screen. When a
+// settings-search result for one of these is tapped, the click sets lastClickedSettingId so the
+// group expands and highlights the matching row (there is no dedicated screensaver screen).
+private val SCREENSAVER_GROUP_IDS = setOf(
+    "screensaver_show_title",
+    "screensaver_categories",
+    "screensaver_slideshow_interval",
+    "screensaver_ken_burns",
+    "screensaver_transition_style",
+)
+
 // Dream-screen pickers (slideshow interval, transition style) flow through the shared
 // `PickerState` dispatcher rather than a screen-local sealed dialog enum.
 
@@ -164,6 +175,7 @@ data class SettingsCallbacks(
     val onSecuritySettings: (String?) -> Unit = {},
     val onBackupSettings: (String?) -> Unit = {},
     val onExperimentalSettings: (String?) -> Unit = {},
+    val onOpenSubtitleTester: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
@@ -199,6 +211,8 @@ fun SettingsScreen(
     val onSecuritySettings = callbacks.onSecuritySettings
     val onBackupSettings = callbacks.onBackupSettings
     val onExperimentalSettings = callbacks.onExperimentalSettings
+    val onOpenSubtitleTester = callbacks.onOpenSubtitleTester
+    val onConfigureLibraries = callbacks.onConfigureLibraries
     val preferences = viewModel.preferences
     val userName = viewModel.currentUserName
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -658,6 +672,25 @@ fun SettingsScreen(
                                                             lastClickedSettingId = "backup"
                                                             onBackupSettings(item.id)
                                                         }
+                                                        is Route.LibraryHomeSections -> {
+                                                            lastClickedSettingId = "configure_libraries"
+                                                            onConfigureLibraries(item.id)
+                                                        }
+                                                        Route.SubtitleTester -> {
+                                                            lastClickedSettingId = "subtitle_tester"
+                                                            onOpenSubtitleTester()
+                                                        }
+                                                        Route.Settings -> {
+                                                            // Bare-settings targets live on this screen: the
+                                                            // sign-out-from-server action opens the confirm
+                                                            // dialog, screensaver rows reveal their group.
+                                                            if (item.id == "sign_out_from_server") {
+                                                                signOutFromServer = true
+                                                                showSignOutConfirm = true
+                                                            } else {
+                                                                lastClickedSettingId = item.id
+                                                            }
+                                                        }
                                                         is Route.ExperimentalSettings -> {
                                                             lastClickedSettingId = "experimental"
                                                             onExperimentalSettings(item.id)
@@ -779,7 +812,6 @@ fun SettingsScreen(
                                         title = stringResource(R.string.settings_server_management),
                                         subtitle = stringResource(R.string.settings_server_management_subtitle),
                                         index = 0, count = 4,
-                                        highlighted = lastClickedSettingId == "server_management",
                                         onClick = {
                                             lastClickedSettingId = "server_management"
                                             onServerManagement(null)
@@ -790,7 +822,6 @@ fun SettingsScreen(
                                         title = stringResource(R.string.settings_switch_user),
                                         subtitle = stringResource(R.string.settings_switch_user_subtitle),
                                         index = 1, count = 4,
-                                        highlighted = lastClickedSettingId == "user_management",
                                         onClick = {
                                             lastClickedSettingId = "user_management"
                                             onUserManagement(null)
@@ -854,7 +885,6 @@ fun SettingsScreen(
                                         title = stringResource(R.string.settings_browse_favorites),
                                         subtitle = stringResource(R.string.settings_browse_favorites_subtitle),
                                         index = 0, count = insightsCount,
-                                        highlighted = lastClickedSettingId == "favorites",
                                         onClick = {
                                             lastClickedSettingId = "favorites"
                                             onFavoritesClick()
@@ -865,7 +895,6 @@ fun SettingsScreen(
                                         title = stringResource(R.string.settings_watch_history_heatmap),
                                         subtitle = stringResource(R.string.settings_watch_history_heatmap_subtitle),
                                         index = 1, count = insightsCount,
-                                        highlighted = lastClickedSettingId == "watch_progress_heatmap",
                                         onClick = {
                                             lastClickedSettingId = "watch_progress_heatmap"
                                             onWatchProgressHeatmapClick()
@@ -876,7 +905,6 @@ fun SettingsScreen(
                                         title = stringResource(R.string.settings_activity_queue),
                                         subtitle = stringResource(R.string.settings_activity_queue_subtitle),
                                         index = 2, count = insightsCount,
-                                        highlighted = lastClickedSettingId == "activity_queue",
                                         onClick = {
                                             lastClickedSettingId = "activity_queue"
                                             onActivityQueueClick()
@@ -887,7 +915,6 @@ fun SettingsScreen(
                                         title = stringResource(R.string.settings_upcoming),
                                         subtitle = stringResource(R.string.settings_upcoming_subtitle),
                                         index = 3, count = insightsCount,
-                                        highlighted = lastClickedSettingId == "upcoming",
                                         onClick = {
                                             lastClickedSettingId = "upcoming"
                                             onUpcomingClick()
@@ -899,7 +926,6 @@ fun SettingsScreen(
                                         subtitle = stringResource(R.string.settings_requests_subtitle),
                                         index = 4, count = insightsCount,
                                         trailingText = pendingCount.takeIf { it > 0 }?.toString(),
-                                        highlighted = lastClickedSettingId == "requests",
                                         onClick = {
                                             lastClickedSettingId = "requests"
                                             onRequestsClick()
@@ -943,7 +969,6 @@ fun SettingsScreen(
                                             title = stringResource(R.string.settings_admin_dashboard),
                                             subtitle = stringResource(R.string.settings_admin_dashboard_subtitle),
                                             index = systemIndex++, count = systemCount,
-                                            highlighted = lastClickedSettingId == "admin_dashboard",
                                             onClick = {
                                                 lastClickedSettingId = "admin_dashboard"
                                                 onAdminDashboard()
@@ -955,7 +980,6 @@ fun SettingsScreen(
                                         title = stringResource(R.string.settings_setup_wizard),
                                         subtitle = stringResource(R.string.settings_setup_wizard_subtitle),
                                         index = systemIndex++, count = systemCount,
-                                        highlighted = lastClickedSettingId == "setup_wizard",
                                         onClick = {
                                             lastClickedSettingId = "setup_wizard"
                                             onSetupWizard()
@@ -972,7 +996,6 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_appearance),
                                     subtitle = buildAppearanceSummary(preferences),
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "appearance",
                                     onClick = {
                                         lastClickedSettingId = "appearance"
                                         onAppearanceSettings(null)
@@ -988,7 +1011,6 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_playback),
                                     subtitle = stringResource(R.string.settings_playback_subtitle, preferences.preferredPlayer.displayName),
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "playback",
                                     onClick = {
                                         lastClickedSettingId = "playback"
                                         onPlaybackSettings(null)
@@ -1004,7 +1026,6 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_audio_player),
                                     subtitle = stringResource(R.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"),
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "audio",
                                     onClick = {
                                         lastClickedSettingId = "audio"
                                         onAudioSettings(null)
@@ -1020,7 +1041,6 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_language_subtitles),
                                     subtitle = stringResource(R.string.settings_language_subtitle, preferences.preferredAudioLanguage ?: stringResource(R.string.settings_lang_default)),
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "language",
                                     onClick = {
                                         lastClickedSettingId = "language"
                                         onLanguageSettings(null)
@@ -1037,7 +1057,6 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_notifications),
                                     subtitle = if (notifPrefs.enabled) stringResource(R.string.settings_notifications_checking, notifPrefs.checkFrequency.displayName.lowercase()) else stringResource(R.string.settings_disabled),
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "notifications",
                                     onClick = {
                                         lastClickedSettingId = "notifications"
                                         onNotificationSettings(null)
@@ -1053,7 +1072,6 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_downloads_storage),
                                     subtitle = stringResource(R.string.settings_cache_subtitle, viewModel.cacheSizeMb),
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "storage",
                                     onClick = {
                                         lastClickedSettingId = "storage"
                                         onStorageSettings(null)
@@ -1073,7 +1091,6 @@ fun SettingsScreen(
                                         else -> stringResource(R.string.settings_lock_off)
                                     },
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "security",
                                     onClick = {
                                         lastClickedSettingId = "security"
                                         onSecuritySettings(null)
@@ -1089,7 +1106,6 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_backup_restore),
                                     subtitle = stringResource(R.string.settings_backup_restore_subtitle),
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "backup",
                                     onClick = {
                                         lastClickedSettingId = "backup"
                                         onBackupSettings(null)
@@ -1110,6 +1126,7 @@ fun SettingsScreen(
                                                 cats.joinToString(", ") { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } }
                                             }
                                         },
+                                        initiallyExpanded = lastClickedSettingId in SCREENSAVER_GROUP_IDS,
                                     ) {
                                         val dreamTotal = 5
                                         val slideshowIntervalTitle = stringResource(R.string.settings_slideshow_interval)
@@ -1123,6 +1140,7 @@ fun SettingsScreen(
                                             subtitle = if (preferences.dreamShowTitle) stringResource(R.string.settings_display_media_title) else stringResource(R.string.settings_hide_media_title),
                                             checked = preferences.dreamShowTitle,
                                             index = 0, count = dreamTotal,
+                                            highlighted = lastClickedSettingId == "screensaver_show_title",
                                             onCheckedChange = { viewModel.setDreamShowTitle(it) },
                                         )
                                         val categoryMovies = stringResource(R.string.settings_category_movies)
@@ -1142,6 +1160,7 @@ fun SettingsScreen(
                                                 }
                                             },
                                             index = 1, count = dreamTotal,
+                                            highlighted = lastClickedSettingId == "screensaver_categories",
                                             onClick = {
                                                 val allCats = DreamImageCategory.entries.toSet()
                                                 val current = preferences.dreamImageCategories
@@ -1161,6 +1180,7 @@ fun SettingsScreen(
                                             subtitle = stringResource(R.string.settings_slideshow_interval_subtitle),
                                             trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
                                             index = 2, count = dreamTotal,
+                                            highlighted = lastClickedSettingId == "screensaver_slideshow_interval",
                                             onClick = {
                                                 activeDialog = PickerState.List(
                                                     title = slideshowIntervalTitle,
@@ -1177,6 +1197,7 @@ fun SettingsScreen(
                                             subtitle = if (preferences.dreamKenBurnsEnabled) stringResource(R.string.settings_ken_burns_on) else stringResource(R.string.settings_ken_burns_off),
                                             checked = preferences.dreamKenBurnsEnabled,
                                             index = 3, count = dreamTotal,
+                                            highlighted = lastClickedSettingId == "screensaver_ken_burns",
                                             onCheckedChange = { viewModel.setDreamKenBurnsEnabled(it) },
                                         )
                                         SettingListItem(
@@ -1185,6 +1206,7 @@ fun SettingsScreen(
                                             subtitle = preferences.dreamTransitionStyle.name,
                                             trailingText = preferences.dreamTransitionStyle.name,
                                             index = 4, count = dreamTotal,
+                                            highlighted = lastClickedSettingId == "screensaver_transition_style",
                                             onClick = {
                                                 val labels = mapOf(
                                                     DreamTransitionStyle.CROSSFADE to transitionCrossfadeLabel,
@@ -1212,7 +1234,6 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_experimental),
                                     subtitle = buildExperimentalSummary(preferences),
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "experimental",
                                     onClick = {
                                         lastClickedSettingId = "experimental"
                                         onExperimentalSettings(null)
@@ -1228,7 +1249,6 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_integrations),
                                     subtitle = stringResource(R.string.settings_integrations_subtitle),
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "integrations",
                                     onClick = {
                                         lastClickedSettingId = "integrations"
                                         onIntegrations(null)
@@ -1244,7 +1264,6 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_about),
                                     subtitle = stringResource(R.string.settings_about_subtitle),
                                     index = 0, count = 1,
-                                    highlighted = lastClickedSettingId == "about",
                                     onClick = {
                                         lastClickedSettingId = "about"
                                         onAboutClick()
