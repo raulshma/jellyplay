@@ -85,21 +85,6 @@ internal fun EpisodePickerSheet(
                 .fillMaxWidth()
                 .padding(bottom = 24.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(40.dp)
-                        .height(4.dp)
-                        .clip(ShapeCache.smooth4)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
-                )
-            }
-
             Text(
                 text = stringResource(R.string.player_video_episodes),
                 style = MaterialTheme.typography.headlineSmall,

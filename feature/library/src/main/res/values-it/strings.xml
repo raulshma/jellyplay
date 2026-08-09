@@ -75,14 +75,4 @@
     <string name="library_cd_adjust">Regola</string>
     <string name="library_cd_previous">Precedente</string>
     <string name="library_cd_next">Successivo</string>
-
-    <!-- ── Multi-select (enhancements §8.1) ─────────────────────────────── -->
-    <string name="library_select">Seleziona</string>
-    <string name="library_select_all">Seleziona tutto</string>
-    <string name="library_n_selected">%1$d selezionati</string>
-    <string name="library_mark_watched">Segna come visto</string>
-    <string name="library_mark_unwatched">Segna come non visto</string>
-    <string name="library_clear_selection">Cancella selezione</string>
-    <string name="library_marked_watched_message">Segnato come visto</string>
-    <string name="library_marked_unwatched_message">Segnato come non visto</string>
 </resources>

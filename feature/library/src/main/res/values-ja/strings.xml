@@ -74,14 +74,4 @@
     <string name="library_cd_adjust">調整</string>
     <string name="library_cd_previous">前へ</string>
     <string name="library_cd_next">次へ</string>
-
-    <!-- ── Multi-select (enhancements §8.1) ─────────────────────────────── -->
-    <string name="library_select">選択</string>
-    <string name="library_select_all">すべて選択</string>
-    <string name="library_n_selected">%1$d 件選択中</string>
-    <string name="library_mark_watched">視聴済みにする</string>
-    <string name="library_mark_unwatched">未視聴にする</string>
-    <string name="library_clear_selection">選択を解除</string>
-    <string name="library_marked_watched_message">視聴済みにしました</string>
-    <string name="library_marked_unwatched_message">未視聴にしました</string>
 </resources>

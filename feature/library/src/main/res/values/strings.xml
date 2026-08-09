@@ -108,18 +108,4 @@
     <string name="library_cd_adjust">Adjust</string>
     <string name="library_cd_previous">Previous</string>
     <string name="library_cd_next">Next</string>
-
-    <!-- ── Multi-select (enhancements §8.1) ─────────────────────────────── -->
-    <!-- Action to enter selection mode (e.g. a Select affordance). -->
-    <string name="library_select">Select</string>
-    <string name="library_select_all">Select All</string>
-    <!-- %1$d = number of selected items -->
-    <string name="library_n_selected">%1$d selected</string>
-    <string name="library_mark_watched">Mark Watched</string>
-    <string name="library_mark_unwatched">Mark Unwatched</string>
-    <!-- Content description for the clear-selection (X) button in the action bar. -->
-    <string name="library_clear_selection">Clear selection</string>
-    <!-- Snackbar confirmations after a bulk mark-played/unplayed. -->
-    <string name="library_marked_watched_message">Marked as watched</string>
-    <string name="library_marked_unwatched_message">Marked as unwatched</string>
 </resources>

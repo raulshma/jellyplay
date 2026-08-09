@@ -75,14 +75,4 @@
     <string name="library_cd_adjust">Anpassen</string>
     <string name="library_cd_previous">Zurück</string>
     <string name="library_cd_next">Weiter</string>
-
-    <!-- ── Multi-select (enhancements §8.1) ─────────────────────────────── -->
-    <string name="library_select">Auswählen</string>
-    <string name="library_select_all">Alle auswählen</string>
-    <string name="library_n_selected">%1$d ausgewählt</string>
-    <string name="library_mark_watched">Als gesehen markieren</string>
-    <string name="library_mark_unwatched">Als ungesehen markieren</string>
-    <string name="library_clear_selection">Auswahl aufheben</string>
-    <string name="library_marked_watched_message">Als gesehen markiert</string>
-    <string name="library_marked_unwatched_message">Als ungesehen markiert</string>
 </resources>
