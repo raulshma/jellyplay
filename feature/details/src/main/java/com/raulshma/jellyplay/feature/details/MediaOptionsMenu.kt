@@ -66,6 +66,8 @@ internal fun rememberMediaOptions(
     onShowFromNextUp: () -> Unit,
     onHideFromContinueWatching: () -> Unit,
     onShowFromContinueWatching: () -> Unit,
+    onHideDetailUpNext: () -> Unit = {},
+    onShowDetailUpNext: () -> Unit = {},
     onManageSeries: () -> Unit,
     onTechnicalInfo: () -> Unit,
     onAddToPlaylist: () -> Unit,
@@ -98,14 +100,17 @@ internal fun rememberMediaOptions(
     val labelHideFromContinueWatching = stringResource(R.string.detail_option_hide_from_continue_watching)
     val labelShowInNextUp = stringResource(R.string.detail_option_show_in_next_up)
     val labelShowInContinueWatching = stringResource(R.string.detail_option_show_in_continue_watching)
+    val labelHideDetailUpNext = stringResource(R.string.detail_option_hide_detail_up_next)
+    val labelShowDetailUpNext = stringResource(R.string.detail_option_show_detail_up_next)
     val labelTechnicalInfo = stringResource(R.string.detail_option_technical_info)
     val labelManageSeries = stringResource(R.string.detail_option_manage_series)
     val labelAddToPlaylist = stringResource(R.string.detail_option_add_to_playlist)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
-        preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds,
+        preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
-        downloadStatus, downloadProgress, canManageSeries, labelManageSeries, labelAddToPlaylist) {
+        downloadStatus, downloadProgress, canManageSeries, labelManageSeries, labelAddToPlaylist,
+        labelHideDetailUpNext, labelShowDetailUpNext) {
         buildList {
             add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
                 onClose(); onEditClick()
@@ -169,6 +174,18 @@ internal fun rememberMediaOptions(
                     ) {
                         onClose()
                         if (isHiddenFromNextUp) onShowFromNextUp() else onHideFromNextUp()
+                    }
+                )
+            }
+            if (isSeries) {
+                val isDetailUpNextHidden = !preferences.showDetailUpNext
+                add(
+                    MediaOption(
+                        label = if (isDetailUpNextHidden) labelShowDetailUpNext else labelHideDetailUpNext,
+                        icon = if (isDetailUpNextHidden) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
+                    ) {
+                        onClose()
+                        if (isDetailUpNextHidden) onShowDetailUpNext() else onHideDetailUpNext()
                     }
                 )
             }

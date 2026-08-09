@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.data.repository.MergedSubtitleSearch
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
@@ -11,6 +12,8 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import io.mockk.coEvery
@@ -51,6 +54,7 @@ class SubtitleManagerTest {
     private lateinit var state: MutableStateFlow<VideoPlayerUiState>
     private lateinit var addedSubtitles: MutableList<SubtitleSource>
     private var refreshedDetails: MutableList<MediaDetail> = mutableListOf()
+    private var currentDetail: MediaDetail? = null
     private lateinit var manager: SubtitleManager
 
     // An unconfined scope makes manager's scope.launch blocks run to completion
@@ -66,6 +70,7 @@ class SubtitleManagerTest {
         state = MutableStateFlow(VideoPlayerUiState())
         addedSubtitles = mutableListOf()
         refreshedDetails.clear()
+        currentDetail = null
 
         manager = SubtitleManager(
             context = mockk(relaxed = true),
@@ -80,6 +85,7 @@ class SubtitleManagerTest {
             updateUiState = { transform -> state.value = transform(state.value) },
             getCurrentItemId = { "item-1" },
             onMediaDetailRefreshed = { refreshedDetails += it },
+            getCurrentMediaDetail = { currentDetail },
         )
     }
 
@@ -139,6 +145,94 @@ class SubtitleManagerTest {
         assertFalse(state.value.hasSearchedSubtitles)
         assertFalse(state.value.isSearchingSubtitles)
         assertTrue(state.value.searchedSubtitles.isEmpty())
+    }
+
+    @Test
+    fun searchAllProviders_usesInMemoryDetailAndDoesNotHitNetwork() {
+        // The VM already holds the detail from playback start; search must reuse
+        // it rather than re-fetching, so a transient server outage mid-search
+        // never reaches getMediaDetail.
+        currentDetail = mediaDetail("item-1")
+        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.failure(RuntimeException("offline"))
+        coEvery {
+            subtitleProviderRepository.searchAllStreaming(any(), "item-1", "eng", any())
+        } returns MergedSubtitleSearch(results = emptyList(), errors = emptyMap())
+
+        manager.searchAllProviders("eng")
+
+        // Network detail fetch never happens when the in-memory snapshot exists.
+        coVerify(exactly = 0) { mediaRepository.getMediaDetail(any()) }
+        assertTrue(state.value.hasSearchedSubtitles)
+        assertFalse(state.value.isSearchingSubtitles)
+    }
+
+    @Test
+    fun searchAllProviders_serverDownStillRunsExternalProvidersAndSurfacesNoItemDetailsError() {
+        // No in-memory snapshot (e.g. playback started without one) AND the
+        // detail fetch fails. The previous code bailed out with a single
+        // "Could not load item details" chip and never queried Wyzie /
+        // OpenSubtitles. The fix still calls searchAllStreaming so external
+        // providers run; the Jellyfin failure surfaces only as an empty merge,
+        // never as a hard abort.
+        currentDetail = null
+        coEvery { mediaRepository.getMediaDetail("item-1") } returns Result.failure(RuntimeException("offline"))
+        val wyzieResult = SubtitleSearchResult(
+            provider = SubtitleProviderKind.WYZIE,
+            id = "w1",
+            language = "eng",
+            displayName = "Wyzie EN",
+        )
+        coEvery {
+            subtitleProviderRepository.searchAllStreaming(any(), "item-1", "eng", any())
+        } returns MergedSubtitleSearch(results = listOf(wyzieResult), errors = emptyMap())
+
+        manager.searchAllProviders("eng")
+
+        assertEquals(listOf(wyzieResult), state.value.providerSearchResults)
+        // No fatal "Could not load item details" — external results came through.
+        assertTrue(state.value.providerSearchErrors.isEmpty())
+        assertTrue(state.value.hasSearchedSubtitles)
+        assertFalse(state.value.isSearchingSubtitles)
+    }
+
+    @Test
+    fun searchAllProviders_streamsPartialResultsToStateMidFlight() {
+        // The streaming contract: searchAllStreaming invokes its callback with
+        // each provider's results as it resolves. SubtitleManager must push those
+        // partials into providerSearchResults immediately — a slow provider can
+        // no longer gate a fast one. Here the callback fires once with an
+        // OpenSubtitles-only snapshot, then the final return adds Wyzie.
+        currentDetail = mediaDetail("item-1")
+        val osResult = SubtitleSearchResult(
+            provider = SubtitleProviderKind.OPENSUBTITLES,
+            id = "os1",
+            language = "eng",
+            displayName = "OS EN",
+        )
+        val wyzieResult = SubtitleSearchResult(
+            provider = SubtitleProviderKind.WYZIE,
+            id = "w1",
+            language = "eng",
+            displayName = "Wyzie EN",
+        )
+        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.failure(RuntimeException("offline"))
+        coEvery {
+            subtitleProviderRepository.searchAllStreaming(any(), "item-1", "eng", any())
+        } coAnswers {
+            @Suppress("UNCHECKED_CAST")
+            val callback = args[3] as (MergedSubtitleSearch) -> Unit
+            // First provider resolves: emit OpenSubtitles-only partial.
+            callback(MergedSubtitleSearch(results = listOf(osResult), errors = emptyMap()))
+            // Then the final snapshot includes both.
+            MergedSubtitleSearch(results = listOf(osResult, wyzieResult), errors = emptyMap())
+        }
+
+        manager.searchAllProviders("eng")
+
+        // Final state reflects the merged snapshot.
+        assertEquals(2, state.value.providerSearchResults.size)
+        assertTrue(state.value.hasSearchedSubtitles)
+        assertFalse(state.value.isSearchingSubtitles)
     }
 
     @Test
@@ -318,6 +412,7 @@ class SubtitleManagerTest {
         updateUiState = { transform -> state.value = transform(state.value) },
         getCurrentItemId = { id },
         onMediaDetailRefreshed = { refreshedDetails += it },
+        getCurrentMediaDetail = { currentDetail },
     )
 
     /**
@@ -338,6 +433,7 @@ class SubtitleManagerTest {
         updateUiState = { transform -> state.value = transform(state.value) },
         getCurrentItemId = { "item-1" },
         onMediaDetailRefreshed = { refreshedDetails += it },
+        getCurrentMediaDetail = { currentDetail },
     )
 
     private fun mediaDetail(id: String): MediaDetail = MediaDetail(

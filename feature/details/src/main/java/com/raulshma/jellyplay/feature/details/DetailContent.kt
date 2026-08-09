@@ -139,6 +139,8 @@ internal fun DetailContent(
         onShowFromNextUp = callbacks.onShowFromNextUp,
         onHideFromContinueWatching = callbacks.onHideFromContinueWatching,
         onShowFromContinueWatching = callbacks.onShowFromContinueWatching,
+        onHideDetailUpNext = callbacks.onHideDetailUpNext,
+        onShowDetailUpNext = callbacks.onShowDetailUpNext,
         onManageSeries = callbacks.onManageSeries,
         onTechnicalInfo = { callbacks.onNavigate(Route.MediaInfo(state.itemId)) },
         onAddToPlaylist = callbacks.onAddToPlaylist,

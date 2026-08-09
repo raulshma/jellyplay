@@ -72,6 +72,7 @@ data class DetailPreferences(
     val hideEpisodeThumbnails: Boolean = false,
     val episodesDescending: Boolean = true,
     val compactEpisodeList: Boolean = false,
+    val showDetailUpNext: Boolean = true,
 )
 
 /** Fields read by `OnboardingViewModel` across the multi-step onboarding flow. */

@@ -288,6 +288,13 @@ class PlayerSessionManager(
             ),
             mediaSources = emptyList(),
             chapters = emptyList(),
+            // Carry the provider ids / external URLs persisted at download time
+            // so SubtitleProviderIds can resolve a TMDB/IMDb id for Wyzie /
+            // OpenSubtitles even when the Jellyfin server is unreachable. Empty
+            // for legacy downloads (pre-v44) — the subtitle providers then fall
+            // back to a title search.
+            providerIds = offlineItem?.providerIds ?: emptyMap(),
+            externalUrls = offlineItem?.externalUrls ?: emptyList(),
         )
 
         if (playerType == PlayerType.EXTERNAL) {

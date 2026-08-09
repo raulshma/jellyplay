@@ -787,55 +787,13 @@ private fun ProviderSearchResults(
         )
         Spacer(Modifier.height(8.dp))
         when {
-            isLoading -> JellyPlayLoadingIndicator(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(24.dp),
-            )
-            hasSearched && visible.isEmpty() && errors.isEmpty() -> Box(
-                modifier = Modifier.fillMaxWidth().height(160.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    stringResource(R.string.player_video_no_results_found),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            // Every provider failed (no results at all): prominent error block
-            // listing every provider's message — not just the first. The filter
-            // chips above still tint each errored provider red.
-            visible.isEmpty() && errors.isNotEmpty() -> Column(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    stringResource(R.string.player_video_search_failed),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Spacer(Modifier.height(8.dp))
-                errors.forEach { (_, msg) ->
-                    Text(
-                        msg,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            visible.isEmpty() -> Box(
-                modifier = Modifier.fillMaxWidth().height(120.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    stringResource(R.string.player_video_pick_language_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            // Partial results + some provider errors: render the results AND the
-            // error messages (one bad key must not hide the others' results, nor
-            // hide its own failure message).
-            else -> Column(modifier = Modifier.weight(1f, fill = false)) {
+            // Partial results from at least one provider: render them
+            // immediately, even while other providers are still loading. This is
+            // the core fix — a slow/retrying provider can no longer hide its
+            // siblings' results behind a spinner. Errors that already landed are
+            // shown inline below the list; if still loading, a compact spinner
+            // signals the remaining providers are pending.
+            visible.isNotEmpty() -> Column(modifier = Modifier.weight(1f, fill = false)) {
                 LazyColumn(
                     modifier = Modifier.verticalWrapAround().weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -865,6 +823,65 @@ private fun ProviderSearchResults(
                         )
                     }
                 }
+                if (isLoading) {
+                    Spacer(Modifier.height(4.dp))
+                    JellyPlayLoadingIndicator(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(8.dp),
+                    )
+                }
+            }
+            // Provider errors landed but no results yet (other providers still
+            // pending or all failed): show the errors immediately rather than a
+            // blank spinner, plus a spinner if more providers are still loading.
+            errors.isNotEmpty() -> Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = if (isLoading) 8.dp else 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (isLoading) {
+                    JellyPlayLoadingIndicator(
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                } else {
+                    Text(
+                        stringResource(R.string.player_video_search_failed),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                errors.forEach { (_, msg) ->
+                    Text(
+                        msg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            isLoading -> JellyPlayLoadingIndicator(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(24.dp),
+            )
+            hasSearched && visible.isEmpty() && errors.isEmpty() -> Box(
+                modifier = Modifier.fillMaxWidth().height(160.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    stringResource(R.string.player_video_no_results_found),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            visible.isEmpty() -> Box(
+                modifier = Modifier.fillMaxWidth().height(120.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    stringResource(R.string.player_video_pick_language_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

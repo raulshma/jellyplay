@@ -567,6 +567,7 @@ class PreferenceProjections @Inject constructor(
             hideEpisodeThumbnails = library.hideEpisodeThumbnails,
             episodesDescending = library.episodesDescending,
             compactEpisodeList = library.compactEpisodeList,
+            showDetailUpNext = library.showDetailUpNext,
         )
     }.distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailPreferences())

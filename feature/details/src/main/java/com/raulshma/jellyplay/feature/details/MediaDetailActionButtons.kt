@@ -158,11 +158,6 @@ internal fun DetailActionButtons(
             modifier = modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (isSeries && target != null) {
-                FadingItem {
-                    UpNextCard(target = target, onClick = onPlay)
-                }
-            }
             FadingItem {
                 PlayButton(
                     style = PlayButtonStyle.Vertical,
@@ -211,11 +206,6 @@ internal fun DetailActionButtons(
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (isSeries && target != null) {
-                FadingItem {
-                    UpNextCard(target = target, onClick = onPlay)
-                }
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.Start),
@@ -413,74 +403,5 @@ private fun FavoriteButton(
             contentDescription = stringResource(R.string.detail_cd_favorite),
             tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
-    }
-}
-
-@Composable
-private fun UpNextCard(
-    target: DetailUiState.SmartPlayTarget,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val focusState = rememberTvFocusState(focusedScale = 1.03f)
-    val shape = ShapeCache.smooth14
-    val confirmHaptic = rememberConfirmHaptic()
-
-    Surface(
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 2.dp,
-        modifier = modifier
-            .fillMaxWidth()
-            .then(focusState.focusModifier)
-            .then(Modifier.tvFocusIndicator(focusState, shape))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { confirmHaptic(); onClick() },
-            ),
-    ) {
-        Row(modifier = Modifier.padding(8.dp)) {
-            MediaImage(
-                url = target.primaryImageUrl ?: "",
-                contentDescription = target.episode.name,
-                blurHash = target.episode.blurHashes.primary,
-                modifier = Modifier
-                    .width(128.dp)
-                    .aspectRatio(16f / 9f)
-                    .clip(ShapeCache.smooth8),
-                contentScale = ContentScale.Crop,
-            )
-            Spacer(Modifier.size(12.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    stringResource(R.string.detail_up_next),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.size(2.dp))
-                Text(
-                    "${target.label} · ${target.episode.name}",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                val overview = target.episode.overview
-                if (!overview.isNullOrEmpty()) {
-                    Spacer(Modifier.size(4.dp))
-                    Text(
-                        overview,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
     }
 }
