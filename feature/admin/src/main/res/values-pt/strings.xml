@@ -148,6 +148,8 @@
     <string name="admin_no_users">Nenhum usuário</string>
     <string name="admin_new_user_title">Novo usuário</string>
     <string name="admin_password_optional">Senha (opcional)</string>
+    <string name="admin_show_password">Mostrar palavra-passe</string>
+    <string name="admin_hide_password">Ocultar palavra-passe</string>
     <string name="admin_create">Criar</string>
     <string name="admin_delete_user_title">Excluir usuário</string>
     <string name="admin_delete_user_body">Excluir \"%1$s\"? Isso não pode ser desfeito.</string>

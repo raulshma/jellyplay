@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,9 +43,6 @@ data class ArrQueueUiState(
     val selectedIds: Set<String> = emptySet(),
     val selectionMode: Boolean = false,
     val actionInProgress: Boolean = false,
-    val actionError: String? = null,
-    /** R3: brief success message (grab/import sent) for a snackbar. */
-    val actionSuccess: String? = null,
     /** Inline action dialog to show, if any. */
     val pendingAction: ArrQueueAction? = null,
 )
@@ -53,6 +51,7 @@ data class ArrQueueUiState(
 class ArrQueueViewModel @Inject constructor(
     private val arrRepository: ArrRepository,
     @ApplicationContext private val context: Context,
+    private val userMessageBus: UserMessageBus,
     experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
 ) : JellyPlayViewModel() {
 
@@ -148,7 +147,7 @@ class ArrQueueViewModel @Inject constructor(
      */
     fun deleteItem(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean) {
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null, pendingAction = null)
+            _state.value = _state.value.copy(actionInProgress = true, pendingAction = null)
             val options = ArrQueueDeleteOptions(
                 removeFromClient = true,
                 blocklist = blocklist,
@@ -161,7 +160,7 @@ class ArrQueueViewModel @Inject constructor(
                         if (tmdb != null) arrRepository.searchForTmdb(tmdb, item.serverKind)
                     }
                 }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
+                .onFailure { userMessageBus.error(it.message ?: context.getString(R.string.arrqueue_unknown_error)) }
             _state.value = _state.value.copy(actionInProgress = false)
         }
     }
@@ -171,7 +170,7 @@ class ArrQueueViewModel @Inject constructor(
         val selected = _state.value.queue.filter { it.rowKey in _state.value.selectedIds }
         if (selected.isEmpty()) return
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null, pendingAction = null)
+            _state.value = _state.value.copy(actionInProgress = true, pendingAction = null)
             val options = ArrQueueDeleteOptions(
                 removeFromClient = true,
                 blocklist = blocklist,
@@ -188,43 +187,35 @@ class ArrQueueViewModel @Inject constructor(
                     }
                     clearSelection()
                 }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
+                .onFailure { userMessageBus.error(it.message ?: context.getString(R.string.arrqueue_unknown_error)) }
             _state.value = _state.value.copy(actionInProgress = false)
         }
     }
 
     fun grabItem(item: ArrQueueItem) {
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null, actionSuccess = null, pendingAction = null)
+            _state.value = _state.value.copy(actionInProgress = true, pendingAction = null)
             arrRepository.grabQueueItem(item)
                 .onSuccess {
-                    _state.value = _state.value.copy(actionSuccess = context.getString(R.string.arrqueue_grab_sent, item.title))
+                    userMessageBus.info(context.getString(R.string.arrqueue_grab_sent, item.title))
                     refresh()
                 }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
+                .onFailure { userMessageBus.error(it.message ?: context.getString(R.string.arrqueue_unknown_error)) }
             _state.value = _state.value.copy(actionInProgress = false)
         }
     }
 
     fun importItem(item: ArrQueueItem) {
         launch {
-            _state.value = _state.value.copy(actionInProgress = true, actionError = null, actionSuccess = null, pendingAction = null)
+            _state.value = _state.value.copy(actionInProgress = true, pendingAction = null)
             arrRepository.importQueueItem(item)
                 .onSuccess {
-                    _state.value = _state.value.copy(actionSuccess = context.getString(R.string.arrqueue_import_sent, item.title))
+                    userMessageBus.info(context.getString(R.string.arrqueue_import_sent, item.title))
                     refresh()
                 }
-                .onFailure { _state.value = _state.value.copy(actionError = it.message) }
+                .onFailure { userMessageBus.error(it.message ?: context.getString(R.string.arrqueue_unknown_error)) }
             _state.value = _state.value.copy(actionInProgress = false)
         }
-    }
-
-    fun clearActionError() {
-        _state.value = _state.value.copy(actionError = null)
-    }
-
-    fun clearActionSuccess() {
-        _state.value = _state.value.copy(actionSuccess = null)
     }
 
     private val ArrQueueItem.rowKey: String

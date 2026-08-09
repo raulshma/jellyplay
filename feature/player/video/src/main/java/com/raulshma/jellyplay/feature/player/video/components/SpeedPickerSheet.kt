@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.core.ui.player.SpeedSlider
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.ifElse
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -41,6 +42,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
+import com.composables.icons.tabler.outline.Gauge
 
 private val SPEED_OPTIONS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
 
@@ -69,12 +71,9 @@ internal fun SpeedPickerSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                "Playback Speed",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                modifier = Modifier.padding(horizontal = 24.dp),
+            SheetHeader(
+                title = "Playback Speed",
+                icon = Tabler.Outline.Gauge,
             )
             Spacer(Modifier.height(20.dp))
 
@@ -125,6 +124,11 @@ internal fun SpeedPickerSheet(
                         }
                     }
                 }
+                Spacer(Modifier.height(16.dp))
+                SpeedSlider(
+                    currentSpeed = currentSpeed,
+                    onSelect = onSelect,
+                )
             } else {
                 Row(
                     modifier = Modifier
@@ -158,6 +162,11 @@ internal fun SpeedPickerSheet(
                         )
                     }
                 }
+                Spacer(Modifier.height(20.dp))
+                SpeedSlider(
+                    currentSpeed = currentSpeed,
+                    onSelect = onSelect,
+                )
             }
         }
     }

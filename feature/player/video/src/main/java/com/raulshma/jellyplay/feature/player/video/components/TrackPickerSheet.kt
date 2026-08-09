@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -73,25 +74,49 @@ internal fun TrackPickerSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 32.dp),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                    ),
-                )
-                if (onReset != null) {
+        TrackPickerSection(
+            title = title,
+            tracks = tracks,
+            onSelect = onSelect,
+            onReset = onReset,
+            onPickDismiss = onDismiss,
+            footer = footer,
+            focusRequester = focusRequester,
+        )
+    }
+}
+
+/**
+ * The body of [TrackPickerSheet] without its own sheet chrome, for embedding
+ * inside the unified subtitle hub. [onPickDismiss] is invoked after a track is
+ * selected so the host (sheet or hub) can close/navigate as needed; the hub
+ * passes a no-op since it owns its own dismissal.
+ *
+ * Declared as a [ColumnScope] extension so the inner `LazyColumn.weight` (used
+ * to bound the scroll height inside the sheet/hub) resolves.
+ */
+@Composable
+internal fun androidx.compose.foundation.layout.ColumnScope.TrackPickerSection(
+    title: String,
+    tracks: List<TrackOption>,
+    onSelect: (TrackOption) -> Unit,
+    onReset: (() -> Unit)? = null,
+    onPickDismiss: () -> Unit = {},
+    footer: @Composable (() -> Unit)? = null,
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp),
+    ) {
+        val resetAction = onReset
+        SheetHeader(
+            title = title,
+            icon = Tabler.Outline.Subtitles,
+            trailing = if (resetAction != null) {
+                {
                     val resetFocusState = rememberTvFocusState(focusedScale = 1.04f)
                     Row(
                         modifier = Modifier
@@ -99,8 +124,8 @@ internal fun TrackPickerSheet(
                             .then(resetFocusState.focusModifier)
                             .tvFocusIndicator(resetFocusState, CircleShape)
                             .clickable {
-                                onReset()
-                                onDismiss()
+                                resetAction()
+                                onPickDismiss()
                             }
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -121,29 +146,29 @@ internal fun TrackPickerSheet(
                         )
                     }
                 }
+            } else null,
+        )
+        Spacer(Modifier.height(12.dp))
+        LazyColumn(modifier = Modifier.verticalWrapAround().weight(1f, fill = false)) {
+            itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->
+                val isSelected = track.isSelected
+                val isFirst = index == 0
+                val isTarget = isSelected || (tracks.none { it.isSelected } && isFirst)
+                TrackItem(
+                    track = track,
+                    isLast = index == tracks.lastIndex,
+                    itemCount = tracks.size,
+                    onSelect = {
+                        onSelect(track)
+                        onPickDismiss()
+                    },
+                    modifier = Modifier.ifElse(isTarget, Modifier.focusRequester(focusRequester)),
+                )
             }
-            Spacer(Modifier.height(12.dp))
-            LazyColumn(modifier = Modifier.verticalWrapAround().weight(1f, fill = false)) {
-                itemsIndexed(tracks, key = { _, track -> track.index }, contentType = { _, _ -> "track" }) { index, track ->
-                    val isSelected = track.isSelected
-                    val isFirst = index == 0
-                    val isTarget = isSelected || (tracks.none { it.isSelected } && isFirst)
-                    TrackItem(
-                        track = track,
-                        isLast = index == tracks.lastIndex,
-                        itemCount = tracks.size,
-                        onSelect = {
-                            onSelect(track)
-                            onDismiss()
-                        },
-                        modifier = Modifier.ifElse(isTarget, Modifier.focusRequester(focusRequester)),
-                    )
-                }
-            }
-            if (footer != null) {
-                Spacer(Modifier.height(8.dp))
-                footer()
-            }
+        }
+        if (footer != null) {
+            Spacer(Modifier.height(8.dp))
+            footer()
         }
     }
 }

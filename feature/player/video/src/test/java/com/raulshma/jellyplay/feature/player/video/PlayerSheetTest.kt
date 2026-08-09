@@ -12,14 +12,12 @@ class PlayerSheetTest {
             PlayerSheet.None,
             PlayerSheet.Speed,
             PlayerSheet.Audio,
-            PlayerSheet.Subtitle,
             PlayerSheet.Chapter,
             PlayerSheet.PlaybackInfo,
             PlayerSheet.AspectRatio,
-            PlayerSheet.SubtitleStyle,
+            PlayerSheet.SubtitleHub,
             PlayerSheet.AVSync,
             PlayerSheet.Decoder,
-            PlayerSheet.SubtitleDownload,
         )
         val uniqueTypes = sheets.map { it::class }.distinct()
         assertTrue(uniqueTypes.size >= sheets.size - 1)

@@ -58,6 +58,7 @@ class LibraryStore @Inject constructor(
         val EPISODES_DESCENDING = booleanPreferencesKey("episodes_descending")
         val SKIP_SPECIALS = booleanPreferencesKey("skip_specials")
         val COMPACT_EPISODE_LIST = booleanPreferencesKey("compact_episode_list")
+        val SHOW_DETAIL_UP_NEXT = booleanPreferencesKey("show_detail_up_next")
         val LIBRARY_POSTER_SIZE = floatPreferencesKey("library_poster_size")
         val LIBRARY_GROUP_BY = stringPreferencesKey("library_group_by")
         val CONFIRM_LIBRARY_RESET = booleanPreferencesKey("confirm_library_reset")
@@ -84,6 +85,7 @@ class LibraryStore @Inject constructor(
         episodesDescending = PreferenceCodec.readBool(prefs, Keys.EPISODES_DESCENDING, "episodes_descending", true),
         skipSpecials = PreferenceCodec.readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
         compactEpisodeList = PreferenceCodec.readBool(prefs, Keys.COMPACT_EPISODE_LIST, "compact_episode_list", false),
+        showDetailUpNext = PreferenceCodec.readBool(prefs, Keys.SHOW_DETAIL_UP_NEXT, "show_detail_up_next", true),
         libraryPosterSize = prefs[Keys.LIBRARY_POSTER_SIZE] ?: DEFAULT_POSTER_SIZE,
         libraryGroupBy = readGroupBy(prefs),
         confirmLibraryReset = readConfirmLibraryReset(prefs),
@@ -183,6 +185,10 @@ class LibraryStore @Inject constructor(
         dataStore.edit { it[Keys.COMPACT_EPISODE_LIST] = enabled }
     }
 
+    suspend fun setShowDetailUpNext(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_DETAIL_UP_NEXT] = enabled }
+    }
+
     suspend fun setLibraryPosterSize(size: Float) {
         dataStore.edit { it[Keys.LIBRARY_POSTER_SIZE] = size.coerceIn(POSTER_SIZE_MIN, POSTER_SIZE_MAX) }
     }
@@ -204,7 +210,7 @@ class LibraryStore @Inject constructor(
         Keys.LIBRARY_VIEW_MODE,
         Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES, Keys.LIBRARY_FILTERS,
         Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING, Keys.SKIP_SPECIALS,
-        Keys.COMPACT_EPISODE_LIST,
+        Keys.COMPACT_EPISODE_LIST, Keys.SHOW_DETAIL_UP_NEXT,
         Keys.LIBRARY_POSTER_SIZE, Keys.LIBRARY_GROUP_BY,
         Keys.CONFIRM_LIBRARY_RESET,
     )
@@ -219,7 +225,7 @@ class LibraryStore @Inject constructor(
             Keys.LIBRARY_VIEW_MODE,
             Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES, Keys.LIBRARY_FILTERS,
             Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING, Keys.SKIP_SPECIALS,
-            Keys.COMPACT_EPISODE_LIST,
+            Keys.COMPACT_EPISODE_LIST, Keys.SHOW_DETAIL_UP_NEXT,
             Keys.LIBRARY_POSTER_SIZE, Keys.LIBRARY_GROUP_BY,
             Keys.CONFIRM_LIBRARY_RESET,
         )
@@ -243,6 +249,7 @@ class LibraryStore @Inject constructor(
             it[Keys.EPISODES_DESCENDING] = userPreferences.episodesDescending
             it[Keys.SKIP_SPECIALS] = userPreferences.skipSpecials
             it[Keys.COMPACT_EPISODE_LIST] = userPreferences.compactEpisodeList
+            it[Keys.SHOW_DETAIL_UP_NEXT] = true
             it[Keys.CONFIRM_LIBRARY_RESET] = true
         }
     }
@@ -262,6 +269,7 @@ class LibraryStore @Inject constructor(
             it[Keys.EPISODES_DESCENDING] = slice.episodesDescending
             it[Keys.SKIP_SPECIALS] = slice.skipSpecials
             it[Keys.COMPACT_EPISODE_LIST] = slice.compactEpisodeList
+            it[Keys.SHOW_DETAIL_UP_NEXT] = slice.showDetailUpNext
             it[Keys.LIBRARY_POSTER_SIZE] = slice.libraryPosterSize
             it[Keys.LIBRARY_GROUP_BY] = slice.libraryGroupBy.name
             it[Keys.CONFIRM_LIBRARY_RESET] = slice.confirmLibraryReset
@@ -293,6 +301,7 @@ data class LibrarySlice(
     val episodesDescending: Boolean = true,
     val skipSpecials: Boolean = false,
     val compactEpisodeList: Boolean = false,
+    val showDetailUpNext: Boolean = true,
     val libraryPosterSize: Float = DEFAULT_POSTER_SIZE,
     val libraryGroupBy: GroupBy = GroupBy.NONE,
     val confirmLibraryReset: Boolean = true,

@@ -54,6 +54,7 @@ internal fun SettingsGroup(
     icon: ImageVector,
     title: String,
     summary: @Composable (() -> String)? = null,
+    badge: @Composable (() -> Unit)? = null,
     initiallyExpanded: Boolean = false,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
@@ -73,6 +74,13 @@ internal fun SettingsGroup(
         else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "groupIconColor",
+    )
+
+    val iconBgColor by animateColorAsState(
+        targetValue = if (expanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "groupIconBgColor",
     )
 
     val chevronRotation by animateFloatAsState(
@@ -95,7 +103,7 @@ internal fun SettingsGroup(
             .fillMaxWidth()
             .clip(ShapeCache.smooth24)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Row(
             modifier = Modifier
@@ -104,27 +112,35 @@ internal fun SettingsGroup(
                     scaleX = headerScale
                     scaleY = headerScale
                 }
-                .clip(ShapeCache.smooth12)
+                .clip(ShapeCache.smooth16)
                 .then(headerTvFocusState.focusModifier)
-                .tvFocusIndicator(headerTvFocusState, ShapeCache.smooth12)
+                .tvFocusIndicator(headerTvFocusState, ShapeCache.smooth16)
                 .clickable(
                     interactionSource = headerInteractionSource,
                     indication = null,
                 ) { expanded = !expanded }
-                .padding(vertical = 4.dp),
+                .padding(vertical = 4.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconColor,
-                modifier = Modifier.size(22.dp),
-            )
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(ShapeCache.smooth12)
+                    .background(iconBgColor),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -141,6 +157,10 @@ internal fun SettingsGroup(
                         )
                     }
                 }
+            }
+            if (badge != null) {
+                badge()
+                Spacer(Modifier.width(8.dp))
             }
             Icon(
                 imageVector = Tabler.Outline.ChevronDown,

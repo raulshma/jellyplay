@@ -32,6 +32,7 @@
     <string name="auth_connect">接続</string>
     <string name="auth_connecting">接続中…</string>
     <string name="auth_server_address">サーバーアドレス</string>
+    <string name="auth_server_address_invalid">有効な URL を入力してください (例: https://host:port)</string>
 
     <!-- Server connection errors -->
     <string name="auth_error_server_address_required">サーバーアドレスを入力してください</string>

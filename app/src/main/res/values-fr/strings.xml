@@ -148,6 +148,16 @@
     <!-- TV navigation drawer -->
     <string name="nav_now_playing">Lecture en cours</string>
     <string name="nav_settings">Paramètres</string>
+    <string name="nav_more">Plus</string>
+    <string name="nav_more_content_description">Plus d\'options</string>
+    <string name="menu_settings">Paramètres</string>
+    <string name="menu_downloads">Téléchargements</string>
+    <string name="menu_play_on">Lire sur</string>
+    <string name="menu_surprise_me">Surprenez-moi</string>
+    <string name="menu_shortcuts">Raccourcis</string>
+    <string name="menu_go_online">Se connecter</string>
+    <string name="menu_go_offline">Se déconnecter</string>
+    <string name="menu_going_online">Connexion en cours…</string>
 
     <!-- Play On device sheet -->
     <string name="play_on_title">Lire sur</string>
@@ -168,4 +178,9 @@
 
     <!-- Now-playing snackbar -->
     <string name="snackbar_now_playing">Lecture en cours : %1$s</string>
+
+    <!-- Player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">Vitesse personnalisée</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">Ajuster la vitesse de lecture</string>
 </resources>

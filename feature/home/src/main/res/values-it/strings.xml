@@ -29,12 +29,7 @@
     <string name="home_clear_search">Cancella ricerca</string>
     <string name="home_search_placeholder">Cerca film, serie, musica…</string>
 
-    <!-- Home floating action button menu. -->
-    <string name="home_close_menu">Chiudi menu</string>
-    <string name="home_more_options">Altre opzioni</string>
-    <string name="home_surprise_me">Sorprendimi</string>
-    <string name="home_downloads">Download</string>
-    <string name="home_play_on">Riproduci su</string>
+
     <string name="home_settings">Impostazioni</string>
     <string name="home_switch_user">Cambia utente</string>
     <string name="home_going_online">Connessione in corso…</string>

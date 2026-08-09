@@ -25,6 +25,9 @@
     <string name="detail_play_no_episodes_available">No Episodes Available</string>
     <string name="detail_play_no_episodes">No Episodes</string>
 
+    <!-- ── Up Next card label ───────────────────────────────────────────── -->
+    <string name="detail_up_next">Up Next</string>
+
     <!-- ── Smart-play templates (verb + S#:E#) ────────────────────────────
          Positional args: %1$d = season number, %2$d = episode number. -->
     <string name="detail_resume_episode">Resume S%1$d:E%2$d</string>
@@ -44,6 +47,7 @@
     <string name="detail_cd_expand">Expand</string>
     <string name="detail_cd_sort_oldest_first">Sort oldest first</string>
     <string name="detail_cd_sort_newest_first">Sort newest first</string>
+    <string name="detail_cd_hide_up_next">Hide Up Next section</string>
 
     <!-- ── Episode / season card labels ─────────────────────────────────── -->
     <string name="detail_season_format">Season %1$d</string>
@@ -67,6 +71,8 @@
     <string name="detail_option_hide_from_continue_watching">Hide from Continue Watching</string>
     <string name="detail_option_show_in_next_up">Show in Next Up</string>
     <string name="detail_option_show_in_continue_watching">Show in Continue Watching</string>
+    <string name="detail_option_hide_detail_up_next">Hide Up Next Section</string>
+    <string name="detail_option_show_detail_up_next">Show Up Next Section</string>
     <string name="detail_option_technical_info">Technical Info</string>
 
     <!-- ── Series download sheet ────────────────────────────────────────── -->

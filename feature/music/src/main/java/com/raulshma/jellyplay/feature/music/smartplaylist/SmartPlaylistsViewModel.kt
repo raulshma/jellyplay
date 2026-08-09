@@ -86,20 +86,15 @@ class SmartPlaylistsViewModel @Inject constructor(
             val hasDateAddedSort = playlist.sortBy == SmartPlaylistSort.DATE_ADDED
             val hasPlayCountSort = playlist.sortBy == SmartPlaylistSort.PLAY_COUNT
 
-            val apiSortBy = when {
-                hasDateAddedSort -> "DateCreated"
-                hasPlayCountSort -> "DatePlayed"
-                playlist.sortBy == SmartPlaylistSort.RATING -> "CommunityRating"
-                playlist.sortBy == SmartPlaylistSort.TITLE -> "SortName"
-                playlist.sortBy == SmartPlaylistSort.ARTIST -> "AlbumArtist"
-                playlist.sortBy == SmartPlaylistSort.ALBUM -> "Album"
-                playlist.sortBy == SmartPlaylistSort.YEAR -> "ProductionYear"
-                else -> "SortName"
-            }
-            val apiSortOrder = when {
-                hasDateAddedSort || hasPlayCountSort -> "Descending"
-                playlist.sortBy == SmartPlaylistSort.RATING || playlist.sortBy == SmartPlaylistSort.YEAR -> "Descending"
-                else -> "Ascending"
+            val sortOption = when {
+                hasDateAddedSort -> com.raulshma.jellyplay.core.model.SortOption.DATE_ADDED
+                hasPlayCountSort -> com.raulshma.jellyplay.core.model.SortOption.DATE_PLAYED
+                playlist.sortBy == SmartPlaylistSort.RATING -> com.raulshma.jellyplay.core.model.SortOption.RATING
+                playlist.sortBy == SmartPlaylistSort.TITLE -> com.raulshma.jellyplay.core.model.SortOption.SORT_NAME
+                playlist.sortBy == SmartPlaylistSort.ARTIST -> com.raulshma.jellyplay.core.model.SortOption.ALBUM_ARTIST
+                playlist.sortBy == SmartPlaylistSort.ALBUM -> com.raulshma.jellyplay.core.model.SortOption.ALBUM
+                playlist.sortBy == SmartPlaylistSort.YEAR -> com.raulshma.jellyplay.core.model.SortOption.YEAR_DESC
+                else -> com.raulshma.jellyplay.core.model.SortOption.SORT_NAME
             }
 
             val unplayedOnly = hasPlayCountFilter && playlist.criteria
@@ -119,10 +114,11 @@ class SmartPlaylistsViewModel @Inject constructor(
                 val genreFilters = nonPlayCountCriteria.filter { it.type == CriterionType.GENRE }
                     .mapNotNull { it.value }
                 mediaRepository.getMediaItems(
-                    mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.AUDIO),
-                    genres = genreFilters.takeIf { it.isNotEmpty() },
-                    sortBy = apiSortBy,
-                    sortOrder = apiSortOrder,
+                    filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                        mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.AUDIO),
+                        genres = genreFilters.takeIf { it.isNotEmpty() }.orEmpty(),
+                        sortBy = sortOption,
+                    ),
                     limit = playlist.maxItems,
                 )
             }

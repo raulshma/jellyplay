@@ -64,6 +64,13 @@
     <string name="onboarding_security_biometric_unlock">Usar huella o desbloqueo facial</string>
     <string name="onboarding_security_biometric_setup_hint">Configura una huella o un rostro en los ajustes de Android para activarlo</string>
     <string name="onboarding_security_auto_lock_timer">Temporizador de bloqueo automático</string>
+    <string name="onboarding_security_lock_never">Nunca</string>
+    <string name="onboarding_security_lock_15s">15s</string>
+    <string name="onboarding_security_lock_30s">30s</string>
+    <string name="onboarding_security_lock_1m">1m</string>
+    <string name="onboarding_security_lock_5m">5m</string>
+    <string name="onboarding_show_password">Mostrar contraseña</string>
+    <string name="onboarding_hide_password">Ocultar contraseña</string>
 
     <!-- HomeLayoutStep -->
     <string name="onboarding_home_layout_title">Diseño de inicio</string>

@@ -685,18 +685,61 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * Verifies the v43→v44 migration adds the nullable `providerIdsJson` and
+     * `externalUrlsJson` columns to `offline_media`. Pre-existing rows pick up
+     * null (degrading to a title-only subtitle search until re-download), and a
+     * fresh write round-trips both JSON blobs through the DAO so the offline
+     * subtitle search can resolve a TMDB/IMDb id without a server round-trip.
+     */
+    @Test
+    fun migrateAllFromV12_addsOfflineProviderIdColumns() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+            db.execSQL(
+                "INSERT INTO offline_media (id, name, mediaType) VALUES (?, ?, ?)",
+                arrayOf<Any>("item-1", "Test", "MOVIE"),
+            )
+        }
+
+        val db = openWithMigrations()
+        // The pre-existing row picks up null for both new columns.
+        val baseline = db.offlineMediaDao().getById("item-1")
+        assertNotNull(baseline)
+        assertEquals(null, baseline!!.providerIdsJson)
+        assertEquals(null, baseline.externalUrlsJson)
+        // A targeted write round-trips both JSON blobs through the new columns.
+        db.offlineMediaDao().upsert(
+            baseline.copy(
+                providerIdsJson = """{"tmdb":"12345","imdb":"tt67890"}""",
+                externalUrlsJson = """[{"name":"TMDB","url":"https://www.themoviedb.org/movie/12345"}]""",
+            )
+        )
+        val updated = db.offlineMediaDao().getById("item-1")
+        assertEquals("""{"tmdb":"12345","imdb":"tt67890"}""", updated!!.providerIdsJson)
+        assertEquals(
+            """[{"name":"TMDB","url":"https://www.themoviedb.org/movie/12345"}]""",
+            updated.externalUrlsJson,
+        )
+        db.close()
+    }
+
     @Test
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (43),
+        // One migration per step from v1 up to the current schema version (44),
         // each handing off to the next with no gaps or duplicate starts.
         // androidx.room.Database has CLASS retention, so getAnnotation() returns
         // null at runtime — the hardcoded fallback is the authoritative value
         // and must be bumped alongside JellyPlayDatabase's version.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 43
+            ?: 44
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",

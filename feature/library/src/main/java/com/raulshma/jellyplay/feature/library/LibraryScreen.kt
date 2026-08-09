@@ -14,6 +14,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -39,10 +40,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.WindowInsets
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -102,6 +100,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -135,8 +134,10 @@ import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.model.GroupBy
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayedStatus
+import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterSheet
 import com.raulshma.jellyplay.feature.library.components.GroupedLibraryContent
 import com.raulshma.jellyplay.feature.library.components.LibraryFilterChipRow
@@ -277,13 +278,20 @@ fun LibraryScreen(
     }
 
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember { { item: MediaItem -> libraryQuickActions(item) } },
+        resolveActions = remember { { item: MediaItem -> item.quickActions(MediaQuickActionScope.LIBRARY, includeDownload = true, includeAddToPlaylist = true) } },
         executeAction = remember(viewModel, onItemClick) {
             { item: MediaItem, action: QuickAction ->
                 when (action) {
                     QuickAction.PLAY -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, true)
                     QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, false)
+                    // DOWNLOAD and ADD_TO_PLAYLIST navigate to the detail screen
+                    // rather than triggering the action inline. The full download
+                    // flow needs a resolved detail (mediaSources, quality, path)
+                    // and the playlist picker lives in feature/details, which this
+                    // module doesn't depend on — so the detail screen owns both.
+                    QuickAction.DOWNLOAD, QuickAction.ADD_TO_PLAYLIST ->
+                        onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     QuickAction.DETAILS -> onItemClick(item.id, item.mediaType, item.parentId, item.name)
                     else -> Unit
                 }
@@ -742,16 +750,18 @@ fun LibraryScreen(
                                                     // Seasons fall back to the parent series poster when the
                                                     // season's own artwork 404s (shared with the grouped list).
                                                     val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
-                                                    LibraryListItem(
-                                                        title = item.displayTitle(),
-                                                        subtitle = subtitle,
-                                                        imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                                        fallbackUrls = fallbackUrls,
-                                                        blurHash = item.blurHashes.primary,
-                                                        onClick = memoizedClick,
-                                                        modifier = Modifier.animateItem(placementSpec = placementSpec),
-                                                        sharedElementKey = "poster_${item.id}",
-                                                    )
+                                                    Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                                                        LibraryListItem(
+                                                            title = item.displayTitle(),
+                                                            subtitle = subtitle,
+                                                            imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                                                            fallbackUrls = fallbackUrls,
+                                                            blurHash = item.blurHashes.primary,
+                                                            onClick = memoizedClick,
+                                                            modifier = Modifier,
+                                                            sharedElementKey = "poster_${item.id}",
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -781,23 +791,25 @@ fun LibraryScreen(
                                                 // Seasons fall back to the parent series poster when the
                                                 // season's own artwork 404s in the thumb view too.
                                                 val fallbackUrls = item.rememberSeriesImageFallback(viewModel::getImageUrl)
-                                                ThumbCard(
-                                                    item = item,
-                                                    imageUrl = remember(item.id, item.blurHashes.backdrop) {
-                                                        if (item.blurHashes.backdrop != null) {
-                                                            viewModel.getBackdropUrl(item.id)
-                                                        } else {
-                                                            viewModel.getImageUrl(item.id)
-                                                        }
-                                                    },
-                                                    fallbackUrls = fallbackUrls,
-                                                    onClick = memoizedClick,
-                                                    showProgress = itemProgress != null && itemProgress > 0f,
-                                                    progressPercent = itemProgress ?: 0f,
-                                                    blurHash = item.blurHashes.backdrop ?: item.blurHashes.primary,
-                                                    modifier = itemModifier,
-                                                    sharedElementKey = "poster_${item.id}",
-                                                )
+                                                Box(modifier = itemModifier) {
+                                                    ThumbCard(
+                                                        item = item,
+                                                        imageUrl = remember(item.id, item.blurHashes.backdrop) {
+                                                            if (item.blurHashes.backdrop != null) {
+                                                                viewModel.getBackdropUrl(item.id)
+                                                            } else {
+                                                                viewModel.getImageUrl(item.id)
+                                                            }
+                                                        },
+                                                        fallbackUrls = fallbackUrls,
+                                                        onClick = memoizedClick,
+                                                        showProgress = itemProgress != null && itemProgress > 0f,
+                                                        progressPercent = itemProgress ?: 0f,
+                                                        blurHash = item.blurHashes.backdrop ?: item.blurHashes.primary,
+                                                        modifier = Modifier,
+                                                        sharedElementKey = "poster_${item.id}",
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -836,19 +848,21 @@ fun LibraryScreen(
                                                     itemImageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                     seriesPosterResolver = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
                                                 )
-                                                PosterCard(
-                                                    item = item,
-                                                    imageUrl = cardImage.imageUrl,
-                                                    fallbackUrls = cardImage.fallbackUrls,
-                                                    onClick = memoizedClick,
-                                                    showProgress = itemProgress != null && itemProgress > 0f,
-                                                    progressPercent = itemProgress ?: 0f,
-                                                    blurHash = cardImage.blurHash,
-                                                    sharedElementKey = "poster_${item.id}",
-                                                    photoFolderChildImageUrls = photoFolderChildImageUrls,
-                                                    showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                                                    modifier = itemModifier,
-                                                )
+                                                Box(modifier = itemModifier) {
+                                                    PosterCard(
+                                                        item = item,
+                                                        imageUrl = cardImage.imageUrl,
+                                                        fallbackUrls = cardImage.fallbackUrls,
+                                                        onClick = memoizedClick,
+                                                        showProgress = itemProgress != null && itemProgress > 0f,
+                                                        progressPercent = itemProgress ?: 0f,
+                                                        blurHash = cardImage.blurHash,
+                                                        sharedElementKey = "poster_${item.id}",
+                                                        photoFolderChildImageUrls = photoFolderChildImageUrls,
+                                                        showEpisodeSeriesBadge = cardImage.showSeriesBadge,
+                                                        modifier = Modifier,
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -885,17 +899,19 @@ fun LibraryScreen(
                                                         itemImageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                                                         seriesPosterResolver = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
                                                     )
-                                                    PosterCard(
-                                                        item = item,
-                                                        imageUrl = cardImage.imageUrl,
-                                                        fallbackUrls = cardImage.fallbackUrls,
-                                                        onClick = memoizedClick,
-                                                        showProgress = itemProgress != null && itemProgress > 0f,
-                                                        progressPercent = itemProgress ?: 0f,
-                                                        blurHash = cardImage.blurHash,
-                                                        sharedElementKey = "poster_${item.id}",
-                                                        showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                                                    )
+                                                    Box(modifier = Modifier) {
+                                                        PosterCard(
+                                                            item = item,
+                                                            imageUrl = cardImage.imageUrl,
+                                                            fallbackUrls = cardImage.fallbackUrls,
+                                                            onClick = memoizedClick,
+                                                            showProgress = itemProgress != null && itemProgress > 0f,
+                                                            progressPercent = itemProgress ?: 0f,
+                                                            blurHash = cardImage.blurHash,
+                                                            sharedElementKey = "poster_${item.id}",
+                                                            showEpisodeSeriesBadge = cardImage.showSeriesBadge,
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -970,7 +986,12 @@ fun LibraryScreen(
                     // These are infrequent navigation actions (not view/layout
                     // controls, which live in the labeled action chip row). Kept
                     // in the floating toolbar so the app bar stays clean.
-                    if (!isTv && pagedItems.itemCount > 0) {
+                    // Music-library-only on phones: these actions target music
+                    // playlists, so showing them for a video library reads as
+                    // clutter ("seems more for the music side", #113). TV keeps
+                    // the toolbar regardless of collectionType.
+                    val isMusicLibrary = selectedFolder?.collectionType == "music"
+                    if (!isTv && isMusicLibrary && pagedItems.itemCount > 0) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = true,
                             modifier = Modifier
@@ -1134,6 +1155,12 @@ fun LibraryScreen(
             current = filters.playedStatus,
             onApply = { viewModel.updateFilters(filters.copy(playedStatus = it)) },
             onDismiss = { openFilterSheet = null },
+            isResumable = filters.isResumable == true,
+            onToggleResumable = {
+                viewModel.updateFilters(
+                    filters.copy(isResumable = !(filters.isResumable == true))
+                )
+            },
         )
         FilterSheetKind.GENRES -> GenreFilterSheet(
             current = filters.genres,
@@ -1183,7 +1210,10 @@ fun LibraryScreen(
             title = stringResource(R.string.library_group_by),
             onDismiss = { showGroupBySheet = false },
         ) {
-            androidx.compose.foundation.layout.FlowRow {
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 GroupBy.entries.forEach { option ->
                     com.raulshma.jellyplay.core.ui.components.GlassFilterChip(
                         label = groupByLabel(option),
@@ -1625,24 +1655,5 @@ private fun groupByLabel(groupBy: GroupBy): String = when (groupBy) {
     GroupBy.TYPE -> stringResource(R.string.library_group_by_type)
     GroupBy.GENRE -> stringResource(R.string.library_group_by_genre)
     GroupBy.YEAR -> stringResource(R.string.library_group_by_year)
-}
-
-/**
- * Which quick actions apply to a library grid item Non-playable
- * entries (photos, photo folders) and group headers get none. The library grid
- * has no inline play affordance, so PLAY and DETAILS both flow through
- * [LibraryScreen.onItemClick].
- */
-private fun libraryQuickActions(item: MediaItem): List<QuickAction> = buildList {
-    when (item.mediaType) {
-        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE,
-        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST,
-        MediaType.MUSIC_VIDEO, MediaType.COLLECTION, MediaType.LIVE_TV, MediaType.CHANNEL -> {
-            add(QuickAction.PLAY)
-            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
-            add(QuickAction.DETAILS)
-        }
-        else -> Unit
-    }
 }
 

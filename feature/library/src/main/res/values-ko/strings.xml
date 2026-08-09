@@ -29,6 +29,8 @@
     <string name="library_sort_by">정렬 기준</string>
     <string name="library_media_type">미디어 유형</string>
     <string name="library_status">상태</string>
+    <string name="library_sort_in_progress">재생 중</string>
+    <string name="library_filter_resumable">재생 중</string>
     <string name="library_genres">장르</string>
     <string name="library_year_range">연도 범위</string>
     <string name="library_tags">태그</string>

@@ -129,8 +129,6 @@ class VideoPlayerStoreTest {
             videoSwipeSeekMaxMs = 180_000L,
             videoRememberBrightness = false,
             videoBrightnessLevel = 0.8f,
-            videoRememberVolume = false,
-            videoVolumeLevel = 0.5f,
             videoAutoSkipIntro = true,
             videoAutoSkipOutro = true,
             videoRememberMuted = false,

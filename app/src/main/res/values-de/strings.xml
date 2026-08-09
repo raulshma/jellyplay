@@ -148,6 +148,16 @@
     <!-- TV navigation drawer -->
     <string name="nav_now_playing">Aktuelle Wiedergabe</string>
     <string name="nav_settings">Einstellungen</string>
+    <string name="nav_more">Mehr</string>
+    <string name="nav_more_content_description">Weitere Optionen</string>
+    <string name="menu_settings">Einstellungen</string>
+    <string name="menu_downloads">Downloads</string>
+    <string name="menu_play_on">Auf Gerät abspielen</string>
+    <string name="menu_surprise_me">Überrasch mich</string>
+    <string name="menu_shortcuts">Verknüpfungen</string>
+    <string name="menu_go_online">Online gehen</string>
+    <string name="menu_go_offline">Offline gehen</string>
+    <string name="menu_going_online">Verbindung wird hergestellt…</string>
 
     <!-- Play On device sheet -->
     <string name="play_on_title">Wiedergeben auf</string>
@@ -168,4 +178,9 @@
 
     <!-- Now-playing snackbar -->
     <string name="snackbar_now_playing">Wiedergabe läuft: %1$s</string>
+
+    <!-- Player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">Eigene Geschwindigkeit</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">Wiedergabegeschwindigkeit anpassen</string>
 </resources>

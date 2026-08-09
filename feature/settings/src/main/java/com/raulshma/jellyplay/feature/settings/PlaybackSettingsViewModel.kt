@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.SegmentBehavior
@@ -146,4 +147,24 @@ class PlaybackSettingsViewModel @Inject constructor(
         editor.edit { playback.setAutoPlayCountdownSec(sec) }
     fun setTvZoomModePercent(percent: Float) =
         editor.edit { videoPlayer.setTvZoomModePercent(percent) }
+
+    /**
+     * Resets a single preference category. Mirrors
+     * [AppearanceSettingsViewModel.resetCategory], delegating to the shared
+     * [PreferencesEditor] so the coverage-guarded key list stays the single
+     * source of truth.
+     */
+    fun resetCategory(category: PreferenceResetCategory) = editor.resetCategory(category)
+
+    /**
+     * Screen-level reset for the Playback settings screen. Resets every category
+     * rendered here — the player/advanced prefs ([PreferenceResetCategory.PLAYBACK])
+     * and the per-engine config ([PreferenceResetCategory.PLAYER_ENGINES]) — so the
+     * whole screen returns to defaults in one action, mirroring the appearance
+     * screen's reset but spanning both categories this screen owns.
+     */
+    fun resetPlaybackSettings() {
+        editor.resetCategory(PreferenceResetCategory.PLAYBACK)
+        editor.resetCategory(PreferenceResetCategory.PLAYER_ENGINES)
+    }
 }

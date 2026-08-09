@@ -29,6 +29,8 @@
     <string name="library_sort_by">排序方式</string>
     <string name="library_media_type">媒体类型</string>
     <string name="library_status">状态</string>
+    <string name="library_sort_in_progress">进行中</string>
+    <string name="library_filter_resumable">进行中</string>
     <string name="library_genres">类型</string>
     <string name="library_year_range">年份范围</string>
     <string name="library_tags">标签</string>

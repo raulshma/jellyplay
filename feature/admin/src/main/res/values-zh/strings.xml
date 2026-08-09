@@ -148,6 +148,8 @@
     <string name="admin_no_users">无用户</string>
     <string name="admin_new_user_title">新用户</string>
     <string name="admin_password_optional">密码（可选）</string>
+    <string name="admin_show_password">显示密码</string>
+    <string name="admin_hide_password">隐藏密码</string>
     <string name="admin_create">创建</string>
     <string name="admin_delete_user_title">删除用户</string>
     <string name="admin_delete_user_body">删除“%1$s”？此操作无法撤销。</string>

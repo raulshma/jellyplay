@@ -64,6 +64,13 @@
     <string name="onboarding_security_biometric_unlock">지문 또는 얼굴 인증 사용</string>
     <string name="onboarding_security_biometric_setup_hint">활성화하려면 Android 설정에서 지문 또는 얼굴을 등록하세요</string>
     <string name="onboarding_security_auto_lock_timer">자동 잠금 타이머</string>
+    <string name="onboarding_security_lock_never">사용 안 함</string>
+    <string name="onboarding_security_lock_15s">15초</string>
+    <string name="onboarding_security_lock_30s">30초</string>
+    <string name="onboarding_security_lock_1m">1분</string>
+    <string name="onboarding_security_lock_5m">5분</string>
+    <string name="onboarding_show_password">비밀번호 표시</string>
+    <string name="onboarding_hide_password">비밀번호 숨기기</string>
 
     <!-- HomeLayoutStep -->
     <string name="onboarding_home_layout_title">홈 레이아웃</string>

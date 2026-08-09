@@ -85,7 +85,9 @@ class AudioLibraryBrowser(
                     }
                     parentId == "ARTISTS" -> {
                         val result = mediaRepository.getMediaItems(
-                            mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ARTIST),
+                            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                                mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ARTIST),
+                            ),
                             startIndex = page * pageSize,
                             limit = pageSize
                         ).getOrNull()
@@ -95,7 +97,9 @@ class AudioLibraryBrowser(
                     }
                     parentId == "ALBUMS" -> {
                         val result = mediaRepository.getMediaItems(
-                            mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ALBUM),
+                            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                                mediaTypes = listOf(com.raulshma.jellyplay.core.model.MediaType.ALBUM),
+                            ),
                             startIndex = page * pageSize,
                             limit = pageSize
                         ).getOrNull()

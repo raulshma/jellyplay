@@ -50,4 +50,14 @@
     <string name="search_filter_any">Any</string>
     <string name="search_filter_rating_plus">%1$.1f+</string>
     <string name="search_apply_filters">Apply Filters</string>
+
+    <!-- Sort (parity with Library's sort options) -->
+    <string name="search_sort">Sort</string>
+    <string name="search_sort_by">Sort By</string>
+
+    <!-- Played-status filter (localizable labels for PlayedStatus) -->
+    <string name="search_filter_status">Status</string>
+    <string name="search_filter_played_all">All</string>
+    <string name="search_filter_played_played">Played</string>
+    <string name="search_filter_played_unplayed">Unplayed</string>
 </resources>

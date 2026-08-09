@@ -523,6 +523,14 @@
     <string name="settings_clear_cache_subtitle">释放存储空间（保留图片缓存）</string>
     <string name="settings_clear_image_cache">清除图片缓存</string>
     <string name="settings_clear_image_cache_subtitle">重新加载所有海报和图片</string>
+    <!-- Privacy & Data hub (enhancements §7.5) -->
+    <string name="settings_privacy_data">隐私与数据</string>
+    <string name="settings_privacy_data_subtitle">缓存、历史记录和账户数据</string>
+    <string name="settings_clear_search_history">清除搜索历史</string>
+    <string name="settings_clear_search_history_subtitle">移除最近的搜索词</string>
+    <string name="settings_cache_cleared">缓存已清除</string>
+    <string name="settings_image_cache_cleared">图片缓存已清除</string>
+    <string name="settings_search_history_cleared">搜索历史已清除</string>
     <string name="settings_wifi_only">仅 WiFi</string>
     <string name="settings_wifi_only_on">仅在非计费网络下载</string>
     <string name="settings_wifi_only_off">在任何网络下载</string>
@@ -895,6 +903,9 @@
     <string name="settings_newsletter_curated_picks_desc">为你特别推荐</string>
     <string name="settings_reset_appearance_title">重置外观设置</string>
     <string name="settings_reset_appearance_message">这会将所有外观设置重置为默认值。此操作无法撤销。</string>
+    <string name="settings_reset_playback_cd">重置播放设置</string>
+    <string name="settings_reset_playback_title">重置播放设置</string>
+    <string name="settings_reset_playback_message">这会将所有播放和引擎设置重置为默认值。此操作无法撤销。</string>
 
     <!-- PlaybackSettingsScreen.kt -->
     <string name="settings_preferred_player">首选播放器</string>

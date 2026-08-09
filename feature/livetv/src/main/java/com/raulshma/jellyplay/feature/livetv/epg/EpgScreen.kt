@@ -82,7 +82,7 @@ fun EpgScreen(
     val networkStatus by LocalNetworkStatus.current.collectAsStateWithLifecycle()
     val headerStatus = resolveHeaderStatus(
         isLoading = viewModel.isLoading,
-        hasError = false,
+        hasError = viewModel.error != null,
         networkStatus = networkStatus,
     )
 

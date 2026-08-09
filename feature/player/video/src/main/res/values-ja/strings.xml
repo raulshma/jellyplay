@@ -137,6 +137,11 @@
     <string name="player_video_more_options">その他のオプション</string>
     <string name="player_video_audio">音声</string>
     <string name="player_video_subtitles">字幕</string>
+    <string name="player_video_subtitle_hub_section_tracks">トラック</string>
+    <string name="player_video_subtitle_hub_section_style">スタイル</string>
+    <string name="player_video_subtitle_hub_section_get">取得</string>
+    <string name="player_video_subtitle_hub_section_delay">遅延</string>
+    <string name="player_video_subtitle_downloaded_device_only">デバイスにのみ保存（オフライン）</string>
     <string name="player_video_chapters">チャプター</string>
     <string name="player_video_episodes">エピソード</string>
     <string name="player_video_syncplay">SyncPlay</string>
@@ -302,4 +307,11 @@
     <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
     <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
     <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
+
+    <!-- アクセシビリティ: 明るさ/音量ジェスチャー領域のスクリーンリーダーセマンティクス (P5 §3.1) -->
+    <string name="a11y_gesture_controls">明るさと音量のコントロール</string>
+    <string name="a11y_brightness_increase">明るさを上げる</string>
+    <string name="a11y_brightness_decrease">明るさを下げる</string>
+    <string name="a11y_volume_increase">音量を上げる</string>
+    <string name="a11y_volume_decrease">音量を下げる</string>
 </resources>

@@ -32,5 +32,11 @@ enum class SortOption(
     DATE_LAST_CONTENT_ADDED("Recently Added Content", "DateLastContentAdded,SortName", "Descending"),
     RANDOM("Random", "Random", "Ascending"),
     DATE_PLAYED("Recently Played", "DatePlayed,SortName", "Descending"),
+    // "In Progress" surfaces partially-watched items first. Sorted by DatePlayed
+    // desc so the most recently resumed item leads; pair with the isResumable
+    // filter (LibraryFilters) to restrict to items with a resume position.
+    IN_PROGRESS("In Progress", "DatePlayed,SortName", "Descending"),
     PREMIERE_DATE("Release Date", "PremiereDate,SortName", "Descending"),
+    ALBUM_ARTIST("Album Artist", "AlbumArtist,SortName", "Ascending"),
+    ALBUM("Album", "Album,SortName", "Ascending"),
 }

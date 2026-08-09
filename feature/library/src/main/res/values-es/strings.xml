@@ -30,6 +30,8 @@
     <string name="library_sort_by">Ordenar por</string>
     <string name="library_media_type">Tipo de contenido</string>
     <string name="library_status">Estado</string>
+    <string name="library_sort_in_progress">En curso</string>
+    <string name="library_filter_resumable">En curso</string>
     <string name="library_genres">Géneros</string>
     <string name="library_year_range">Rango de años</string>
     <string name="library_tags">Etiquetas</string>

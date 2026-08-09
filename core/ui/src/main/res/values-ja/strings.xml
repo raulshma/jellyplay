@@ -673,4 +673,13 @@
     <string name="core_preview_series">シリーズ</string>
     <string name="core_preview_new_format">新着 %1$d 件</string>
 
+    <!-- Shared player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">再生速度を指定</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">再生速度を調整</string>
+
+    <!-- アクセシビリティ: 動画/音楽モード切り替え (P5 §3.2) -->
+    <string name="a11y_mode_video">動画モード</string>
+    <string name="a11y_mode_music">音楽モード</string>
+
 </resources>

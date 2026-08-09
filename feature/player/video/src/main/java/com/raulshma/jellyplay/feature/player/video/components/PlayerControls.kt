@@ -147,6 +147,7 @@ internal fun PlayerControls(
     nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
     segments: List<MediaSegment> = emptyList(),
+    resumePositionMs: Long = 0L,
 
     currentAspectRatio: AspectRatio,
     detectedAspectRatio: AspectRatio?,
@@ -172,7 +173,7 @@ internal fun PlayerControls(
     onSpeedClick: () -> Unit,
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
-    onSubtitleStyleClick: () -> Unit,
+    onSubtitleHubClick: () -> Unit,
     onChapterClick: () -> Unit,
     onInfoClick: () -> Unit,
     onAspectRatioClick: () -> Unit,
@@ -183,7 +184,6 @@ internal fun PlayerControls(
     onAVSyncClick: () -> Unit,
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
-    onSubtitleDownloadClick: () -> Unit,
     onEpisodesClick: () -> Unit = {},
     onSyncPlayClick: () -> Unit = {},
     onPipClick: () -> Unit = {},
@@ -555,6 +555,7 @@ internal fun PlayerControls(
                     trickplayBitmap = tvTrickplayBitmap,
                     playbackSpeed = playbackSpeed,
                     showTimeRemaining = showTimeRemaining,
+                    resumePositionMs = resumePositionMs,
                     onSeekStart = onSeekStart,
                     onSeekEnd = onSeekEnd,
                     onSeekPositionChange = onSeekPositionChange,
@@ -732,9 +733,9 @@ internal fun PlayerControls(
             audioNormalizationEnabled = audioNormalizationEnabled,
             channelMixMode = channelMixMode,
             channelMixEnabled = channelMixEnabled,
-            onSubtitleStyleClick = {
+            onSubtitleHubClick = {
                 showOverflow = false
-                onSubtitleStyleClick()
+                onSubtitleHubClick()
             },
             onDialogueBoostClick = {
                 showOverflow = false
@@ -762,10 +763,6 @@ internal fun PlayerControls(
             onPassthroughClick = {
                 showOverflow = false
                 onPassthroughClick()
-            },
-            onSubtitleDownloadClick = {
-                showOverflow = false
-                onSubtitleDownloadClick()
             },
             onVideoStatsClick = {
                 showOverflow = false
@@ -882,7 +879,7 @@ private fun PrimaryMediaControls(
     }
     if (hasEpisodes && episodeBrowserEnabled) {
         PlayerIconButton(
-            icon = Tabler.Outline.Video,
+            icon = Tabler.Outline.ListNumbers,
             contentDescription = stringResource(R.string.player_video_episodes),
             onClick = onEpisodesClick,
         )
@@ -981,6 +978,7 @@ private fun TvControllableSeekBar(
     trickplayBitmap: Bitmap? = null,
     playbackSpeed: Float = 1.0f,
     showTimeRemaining: Boolean = false,
+    resumePositionMs: Long = 0L,
     onSeekStart: () -> Unit,
     onSeekEnd: () -> Unit,
     onSeekPositionChange: (Long) -> Unit = {},
@@ -1026,6 +1024,8 @@ private fun TvControllableSeekBar(
     )
 
     val chapterMarkerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+    // Resume-position marker: tertiary stands apart from progress/chapter markers.
+    val resumeMarkerColor = MaterialTheme.colorScheme.tertiary
 
     // Precompute the per-segment draw color once per segment list. The seek bar
     // Canvas redraws on every position/buffered tick (~4 Hz) and previously
@@ -1251,6 +1251,22 @@ private fun TvControllableSeekBar(
                             )
                         }
                     }
+                }
+
+                if (resumePositionMs > 0 && duration > 0) {
+                    val resumeFraction = (resumePositionMs.toFloat() / duration).coerceIn(0.01f, 0.99f)
+                    val resumeX = resumeFraction * trackWidth
+                    val resumeMarkerHeight = 10.dp.toPx()
+                    val resumeMarkerWidth = 2.dp.toPx()
+                    drawRoundRect(
+                        color = resumeMarkerColor,
+                        topLeft = androidx.compose.ui.geometry.Offset(
+                            resumeX - resumeMarkerWidth / 2f,
+                            trackY + trackHeight.toPx() / 2f - resumeMarkerHeight / 2f,
+                        ),
+                        size = androidx.compose.ui.geometry.Size(resumeMarkerWidth, resumeMarkerHeight),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()),
+                    )
                 }
 
                 val thumbRadius = thumbRadiusDp.toPx()

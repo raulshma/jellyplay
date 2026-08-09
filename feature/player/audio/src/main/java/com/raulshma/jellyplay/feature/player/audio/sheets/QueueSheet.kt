@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -35,10 +34,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.List
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.feature.player.audio.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,32 +60,24 @@ internal fun QueueSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.audio_queue_title),
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                    ),
-                )
+            SheetHeader(
+                title = stringResource(R.string.audio_queue_title),
+                icon = Tabler.Outline.List,
                 // Queue position of the currently-playing track (1-based).
-                if (currentIndex in queue.indices) {
-                    Text(
-                        stringResource(
-                            R.string.audio_queue_position,
-                            currentIndex + 1,
-                            queue.size,
-                        ),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+                trailing = {
+                    if (currentIndex in queue.indices) {
+                        Text(
+                            stringResource(
+                                R.string.audio_queue_position,
+                                currentIndex + 1,
+                                queue.size,
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+            )
             Spacer(Modifier.height(20.dp))
             LazyColumn(
                 contentPadding = PaddingValues(vertical = 4.dp),

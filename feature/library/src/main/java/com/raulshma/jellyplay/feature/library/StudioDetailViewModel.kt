@@ -23,8 +23,10 @@ class StudioDetailViewModel @Inject constructor(
     private val studioName: String = savedStateHandle[Route.StudioDetail::studioName.name] ?: ""
 
     val items: Flow<PagingData<MediaItem>> = mediaRepository.getMediaItemsPaged(
+        filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+            sortBy = com.raulshma.jellyplay.core.model.SortOption.SORT_NAME,
+        ),
         studioIds = listOf(studioId),
-        sortBy = "SortName",
     ).cachedIn(scope)
 
     fun getImageUrl(itemId: String): String =

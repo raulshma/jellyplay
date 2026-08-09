@@ -53,8 +53,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -67,6 +65,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.PasswordTextField
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import androidx.compose.ui.focus.FocusRequester
@@ -573,29 +572,12 @@ private fun SeerrHeader() {
 
 @Composable
 private fun ApiKeyFields(viewModel: SeerrSettingsViewModel) {
-    var apiKeyVisible by remember { mutableStateOf(false) }
-    OutlinedTextField(
+    PasswordTextField(
         value = viewModel.apiKey,
         onValueChange = viewModel::onApiKeyChanged,
         label = { Text(stringResource(R.string.settings_api_key_label)) },
         placeholder = { Text(stringResource(R.string.settings_api_key_placeholder)) },
-        leadingIcon = {
-            Icon(Tabler.Outline.Key, contentDescription = null)
-        },
-        trailingIcon = {
-            IconButton(
-                onClick = { apiKeyVisible = !apiKeyVisible },
-                modifier = Modifier.focusIndicator(CircleShape),
-            ) {
-                Icon(
-                    imageVector = if (apiKeyVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
-                    contentDescription = if (apiKeyVisible) stringResource(R.string.settings_hide_api_key) else stringResource(R.string.settings_show_api_key)
-                )
-            }
-        },
-        visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        singleLine = true,
+        leadingIcon = { Icon(Tabler.Outline.Key, contentDescription = null) },
         modifier = Modifier.fillMaxWidth(),
         enabled = !viewModel.isTesting,
         shape = ShapeCache.smooth16,
@@ -604,7 +586,6 @@ private fun ApiKeyFields(viewModel: SeerrSettingsViewModel) {
 
 @Composable
 private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel) {
-    var passwordVisible by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = viewModel.username,
@@ -619,38 +600,21 @@ private fun JellyfinAuthFields(viewModel: SeerrSettingsViewModel) {
             enabled = !viewModel.isTesting,
             shape = ShapeCache.smooth16,
         )
-        OutlinedTextField(
+        PasswordTextField(
             value = viewModel.password,
             onValueChange = viewModel::onPasswordChanged,
             label = { Text(stringResource(R.string.settings_password_label)) },
             placeholder = { Text(stringResource(R.string.settings_jellyfin_password_placeholder)) },
-            leadingIcon = {
-                Icon(Tabler.Outline.Lock, contentDescription = null)
-            },
-            trailingIcon = {
-            IconButton(
-                onClick = { passwordVisible = !passwordVisible },
-                modifier = Modifier.focusIndicator(CircleShape),
-            ) {
-                Icon(
-                    imageVector = if (passwordVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
-                    contentDescription = if (passwordVisible) stringResource(R.string.settings_hide_password) else stringResource(R.string.settings_show_password)
-                )
-            }
-        },
-        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-        enabled = !viewModel.isTesting,
-        shape = ShapeCache.smooth16,
-    )
+            leadingIcon = { Icon(Tabler.Outline.Lock, contentDescription = null) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !viewModel.isTesting,
+            shape = ShapeCache.smooth16,
+        )
     }
 }
 
 @Composable
 private fun LocalAuthFields(viewModel: SeerrSettingsViewModel) {
-    var passwordVisible by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = viewModel.email,
@@ -666,28 +630,12 @@ private fun LocalAuthFields(viewModel: SeerrSettingsViewModel) {
             enabled = !viewModel.isTesting,
             shape = ShapeCache.smooth16,
         )
-        OutlinedTextField(
+        PasswordTextField(
             value = viewModel.password,
             onValueChange = viewModel::onPasswordChanged,
             label = { Text(stringResource(R.string.settings_password_label)) },
             placeholder = { Text(stringResource(R.string.settings_seerr_password_placeholder)) },
-            leadingIcon = {
-                Icon(Tabler.Outline.Lock, contentDescription = null)
-            },
-            trailingIcon = {
-                IconButton(
-                    onClick = { passwordVisible = !passwordVisible },
-                    modifier = Modifier.focusIndicator(CircleShape),
-                ) {
-                    Icon(
-                        imageVector = if (passwordVisible) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
-                        contentDescription = if (passwordVisible) stringResource(R.string.settings_hide_password) else stringResource(R.string.settings_show_password)
-                    )
-                }
-            },
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true,
+            leadingIcon = { Icon(Tabler.Outline.Lock, contentDescription = null) },
             modifier = Modifier.fillMaxWidth(),
             enabled = !viewModel.isTesting,
             shape = ShapeCache.smooth16,

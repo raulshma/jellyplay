@@ -45,6 +45,13 @@ data class OfflineMediaItem(
     val studios: List<String> = emptyList(),
     val tagline: String? = null,
     val cast: List<OfflinePersonInfo> = emptyList(),
+    // Provider ids (tmdb/imdb/…) and external URLs persisted at download time
+    // so the offline subtitle search can resolve a TMDB/IMDb id without a
+    // server round-trip. Empty for items downloaded before these fields
+    // existed (migration 43→44) — the subtitle providers then fall back to a
+    // title search, matching the pre-fix behaviour.
+    val providerIds: Map<String, String> = emptyMap(),
+    val externalUrls: List<ExternalUrl> = emptyList(),
     // Epoch millis the offline_media row was created (download date).
     val createdAt: Long = 0L,
 )

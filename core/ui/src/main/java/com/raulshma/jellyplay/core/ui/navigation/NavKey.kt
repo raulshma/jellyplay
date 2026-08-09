@@ -94,6 +94,14 @@ sealed class Route : NavKey {
     @Serializable data class NotificationSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class StorageSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class SecuritySettings(val highlightSettingId: String? = null) : Route()
+    /**
+     * Privacy & Data hub — consolidates scattered destructive data actions
+     * (clear cache, clear image cache, clear search history, factory reset,
+     * sign out) into a single discoverable screen. Re-exposes the same
+     * actions the dedicated screens already perform; it does not move or
+     * delete them.
+     */
+    @Serializable data class PrivacyData(val highlightSettingId: String? = null) : Route()
     @Serializable data class BackupSettings(val highlightSettingId: String? = null) : Route()
     @Serializable data class ExperimentalSettings(val highlightSettingId: String? = null) : Route()
 
@@ -226,12 +234,22 @@ sealed class Route : NavKey {
     @Serializable data object SubtitleTester : Route()
 }
 
+/**
+ * The string key under which [Route.Shortcuts] is hidden via
+ * [com.raulshma.jellyplay.core.model.UserPreferences.hiddenNavItems].
+ *
+ * Equals `Route.Shortcuts::class.simpleName`. Centralised here so the nav-bar composition
+ * (`JellyPlayApp`) and the customization UI (`NavigationCustomizationGroup`) reference one
+ * source of truth instead of a bare `"Shortcuts"` literal that can silently drift from the
+ * route's class name.
+ */
+val SHORTCUTS_NAV_KEY: String = Route.Shortcuts::class.simpleName!!
+
 val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(
     Route.Home to "Home",
     Route.Library to "Library",
     Route.Search to "Search",
     Route.LiveTv to "Live TV",
-    Route.Shortcuts to "Shortcuts",
 )
 
 val MUSIC_TOP_LEVEL_ROUTES = linkedMapOf(
@@ -290,7 +308,8 @@ val Route.isModal: Boolean
         Route.ScheduledTasks,
         Route.Devices,
         Route.Logs,
-        Route.Requests -> true
+        Route.Requests,
+        Route.Shortcuts -> true
         Route.Users -> true
         Route.ArrQueue -> true
         Route.UpcomingCalendar -> true

@@ -47,6 +47,8 @@ import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.MediaQuickActionScope
+import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
@@ -121,6 +123,7 @@ fun HomeScreen(
     callbacks: HomeCallbacks,
     homeMode: HomeMode = HomeMode.VIDEO,
     musicContent: @Composable () -> Unit = {},
+    surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -130,6 +133,7 @@ fun HomeScreen(
         viewModel = viewModel,
         callbacks = callbacks,
         musicContent = musicContent,
+        surpriseRequests = surpriseRequests,
     )
 }
 
@@ -149,29 +153,13 @@ private fun filterOfflineByMode(
     }
 }
 
-/**
- * Which quick actions apply to a home-row item Poster cards
- * get play / mark-watched / details; everything else (photo folders, Seerr
- * cards) is excluded by the card renderers anyway.
- */
-private fun homeQuickActions(item: MediaItem): List<QuickAction> = buildList {
-    when (item.mediaType) {
-        MediaType.MOVIE, MediaType.SERIES, MediaType.SEASON, MediaType.EPISODE,
-        MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM, MediaType.ARTIST -> {
-            add(QuickAction.PLAY)
-            add(if (item.isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
-            add(QuickAction.DETAILS)
-        }
-        else -> Unit
-    }
-}
-
 @Composable
 private fun MainHomeContent(
     state: HomeUiState,
     viewModel: HomeViewModel,
     callbacks: HomeCallbacks,
     musicContent: @Composable () -> Unit,
+    surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val density = LocalDensity.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -228,6 +216,13 @@ private fun MainHomeContent(
         getBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } },
     )
 
+    // Global nav overflow "Surprise Me" (#115): the hero controller lives here
+    // (it owns the hero LazyListState + featured candidates), so the app shell
+    // emits a one-shot signal that Home forwards to it.
+    androidx.compose.runtime.LaunchedEffect(heroController, surpriseRequests) {
+        surpriseRequests.collect { heroController.toggleSurprise() }
+    }
+
     val headerHeight = rememberHeroHeight()
 
     val bgState = rememberHomeBackgroundState(
@@ -257,7 +252,7 @@ private fun MainHomeContent(
     // card. Provided to every PosterCard in scope via
     // CompositionLocal — the cards wire their own long-press.
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> homeQuickActions(item) } },
+        resolveActions = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> item.quickActions(MediaQuickActionScope.HOME) } },
         executeAction = remember(viewModel, mediaOnItemClick, mediaOnPlayClick) {
             { item: com.raulshma.jellyplay.core.model.MediaItem, action: QuickAction ->
                 when (action) {
@@ -301,7 +296,6 @@ private fun MainHomeContent(
     }
     val discoverRows = rememberDiscoverRows(allDiscoverItems)
 
-    var isFabExpanded by remember { mutableStateOf(false) }
     var isSearchExpanded by remember { mutableStateOf(false) }
     val isSearchFocused by remember { derivedStateOf { state.isSearchActive || isSearchExpanded } }
 
@@ -319,14 +313,10 @@ private fun MainHomeContent(
     val onConfigureLibraries = remember(callbacks) { { callbacks.onConfigureLibraries() } }
     val dismissSectionConfig = remember { { sectionConfigTarget = null } }
 
-    BackHandler(enabled = isFabExpanded || isSearchFocused) {
-        if (isFabExpanded) {
-            isFabExpanded = false
-        } else if (isSearchFocused) {
-            isSearchExpanded = false
-            viewModel.onEvent(HomeUiEvent.ClearSearch)
-            focusManager.clearFocus()
-        }
+    BackHandler(enabled = isSearchFocused) {
+        isSearchExpanded = false
+        viewModel.onEvent(HomeUiEvent.ClearSearch)
+        focusManager.clearFocus()
     }
 
     ArtworkThemeWrapper(
@@ -612,31 +602,7 @@ private fun MainHomeContent(
                     },
                 )
 
-                if (!isTv) {
-                    // Stabilize the FAB click lambdas so HomeFabMenu is skippable
-                    // — otherwise every MainHomeContent recomposition (download
-                    // count tick, sync count change, refresh flag flip, etc.)
-                    // re-runs the whole FAB tree. The sibling dock lambdas above
-                    // were already memoized; these were missed.
-                    val fabSurpriseClick = remember(heroController) { { heroController.toggleSurprise() } }
-                    val fabToggleOffline = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) } }
-                    HomeFabMenu(
-                        isExpanded = isFabExpanded,
-                        onToggle = { isFabExpanded = it },
-                        activeDownloadCount = activeDownloadCount,
-                        offlineMode = state.offlineMode,
-                        onSurpriseClick = fabSurpriseClick,
-                        onSyncPlayClick = callbacks.onSyncPlayClick,
-                        onDownloadsClick = callbacks.onDownloadsClick,
-                        onToggleOffline = fabToggleOffline,
-                        isGoingOnline = state.isGoingOnline,
-                        onPlayOnClick = callbacks.onPlayOnClick,
-                        onSettingsClick = callbacks.onSettingsClick,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .clearFloatingNav(extraBottom = 0.dp),
-                    )
-                }
+
         } // end CompositionLocalProvider(LocalMediaQuickActionController)
         }
     }

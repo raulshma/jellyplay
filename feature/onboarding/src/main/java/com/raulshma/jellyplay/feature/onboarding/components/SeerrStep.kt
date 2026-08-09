@@ -36,16 +36,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.PasswordTextField
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -158,7 +161,7 @@ fun SeerrStep(
 
             when (authMethod) {
                 SeerrAuthMethod.API_KEY -> {
-                    OutlinedTextField(
+                    PasswordTextField(
                         value = apiKey,
                         onValueChange = {
                             apiKey = it
@@ -167,9 +170,7 @@ fun SeerrStep(
                         label = { Text(stringResource(R.string.onboarding_seerr_api_key)) },
                         placeholder = { Text(stringResource(R.string.onboarding_seerr_api_key_placeholder)) },
                         leadingIcon = { Icon(Tabler.Outline.Key, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true,
+                        contentType = ContentType.Password,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -184,10 +185,12 @@ fun SeerrStep(
                         placeholder = { Text(stringResource(R.string.onboarding_seerr_username_placeholder)) },
                         leadingIcon = { Icon(Tabler.Outline.User, contentDescription = null, modifier = Modifier.size(20.dp)) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { contentType = ContentType.Username },
                     )
                     Spacer(Modifier.height(4.dp))
-                    OutlinedTextField(
+                    PasswordTextField(
                         value = password,
                         onValueChange = {
                             password = it
@@ -196,9 +199,7 @@ fun SeerrStep(
                         label = { Text(stringResource(R.string.onboarding_seerr_password)) },
                         placeholder = { Text(stringResource(R.string.onboarding_seerr_password_placeholder_jellyfin)) },
                         leadingIcon = { Icon(Tabler.Outline.Lock, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true,
+                        contentType = ContentType.Password,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -217,7 +218,7 @@ fun SeerrStep(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(4.dp))
-                    OutlinedTextField(
+                    PasswordTextField(
                         value = password,
                         onValueChange = {
                             password = it
@@ -226,9 +227,7 @@ fun SeerrStep(
                         label = { Text(stringResource(R.string.onboarding_seerr_password)) },
                         placeholder = { Text(stringResource(R.string.onboarding_seerr_password_placeholder_seerr)) },
                         leadingIcon = { Icon(Tabler.Outline.Lock, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true,
+                        contentType = ContentType.Password,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

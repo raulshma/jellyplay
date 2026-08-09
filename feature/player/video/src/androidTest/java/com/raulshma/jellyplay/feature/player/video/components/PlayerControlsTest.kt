@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -81,7 +82,7 @@ class PlayerControlsTest {
                     onSpeedClick = {},
                     onAudioClick = {},
                     onSubtitleClick = {},
-                    onSubtitleStyleClick = {},
+                    onSubtitleHubClick = {},
                     onChapterClick = {},
                     onInfoClick = {},
                     onAspectRatioClick = {},
@@ -92,7 +93,6 @@ class PlayerControlsTest {
                     onAVSyncClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
-                    onSubtitleDownloadClick = {},
                 )
             }
         }
@@ -209,7 +209,7 @@ class PlayerControlsTest {
     fun playerControls_supportsSubtitleStyle_showsStyleInOverflow() {
         setContent(supportsSubtitleStyle = true)
         composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onNodeWithText("Subtitle Style").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onAllNodesWithText("Subtitle Style").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Subtitle Style").assertIsDisplayed()
     }
 
@@ -224,7 +224,7 @@ class PlayerControlsTest {
     fun playerControls_supportsDialogueBoost_showsBoostInOverflow() {
         setContent(supportsDialogueBoost = true)
         composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onNodeWithText("Dialogue Boost").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onAllNodesWithText("Dialogue Boost").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Dialogue Boost").assertIsDisplayed()
     }
 
@@ -239,7 +239,7 @@ class PlayerControlsTest {
     fun playerControls_supportsNightMode_showsNightInOverflow() {
         setContent(supportsNightMode = true)
         composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onNodeWithText("Night Mode").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onAllNodesWithText("Night Mode").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Night Mode").assertIsDisplayed()
     }
 
@@ -254,7 +254,7 @@ class PlayerControlsTest {
     fun playerControls_supportsAudioDelay_showsDelayInOverflow() {
         setContent(supportsAudioDelay = true)
         composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onNodeWithText("Audio Delay").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onAllNodesWithText("Audio Delay").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Audio Delay").assertIsDisplayed()
     }
 
@@ -269,7 +269,7 @@ class PlayerControlsTest {
     fun playerControls_supportsPassthrough_showsPassthroughInOverflow() {
         setContent(supportsAudioPassthrough = true)
         composeTestRule.onNodeWithContentDescription("More options").performClick()
-        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onNodeWithText("Passthrough").fetchSemanticsNodes().isNotEmpty() }
+        composeTestRule.waitUntil(timeoutMillis = 5000L) { composeTestRule.onAllNodesWithText("Passthrough").fetchSemanticsNodes().isNotEmpty() }
         composeTestRule.onNodeWithText("Passthrough").assertIsDisplayed()
     }
 
@@ -314,7 +314,7 @@ class PlayerControlsTest {
                     onSpeedClick = {},
                     onAudioClick = {},
                     onSubtitleClick = {},
-                    onSubtitleStyleClick = {},
+                    onSubtitleHubClick = {},
                     onChapterClick = {},
                     onInfoClick = {},
                     onAspectRatioClick = {},
@@ -325,7 +325,6 @@ class PlayerControlsTest {
                     onAVSyncClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
-                    onSubtitleDownloadClick = {},
                 )
             }
         }
@@ -367,7 +366,7 @@ class PlayerControlsTest {
                     onSpeedClick = {},
                     onAudioClick = {},
                     onSubtitleClick = {},
-                    onSubtitleStyleClick = {},
+                    onSubtitleHubClick = {},
                     onChapterClick = {},
                     onInfoClick = {},
                     onAspectRatioClick = {},
@@ -378,7 +377,6 @@ class PlayerControlsTest {
                     onAVSyncClick = {},
                     onDecoderClick = {},
                     onPassthroughClick = {},
-                    onSubtitleDownloadClick = {},
                 )
             }
         }

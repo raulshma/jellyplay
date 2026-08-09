@@ -32,9 +32,10 @@ class TracksViewModel @Inject constructor(
 
     val tracks: Flow<PagingData<MediaItem>> = sortFlow.flatMapLatest { sort ->
         mediaRepository.getMediaItemsPaged(
-            mediaTypes = listOf(MediaType.AUDIO),
-            sortBy = sort.option.apiValue,
-            sortOrder = sort.option.sortOrder,
+            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                mediaTypes = listOf(MediaType.AUDIO),
+                sortBy = sort.option,
+            ),
         )
     }.cachedIn(scope)
 

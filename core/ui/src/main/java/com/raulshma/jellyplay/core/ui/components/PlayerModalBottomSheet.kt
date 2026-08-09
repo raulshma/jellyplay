@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SheetState
@@ -148,7 +146,12 @@ private fun InWindowPlayerSheet(
                 .imePadding()
                 .offset { IntOffset(0, translationY.roundToInt()) }
                 .clip(SheetTopShape)
-                .background(colorScheme.surfaceContainer)
+                // surface (not surfaceContainer) so the sheet matches the app/screen
+                // background in every mode — in OLED that is pure #000, identical to
+                // the Library / MediaDetail screens, instead of the slightly-lifted
+                // surfaceContainer #111 that left tabs and sections reading as a
+                // disjoint band.
+                .background(colorScheme.surface)
                 // Consume taps on the sheet panel itself so a touch on non-interactive
                 // areas (titles, labels, spacers, the handle on a plain tap) does not
                 // fall through to the dismiss scrim behind it. Interactive children
@@ -180,16 +183,9 @@ private fun InWindowPlayerSheet(
                                 liveDrag = 0f
                             },
                         )
-                    }
-                    .padding(top = 12.dp, bottom = 8.dp),
-                contentAlignment = Alignment.Center,
+                    },
             ) {
-                Box(
-                    Modifier
-                        .size(width = 40.dp, height = 4.dp)
-                        .clip(CircleShape)
-                        .background(colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
-                )
+                SheetDragHandle()
             }
 
             MaterialTheme(

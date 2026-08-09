@@ -19,8 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.MoonStars
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.core.ui.components.SheetSection
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.feature.player.audio.R
@@ -52,86 +56,89 @@ internal fun AudioSleepTimerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                stringResource(R.string.audio_sleep_timer_title),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            SheetHeader(
+                title = stringResource(R.string.audio_sleep_timer_title),
+                icon = Tabler.Outline.MoonStars,
             )
-            Spacer(Modifier.height(20.dp))
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                Spacer(Modifier.height(8.dp))
 
-            if (isActive) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                            ShapeCache.smoothPill,
-                        )
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = if (isEndOfEpisodeMode) stringResource(R.string.audio_sleep_timer_end_of_episode) else formatDurationMs(remainingMs),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        stringResource(R.string.audio_cancel),
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Medium,
+                if (isActive) {
+                    Row(
                         modifier = Modifier
-                            .focusIndicator()
-                            .clickable(
-                                role = androidx.compose.ui.semantics.Role.Button,
-                                onClick = onCancel,
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                                ShapeCache.smoothPill,
                             )
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = if (isEndOfEpisodeMode) stringResource(R.string.audio_sleep_timer_end_of_episode) else formatDurationMs(remainingMs),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            stringResource(R.string.audio_cancel),
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .focusIndicator()
+                                .clickable(
+                                    role = androidx.compose.ui.semantics.Role.Button,
+                                    onClick = onCancel,
+                                )
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
                 }
-                Spacer(Modifier.height(16.dp))
-            }
 
-            Text(
-                stringResource(R.string.audio_sleep_timer_duration),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(8.dp))
+                SheetSection {
+                    Text(
+                        stringResource(R.string.audio_sleep_timer_duration),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SLEEP_TIMER_PRESETS.forEach { durationMs ->
-                    // Highlight the configured duration (lastUsedDurationMs is set synchronously
-                    // when the timer starts). Previously this compared against remainingMs, which
-                    // decrements every second, so the highlight vanished the moment the timer began.
-                    val isSelected = isActive && !isEndOfEpisodeMode && durationMs == lastUsedDurationMs
-                    val isLastUsed = !isActive && durationMs == lastUsedDurationMs
-                    val minutes = durationMs / (60 * 1000)
-                    val label = if (minutes % 60L == 0L) "${minutes / 60}h" else "${minutes}m"
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        SLEEP_TIMER_PRESETS.forEach { durationMs ->
+                            // Highlight the configured duration (lastUsedDurationMs is set synchronously
+                            // when the timer starts). Previously this compared against remainingMs, which
+                            // decrements every second, so the highlight vanished the moment the timer began.
+                            val isSelected = isActive && !isEndOfEpisodeMode && durationMs == lastUsedDurationMs
+                            val isLastUsed = !isActive && durationMs == lastUsedDurationMs
+                            val minutes = durationMs / (60 * 1000)
+                            val label = if (minutes % 60L == 0L) "${minutes / 60}h" else "${minutes}m"
+                            androidx.compose.material3.FilterChip(
+                                selected = isSelected || isLastUsed,
+                                onClick = { onSelectDuration(durationMs); onDismiss() },
+                                label = { Text(label) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    val isEndSelected = isActive && isEndOfEpisodeMode
                     androidx.compose.material3.FilterChip(
-                        selected = isSelected || isLastUsed,
-                        onClick = { onSelectDuration(durationMs); onDismiss() },
-                        label = { Text(label) },
-                        modifier = Modifier.weight(1f),
+                        selected = isEndSelected,
+                        onClick = { onSelectEndOfEpisode(); onDismiss() },
+                        label = { Text(stringResource(R.string.audio_sleep_timer_end_of_episode)) },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
-
-            Spacer(Modifier.height(12.dp))
-
-            val isEndSelected = isActive && isEndOfEpisodeMode
-            androidx.compose.material3.FilterChip(
-                selected = isEndSelected,
-                onClick = { onSelectEndOfEpisode(); onDismiss() },
-                label = { Text(stringResource(R.string.audio_sleep_timer_end_of_episode)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
     }
 }

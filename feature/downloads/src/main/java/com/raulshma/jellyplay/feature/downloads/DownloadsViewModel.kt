@@ -12,6 +12,8 @@ import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.formatEta
 import com.raulshma.jellyplay.core.model.formatSpeed
+import com.raulshma.jellyplay.core.ui.feedback.UiText
+import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,6 +58,7 @@ class DownloadsViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val offlineRepository: OfflineRepository,
     private val syncManager: OfflineSyncManager,
+    private val userMessageBus: UserMessageBus,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(DownloadsUiState())
@@ -123,6 +126,7 @@ class DownloadsViewModel @Inject constructor(
     fun deleteDownload(item: DownloadItem) {
         launch {
             downloadRepository.deleteDownload(item.id)
+            userMessageBus.info(UiText.Resource(R.string.downloads_deleted_message))
         }
     }
 
@@ -177,6 +181,7 @@ class DownloadsViewModel @Inject constructor(
                 downloadRepository.deleteDownload(item.id)
             }
             clearSelection()
+            userMessageBus.info(UiText.Resource(R.string.downloads_deleted_message))
         }
     }
 
@@ -219,6 +224,42 @@ class DownloadsViewModel @Inject constructor(
         launch {
             targets.forEach { item ->
                 downloadRepository.cancelDownload(item.id)
+            }
+        }
+    }
+
+    // ── Global actions ──────────────────────────────────────────────────
+
+    /**
+     * Pause every download that is currently downloading. Mirrors [pauseSelected]
+     * but over the full list, so the user can halt all active transfers without
+     * entering selection mode.
+     */
+    fun pauseAll() {
+        val targets = _uiState.value.downloads
+            .filter { it.status == DownloadStatus.DOWNLOADING }
+        if (targets.isEmpty()) return
+        launch {
+            targets.forEach { item ->
+                downloadRepository.pauseDownload(item.id)
+            }
+        }
+    }
+
+    /**
+     * Re-queue every download in a Failed state. Mirrors the per-item
+     * [retryDownload] flow (reset + enqueue) applied to all Failed items, so a
+     * transient batch failure (e.g. a dropped network) can be recovered in one
+     * action without entering selection mode.
+     */
+    fun retryAllFailed() {
+        val targets = _uiState.value.downloads
+            .filter { it.status == DownloadStatus.FAILED }
+        if (targets.isEmpty()) return
+        launch {
+            targets.forEach { item ->
+                downloadRepository.retryDownload(item.id)
+                downloadRepository.enqueueDownload(item.id)
             }
         }
     }

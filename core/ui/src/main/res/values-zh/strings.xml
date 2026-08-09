@@ -673,4 +673,13 @@
     <string name="core_preview_series">剧集</string>
     <string name="core_preview_new_format">%1$d 个新内容</string>
 
+    <!-- Shared player speed-picker custom-value labels (§2.3). -->
+    <string name="player_speed_custom">自定义速度</string>
+    <string name="player_speed_value">%.2fx</string>
+    <string name="player_speed_slider_label">调整播放速度</string>
+
+    <!-- 无障碍：视频/音乐模式切换 (P5 §3.2) -->
+    <string name="a11y_mode_video">视频模式</string>
+    <string name="a11y_mode_music">音乐模式</string>
+
 </resources>

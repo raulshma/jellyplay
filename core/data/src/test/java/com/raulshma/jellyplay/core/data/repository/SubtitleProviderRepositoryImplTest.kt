@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.network.subtitle.SubtitleProvider
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -132,17 +133,70 @@ class SubtitleProviderRepositoryImplTest {
     }
 
     @Test
-    fun `searchAll merges results and surfaces errors alongside them`() = runTest {
+    fun `searchAllStreaming merges results and surfaces errors alongside them`() = runTest {
         coEvery { wyzie.search(any(), any()) } returns Result.failure(IllegalStateException("wyzie down"))
         coEvery { openSubtitles.search(any(), any()) } returns Result.success(listOf(row(SubtitleProviderKind.OPENSUBTITLES)))
 
         val merged = newRepository(
             mapOf(SubtitleProviderKind.WYZIE to wyzie, SubtitleProviderKind.OPENSUBTITLES to openSubtitles),
-        ).searchAll(query, itemId = "item-1", language = "eng")
+        ).searchAllStreaming(query, itemId = "item-1", language = "eng") { }
 
         // OpenSubtitles row present, Wyzie error surfaced — neither hides the other.
         assertEquals(1, merged.results.size)
         assertEquals(SubtitleProviderKind.OPENSUBTITLES, merged.results.first().provider)
         assertTrue("Wyzie error must be in the error map", merged.errors.containsKey(SubtitleProviderKind.WYZIE))
+    }
+
+    @Test
+    fun `searchAllStreaming emits each provider as it resolves, not behind a barrier`() = runTest {
+        // Wyzie is slow (e.g. retrying through RetryPolicy backoff); OpenSubtitles
+        // resolves instantly. The streaming contract: OpenSubtitles' results must
+        // reach onPartial BEFORE the slow Wyzie completes — this is the exact
+        // scenario the old awaitAll barrier got wrong (it buffered everything).
+        coEvery { wyzie.search(any(), any()) } coAnswers {
+            delay(5_000) // slow
+            Result.failure(IllegalStateException("wyzie down"))
+        }
+        coEvery { openSubtitles.search(any(), any()) } returns
+            Result.success(listOf(row(SubtitleProviderKind.OPENSUBTITLES)))
+
+        val partials = mutableListOf<MergedSubtitleSearch>()
+        val merged = newRepository(
+            mapOf(SubtitleProviderKind.WYZIE to wyzie, SubtitleProviderKind.OPENSUBTITLES to openSubtitles),
+        ).searchAllStreaming(query, itemId = "item-1", language = "eng") { partial ->
+            partials += partial
+        }
+
+        // Final state: OpenSubtitles row + Wyzie error.
+        assertEquals(1, merged.results.size)
+        assertEquals(SubtitleProviderKind.OPENSUBTITLES, merged.results.first().provider)
+        assertTrue(merged.errors.containsKey(SubtitleProviderKind.WYZIE))
+
+        // Streaming contract: at least one partial was emitted containing
+        // OpenSubtitles' results while Wyzie's error was NOT yet present — proof
+        // the fast provider's results escaped the barrier instead of waiting.
+        assertTrue(
+            "Expected a partial with OpenSubtitles results but no Wyzie error yet; got: " +
+                partials.joinToString { "results=${it.results.map { r -> r.provider }} errors=${it.errors.keys}" },
+            partials.any { p ->
+                p.results.any { it.provider == SubtitleProviderKind.OPENSUBTITLES } &&
+                    !p.errors.containsKey(SubtitleProviderKind.WYZIE)
+            },
+        )
+    }
+
+    @Test
+    fun `searchAllStreaming final snapshot merges all providers in stable order`() = runTest {
+        coEvery { wyzie.search(any(), any()) } returns Result.success(listOf(row(SubtitleProviderKind.WYZIE)))
+        coEvery { openSubtitles.search(any(), any()) } returns Result.success(listOf(row(SubtitleProviderKind.OPENSUBTITLES)))
+
+        val merged = newRepository(
+            mapOf(SubtitleProviderKind.WYZIE to wyzie, SubtitleProviderKind.OPENSUBTITLES to openSubtitles),
+        ).searchAllStreaming(query, itemId = "item-1", language = "eng") { }
+
+        // Both providers present in the final snapshot, ordered by provider ordinal.
+        val providers = merged.results.map { it.provider }
+        assertEquals(listOf(SubtitleProviderKind.WYZIE, SubtitleProviderKind.OPENSUBTITLES), providers)
+        assertTrue(merged.errors.isEmpty())
     }
 }

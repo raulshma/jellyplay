@@ -902,6 +902,8 @@ class DownloadRepositoryImpl @Inject constructor(
             studios = item.studios.joinToString(","),
             tagline = taglines.firstOrNull(),
             peopleJson = if (cast.isEmpty()) null else encodeCast(cast),
+            providerIdsJson = if (providerIds.isEmpty()) null else encodeProviderIds(providerIds),
+            externalUrlsJson = if (externalUrls.isEmpty()) null else encodeExternalUrls(externalUrls),
         )
     }
 

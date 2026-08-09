@@ -194,8 +194,7 @@ fun TrackRow(
                 onClick = onToggleFavorite,
                 modifier = Modifier
                     .then(favoriteFocusState.focusModifier)
-                    .tvFocusIndicator(favoriteFocusState, CircleShape)
-                    .size(32.dp),
+                    .tvFocusIndicator(favoriteFocusState, CircleShape),
             ) {
                 Icon(
                     if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,

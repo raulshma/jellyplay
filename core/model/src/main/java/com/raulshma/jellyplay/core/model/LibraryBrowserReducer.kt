@@ -59,23 +59,31 @@ object LibraryBrowserReducer {
     /**
      * Enter a home-section "See-All" deep-link. Scopes to the section's synthetic
      * folder + pre-applied sort/media-type filter, and marks the state as a
-     * section so per-folder persistence is gated off.
+     * section so per-folder persistence is gated off. Resets grouping to [GroupBy.NONE]
+     * so a previous section's "Group by X" can't shadow the latest-first sort.
      */
     fun configureSection(current: LibraryBrowserState, ctx: LibrarySectionContext): LibraryBrowserState {
         val folder = ctx.parentId?.let {
             LibraryFolder(id = it, name = ctx.title, collectionType = ctx.collectionType)
         }
+        // Sections default to "Recently Added Content" (DateLastContentAdded) so a
+        // series that just gained a new episode rises to the top even if the series
+        // itself was added long ago — matches the user's mental model of "Latest"
+        // for compound items (#113).
         val sectionSort = ctx.sortBy?.let { api ->
             SortOption.entries.firstOrNull { it.apiValue == api || it.name == api }
-        } ?: SortOption.DATE_ADDED
+        } ?: SortOption.DATE_LAST_CONTENT_ADDED
         // "See All" from a home Latest row mirrors the default library tab view
         // (top-level items) and differs only in sort order (latest first).
         // Explicit ctx.mediaTypes (if passed) still win.
         val filters = LibraryFilters(sortBy = sectionSort, mediaTypes = ctx.mediaTypes)
+        // Reset grouping so a leftover "Group by Year" from a previous section can't
+        // supersede the latest-first sort on the next "Latest X" open (#113).
         return current.copy(
             folder = folder,
             title = ctx.title,
             filters = filters,
+            groupBy = GroupBy.NONE,
             sectionContext = ctx,
         )
     }

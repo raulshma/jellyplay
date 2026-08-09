@@ -439,7 +439,7 @@ private fun SeasonHeader(
                 )
                 Spacer(Modifier.width(8.dp))
             }
-            IconButton(onClick = onSearch, modifier = Modifier.size(32.dp)) {
+            IconButton(onClick = onSearch) {
                 Icon(
                     Tabler.Outline.Search,
                     contentDescription = stringResource(R.string.detail_manage_cd_search_season),
@@ -447,7 +447,7 @@ private fun SeasonHeader(
                     modifier = Modifier.size(18.dp),
                 )
             }
-            IconButton(onClick = onToggleMonitor, modifier = Modifier.size(32.dp)) {
+            IconButton(onClick = onToggleMonitor) {
                 Icon(
                     if (stats.monitored == stats.total) Tabler.Outline.EyeOff else Tabler.Outline.Eye,
                     contentDescription = stringResource(R.string.detail_manage_cd_toggle_monitor_season),
@@ -478,7 +478,7 @@ private fun EpisodeRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Monitor toggle.
-        IconButton(onClick = onToggleMonitored, modifier = Modifier.size(32.dp)) {
+        IconButton(onClick = onToggleMonitored) {
             Icon(
                 imageVector = if (episode.monitored) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
                 contentDescription = stringResource(R.string.detail_manage_cd_toggle_monitor_episode),

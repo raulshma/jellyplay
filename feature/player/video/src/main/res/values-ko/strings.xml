@@ -137,6 +137,11 @@
     <string name="player_video_more_options">추가 옵션</string>
     <string name="player_video_audio">오디오</string>
     <string name="player_video_subtitles">자막</string>
+    <string name="player_video_subtitle_hub_section_tracks">트랙</string>
+    <string name="player_video_subtitle_hub_section_style">스타일</string>
+    <string name="player_video_subtitle_hub_section_get">가져오기</string>
+    <string name="player_video_subtitle_hub_section_delay">지연</string>
+    <string name="player_video_subtitle_downloaded_device_only">기기에만 저장됨 (오프라인)</string>
     <string name="player_video_chapters">챕터</string>
     <string name="player_video_episodes">에피소드</string>
     <string name="player_video_syncplay">SyncPlay</string>
@@ -302,4 +307,11 @@
     <string name="player_video_subtitle_provider_jellyfin">Jellyfin</string>
     <string name="player_video_subtitle_provider_wyzie">Wyzie</string>
     <string name="player_video_subtitle_provider_opensubtitles">OpenSubtitles</string>
+
+    <!-- 접근성: 밝기/볼륨 제스처 영역의 화면 읽기 의미 (P5 §3.1) -->
+    <string name="a11y_gesture_controls">밝기 및 볼륨 컨트롤</string>
+    <string name="a11y_brightness_increase">밝기 높이기</string>
+    <string name="a11y_brightness_decrease">밝기 낮추기</string>
+    <string name="a11y_volume_increase">볼륨 높이기</string>
+    <string name="a11y_volume_decrease">볼륨 낮추기</string>
 </resources>

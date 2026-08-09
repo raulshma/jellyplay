@@ -49,6 +49,16 @@
     <string name="search_filter_rating_plus">%1$.1f+</string>
     <string name="search_apply_filters">필터 적용</string>
 
+    <!-- Sort (parity with Library's sort options) -->
+    <string name="search_sort">정렬</string>
+    <string name="search_sort_by">정렬 기준</string>
+
+    <!-- Played-status filter (localizable labels for PlayedStatus) -->
+    <string name="search_filter_status">상태</string>
+    <string name="search_filter_played_all">전체</string>
+    <string name="search_filter_played_played">재생함</string>
+    <string name="search_filter_played_unplayed">재생하지 않음</string>
+
     <!-- auto-localized: previously translatable="false" (2) -->
     <string name="search_request_via_seerr">Seerr을 통해 요청</string>
     <string name="search_seerr_search_failed">Seerr 검색 실패</string>
