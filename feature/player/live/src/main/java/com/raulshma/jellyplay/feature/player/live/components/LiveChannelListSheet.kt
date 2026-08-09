@@ -28,8 +28,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.DeviceTv
 import com.composables.icons.tabler.outline.Star
 import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -62,8 +64,11 @@ fun LiveChannelListSheet(
 ) {
     TvSafeSheet(
         onDismissRequest = onDismiss,
-        title = stringResource(R.string.live_channels),
     ) {
+        SheetHeader(
+            title = stringResource(R.string.live_channels),
+            icon = Tabler.Outline.DeviceTv,
+        )
         val listState = rememberLazyListState()
         val currentRequester = remember { FocusRequester() }
 

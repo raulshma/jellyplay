@@ -19,8 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Gauge
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.player.SpeedSlider
 import com.raulshma.jellyplay.feature.player.audio.R
 import com.raulshma.jellyplay.core.ui.R as CoreUiR
@@ -43,12 +46,9 @@ internal fun SpeedPickerSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                stringResource(R.string.audio_speed_title),
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                modifier = Modifier.padding(horizontal = 24.dp),
+            SheetHeader(
+                title = stringResource(R.string.audio_speed_title),
+                icon = Tabler.Outline.Gauge,
             )
             Spacer(Modifier.height(20.dp))
             Row(

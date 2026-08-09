@@ -29,12 +29,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Subtitles
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusState
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -204,21 +206,17 @@ internal fun SubtitleHubSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp)
                         .padding(bottom = 16.dp),
                 ) {
-                    androidx.compose.foundation.layout.Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            stringResource(R.string.player_video_subtitle_settings),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        )
-                        TextButton(onClick = onOpenTester) {
-                            Text(stringResource(R.string.player_video_open_tester))
-                        }
-                    }
+                    SheetHeader(
+                        title = stringResource(R.string.player_video_subtitle_settings),
+                        icon = Tabler.Outline.Subtitles,
+                        trailing = {
+                            TextButton(onClick = onOpenTester) {
+                                Text(stringResource(R.string.player_video_open_tester))
+                            }
+                        },
+                    )
                     Spacer(Modifier.height(16.dp))
                     SubtitleStyleControls(
                         currentStyle = subtitleStyle,

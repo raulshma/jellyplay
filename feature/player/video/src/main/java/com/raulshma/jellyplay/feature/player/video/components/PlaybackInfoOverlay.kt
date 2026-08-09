@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.InfoCircle
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -83,12 +86,9 @@ fun PlaybackInfoOverlay(
                 .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = stringResource(R.string.player_video_playback_info),
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
+            SheetHeader(
+                title = stringResource(R.string.player_video_playback_info),
+                icon = Tabler.Outline.InfoCircle,
             )
 
             InfoSection(title = stringResource(R.string.player_video_media_source)) {

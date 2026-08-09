@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -464,11 +465,7 @@ fun LanguageSettingsScreen(
                     .padding(horizontal = 24.dp)
                     .padding(bottom = 32.dp),
             ) {
-                Text(
-                    stringResource(R.string.settings_subtitle_background),
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Spacer(Modifier.height(12.dp))
+                SheetHeader(title = stringResource(R.string.settings_subtitle_background), icon = Tabler.Outline.Palette)
                 LazyColumn(
                     modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.35f),
                 ) {

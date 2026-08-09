@@ -448,7 +448,8 @@ fun RequestDetailBottomSheet(
             onDismissRequest = onDismiss,
             sheetState = sheetState,
             shape = ShapeCache.smoothTop28,
-            containerColor = colorScheme.surfaceContainer.copy(alpha = 0.95f),
+            containerColor = colorScheme.surfaceContainer,
+            dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
             content = content,
         )
     }

@@ -41,7 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,6 +67,7 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.foundation.shape.CircleShape
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -520,11 +520,7 @@ private fun AddAddressSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(
-                stringResource(R.string.settings_add_server_address),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            )
-            Spacer(Modifier.height(8.dp))
+            SheetHeader(title = stringResource(R.string.settings_add_server_address), icon = Tabler.Outline.Server)
             Text(
                 stringResource(R.string.settings_add_address_description),
                 style = MaterialTheme.typography.bodySmall,

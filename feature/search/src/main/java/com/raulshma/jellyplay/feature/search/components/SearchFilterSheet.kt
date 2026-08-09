@@ -112,6 +112,8 @@ fun SearchFilterSheet(
         sheetState = sheetState,
         containerColor = sheetContainerColor,
         tonalElevation = 0.dp,
+        shape = ShapeCache.smoothTop28,
+        dragHandle = { com.raulshma.jellyplay.core.ui.components.SheetDragHandle() },
     ) {
         SearchFilterSheetBody(
             contentColor = contentColor,
@@ -163,23 +165,17 @@ private fun ColumnScope.SearchFilterSheetBody(
             .padding(horizontal = 24.dp)
             .padding(bottom = 32.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.search_filters_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = contentColor,
-                )
+            Text(
+                text = stringResource(R.string.search_filters_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor,
+            )
                 val resetFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 val resetInteractionSource = remember { MutableInteractionSource() }
                 val isResetPressed by resetInteractionSource.collectIsPressedAsState()
@@ -380,7 +376,6 @@ private fun ColumnScope.SearchFilterSheetBody(
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             }
-        }
     }
 }
 

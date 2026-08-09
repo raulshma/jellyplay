@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -86,22 +85,20 @@ fun MediaQuickActionSheet(
     TvSafeSheet(
         onDismissRequest = onDismiss,
         modifier = modifier,
-        title = title,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            actions.forEachIndexed { index, action ->
-                QuickActionRow(action = action, onClick = { onAction(action) })
-                if (index < actions.lastIndex) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                    )
+            SheetHeader(
+                title = title,
+                onClose = onDismiss,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                actions.forEach { action ->
+                    QuickActionRow(action = action, onClick = { onAction(action) })
                 }
             }
         }
