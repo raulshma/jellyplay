@@ -30,6 +30,7 @@ import com.composables.icons.tabler.outline.LayoutList
 import com.composables.icons.tabler.outline.Menu2
 import com.composables.icons.tabler.outline.Search
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
+import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
 import com.raulshma.jellyplay.feature.settings.R
 
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -56,7 +57,7 @@ private val NAV_ITEMS: List<NavItemDescriptor> = listOf(
     NavItemDescriptor("Search", R.string.settings_nav_item_search, Tabler.Outline.Search, R.string.settings_nav_item_search_subtitle),
     NavItemDescriptor("LiveTv", R.string.settings_nav_item_live_tv, Tabler.Outline.DeviceTv, R.string.settings_nav_item_live_tv_subtitle),
     NavItemDescriptor("MusicBrowse", R.string.settings_nav_item_browse, Tabler.Outline.Disc, R.string.settings_nav_item_browse_subtitle),
-    NavItemDescriptor("Shortcuts", R.string.settings_nav_item_shortcuts, Tabler.Outline.Apps, R.string.settings_nav_item_shortcuts_subtitle),
+    NavItemDescriptor(SHORTCUTS_NAV_KEY, R.string.settings_nav_item_shortcuts, Tabler.Outline.Apps, R.string.settings_nav_item_shortcuts_subtitle),
 )
 
 /**
@@ -76,7 +77,7 @@ fun NavigationCustomizationGroup(
 ) {
     val isTv = LocalTvMode.current
     val navItems = remember(isTv) {
-        if (isTv) NAV_ITEMS else NAV_ITEMS.filter { it.key != "Shortcuts" }
+        if (isTv) NAV_ITEMS else NAV_ITEMS.filter { it.key != SHORTCUTS_NAV_KEY }
     }
 
     SettingsGroup(
