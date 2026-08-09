@@ -226,6 +226,17 @@ sealed class Route : NavKey {
     @Serializable data object SubtitleTester : Route()
 }
 
+/**
+ * The string key under which [Route.Shortcuts] is hidden via
+ * [com.raulshma.jellyplay.core.model.UserPreferences.hiddenNavItems].
+ *
+ * Equals `Route.Shortcuts::class.simpleName`. Centralised here so the nav-bar composition
+ * (`JellyPlayApp`) and the customization UI (`NavigationCustomizationGroup`) reference one
+ * source of truth instead of a bare `"Shortcuts"` literal that can silently drift from the
+ * route's class name.
+ */
+val SHORTCUTS_NAV_KEY: String = Route.Shortcuts::class.simpleName!!
+
 val VIDEO_TOP_LEVEL_ROUTES = linkedMapOf(
     Route.Home to "Home",
     Route.Library to "Library",

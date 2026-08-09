@@ -167,9 +167,7 @@
     <string name="nav_more">More</string>
     <string name="nav_more_content_description">More options</string>
 
-    <!-- Items shared by the Home FAB menu and the global "More" overflow sheet.
-         Kept here (app module) so both the home feature and the app-level
-         overflow sheet resolve them through resource merging. -->
+    <!-- Items displayed in the global "More" overflow sheet. -->
     <string name="menu_settings">Settings</string>
     <string name="menu_downloads">Downloads</string>
     <string name="menu_syncplay" translatable="false">SyncPlay</string>

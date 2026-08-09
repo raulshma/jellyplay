@@ -787,23 +787,7 @@ fun SettingsScreen(
                                     title = stringResource(R.string.settings_account),
                                     summary = { stringResource(R.string.settings_signed_in_as_name, userName) },
                                     badge = {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(CircleShape)
-                                                .background(
-                                                    if (viewModel.currentUser?.isAdmin == true) MaterialTheme.colorScheme.tertiaryContainer
-                                                    else MaterialTheme.colorScheme.secondaryContainer
-                                                )
-                                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = if (viewModel.currentUser?.isAdmin == true) stringResource(R.string.settings_admin_badge) else stringResource(R.string.settings_member_badge),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (viewModel.currentUser?.isAdmin == true) MaterialTheme.colorScheme.onTertiaryContainer
-                                                else MaterialTheme.colorScheme.onSecondaryContainer,
-                                            )
-                                        }
+                                        RoleBadge(isAdmin = viewModel.currentUser?.isAdmin == true)
                                     },
                                     initiallyExpanded = false,
                                 ) {
@@ -1407,23 +1391,11 @@ private fun SettingsProfileBanner(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(
-                                    if (isAdmin) MaterialTheme.colorScheme.tertiaryContainer
-                                    else MaterialTheme.colorScheme.secondaryContainer
-                                )
-                                .padding(horizontal = 7.dp, vertical = 1.dp)
-                        ) {
-                            Text(
-                                text = if (isAdmin) stringResource(R.string.settings_admin_badge) else stringResource(R.string.settings_member_badge),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isAdmin) MaterialTheme.colorScheme.onTertiaryContainer
-                                else MaterialTheme.colorScheme.onSecondaryContainer,
-                            )
-                        }
+                        RoleBadge(
+                            isAdmin = isAdmin,
+                            horizontalPadding = 7.dp,
+                            verticalPadding = 1.dp,
+                        )
                     }
 
                     Spacer(Modifier.height(2.dp))
@@ -1500,6 +1472,37 @@ private fun SettingsProfileBanner(
                 }
             }
         }
+    }
+}
+
+/**
+ * Pill-shaped admin/member role badge. Used in the account [SettingsGroup] header and the
+ * [SettingsProfileBanner]. Defaults mirror the group-header padding; the banner passes tighter
+ * padding via [horizontalPadding]/[verticalPadding].
+ */
+@Composable
+private fun RoleBadge(
+    isAdmin: Boolean,
+    modifier: Modifier = Modifier,
+    horizontalPadding: androidx.compose.ui.unit.Dp = 8.dp,
+    verticalPadding: androidx.compose.ui.unit.Dp = 2.dp,
+) {
+    val container = if (isAdmin) MaterialTheme.colorScheme.tertiaryContainer
+    else MaterialTheme.colorScheme.secondaryContainer
+    val onContainer = if (isAdmin) MaterialTheme.colorScheme.onTertiaryContainer
+    else MaterialTheme.colorScheme.onSecondaryContainer
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(container)
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding)
+    ) {
+        Text(
+            text = stringResource(if (isAdmin) R.string.settings_admin_badge else R.string.settings_member_badge),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = onContainer,
+        )
     }
 }
 

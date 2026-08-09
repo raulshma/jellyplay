@@ -311,7 +311,6 @@ private fun MainHomeContent(
     }
     val discoverRows = rememberDiscoverRows(allDiscoverItems)
 
-    var isFabExpanded by remember { mutableStateOf(false) }
     var isSearchExpanded by remember { mutableStateOf(false) }
     val isSearchFocused by remember { derivedStateOf { state.isSearchActive || isSearchExpanded } }
 
@@ -329,14 +328,10 @@ private fun MainHomeContent(
     val onConfigureLibraries = remember(callbacks) { { callbacks.onConfigureLibraries() } }
     val dismissSectionConfig = remember { { sectionConfigTarget = null } }
 
-    BackHandler(enabled = isFabExpanded || isSearchFocused) {
-        if (isFabExpanded) {
-            isFabExpanded = false
-        } else if (isSearchFocused) {
-            isSearchExpanded = false
-            viewModel.onEvent(HomeUiEvent.ClearSearch)
-            focusManager.clearFocus()
-        }
+    BackHandler(enabled = isSearchFocused) {
+        isSearchExpanded = false
+        viewModel.onEvent(HomeUiEvent.ClearSearch)
+        focusManager.clearFocus()
     }
 
     ArtworkThemeWrapper(
@@ -622,33 +617,7 @@ private fun MainHomeContent(
                     },
                 )
 
-                // Home FAB speed-dial disabled (#115): the global nav-bar "More"
-                // overflow now exposes Settings/Downloads/SyncPlay/Play On +
-                // Surprise Me + Go Online/Offline from anywhere, so the Home-only
-                // FAB is redundant. HomeFabMenu + its TODO marker are retained in
-                // HomeAppBar.kt for now; remove both once the hoisting is signed off.
-                @Suppress("KotlinConstantConditions")
-                val showHomeFab = false
-                if (!isTv && showHomeFab) {
-                    val fabSurpriseClick = remember(heroController) { { heroController.toggleSurprise() } }
-                    val fabToggleOffline = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.ToggleOfflineMode) } }
-                    HomeFabMenu(
-                        isExpanded = isFabExpanded,
-                        onToggle = { isFabExpanded = it },
-                        activeDownloadCount = activeDownloadCount,
-                        offlineMode = state.offlineMode,
-                        onSurpriseClick = fabSurpriseClick,
-                        onSyncPlayClick = callbacks.onSyncPlayClick,
-                        onDownloadsClick = callbacks.onDownloadsClick,
-                        onToggleOffline = fabToggleOffline,
-                        isGoingOnline = state.isGoingOnline,
-                        onPlayOnClick = callbacks.onPlayOnClick,
-                        onSettingsClick = callbacks.onSettingsClick,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .clearFloatingNav(extraBottom = 0.dp),
-                    )
-                }
+
         } // end CompositionLocalProvider(LocalMediaQuickActionController)
         }
     }

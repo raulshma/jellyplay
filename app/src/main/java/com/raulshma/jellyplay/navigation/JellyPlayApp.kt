@@ -143,6 +143,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.VIDEO_TOP_LEVEL_ROUTES
 import com.raulshma.jellyplay.core.ui.navigation.rememberNavigationState
+import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
 import com.raulshma.jellyplay.core.ui.navigation.toNavRouteClass
 import com.raulshma.jellyplay.core.ui.tv.TvScaffold
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -975,7 +976,7 @@ private fun TvContent(
                         icon = routeToIcon(route),
                     )
                 }
-                if (Route.Shortcuts::class.simpleName !in hiddenNavItems) {
+                if (SHORTCUTS_NAV_KEY !in hiddenNavItems) {
                     baseItems + TvNavItem(
                         route = Route.Shortcuts,
                         label = shortcutsLabel,

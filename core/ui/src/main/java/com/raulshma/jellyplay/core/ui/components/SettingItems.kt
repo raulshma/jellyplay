@@ -62,6 +62,74 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
  * + [tvFocusIndicator]; callers do NOT pass focus modifiers. Pass `highlighted = true` to grab
  * focus and scroll the item into view (used by deep-link/highlight flows).
  */
+
+/**
+ * Drives the one-shot highlight glow used by [SettingListItemImpl] / [SettingToggleItemImpl]:
+ * snaps to full intensity on `highlighted`, then animates down through a fixed keyframe curve so
+ * the item pulses to draw attention for deep-link/scroll-into-view flows. Once animated it does
+ * not re-fire until `highlighted` toggles back to false, so re-composition is cheap.
+ *
+ * Returns the current glow alpha in `0f..1f`; callers apply it to shadow/background/border.
+ */
+@Composable
+private fun rememberHighlightGlow(highlighted: Boolean): Float {
+    val highlightProgress = remember { Animatable(0f) }
+    var hasAnimatedHighlight by rememberSaveable(highlighted) { mutableStateOf(false) }
+    LaunchedEffect(highlighted) {
+        if (highlighted && !hasAnimatedHighlight) {
+            hasAnimatedHighlight = true
+            highlightProgress.snapTo(1f)
+            highlightProgress.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 2500
+                    1f at 0 using FastOutSlowInEasing
+                    0.65f at 600 using FastOutSlowInEasing
+                    0.9f at 1200 using FastOutSlowInEasing
+                    0.4f at 1800 using FastOutSlowInEasing
+                    0f at 2500
+                }
+            )
+        } else if (!highlighted) {
+            hasAnimatedHighlight = false
+            highlightProgress.snapTo(0f)
+        }
+    }
+    return highlightProgress.value
+}
+
+/**
+ * The shadow + background + border modifiers that visualize [rememberHighlightGlow]'s alpha.
+ * Pass the glow alpha and the clip [shape]; returns [Modifier] (identity when `glowAlpha <= 0f`).
+ */
+private fun Modifier.highlightGlow(glowAlpha: Float, shape: androidx.compose.ui.graphics.Shape, primaryColor: Color): Modifier =
+    this
+        .then(
+            if (glowAlpha > 0f) {
+                Modifier.shadow(
+                    elevation = 14.dp * glowAlpha,
+                    shape = shape,
+                    clip = false,
+                    ambientColor = primaryColor.copy(alpha = 0.6f * glowAlpha),
+                    spotColor = primaryColor.copy(alpha = 0.5f * glowAlpha),
+                )
+            } else Modifier
+        )
+        .clip(shape)
+        .background(
+            if (glowAlpha > 0f) primaryColor.copy(alpha = 0.2f * glowAlpha)
+            else Color.Transparent
+        )
+        .then(
+            if (glowAlpha > 0f) {
+                Modifier.border(
+                    width = 2.dp,
+                    color = primaryColor.copy(alpha = glowAlpha),
+                    shape = shape,
+                )
+            } else Modifier
+        )
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SettingListItem(
@@ -135,30 +203,8 @@ private fun SettingListItemImpl(
 
     val focusRequester = remember { FocusRequester() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val highlightProgress = remember { Animatable(0f) }
     val primaryColor = MaterialTheme.colorScheme.primary
-    var hasAnimatedHighlight by rememberSaveable(highlighted) { mutableStateOf(false) }
-
-    LaunchedEffect(highlighted) {
-        if (highlighted && !hasAnimatedHighlight) {
-            hasAnimatedHighlight = true
-            highlightProgress.snapTo(1f)
-            highlightProgress.animateTo(
-                targetValue = 0f,
-                animationSpec = keyframes {
-                    durationMillis = 2500
-                    1f at 0 using FastOutSlowInEasing
-                    0.65f at 600 using FastOutSlowInEasing
-                    0.9f at 1200 using FastOutSlowInEasing
-                    0.4f at 1800 using FastOutSlowInEasing
-                    0f at 2500
-                }
-            )
-        } else if (!highlighted) {
-            hasAnimatedHighlight = false
-            highlightProgress.snapTo(0f)
-        }
-    }
+    val glowAlpha = rememberHighlightGlow(highlighted)
 
     LaunchedEffect(highlighted) {
         if (highlighted) {
@@ -172,8 +218,6 @@ private fun SettingListItemImpl(
             bringIntoViewRequester.bringIntoView()
         }
     }
-
-    val glowAlpha = highlightProgress.value
 
     ListItem(
         headlineContent = {
@@ -235,31 +279,7 @@ private fun SettingListItemImpl(
                 scaleY = scale
                 this.alpha = pressAlpha
             }
-            .then(
-                if (glowAlpha > 0f) {
-                    Modifier.shadow(
-                        elevation = 14.dp * glowAlpha,
-                        shape = shape,
-                        clip = false,
-                        ambientColor = primaryColor.copy(alpha = 0.6f * glowAlpha),
-                        spotColor = primaryColor.copy(alpha = 0.5f * glowAlpha),
-                    )
-                } else Modifier
-            )
-            .clip(shape)
-            .background(
-                if (glowAlpha > 0f) primaryColor.copy(alpha = 0.2f * glowAlpha)
-                else Color.Transparent
-            )
-            .then(
-                if (glowAlpha > 0f) {
-                    Modifier.border(
-                        width = 2.dp,
-                        color = primaryColor.copy(alpha = glowAlpha),
-                        shape = shape,
-                    )
-                } else Modifier
-            )
+            .highlightGlow(glowAlpha, shape, primaryColor)
             .focusRequester(focusRequester)
             .bringIntoViewRequester(bringIntoViewRequester)
             .then(tvFocusState.focusModifier)
@@ -348,30 +368,8 @@ private fun SettingToggleItemImpl(
 
     val focusRequester = remember { FocusRequester() }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val highlightProgress = remember { Animatable(0f) }
     val primaryColor = MaterialTheme.colorScheme.primary
-    var hasAnimatedHighlight by rememberSaveable(highlighted) { mutableStateOf(false) }
-
-    LaunchedEffect(highlighted) {
-        if (highlighted && !hasAnimatedHighlight) {
-            hasAnimatedHighlight = true
-            highlightProgress.snapTo(1f)
-            highlightProgress.animateTo(
-                targetValue = 0f,
-                animationSpec = keyframes {
-                    durationMillis = 2500
-                    1f at 0 using FastOutSlowInEasing
-                    0.65f at 600 using FastOutSlowInEasing
-                    0.9f at 1200 using FastOutSlowInEasing
-                    0.4f at 1800 using FastOutSlowInEasing
-                    0f at 2500
-                }
-            )
-        } else if (!highlighted) {
-            hasAnimatedHighlight = false
-            highlightProgress.snapTo(0f)
-        }
-    }
+    val glowAlpha = rememberHighlightGlow(highlighted)
 
     LaunchedEffect(highlighted) {
         if (highlighted) {
@@ -385,8 +383,6 @@ private fun SettingToggleItemImpl(
             bringIntoViewRequester.bringIntoView()
         }
     }
-
-    val glowAlpha = highlightProgress.value
 
     ListItem(
         headlineContent = {
@@ -437,31 +433,7 @@ private fun SettingToggleItemImpl(
                 scaleY = scale
                 this.alpha = pressAlpha
             }
-            .then(
-                if (glowAlpha > 0f) {
-                    Modifier.shadow(
-                        elevation = 14.dp * glowAlpha,
-                        shape = shape,
-                        clip = false,
-                        ambientColor = primaryColor.copy(alpha = 0.6f * glowAlpha),
-                        spotColor = primaryColor.copy(alpha = 0.5f * glowAlpha),
-                    )
-                } else Modifier
-            )
-            .clip(shape)
-            .background(
-                if (glowAlpha > 0f) primaryColor.copy(alpha = 0.2f * glowAlpha)
-                else Color.Transparent
-            )
-            .then(
-                if (glowAlpha > 0f) {
-                    Modifier.border(
-                        width = 2.dp,
-                        color = primaryColor.copy(alpha = glowAlpha),
-                        shape = shape,
-                    )
-                } else Modifier
-            )
+            .highlightGlow(glowAlpha, shape, primaryColor)
             .focusRequester(focusRequester)
             .bringIntoViewRequester(bringIntoViewRequester)
             .then(tvFocusState.focusModifier)
