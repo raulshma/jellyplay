@@ -854,8 +854,10 @@ class ExoPlayerEngine(
      *
      * Mirrors [reconfigureAudioPipeline] / [addExternalSubtitle]: preserve the
      * position and play state, then [setMediaItem] + [prepare] + resume. The
-     * [SubtitleDelayOverlay]'s 250 ms flush debounce collapses a burst of taps
-     * into a single reload, so the rebuffer happens once per slider-settle.
+     * [SubtitleDelayOverlay]'s 250 ms flush debounce coalesces rapid taps into
+     * fewer [VideoPlayerViewModel.setSubtitleDelay] calls, and that method
+     * further debounces the engine apply (~500 ms) so a whole fine-tune burst
+     * triggers a single reload / rebuffer.
      */
     private fun refreshSubtitlesForOffsetChange() {
         val exo = player ?: return

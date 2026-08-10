@@ -2132,6 +2132,7 @@ private fun PlayerSheetRouter(
                 // Style tab
                 subtitleStyle = uiState.subtitleStyle,
                 onStyleChange = { viewModel.setSubtitleStyle(it) },
+                onSubtitleDelayChange = viewModel::setSubtitleDelay,
                 onPickFont = onPickFont,
                 onOpenTester = onOpenSubtitleTester,
                 capabilities = uiState.engineCapabilities,

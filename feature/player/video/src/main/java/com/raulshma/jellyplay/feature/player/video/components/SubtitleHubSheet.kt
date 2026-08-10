@@ -90,6 +90,7 @@ internal fun SubtitleHubSheet(
     // Style tab
     subtitleStyle: SubtitleStyle,
     onStyleChange: (SubtitleStyle) -> Unit,
+    onSubtitleDelayChange: (Long) -> Unit,
     onPickFont: () -> Unit,
     onOpenTester: () -> Unit,
     capabilities: EngineCapabilities,
@@ -223,6 +224,9 @@ internal fun SubtitleHubSheet(
                         onPickFont = onPickFont,
                         showOverrideToggle = true,
                         onReset = { onStyleChange(SubtitleStyle(applyCustomStyle = true)) },
+                        // Route the offset slider to the per-item delay setter so
+                        // an in-player delay edit doesn't clobber the global default.
+                        onSubtitleDelayChange = onSubtitleDelayChange,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }

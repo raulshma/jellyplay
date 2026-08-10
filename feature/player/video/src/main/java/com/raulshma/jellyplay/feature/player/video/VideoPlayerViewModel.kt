@@ -169,6 +169,15 @@ internal fun resolveResumeTicks(
 private const val CONFIG_SYNC_DEBOUNCE_MS = 150L
 
 /**
+ * Debounce window for the engine apply of a subtitle-delay change. A delay
+ * change forces ExoPlayer/LibVLC to reload the media item to re-parse cues
+ * through the offset wrapper (a rebuffer), so a burst of fine-tune nudges is
+ * coalesced into a single reload. The in-memory value (and thus the overlay
+ * readout) updates immediately; only the expensive engine push waits.
+ */
+private const val SUBTITLE_DELAY_APPLY_DEBOUNCE_MS = 500L
+
+/**
  * Initial-buffering watchdog. If the engine has not reached READY within this
  * window since load, the playback-error dialog is surfaced so the user can
  * retry with another engine. Long enough to cover legitimate cold-start
@@ -701,6 +710,11 @@ class VideoPlayerViewModel @Inject constructor(
 
     private var engineCollectionJob: Job? = null
 
+    // Coalesces a burst of subtitle-delay fine-tune changes into one engine
+    // apply (one media reload on ExoPlayer/LibVLC). Cancelled/replaced on each
+    // setSubtitleDelay call so only the last value wins.
+    private var subtitleDelayApplyJob: Job? = null
+
     // Tracks the in-flight media-load coroutine so a new [initializeInternal]
     // call can cancel it before launching its own — prevents overlapping
     // network/teardown side effects when a SyncPlay load event races a user
@@ -999,6 +1013,16 @@ class VideoPlayerViewModel @Inject constructor(
                         subtitleStyle = resolveSubtitleStyle(
                             agg.subtitle,
                             isHdr = isHdrFromStreams(playerSessionManager.sessionState.value.mediaStreams),
+                        ).copy(
+                            // Subtitle delay is per-media: resolve it for the
+                            // current item (per-item override, else the global
+                            // default) rather than seeding from the global style,
+                            // so an engine swap / reloadWithEngine never resets a
+                            // per-item correction to the global default.
+                            offsetMs = resolveSubtitleDelayMs(
+                                agg.subtitle,
+                                playerSessionManager.sessionState.value.currentItemId,
+                            ),
                         ),
                         // Dialogue Boost defaults to OFF until the per-item resolver
                         // applies a stored rule. It does not inherit the
@@ -1616,19 +1640,17 @@ class VideoPlayerViewModel @Inject constructor(
                 _uiState.update { it.copy(videoEffects = hydratedEffects) }
                 updateConfigWithUiStateDebounced()
             }
-            // G9: restore a per-item subtitle-sync delay so a user's correction
-            // for a badly-timed track survives a re-watch / resume. Falls back to
-            // the global offset when no per-item value is stored. Push the
-            // resolved delay to the engine immediately — without this the engine
-            // keeps the global offset until the user touches any setting that
-            // triggers a config push, leaving the AV-sync slider display out of
-            // sync with what is actually rendered on resume.
-            agg.subtitle.subtitleDelayByItem[itemId]?.let { itemDelay ->
-                val currentStyle = _uiState.value.subtitleStyle
-                if (currentStyle.offsetMs != itemDelay) {
-                    _uiState.update { it.copy(subtitleStyle = currentStyle.copy(offsetMs = itemDelay)) }
-                    updateConfigWithUiStateDebounced()
-                }
+            // Resolve the effective subtitle-sync delay for this item: a stored
+            // per-item correction wins, otherwise the global "Subtitle sync
+            // offset" default applies. Always apply (even when no per-item entry
+            // exists) so the previous item's in-memory delay can't bleed into
+            // this one. Push to the engine immediately so the AV-sync slider and
+            // the rendered cues stay in sync on resume.
+            val itemDelay = resolveSubtitleDelayMs(agg.subtitle, itemId)
+            val currentStyle = _uiState.value.subtitleStyle
+            if (currentStyle.offsetMs != itemDelay) {
+                _uiState.update { it.copy(subtitleStyle = currentStyle.copy(offsetMs = itemDelay)) }
+                updateConfigWithUiStateDebounced()
             }
 
             if (sessionState.streamUrl != null) {
@@ -1950,7 +1972,12 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(subtitleStyle = style) }
         updateConfigWithUiState()
         launch {
-            subtitleStore.setSubtitleStyle(style)
+            // The in-memory `style.offsetMs` is the resolved per-item delay, not a
+            // global default. Persist the style with the persisted global
+            // "Subtitle sync offset" default preserved, so a font/colour/edge
+            // change can't clobber the per-item delay into the global store.
+            val globalOffsetMs = cachedAggregate.subtitle.subtitleStyle.offsetMs
+            subtitleStore.setSubtitleStyle(style.copy(offsetMs = globalOffsetMs))
         }
     }
 
@@ -1973,7 +2000,11 @@ class VideoPlayerViewModel @Inject constructor(
             )
             _uiState.update { it.copy(subtitleStyle = newStyle) }
             updateConfigWithUiState()
-            subtitleStore.setSubtitleStyle(newStyle)
+            // Preserve the persisted global subtitle-delay default (see
+            // [setSubtitleStyle]): the in-memory offsetMs is the resolved per-item
+            // value and must not leak into the global store.
+            val globalOffsetMs = cachedAggregate.subtitle.subtitleStyle.offsetMs
+            subtitleStore.setSubtitleStyle(newStyle.copy(offsetMs = globalOffsetMs))
         }
     }
 
@@ -2052,10 +2083,24 @@ class VideoPlayerViewModel @Inject constructor(
     fun setSubtitleDelay(ms: Long) {
         val current = _uiState.value.subtitleStyle
         if (current.offsetMs == ms) return
-        setSubtitleStyle(current.copy(offsetMs = ms))
-        // G9: also persist per-item so the correction survives a re-watch/resume.
+        // Subtitle delay is per-media: update the in-memory resolved value (which
+        // feeds the overlay readout and the engine) and persist only to the
+        // per-item store. This must NOT route through [setSubtitleStyle] — that
+        // persists the whole style to the global "Subtitle sync offset" default,
+        // which is how a correction for one item previously leaked into every
+        // other item.
+        _uiState.update { it.copy(subtitleStyle = current.copy(offsetMs = ms)) }
         playerSessionManager.sessionState.value.currentItemId?.let { itemId ->
             launch { subtitleStore.setSubtitleDelayForItem(itemId, ms) }
+        }
+        // Debounce the engine apply: a delay change forces ExoPlayer/LibVLC to
+        // reload the media item to re-parse cues through the offset wrapper (a
+        // rebuffer). Coalesce a burst of fine-tune nudges into a single reload —
+        // the readout already reflects the live in-memory value instantly.
+        subtitleDelayApplyJob?.cancel()
+        subtitleDelayApplyJob = launch {
+            delay(SUBTITLE_DELAY_APPLY_DEBOUNCE_MS)
+            updateConfigWithUiState()
         }
     }
 

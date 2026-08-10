@@ -81,6 +81,10 @@ import kotlin.math.roundToLong
  * @param capabilities  Per-engine gates (hides unsupported controls).
  * @param onPickFont    Invoked when the user taps the font row.
  * @param onReset       When non-null, renders a reset chip that calls it.
+ * @param onSubtitleDelayChange When non-null, the subtitle-offset slider routes
+ *  through it (per-media delay) instead of [onStyleChange]. The player hub uses
+ *  this so delay edits persist per-item; the standalone tester leaves it null to
+ *  keep the legacy style-bucket behaviour.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -92,6 +96,7 @@ fun SubtitleStyleControls(
     onPickFont: () -> Unit = {},
     showOverrideToggle: Boolean = true,
     onReset: (() -> Unit)? = null,
+    onSubtitleDelayChange: ((Long) -> Unit)? = null,
 ) {
     val isTv = LocalTvMode.current
 
@@ -544,7 +549,14 @@ fun SubtitleStyleControls(
             TvOrTouchSlider(
                 value = offsetMs.toFloat(),
                 onValueChange = { offsetMs = (it / 100f).roundToLong() * 100 },
-                onValueChangeFinished = { onStyleChange(currentStyle.copy(offsetMs = offsetMs)) },
+                onValueChangeFinished = {
+                    // Per-media delay is persisted per-item when a dedicated handler
+                    // is supplied (player hub); otherwise the standalone tester falls
+                    // back to the style bucket so its behaviour is unchanged.
+                    val delayHandler = onSubtitleDelayChange
+                    if (delayHandler != null) delayHandler(offsetMs)
+                    else onStyleChange(currentStyle.copy(offsetMs = offsetMs))
+                },
                 valueRange = -30000f..30000f,
                 modifier = Modifier.fillMaxWidth(),
                 isTv = isTv,
