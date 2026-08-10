@@ -226,18 +226,19 @@
     <string name="player_video_on">On</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_reset_both">Reset both</string>
+    <string name="player_video_reset_audio">Reset audio</string>
     <string name="player_video_av_sync_audio_helper">Negative: audio earlier. Positive: audio later.</string>
     <string name="player_video_av_sync_decrease">Decrease %1$s</string>
     <string name="player_video_av_sync_increase">Increase %1$s</string>
-    <!-- timestamp + cue-preview subtitle-sync helper -->
-    <string name="player_video_sync_preview_title">Cue preview sync</string>
-    <string name="player_video_sync_preview_hint">Enter a timestamp to see the subtitle line there, then drag the offset to align it with the voice.</string>
-    <string name="player_video_sync_preview_timestamp">Timestamp (mm:ss.mmm)</string>
-    <string name="player_video_sync_preview_use_current">Use current position</string>
-    <string name="player_video_sync_preview_reset">Reset offset</string>
-    <string name="player_video_sync_preview_unavailable">Subtitle preview is unavailable for this track (embedded or image-based subtitles can\'t be previewed here).</string>
-    <string name="player_video_sync_preview_embedded_hint">Only lines played so far are available for embedded subtitles. Scrub backward or play further to preview ahead.</string>
+    <string name="player_video_subtitle_delay">Subtitle Delay</string>
+    <string name="player_video_subtitle_delay_close">Close subtitle delay</string>
+    <string name="player_video_subtitle_delay_reset">Reset</string>
+    <string name="player_video_subtitle_delay_decrease_coarse">Delay subtitles 1 second</string>
+    <string name="player_video_subtitle_delay_decrease_fine">Delay subtitles 0.1 seconds</string>
+    <string name="player_video_subtitle_delay_increase_fine">Advance subtitles 0.1 seconds</string>
+    <string name="player_video_subtitle_delay_increase_coarse">Advance subtitles 1 second</string>
+    <string name="player_video_subtitle_delay_show_controls">Show delay controls</string>
+    <string name="player_video_subtitle_delay_hub_hint">Adjust the timing of subtitles against the video. Use the overlay so you can see the subtitles shift as you tweak.</string>
     <string name="player_video_picture_in_picture">Picture in Picture</string>
     <string name="player_video_play_next">Play Next</string>
     <string name="player_video_turn_on_autoplay">Turn on autoplay</string>

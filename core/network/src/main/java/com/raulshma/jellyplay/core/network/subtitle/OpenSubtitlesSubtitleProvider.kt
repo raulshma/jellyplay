@@ -42,11 +42,12 @@ import javax.inject.Singleton
  * → `GET link` for the bytes. Search is `GET /subtitles` keyed by TMDB/IMDb id
  * (preferred) or a title `query`, with `languages` as ISO 639-2B.
  *
- * Auth is an `Api-Key` header always, plus an **optional** JWT bearer obtained
- * via `POST /login` when the user supplies username + password — this raises the
- * per-day download quota. The token is cached in the encrypted credential store
- * (with an expiry) and refreshed lazily on expiry or 401; a [Mutex] serializes
- * re-login so concurrent calls don't each re-authenticate.
+ * Auth is a shared app `Api-Key` header always (compiled in; never user-visible
+ * — same model as the Jellyfin opensubtitles plugin), plus a **mandatory** JWT
+ * bearer obtained via `POST /login` with the user's opensubtitles.com username
+ * + password. The token is cached in the encrypted credential store (with an
+ * expiry) and refreshed lazily on expiry or 401; a [Mutex] serializes re-login
+ * so concurrent calls don't each re-authenticate.
  *
  * Rate-limited to ~1 req/s via [SubtitleRateLimiter] (OpenSubtitles enforces
  * 1 req/s and 40 req/10s/IP). Transient 429/5xx retry via [RetryPolicy] in the
@@ -97,7 +98,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
     ): Result<List<SubtitleSearchResult>> {
         val os = credentials as? SubtitleProviderCredentials.OpenSubtitles
         if (os == null || !os.isConfigured) {
-            return Result.failure(ApiException(false, message = "OpenSubtitles API key is not configured"))
+            return Result.failure(ApiException(false, message = "OpenSubtitles username and password are not configured"))
         }
         return rateLimiter.acquire {
             runCatching {
@@ -122,13 +123,13 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
                     val token = ensureValidToken(os)
                     val request = Request.Builder()
                         .url(urlBuilder.build())
-                        .header("Api-Key", os.apiKey)
+                        .header("Api-Key", APP_API_KEY)
                         .header("User-Agent", USER_AGENT)
                         .header("Accept", "application/json")
-                        .apply { token?.let { header("Authorization", "Bearer $it") } }
+                        .header("Authorization", "Bearer $token")
                         .build()
                     val body = execute(request)
-                    parseSearchResponse(body)
+                    parseSearchResponse(body, query.season, query.episode)
                 }
             }.recoverCatching { e ->
                 throw wrapNetwork(e)
@@ -142,7 +143,7 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
     ): Result<SubtitleFile> {
         val os = credentials as? SubtitleProviderCredentials.OpenSubtitles
         if (os == null || !os.isConfigured) {
-            return Result.failure(ApiException(false, message = "OpenSubtitles API key is not configured"))
+            return Result.failure(ApiException(false, message = "OpenSubtitles username and password are not configured"))
         }
         val fileId = result.id.toLongOrNull()
         if (fileId == null) {
@@ -157,11 +158,11 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
                         .toRequestBody(JSON_MEDIA)
                     val downloadRequest = Request.Builder()
                         .url("$baseUrl/api/v1/download".toHttpUrl())
-                        .header("Api-Key", os.apiKey)
+                        .header("Api-Key", APP_API_KEY)
                         .header("User-Agent", USER_AGENT)
                         .header("Accept", "application/json")
                         .header("Content-Type", "application/json")
-                        .apply { token?.let { header("Authorization", "Bearer $it") } }
+                        .header("Authorization", "Bearer $token")
                         .post(payload)
                         .build()
                     val downloadBody = execute(downloadRequest)
@@ -196,29 +197,34 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
     }
 
     /**
-     * Returns a non-expired JWT if the user has configured username/password,
-     * logging in (and persisting the token) on demand. Returns null when the
-     * user is on the anonymous (API-key-only) tier — callers simply omit the
-     * `Authorization` header.
+     * Returns a non-expired JWT for the configured username/password, logging in
+     * (and persisting the token) on demand. Callers must have already verified
+     * [SubtitleProviderCredentials.OpenSubtitles.isConfigured], so this always
+     * returns a token (a missing/expired token triggers a fresh login); failures
+     * from `/login` propagate as an [ApiException].
      *
      * Serialized by [loginMutex] so a burst of concurrent first-of-the-day calls
      * shares a single login rather than each firing its own.
      */
-    private suspend fun ensureValidToken(creds: SubtitleProviderCredentials.OpenSubtitles): String? {
-        val username = creds.username?.takeIf { it.isNotBlank() } ?: return null
-        val password = creds.password?.takeIf { it.isNotBlank() } ?: return null
+    private suspend fun ensureValidToken(creds: SubtitleProviderCredentials.OpenSubtitles): String {
+        val username = creds.username?.takeIf { it.isNotBlank() }
+            ?: throw ApiException(false, message = "OpenSubtitles username is not configured")
+        val password = creds.password?.takeIf { it.isNotBlank() }
+            ?: throw ApiException(false, message = "OpenSubtitles password is not configured")
         val now = System.currentTimeMillis()
-        if (!creds.jwt.isNullOrBlank() && creds.jwtExpiresAt > now + TOKEN_REFRESH_LEAD_MS) {
-            return creds.jwt
+        val cachedJwt = creds.jwt
+        if (!cachedJwt.isNullOrBlank() && creds.jwtExpiresAt > now + TOKEN_REFRESH_LEAD_MS) {
+            return cachedJwt
         }
         return loginMutex.withLock {
             // Re-check inside the lock: a concurrent caller may have just refreshed.
             val fresh = credentialsStore.getCredentials(SubtitleProviderKind.OPENSUBTITLES)
                 as? SubtitleProviderCredentials.OpenSubtitles
-            if (fresh != null && !fresh.jwt.isNullOrBlank() && fresh.jwtExpiresAt > now + TOKEN_REFRESH_LEAD_MS) {
-                return@withLock fresh.jwt
+            val freshJwt = fresh?.jwt
+            if (fresh != null && !freshJwt.isNullOrBlank() && fresh.jwtExpiresAt > now + TOKEN_REFRESH_LEAD_MS) {
+                return@withLock freshJwt
             }
-            val token = doLogin(creds.apiKey, username, password)
+            val token = doLogin(username, password)
             // Persist the refreshed token (expiry read from the JWT; fall back to 24h).
             val expiresAt = decodeJwtExpiry(token) ?: (now + DEFAULT_TOKEN_TTL_MS)
             credentialsStore.setCredentials(
@@ -229,14 +235,14 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
         }
     }
 
-    private suspend fun doLogin(apiKey: String, username: String, password: String): String {
+    private suspend fun doLogin(username: String, password: String): String {
         val payload = buildJsonObject {
             put("username", username)
             put("password", password)
         }.toString().toRequestBody(JSON_MEDIA)
         val request = Request.Builder()
             .url("$baseUrl/api/v1/login".toHttpUrl())
-            .header("Api-Key", apiKey)
+            .header("Api-Key", APP_API_KEY)
             .header("User-Agent", USER_AGENT)
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
@@ -308,12 +314,16 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
         }
     }
 
-    private fun parseSearchResponse(body: String): List<SubtitleSearchResult> {
+    private fun parseSearchResponse(
+        body: String,
+        requestedSeason: Int? = null,
+        requestedEpisode: Int? = null,
+    ): List<SubtitleSearchResult> {
         val root = parseJsonObject(body)
         val data = root["data"]?.jsonArray ?: return emptyList()
         // De-duplicate by file_id: OpenSubtitles returns multiple file entries per
         // feature (different releases); the attributes.file_id is the download handle.
-        return data.mapNotNull { element ->
+        val all = data.mapNotNull { element ->
             val obj = element.jsonObject
             val attrs = obj["attributes"]?.jsonObject ?: return@mapNotNull null
             val fileId = attrs["file_id"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
@@ -325,6 +335,13 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
             val hearingImpaired = attrs["hearing_impaired"]?.jsonPrimitive?.content?.let { it == "1" }
             val aiTranslated = attrs["ai_translated"]?.let { isTruthy(it) }
             val machineTranslated = attrs["machine_translated"]?.let { isTruthy(it) }
+            // OpenSubtitles echoes the feature metadata (including season/episode)
+            // on each row via attributes.feature_details. We capture it here so the
+            // TV-episode filter below can drop cross-episode rows that slip through
+            // the (loose) imdb_id + season_number/episode_number server match.
+            val featureDetails = attrs["feature_details"]?.jsonObject
+            val resultSeason = featureDetails?.get("season_number")?.jsonPrimitive?.intOrNull
+            val resultEpisode = featureDetails?.get("episode_number")?.jsonPrimitive?.intOrNull
             SubtitleSearchResult(
                 provider = SubtitleProviderKind.OPENSUBTITLES,
                 id = fileId.toString(),
@@ -338,8 +355,47 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
                 fileName = fileName,
                 // ai/machine-translated both indicate non-human translation.
                 isAiTranslated = (aiTranslated == true || machineTranslated == true).takeIf { it },
+                season = resultSeason,
+                episode = resultEpisode,
             )
         }.distinctBy { it.id }
+
+        return filterByEpisode(all, requestedSeason, requestedEpisode)
+    }
+
+    /**
+     * For TV episodes, OpenSubtitles' `imdb_id` + `season_number`/`episode_number`
+     * server-side match is loose: it can return subtitles for sibling episodes of
+     * the same season (especially when `imdb_id` resolves to the series rather
+     * than the episode). Since each row echoes its true feature via
+     * `feature_details.season_number`/`episode_number`, we re-check client-side
+     * and drop mismatches — but only when at least one row matches, so a sparse
+     * response (no per-row episode metadata) falls back to the full list rather
+     * than showing an empty sheet. See issue #121.
+     */
+    private fun filterByEpisode(
+        results: List<SubtitleSearchResult>,
+        requestedSeason: Int?,
+        requestedEpisode: Int?,
+    ): List<SubtitleSearchResult> {
+        if (requestedSeason == null || requestedEpisode == null) return results
+        val matching = results.filter {
+            it.season == requestedSeason && it.episode == requestedEpisode
+        }
+        if (matching.isEmpty()) {
+            if (results.any { it.season != null || it.episode != null }) {
+                // Server returned episode metadata for other rows but none for the
+                // requested episode — likely a wrong-episode set. Still fall back
+                // to keep the sheet usable, but surface it for diagnosis.
+                Log.w(
+                    TAG,
+                    "No rows matched S${requestedSeason}E${requestedEpisode}; " +
+                        "falling back to ${results.size} unfiltered results.",
+                )
+            }
+            return results
+        }
+        return matching
     }
 
     private fun execute(request: Request): String =
@@ -400,6 +456,20 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
     companion object {
         private const val BASE = "https://api.opensubtitles.com"
         private const val USER_AGENT = "JellyPlay"
+
+        /**
+         * Shared application `Api-Key`, sent on every OpenSubtitles request. This
+         * is the same registered consumer key the Jellyfin opensubtitles plugin
+         * ships (see `scratch/jellyfin-plugin-opensubtitles`), used so that users
+         * authenticate with their opensubtitles.com username/password only — they
+         * never see or manage an API key, matching the plugin UX. A dedicated
+         * JellyPlay consumer key would be the cleaner long-term option.
+         *
+         * `internal` so unit tests can assert the header value without exposing
+         * the key outside the network module.
+         */
+        internal const val APP_API_KEY = "gUCLWGoAg2PmyseoTM0INFFVPcDCeDlT"
+
         private const val DEFAULT_TOKEN_TTL_MS = 24L * 60 * 60 * 1000
         private const val TOKEN_REFRESH_LEAD_MS = 5 * 60 * 1000L
         private const val TAG = "OpenSubs"

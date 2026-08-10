@@ -34,6 +34,10 @@ class PlayerLifecycleManager @Inject constructor(
     @Volatile
     var activeCallbacks: PlayerLifecycleCallbacks? = null
 
+    /** True when background video audio is enabled (engine keeps running on background). */
+    val isBackgroundAudioEnabled: Boolean
+        get() = playbackStore.playback.value.backgroundVideoAudioEnabled
+
     /** Clears the active engine callbacks. Called when playback ends. */
     fun reset() {
         activeCallbacks = null

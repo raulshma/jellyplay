@@ -1158,10 +1158,10 @@
     <string name="settings_subtitles_wyzie">Wyzie Subs</string>
     <string name="settings_subtitles_wyzie_help">免费字幕 API（每天 1,000 次请求）。在 store.wyzie.io/redeem 获取密钥。</string>
     <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
-    <string name="settings_subtitles_opensubtitles_help">需要 API key。可选的用户名/密码可提高每日下载配额。</string>
+    <string name="settings_subtitles_opensubtitles_help">使用你的 opensubtitles.com 账户登录。VIP 会员可提高每日下载配额，免费账户也有一定的下载次数。</string>
     <string name="settings_subtitles_api_key">API key</string>
-    <string name="settings_subtitles_username_optional">用户名（可选）</string>
-    <string name="settings_subtitles_password_optional">密码（可选）</string>
+    <string name="settings_subtitles_username">用户名（可选）</string>
+    <string name="settings_subtitles_password">密码（可选）</string>
     <string name="settings_subtitles_save">保存</string>
     <string name="settings_subtitles_test">测试</string>
     <string name="settings_subtitles_testing">测试中…</string>

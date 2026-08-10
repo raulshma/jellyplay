@@ -158,7 +158,8 @@ class MainActivity : FragmentActivity() {
                     combine(
                         pipController.shouldAutoEnterPip,
                         pipController.pipAspectRatio,
-                    ) { shouldAutoEnter, aspect -> shouldAutoEnter to aspect }
+                        pipController.isPlaying,
+                    ) { shouldAutoEnter, aspect, isPlaying -> Triple(shouldAutoEnter, aspect, isPlaying) }
                         .distinctUntilChanged()
                         .collect {
                             if (isInPictureInPictureMode) {
@@ -464,7 +465,13 @@ class MainActivity : FragmentActivity() {
     // triggers when paused/stopped.
     override fun onTopResumedActivityChanged(isTopResumed: Boolean) {
         super.onTopResumedActivityChanged(isTopResumed)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        if (isTopResumed && justExitedPip) {
+            // Safety net for OEM lifecycle quirks: onResume() normally clears
+            // justExitedPip on expand, but if it didn't fire, handle the expand
+            // here so the engine resumes.
+            justExitedPip = false
+            playerLifecycleManager.onActivityResume()
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             !isTopResumed &&
             !isInPictureInPictureMode &&
             pipController.shouldAutoEnterPip.value &&
@@ -504,15 +511,30 @@ class MainActivity : FragmentActivity() {
             registerPipActionReceiver()
             refreshPipActions()
         } else {
-            justExitedPip = true
             unregisterPipActionReceiver()
+            // onPictureInPictureModeChanged and onResume/onStop arrive as separate
+            // looper messages, so ordering is not guaranteed. Use the lifecycle state
+            // to distinguish expand (activity already RESUMED → late callback, skip)
+            // from dismiss/early-expand (not yet resumed → arm the flag so onResume
+            // or onStop can resolve it).
+            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                justExitedPip = true
+                // Pause the engine immediately so audio doesn't leak after the PiP
+                // window closes on dismiss. onActivityResume() restores playback on
+                // expand. No-op when backgroundVideoAudioEnabled is ON.
+                playerLifecycleManager.onActivityPause()
+            }
         }
         pipController.setPipMode(isInPictureInPictureMode)
     }
 
     override fun onPause() {
         super.onPause()
-        if (!isInPictureInPictureMode) {
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        val isScreenOffOrLocked = keyguardManager?.isKeyguardLocked == true || powerManager?.isInteractive == false
+
+        if (!isInPictureInPictureMode || isScreenOffOrLocked) {
             playerLifecycleManager.onActivityPause()
             backgroundedAt = System.currentTimeMillis()
         }
@@ -520,6 +542,10 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Clear justExitedPip: if we just expanded from PiP, this prevents
+        // onStop() from treating the next stop as a PiP dismiss. The engine
+        // was paused in onPipModeChanged(false) for the surface transition;
+        // onActivityResume() restores playback.
         justExitedPip = false
         playerLifecycleManager.onActivityResume()
 
@@ -538,13 +564,25 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         if (justExitedPip) {
+            // PiP was dismissed (swiped away). If background audio is OFF, close
+            // the player via the existing dismiss path. If ON, leave the engine
+            // running so audio continues in the background.
             justExitedPip = false
-            pipController.notifyPipDismissed()
+            if (!playerLifecycleManager.isBackgroundAudioEnabled) {
+                pipController.notifyPipDismissed()
+            }
+        } else if (isInPictureInPictureMode) {
+            // Screen off or app switch while in PiP: pause the engine so audio
+            // doesn't keep playing with bg audio OFF. onPause() can't catch this
+            // because the activity is already PAUSED during PiP — only onStop()
+            // fires. onActivityResume() restores playback when the activity
+            // resumes (screen on / return to app). No-op when bg audio is ON.
+            playerLifecycleManager.onActivityPause()
         }
     }
 
-    fun enterPipMode() {
-        if (!isPipCapable()) return
+    fun enterPipMode(): Boolean {
+        if (!isPipCapable()) return false
 
         registerPipActionReceiver()
 
@@ -552,8 +590,12 @@ class MainActivity : FragmentActivity() {
         // Wrap the system call: some OEMs/ROMs throw IllegalArgumentException on
         // out-of-range aspect ratios or malformed source rects even after our
         // clamping. Fail open (no entry) rather than crashing — VLC's defense.
-        runCatching { enterPictureInPictureMode(params) }
-            .onFailure { Log.w(TAG, "PiP enter failed", it) }
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                enterPictureInPictureMode(params)
+            } else false
+        }.onFailure { Log.w(TAG, "PiP enter failed", it) }
+            .getOrDefault(false)
     }
 
     private fun isPipCapable(): Boolean =
@@ -588,7 +630,13 @@ class MainActivity : FragmentActivity() {
             if (isValidSourceRect(src)) setSourceRectHint(src)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val autoEnter = if (preArm) pipController.shouldAutoEnterPip.value else false
+            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            val isScreenOffOrLocked = keyguardManager?.isKeyguardLocked == true || powerManager?.isInteractive == false
+
+            val autoEnter = if (preArm && !isScreenOffOrLocked) {
+                pipController.shouldAutoEnterPip.value && pipController.isPlaying.value
+            } else false
             setAutoEnterEnabled(autoEnter)
             setSeamlessResizeEnabled(autoEnter)
         }

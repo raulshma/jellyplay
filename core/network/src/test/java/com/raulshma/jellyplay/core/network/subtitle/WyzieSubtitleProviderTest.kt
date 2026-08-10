@@ -155,4 +155,64 @@ class WyzieSubtitleProviderTest {
         // language normalized to ISO 639-3
         assertEquals("eng", row.language)
     }
+
+    // region TV-episode SxxExx marker preference (issue #121)
+    // Wyzie carries no echoed episode metadata, so the defensive guard prefers
+    // rows whose release/file name carries the requested SxxExx marker, falling
+    // back to the full list when no row carries it.
+
+    private fun wyzieRow(id: String, release: String): String = """
+        {"id":"$id","url":"https://cdn.example.com/$id.srt","format":"srt",
+         "display":"English","language":"en","isHearingImpaired":false,
+         "release":"$release","fileName":"$release.srt","downloadCount":10,"ai":false}
+    """.trimIndent()
+
+    @Test
+    fun `TV episode query prefers rows carrying the SxxExx marker`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                "[${wyzieRow("ep1", "Show.S01E01.1080p")},${wyzieRow("ep2", "Show.S01E02.1080p")}]",
+            ),
+        )
+
+        val result = provider.search(
+            SubtitleQuery(imdbId = "tt3659388", season = 1, episode = 1),
+            creds,
+        )
+        assertTrue(result.isSuccess)
+        val rows = result.getOrThrow()
+        assertEquals(1, rows.size)
+        assertEquals("ep1", rows.first().id)
+    }
+
+    @Test
+    fun `TV episode query falls back to all rows when none carry the marker`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                "[${wyzieRow("a", "Show.season.one.pack")},${wyzieRow("b", "Show.LQ")}]",
+            ),
+        )
+
+        val result = provider.search(
+            SubtitleQuery(imdbId = "tt3659388", season = 1, episode = 1),
+            creds,
+        )
+        assertTrue(result.isSuccess)
+        // No marker anywhere → keep the full server response.
+        assertEquals(2, result.getOrThrow().size)
+    }
+
+    @Test
+    fun `movie query does not apply the SxxExx preference`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                "[${wyzieRow("m1", "Movie.2023")},${wyzieRow("m2", "Other.2023.S01E01")}]",
+            ),
+        )
+
+        val result = provider.search(SubtitleQuery(imdbId = "tt3659388"), creds)
+        assertTrue(result.isSuccess)
+        assertEquals(2, result.getOrThrow().size)
+    }
+    // endregion
 }

@@ -792,6 +792,18 @@ class VideoPlayerViewModel @Inject constructor(
         // instance, so every load must re-arm it or PiP controls go dead.
         registerPipTransport()
         launch {
+            pipController.pipDismissed.collect { dismissed ->
+                if (dismissed) {
+                    activePlayerController.engine?.pause()
+                    playerSessionManager.engine?.pause()
+                    mediaSessionController.release()
+                    videoMiniPlayerState.release()
+                    release()
+                    _closePlayer.trySend(Unit)
+                }
+            }
+        }
+        launch {
             aggregateStore.aggregate.collect { agg ->
                 val oldAggregate = cachedAggregate
                 cachedAggregate = agg
@@ -1176,14 +1188,6 @@ class VideoPlayerViewModel @Inject constructor(
                     }
                 } else {
                     activePlayerController.clearEngine()
-                }
-            }
-        }
-
-        launch {
-            pipController.pipDismissed.collect { dismissed ->
-                if (dismissed) {
-                    playerSessionManager.engine?.pause()
                 }
             }
         }

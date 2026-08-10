@@ -119,6 +119,14 @@ class ExoPlayerEngine(
     @Volatile
     private var lastAppliedAudioSessionId: Int = -1
 
+    // Mirrors MPV/LibVLC: remembers play state across Activity pause so the
+    // engine pauses on lock/home (unless background audio is enabled) and
+    // resumes only if it was actually playing. Without this override the
+    // inherited PlayerLifecycleCallbacks default is a no-op, so ExoPlayer
+    // would keep playing audio silently when the screen locks.
+    @Volatile
+    private var wasPlayingBeforeActivityPause = false
+
     private inline fun runOnPlayerThread(crossinline block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             block()
@@ -692,6 +700,7 @@ class ExoPlayerEngine(
         releaseAudioEffects()
         cachedVolume = 1f
         lastUnmuteVolume = 1f
+        wasPlayingBeforeActivityPause = false
         _playbackState.value = EnginePlaybackState.IDLE
         _isPlaying.value = false
         _availableTracks.value = emptyList()
@@ -722,6 +731,22 @@ class ExoPlayerEngine(
         p.play()
     }
     override fun pause() = runOnPlayerThread { player?.pause() }
+
+    // Activity lifecycle bridge: unlike MPV/LibVLC, ExoPlayer does not detach
+    // views here (PlayerView handles the surface lifecycle). Pausing keeps the
+    // seek position; onActivityResume restores play only if it was active.
+    override fun onActivityPause() {
+        wasPlayingBeforeActivityPause = _isPlaying.value
+        pause()
+    }
+
+    override fun onActivityResume() {
+        if (wasPlayingBeforeActivityPause) {
+            wasPlayingBeforeActivityPause = false
+            play()
+        }
+    }
+
     override fun stop() = runOnPlayerThread { player?.stop() }
     override fun seekTo(positionMs: Long) = runOnPlayerThread { player?.seekTo(positionMs) }
     override fun setPlaybackSpeed(speed: Float) = runOnPlayerThread { player?.setPlaybackSpeed(speed) }
@@ -779,18 +804,12 @@ class ExoPlayerEngine(
         // handled by the upper layer recreating the player — nothing to do here.
         //
         // subtitleDelayMs change: the OffsettingSubtitleParserFactory's
-        // wrapper reads currentConfig.subtitleDelayMs on each parse() call, so
-        // a delay adjustment takes effect for subsequent cues without a media
-        // reload. (Previously the offset was snapshotted at prepare() time and
-        // the delay slider appeared broken for side-loaded subtitles.)
-        //
-        // KNOWN LIMITATION: Media3 parses a progressive side-car subtitle file
-        // once and caches the cues; parse() is not re-invoked when the delay
-        // changes mid-playback, so cues already loaded keep their original
-        // timestamps until the user seeks (which re-invokes the parser). mpv and
-        // libVLC re-evaluate the delay continuously, so their offset is truly
-        // live. Forcing a re-parse on every delay change risks perf/jank, so the
-        // buffered-cue limitation is accepted; seeking refreshes the offset.
+        // wrapper reads currentConfig.subtitleDelayMs on each parse() call. A
+        // delay adjustment is applied live by refreshSubtitlesForOffsetChange(),
+        // which reloads the current MediaItem so Media3 re-parses the subtitles
+        // through the offset wrapper with the new value. mpv and libVLC
+        // re-evaluate the delay continuously (sub-delay / setSpuDelay), so no
+        // reload is needed there.
 
         if (oldConfig.audioEffects != newConfig.audioEffects) {
             applyAudioEffects()
@@ -801,6 +820,15 @@ class ExoPlayerEngine(
 
         if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
             playerView?.let { pv -> applySubtitleStyleToView(pv, newConfig.subtitleStyle) }
+            // The offset lives on SubtitleStyle.offsetMs, so a delay change also
+            // flows through here. Media3 caches parsed cues for the active text
+            // track and will not re-invoke the OffsettingSubtitleParserFactory
+            // for the cached sample — so the overlay would look like it does
+            // nothing until the next reload/seek. Rebuild the media item so the
+            // subtitle is parsed through the offset wrapper with the new value.
+            if (oldConfig.subtitleStyle.offsetMs != newConfig.subtitleStyle.offsetMs) {
+                refreshSubtitlesForOffsetChange()
+            }
         }
 
         if (oldConfig.pauseOnAudioFocusLoss != newConfig.pauseOnAudioFocusLoss) {
@@ -809,6 +837,35 @@ class ExoPlayerEngine(
                 .setUsage(C.USAGE_MEDIA)
                 .build()
             player?.setAudioAttributes(audioAttrs, newConfig.pauseOnAudioFocusLoss)
+        }
+    }
+
+    /**
+     * Reloads the current MediaItem so Media3 re-parses the subtitles through
+     * the [OffsettingSubtitleParserFactory] with the new offset.
+     *
+     * Media3 caches parsed cues for the active text track: neither a track
+     * reselection nor a same-position seek reliably re-invokes the parser for
+     * the already-parsed sample (the two-phase disable/re-enable collapses into
+     * a net-zero parameter diff before the renderer re-evaluates; a small seek
+     * reuses the cached sample). The only reliable nudge is a media-period
+     * reset, which tears down the text renderer stream and rebuilds it from
+     * scratch — re-running the offset wrapper.
+     *
+     * Mirrors [reconfigureAudioPipeline] / [addExternalSubtitle]: preserve the
+     * position and play state, then [setMediaItem] + [prepare] + resume. The
+     * [SubtitleDelayOverlay]'s 250 ms flush debounce collapses a burst of taps
+     * into a single reload, so the rebuffer happens once per slider-settle.
+     */
+    private fun refreshSubtitlesForOffsetChange() {
+        val exo = player ?: return
+        val mediaItem = currentMediaItem ?: return
+        runOnPlayerThread {
+            val positionMs = exo.currentPosition
+            val wasPlaying = exo.isPlaying
+            exo.setMediaItem(mediaItem, positionMs)
+            exo.prepare()
+            if (wasPlaying) exo.play()
         }
     }
 

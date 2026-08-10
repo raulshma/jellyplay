@@ -1158,10 +1158,10 @@
     <string name="settings_subtitles_wyzie">Wyzie Subs</string>
     <string name="settings_subtitles_wyzie_help">API de subtítulos gratuita (1.000 solicitudes/día). Consigue una clave en store.wyzie.io/redeem.</string>
     <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
-    <string name="settings_subtitles_opensubtitles_help">Se requiere API key. El nombre de usuario/contraseña opcionales aumentan la cuota diaria de descargas.</string>
+    <string name="settings_subtitles_opensubtitles_help">Inicia sesión con tu cuenta de opensubtitles.com. Una membresía VIP aumenta la cuota diaria de descargas; las cuentas gratuitas también tienen un número limitado de descargas.</string>
     <string name="settings_subtitles_api_key">API key</string>
-    <string name="settings_subtitles_username_optional">Nombre de usuario (opcional)</string>
-    <string name="settings_subtitles_password_optional">Contraseña (opcional)</string>
+    <string name="settings_subtitles_username">Nombre de usuario (opcional)</string>
+    <string name="settings_subtitles_password">Contraseña (opcional)</string>
     <string name="settings_subtitles_save">Guardar</string>
     <string name="settings_subtitles_test">Probar</string>
     <string name="settings_subtitles_testing">Probando…</string>

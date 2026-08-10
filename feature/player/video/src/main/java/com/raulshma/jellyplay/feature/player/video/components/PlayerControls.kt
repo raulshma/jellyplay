@@ -237,6 +237,7 @@ internal fun PlayerControls(
     mediaStreams: List<MediaStream> = emptyList(),
     audioTracks: List<TrackOption> = emptyList(),
     isConnectionMetered: Boolean = false,
+    subtitleDelayMs: Long = 0L,
     showPlaybackMetadata: Boolean = true,
     showClock: Boolean = false,
     showTimeRemaining: Boolean = false,
@@ -542,6 +543,7 @@ internal fun PlayerControls(
                         videoStats = playbackMetadata,
                         audioTracks = audioTracks,
                         isConnectionMetered = isConnectionMetered,
+                        subtitleDelayMs = subtitleDelayMs,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
                 }

@@ -302,4 +302,62 @@ class VideoPlayerCleanupTest {
         // Verify UI state has been reset (e.g. title is empty)
         assertTrue(viewModel.uiState.value.title.isEmpty())
     }
+
+    @Test
+    fun pipController_notifyPipDismissed_triggersViewModelReleaseAndClosePlayer() {
+        val pipController = PipController()
+        val sessionManager = mockk<PlaybackSessionManager>(relaxed = true)
+        val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
+        val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
+        every { syncPlayManager.playbackCore } returns playbackCore
+
+        val viewModel = VideoPlayerViewModel(
+            context = mockk(relaxed = true),
+            mediaRepository = mockk(relaxed = true),
+            playbackRepository = mockk(relaxed = true),
+            subtitleProviderRepository = mockk(relaxed = true),
+            streamingSubtitleStore = noOpStreamingSubtitleStore(),
+            imageUrlProvider = mockk(relaxed = true),
+            downloadRepository = mockk(relaxed = true),
+            offlineRepository = mockk(relaxed = true),
+            offlinePlaybackFacade = mockk(relaxed = true),
+            playbackSourceResolver = mockk(relaxed = true),
+            episodeCatalogue = mockk(relaxed = true),
+            itemPlaybackPreferenceRepository = mockk(relaxed = true),
+            aggregateStore = mockk(relaxed = true) { every { aggregate } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate()) },
+            engineStore = mockk(relaxed = true) { every { playerEngine } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.engine.PlayerEngineSlice()) },
+            subtitleStore = mockk(relaxed = true) { every { subtitle } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice()) },
+            securityStore = mockk(relaxed = true) { every { security } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.security.SecuritySlice()) },
+            syncPlayCastStore = mockk(relaxed = true) { every { syncPlayCast } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice()) },
+            playbackStore = mockk(relaxed = true) { every { playback } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice()) },
+            audioStore = mockk(relaxed = true) { every { audio } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.audio.AudioSlice()) },
+            audioEffectsStore = mockk(relaxed = true) { every { audioEffects } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice()) },
+            videoPlayerStore = mockk(relaxed = true) { every { videoPlayer } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice()) },
+            downloadsStore = mockk(relaxed = true) { every { downloads } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice()) },
+            appearanceStore = mockk(relaxed = true) { every { appearance } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice()) },
+            networkOfflineStore = mockk(relaxed = true) { every { networkOffline } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice()) },
+            sessionManager = sessionManager,
+            castManager = mockk(relaxed = true),
+            jellyfinRemotePlayCastStrategy = mockk(relaxed = true),
+            syncPlayManager = syncPlayManager,
+            okHttpClient = mockk(relaxed = true),
+            adaptiveBitrateManager = mockk(relaxed = true),
+            networkMonitor = mockk(relaxed = true) { every { isMetered } returns MutableStateFlow(false) },
+            activePlayerController = mockk(relaxed = true),
+            playerLifecycleManager = PlayerLifecycleManager(mockk(relaxed = true) { every { playback } returns MutableStateFlow(com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice()) }),
+            pipController = pipController,
+            videoMiniPlayerState = mockk(relaxed = true),
+            sleepTimerManager = mockk(relaxed = true) { every { remainingMs } returns MutableStateFlow(0L) },
+            userMessageBus = UserMessageBus(),
+            playerEngineFactory = mockk(relaxed = true),
+            fontProvider = mockk(relaxed = true),
+            savedStateHandle = androidx.lifecycle.SavedStateHandle(),
+            subtitlePreviewRepository = mockk(relaxed = true),
+        )
+
+        pipController.notifyPipDismissed()
+
+        // Verify syncPlayManager.playbackCore was reset (proves release() ran)
+        verify { playbackCore.reset() }
+    }
 }
