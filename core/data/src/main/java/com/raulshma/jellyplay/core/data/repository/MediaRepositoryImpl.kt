@@ -889,7 +889,11 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
         invalidateHomeSectionsCache()
         invalidateUserDataCaches(itemId)
-        return apiClient.toggleFavorite(itemId)
+        // Fan-out (online API + best-effort offline mirror, or local apply +
+        // outbox staging when offline / online call failed) is owned by
+        // PlayedStateSync — the single home for the user-data write contract,
+        // shared with PlaybackSyncWorker's reconciliation (favorite included).
+        return playedStateSync.toggleFavorite(itemId)
     }
 
     override suspend fun markPlayed(itemId: String): Result<Unit> {

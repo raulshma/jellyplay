@@ -654,10 +654,26 @@ class VideoPlayerViewModel @Inject constructor(
         },
         onWatchedThresholdReached = { itemId ->
             handleSmartDownloadCleanup(itemId)
-            // Mark the offline copy as fully watched so its row shows the
-            // watched state. No-op for non-downloaded items.
+            // Closes the gap where playback crossed the watched threshold but no
+            // clean Stop telemetry reached the server (process kill / crash),
+            // leaving the item unplayed server-side.
+            //
+            // Normal mode: mark watched through PlayedStateSync.flip (via
+            // markPlayed) so the change applies to the offline store AND reaches
+            // the server — immediately when online, or via the playback outbox
+            // on reconnect when offline.
+            //
+            // Incognito: never reach the server or create outbox rows — the same
+            // invariant reportCurrentPlaybackStopped enforces. Fall back to the
+            // local-only offline mark so a downloaded copy still shows watched,
+            // matching how persistPlaybackPosition keeps writing the local resume
+            // cache in incognito.
             launch {
-                offlinePlaybackFacade.recordPlayed(itemId)
+                if (cachedAggregate.videoPlayer.incognitoModeEnabled) {
+                    offlinePlaybackFacade.recordPlayed(itemId)
+                } else {
+                    mediaRepository.markPlayed(itemId)
+                }
             }
         },
         onPositionPersisted = { positionMs -> persistPlaybackPosition(positionMs, force = false) },

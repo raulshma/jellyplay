@@ -19,12 +19,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.filled.Heart
 import com.composables.icons.tabler.outline.Bookmark
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Eye
 import com.composables.icons.tabler.outline.EyeOff
+import com.composables.icons.tabler.outline.Heart
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.ui.R
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -52,8 +55,11 @@ val QuickAction.labelRes: Int
         QuickAction.PLAY -> R.string.core_action_play
         QuickAction.MARK_WATCHED -> R.string.core_action_mark_watched
         QuickAction.MARK_UNWATCHED -> R.string.core_action_mark_unwatched
+        QuickAction.FAVORITE -> R.string.core_action_favorite
+        QuickAction.UNFAVORITE -> R.string.core_action_unfavorite
         QuickAction.DOWNLOAD -> R.string.core_action_download
         QuickAction.ADD_TO_PLAYLIST -> R.string.core_action_add_to_playlist
+        QuickAction.DELETE -> R.string.core_action_delete
         QuickAction.DETAILS -> R.string.core_action_details
     }
 
@@ -63,8 +69,12 @@ val QuickAction.icon: ImageVector
         QuickAction.PLAY -> Tabler.Outline.PlayerPlay
         QuickAction.MARK_WATCHED -> Tabler.Outline.Eye
         QuickAction.MARK_UNWATCHED -> Tabler.Outline.EyeOff
+        // Outline = "add to favorites"; filled = "currently favorited, tap to remove".
+        QuickAction.FAVORITE -> Tabler.Outline.Heart
+        QuickAction.UNFAVORITE -> Tabler.Filled.Heart
         QuickAction.DOWNLOAD -> Tabler.Outline.Download
         QuickAction.ADD_TO_PLAYLIST -> Tabler.Outline.Bookmark
+        QuickAction.DELETE -> Tabler.Outline.Trash
         QuickAction.DETAILS -> Tabler.Outline.InfoCircle
     }
 

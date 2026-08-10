@@ -57,8 +57,12 @@ import com.composables.icons.tabler.outline.Star
 import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.model.quickActions
+import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveBackdropHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -68,12 +72,15 @@ import com.raulshma.jellyplay.core.ui.components.BackdropLayer
 import com.raulshma.jellyplay.core.ui.components.ChipRow
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
+import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.components.TransparentTopBar
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.rememberBackdropScrollState
+import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
@@ -102,6 +109,36 @@ fun OfflineSeriesScreen(
     val contentPad = adaptiveInfo.contentPadding(isTv)
 
     LaunchedEffect(seriesId) { viewModel.load(seriesId) }
+
+    // Long-press quick actions for episodes: mark watched / favorite / delete /
+    // play / view details. Everything here is downloaded, so routing stays
+    // offline and DELETE removes the episode's download.
+    val quickActionController = rememberMediaQuickActionController(
+        resolveActions = remember {
+            { item: MediaItem ->
+                item.quickActions(
+                    MediaQuickActionScope.DETAIL,
+                    includeDownload = false,
+                    includeAddToPlaylist = false,
+                    includeDelete = true,
+                    includeFavorite = true,
+                )
+            }
+        },
+        executeAction = remember(viewModel, onPlayOffline, onEpisodeDetail) {
+            { item: MediaItem, action: QuickAction ->
+                when (action) {
+                    QuickAction.PLAY -> onPlayOffline(item.id)
+                    QuickAction.DETAILS -> onEpisodeDetail(item.id)
+                    QuickAction.MARK_WATCHED -> viewModel.markEpisodePlayed(item.id, played = true)
+                    QuickAction.MARK_UNWATCHED -> viewModel.markEpisodePlayed(item.id, played = false)
+                    QuickAction.FAVORITE, QuickAction.UNFAVORITE -> viewModel.toggleFavorite(item.id)
+                    QuickAction.DELETE -> viewModel.deleteEpisode(item.id)
+                    else -> Unit
+                }
+            }
+        },
+    )
 
     var showDeleteSheet by remember { mutableStateOf(false) }
 
@@ -227,6 +264,7 @@ fun OfflineSeriesScreen(
                                 onEpisodePlay = { episode -> onPlayOffline(episode.id) },
                                 onEpisodeDetail = { episode -> onEpisodeDetail(episode.id) },
                                 onEpisodeDelete = { episode -> viewModel.deleteEpisode(episode.id) },
+                                onEpisodeLongPress = { episode -> quickActionController.show(episode.toMediaItem()) },
                                 onMarkSeasonPlayed = { seasonId -> viewModel.markSeasonPlayed(seasonId) },
                                 onMarkSeasonUnplayed = { seasonId -> viewModel.markSeasonUnplayed(seasonId) },
                                 compactEpisodeList = compactEpisodeList,
@@ -293,6 +331,8 @@ fun OfflineSeriesScreen(
             )
         }
     }
+
+    MediaQuickActionHost(quickActionController)
 }
 
 @Composable

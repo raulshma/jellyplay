@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TabRow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,13 +54,20 @@ import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
+import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
+import com.raulshma.jellyplay.core.ui.components.QuickAction
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
@@ -86,6 +94,43 @@ fun OfflineLibraryScreen(
     var searchOpen by remember { mutableStateOf(false) }
     var sortMenuOpen by remember { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
+
+    // Long-press quick actions. Everything in this grid is downloaded, so the
+    // sheet offers mark-watched / favorite / delete / view-details and routing
+    // always lands on the offline detail screens (never the online page).
+    val quickActionController = rememberMediaQuickActionController(
+        resolveActions = remember {
+            { item: MediaItem ->
+                item.quickActions(
+                    MediaQuickActionScope.LIBRARY,
+                    includeDownload = false,
+                    includeAddToPlaylist = false,
+                    includeDelete = true,
+                    includeFavorite = true,
+                )
+            }
+        },
+        executeAction = remember(viewModel, onItemClick, onSeriesClick) {
+            { item: MediaItem, action: QuickAction ->
+                when (action) {
+                    // PLAY and DETAILS both open the offline detail/series screen,
+                    // which owns the Play button and full offline metadata.
+                    QuickAction.PLAY, QuickAction.DETAILS -> {
+                        if (item.mediaType == com.raulshma.jellyplay.core.model.MediaType.SERIES) {
+                            onSeriesClick(item.id)
+                        } else {
+                            onItemClick(item.id)
+                        }
+                    }
+                    QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item, played = true)
+                    QuickAction.MARK_UNWATCHED -> viewModel.markItemPlayed(item, played = false)
+                    QuickAction.FAVORITE, QuickAction.UNFAVORITE -> viewModel.toggleFavorite(item)
+                    QuickAction.DELETE -> viewModel.delete(item)
+                    else -> Unit
+                }
+            }
+        },
+    )
 
     JellyPlayScreenScaffold(
         title = stringResource(R.string.downloads_library_title),
@@ -203,22 +248,25 @@ fun OfflineLibraryScreen(
                         contentType = { "offlineItem" },
                         modifier = Modifier.fillMaxSize(),
                     ) { _, item, itemModifier ->
-                        OfflineMediaCard(
-                            item = item,
-                            onClick = {
-                                if (item.mediaType == com.raulshma.jellyplay.core.model.MediaType.SERIES) {
-                                    onSeriesClick(item.id)
-                                } else {
-                                    onItemClick(item.id)
-                                }
-                            },
-                            modifier = itemModifier,
-                        )
+                        CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+                            OfflineMediaCard(
+                                item = item,
+                                onClick = {
+                                    if (item.mediaType == com.raulshma.jellyplay.core.model.MediaType.SERIES) {
+                                        onSeriesClick(item.id)
+                                    } else {
+                                        onItemClick(item.id)
+                                    }
+                                },
+                                modifier = itemModifier,
+                            )
+                        }
                     }
                 }
             }
         }
     }
+    MediaQuickActionHost(quickActionController)
 }
 
 @Composable

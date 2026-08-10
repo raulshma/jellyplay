@@ -78,6 +78,8 @@ internal fun OfflineEpisodeCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     sharedThumbnailModifier: Modifier = Modifier,
+    /** Long-press handler; the host wires this to its quick-action controller. */
+    onLongPress: (() -> Unit)? = null,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -141,6 +143,7 @@ internal fun OfflineEpisodeCard(
                 interactionSource = cardInteractionSource,
                 indication = null,
                 onClick = onDetailClick,
+                onLongClick = onLongPress,
             ),
     ) {
         Box(
@@ -350,6 +353,8 @@ internal fun OfflineCompactEpisodeRow(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     sharedThumbnailModifier: Modifier = Modifier,
+    /** Long-press handler; the host wires this to its quick-action controller. */
+    onLongPress: (() -> Unit)? = null,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -382,6 +387,7 @@ internal fun OfflineCompactEpisodeRow(
                 interactionSource = cardInteractionSource,
                 indication = null,
                 onClick = onDetailClick,
+                onLongClick = onLongPress,
             ),
     ) {
         Box(

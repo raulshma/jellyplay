@@ -338,6 +338,16 @@ class OfflineRepositoryImpl @Inject constructor(
         )
     }
 
+    override suspend fun applyFavoriteState(itemId: String, isFavorite: Boolean) {
+        // Favorite is per-item (no hierarchy cascade — the Jellyfin favorite
+        // endpoints act on one item only), so this is a single-row UPDATE. Zero
+        // rows match for a non-downloaded item, so there is no existence guard.
+        offlineMediaDao.applyFavoriteState(
+            itemId = itemId,
+            isFavorite = isFavorite,
+        )
+    }
+
     override suspend fun searchOffline(query: String, limit: Int): List<OfflineMediaItem> {
         val trimmed = query.trim()
         if (trimmed.length < MIN_OFFLINE_SEARCH_LENGTH || limit <= 0) return emptyList()
@@ -665,6 +675,7 @@ class OfflineRepositoryImpl @Inject constructor(
         playbackPositionTicks = playbackPositionTicks,
         playedPercentage = playedPercentage,
         isPlayed = isPlayed,
+        isFavorite = isFavorite,
         lastPlayedDate = lastPlayedDate,
         originalTitle = originalTitle,
         criticRating = criticRating,

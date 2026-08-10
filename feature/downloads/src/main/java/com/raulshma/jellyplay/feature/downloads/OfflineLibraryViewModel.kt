@@ -1,7 +1,9 @@
 package com.raulshma.jellyplay.feature.downloads
 
 import androidx.lifecycle.SavedStateHandle
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -40,6 +42,7 @@ data class StorageSummary(val totalBytes: Long, val itemCount: Int)
 @HiltViewModel
 class OfflineLibraryViewModel @Inject constructor(
     private val offlineRepository: OfflineRepository,
+    private val mediaRepository: MediaRepository,
     @Suppress("unused") savedStateHandle: SavedStateHandle,
 ) : JellyPlayViewModel() {
 
@@ -129,6 +132,46 @@ class OfflineLibraryViewModel @Inject constructor(
             OfflineLibrarySort.NAME -> matched.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             OfflineLibrarySort.RATING -> matched.sortedByDescending { it.communityRating ?: -1f }
             OfflineLibrarySort.SIZE -> matched.sortedByDescending { it.totalSizeBytes }
+        }
+    }
+
+    /**
+     * Toggles played state for a downloaded item from the long-press quick-action
+     * sheet. Routes through [MediaRepository.markPlayed]/[MediaRepository.markUnplayed]
+     * so the change is applied to the local offline DB AND enqueued into the
+     * playback outbox for server sync on reconnect (or pushed immediately when
+     * online) — mirroring [OfflineSeriesViewModel.markSeasonPlayed].
+     */
+    fun markItemPlayed(item: MediaItem, played: Boolean) {
+        launch {
+            if (played) mediaRepository.markPlayed(item.id)
+            else mediaRepository.markUnplayed(item.id)
+        }
+    }
+
+    /**
+     * Toggles favorite for a downloaded item. Routes through
+     * [PlayedStateSync.toggleFavorite], so it works fully offline: the flip is
+     * applied to the local offline store immediately and staged in the playback
+     * outbox for delivery on reconnect.
+     */
+    fun toggleFavorite(item: MediaItem) {
+        launch { mediaRepository.toggleFavorite(item.id) }
+    }
+
+    /**
+     * Deletes a downloaded item from the long-press quick-action sheet. Routes by
+     * media type: a series deletes the whole series download; anything else
+     * deletes the single item. The reactive [offlineLibrary] flow refreshes on
+     * its own once the row is gone.
+     */
+    fun delete(item: MediaItem) {
+        launch {
+            if (item.mediaType == MediaType.SERIES) {
+                offlineRepository.deleteOfflineSeries(item.id)
+            } else {
+                offlineRepository.deleteOfflineItem(item.id)
+            }
         }
     }
 }

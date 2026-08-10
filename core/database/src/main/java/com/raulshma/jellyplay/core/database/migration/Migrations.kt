@@ -744,8 +744,18 @@ val MIGRATION_43_44 = object : Migration(43, 44) {
     }
 }
 
+// Offline favorite flag, seeded from server UserData at download time and
+// updated locally as the user toggles favorite offline. Mirrors the `isPlayed`
+// column shape from migration 28→29 (NOT NULL DEFAULT 0 so existing rows
+// resolve to not-favorite until the user acts or the item is re-downloaded).
+val MIGRATION_44_45 = object : Migration(44, 45) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN isFavorite INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v44 migration chain, with the
+ * The complete, correctly-ordered v1→v45 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -797,4 +807,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_41_42,
         MIGRATION_42_43,
         MIGRATION_43_44,
+        MIGRATION_44_45,
     )

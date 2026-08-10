@@ -51,6 +51,8 @@ data class OfflineMediaEntity(
     val playedPercentage: Double = 0.0,
     @ColumnInfo(defaultValue = "0")
     val isPlayed: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val isFavorite: Boolean = false,
     val lastPlayedDate: String? = null,
     // Rich metadata persisted at download time so offline detail screens can
     // show the same information as the online detail screen. Added in

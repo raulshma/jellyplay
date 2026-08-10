@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
@@ -77,6 +78,7 @@ class DetailViewModel @Inject constructor(
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
+    private val offlineRepository: OfflineRepository,
     private val downloadIntake: DownloadIntake,
     private val projections: PreferenceProjections,
     private val libraryStore: LibraryStore,
@@ -419,6 +421,19 @@ class DetailViewModel @Inject constructor(
                     }
                 }
                 .onFailure { err ->
+                    // Offline fallback: if the online load failed (server
+                    // unreachable / not cached) but the item is downloaded,
+                    // redirect to the offline detail page instead of surfacing
+                    // a load error. This closes the gap where a long-press
+                    // "View details" on a downloaded item landed here while
+                    // offline. Guarded by currentItemId so a stale fetch can't
+                    // redirect after the user navigated away.
+                    val offlineCopy = offlineRepository.getOfflineItem(itemId)
+                    if (currentItemId == itemId && offlineCopy != null) {
+                        _uiState.update { it.copy(isLoading = false, isRefreshing = false, error = null) }
+                        _messages.tryEmit(DetailMessage.OpenOffline(itemId, offlineCopy.mediaType))
+                        return@onFailure
+                    }
                     val accessDenied = (err as? ApiException)?.isAccessDenied == true
                     val message = if (accessDenied) {
                         context.getString(R.string.detail_error_access_denied)

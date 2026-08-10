@@ -32,6 +32,9 @@
     <string name="core_action_mark_unwatched">Mark as unwatched</string>
     <string name="core_action_download">Download</string>
     <string name="core_action_add_to_playlist">Add to playlist</string>
+    <string name="core_action_favorite">Add to favorites</string>
+    <string name="core_action_unfavorite">Remove from favorites</string>
+    <string name="core_action_delete">Delete download</string>
     <string name="core_action_details">View details</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer

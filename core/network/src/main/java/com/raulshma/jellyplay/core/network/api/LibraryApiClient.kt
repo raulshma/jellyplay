@@ -172,6 +172,15 @@ interface LibraryApiClient {
     suspend fun markUnplayed(itemId: String): Result<Unit>
     suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean? = null): Result<Boolean>
 
+    /**
+     * Sets an absolute favorite state on the server (`markFavoriteItem` when
+     * [isFavorite], `unmarkFavoriteItem` otherwise). Used by the outbox replay
+     * path so a staged flip lands deterministically regardless of the server's
+     * current state — unlike [toggleFavorite], which reads-and-flips and is
+     * unsuitable for replay.
+     */
+    suspend fun setFavorite(itemId: String, isFavorite: Boolean): Result<Unit>
+
     fun getImageUrl(
         itemId: String,
         imageType: String = "Primary",

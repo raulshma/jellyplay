@@ -164,6 +164,29 @@ class OfflineSeriesViewModel @Inject constructor(
         launch { mediaRepository.markUnplayed(seasonId) }
     }
 
+    /**
+     * Toggles played state for a single downloaded episode from the long-press
+     * quick-action sheet. See [markSeasonPlayed]; uses the same offline-aware
+     * sync path so the per-episode change applies locally and outboxes for the
+     * server.
+     */
+    fun markEpisodePlayed(episodeId: String, played: Boolean) {
+        launch {
+            if (played) mediaRepository.markPlayed(episodeId)
+            else mediaRepository.markUnplayed(episodeId)
+        }
+    }
+
+    /**
+     * Toggles favorite for a downloaded episode. Routes through
+     * [PlayedStateSync.toggleFavorite], so it works fully offline: the flip is
+     * applied locally and staged in the playback outbox for delivery on
+     * reconnect.
+     */
+    fun toggleFavorite(itemId: String) {
+        launch { mediaRepository.toggleFavorite(itemId) }
+    }
+
     fun deleteSeries() {
         val id = _seriesId.value ?: return
         launch { offlineRepository.deleteOfflineSeries(id) }
