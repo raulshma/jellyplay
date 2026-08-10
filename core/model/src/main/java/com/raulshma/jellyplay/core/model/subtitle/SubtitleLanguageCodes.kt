@@ -10,9 +10,10 @@ import java.util.Locale
  * use. Each external provider speaks a different dialect:
  *
  * - **Wyzie**: ISO 639-1 (2-letter, e.g. `en`) — comma-separated list.
- * - **OpenSubtitles**: ISO 639-2B (3-letter bibliographic, e.g. `eng`, but some
- *   codes differ from 639-3, e.g. German `deu`/`ger`). In practice the majority
- *   coincide, so we pass 639-3 through with a known-difference override map.
+ * - **OpenSubtitles**: ISO 639-1 (2-letter, e.g. `en`) for the `/subtitles`
+ *   `languages` filter (verified against the live API: `eng` returns 0 results,
+ *   `en` returns matches). Region variants use BCP-47-style tags the API echoes
+ *   in `subtitles_counts` (e.g. `pt-BR`, `pt-PT`).
  *
  * 639-1 ↔ 639-3 conversion goes via lookup tables built from
  * `Locale.getAvailableLocales()` (which exposes both `.language` = 639-1 and
