@@ -74,7 +74,6 @@
     <string name="player_video_border_width">边框宽度：%1$s</string>
     <string name="player_video_shadow_offset">阴影偏移：%1$s</string>
     <string name="player_video_subtitle_offset">字幕偏移：%1$s</string>
-    <string name="player_video_sync_preview_reset">重置偏移</string>
     <string name="player_video_vertical_position">垂直位置：%1$d%%</string>
 
     <!-- Sleep timer sheet -->
@@ -220,7 +219,16 @@
     <string name="player_video_on">开启</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_reset_both">全部重置</string>
+    <string name="player_video_reset_audio">重置音频</string>
+    <string name="player_video_subtitle_delay">字幕延迟</string>
+    <string name="player_video_subtitle_delay_close">关闭字幕延迟</string>
+    <string name="player_video_subtitle_delay_reset">重置</string>
+    <string name="player_video_subtitle_delay_decrease_coarse">字幕延迟1秒</string>
+    <string name="player_video_subtitle_delay_decrease_fine">字幕延迟0.1秒</string>
+    <string name="player_video_subtitle_delay_increase_fine">字幕提前0.1秒</string>
+    <string name="player_video_subtitle_delay_increase_coarse">字幕提前1秒</string>
+    <string name="player_video_subtitle_delay_show_controls">调整延迟</string>
+    <string name="player_video_subtitle_delay_hub_hint">调整字幕相对于视频的时间。使用覆盖层，以便在调整时看到字幕移动。</string>
     <string name="player_video_av_sync_audio_helper">负值：音频提前。正值：音频延后。</string>
     <string name="player_video_av_sync_decrease">减少 %1$s</string>
     <string name="player_video_av_sync_increase">增加 %1$s</string>

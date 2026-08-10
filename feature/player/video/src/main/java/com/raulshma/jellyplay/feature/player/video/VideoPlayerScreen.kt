@@ -135,6 +135,7 @@ import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialo
 import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackModeSheet
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
+import com.raulshma.jellyplay.feature.player.video.components.SubtitleDelayOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleManagerSheet
@@ -281,6 +282,9 @@ fun VideoPlayerScreen(
     var currentSheet by rememberSaveable(stateSaver = PlayerSheetSaver) {
         mutableStateOf(PlayerSheet.None)
     }
+    // Transparent subtitle-delay overlay (VLC-style). Not saveable: dismissed on
+    // recreation, same as the gesture-driven seek/brightness pills.
+    var showDelayOverlay by remember { mutableStateOf(false) }
     var isSeeking by rememberSaveable { mutableStateOf(false) }
     var isOverflowMenuOpen by rememberSaveable { mutableStateOf(false) }
     var seekPositionMs by rememberSaveable { mutableLongStateOf(0L) }
@@ -1616,6 +1620,17 @@ fun VideoPlayerScreen(
             val onControlsFocusChange by remember { mutableStateOf({ hasFocus: Boolean -> controlsHasFocus = hasFocus }) }
             val onOverflowMenuChange by remember { mutableStateOf({ open: Boolean -> isOverflowMenuOpen = open }) }
 
+            // Transparent VLC-style subtitle-delay overlay. Sits over the video
+            // (below the control chrome) so the user can watch subtitles shift.
+            // Passes empty-space taps through to the host gesture layer.
+            if (showDelayOverlay && !isInPipMode && !isScreenLocked) {
+                SubtitleDelayOverlay(
+                    currentDelayMs = uiState.subtitleStyle.offsetMs,
+                    onChange = { viewModel.setSubtitleDelay(it) },
+                    onDismiss = { showDelayOverlay = false },
+                )
+            }
+
             // Control bars always render as a dark "chrome zone" (dark scrim + light text/icons)
             // because they float over arbitrary video content, regardless of the app theme.
             // Drawers and other surfaces outside this wrapper still respect the ambient theme.
@@ -1642,6 +1657,7 @@ fun VideoPlayerScreen(
                 mediaStreams = uiState.mediaStreams,
                 audioTracks = uiState.audioTracks,
                 isConnectionMetered = uiState.isConnectionMetered,
+                subtitleDelayMs = uiState.subtitleStyle.offsetMs,
                 showPlaybackMetadata = uiState.showPlaybackMetadata,
                 showClock = uiState.showClock,
                 showTimeRemaining = uiState.showTimeRemaining,
@@ -1829,23 +1845,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    // G10: lazily parse the active external subtitle track for the cue-preview
-    // whenever the AV-sync sheet opens; clear on close so a stale cue list from
-    // a prior track doesn't render. setPreviewSheetVisible gates the embedded-
-    // cue pump (and re-syncs on open) so onCues doesn't churn the UI state while
-    // the preview isn't on screen.
-    LaunchedEffect(currentSheet) {
-        if (currentSheet == PlayerSheet.AVSync) {
-            viewModel.setPreviewSheetVisible(true)
-            viewModel.loadActiveSubtitleCues()
-        } else if (uiState.subtitlePreviewCues != null) {
-            viewModel.clearActiveSubtitleCues()
-            viewModel.setPreviewSheetVisible(false)
-        } else {
-            viewModel.setPreviewSheetVisible(false)
-        }
-    }
-
     LaunchedEffect(showControls, controlsHasFocus, isSeeking, currentSheet, isOverflowMenuOpen, userInteractionCount) {
         if (showControls && !isSeeking && currentSheet == PlayerSheet.None && !isOverflowMenuOpen) {
             if (!isTv && controlsHasFocus) {
@@ -1912,6 +1911,10 @@ fun VideoPlayerScreen(
             fontPickerLauncher.launch(arrayOf("*/*"))
         },
         onOpenSubtitleTester = onOpenSubtitleTester,
+        onOpenSubtitleDelayOverlay = {
+            currentSheet = PlayerSheet.None
+            showDelayOverlay = true
+        },
     )
 
     val playerError = uiState.playerError
@@ -2036,6 +2039,7 @@ private fun PlayerSheetRouter(
     onLoadLocalSubtitle: () -> Unit,
     onPickFont: () -> Unit,
     onOpenSubtitleTester: () -> Unit,
+    onOpenSubtitleDelayOverlay: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -2160,10 +2164,7 @@ private fun PlayerSheetRouter(
                 },
                 // Delay tab
                 currentSubtitleDelayMs = uiState.subtitleStyle.offsetMs,
-                onSubtitleDelayChange = { viewModel.setSubtitleDelay(it) },
-                activeSubtitleCues = uiState.subtitlePreviewCues,
-                subtitlePreviewSource = uiState.subtitlePreviewSource,
-                playbackPositionMs = { viewModel.currentPositionMs.value },
+                onOpenDelayOverlay = onOpenSubtitleDelayOverlay,
             )
         }
         is PlayerSheet.Chapter -> {
@@ -2203,6 +2204,7 @@ private fun PlayerSheetRouter(
                     subtitleTracks = uiState.subtitleTracks,
                     playbackSpeed = uiState.playbackSpeed,
                     audioDelayMs = uiState.audioDelayMs,
+                    subtitleDelayMs = uiState.subtitleStyle.offsetMs,
                     playerError = uiState.playerError,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2222,15 +2224,9 @@ private fun PlayerSheetRouter(
         is PlayerSheet.AVSync -> {
             AVSyncSheet(
                 currentAudioDelayMs = uiState.audioDelayMs,
-                currentSubtitleDelayMs = uiState.subtitleStyle.offsetMs,
                 onAudioDelayChange = { viewModel.setAudioDelay(it) },
-                onSubtitleDelayChange = { viewModel.setSubtitleDelay(it) },
                 onDismiss = dismissSheet,
-                activeSubtitleCues = uiState.subtitlePreviewCues,
-                subtitlePreviewSource = uiState.subtitlePreviewSource,
-                playbackPositionMs = { viewModel.currentPositionMs.value },
                 audioDelaySupported = uiState.engineCapabilities.supportsAudioDelay,
-                subtitleDelaySupported = uiState.engineCapabilities.supportsSubtitleDelay,
             )
         }
         is PlayerSheet.Decoder -> {

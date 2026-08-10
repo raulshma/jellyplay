@@ -215,4 +215,20 @@ class PlaybackInfoOverlayTest {
         }
         composeTestRule.onNodeWithText("HDR10").assertDoesNotExist()
     }
+
+    @Test
+    fun playbackInfoOverlay_nonZeroSubtitleDelay_showsSubtitleDelayRow() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                PlaybackInfoOverlay(
+                    mediaSource = mediaSource,
+                    mediaStreams = mediaStreams,
+                    playMethod = "Direct Play",
+                    subtitleDelayMs = 1500L,
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Subtitle Delay").assertIsDisplayed()
+        composeTestRule.onNodeWithText("+1.5s").assertIsDisplayed()
+    }
 }

@@ -74,7 +74,6 @@
     <string name="player_video_border_width">Largura da borda: %1$s</string>
     <string name="player_video_shadow_offset">Deslocamento da sombra: %1$s</string>
     <string name="player_video_subtitle_offset">Desvio das legendas: %1$s</string>
-    <string name="player_video_sync_preview_reset">Redefinir desvio</string>
     <string name="player_video_vertical_position">Posição vertical: %1$d%%</string>
 
     <!-- Sleep timer sheet -->
@@ -220,7 +219,16 @@
     <string name="player_video_on">Ativado</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_reset_both">Repor ambos</string>
+    <string name="player_video_reset_audio">Repor áudio</string>
+    <string name="player_video_subtitle_delay">Atraso das legendas</string>
+    <string name="player_video_subtitle_delay_close">Fechar atraso das legendas</string>
+    <string name="player_video_subtitle_delay_reset">Repor</string>
+    <string name="player_video_subtitle_delay_decrease_coarse">Atrasar legendas 1 segundo</string>
+    <string name="player_video_subtitle_delay_decrease_fine">Atrasar legendas 0,1 segundos</string>
+    <string name="player_video_subtitle_delay_increase_fine">Adiantar legendas 0,1 segundos</string>
+    <string name="player_video_subtitle_delay_increase_coarse">Adiantar legendas 1 segundo</string>
+    <string name="player_video_subtitle_delay_show_controls">Ajustar atraso</string>
+    <string name="player_video_subtitle_delay_hub_hint">Ajuste o tempo das legendas em relação ao vídeo. Use a sobreposição para ver as legendas deslocarem-se enquanto ajusta.</string>
     <string name="player_video_av_sync_audio_helper">Negativo: áudio mais cedo. Positivo: áudio mais tarde.</string>
     <string name="player_video_av_sync_decrease">Diminuir %1$s</string>
     <string name="player_video_av_sync_increase">Aumentar %1$s</string>

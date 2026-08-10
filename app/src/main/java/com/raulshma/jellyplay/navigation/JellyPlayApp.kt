@@ -592,15 +592,19 @@ private fun MainContent(
         }
     }
 
-    val enterPip: () -> Unit = remember(context) {
-        {
-            (context as? MainActivity)?.enterPipMode()
-        }
-    }
-
     val enterVideoMiniMode: () -> Unit = remember(navigator) {
         {
             navigator.goBack()
+        }
+    }
+
+    val enterPip: () -> Unit = remember(context, enterVideoMiniMode) {
+        {
+            val activity = context as? MainActivity
+            val success = activity?.enterPipMode() ?: false
+            if (!success) {
+                enterVideoMiniMode()
+            }
         }
     }
 

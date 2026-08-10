@@ -53,6 +53,14 @@ data class SubtitleSearchResult(
     val fileName: String? = null,
     val downloadUrl: String? = null,
     /**
+     * TV episode metadata echoed by the provider (when available), used by the
+     * provider's `search` to filter cross-episode rows client-side. `null` for
+     * movies, Jellyfin rows, or providers that do not return per-row episode
+     * metadata (e.g. Wyzie). Not user-facing.
+     */
+    val season: Int? = null,
+    val episode: Int? = null,
+    /**
      * Only present for [SubtitleProviderKind.JELLYFIN] rows — carries the
      * server-native [com.raulshma.jellyplay.core.model.RemoteSubtitleInfo] so
      * the player/editor can route Jellyfin downloads through the existing

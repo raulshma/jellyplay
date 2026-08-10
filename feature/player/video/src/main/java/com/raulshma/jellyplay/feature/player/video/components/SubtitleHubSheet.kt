@@ -14,6 +14,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -113,13 +115,9 @@ internal fun SubtitleHubSheet(
     onUseSubtitle: () -> Unit,
     isUploading: Boolean,
     onUpload: (Uri, String, String?, Boolean, Boolean) -> Unit,
-    // Delay tab
+    // Delay tab — opens the transparent overlay (no in-sheet cue preview).
     currentSubtitleDelayMs: Long,
-    onSubtitleDelayChange: (Long) -> Unit,
-    activeSubtitleCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>?,
-    subtitlePreviewSource: com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource =
-        com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource.NONE,
-    playbackPositionMs: () -> Long,
+    onOpenDelayOverlay: () -> Unit,
 ) {
     val isTv = LocalTvMode.current
 
@@ -265,15 +263,58 @@ internal fun SubtitleHubSheet(
                     uploadFocus = uploadFocus,
                     loadBtnFocus = loadBtnFocus,
                 )
-                SubtitleHubTab.DELAY -> SubtitleDelaySection(
-                    currentSubtitleDelayMs = currentSubtitleDelayMs,
-                    onSubtitleDelayChange = onSubtitleDelayChange,
-                    activeSubtitleCues = activeSubtitleCues,
-                    subtitlePreviewSource = subtitlePreviewSource,
-                    playbackPositionMs = playbackPositionMs,
+                SubtitleHubTab.DELAY -> SubtitleDelayLauncherSection(
+                    currentDelayMs = currentSubtitleDelayMs,
+                    onOpenDelayOverlay = onOpenDelayOverlay,
                     isTv = isTv,
                 )
             }
+        }
+    }
+}
+
+/**
+ * The hub's Delay tab: a short explainer + a button that dismisses the hub and
+ * opens the transparent [SubtitleDelayOverlay] on the video. The offset is
+ * adjusted there so the user can watch the live subtitles shift — VLC-style.
+ */
+@Composable
+private fun SubtitleDelayLauncherSection(
+    currentDelayMs: Long,
+    onOpenDelayOverlay: () -> Unit,
+    isTv: Boolean,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 32.dp),
+    ) {
+        SheetHeader(
+            title = stringResource(R.string.player_video_subtitle_delay),
+            icon = Tabler.Outline.Subtitles,
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            stringResource(R.string.player_video_subtitle_delay_hub_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (currentDelayMs != 0L) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(
+                    R.string.player_video_subtitle_offset,
+                    formatDelayLabel(currentDelayMs),
+                ),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        FilledTonalButton(onClick = onOpenDelayOverlay, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.player_video_subtitle_delay_show_controls))
         }
     }
 }

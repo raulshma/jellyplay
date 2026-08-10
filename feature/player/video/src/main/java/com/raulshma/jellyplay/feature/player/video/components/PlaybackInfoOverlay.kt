@@ -61,6 +61,7 @@ fun PlaybackInfoOverlay(
     subtitleTracks: List<TrackOption> = emptyList(),
     playbackSpeed: Float = 1f,
     audioDelayMs: Long = 0L,
+    subtitleDelayMs: Long = 0L,
     playerError: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -177,6 +178,7 @@ fun PlaybackInfoOverlay(
                 InfoRow(stringResource(R.string.player_video_decoder_mode), decoderMode)
                 InfoRow(stringResource(R.string.player_video_speed), "${playbackSpeed}x")
                 if (audioDelayMs != 0L) InfoRow(stringResource(R.string.player_video_audio_delay), "${audioDelayMs} ms")
+                if (subtitleDelayMs != 0L) InfoRow(stringResource(R.string.player_video_subtitle_delay), formatDelayLabel(subtitleDelayMs))
                 InfoRow(stringResource(R.string.player_video_aspect_ratio_label), aspectRatio)
                 InfoRow(stringResource(R.string.player_video_night_mode_label), if (nightModeEnabled) nightModeStrength.displayName else stringResource(R.string.player_video_off))
                 InfoRow(stringResource(R.string.player_video_dialogue_boost_label), if (dialogueBoostEnabled) dialogueBoostStrength.displayName else stringResource(R.string.player_video_off))

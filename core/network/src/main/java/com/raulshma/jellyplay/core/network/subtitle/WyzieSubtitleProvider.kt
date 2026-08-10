@@ -96,7 +96,8 @@ class WyzieSubtitleProvider @Inject constructor(
                     val body = execute(request) { response ->
                         response.body?.string() ?: throw IOException("Empty Wyzie response")
                     }
-                    json.decodeFromString<List<WyzieSubtitleDto>>(body).map { it.toResult() }
+                    val parsed = json.decodeFromString<List<WyzieSubtitleDto>>(body).map { it.toResult() }
+                    preferEpisodeMarker(parsed, query.season, query.episode)
                 }
             }.recoverCatching { e ->
                 // Wyzie signals "zero matches" as HTTP 400 with a
@@ -183,6 +184,38 @@ class WyzieSubtitleProvider @Inject constructor(
         if (e !is ApiException || e.httpCode != 400) return false
         val body = e.responseBody ?: return false
         return body.contains("No subtitles found", ignoreCase = true)
+    }
+
+    /**
+     * Defensive cross-episode guard for TV queries. Wyzie's response carries no
+     * echoed season/episode metadata, and its server-side match on `season`/
+     * `episode` can occasionally return sibling-episode releases from the same
+     * season. When [season]+[episode] are requested, prefer rows whose release
+     * name or file name contains the `S{ss}E{ee}` marker; fall back to the full
+     * list when no row carries the marker so the sheet is never emptier than the
+     * raw server response. Companion to the OpenSubtitles client-side filter for
+     * issue #121.
+     */
+    private fun preferEpisodeMarker(
+        results: List<SubtitleSearchResult>,
+        season: Int?,
+        episode: Int?,
+    ): List<SubtitleSearchResult> {
+        if (season == null || episode == null || results.isEmpty()) return results
+        val marker = "S%02dE%02d".format(season, episode)
+        val matching = results.filter {
+            it.releaseName?.contains(marker, ignoreCase = true) == true ||
+                it.fileName?.contains(marker, ignoreCase = true) == true
+        }
+        if (matching.isEmpty()) {
+            Log.d(
+                TAG,
+                "No Wyzie rows carried marker $marker; " +
+                    "returning ${results.size} results unfiltered.",
+            )
+            return results
+        }
+        return matching
     }
 
     private fun wrapNetwork(e: Throwable): ApiException {
