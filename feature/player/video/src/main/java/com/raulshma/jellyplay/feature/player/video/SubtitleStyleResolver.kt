@@ -31,3 +31,14 @@ fun resolveSubtitleStyle(slice: SubtitleSlice, isHdr: Boolean = false): Subtitle
     isHdr && slice.hdrSubtitleStyleEnabled -> slice.hdrSubtitleStyle.copy(applyCustomStyle = true)
     else -> slice.subtitleStyle
 }
+
+/**
+ * Resolves the effective subtitle-sync delay for [itemId] from [slice]: a stored
+ * per-item correction wins; otherwise the slice's global "Subtitle sync offset"
+ * default applies. Delay is never inherited from a previously-played item — only
+ * from the explicit global default. Shared by every site that re-derives subtitle
+ * state from preferences (load, engine-bind, and the prefs projector) so the
+ * per-item value survives DataStore re-emissions triggered by its own write.
+ */
+fun resolveSubtitleDelayMs(slice: SubtitleSlice, itemId: String?): Long =
+    slice.subtitleDelayByItem[itemId] ?: slice.subtitleStyle.offsetMs

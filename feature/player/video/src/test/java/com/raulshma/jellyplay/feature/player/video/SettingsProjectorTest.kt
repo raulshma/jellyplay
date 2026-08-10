@@ -98,4 +98,43 @@ class SettingsProjectorTest {
         val changed2 = projector.project(agg)
         assertFalse(changed2)
     }
+
+    @Test
+    fun project_preservesPerItemSubtitleDelayOnSliceReemission() {
+        // Regression: writing the per-item delay re-emits the subtitle slice. The
+        // projector must NOT then overwrite offsetMs with the global style default
+        // (0) — that clobber rebuilt the engine config and reloaded media with the
+        // delay removed on every fine-tune. The per-item value is authoritative.
+        val styleWithDelay = SubtitleStyle.DEFAULT.copy(offsetMs = 500L)
+        uiState = uiState.copy(subtitleStyle = styleWithDelay)
+        val agg = VideoPlayerAggregate(
+            subtitle = SubtitleSlice(
+                subtitleStyle = SubtitleStyle.DEFAULT.copy(offsetMs = 0L),
+                subtitleDelayByItem = mapOf("item-123" to 500L),
+            ),
+        )
+
+        val changed = projector.project(agg)
+
+        assertEquals(500L, uiState.subtitleStyle.offsetMs)
+        assertFalse("Per-item delay re-emission must not signal a style change", changed)
+    }
+
+    @Test
+    fun project_appliesGlobalDefaultDelayWhenNoPerItemEntry() {
+        // With no per-item override, the global "Subtitle sync offset" default
+        // should still apply through projection (and signal a change so the engine
+        // picks it up).
+        uiState = uiState.copy(subtitleStyle = SubtitleStyle.DEFAULT.copy(offsetMs = 0L))
+        val agg = VideoPlayerAggregate(
+            subtitle = SubtitleSlice(
+                subtitleStyle = SubtitleStyle.DEFAULT.copy(offsetMs = 250L),
+            ),
+        )
+
+        val changed = projector.project(agg)
+
+        assertEquals(250L, uiState.subtitleStyle.offsetMs)
+        assertTrue(changed)
+    }
 }

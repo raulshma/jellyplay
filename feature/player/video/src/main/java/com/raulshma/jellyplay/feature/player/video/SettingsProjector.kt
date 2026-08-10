@@ -57,10 +57,19 @@ internal class SettingsProjector(
         // HDR-aware subtitle style: the resolved style depends on whether the
         // current streams carry HDR, so re-derive on every prefs tick. The VM
         // must rebuild the engine config when this changes.
+        //
+        // Subtitle delay is per-media and authoritative via the per-item store
+        // (written by setSubtitleDelay), NOT the global style bucket. Preserve
+        // the resolved per-item delay here so a DataStore re-emission — including
+        // the very write that just stored this delay — can't clobber the live
+        // offsetMs back to the global default. Without this, writing the delay
+        // re-emits the slice, this projector overwrites offsetMs to the global
+        // default (often 0), and the resulting config push reloads media with the
+        // delay removed. Mirrors the engineFlow collector's resolve step.
         val resolvedSubtitleStyle = resolveSubtitleStyle(
             agg.subtitle,
             isHdr = isHdrFromStreams(getMediaStreams()),
-        )
+        ).copy(offsetMs = resolveSubtitleDelayMs(agg.subtitle, getItemId()))
         if (getUiState().subtitleStyle != resolvedSubtitleStyle) {
             updateUiState { it.copy(subtitleStyle = resolvedSubtitleStyle) }
             subtitleStyleChanged = true
