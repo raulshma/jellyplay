@@ -46,6 +46,19 @@ interface PlayedStateSync {
     suspend fun flip(itemId: String, played: Boolean): Result<Unit>
 
     /**
+     * User-driven favorite toggle. Resolves the current favorite state (from the
+     * offline row when offline, from the server when online), flips it, and
+     * applies the same online/offline + outbox fan-out contract as [flip]:
+     *   - Offline: apply locally + stage a FAVORITE/UNFAVORITE outbox event.
+     *   - Online: push via the server; mirror the resolved target into the
+     *     offline store. On failure, fall back to local apply + outbox so the
+     *     user's intent is never lost.
+     * Always reports the resolved target state so the caller's optimistic UI
+     * flip is correct regardless of path.
+     */
+    suspend fun toggleFavorite(itemId: String): Result<Boolean>
+
+    /**
      * Latest-wins reconciliation of one offline row against the server view.
      * Three branches:
      *   - Server played → reset local to played (so a later resume starts clean).
@@ -146,6 +159,44 @@ class PlayedStateSyncImpl @Inject constructor(
         return result
     }
 
+    override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
+        // Offline: resolve the current state from the local row so the toggle is
+        // deterministic without a server round-trip, then apply + stage the
+        // absolute target in the outbox for delivery on reconnect.
+        if (offlineModeManager.isOffline) {
+            return Result.success(applyFavoriteLocallyAndEnqueue(itemId))
+        }
+        // Online: the server reads + flips atomically (currentIsFavorite = null
+        // lets it resolve). The returned Boolean is the authoritative new state.
+        val result = apiClient.toggleFavorite(itemId, currentIsFavorite = null)
+        if (result.isSuccess) {
+            val target = result.getOrNull() ?: return result
+            // Mirror into the offline store so downloaded items stay consistent;
+            // best-effort like the played mirror above.
+            runCatching { offlineRepository.applyFavoriteState(itemId, target) }
+        } else {
+            // Online but the call failed — don't lose the user's intent: apply
+            // locally and enqueue for retry, resolving target from local state.
+            return Result.success(applyFavoriteLocallyAndEnqueue(itemId))
+        }
+        return result
+    }
+
+    /**
+     * Shared offline / online-failure fallback for [toggleFavorite]: resolve the
+     * current favorite state from the local row (deterministic without a server
+     * round-trip), flip it, apply locally, and stage the absolute target in the
+     * outbox for delivery on reconnect. Returns the resolved target so the
+     * caller's optimistic UI flip is correct regardless of path.
+     */
+    private suspend fun applyFavoriteLocallyAndEnqueue(itemId: String): Boolean {
+        val current = runCatching { offlineRepository.getOfflineItem(itemId)?.isFavorite }.getOrNull() ?: false
+        val target = !current
+        runCatching { offlineRepository.applyFavoriteState(itemId, target) }
+        runCatching { playbackOutboxRepository.enqueueFavoriteState(itemId, target) }
+        return target
+    }
+
     /**
      * Auto-deleting a finished download on a watched flip is an unrequested,
      * destructive product decision — it is off by default. Kept behind its own
@@ -179,6 +230,15 @@ class PlayedStateSyncImpl @Inject constructor(
         // the series-scoped caches if this item belongs to one.
         mediaRepository.get().invalidateUserDataCaches(itemId)
         val serverItem = mediaRepository.get().getMediaDetail(itemId).getOrNull()?.item ?: return null
+
+        // Favorite is a user preference shared across devices, so the server is
+        // authoritative: if it disagrees with the local row, adopt the server's
+        // state. No timestamp tiebreak — a favorite flip made on another device
+        // must propagate here regardless of local activity. Best-effort; the
+        // played-state reconciliation below runs regardless of outcome.
+        if (serverItem.isFavorite != offline.isFavorite) {
+            runCatching { offlineRepository.applyFavoriteState(itemId, serverItem.isFavorite) }
+        }
 
         // Server watched (e.g. finished online) always wins — reset the local
         // row so a later offline resume starts the next episode / 0, not a

@@ -67,6 +67,18 @@ interface OfflineRepository {
     suspend fun applyPlayedState(itemId: String, isPlayed: Boolean)
 
     /**
+     * Applies a favorite / unfavorite flip to [itemId] in the local offline
+     * store. Favorite is per-item (no hierarchy cascade), mirroring the
+     * Jellyfin favorite endpoints' single-item scope. No-op if the item isn't
+     * in the offline store — the underlying UPDATE matches zero rows.
+     *
+     * @param itemId the item id.
+     * @param isFavorite when true, marks the item as a favorite; when false,
+     *   clears the favorite flag.
+     */
+    suspend fun applyFavoriteState(itemId: String, isFavorite: Boolean)
+
+    /**
      * Search the on-device downloaded library by free-text query. Matches
      * against [OfflineMediaItem.name], [OfflineMediaItem.seriesName] and
      * [OfflineMediaItem.seasonName] (case-insensitive substring). Returns

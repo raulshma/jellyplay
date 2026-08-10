@@ -36,6 +36,7 @@ data class OfflineMediaItem(
     val playbackPositionTicks: Long? = null,
     val playedPercentage: Double = 0.0,
     val isPlayed: Boolean = false,
+    val isFavorite: Boolean = false,
     val lastPlayedDate: String? = null,
     // Rich metadata persisted at download time so the offline detail screens
     // mirror the online detail screen. Populated from MediaDetail; null for
@@ -136,6 +137,7 @@ fun OfflineMediaItem.toMediaItem(): MediaItem {
         runTimeTicks = runTimeTicks,
         playbackPositionTicks = effectivePositionTicks,
         isPlayed = effectiveIsPlayed,
+        isFavorite = isFavorite,
         premiereDate = null,
         genres = genres,
         studios = studios,

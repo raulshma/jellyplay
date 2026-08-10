@@ -18,6 +18,8 @@ enum class PlaybackOutboxEventType {
     STOP,
     PLAYED,
     UNPLAYED,
+    FAVORITE,
+    UNFAVORITE,
 }
 
 /**
@@ -86,6 +88,13 @@ interface PlaybackOutboxRepository {
      * watched flip are orthogonal and can coexist.
      */
     suspend fun enqueuePlayedState(itemId: String, isPlayed: Boolean)
+
+    /**
+     * Stages a user-driven favorite-state flip for delivery on reconnect. Uses a
+     * deterministic id (`"favorite_state:$itemId"`) so a re-flip for the same
+     * item lands in place — latest intent wins. Mirrors [enqueuePlayedState].
+     */
+    suspend fun enqueueFavoriteState(itemId: String, isFavorite: Boolean)
 
     /** Snapshot of all pending entries ordered oldest-first. */
     suspend fun drain(): List<PlaybackOutboxEntry>

@@ -8,6 +8,7 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
@@ -46,6 +47,7 @@ class PlaybackSyncWorkerTest {
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
+    private val offlineRepository: OfflineRepository = mockk(relaxed = true)
     private val userDataSyncScheduler: UserDataSyncScheduler = mockk(relaxed = true)
 
     @Before
@@ -59,6 +61,10 @@ class PlaybackSyncWorkerTest {
         // Default: empty outbox; tests override via coEvery { outbox.drain() }.
         coEvery { outbox.drain() } returns emptyList()
         coEvery { outbox.count() } returns 0
+        // Default: no downloaded items, so the reconcile batch is just the
+        // outbox items (preserves the pre-Gap-A behaviour). Tests that exercise
+        // the downloaded-item reconcile override this.
+        coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
     }
 
     private fun buildWorker(runAttemptCount: Int = 0): PlaybackSyncWorker =
@@ -75,6 +81,7 @@ class PlaybackSyncWorkerTest {
                     apiClient,
                     offlineModeManager,
                     playedStateSync,
+                    offlineRepository,
                     userDataSyncScheduler,
                 )
             })
@@ -120,6 +127,42 @@ class PlaybackSyncWorkerTest {
 
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
         coVerify(exactly = 0) { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) }
+    }
+
+    // ── Downloaded-item reconcile (Gap A: empty outbox still reconciles) ──
+
+    @Test
+    fun `downloaded items are reconciled even with an empty outbox`() = runTest {
+        coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("d1", "d2")
+        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns PlayedStateSync.ComputeResult.PLAYED
+
+        val result = buildWorker().doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d1") }
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d2") }
+        // reconcile changed (PLAYED) → refresh online caches.
+        coVerify(exactly = 1) { userDataSyncScheduler.enqueueNow() }
+    }
+
+    @Test
+    fun `downloaded items reconcile with all NOOP does not trigger userDataSync`() = runTest {
+        coEvery { offlineRepository.getDownloadedItemIds() } returns listOf("d1")
+        coEvery { playedStateSync.reconcileOfflineRow(any()) } returns PlayedStateSync.ComputeResult.NOOP
+
+        buildWorker().doWork()
+
+        coVerify(exactly = 1) { playedStateSync.reconcileOfflineRow("d1") }
+        coVerify(exactly = 0) { userDataSyncScheduler.enqueueNow() }
+    }
+
+    @Test
+    fun `empty outbox and no downloads returns success without reconcile`() = runTest {
+        val result = buildWorker().doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Success)
+        coVerify(exactly = 0) { playedStateSync.reconcileOfflineRow(any()) }
+        coVerify(exactly = 0) { userDataSyncScheduler.enqueueNow() }
     }
 
     // ── Happy path: all entries succeed ───────────────────────────────

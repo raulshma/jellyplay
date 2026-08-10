@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
@@ -72,6 +73,7 @@ class DetailViewModelTest {
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var downloadRepository: DownloadRepository
+    private lateinit var offlineRepository: OfflineRepository
     private lateinit var downloadIntake: DownloadIntake
     private lateinit var projections: PreferenceProjections
     private lateinit var libraryStore: LibraryStore
@@ -99,6 +101,7 @@ class DetailViewModelTest {
         playbackRepository = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         downloadRepository = mockk(relaxed = true)
+        offlineRepository = mockk(relaxed = true)
         downloadIntake = mockk(relaxed = true)
         projections = mockk(relaxed = true)
         libraryStore = mockk(relaxed = true)
@@ -129,6 +132,10 @@ class DetailViewModelTest {
         // related-items launch doesn't crash casting the relaxed-mock default.
         // Individual tests override this when they assert on related items.
         coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())
+        // Default: no offline copy. loadItem's failure branch falls back to the
+        // offline detail only when an item is downloaded; tests that exercise
+        // that redirect override this to return an OfflineMediaItem.
+        coEvery { offlineRepository.getOfflineItem(any()) } returns null
 
         // The ViewModel resolves localized labels via context.getString(resId, vararg). As a
         // pure unit test (no Robolectric/instrumentation), stub the smart-play templates to
@@ -178,6 +185,7 @@ class DetailViewModelTest {
             playbackRepository = playbackRepository,
             imageUrlProvider = imageUrlProvider,
             downloadRepository = downloadRepository,
+            offlineRepository = offlineRepository,
             downloadIntake = downloadIntake,
             projections = projections,
             libraryStore = libraryStore,

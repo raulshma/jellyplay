@@ -91,6 +91,15 @@ interface OfflineMediaDao {
         lastPlayedDate: String?,
     )
 
+    /**
+     * Applies a favorite-state flip to a single offline row. Favorite is
+     * per-item (no hierarchy cascade — unlike [applyPlayedStateToHierarchy], the
+     * Jellyfin favorite endpoints act on one item only), so this is a targeted
+     * single-row UPDATE. No-op (matches zero rows) for a non-downloaded item.
+     */
+    @Query("UPDATE offline_media SET isFavorite = :isFavorite WHERE id = :itemId")
+    suspend fun applyFavoriteState(itemId: String, isFavorite: Boolean)
+
     @Transaction
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(entities: List<OfflineMediaEntity>)

@@ -92,6 +92,7 @@ internal fun OfflineSeasonsSection(
     onEpisodePlay: (OfflineMediaItem) -> Unit,
     onEpisodeDetail: (OfflineMediaItem) -> Unit,
     onEpisodeDelete: (OfflineMediaItem) -> Unit,
+    onEpisodeLongPress: (OfflineMediaItem) -> Unit = {},
     onMarkSeasonPlayed: (seasonId: String) -> Unit = {},
     onMarkSeasonUnplayed: (seasonId: String) -> Unit = {},
     compactEpisodeList: Boolean = false,
@@ -238,6 +239,7 @@ internal fun OfflineSeasonsSection(
                                 onPlayClick = { onEpisodePlay(episode) },
                                 onDetailClick = { onEpisodeDetail(episode) },
                                 onDelete = { pendingDelete = episode },
+                                onLongPress = { onEpisodeLongPress(episode) },
                                 sharedThumbnailModifier = episodeThumbSharedModifier(
                                     episodeId = episode.id,
                                     sharedTransitionScope = sharedTransitionScope,
@@ -260,6 +262,7 @@ internal fun OfflineSeasonsSection(
                             onPlayClick = { onEpisodePlay(episode) },
                             onDetailClick = { onEpisodeDetail(episode) },
                             onDelete = { pendingDelete = episode },
+                            onLongPress = { onEpisodeLongPress(episode) },
                             modifier = focusModifier,
                             sharedThumbnailModifier = episodeThumbSharedModifier(
                                 episodeId = episode.id,

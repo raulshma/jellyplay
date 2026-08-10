@@ -51,16 +51,28 @@ private fun MediaQuickActionScope.actionableTypes(): Set<MediaType> = when (this
  *   mediaSources half is checked on the detail screen once the action lands.
  * @param includeAddToPlaylist When true, adds [QuickAction.ADD_TO_PLAYLIST] for
  *   video and series/season types (the types a playlist makes sense for).
+ * @param includeDelete When true, adds [QuickAction.DELETE] for audio and video
+ *   types. Used by the offline hosts where the item is already downloaded and a
+ *   destructive "remove download" affordance makes sense; omitted online.
+ * @param includeFavorite When true, adds the [QuickAction.FAVORITE]/
+ *   [QuickAction.UNFAVORITE] toggle. Gated so the online hosts (which already
+ *   expose favorite from the detail screen's action row) keep their current
+ *   long-press surface, while the offline hosts opt in to close the parity gap.
  */
 fun MediaItem.quickActions(
     scope: MediaQuickActionScope,
     includeDownload: Boolean = false,
     includeAddToPlaylist: Boolean = false,
+    includeDelete: Boolean = false,
+    includeFavorite: Boolean = false,
 ): List<QuickAction> {
     if (mediaType !in scope.actionableTypes()) return emptyList()
     return buildList {
         add(QuickAction.PLAY)
         add(if (isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
+        if (includeFavorite) {
+            add(if (isFavorite) QuickAction.UNFAVORITE else QuickAction.FAVORITE)
+        }
         if (includeDownload && (mediaType.isAudioType || mediaType.isVideoType)) {
             add(QuickAction.DOWNLOAD)
         }
@@ -68,6 +80,11 @@ fun MediaItem.quickActions(
             (mediaType.isVideoType || mediaType == MediaType.SERIES || mediaType == MediaType.SEASON)
         ) {
             add(QuickAction.ADD_TO_PLAYLIST)
+        }
+        if (includeDelete && (mediaType.isVideoType || mediaType == MediaType.SERIES ||
+                mediaType == MediaType.SEASON || mediaType.isAudioType)
+        ) {
+            add(QuickAction.DELETE)
         }
         add(QuickAction.DETAILS)
     }

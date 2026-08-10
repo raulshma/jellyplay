@@ -873,6 +873,7 @@ class DownloadRepositoryImpl @Inject constructor(
         playbackPositionTicks = playbackPositionTicks,
         playedPercentage = PlayedStateSync.computePlayedPercentage(playbackPositionTicks, runTimeTicks, isPlayed),
         isPlayed = isPlayed,
+        isFavorite = isFavorite,
         lastPlayedDate = null,
     )
 

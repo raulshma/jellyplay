@@ -165,6 +165,34 @@ class PlaybackOutboxRepositoryImpl @Inject constructor(
         )
     }
 
+    override suspend fun enqueueFavoriteState(itemId: String, isFavorite: Boolean) = withContext(Dispatchers.IO) {
+        // Deterministic id so a re-flip for the same item lands in place — the
+        // latest user intent wins and there is never more than one row per
+        // item for the favorite-state channel. `positionTicks`/`isPaused`/
+        // `playMethod` are unused for this event type but the entity requires
+        // them; defaults match STOP's shape.
+        val now = nowMillis()
+        dao.upsert(
+            PlaybackOutboxEntity(
+                id = "favorite_state:$itemId",
+                itemId = itemId,
+                eventType = if (isFavorite) PlaybackOutboxEventType.FAVORITE.name else PlaybackOutboxEventType.UNFAVORITE.name,
+                sessionId = "",
+                positionTicks = 0L,
+                isPaused = false,
+                playMethod = PlayMethod.DIRECT_PLAY.name,
+                mediaSourceId = null,
+                recordedAt = now,
+                // Preserve original createdAt on an overwrite so drain ordering
+                // keeps the first flip's position — only the target state
+                // changes, not the queue position. Fresh on first insert.
+                createdAt = dao.getForItem(itemId)
+                    .firstOrNull { it.id == "favorite_state:$itemId" }
+                    ?.createdAt ?: now,
+            )
+        )
+    }
+
     override suspend fun drain(): List<PlaybackOutboxEntry> = withContext(Dispatchers.IO) {
         dao.getAll().map { it.toDomain() }
     }

@@ -140,10 +140,20 @@ fun MediaDetailScreen(
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message ->
-            val text = when (message) {
-                is DetailMessage.Text -> message.text
+            when (message) {
+                is DetailMessage.OpenOffline -> {
+                    // Online detail failed but the item is downloaded: redirect to
+                    // the offline detail/series page instead of showing a snackbar.
+                    val route = if (message.mediaType == MediaType.SERIES) {
+                        Route.OfflineSeries(message.itemId)
+                    } else {
+                        Route.OfflineDetail(message.itemId)
+                    }
+                    onNavigate(route)
+                }
+                is DetailMessage.Text -> snackbarHostState.showSnackbar(message.text)
                 is DetailMessage.SeriesDownload -> {
-                    if (message.error != null) {
+                    val text = if (message.error != null) {
                         message.error
                     } else if (message.queuedCount > 0) {
                         snackbarContext.resources.getQuantityString(
@@ -154,9 +164,9 @@ fun MediaDetailScreen(
                     } else {
                         snackbarContext.getString(R.string.detail_msg_no_episodes_queued)
                     }
+                    snackbarHostState.showSnackbar(text)
                 }
             }
-            snackbarHostState.showSnackbar(text)
         }
     }
 
