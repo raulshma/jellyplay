@@ -5,7 +5,6 @@
     <!-- Screen titles / scaffolds -->
     <string name="downloads_screen_title">다운로드</string>
     <string name="downloads_library_title">다운로드됨</string>
-    <string name="downloads_loading">로드 중…</string>
     <string name="downloads_not_found">찾을 수 없음</string>
     <string name="downloads_download_unavailable">이 다운로드는 더 이상 사용할 수 없습니다</string>
 
@@ -23,10 +22,6 @@
     <plurals name="downloads_item_count">
         <item quantity="other">항목 %1$d개</item>
     </plurals>
-    <plurals name="downloads_episodes_count">
-        <item quantity="other">에피소드 %1$d개</item>
-    </plurals>
-    <string name="downloads_episodes_count_with_size">에피소드 %1$d개 · %2$s</string>
     <string name="downloads_selected_count">%1$d개 선택됨</string>
 
     <!-- Common actions / buttons -->
@@ -45,8 +40,6 @@
     <string name="downloads_action_clear_selection">선택 해제</string>
     <string name="downloads_pause_all">모두 일시정지</string>
     <string name="downloads_retry_failed">실패한 항목 모두 재시도</string>
-    <string name="downloads_select_all">모두 선택</string>
-    <string name="downloads_deselect_all">모두 선택 해제</string>
     <string name="downloads_clear_cd">지우기</string>
     <string name="downloads_search_cd">검색</string>
     <string name="downloads_sort_cd">정렬</string>
@@ -65,11 +58,6 @@
     <string name="downloads_delete_episode_title">에피소드 삭제</string>
     <string name="downloads_delete_episode_cd">에피소드 삭제</string>
     <string name="downloads_delete_episode_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까?</string>
-    <string name="downloads_select_episodes_to_remove">기기에서 제거할 에피소드를 선택하세요.</string>
-    <string name="downloads_episodes_selected">에피소드 %2$d개 중 %1$d개 선택됨</string>
-    <string name="downloads_episodes_selected_with_freed">에피소드 %2$d개 중 %1$d개 선택됨 · %3$s</string>
-    <string name="downloads_delete_count">%1$d개 삭제</string>
-    <string name="downloads_delete_count_with_freed">%1$d개 삭제 · %2$s</string>
     <string name="downloads_deleted">삭제됨</string>
     <string name="downloads_deleted_message">다운로드가 삭제되었습니다</string>
 
@@ -82,7 +70,6 @@
 
     <!-- Offline detail -->
     <string name="downloads_series_default">시리즈</string>
-    <string name="downloads_season_default">시즌 %1$d</string>
     <string name="downloads_play_resume">이어보기</string>
     <string name="downloads_play_again">다시 재생</string>
     <string name="downloads_show_less">간단히 보기</string>
@@ -95,10 +82,8 @@
     <string name="downloads_status">상태</string>
     <string name="downloads_progress">진행률</string>
     <string name="downloads_watch_status">시청 상태</string>
-    <string name="downloads_watched">시청함</string>
     <string name="downloads_cd_switch_to_list">세로 에피소드 목록으로 전환</string>
     <string name="downloads_cd_switch_to_cards">가로 에피소드 카드로 전환</string>
-    <string name="downloads_watched_label">시청함</string>
     <string name="downloads_in_progress">진행 중</string>
     <string name="downloads_started">시작됨</string>
     <string name="downloads_position">위치</string>
@@ -108,8 +93,6 @@
 
     <!-- Seasons / episodes -->
     <string name="downloads_seasons">시즌</string>
-    <string name="downloads_collapse">접기</string>
-    <string name="downloads_expand">펼치기</string>
     <string name="downloads_mark_season_cd">시즌 시청함/시청 안 함으로 표시</string>
     <string name="downloads_mark_season_watched">시즌을 시청함으로 표시</string>
     <string name="downloads_mark_season_unwatched">시즌을 시청 안 함으로 표시</string>

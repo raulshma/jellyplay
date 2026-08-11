@@ -179,10 +179,14 @@ fun rememberMultiEpisodeSelectionForDownload(
  * Delete-sheet construction: selectability = every episode in [episodes]
  * (every episode is already downloaded offline, so there is no exclusion).
  * The episode map arrives pre-loaded once, so keying on it is safe.
+ *
+ * Operates on the unified [MediaItem] — the unified detail screen projects
+ * offline episodes through `OfflineMediaItem.toMediaItem()`, so the delete
+ * sheet reads the same episode shape as the seasons section.
  */
 @Composable
 fun rememberMultiEpisodeSelectionForDelete(
-    episodes: Map<String, List<com.raulshma.jellyplay.core.model.OfflineMediaItem>>,
+    episodes: Map<String, List<com.raulshma.jellyplay.core.model.MediaItem>>,
 ): MultiEpisodeSelection = remember(episodes) {
     MultiEpisodeSelection(
         initialSeasonIds = episodes.keys,

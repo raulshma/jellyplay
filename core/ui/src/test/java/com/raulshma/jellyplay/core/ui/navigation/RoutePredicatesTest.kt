@@ -31,8 +31,6 @@ class RoutePredicatesTest {
         Route.ManageSeries("x"),
         Route.MediaInfo("x"),
         Route.CollectionDetail("x"),
-        Route.OfflineSeries("x"),
-        Route.OfflineDetail("x"),
         Route.ArtistDetail("x"),
         Route.AlbumDetail("x"),
         Route.SmartPlaylistDetail("x"),
@@ -84,7 +82,7 @@ class RoutePredicatesTest {
         // Guards against the list above losing an entry without the expected
         // set being updated. If a detail route is added, increment this number
         // and add it to [detailRoutes].
-        assertEquals(20, detailRoutes.size)
+        assertEquals(18, detailRoutes.size)
     }
 
     @Test

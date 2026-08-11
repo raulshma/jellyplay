@@ -63,19 +63,19 @@ class HomeNavigationTest {
     }
 
     @Test
-    fun onOfflineItemClick_series_navigatesToOfflineSeries() {
+    fun onOfflineItemClick_series_navigatesToMediaDetail() {
         val callbacks = buildTestCallbacks(navigator)
         callbacks.onOfflineItemClick("series-1", MediaType.SERIES)
 
-        verify { navigator.navigate(Route.OfflineSeries("series-1")) }
+        verify { navigator.navigate(Route.MediaDetail("series-1")) }
     }
 
     @Test
-    fun onOfflineItemClick_movie_navigatesToOfflineDetail() {
+    fun onOfflineItemClick_movie_navigatesToMediaDetail() {
         val callbacks = buildTestCallbacks(navigator)
         callbacks.onOfflineItemClick("movie-1", MediaType.MOVIE)
 
-        verify { navigator.navigate(Route.OfflineDetail("movie-1")) }
+        verify { navigator.navigate(Route.MediaDetail("movie-1")) }
     }
 
     @Test
@@ -140,11 +140,7 @@ class HomeNavigationTest {
             onPlayOnClick = onPlayOnClick,
             onOfflineLibraryClick = { navigator.navigate(Route.OfflineLibrary) },
             onOfflineItemClick = { itemId, mediaType ->
-                if (mediaType == MediaType.SERIES) {
-                    navigator.navigate(Route.OfflineSeries(itemId))
-                } else {
-                    navigator.navigate(Route.OfflineDetail(itemId))
-                }
+                navigator.navigate(Route.MediaDetail(itemId))
             },
             onSeerrItemClick = { tmdbId, mediaType ->
                 navigator.navigate(Route.SeerrDetail(tmdbId, mediaType))

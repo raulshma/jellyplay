@@ -14,6 +14,7 @@ import com.composables.icons.tabler.outline.ListDetails
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Playlist
 import com.composables.icons.tabler.outline.Share
+import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -57,11 +58,15 @@ internal fun rememberMediaOptions(
     isDownloading: Boolean,
     isDownloadingSeries: Boolean,
     canManageSeries: Boolean,
+    canDeleteDownloadedSeries: Boolean,
+    canEditMetadata: Boolean,
+    canAddToPlaylist: Boolean,
     onClose: () -> Unit,
     onEditClick: () -> Unit,
     onShare: () -> Unit,
     onDownload: () -> Unit,
     onDownloadSeries: () -> Unit,
+    onDeleteDownloadedSeries: () -> Unit,
     onHideFromNextUp: () -> Unit,
     onShowFromNextUp: () -> Unit,
     onHideFromContinueWatching: () -> Unit,
@@ -105,16 +110,24 @@ internal fun rememberMediaOptions(
     val labelTechnicalInfo = stringResource(R.string.detail_option_technical_info)
     val labelManageSeries = stringResource(R.string.detail_option_manage_series)
     val labelAddToPlaylist = stringResource(R.string.detail_option_add_to_playlist)
+    val labelDeleteDownloads = stringResource(R.string.detail_option_delete_downloads)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
-        downloadStatus, downloadProgress, canManageSeries, labelManageSeries, labelAddToPlaylist,
+        downloadStatus, downloadProgress, canManageSeries, canDeleteDownloadedSeries, canEditMetadata,
+        canAddToPlaylist, labelManageSeries,
+        labelAddToPlaylist, labelDeleteDownloads,
         labelHideDetailUpNext, labelShowDetailUpNext) {
         buildList {
-            add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
-                onClose(); onEditClick()
-            })
+            // Metadata editor is a remote-only action (feature matrix: local = No);
+            // gated on remoteDiscovery so a local origin never offers a server
+            // edit it cannot fulfill.
+            if (canEditMetadata) {
+                add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
+                    onClose(); onEditClick()
+                })
+            }
             if (preferences.showShareMediaOption) {
                 add(MediaOption(labelShare, Tabler.Outline.Share) {
                     onClose(); onShare()
@@ -152,11 +165,20 @@ internal fun rememberMediaOptions(
                     }
                 )
             }
+            // Series batch-delete: a non-remote (downloaded) series with local
+            // download-management capability. Opens the multi-select sheet that
+            // drives DetailViewModel.deleteOfflineEpisodes / deleteOfflineSeries.
+            if (canDeleteDownloadedSeries) {
+                add(MediaOption(labelDeleteDownloads, Tabler.Outline.Trash) {
+                    onClose(); onDeleteDownloadedSeries()
+                })
+            }
             // Add to Playlist: only for playable video items and series (a
             // series expands to its episodes in the VM). Audio/album detail
             // already has its own playlist flow in feature/music, so it is
-            // excluded here to avoid a duplicate entry path.
-            if (item != null && (item.mediaType.isVideoType || item.mediaType == MediaType.SERIES)) {
+            // excluded here to avoid a duplicate entry path. Remote-only — a
+            // local origin has no server playlist target.
+            if (canAddToPlaylist && item != null && (item.mediaType.isVideoType || item.mediaType == MediaType.SERIES)) {
                 add(MediaOption(labelAddToPlaylist, Tabler.Outline.Playlist) {
                     onClose(); onAddToPlaylist()
                 })

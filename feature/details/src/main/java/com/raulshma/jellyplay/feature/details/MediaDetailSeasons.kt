@@ -70,6 +70,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
+import com.raulshma.jellyplay.core.ui.components.formatRelativeTime
 import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -106,7 +107,39 @@ internal fun SeasonsSection(
     onCompactEpisodeListChange: (Boolean) -> Unit = {},
     onMarkSeasonPlayed: (seasonId: String) -> Unit = {},
     onMarkSeasonUnplayed: (seasonId: String) -> Unit = {},
+    // ── Unified episode parity ──
+    // Set of downloaded episode ids (gates the per-episode delete badge) — null
+    // hides the affordance entirely (plain remote series with no downloads).
+    downloadedEpisodeIds: Set<String>? = null,
+    /** Per-episode delete (downloaded episodes only). */
+    onEpisodeDeleteClick: (MediaItem) -> Unit = {},
+    /**
+     * Per-episode local artwork resolver: returns an on-disk path when the
+     * episode has a downloaded thumbnail, else null (caller falls back to the
+     * server [getImageUrl]). Null disables the local-first lookup.
+     */
+    getEpisodeLocalImagePath: ((MediaItem) -> String?)? = null,
+    /**
+     * True when the snapshot is sourced from local data. The caller already
+     * neutralizes the deferred preferences (hideThumbnails/skipSpecials/
+     * episodesDescending) for a local origin; this flag additionally hides the
+     * sort-order toggle, whose tap would otherwise mutate the global pref with
+     * no visible effect (local order is always server order).
+     */
+    isLocalOrigin: Boolean = false,
 ) {
+    // ── DEFERRED FOR LOCAL ORIGIN ────────────────────────────────────────────
+    // The following affordances remain ONLINE-ONLY and are deliberately NOT
+    // implemented for a local/offline origin in this PR:
+    //   • hideEpisodeThumbnails / spoiler overlay — local cards always show art.
+    //   • skipSpecials (S0 filtering) — local series render every season.
+    //   • episodesDescending sort toggle — local series use server order.
+    //   • press-and-hold peek (rememberMediaPeek) — local cards don't peek.
+    // The params stay on the signature (driven by `preferences`, defaulting to
+    // false/true) so a local origin simply passes neutral values; the unified
+    // EpisodeCard renders correctly without these for a downloaded episode. The
+    // sort-order toggle is additionally hidden for a local origin ([isLocalOrigin]).
+    // ─────────────────────────────────────────────────────────────────────────
     val smartTargetSeasonId = smartPlayTarget?.episode?.seasonId
     val initialSeasonIndex = when {
         smartTargetSeasonId != null -> {
@@ -187,24 +220,29 @@ internal fun SeasonsSection(
                         }
                     }
                     val sortFocusState = rememberTvFocusState(focusedScale = 1.1f)
-                    Surface(
-                        modifier = Modifier
-                            .clip(ShapeCache.smooth16)
-                            .then(sortFocusState.focusModifier)
-                            .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
-                            .clickable { onEpisodesDescendingChange(!episodesDescending) },
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                        shape = ShapeCache.smooth16,
-                    ) {
-                        Icon(
-                            imageVector = if (episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
-                            contentDescription = stringResource(
-                                if (episodesDescending) R.string.detail_cd_sort_oldest_first
-                                else R.string.detail_cd_sort_newest_first
-                            ),
-                            modifier = Modifier.padding(8.dp),
-                        )
+                    // The sort toggle is an online-only affordance (local order is
+                    // always server order), so hide it for a local origin rather
+                    // than render a control that mutates a pref with no effect.
+                    if (!isLocalOrigin) {
+                        Surface(
+                            modifier = Modifier
+                                .clip(ShapeCache.smooth16)
+                                .then(sortFocusState.focusModifier)
+                                .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
+                                .clickable { onEpisodesDescendingChange(!episodesDescending) },
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            shape = ShapeCache.smooth16,
+                        ) {
+                            Icon(
+                                imageVector = if (episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
+                                contentDescription = stringResource(
+                                    if (episodesDescending) R.string.detail_cd_sort_oldest_first
+                                    else R.string.detail_cd_sort_newest_first
+                                ),
+                                modifier = Modifier.padding(8.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -388,6 +426,9 @@ internal fun SeasonsSection(
                                     onDetailClick = { onEpisodeDetailClick(episode) },
                                     onLongPress = { onEpisodeLongPress(episode) },
                                     hideThumbnail = hideEpisodeThumbnails,
+                                    isDownloaded = downloadedEpisodeIds?.contains(episode.id) == true,
+                                    onDeleteClick = { onEpisodeDeleteClick(episode) },
+                                    localImagePath = getEpisodeLocalImagePath?.invoke(episode),
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -417,6 +458,9 @@ internal fun SeasonsSection(
                                     onLongPress = { onEpisodeLongPress(episode) },
                                     modifier = focusModifier,
                                     hideThumbnail = hideEpisodeThumbnails,
+                                    isDownloaded = downloadedEpisodeIds?.contains(episode.id) == true,
+                                    onDeleteClick = { onEpisodeDeleteClick(episode) },
+                                    localImagePath = getEpisodeLocalImagePath?.invoke(episode),
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -483,6 +527,13 @@ internal fun EpisodeCard(
     hideThumbnail: Boolean = false,
     sharedThumbnailModifier: Modifier = Modifier,
     onLongPress: (() -> Unit)? = null,
+    // ── Unified episode parity ──
+    /** True when this episode has a completed download — surfaces the trash badge. */
+    isDownloaded: Boolean = false,
+    /** Per-episode delete (downloaded episodes only). No-op default. */
+    onDeleteClick: () -> Unit = {},
+    /** On-disk thumbnail path; preferred over [getImageUrl] when non-null. */
+    localImagePath: String? = null,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -506,7 +557,11 @@ internal fun EpisodeCard(
     val cardWidth = (adaptiveInfo.rowCardWidth(isTv) * 1.5f).coerceAtLeast(260.dp)
 
     // Build the episode image URL once per episode instead of 3× per recomposition.
-    val episodeImageUrl = remember(episode.id) { getImageUrl(episode.id) }
+    // Prefer the on-disk local thumbnail (a downloaded episode's saved Primary
+    // image) before the server [getImageUrl] fallback — matches the offline card.
+    val episodeImageUrl = remember(episode.id, localImagePath) {
+        localImagePath ?: getImageUrl(episode.id)
+    }
 
     // Press-and-hold "peek" preview; no-op on TV / when no controller is wired.
     val peek = rememberMediaPeek(
@@ -651,6 +706,37 @@ internal fun EpisodeCard(
                         .padding(start = 6.dp, bottom = 8.dp),
                 )
             }
+
+            // Per-episode delete affordance — only for a downloaded episode
+            // (gated by `isDownloaded`, which the host sets from the downloaded-
+            // episode-id set or the local origin). Online episodes never show
+            // this (downloading stays in `SeriesDownloadSheet`).
+            if (isDownloaded) {
+                val deleteFocusState = rememberTvFocusState(focusedScale = 1.1f)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .then(deleteFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(deleteFocusState, CircleShape))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDeleteClick,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Tabler.Outline.Trash,
+                        contentDescription = stringResource(R.string.detail_delete_episode_cd),
+                        tint = Color.White.copy(alpha = 0.9f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
         }
 
         Column(modifier = Modifier.padding(16.dp)) {
@@ -674,7 +760,7 @@ internal fun EpisodeCard(
             val totalTime = if (runtimeTicks != null) {
                 formatDurationFromTicks(runtimeTicks)
             } else null
-            
+
             if (remainingTime != null && totalTime != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -705,6 +791,20 @@ internal fun EpisodeCard(
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
+
+            // Last-watched relative timestamp (e.g. "2d ago"). Ports the offline
+            // card's lastPlayedDate line so the field is not lost in the unified
+            // card. Shown when the episode has any watch activity and the relative
+            // formatter could parse the stored timestamp.
+            val lastWatched = formatRelativeTime(episode.lastPlayedDate)
+            if (lastWatched != null && (episode.isPlayed || (positionTicks != null && positionTicks > 0))) {
+                Text(
+                    text = lastWatched,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
             episode.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -731,7 +831,8 @@ internal fun EpisodeCard(
  * watched tag pop while quickly swiping through a season.
  *
  * No per-episode download/delete: online episodes have no delete action
- * (downloading stays in `SeriesDownloadSheet`), matching [EpisodeCard].
+ * (downloading stays in `SeriesDownloadSheet`), matching [EpisodeCard]. A
+ * downloaded episode shows a trailing trash affordance instead.
  */
 @Composable
 private fun CompactEpisodeRow(
@@ -744,6 +845,10 @@ private fun CompactEpisodeRow(
     modifier: Modifier = Modifier,
     sharedThumbnailModifier: Modifier = Modifier,
     onLongPress: (() -> Unit)? = null,
+    // ── Unified episode parity ──
+    isDownloaded: Boolean = false,
+    onDeleteClick: () -> Unit = {},
+    localImagePath: String? = null,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -760,7 +865,9 @@ private fun CompactEpisodeRow(
         label = "compactEpisodeRowPlayScale",
     )
 
-    val episodeImageUrl = remember(episode.id) { getImageUrl(episode.id) }
+    val episodeImageUrl = remember(episode.id, localImagePath) {
+        localImagePath ?: getImageUrl(episode.id)
+    }
 
     // Press-and-hold "peek" preview; mirrors EpisodeCard.
     val peek = rememberMediaPeek(
@@ -922,6 +1029,48 @@ private fun CompactEpisodeRow(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+
+            // Last-watched relative timestamp — ports the offline compact row's
+            // lastPlayedDate line so the field is not lost in the unified card.
+            val lastWatched = formatRelativeTime(episode.lastPlayedDate)
+            if (lastWatched != null && (episode.isPlayed || (positionTicks != null && positionTicks > 0))) {
+                Text(
+                    text = lastWatched,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+
+        // Per-episode delete (downloaded episodes only). Sits at the trailing
+        // edge of the row rather than overlaid on the thumbnail (as on the card)
+        // — the compact row has room for a dedicated affordance. Mirrors the
+        // offline compact row.
+        if (isDownloaded) {
+            val deleteFocusState = rememberTvFocusState(focusedScale = 1.1f)
+            Box(
+                modifier = Modifier
+                    .padding(end = 12.dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .then(deleteFocusState.focusModifier)
+                    .then(Modifier.tvFocusIndicator(deleteFocusState, CircleShape))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDeleteClick,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Tabler.Outline.Trash,
+                    contentDescription = stringResource(R.string.detail_delete_episode_cd),
+                    tint = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }

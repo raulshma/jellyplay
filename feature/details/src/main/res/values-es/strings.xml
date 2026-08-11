@@ -279,4 +279,40 @@
     <string name="detail_season_empty_title">No hay episodios disponibles</string>
     <string name="detail_season_empty_description">Los episodios aparecerán aquí cuando se añadan.</string>
 
+    <!-- Unified download / offline-detail strings. Resync falls back to default. -->
+    <string name="detail_download_info">Información de descarga</string>
+    <string name="detail_file_size">Tamaño del archivo</string>
+    <string name="detail_downloaded">Descargado</string>
+    <string name="detail_status">Estado</string>
+    <string name="detail_progress">Progreso</string>
+    <string name="detail_watch_status">Estado de visualización</string>
+    <string name="detail_watched_status_watched">Visto</string>
+    <string name="detail_watched_status_label">Visto</string>
+    <string name="detail_watched_status_in_progress">En curso</string>
+    <string name="detail_watched_status_started">Iniciado</string>
+    <string name="detail_position">Posición</string>
+    <string name="detail_position_of">%1$s de %2$s</string>
+    <string name="detail_last_watched">Visto por última vez</string>
+    <string name="detail_close">Cerrar</string>
+    <string name="detail_delete">Eliminar</string>
+    <string name="detail_delete_download_title">Eliminar descarga</string>
+    <string name="detail_delete_download_cd">Eliminar descarga</string>
+    <string name="detail_delete_download_message">¿Quitar \"%1$s\" de tu dispositivo? Esto libera %2$s.</string>
+    <string name="detail_delete_episode_title">Eliminar episodio</string>
+    <string name="detail_delete_episode_cd">Eliminar episodio</string>
+    <string name="detail_delete_episode_message">¿Quitar \"%1$s\" de tu dispositivo?</string>
+    <string name="detail_delete_downloads_title">Eliminar descargas</string>
+    <string name="detail_select_episodes_to_remove">Selecciona los episodios que quieres quitar del dispositivo.</string>
+    <string name="detail_episodes_selected">%1$d de %2$d episodios seleccionados</string>
+    <string name="detail_episodes_selected_with_freed">%1$d de %2$d episodios seleccionados · %3$s</string>
+    <string name="detail_delete_count">Eliminar %1$d</string>
+    <string name="detail_delete_count_with_freed">Eliminar %1$d · %2$s</string>
+    <string name="detail_season_default">Temporada %1$d</string>
+    <string name="detail_delete_entire_series">Eliminar serie completa</string>
+    <string name="detail_option_delete_downloads">Eliminar descargas</string>
+    <plurals name="detail_episodes_count">
+        <item quantity="one">%1$d episodio</item>
+        <item quantity="many">%1$d episodios</item>
+        <item quantity="other">%1$d episodios</item>
+    </plurals>
 </resources>

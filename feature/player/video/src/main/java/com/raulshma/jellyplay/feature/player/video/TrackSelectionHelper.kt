@@ -428,6 +428,15 @@ internal class TrackSelectionHelper(
                     if (match != null) {
                         selectSubtitleTrack(match, isUserOverride = false)
                     }
+                } else if (subStreams.isEmpty()) {
+                    // Offline: server mediaStreams is empty, so the pending
+                    // index is the original server stream index stamped onto the
+                    // side-loaded subtitle as id == "offline:${pending}". Resolve
+                    // by that id; if the engine hasn't propagated it (e.g. the
+                    // sub hasn't side-loaded yet) the next availableTracks
+                    // emission re-runs the restore path and picks it up.
+                    trackSelectionPolicy.resolveByOfflineSubtitleId(subtitleTracks, pending)
+                        ?.let { selectSubtitleTrack(it, isUserOverride = false) }
                 }
             }
         } else if (!subtitleSelectionHeld) {
@@ -456,14 +465,18 @@ internal class TrackSelectionHelper(
                         // Prefer the container stream index (mpv ff-index), which
                         // equals the stored server index; fall back to label for
                         // engines/side-loaded tracks without one. Offline (no
-                        // server streams) falls through to the engine positional
-                        // index (see resolveMediaStreamIndex).
+                        // server streams) resolves the side-loaded subtitle by
+                        // its `"offline:${index}"` id (both ExoPlayer and mpv
+                        // propagate it into TrackOption.id), then falls back to
+                        // a positional-index match for legacy tracks without it.
                         val resolved = trackSelectionPolicy.resolveByStreamIndex(subtitleTracks, subIdx, targetStream)
                         if (resolved != null) {
                             selectSubtitleTrack(resolved, isUserOverride = false)
                         } else if (streams.isEmpty()) {
-                            subtitleTracks.firstOrNull { it.index == subIdx }
+                            trackSelectionPolicy.resolveByOfflineSubtitleId(subtitleTracks, subIdx)
                                 ?.let { selectSubtitleTrack(it, isUserOverride = false) }
+                                ?: subtitleTracks.firstOrNull { it.index == subIdx }
+                                    ?.let { selectSubtitleTrack(it, isUserOverride = false) }
                         }
                     }
                 } else {

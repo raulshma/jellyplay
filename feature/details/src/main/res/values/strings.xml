@@ -175,6 +175,7 @@
     <!-- ── ViewModel error messages (shown via ErrorScreen / snackbar) ──── -->
     <string name="detail_error_load_failed">Couldn\'t load details</string>
     <string name="detail_error_access_denied">You don\'t have access to this item.</string>
+    <string name="detail_error_unavailable_offline">This item isn\'t available offline.</string>
     <string name="detail_error_details_not_loaded">Media details not loaded</string>
     <string name="detail_error_no_source">No media source available for download</string>
     <string name="detail_error_no_stream_url">Could not get stream URL</string>
@@ -280,5 +281,85 @@
     <string name="detail_person_empty_description">This person has no titles matching the current filter.</string>
     <string name="detail_season_empty_title">No episodes available</string>
     <string name="detail_season_empty_description">Episodes will appear here once they\'re added.</string>
+
+    <!-- ── Unified download / offline-detail strings ────────────────────────────
+         Ported from feature/downloads.
+         Prefixed `detail_` so feature/details owns its own R-class entries without
+         depending on feature/downloads. Translations live alongside in values-*.
+         Resync strings are English-only here (mirroring feature/downloads, which
+         never translated them); locales fall back to these defaults. -->
+    <string name="detail_download_info">Download info</string>
+    <string name="detail_file_size">File size</string>
+    <string name="detail_downloaded">Downloaded</string>
+    <string name="detail_status">Status</string>
+    <string name="detail_progress">Progress</string>
+
+    <!-- DownloadAttachment status labels (DownloadInfoCard). English-only here,
+         mirroring the resync strings above; locales fall back to these defaults. -->
+    <string name="detail_download_status_pending">Pending</string>
+    <string name="detail_download_status_queued">Queued</string>
+    <string name="detail_download_status_downloading">Downloading</string>
+    <string name="detail_download_status_paused">Paused</string>
+    <string name="detail_download_status_completed">Completed</string>
+    <string name="detail_download_status_failed">Failed</string>
+    <string name="detail_download_status_cancelled">Cancelled</string>
+    <string name="detail_watch_status">Watch status</string>
+    <string name="detail_watched_status_watched">Watched</string>
+    <string name="detail_watched_status_label">Watched</string>
+    <string name="detail_watched_status_in_progress">In progress</string>
+    <string name="detail_watched_status_started">Started</string>
+    <string name="detail_position">Position</string>
+    <string name="detail_position_of">%1$s of %2$s</string>
+    <string name="detail_last_watched">Last watched</string>
+    <string name="detail_close">Close</string>
+    <string name="detail_delete">Delete</string>
+
+    <!-- Delete confirmations for an attached download / downloaded episode. -->
+    <string name="detail_delete_download_title">Delete download</string>
+    <string name="detail_delete_download_cd">Delete download</string>
+    <string name="detail_delete_download_message">Remove \"%1$s\" from your device? This frees up %2$s.</string>
+    <string name="detail_delete_episode_title">Delete episode</string>
+    <string name="detail_delete_episode_cd">Delete episode</string>
+    <string name="detail_delete_episode_message">Remove \"%1$s\" from your device?</string>
+
+    <!-- Series batch-delete sheet (ported from the old offline-series screen). -->
+    <string name="detail_delete_downloads_title">Delete downloads</string>
+    <string name="detail_select_episodes_to_remove">Select episodes to remove from your device.</string>
+    <string name="detail_episodes_selected">%1$d of %2$d episodes selected</string>
+    <string name="detail_episodes_selected_with_freed">%1$d of %2$d episodes selected · %3$s</string>
+    <string name="detail_delete_count">Delete %1$d</string>
+    <string name="detail_delete_count_with_freed">Delete %1$d · %2$s</string>
+    <string name="detail_season_default">Season %1$d</string>
+    <string name="detail_delete_entire_series">Delete entire series</string>
+    <string name="detail_option_delete_downloads">Delete downloads</string>
+
+    <!-- Aggregate local-series header ("N episodes · size"). -->
+    <plurals name="detail_episodes_count">
+        <item quantity="one">%1$d episode</item>
+        <item quantity="other">%1$d episodes</item>
+    </plurals>
+
+    <!-- Resync / re-download freshness banner + sheet. -->
+    <string name="detail_resync_title">Sync download</string>
+    <string name="detail_resync_checking">Checking for updates…</string>
+    <string name="detail_resync_update_available">New information available</string>
+    <string name="detail_resync_media_changed">Media file changed — re-download required</string>
+    <string name="detail_resync_in_progress">Syncing latest details…</string>
+    <string name="detail_resync_complete">Download synced with latest details</string>
+    <string name="detail_resync_failed">Sync failed</string>
+    <string name="detail_resync_up_to_date">This download is up to date.</string>
+    <string name="detail_resync_description">Newer information is available on the server. Sync to refresh metadata and images.</string>
+    <string name="detail_resync_change_metadata">Updated metadata (overview, cast, ratings)</string>
+    <string name="detail_resync_change_images">Updated artwork (poster/backdrop)</string>
+    <string name="detail_resync_change_media">The media file itself changed</string>
+    <string name="detail_resync_media_explanation">A metadata sync can\'t update the media file. Delete and re-download this item to get the new file.</string>
+    <string name="detail_resync_action">Sync now</string>
+    <string name="detail_resync_redownload">Re-download media</string>
+
+    <!-- Local-origin subtitle selector (manifest-backed; no audio inventory). -->
+    <string name="detail_local_subtitles">Subtitles</string>
+    <string name="detail_local_subtitle_off">Off</string>
+    <string name="detail_local_subtitle_default_badge">DEFAULT</string>
+    <string name="detail_local_subtitle_forced_badge">FORCED</string>
 
 </resources>

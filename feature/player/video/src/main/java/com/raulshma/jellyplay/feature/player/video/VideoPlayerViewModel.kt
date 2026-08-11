@@ -1337,7 +1337,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     /**
      * Offline resume: the offline entry points (Downloads, OfflineLibrary,
-     * OfflineSeries, deep links, remote control, mini-player) all navigate with
+     * MediaDetail (offline), deep links, remote control, mini-player) all navigate with
      * `startPositionTicks = 0`. When no explicit position was requested and the
      * item is a completed download, fall back to the last-known position stored
      * on the downloaded item (seeded from server UserData and updated while
@@ -1620,7 +1620,7 @@ class VideoPlayerViewModel @Inject constructor(
             }
 
             // Offline resume: the offline entry points (Downloads, OfflineLibrary,
-            // OfflineSeries, deep links, remote control, mini-player) all navigate with
+            // MediaDetail (offline), deep links, remote control, mini-player) all navigate with
             // startPositionTicks = 0. When no explicit position was requested and the item
             // is a completed download, fall back to the last-known position stored on the
             // downloaded item (seeded from server UserData and updated while watching

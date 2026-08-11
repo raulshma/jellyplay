@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.downloads
+package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -52,53 +52,67 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.defaultContentSizeSpec
 import com.raulshma.jellyplay.core.designsystem.theme.defaultSpatialSpring
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
-import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.rememberMultiEpisodeSelectionForDelete
 
 /**
- * Multi-select delete sheet for an offline series. Mirrors the online
- * [com.raulshma.jellyplay.feature.details.SeriesDownloadSheet] layout — a
+ * Multi-select delete sheet for a downloaded series, rendered inside the
+ * unified media-detail tree. Mirrors the layout of [SeriesDownloadSheet] — a
  * header, a select-all pill, a per-season LazyColumn with tri-state season
  * checkboxes and expandable episode rows, and a footer action row — but every
  * selection is destructive and styled with the error color scheme.
  *
  * Users can mix-and-match: whole series (Select All), whole seasons (season
  * checkbox), or individual episodes across seasons (episode checkbox). The
- * footer button reports the selected count and the bytes that will be freed,
- * and calls back with the selected episode ids.
+ * footer button reports the selected count, and an explicit "delete entire
+ * series" action offers the whole-series path. Both route through the merged
+ * [DetailViewModel] offline-delete methods, which collapse a fully-selected
+ * season into a single `deleteOfflineSeason` transaction.
  *
- * Episodes are already pre-loaded by [OfflineSeriesViewModel.episodes], so
- * there is no lazy-load machinery here: every season is immediately selectable.
+ * Data note: the unified detail snapshot projects offline episodes to
+ * [MediaItem] via `OfflineMediaItem.toMediaItem()`, which drops per-episode
+ * `totalSizeBytes`. The freed-space figure therefore uses the aggregate
+ * [totalSizeBytes] (from `LocalSeriesAggregate`) and is only shown when the
+ * selection covers every downloadable episode — the one case where the freed
+ * total is exactly known. Partial selections show a count-only summary,
+ * matching the original sheet's count-only fallback.
  *
- * @param seasons season rows (for names + ordering); each must exist as a key in
- *   [episodes] (possibly mapped to an empty list).
- * @param episodes episodes keyed by season id.
+ * @param seasons season rows (for names + ordering); each must exist as a key
+ *   in [episodes] (possibly mapped to an empty list). Only seasons with at
+ *   least one downloaded episode should be passed.
+ * @param episodes downloaded episodes keyed by season id. Every episode here
+ *   is treated as deletable (the caller pre-filters to downloaded episodes).
+ * @param totalSizeBytes aggregate on-disk size of the series' downloads
+ *   (`LocalSeriesAggregate.totalSizeBytes`); 0 hides the freed-space figure.
  * @param onDelete invoked with the flat set of episode ids to remove.
+ * @param onDeleteEntireSeries invoked to drop the whole series in one
+ *   transaction (`DetailViewModel.deleteOfflineSeries`).
  * @param onDismiss closes the sheet.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun DeleteSeriesSheet(
-    seasons: List<OfflineMediaItem>,
-    episodes: Map<String, List<OfflineMediaItem>>,
+fun DeleteDownloadedEpisodesSheet(
+    seasons: List<MediaItem>,
+    episodes: Map<String, List<MediaItem>>,
+    totalSizeBytes: Long,
     onDelete: (episodeIds: Set<String>) -> Unit,
+    onDeleteEntireSeries: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val selection = rememberMultiEpisodeSelectionForDelete(episodes)
     var expandedSeasonIds by remember { mutableStateOf(emptySet<String>()) }
 
     val totalSelectedCount = selection.totalSelectedCount
-    // Delete-specific: bytes freed by the current selection. The base class
-    // owns selection algebra; the byte total is a pure lookup over the selected
-    // ids against the episode map this sheet already holds.
-    val episodeById = remember(episodes) { episodes.values.flatten().associateBy { it.id } }
-    val totalSelectedBytes = selection.selectedEpisodeIds.values.flatten().sumOf { id ->
-        episodeById[id]?.totalSizeBytes ?: 0L
-    }
     val allSelected = selection.allSelected
     val allSelectableIds = selection.allSelectableIds
+    // Freed-space is exact only when every downloadable episode is selected
+    // (the whole-series delete frees the aggregate total). For partial
+    // selections the per-episode sizes are not available on the unified
+    // MediaItem, so the summary falls back to count-only.
+    val freedBytes = if (allSelected) totalSizeBytes else 0L
+    val freedBytesStr = freedBytes.takeIf { it > 0 }?.formatBytes()
 
     Column(
         modifier = Modifier
@@ -112,8 +126,8 @@ fun DeleteSeriesSheet(
     ) {
         // ── Header ──
         SheetHeader(
-            title = stringResource(R.string.downloads_delete_downloads_title),
-            subtitle = stringResource(R.string.downloads_select_episodes_to_remove),
+            title = stringResource(R.string.detail_delete_downloads_title),
+            subtitle = stringResource(R.string.detail_select_episodes_to_remove),
             icon = Tabler.Outline.Trash,
             onClose = onDismiss,
         )
@@ -140,8 +154,8 @@ fun DeleteSeriesSheet(
                 ),
                 modifier = Modifier.weight(1f),
             ) {
-                val selectAllLabel = stringResource(R.string.downloads_select_all)
-                val deselectAllLabel = stringResource(R.string.downloads_deselect_all)
+                val selectAllLabel = stringResource(R.string.detail_select_all)
+                val deselectAllLabel = stringResource(R.string.detail_deselect_all)
                 Text(if (allSelected) deselectAllLabel else selectAllLabel)
             }
         }
@@ -161,12 +175,11 @@ fun DeleteSeriesSheet(
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
             Spacer(Modifier.height(4.dp))
-            val freedBytesStr = if (totalSelectedBytes > 0) totalSelectedBytes.formatBytes() else null
             Text(
                 text = if (freedBytesStr != null)
-                    stringResource(R.string.downloads_episodes_selected_with_freed, totalSelectedCount, allSelectableIds.size, freedBytesStr)
+                    stringResource(R.string.detail_episodes_selected_with_freed, totalSelectedCount, allSelectableIds.size, freedBytesStr)
                 else
-                    stringResource(R.string.downloads_episodes_selected, totalSelectedCount, allSelectableIds.size),
+                    stringResource(R.string.detail_episodes_selected, totalSelectedCount, allSelectableIds.size),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -228,18 +241,18 @@ fun DeleteSeriesSheet(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = season.name.takeIf { it.isNotBlank() }
-                                    ?: stringResource(R.string.downloads_season_default, season.seasonNumber ?: 1),
+                                    ?: stringResource(R.string.detail_season_default, season.seasonNumber ?: 1),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.SemiBold,
                             )
                             if (seasonEpisodes.isNotEmpty()) {
-                                val seasonSize = seasonEpisodes.sumOf { it.totalSizeBytes }
                                 Text(
-                                    text = if (seasonSize > 0)
-                                        stringResource(R.string.downloads_episodes_count_with_size, seasonEpisodes.size, seasonSize.formatBytes())
-                                    else
-                                        pluralStringResource(R.plurals.downloads_episodes_count, seasonEpisodes.size, seasonEpisodes.size),
+                                    text = pluralStringResource(
+                                        R.plurals.detail_episode_count,
+                                        seasonEpisodes.size,
+                                        seasonEpisodes.size,
+                                    ),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -247,7 +260,7 @@ fun DeleteSeriesSheet(
                         }
                         Icon(
                             imageVector = Tabler.Outline.ChevronDown,
-                            contentDescription = stringResource(if (isExpanded) R.string.downloads_collapse else R.string.downloads_expand),
+                            contentDescription = stringResource(if (isExpanded) R.string.detail_cd_collapse else R.string.detail_cd_expand),
                             modifier = Modifier
                                 .size(20.dp)
                                 .graphicsLayer { rotationZ = chevronRotation },
@@ -308,15 +321,10 @@ fun DeleteSeriesSheet(
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurface,
                                         )
-                                        val sizeText = episode.totalSizeBytes.takeIf { it > 0 }?.formatBytes()
-                                        val minutes = episode.runTimeTicks?.let { it / 600_000_000 }
-                                        val secondary = buildList {
-                                            if (sizeText != null) add(sizeText)
-                                            if (minutes != null) add("${minutes}m")
-                                        }.joinToString(" · ")
-                                        if (secondary.isNotEmpty()) {
+                                        episode.runTimeTicks?.let { ticks ->
+                                            val minutes = ticks / 600_000_000
                                             Text(
-                                                text = secondary,
+                                                text = "${minutes}m",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
@@ -343,11 +351,23 @@ fun DeleteSeriesSheet(
             horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Whole-series delete (single transaction). Left-aligned so the
+            // per-episode Cancel/Delete pair stay grouped on the right.
+            TextButton(
+                onClick = onDeleteEntireSeries,
+                shape = ShapeCache.smoothPill,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(stringResource(R.string.detail_delete_entire_series))
+            }
             TextButton(
                 onClick = onDismiss,
                 shape = ShapeCache.smoothPill,
             ) {
-                Text(stringResource(R.string.downloads_cancel))
+                Text(stringResource(R.string.detail_cancel))
             }
             Button(
                 onClick = { onDelete(selection.toSelectedIds()) },
@@ -366,12 +386,11 @@ fun DeleteSeriesSheet(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.size(6.dp))
-                val freedBytesStr = if (totalSelectedBytes > 0) totalSelectedBytes.formatBytes() else null
                 Text(
                     if (freedBytesStr != null)
-                        stringResource(R.string.downloads_delete_count_with_freed, totalSelectedCount, freedBytesStr)
+                        stringResource(R.string.detail_delete_count_with_freed, totalSelectedCount, freedBytesStr)
                     else
-                        stringResource(R.string.downloads_delete_count, totalSelectedCount),
+                        stringResource(R.string.detail_delete_count, totalSelectedCount),
                 )
             }
         }

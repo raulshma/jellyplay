@@ -136,6 +136,15 @@ abstract class DataModule {
     @Singleton
     abstract fun bindOfflineRepository(impl: OfflineRepositoryImpl): OfflineRepository
 
+    // The single external seam for media-detail resolution. Owns the remote/local
+    // source policy, the source-dependent read graph, and capability derivation.
+    // See the MediaDetailProvider kdoc for the source policy.
+    @Binds
+    @Singleton
+    abstract fun bindMediaDetailProvider(
+        impl: com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl,
+    ): com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+
     // The deep "Playback Source Resolver" seam: the single owner of the
     // download-vs-stream fork. See PlaybackSourceResolver kdoc — every caller
     // already depends on :core:data, so this @Binds is the only wiring needed.

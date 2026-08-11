@@ -382,15 +382,27 @@ A single `JellyPlayDatabase` (v36) holds three relevant tables:
 
 ### UI layer
 
-- **`feature/downloads`** — `DownloadsScreen` (queue + per-row actions),
-  `OfflineLibraryScreen` (grid with search/sort/filter + storage
-  header), `OfflineDetailScreen` / `OfflineSeriesScreen` /
-  `OfflineSeasonsSection` / `OfflineEpisodeCard` for browsing, and their
-  `@HiltViewModel`s backed by `DownloadRepository` /
-  `OfflineRepository` flows.
-- **`feature/details`** — the `DownloadConfirmationDialog` and
-  `SeriesDownloadSheet` that initiate downloads; `DetailViewModel`
-  performs the cellular-warning check and calls `DownloadIntake`.
+- **`feature/details`** — **one** `MediaDetailScreen` renders detail for
+  online, remote-with-attached-download, and local/offline/fallback items.
+  `MediaDetailProvider` (in `core/data`) owns the remote/local source decision,
+  the source-dependent read graph (detail, seasons/episodes via the shared
+  `EpisodeCatalogue`, album children, local subtitles, local artwork), the
+  reactive download/sync attachment, and a compact capability set. `DetailViewModel`
+  consumes the provider, drives remote-only discovery (Seerr, ARR, theme music,
+  similar/collection, playlists), and owns all write actions (watched/favorite,
+  download lifecycle: delete/resync/re-download, per-episode and whole-season
+  batch delete). Download/sync presentation (`DownloadInfoCard`,
+  `WatchProgressSection`, `SyncUpdateBanner`, `ResyncSheet`,
+  `DeleteDownloadedEpisodesSheet`) and a manifest-backed local subtitle selector
+  live here, gated by capability/attachment so they also serve a remote item with
+  a completed download. The `DownloadConfirmationDialog` and `SeriesDownloadSheet`
+  initiate downloads; `DetailViewModel` performs the cellular-warning check and
+  calls `DownloadIntake`.
+- **`feature/downloads`** — reserved for download **queue** and **offline-library**
+  management: `DownloadsScreen` (queue + per-row actions) and `OfflineLibraryScreen`
+  (grid with search/sort/filter + storage header). Both drill into
+  `Route.MediaDetail(id)` — there is no longer a separate offline detail or series
+  screen.
 - **`feature/home`** — the `SyncStatusIcon` + `SyncDetailsSheet` that
   surface pending playback-sync events.
 - **`feature/settings`** — `StorageSettingsScreen` exposes every
