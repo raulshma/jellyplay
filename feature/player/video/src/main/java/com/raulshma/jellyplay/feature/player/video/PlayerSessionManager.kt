@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -268,7 +269,11 @@ class PlayerSessionManager(
             )
         }
 
-        val agg = aggregateStore.aggregate.value
+        // Await the hydrated aggregate (not the .value point read, which is the
+        // empty default on cold start and would lose the saved per-item subtitle
+        // delay). loadOnline/loadOffline are suspend, so .first() on the raw
+        // flow blocks until the real DataStore values arrive.
+        val agg = aggregateStore.aggregateRaw.first()
         val playerType = agg.playback.preferredPlayer
 
         // Preserve the offline item's rich metadata (seriesId, seasonId,
@@ -343,7 +348,11 @@ class PlayerSessionManager(
         }
         val streams = source?.mediaStreams ?: emptyList()
 
-        val agg = aggregateStore.aggregate.value
+        // Await the hydrated aggregate (not the .value point read, which is the
+        // empty default on cold start and would lose the saved per-item subtitle
+        // delay). loadOnline/loadOffline are suspend, so .first() on the raw
+        // flow blocks until the real DataStore values arrive.
+        val agg = aggregateStore.aggregateRaw.first()
         val playerType = agg.playback.preferredPlayer
         val sourceId = source?.id ?: ""
 
@@ -710,7 +719,7 @@ class PlayerSessionManager(
      * (ExoPlayer, LibVLC, MPV) demuxes embedded text subs from the container
      * natively — confirmed for MPV via logcat, which lists the demuxed tracks
      * — so side-loading them too would duplicate each track and could render
-     * the selected sub twice. This matches mpvkt and findroid, which never
+     * the selected sub twice., which never
      * side-load embedded subs alongside container demuxing.
      */
     private fun buildExternalSubtitles(

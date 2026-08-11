@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -48,7 +49,16 @@ class VideoPlayerAggregateStore @Inject constructor(
     private val engineStore: PlayerEngineStore,
     private val securityStore: SecurityStore,
 ) {
-    val aggregate: StateFlow<VideoPlayerAggregate> = combine(
+    /**
+     * The cold preference-combine flow, before [stateIn]. Exposed so suspending
+     * call sites (notably [com.raulshma.jellyplay.feature.player.video.PlayerSessionManager]'s
+     * media-load path) can `.first()` a *hydrated* snapshot: [aggregate] is
+     * `WhileSubscribed` with an empty-default initial value, so its `.value` is
+     * the empty default until a subscriber propagates the first DataStore read —
+     * reading it cold loses per-item subtitle delay (and other prefs). Awaiting
+     * this raw flow guarantees the real persisted values.
+     */
+    val aggregateRaw: Flow<VideoPlayerAggregate> = combine(
         combine(
             playbackStore.playback,
             videoPlayerStore.videoPlayer,
@@ -71,6 +81,8 @@ class VideoPlayerAggregateStore @Inject constructor(
             security = g2.security,
         )
     }.distinctUntilChanged()
+
+    val aggregate: StateFlow<VideoPlayerAggregate> = aggregateRaw
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), VideoPlayerAggregate())
 
     private data class VideoPlayerAggregateGroup1(

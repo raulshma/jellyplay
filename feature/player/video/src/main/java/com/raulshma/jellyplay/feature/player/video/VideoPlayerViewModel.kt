@@ -1634,8 +1634,21 @@ class VideoPlayerViewModel @Inject constructor(
             val source = sessionState.currentMediaSource
             val detail = sessionState.mediaDetail
 
+            // Re-snapshot the aggregate now that loadMedia has returned. loadMedia
+            // awaits aggregateRaw.first() internally, so by here the DataStore has
+            // emitted the hydrated preferences — but the local `agg` captured at
+            // the top of this coroutine is the cold-start empty default until the
+            // separate prefs collector hydrates cachedAggregate, which races on
+            // coroutine scheduling. Per-item maps read from the stale `agg`
+            // (subtitle delay, video effects) resolve to 0/empty and then clobber
+            // the real values the engine already booted with (the saved delay
+            // would appear in media-info then vanish, with no delay on the track).
+            // Use a fresh hydrated snapshot for per-item lookups; global UI seeding
+            // above is reconciled by downstream collectors, so it keeps `agg`.
+            val hydratedAgg = aggregateStore.aggregateRaw.first()
+
             // Restore per-item persisted video filters (if any) before playback kicks off.
-            val hydratedEffects = agg.engine.videoEffectsByItem[itemId] ?: VideoEffectsConfig()
+            val hydratedEffects = hydratedAgg.engine.videoEffectsByItem[itemId] ?: VideoEffectsConfig()
             if (_uiState.value.videoEffects != hydratedEffects) {
                 _uiState.update { it.copy(videoEffects = hydratedEffects) }
                 updateConfigWithUiStateDebounced()
@@ -1646,7 +1659,7 @@ class VideoPlayerViewModel @Inject constructor(
             // exists) so the previous item's in-memory delay can't bleed into
             // this one. Push to the engine immediately so the AV-sync slider and
             // the rendered cues stay in sync on resume.
-            val itemDelay = resolveSubtitleDelayMs(agg.subtitle, itemId)
+            val itemDelay = resolveSubtitleDelayMs(hydratedAgg.subtitle, itemId)
             val currentStyle = _uiState.value.subtitleStyle
             if (currentStyle.offsetMs != itemDelay) {
                 _uiState.update { it.copy(subtitleStyle = currentStyle.copy(offsetMs = itemDelay)) }
