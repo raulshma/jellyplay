@@ -115,6 +115,34 @@ class ResyncActionsTest {
         gate.complete(ok())
         advanceUntilIdle()
     }
+
+    @Test
+    fun `resync thrown exception maps to Error instead of sticking at Working`() = runTest {
+        // resyncItem throwing must not leave state latched at Working — resync
+        // mirrors redownloadMedia's try/catch and surfaces the message as Error.
+        coEvery { offlineSyncManager.resyncItem("item1") } throws RuntimeException("kaboom")
+        val actions = actions(this)
+
+        actions.resync()
+        advanceUntilIdle()
+
+        val state = actions.state.value
+        assertTrue("expected Error, was $state", state is ResyncUiState.Error)
+        assertEquals("kaboom", (state as ResyncUiState.Error).message)
+    }
+
+    @Test
+    fun `resync thrown exception with no message falls back to Resync failed`() = runTest {
+        coEvery { offlineSyncManager.resyncItem("item1") } throws RuntimeException()
+        val actions = actions(this)
+
+        actions.resync()
+        advanceUntilIdle()
+
+        val state = actions.state.value
+        assertTrue(state is ResyncUiState.Error)
+        assertEquals("Resync failed", (state as ResyncUiState.Error).message)
+    }
     // endregion
 
     // region checkForUpdates
@@ -254,6 +282,53 @@ class ResyncActionsTest {
 
         gate.complete(MediaDetail(item = MediaItem(id = "item1", name = "Movie", mediaType = MediaType.MOVIE)))
         advanceUntilIdle()
+    }
+
+    @Test
+    fun `redownloadMedia with null itemId is a no-op`() = runTest {
+        val actions = actions(this, itemId = null)
+
+        actions.redownloadMedia()
+        advanceUntilIdle()
+
+        assertTrue(actions.state.value is ResyncUiState.Idle)
+        coVerify(exactly = 0) { mediaRepository.invalidateDetailCache(any()) }
+        coVerify(exactly = 0) { offlineRepository.deleteOfflineItem(any()) }
+    }
+
+    @Test
+    fun `redownloadMedia intake exception surfaces the message as Error`() = runTest {
+        // The re-download path guards against thrown exceptions (unlike resync);
+        // a failing intake must surface the message, not leave state at Working.
+        val detail = MediaDetail(item = MediaItem(id = "item1", name = "Movie", mediaType = MediaType.MOVIE))
+        coEvery { mediaRepository.getMediaDetail("item1") } returns Result.success(detail)
+        coEvery { downloadIntake.start(detail) } throws RuntimeException("disk crash")
+        val actions = actions(this)
+
+        actions.redownloadMedia()
+        advanceUntilIdle()
+
+        val state = actions.state.value
+        assertTrue(state is ResyncUiState.Error)
+        assertEquals("disk crash", (state as ResyncUiState.Error).message)
+    }
+    // endregion
+
+    // region resync — fallback message when no failed step carries one
+    @Test
+    fun `resync with empty steps falls back to the generic Resync failed message`() = runTest {
+        // succeeded is false (steps empty); no failed step carries a message, so
+        // the Error state falls back to the hardcoded "Resync failed".
+        coEvery { offlineSyncManager.resyncItem("item1") } returns
+            ResyncResult("item1", emptyList(), mediaFileChanged = false)
+        val actions = actions(this)
+
+        actions.resync()
+        advanceUntilIdle()
+
+        val state = actions.state.value
+        assertTrue(state is ResyncUiState.Error)
+        assertEquals("Resync failed", (state as ResyncUiState.Error).message)
     }
     // endregion
 }
