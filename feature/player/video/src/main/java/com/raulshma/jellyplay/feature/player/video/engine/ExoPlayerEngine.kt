@@ -631,11 +631,29 @@ class ExoPlayerEngine(
         serverDurationMs = request.serverDurationMs
         currentSubtitleConfigs.clear()
         currentSubtitleConfigs.addAll(subtitleConfigs)
-        exo.prepare()
-        if (request.startPositionMs > 0) {
-            exo.seekTo(request.startPositionMs)
+        if (currentConfig.subtitleDelayMs != 0L) {
+            // A non-zero subtitle delay configured at boot (typically a persisted
+            // per-item correction) never ran the onConfigChanged →
+            // refreshSubtitlesForOffsetChange reload: updateConfig fires before
+            // load() creates the player, so player/currentMediaItem are null at
+            // boot and refreshSubtitlesForOffsetChange() no-ops. The saved delay
+            // therefore only took effect once the user re-adjusted it
+            // mid-playback (which fires the reload with the player alive). Reload
+            // once here at the requested start position so Media3 re-parses cues
+            // through the OffsettingSubtitleParserFactory with the delay applied
+            // — the same proven path the live slider uses. setMediaItem(item,
+            // startPosMs) folds the seek into the reload so there is a single
+            // prepare (no double-buffer) and the resume position is preserved.
+            exo.setMediaItem(mediaItem, request.startPositionMs)
+            exo.prepare()
+            exo.play()
+        } else {
+            exo.prepare()
+            if (request.startPositionMs > 0) {
+                exo.seekTo(request.startPositionMs)
+            }
+            exo.play()
         }
-        exo.play()
 
         applyAudioEffects()
     }
