@@ -32,6 +32,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -436,5 +437,272 @@ class UnifiedMediaDetailProviderImplTest {
     fun `invalidate delegates to the catalogue`() = runTest {
         buildProvider().invalidate("s1")
         coVerify(exactly = 1) { episodeCatalogue.invalidateSeries("s1") }
+    }
+
+    // ── Attachment derivation: totalSize + createdAt provenance ───────────────
+    //
+    // buildAttachment derives totalSizeBytes from the download row, falling back
+    // to the local OfflineMediaItem when the download row reports <= 0 (a known
+    // gap for some legacy rows), and sources createdAtEpochMillis exclusively
+    // from the local row (DownloadItem carries no creation timestamp).
+
+    @Test
+    fun `attachment totalSizeBytes falls back to local row when download reports zero`() = runTest {
+        val local = localMovie().copy(totalSizeBytes = 5_000L)
+        val download = completedDownload().copy(totalSizeBytes = 0L, downloadedBytes = 0L)
+        wireStubs("m1", mode = OfflineMode.ONLINE, localItem = local, download = download)
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+
+        val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
+
+        assertEquals(5_000L, snapshot.context.download?.totalSizeBytes)
+    }
+
+    @Test
+    fun `attachment totalSizeBytes prefers the download row when it is positive`() = runTest {
+        val local = localMovie().copy(totalSizeBytes = 5_000L)
+        val download = completedDownload().copy(totalSizeBytes = 3_000L, downloadedBytes = 3_000L)
+        wireStubs("m1", mode = OfflineMode.ONLINE, localItem = local, download = download)
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+
+        val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
+
+        assertEquals(3_000L, snapshot.context.download?.totalSizeBytes)
+    }
+
+    @Test
+    fun `attachment createdAtEpochMillis is sourced from the local row`() = runTest {
+        val local = localMovie().copy(createdAt = 1_700_000_000_000L)
+        wireStubs("m1", mode = OfflineMode.ONLINE, localItem = local, download = completedDownload())
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+
+        val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
+
+        assertEquals(1_700_000_000_000L, snapshot.context.download?.createdAtEpochMillis)
+    }
+
+    @Test
+    fun `attachment createdAtEpochMillis is zero when no local row exists`() = runTest {
+        // A remote-only item (no local row) attaches a download but has no
+        // creation timestamp to source — must default to 0, never a fake value.
+        wireStubs("m1", mode = OfflineMode.ONLINE, localItem = null, download = completedDownload())
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+
+        val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
+
+        assertEquals(0L, snapshot.context.download?.createdAtEpochMillis)
+    }
+
+    // ── Album tracks: the online/offline fork at the album-children level ────
+
+    private fun albumDetail(id: String = "a1") = MediaDetail(
+        item = MediaItem(id = id, name = "Album", mediaType = MediaType.ALBUM),
+    )
+
+    @Test
+    fun `remote ALBUM snapshot loads album tracks from the server`() = runTest {
+        wireStubs("a1", mode = OfflineMode.ONLINE)
+        coEvery { mediaRepository.getMediaDetail("a1") } returns Result.success(albumDetail())
+        val tracks = listOf(
+            MediaItem(id = "t1", name = "Track 1", mediaType = MediaType.AUDIO),
+            MediaItem(id = "t2", name = "Track 2", mediaType = MediaType.AUDIO),
+        )
+        coEvery { mediaRepository.getAlbumTracks("a1") } returns Result.success(tracks)
+
+        val snapshot = (firstResolved(buildProvider(), "a1") as DetailLoadState.Loaded).snapshot
+
+        assertEquals(tracks.map { it.id }, snapshot.albumTracks.map { it.id })
+        coVerify(exactly = 0) { offlineRepository.getChildren(any()) }
+    }
+
+    @Test
+    fun `local ALBUM snapshot loads album tracks from offline children`() = runTest {
+        val localAlbum = OfflineMediaItem(
+            id = "a1",
+            name = "Album",
+            mediaType = MediaType.ALBUM,
+            downloadPath = "/data/offline/a1/album",
+        )
+        wireStubs("a1", mode = OfflineMode.OFFLINE_MANUAL, localItem = localAlbum)
+        val child = OfflineMediaItem(
+            id = "t1",
+            name = "Track 1",
+            mediaType = MediaType.AUDIO,
+            downloadPath = "/data/offline/a1/t1",
+        )
+        every { offlineRepository.getChildren("a1") } returns MutableStateFlow(listOf(child))
+
+        val snapshot = (firstResolved(buildProvider(), "a1") as DetailLoadState.Loaded).snapshot
+
+        assertEquals(listOf("t1"), snapshot.albumTracks.map { it.id })
+        coVerify(exactly = 0) { mediaRepository.getAlbumTracks(any()) }
+    }
+
+    // ── Local SERIES aggregate + per-episode artwork ─────────────────────────
+    //
+    // publishLocal derives the series header ("N episodes · size") and the
+    // per-episode image map from a single pass over the raw OfflineMediaItem
+    // rows (the catalogue's MediaItem projection drops posterPath/totalSizeBytes).
+
+    @Test
+    fun `local SERIES snapshot carries aggregate counts and per-episode artwork`() = runTest {
+        val localSeries = OfflineMediaItem(
+            id = "s1",
+            name = "Series",
+            mediaType = MediaType.SERIES,
+            downloadPath = "/data/offline/s1/series",
+        )
+        wireStubs("s1", mode = OfflineMode.OFFLINE_MANUAL, localItem = localSeries)
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(
+            seriesCatalogueSnapshot(seriesId = "s1", seasonIds = listOf("season1"), episodesPerSeason = 0),
+        )
+        val seasonRow = OfflineMediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON)
+        val epRow = OfflineMediaItem(
+            id = "season1-ep1",
+            name = "Pilot",
+            mediaType = MediaType.EPISODE,
+            posterPath = "/data/offline/s1/ep1.jpg",
+            totalSizeBytes = 2_000L,
+        )
+        every { offlineRepository.getSeasonsForSeries("s1") } returns MutableStateFlow(listOf(seasonRow))
+        every { offlineRepository.getEpisodesForSeason("season1") } returns MutableStateFlow(listOf(epRow))
+
+        val snapshot = (firstResolved(buildProvider(), "s1") as DetailLoadState.Loaded).snapshot
+
+        val aggregate = snapshot.context.seriesAggregate
+        assertNotNull(aggregate)
+        assertEquals(1, aggregate!!.downloadedEpisodeCount)
+        assertEquals(2_000L, aggregate.totalSizeBytes)
+        // The catalogue projection drops posterPath; the artwork map carries it.
+        assertEquals("/data/offline/s1/ep1.jpg", snapshot.assets.episodeImages["season1-ep1"])
+    }
+
+    @Test
+    fun `local non-series snapshot carries no series aggregate`() = runTest {
+        // A local MOVIE is not a series — the aggregate is null even with a row.
+        wireStubs("m1", mode = OfflineMode.OFFLINE_MANUAL, localItem = localMovie())
+
+        val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
+
+        assertNull(snapshot.context.seriesAggregate)
+    }
+
+    // ── Capability derivation: studio navigation + smart-play ────────────────
+
+    @Test
+    fun `remote detail with studios advertises studio navigation`() = runTest {
+        wireStubs("m1", mode = OfflineMode.ONLINE)
+        val withStudios = movieDetail().copy(
+            studios = listOf(com.raulshma.jellyplay.core.model.StudioInfo(name = "Studio A", id = "st-1")),
+        )
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(withStudios)
+
+        val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
+
+        // studioNavigation requires REMOTE origin AND a non-empty studios list.
+        assertTrue(snapshot.capabilities.studioNavigation)
+    }
+
+    @Test
+    fun `local origin suppresses smart-play capability`() = runTest {
+        // smartPlay is derived from the remote origin; a local projection must
+        // not advertise it even for a series with episodes.
+        wireStubs("m1", mode = OfflineMode.OFFLINE_MANUAL, localItem = localMovie())
+
+        val snapshot = (firstResolved(buildProvider(), "m1") as DetailLoadState.Loaded).snapshot
+
+        assertFalse(snapshot.capabilities.smartPlay)
+        assertFalse(snapshot.capabilities.remoteDiscovery)
+    }
+
+    // ── refresh() forces a re-resolution and invalidates the detail cache ────
+
+    @Test
+    fun `refresh re-resolves and invalidates the detail cache`() = runTest {
+        wireStubs("m1", mode = OfflineMode.ONLINE)
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+
+        val provider = buildProvider()
+        val job = launch { provider.observe("m1").collect { } }
+        advanceUntilIdle()
+
+        // The initial resolution (lastTick starts at -1) already force-resolved
+        // once; clear the call log so the assertion isolates the refresh's own
+        // forced re-resolution. Stub answers are preserved.
+        clearMocks(mediaRepository, answers = false, recordedCalls = true, childMocks = false)
+
+        provider.refresh("m1")
+        advanceUntilIdle()
+
+        // refresh forces a re-resolution → cache invalidation + a fresh fetch.
+        coVerify(atLeast = 1) { mediaRepository.invalidateDetailCache("m1") }
+        coVerify(atLeast = 1) { mediaRepository.getMediaDetail("m1") }
+        job.cancel()
+    }
+
+    // ── expandSeason idempotency ─────────────────────────────────────────────
+
+    @Test
+    fun `expandSeason is idempotent for an already-fetched season`() = runTest {
+        val initial = seriesCatalogueSnapshot(seasonIds = listOf("season1"), episodesPerSeason = 2)
+        wireStubs("s1", mode = OfflineMode.ONLINE)
+        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(initial)
+        coEvery { episodeCatalogue.loadSeasonEpisodes("s1", "season2", any()) } returns Result.success(
+            listOf(
+                MediaItem(id = "season2-ep1", name = "S2 E1", mediaType = MediaType.EPISODE, seriesId = "s1", seasonId = "season2"),
+            ),
+        )
+
+        val provider = buildProvider()
+        val states = mutableListOf<DetailLoadState>()
+        val job = launch { provider.observe("s1").collect { states += it } }
+        advanceUntilIdle()
+
+        provider.expandSeason("s1", "season2")
+        advanceUntilIdle()
+        val genAfterFirst = states.filterIsInstance<DetailLoadState.Loaded>().last().snapshot.contentGeneration
+
+        // Re-expanding the now-fetched season returns the same episodes but must
+        // NOT bump the content generation (no spurious re-emission).
+        provider.expandSeason("s1", "season2")
+        advanceUntilIdle()
+        val genAfterSecond = states.filterIsInstance<DetailLoadState.Loaded>().last().snapshot.contentGeneration
+
+        assertEquals(genAfterFirst, genAfterSecond)
+        job.cancel()
+    }
+
+    // ── canonicalEpisodeIds cold-load failure ────────────────────────────────
+
+    @Test
+    fun `canonicalEpisodeIds returns empty when the cold load fails`() = runTest {
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.failure(RuntimeException("net"))
+
+        val ids = buildProvider().canonicalEpisodeIds("s1")
+
+        assertTrue(ids.isEmpty())
+    }
+
+    // ── Inactive-session no-ops for the seam methods ─────────────────────────
+    //
+    // applyOptimisticSeasonRewrite / expandSeason early-return when no session is
+    // active for the item (the server mutation still lands; the next load picks
+    // up the post-cascade state). They must not touch the catalogue.
+
+    @Test
+    fun `expandSeason without an active session returns empty and skips the catalogue`() = runTest {
+        val ids = buildProvider().expandSeason("s1", "season1")
+
+        assertTrue(ids.isEmpty())
+        coVerify(exactly = 0) { episodeCatalogue.loadSeasonEpisodes(any(), any(), any()) }
+    }
+
+    @Test
+    fun `applyOptimisticSeasonRewrite without an active session is a no-op`() = runTest {
+        buildProvider().applyOptimisticSeasonRewrite("s1", "season1") { it }
+
+        coVerify(exactly = 0) { episodeCatalogue.updateSeasonEpisodes(any(), any(), any()) }
+        coVerify(exactly = 0) { episodeCatalogue.invalidateSeries(any()) }
     }
 }

@@ -25,6 +25,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -199,6 +200,249 @@ class DownloadLifecycleActionsTest {
         h.resetForNavigation()
 
         assertEquals(DownloadLifecycleState(), h.state.value)
+    }
+    // endregion
+
+    // region startDownload — precondition + cellular-warning guards
+    @Test
+    fun `startDownload with no loaded detail emits details-not-loaded and skips intake`() = runTest {
+        every { context.getString(R.string.detail_error_details_not_loaded) } returns "no detail"
+        val messages = mutableListOf<DetailMessage>()
+        val h = makeActions(scope = this, detail = null, messageSink = { messages += it })
+
+        h.startDownload()
+        advanceUntilIdle()
+
+        assertTrue(messages.contains(DetailMessage.Text("no detail")))
+        coVerify(exactly = 0) { downloadIntake.start(any(), any()) }
+    }
+
+    @Test
+    fun `startDownload with no media source emits no-source and skips intake`() = runTest {
+        every { context.getString(R.string.detail_error_no_source) } returns "no source"
+        val messages = mutableListOf<DetailMessage>()
+        val detail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
+        val h = makeActions(scope = this, detail = detail, messageSink = { messages += it })
+
+        h.startDownload()
+        advanceUntilIdle()
+
+        assertTrue(messages.contains(DetailMessage.Text("no source")))
+        coVerify(exactly = 0) { downloadIntake.start(any(), any()) }
+    }
+
+    @Test
+    fun `startDownload on metered connection over threshold surfaces cellular warning`() = runTest {
+        // 60 MB source on a metered link with a 50 MB warning threshold → the
+        // download does NOT start; the warning dialog state is surfaced instead.
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+            mediaSources = listOf(MediaSource(id = "src-1", name = "Source", size = 60L * 1024L * 1024L)),
+        )
+        val h = makeActions(
+            scope = this,
+            detail = detail,
+            unmetered = false,
+            downloadsSlice = DownloadsSlice(cellularDownloadSizeWarningMb = 50),
+        )
+
+        h.startDownload()
+        advanceUntilIdle()
+
+        assertEquals(60, h.state.value.cellularDownloadWarningMb)
+        assertFalse(h.state.value.isDownloading)
+        coVerify(exactly = 0) { downloadIntake.start(any(), any()) }
+    }
+
+    @Test
+    fun `startDownload on metered connection under threshold proceeds`() = runTest {
+        // 40 MB source under a 50 MB threshold on a metered link → no warning,
+        // the download starts.
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+            mediaSources = listOf(MediaSource(id = "src-1", name = "Source", size = 40L * 1024L * 1024L)),
+        )
+        coEvery { downloadIntake.start(any(), any()) } returns DownloadResult(
+            downloadItem = mockk(relaxed = true),
+            error = null,
+        )
+        val h = makeActions(
+            scope = this,
+            detail = detail,
+            unmetered = false,
+            downloadsSlice = DownloadsSlice(cellularDownloadSizeWarningMb = 50),
+        )
+
+        h.startDownload()
+        advanceUntilIdle()
+
+        assertNull(h.state.value.cellularDownloadWarningMb)
+        coVerify { downloadIntake.start(detail, null) }
+    }
+
+    @Test
+    fun `confirmCellularDownload clears the warning and proceeds`() = runTest {
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+            mediaSources = listOf(MediaSource(id = "src-1", name = "Source", size = 60L * 1024L * 1024L)),
+        )
+        coEvery { downloadIntake.start(any(), any()) } returns DownloadResult(
+            downloadItem = mockk(relaxed = true),
+            error = null,
+        )
+        val h = makeActions(
+            scope = this,
+            detail = detail,
+            unmetered = false,
+            downloadsSlice = DownloadsSlice(cellularDownloadSizeWarningMb = 50),
+        )
+        h.startDownload()
+        advanceUntilIdle()
+        assertEquals(60, h.state.value.cellularDownloadWarningMb)
+
+        h.confirmCellularDownload()
+        advanceUntilIdle()
+
+        assertNull(h.state.value.cellularDownloadWarningMb)
+        coVerify { downloadIntake.start(detail, null) }
+    }
+
+    @Test
+    fun `dismissCellularDownloadWarning clears the warning without downloading`() = runTest {
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+            mediaSources = listOf(MediaSource(id = "src-1", name = "Source", size = 60L * 1024L * 1024L)),
+        )
+        val h = makeActions(
+            scope = this,
+            detail = detail,
+            unmetered = false,
+            downloadsSlice = DownloadsSlice(cellularDownloadSizeWarningMb = 50),
+        )
+        h.startDownload()
+        advanceUntilIdle()
+        assertEquals(60, h.state.value.cellularDownloadWarningMb)
+
+        h.dismissCellularDownloadWarning()
+
+        assertNull(h.state.value.cellularDownloadWarningMb)
+        coVerify(exactly = 0) { downloadIntake.start(any(), any()) }
+    }
+    // endregion
+
+    // region downloadSeries — eligibility + failure paths
+    @Test
+    fun `downloadSeries on a non-series emits not-a-series error`() = runTest {
+        every { context.getString(R.string.detail_error_not_a_series) } returns "not a series"
+        val messages = mutableListOf<DetailMessage>()
+        val movieDetail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
+        val h = makeActions(scope = this, detail = movieDetail, messageSink = { messages += it })
+
+        h.downloadSeries()
+        advanceUntilIdle()
+
+        val msg = messages.filterIsInstance<DetailMessage.SeriesDownload>().single()
+        assertEquals(0, msg.queuedCount)
+        assertEquals("not a series", msg.error)
+        coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }
+    }
+
+    @Test
+    fun `downloadSeries with no loaded detail emits details-not-loaded error`() = runTest {
+        every { context.getString(R.string.detail_error_details_not_loaded) } returns "no detail"
+        val messages = mutableListOf<DetailMessage>()
+        val h = makeActions(scope = this, detail = null, messageSink = { messages += it })
+
+        h.downloadSeries()
+        advanceUntilIdle()
+
+        val msg = messages.filterIsInstance<DetailMessage.SeriesDownload>().single()
+        assertEquals("no detail", msg.error)
+        coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }
+    }
+
+    @Test
+    fun `downloadSeries intake failure emits queue-failed error`() = runTest {
+        every { context.getString(R.string.detail_error_queue_failed) } returns "queue failed"
+        val seriesDetail = MediaDetail(item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES))
+        // A throwable with no message exercises the getString fallback path.
+        coEvery { downloadIntake.startSeries("series-1", null) } returns Result.failure(RuntimeException())
+        val messages = mutableListOf<DetailMessage>()
+        val h = makeActions(scope = this, detail = seriesDetail, messageSink = { messages += it })
+
+        h.downloadSeries()
+        advanceUntilIdle()
+
+        val msg = messages.filterIsInstance<DetailMessage.SeriesDownload>().single()
+        assertEquals(0, msg.queuedCount)
+        assertEquals("queue failed", msg.error)
+        assertFalse(h.state.value.isDownloadingSeries)
+    }
+    // endregion
+
+    // region loadDownloadSheetEpisodes — on-demand per-season cache + idempotency
+    @Test
+    fun `loadDownloadSheetEpisodes expands once and is idempotent for a fetched season`() = runTest {
+        val ep1 = MediaItem(id = "e1", name = "E1", mediaType = MediaType.EPISODE)
+        val expandCalls = mutableListOf<String>()
+        val h = makeActions(
+            scope = this,
+            itemId = "item-1",
+            expandSeason = { _, seasonId ->
+                expandCalls += seasonId
+                listOf(ep1)
+            },
+        )
+
+        h.loadDownloadSheetEpisodes("s1")
+        advanceUntilIdle()
+        // Second call for the same season is a no-op (already in fetchedSeasonIds).
+        h.loadDownloadSheetEpisodes("s1")
+        advanceUntilIdle()
+
+        assertEquals(listOf("s1"), expandCalls)
+        assertEquals(mapOf("s1" to listOf(ep1)), h.state.value.downloadSheetEpisodes)
+    }
+
+    @Test
+    fun `loadDownloadSheetEpisodes with null itemId is a no-op`() = runTest {
+        val expandCalls = mutableListOf<String>()
+        val h = makeActions(
+            scope = this,
+            itemId = null,
+            expandSeason = { _, seasonId ->
+                expandCalls += seasonId
+                emptyList()
+            },
+        )
+
+        h.loadDownloadSheetEpisodes("s1")
+        advanceUntilIdle()
+
+        assertTrue(expandCalls.isEmpty())
+    }
+
+    @Test
+    fun `resetDownloadSheetState clears the per-season cache so the next load re-expands`() = runTest {
+        val ep1 = MediaItem(id = "e1", name = "E1", mediaType = MediaType.EPISODE)
+        val expandCalls = mutableListOf<String>()
+        val h = makeActions(
+            scope = this,
+            itemId = "item-1",
+            expandSeason = { _, seasonId ->
+                expandCalls += seasonId
+                listOf(ep1)
+            },
+        )
+
+        h.loadDownloadSheetEpisodes("s1")
+        advanceUntilIdle()
+        h.resetDownloadSheetState()
+        h.loadDownloadSheetEpisodes("s1")
+        advanceUntilIdle()
+
+        // Reset dropped the fetched-season cache → the season re-expands.
+        assertEquals(listOf("s1", "s1"), expandCalls)
     }
     // endregion
 }

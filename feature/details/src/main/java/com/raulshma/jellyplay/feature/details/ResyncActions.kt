@@ -52,14 +52,21 @@ internal class ResyncActions(
         if (_state.value is ResyncUiState.Working) return
         scope.launch {
             _state.value = ResyncUiState.Working
-            val result = offlineSyncManager.resyncItem(id)
-            _state.value = if (result.succeeded) {
-                ResyncUiState.Done(result)
-            } else {
-                ResyncUiState.Error(
-                    result.steps.lastOrNull { step -> !step.success }?.message ?: "Resync failed",
-                )
+            // Mirror redownloadMedia: a thrown exception must surface as Error,
+            // not leave state latched at Working (which would freeze the UI).
+            val newState = try {
+                val result = offlineSyncManager.resyncItem(id)
+                if (result.succeeded) {
+                    ResyncUiState.Done(result)
+                } else {
+                    ResyncUiState.Error(
+                        result.steps.lastOrNull { step -> !step.success }?.message ?: "Resync failed",
+                    )
+                }
+            } catch (e: Exception) {
+                ResyncUiState.Error(e.message ?: "Resync failed")
             }
+            _state.value = newState
         }
     }
 
