@@ -9,7 +9,6 @@ import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 fun EntryProviderScope<NavKey>.videoPlayerSection(
     navigator: Navigator,
     onEnterPip: () -> Unit = {},
-    onEnterMiniMode: () -> Unit = {},
 ) {
     entry<Route.VideoPlayer> { key ->
         VideoPlayerScreen(
@@ -20,7 +19,6 @@ fun EntryProviderScope<NavKey>.videoPlayerSection(
             audioStreamIndex = key.audioStreamIndex,
             onBack = { navigator.goBack() },
             onEnterPip = onEnterPip,
-            onEnterMiniMode = onEnterMiniMode,
             onOpenSubtitleTester = { navigator.navigate(Route.SubtitleTester) },
         )
     }

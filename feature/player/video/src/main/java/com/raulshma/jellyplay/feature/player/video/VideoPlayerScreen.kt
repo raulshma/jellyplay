@@ -219,13 +219,7 @@ fun VideoPlayerScreen(
     audioStreamIndex: Int? = null,
     onBack: () -> Unit,
     onEnterPip: () -> Unit = {},
-    onEnterMiniMode: () -> Unit = {},
     onOpenSubtitleTester: () -> Unit = {},
-    // When false (e.g. hosted by the dedicated PlayerActivity), the back / swipe-down
-    // "enter mini-player" path is skipped in favour of onBack, since system PiP
-    // floating over the browse UI replaces the in-app floating card. True keeps the
-    // legacy in-app mini-player behaviour (MainActivity nav host).
-    miniModeEnabled: Boolean = true,
     viewModel: VideoPlayerViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -570,27 +564,11 @@ fun VideoPlayerScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Shared trigger for entering the in-app mini-player, invoked from both the
-    // back handler and the swipe-down-to-dismiss gesture. Self-guards so the
-    // swipe path (which has no upstream precondition check) only minimizes when
-    // mini-mode is actually supported for the current playback.
-    val enterMiniMode: () -> Unit = {
-        if (!isTv && uiState.isPlaying && miniModeEnabled && uiState.engineCapabilities.supportsMiniMode) {
-            viewModel.prepareForMiniMode(
-                title = uiState.title,
-                subtitle = uiState.subtitle,
-            )
-            onEnterMiniMode()
-        }
-    }
-
     BackHandler {
         if (currentSheet != PlayerSheet.None) {
             currentSheet = PlayerSheet.None
         } else if (isTv && showControls) {
             showControls = false
-        } else if (!isTv && uiState.isPlaying && miniModeEnabled && uiState.engineCapabilities.supportsMiniMode) {
-            enterMiniMode()
         } else {
             onBack()
         }
@@ -1299,7 +1277,6 @@ fun VideoPlayerScreen(
                         }
                     }
                 },
-                onSwipeDownDismiss = enterMiniMode,
                 onHapticPulse = remember(activity, viewModel) {
                     {
                         if (viewModel.hapticsEnabled) {

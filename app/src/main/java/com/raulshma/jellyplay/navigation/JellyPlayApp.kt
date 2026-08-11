@@ -543,13 +543,6 @@ private fun MainContent(
         }
     }
 
-    val videoMiniPlayerState = viewModel.videoMiniPlayerState
-    val isVideoMiniMode by videoMiniPlayerState.isMiniMode.collectAsStateWithLifecycle()
-    val videoMiniTitle by videoMiniPlayerState.title.collectAsStateWithLifecycle()
-    val videoMiniSubtitle by videoMiniPlayerState.subtitle.collectAsStateWithLifecycle()
-    val videoMiniIsPlaying by videoMiniPlayerState.isPlaying.collectAsStateWithLifecycle()
-    val videoMiniItemId by videoMiniPlayerState.itemId.collectAsStateWithLifecycle()
-
     val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
     LaunchedEffect(pendingRoute) {
         pendingRoute?.let { route ->
@@ -615,19 +608,14 @@ private fun MainContent(
         }
     }
 
-    val enterVideoMiniMode: () -> Unit = remember(navigator) {
+    val enterPip: () -> Unit = remember(navigator) {
         {
+            // TODO(pip): in-nav player PiP (e.g. LiveTV) is broken since the
+            //  PlayerActivity migration (55cd569f8) removed
+            //  MainActivity:supportsPictureInPicture. The former enterPipMode()
+            //  call now always fails; this collapses to the goBack fallback.
+            //  Restore by routing live playback through PlayerActivity.
             navigator.goBack()
-        }
-    }
-
-    val enterPip: () -> Unit = remember(context, enterVideoMiniMode) {
-        {
-            val activity = context as? MainActivity
-            val success = activity?.enterPipMode() ?: false
-            if (!success) {
-                enterVideoMiniMode()
-            }
         }
     }
 
@@ -806,9 +794,7 @@ private fun MainContent(
                     onLogout = onLogout,
                     homeMode = homeMode,
                     onModeChange = onModeChange,
-                    enterPip = enterPip,
-                    enterVideoMiniMode = enterVideoMiniMode,
-                    saveableStateHolder = saveableStateHolder,
+                    enterPip = enterPip,                    saveableStateHolder = saveableStateHolder,
                     entryDecorator = entryDecorator,
                     onNowPlayingClick = onNowPlayingClick,
                     onAmbientClick = onAmbientClick,
@@ -824,14 +810,7 @@ private fun MainContent(
                     audioTitle = audioTitle,
                     audioArtist = audioArtist,
                     audioArtworkUrl = audioArtworkUrl,
-                    onDismissMiniPlayer = { isMiniPlayerDismissed = true },
-                    isVideoMiniMode = isVideoMiniMode,
-                    videoMiniPlayerState = videoMiniPlayerState,
-                    videoMiniTitle = videoMiniTitle,
-                    videoMiniSubtitle = videoMiniSubtitle,
-                    videoMiniIsPlaying = videoMiniIsPlaying,
-                    videoMiniItemId = videoMiniItemId,
-                )
+                    onDismissMiniPlayer = { isMiniPlayerDismissed = true },                )
             } else {
                 if (!isFullScreenRoute) {
                     // Wire the system/gesture back button to in-app navigation so back
@@ -866,9 +845,7 @@ private fun MainContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,
-                        enterVideoMiniMode = enterVideoMiniMode,
-                        saveableStateHolder = saveableStateHolder,
+                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
@@ -885,14 +862,7 @@ private fun MainContent(
                         audioTitle = audioTitle,
                         audioArtist = audioArtist,
                         audioArtworkUrl = audioArtworkUrl,
-                        onDismissMiniPlayer = { isMiniPlayerDismissed = true },
-                        isVideoMiniMode = isVideoMiniMode,
-                        videoMiniPlayerState = videoMiniPlayerState,
-                        videoMiniTitle = videoMiniTitle,
-                        videoMiniSubtitle = videoMiniSubtitle,
-                        videoMiniIsPlaying = videoMiniIsPlaying,
-                        videoMiniItemId = videoMiniItemId,
-                        animatedNavBarColor = animatedNavBarColor,
+                        onDismissMiniPlayer = { isMiniPlayerDismissed = true },                        animatedNavBarColor = animatedNavBarColor,
                         showNavBarLabels = preferences.navBarShowLabels,
                         navigationStyle = preferences.navigationStyle,
                         isExpressiveNavExperimental = preferences.isExperimentalEnabled(ExperimentalFeature.EXPRESSIVE_NAVIGATION),
@@ -915,19 +885,10 @@ private fun MainContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,
-                        enterVideoMiniMode = enterVideoMiniMode,
-                        saveableStateHolder = saveableStateHolder,
+                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
-                        onAmbientClick = onAmbientClick,
-                        isVideoMiniMode = isVideoMiniMode,
-                        videoMiniPlayerState = videoMiniPlayerState,
-                        videoMiniTitle = videoMiniTitle,
-                        videoMiniSubtitle = videoMiniSubtitle,
-                        videoMiniIsPlaying = videoMiniIsPlaying,
-                        videoMiniItemId = videoMiniItemId,
-                    )
+                        onAmbientClick = onAmbientClick,                    )
                 }
                 }
             } // end inner blur Box
@@ -965,9 +926,7 @@ private fun TvContent(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,
-    enterVideoMiniMode: () -> Unit,
-    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    enterPip: () -> Unit,    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
@@ -983,14 +942,7 @@ private fun TvContent(
     audioTitle: String,
     audioArtist: String,
     audioArtworkUrl: String,
-    onDismissMiniPlayer: () -> Unit,
-    isVideoMiniMode: Boolean,
-    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
-    videoMiniTitle: String,
-    videoMiniSubtitle: String,
-    videoMiniIsPlaying: Boolean,
-    videoMiniItemId: String?,
-) {
+    onDismissMiniPlayer: () -> Unit,) {
     TvMaterial3Theme(
         colorScheme = tvDarkColorScheme(
             background = MaterialTheme.colorScheme.background,
@@ -1057,9 +1009,7 @@ private fun TvContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,
-                        enterVideoMiniMode = enterVideoMiniMode,
-                        saveableStateHolder = saveableStateHolder,
+                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
@@ -1067,7 +1017,7 @@ private fun TvContent(
                     // TV mini-player transport: the drawer's "Now Playing" row only opens the
                     // full player, so without this overlay backgrounded audio has no D-pad-
                     // reachable pause/skip/close bar on TV. The components are already TV-aware
-                    // (MiniPlayer/VideoMiniPlayer apply tvFocusIndicator); this is the host
+                    // (MiniPlayer applies tvFocusIndicator); this is the host
                     // wiring gap for TV navigation.
                     if (showMiniPlayer) {
                         Box(
@@ -1094,31 +1044,7 @@ private fun TvContent(
                                 },
                             )
                         }
-                    }
-                    if (isVideoMiniMode) {
-                        VideoMiniPlayer(
-                            isVisible = true,
-                            engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
-                            title = videoMiniTitle,
-                            subtitle = videoMiniSubtitle,
-                            isPlaying = videoMiniIsPlaying,
-                            onClick = {
-                                val itemId = videoMiniItemId ?: return@VideoMiniPlayer
-                                navigator.navigate(Route.VideoPlayer(itemId))
-                            },
-                            onClose = {
-                                videoMiniPlayerState.release()
-                            },
-                            onPlayPause = {
-                                videoMiniPlayerState.togglePlayPause()
-                            },
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(end = 8.dp, bottom = 8.dp)
-                                .fillMaxWidth(0.45f),
-                        )
-                    }
-                }
+                    }                }
             }
         }
     }
@@ -1138,9 +1064,7 @@ private fun PhoneContent(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,
-    enterVideoMiniMode: () -> Unit,
-    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    enterPip: () -> Unit,    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
@@ -1157,14 +1081,7 @@ private fun PhoneContent(
     audioTitle: String,
     audioArtist: String,
     audioArtworkUrl: String,
-    onDismissMiniPlayer: () -> Unit,
-    isVideoMiniMode: Boolean,
-    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
-    videoMiniTitle: String,
-    videoMiniSubtitle: String,
-    videoMiniIsPlaying: Boolean,
-    videoMiniItemId: String?,
-    animatedNavBarColor: Color,
+    onDismissMiniPlayer: () -> Unit,    animatedNavBarColor: Color,
     showNavBarLabels: Boolean,
     navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
     isExpressiveNavExperimental: Boolean = false,
@@ -1266,9 +1183,7 @@ private fun PhoneContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,
-                        enterVideoMiniMode = enterVideoMiniMode,
-                        saveableStateHolder = saveableStateHolder,
+                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
@@ -1333,44 +1248,7 @@ private fun PhoneContent(
                             },
                         )
                     }
-                }
-                if (isVideoMiniMode) {
-                    VideoMiniPlayer(
-                        isVisible = true,
-                        // The host app knows the engine is a video `MediaEngine` even though
-                        // the cross-feature holder types it as the more general
-                        // `RemotePlayableEngine`. Cast is safe because only the video
-                        // engine ever enters mini mode.
-                        engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
-                        title = videoMiniTitle,
-                        subtitle = videoMiniSubtitle,
-                        isPlaying = videoMiniIsPlaying,
-                        onClick = {
-                            val itemId = videoMiniItemId ?: return@VideoMiniPlayer
-                            navigator.navigate(Route.VideoPlayer(itemId))
-                        },
-                        onClose = {
-                            videoMiniPlayerState.release()
-                        },
-                        onPlayPause = {
-                            videoMiniPlayerState.togglePlayPause()
-                        },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 64.dp else 8.dp))
-                            .fillMaxWidth(0.45f)
-                            .offset {
-                                if (!isExpanded) {
-                                    val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                                    val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
-                                    IntOffset(x = 0, y = yOffset.roundToInt())
-                                } else {
-                                    IntOffset.Zero
-                                }
-                            },
-                    )
-                }
-                // Play On persistent transport bar — visible while a Jellyfin
+                }                // Play On persistent transport bar — visible while a Jellyfin
                 // remote session is active and the full-screen companion is not
                 // already open. Sits above the floating nav bar.
                 if (playOnState.isConnected && !isPlayOnCompanionOpen) {
@@ -1494,7 +1372,7 @@ private fun PhoneContent(
 
 /**
  * Full-screen layout (player / onboarding / ambient / photo viewer): bare [Box] with
- * [MainNavDisplay] and an optional picture-in-picture [VideoMiniPlayer]. Deliberately
+ * [MainNavDisplay]. Deliberately
  * omits drawer / nav-bar / mini-player chrome.
  */
 @Composable
@@ -1504,19 +1382,10 @@ private fun FullScreenContent(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,
-    enterVideoMiniMode: () -> Unit,
-    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    enterPip: () -> Unit,    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
-    onAmbientClick: () -> Unit,
-    isVideoMiniMode: Boolean,
-    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
-    videoMiniTitle: String,
-    videoMiniSubtitle: String,
-    videoMiniIsPlaying: Boolean,
-    videoMiniItemId: String?,
-) {
+    onAmbientClick: () -> Unit,) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1528,37 +1397,11 @@ private fun FullScreenContent(
             onLogout = onLogout,
             homeMode = homeMode,
             onModeChange = onModeChange,
-            enterPip = enterPip,
-            enterVideoMiniMode = enterVideoMiniMode,
-            saveableStateHolder = saveableStateHolder,
+            enterPip = enterPip,            saveableStateHolder = saveableStateHolder,
             entryDecorator = entryDecorator,
             onNowPlayingClick = onNowPlayingClick,
             onAmbientClick = onAmbientClick,
-        )
-        if (isVideoMiniMode) {
-            VideoMiniPlayer(
-                isVisible = true,
-                engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
-                title = videoMiniTitle,
-                subtitle = videoMiniSubtitle,
-                isPlaying = videoMiniIsPlaying,
-                onClick = {
-                    val itemId = videoMiniItemId ?: return@VideoMiniPlayer
-                    navigator.navigate(Route.VideoPlayer(itemId))
-                },
-                onClose = {
-                    videoMiniPlayerState.release()
-                },
-                onPlayPause = {
-                    videoMiniPlayerState.togglePlayPause()
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 8.dp, bottom = 8.dp)
-                    .fillMaxWidth(0.5f),
-            )
-        }
-    }
+        )    }
 }
 
 /**
@@ -1613,9 +1456,7 @@ private fun MainNavDisplay(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,
-    enterVideoMiniMode: () -> Unit = {},
-    innerPadding: PaddingValues = PaddingValues(0.dp),
+    enterPip: () -> Unit,    innerPadding: PaddingValues = PaddingValues(0.dp),
     saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     modifier: Modifier = Modifier,
@@ -1698,9 +1539,7 @@ private fun MainNavDisplay(
         onModeChange,
         onNowPlayingClick,
         onAmbientClick,
-        enterPip,
-        enterVideoMiniMode,
-        onLogout,
+        enterPip,        onLogout,
         onPlayOnClick,
         playOnStrategy,
     ) {
@@ -1731,8 +1570,8 @@ private fun MainNavDisplay(
             liveTvSection(navigator)
             detailsSection(navigator)
             editorSection(navigator)
-            videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
-            livePlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
+            videoPlayerSection(navigator, onEnterPip = enterPip)
+            livePlayerSection(navigator, onEnterPip = enterPip)
             audioPlayerSection(navigator)
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }

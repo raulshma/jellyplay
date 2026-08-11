@@ -719,8 +719,8 @@ class PlayerSessionManager(
      * (ExoPlayer, LibVLC, MPV) demuxes embedded text subs from the container
      * natively — confirmed for MPV via logcat, which lists the demuxed tracks
      * — so side-loading them too would duplicate each track and could render
-     * the selected sub twice., which never
-     * side-load embedded subs alongside container demuxing.
+     * the selected sub twice. We therefore never side-load embedded subs
+     * alongside container demuxing.
      */
     private fun buildExternalSubtitles(
         detail: MediaDetail,

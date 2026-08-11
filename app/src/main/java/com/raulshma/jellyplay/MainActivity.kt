@@ -1,19 +1,11 @@
 package com.raulshma.jellyplay
 
 import android.Manifest
-import android.app.PendingIntent
-import android.app.PictureInPictureParams
-import android.app.RemoteAction
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.graphics.Rect
-import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.graphics.Color
 import androidx.activity.SystemBarStyle
@@ -42,13 +34,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import android.util.Rational
-import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.data.playback.PipAction
-import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
@@ -58,15 +45,11 @@ import com.raulshma.jellyplay.core.ui.components.colorBlindFilter
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.navigation.JellyPlayApp
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
-
-    @Inject lateinit var pipController: PipController
 
     private val viewModel: MainViewModel by viewModels()
 
@@ -143,54 +126,6 @@ class MainActivity : FragmentActivity() {
         }
 
         handleIncomingIntent(intent)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
-        ) {
-            // One collector drives param application for both the pre-arm path
-            // (not yet in PiP: setAutoEnterEnabled + aspect + source rect, no
-            // actions) and the in-PiP refresh path (resolution/track swap while
-            // already in PiP: actions + aspect). Branching here avoids a second
-            // aspect collector that would double-apply params on a track change.
-            lifecycleScope.launch {
-                repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    combine(
-                        pipController.shouldAutoEnterPip,
-                        pipController.pipAspectRatio,
-                        pipController.isPlaying,
-                    ) { shouldAutoEnter, aspect, isPlaying -> Triple(shouldAutoEnter, aspect, isPlaying) }
-                        .distinctUntilChanged()
-                        .collect {
-                            if (isInPictureInPictureMode) {
-                                applyPipParams(includeActions = true)
-                            } else {
-                                applyPipParams(includeActions = false)
-                            }
-                        }
-                }
-            }
-            // Keep the PiP play/pause action icon in sync with playback state.
-            lifecycleScope.launch {
-                repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    pipController.isPlaying.collect {
-                        refreshPipActions()
-                    }
-                }
-            }
-            // Auto-exit: when the ViewModel signals END/ERROR in PiP, reuse the
-            // existing dismiss path (pause + navigate back) so no new exit
-            // plumbing is needed.
-            lifecycleScope.launch {
-                repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    pipController.autoExitPip.collect { exit ->
-                        if (exit && isInPictureInPictureMode) {
-                            pipController.consumeAutoExitPip()
-                            pipController.notifyPipDismissed()
-                        }
-                    }
-                }
-            }
-        }
 
         // Pre-Android 13 per-app language: observe the saved language and apply
         // it on cold start, then recreate when the user changes it at runtime.
@@ -450,83 +385,6 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        if (pipController.shouldAutoEnterPip.value) {
-            enterPipMode()
-        }
-    }
-
-    // Reliability fallback for PiP auto-entry: onUserLeaveHint is not
-    // reliably fired on all OEMs/API levels for gesture "slide up to home". When this
-    // activity loses the top-resumed position during active playback (i.e. the user
-    // navigated away), enter PiP using the same guard predicate. Guarded so it never
-    // triggers when paused/stopped.
-    override fun onTopResumedActivityChanged(isTopResumed: Boolean) {
-        super.onTopResumedActivityChanged(isTopResumed)
-        if (isTopResumed && justExitedPip) {
-            // Safety net for OEM lifecycle quirks: onResume() normally clears
-            // justExitedPip on expand, but if it didn't fire, handle it here.
-            justExitedPip = false
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            !isTopResumed &&
-            !isInPictureInPictureMode &&
-            pipController.shouldAutoEnterPip.value &&
-            pipController.isPlaying.value
-        ) {
-            enterPipMode()
-        }
-    }
-
-    private var justExitedPip = false
-
-    // ── PiP remote actions ──
-    // A BroadcastReceiver registered while in PiP, fed by RemoteAction PendingIntents
-    // so the PiP window exposes play/pause, skip ±, and next controls.
-    private var pipActionReceiver: BroadcastReceiver? = null
-
-    @Deprecated("Deprecated in Java")
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
-        onPipModeChanged(isInPictureInPictureMode)
-    }
-
-    @Suppress("DEPRECATION")
-    override fun onPictureInPictureModeChanged(
-        isInPictureInPictureMode: Boolean,
-        newConfig: android.content.res.Configuration,
-    ) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        onPipModeChanged(isInPictureInPictureMode)
-    }
-
-    private fun onPipModeChanged(isInPictureInPictureMode: Boolean) {
-        if (isInPictureInPictureMode) {
-            // Register the receiver + attach actions on EVERY PiP entry, including
-            // auto-entry (home-press while playing) which bypasses enterPipMode()
-            // and would otherwise leave the remote actions dead.
-            registerPipActionReceiver()
-            refreshPipActions()
-            // Release immersive mode on PiP entry so the system's gesture-nav
-            // handle anchors correctly (bottom). Kept hidden from fullscreen,
-            // the handle floats mid-screen until a later layout pass — the
-            // "minimize + reopen fixes it" symptom. Mirrors PlayerActivity.
-            WindowCompat.getInsetsController(window, window.decorView)
-                .show(WindowInsetsCompat.Type.systemBars())
-        } else {
-            unregisterPipActionReceiver()
-            // onPictureInPictureModeChanged and onResume/onStop arrive as separate
-            // looper messages, so ordering is not guaranteed. Use the lifecycle state
-            // to distinguish expand (activity already RESUMED → late callback, skip)
-            // from dismiss/early-expand (not yet resumed → arm the flag so onResume
-            // or onStop can resolve it).
-            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                justExitedPip = true
-            }
-        }
-        pipController.setPipMode(isInPictureInPictureMode)
-    }
-
     override fun onPause() {
         super.onPause()
         // The video engine is hosted by PlayerActivity now. MainActivity no longer
@@ -541,7 +399,6 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        justExitedPip = false
 
         if (backgroundedAt > 0L) {
             val prefs = viewModel.preferences.value
@@ -564,211 +421,8 @@ class MainActivity : FragmentActivity() {
         // playerLifecycleManager contamination.
     }
 
-    fun enterPipMode(): Boolean {
-        if (!isPipCapable()) return false
-
-        registerPipActionReceiver()
-
-        val params = buildPipParams(preArm = false, includeActions = true)
-        // Wrap the system call: some OEMs/ROMs throw IllegalArgumentException on
-        // out-of-range aspect ratios or malformed source rects even after our
-        // clamping. Fail open (no entry) rather than crashing — VLC's defense.
-        return runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                enterPictureInPictureMode(params)
-            } else false
-        }.onFailure { Log.w(TAG, "PiP enter failed", it) }
-            .getOrDefault(false)
-    }
-
-    private fun isPipCapable(): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
-
-    /**
-     * Builds [PictureInPictureParams] from the live [PipController] state: the
-     * video aspect ratio (from server streams, clamped to the legal range), the
-     * source-rect hint (from the surface's window bounds, for a smooth enter
-     * animation), seamless resize, auto-enter flag, and remote actions.
-     *
-     * @param preArm `true` for the pre-arm path (not yet in PiP): sets
-     *  `setAutoEnterEnabled`/`setSeamlessResizeEnabled` from the controller so
-     *  the system can auto-enter on a home gesture; omits actions (only
-     *  rendered once in PiP). `false` for an explicit enter or an in-PiP
-     *  refresh, where actions are attached.
-     * @param includeActions whether to attach the play/pause/skip/next
-     *  RemoteActions. Omitted during pre-arm; attached on enter and refresh.
-     */
-    private fun buildPipParams(
-        preArm: Boolean,
-        includeActions: Boolean,
-    ): PictureInPictureParams = PictureInPictureParams.Builder().apply {
-        val ratio = pipController.pipAspectRatio.value ?: Rational(16, 9)
-        setAspectRatio(clampAspectRatio(ratio))
-        // Source-rect hint: the video surface's window bounds. Gives the system
-        // the crop source for a seamless enter animation (Jellyfin's pattern).
-        // Only set when the surface is laid out and within the window; a hint
-        // outside the window bounds is ignored or can throw on some ROMs.
-        pipController.pipSourceRect?.let { src ->
-            if (isValidSourceRect(src)) setSourceRectHint(src)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
-            val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
-            val isScreenOffOrLocked = keyguardManager?.isKeyguardLocked == true || powerManager?.isInteractive == false
-
-            val autoEnter = if (preArm && !isScreenOffOrLocked) {
-                pipController.shouldAutoEnterPip.value && pipController.isPlaying.value
-            } else false
-            setAutoEnterEnabled(autoEnter)
-            setSeamlessResizeEnabled(autoEnter)
-        }
-        if (includeActions) setActions(buildPipActions())
-    }.build()
-
-    /**
-     * A source-rect hint is valid only when it has non-zero area and is fully
-     * within the visible window bounds (off-screen edges can cause the system to
-     * drop the hint or throw).
-     */
-    private fun isValidSourceRect(src: Rect): Boolean {
-        if (src.width() <= 0 || src.height() <= 0) return false
-        if (src.left < 0 || src.top < 0) return false
-        val w = window.decorView.width
-        val h = window.decorView.height
-        return w <= 0 || h <= 0 || (src.right <= w && src.bottom <= h)
-    }
-
-    /**
-     * Re-applies the current PiP params via [setPictureInPictureParams]. Used
-     * both for pre-arming (when auto-enter/aspect change) and for live updates
-     * while in PiP. Guarded against [IllegalArgumentException].
-     */
-    private fun applyPipParams(includeActions: Boolean) {
-        if (!isPipCapable()) return
-        val params = buildPipParams(preArm = !isInPictureInPictureMode, includeActions = includeActions)
-        runCatching { setPictureInPictureParams(params) }
-            .onFailure { Log.w(TAG, "PiP setPictureInPictureParams failed", it) }
-    }
-
-    /**
-     * Builds the [RemoteAction] list shown in the PiP window. The play/pause icon
-     * reflects the current playback state so the toggle stays in sync.
-     */
-    private fun buildPipActions(): List<RemoteAction> {
-        val isPlaying = pipController.isPlaying.value
-        val hasNext = pipController.pipHasNext
-        val actions = mutableListOf<RemoteAction>()
-
-        actions += pipRemoteAction(
-            id = PIP_ACTION_SKIP_BACK,
-            icon = android.R.drawable.ic_media_rew,
-            title = getString(R.string.pip_rewind),
-        )
-        actions += pipRemoteAction(
-            id = if (isPlaying) PIP_ACTION_PAUSE else PIP_ACTION_PLAY,
-            icon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-            title = if (isPlaying) getString(R.string.media_pause) else getString(R.string.media_play),
-        )
-        actions += pipRemoteAction(
-            id = PIP_ACTION_SKIP_FORWARD,
-            icon = android.R.drawable.ic_media_ff,
-            title = getString(R.string.pip_forward),
-        )
-        if (hasNext) {
-            actions += pipRemoteAction(
-                id = PIP_ACTION_NEXT,
-                icon = android.R.drawable.ic_media_next,
-                title = getString(R.string.pip_next),
-            )
-        }
-        return actions
-    }
-
-    private fun pipRemoteAction(id: Int, icon: Int, title: String): RemoteAction {
-        val intent = Intent(PIP_ACTION_BROADCAST).putExtra(PIP_ACTION_EXTRA, id)
-        val pi = PendingIntent.getBroadcast(
-            this,
-            id,
-            intent.setPackage(packageName),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        return RemoteAction(
-            Icon.createWithResource(this, icon),
-            title,
-            title,
-            pi,
-        )
-    }
-
-    /**
-     * Refreshes the PiP action icons (notably the play/pause toggle) when the
-     * playback state changes while in PiP. No-op outside PiP.
-     */
-    fun refreshPipActions() {
-        if (!isInPictureInPictureMode) return
-        applyPipParams(includeActions = true)
-    }
-
-    private fun registerPipActionReceiver() {
-        if (pipActionReceiver != null) return
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action != PIP_ACTION_BROADCAST) return
-                val id = intent.getIntExtra(PIP_ACTION_EXTRA, -1)
-                val action = when (id) {
-                    PIP_ACTION_PLAY -> PipAction.PLAY
-                    PIP_ACTION_PAUSE -> PipAction.PAUSE
-                    PIP_ACTION_SKIP_FORWARD -> PipAction.SKIP_FORWARD
-                    PIP_ACTION_SKIP_BACK -> PipAction.SKIP_BACKWARD
-                    PIP_ACTION_NEXT -> PipAction.NEXT
-                    else -> return
-                }
-                val transport = pipController.pipTransport
-                if (transport == null) {
-                    // A stale/unregistered transport silently drops PiP actions.
-                    // Log so it's diagnosable instead of dead PIP buttons.
-                    Log.w(TAG, "PiP action $action dropped: pipTransport is null")
-                } else {
-                    transport.handle(action)
-                }
-                // The play/pause toggle changes the icon — refresh immediately.
-                refreshPipActions()
-            }
-        }
-        ContextCompat.registerReceiver(
-            this,
-            receiver,
-            IntentFilter(PIP_ACTION_BROADCAST),
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
-        pipActionReceiver = receiver
-    }
-
-    private fun unregisterPipActionReceiver() {
-        pipActionReceiver?.let { runCatching { unregisterReceiver(it) } }
-        pipActionReceiver = null
-    }
-
-    private fun clampAspectRatio(ratio: Rational): Rational {
-        val min = Rational(100, 239)
-        val max = Rational(239, 100)
-        return when {
-            ratio < min -> min
-            ratio > max -> max
-            else -> ratio
-        }
-    }
-
     private companion object {
         const val TAG = "MainActivity"
-        const val PIP_ACTION_BROADCAST = "com.raulshma.jellyplay.PIP_ACTION"
-        const val PIP_ACTION_EXTRA = "pip_action_id"
-        const val PIP_ACTION_PLAY = 1
-        const val PIP_ACTION_PAUSE = 2
-        const val PIP_ACTION_SKIP_FORWARD = 3
-        const val PIP_ACTION_SKIP_BACK = 4
-        const val PIP_ACTION_NEXT = 5
     }
 }
 
