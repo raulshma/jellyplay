@@ -66,10 +66,11 @@ internal class SettingsProjector(
         // re-emits the slice, this projector overwrites offsetMs to the global
         // default (often 0), and the resulting config push reloads media with the
         // delay removed. Mirrors the engineFlow collector's resolve step.
-        val resolvedSubtitleStyle = resolveSubtitleStyle(
+        val resolvedSubtitleStyle = resolveSubtitleStyleWithDelay(
             agg.subtitle,
+            getItemId(),
             isHdr = isHdrFromStreams(getMediaStreams()),
-        ).copy(offsetMs = resolveSubtitleDelayMs(agg.subtitle, getItemId()))
+        )
         if (getUiState().subtitleStyle != resolvedSubtitleStyle) {
             updateUiState { it.copy(subtitleStyle = resolvedSubtitleStyle) }
             subtitleStyleChanged = true

@@ -89,8 +89,7 @@ internal object EngineConfigBuilder {
         // default while the engineFlow collector seeds uiState with the per-item
         // value — the load path then sees no diff and never pushes the delay, so
         // a saved correction would show in metadata but never reach the engine.
-        val subtitleStyle = resolveSubtitleStyle(agg.subtitle, isHdr = isHdr)
-            .copy(offsetMs = resolveSubtitleDelayMs(agg.subtitle, itemId))
+        val subtitleStyle = resolveSubtitleStyleWithDelay(agg.subtitle, itemId, isHdr = isHdr)
         return EngineConfig(
             decoderMode = agg.playback.decoderMode,
             audioPassthrough = agg.playback.audioPassthrough,

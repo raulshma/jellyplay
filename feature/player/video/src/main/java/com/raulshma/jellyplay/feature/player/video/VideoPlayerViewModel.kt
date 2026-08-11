@@ -1010,19 +1010,15 @@ class VideoPlayerViewModel @Inject constructor(
                         audioDelayMs = agg.audio.audioDelayMs,
                         decoderMode = agg.playback.decoderMode,
                         audioPassthrough = agg.playback.audioPassthrough,
-                        subtitleStyle = resolveSubtitleStyle(
+                        // Subtitle delay is per-media: resolve it for the
+                        // current item (per-item override, else the global
+                        // default) rather than seeding from the global style,
+                        // so an engine swap / reloadWithEngine never resets a
+                        // per-item correction to the global default.
+                        subtitleStyle = resolveSubtitleStyleWithDelay(
                             agg.subtitle,
+                            playerSessionManager.sessionState.value.currentItemId,
                             isHdr = isHdrFromStreams(playerSessionManager.sessionState.value.mediaStreams),
-                        ).copy(
-                            // Subtitle delay is per-media: resolve it for the
-                            // current item (per-item override, else the global
-                            // default) rather than seeding from the global style,
-                            // so an engine swap / reloadWithEngine never resets a
-                            // per-item correction to the global default.
-                            offsetMs = resolveSubtitleDelayMs(
-                                agg.subtitle,
-                                playerSessionManager.sessionState.value.currentItemId,
-                            ),
                         ),
                         // Dialogue Boost defaults to OFF until the per-item resolver
                         // applies a stored rule. It does not inherit the

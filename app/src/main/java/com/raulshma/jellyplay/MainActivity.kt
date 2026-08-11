@@ -13,7 +13,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
@@ -23,7 +22,6 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -37,10 +35,10 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.core.view.WindowCompat
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
-import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
 import com.raulshma.jellyplay.core.ui.components.BlueLightFilterBox
 import com.raulshma.jellyplay.core.ui.components.HandModeProvider
+import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
 import com.raulshma.jellyplay.core.ui.components.colorBlindFilter
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.navigation.JellyPlayApp
@@ -186,7 +184,6 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
-            val isSystemDark = isSystemInDarkTheme()
             val hasLockEnabled by remember {
                 derivedStateOf { preferences.pinLockEnabled || preferences.biometricLockEnabled }
             }
@@ -194,36 +191,10 @@ class MainActivity : FragmentActivity() {
                 derivedStateOf { hasLockEnabled && !isPinUnlocked.value }
             }
 
-            var themeClockTick by remember { mutableLongStateOf(0L) }
-            LaunchedEffect(preferences.themeMode) {
-                if (preferences.themeMode == ThemeMode.SCHEDULED) {
-                    while (true) {
-                        kotlinx.coroutines.delay(60_000L)
-                        themeClockTick = System.currentTimeMillis()
-                    }
-                }
-            }
-
-            val darkTheme by remember {
-                derivedStateOf {
-                    @Suppress("UnusedExpression") themeClockTick // time-based input
-                    preferences.synthwaveMode || when (preferences.themeMode) {
-                        ThemeMode.DARK -> true
-                        ThemeMode.LIGHT -> false
-                        ThemeMode.SYSTEM -> isSystemDark
-                        ThemeMode.SCHEDULED -> {
-                            val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-                            val start = preferences.scheduledThemeStartHour
-                            val end = preferences.scheduledThemeEndHour
-                            if (start > end) {
-                                hour >= start || hour < end
-                            } else {
-                                hour >= start && hour < end
-                            }
-                        }
-                    }
-                }
-            }
+            // Preference-driven dark-theme derivation (DARK/LIGHT/SYSTEM/SCHEDULED
+            // + synthwave override) is shared with PlayerActivity via
+            // rememberPreferenceDarkTheme so both hosts flip theme identically.
+            val darkTheme = rememberPreferenceDarkTheme(preferences)
 
             val activity = this
             LaunchedEffect(darkTheme) {
