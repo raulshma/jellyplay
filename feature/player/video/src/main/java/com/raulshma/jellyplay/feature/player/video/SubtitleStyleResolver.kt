@@ -42,3 +42,19 @@ fun resolveSubtitleStyle(slice: SubtitleSlice, isHdr: Boolean = false): Subtitle
  */
 fun resolveSubtitleDelayMs(slice: SubtitleSlice, itemId: String?): Long =
     slice.subtitleDelayByItem[itemId] ?: slice.subtitleStyle.offsetMs
+
+/**
+ * Resolves the effective subtitle style AND its per-item delay in one step:
+ * [resolveSubtitleStyle] picks the high-contrast/HDR/SDR style, then its
+ * [SubtitleStyle.offsetMs] is overridden by the per-item delay from
+ * [resolveSubtitleDelayMs]. Shared by every site that rebuilds subtitle state
+ * from preferences (engine config build, settings projector, engine-bind seed)
+ * so the delay-resolution shape isn't copy-pasted across call sites.
+ */
+fun resolveSubtitleStyleWithDelay(
+    slice: SubtitleSlice,
+    itemId: String?,
+    isHdr: Boolean = false,
+): SubtitleStyle =
+    resolveSubtitleStyle(slice, isHdr = isHdr)
+        .copy(offsetMs = resolveSubtitleDelayMs(slice, itemId))
