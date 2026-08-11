@@ -2925,7 +2925,7 @@ class VideoPlayerViewModel @Inject constructor(
             val sessionState = playerSessionManager.sessionState.value
             val itemId = sessionState.currentItemId ?: return
             val player = engine.underlyingPlayer ?: return
-            mediaSessionController.createForPlayer(player, "jellyplay_video_$itemId")
+            mediaSessionController.createForPlayer(player, "jellyplay_video_$itemId", itemId)
         }
     }
 

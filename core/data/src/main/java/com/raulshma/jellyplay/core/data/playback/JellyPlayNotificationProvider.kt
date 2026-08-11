@@ -33,7 +33,9 @@ import kotlinx.coroutines.withContext
  * - JellyPlay small icon and branded playback action icons
  * - Large artwork from MediaMetadata.artworkUri (loaded async via Coil)
  * - Colorized background extracted from artwork palette
- * - Content intent to reopen the app
+ * - Content intent that reopens the session's session activity when set
+ *   (video → PlayerActivity fullscreen, e.g. expanding out of PiP) and falls
+ *   back to the app launcher intent (MainActivity) for sessions without one
  *
  * Works for both audio and video playback via MediaSession.
  */
@@ -143,7 +145,7 @@ class JellyPlayNotificationProvider(
             .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setDeleteIntent(actionFactory.createNotificationDismissalIntent(mediaSession))
-            .setContentIntent(buildContentIntent())
+            .setContentIntent(buildContentIntent(mediaSession))
             .setOngoing(isPlaying)
 
         synchronized(bitmapLock) {
@@ -233,7 +235,13 @@ class JellyPlayNotificationProvider(
 
     // ── Intents ──────────────────────────────────────────────────────
 
-    private fun buildContentIntent(): PendingIntent {
+    private fun buildContentIntent(session: MediaSession): PendingIntent {
+        // Prefer the active session's own session activity. Video sessions pin
+        // this to PlayerActivity, so tapping the notification expands the
+        // fullscreen video (e.g. out of PiP) instead of landing on the browse
+        // UI. Audio sessions leave it unset, so we fall through to the app
+        // launcher intent (MainActivity) — preserving prior audio behaviour.
+        session.sessionActivity?.let { return it }
         cachedContentIntent?.let { return it }
         val intent = appContext.packageManager
             .getLaunchIntentForPackage(appContext.packageName)
