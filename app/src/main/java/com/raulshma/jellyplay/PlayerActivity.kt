@@ -27,6 +27,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -249,6 +251,19 @@ class PlayerActivity : FragmentActivity() {
         if (isInPictureInPictureMode) {
             registerPipActionReceiver()
             refreshPipActions()
+            // Exit immersive mode on PiP entry so the system's gesture-nav
+            // handle anchors at its correct (bottom) position. Entering PiP
+            // from a fully-immersive window leaves the handle floating
+            // mid-screen until the next layout pass (the "minimize + reopen
+            // fixes it" symptom): the activity never released the hidden state,
+            // so the framework has no stable inset anchor during the transition.
+            // Showing the bars here prompts an immediate relayout. Immersive is
+            // restored on PiP exit by VideoPlayerScreen's isInPipMode effect,
+            // which re-hides system bars once !isInPipMode. Covers both the
+            // manual enterPipMode() path and system auto-entry via
+            // setAutoEnterEnabled (which bypasses enterPipMode entirely).
+            WindowCompat.getInsetsController(window, window.decorView)
+                .show(WindowInsetsCompat.Type.systemBars())
             // Reset window brightness to the system auto value while in PiP: the
             // in-app brightness gesture has no meaning in the floating window, and
             // a stale override would persist after expand. Restore on exit.
