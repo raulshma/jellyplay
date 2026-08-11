@@ -136,6 +136,15 @@ abstract class DataModule {
     @Singleton
     abstract fun bindOfflineRepository(impl: OfflineRepositoryImpl): OfflineRepository
 
+    // Metadata-only file probe (MediaExtractor) backing the offline quality/
+    // audio badges. Stateless impl; bound so the provider can take the interface
+    // and tests can stub it.
+    @Binds
+    @Singleton
+    abstract fun bindLocalStreamProbe(
+        impl: com.raulshma.jellyplay.core.data.repository.MediaExtractorLocalStreamProbe,
+    ): com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
+
     // The single external seam for media-detail resolution. Owns the remote/local
     // source policy, the source-dependent read graph, and capability derivation.
     // See the MediaDetailProvider kdoc for the source policy.

@@ -42,6 +42,7 @@ import com.composables.icons.tabler.outline.Subtitles
 import com.composables.icons.tabler.outline.WaveSine
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DetailPreferences
+import com.raulshma.jellyplay.core.model.LocalSubtitleOption
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.isLanguageMatch
@@ -58,6 +59,58 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 // driver target must cover it too, otherwise high-index sections are left dim.
 internal const val DETAIL_STAGGER_STEP = 0.045f
 internal const val DETAIL_MAX_STAGGER_INDEX = 12
+
+/**
+ * Compact quality pill label ("<bucket> <RANGE>") for a video stream — the 4K/HD/SD
+ * bucket from height plus the HDR/SDR/Dolby Vision suffix. Extracted from
+ * [MediaInfoSection] so the read-only [LocalStreamBadges] (offline) reuses the
+ * exact same formatting. Synchronous and pure → directly unit-testable.
+ */
+internal fun mediaQualityLabel(video: MediaStream?): String = buildString {
+    val res = video?.height?.let { h ->
+        when {
+            h >= 2160 -> "4K"
+            h >= 1080 -> "HD"
+            h >= 720 -> "HD"
+            else -> "SD"
+        }
+    } ?: "Auto"
+    append(res)
+    append(" ")
+    val range = video?.videoDoViTitle
+        ?: video?.videoRangeType
+        ?: video?.videoRange
+        ?: "SDR"
+    append(range.uppercase())
+}
+
+/**
+ * Compact audio pill label ("<LANG> - <CHANNELS>") for the selected/default
+ * audio stream. [channelsFormat] is the resource template for uncommon channel
+ * counts (hoisted by callers since `stringResource` is composable-only). Returns
+ * "AUTO" when there is no audio stream. Extracted from [MediaInfoSection] for
+ * reuse by the offline [LocalStreamBadges].
+ */
+internal fun mediaAudioLabel(audio: MediaStream?, channelsFormat: String): String = buildString {
+    append(
+        audio
+            ?.language?.uppercase()?.take(3)
+            ?: audio?.displayTitle?.take(3)?.uppercase()
+            ?: "AUTO"
+    )
+    audio?.channels?.let { channels ->
+        append(" - ")
+        append(
+            when (channels) {
+                1 -> "MONO"
+                2 -> "STEREO"
+                6 -> "5.1"
+                8 -> "7.1"
+                else -> channelsFormat.format(channels)
+            }
+        )
+    }
+}
 
 @Composable
 internal fun StaggeredDetailSection(
@@ -150,25 +203,7 @@ internal fun MediaInfoSection(
             val audioChannelsFormat = stringResource(R.string.detail_audio_channels_format)
             val subtitleOff = stringResource(R.string.detail_subtitle_off)
 
-            val qualityLabel = remember(videoStream) {
-                buildString {
-                    val res = videoStream?.height?.let { h ->
-                        when {
-                            h >= 2160 -> "4K"
-                            h >= 1080 -> "HD"
-                            h >= 720 -> "HD"
-                            else -> "SD"
-                        }
-                    } ?: "Auto"
-                    append(res)
-                    append(" ")
-                    val range = videoStream?.videoDoViTitle
-                        ?: videoStream?.videoRangeType
-                        ?: videoStream?.videoRange
-                        ?: "SDR"
-                    append(range.uppercase())
-                }
-            }
+            val qualityLabel = remember(videoStream) { mediaQualityLabel(videoStream) }
 
             FadingItem(modifier = Modifier.weight(1f)) {
                 QuickInfoPill(
@@ -179,26 +214,7 @@ internal fun MediaInfoSection(
             }
 
             val audioLabel = remember(selectedAudio, audioChannelsFormat) {
-                buildString {
-                    append(
-                        selectedAudio
-                            ?.language?.uppercase()?.take(3)
-                            ?: selectedAudio?.displayTitle?.take(3)?.uppercase()
-                            ?: "AUTO"
-                    )
-                    selectedAudio?.channels?.let { channels ->
-                        append(" - ")
-                        append(
-                            when (channels) {
-                                1 -> "MONO"
-                                2 -> "STEREO"
-                                6 -> "5.1"
-                                8 -> "7.1"
-                                else -> audioChannelsFormat.format(channels)
-                            }
-                        )
-                    }
-                }
+                mediaAudioLabel(selectedAudio, audioChannelsFormat)
             }
 
             FadingItem(modifier = Modifier.weight(1f)) {
@@ -377,6 +393,133 @@ internal fun MediaInfoSection(
                             }
                         }
                     }
+            }
+        }
+    }
+}
+
+/**
+ * Offline (local) media-info section: a single row of read-only quality + audio
+ * badges (probed from the downloaded file) followed by the interactive local
+ * subtitle pill, mirroring the remote [MediaInfoSection] badge row so the two
+ * origins feel consistent.
+ *
+ * Audio is NOT interactive here — an offline file's audio is switched in the
+ * player (ExoPlayer runtime track selection), not from the detail screen — so
+ * the audio pill has no picker. The subtitle pill opens the manifest-backed
+ * local subtitle sheet (reusing [LocalSubtitleOptionRow]); when no local
+ * subtitles are available it is omitted and only the two stream badges render.
+ * Gated by `capabilities.localStreamInfo` at the call site.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun LocalMediaInfoSection(
+    mediaStreams: List<MediaStream>,
+    subtitles: List<LocalSubtitleOption> = emptyList(),
+    selectedSubtitleIndex: Int? = null,
+    onSelectSubtitle: (Int?) -> Unit = {},
+    horizontalPadding: androidx.compose.ui.unit.Dp = 24.dp,
+) {
+    val (videoStream, audioStreams) = remember(mediaStreams) {
+        var firstVideo: MediaStream? = null
+        val audio = mutableListOf<MediaStream>()
+        mediaStreams.forEach { s ->
+            when (s.type) {
+                StreamType.VIDEO -> if (firstVideo == null) firstVideo = s
+                StreamType.AUDIO -> audio += s
+                else -> Unit
+            }
+        }
+        firstVideo to audio
+    }
+
+    val hasStreamBadges = videoStream != null || audioStreams.isNotEmpty()
+    if (!hasStreamBadges && subtitles.isEmpty()) return
+
+    val defaultAudio = audioStreams.firstOrNull { it.isDefault } ?: audioStreams.firstOrNull()
+    val audioChannelsFormat = stringResource(R.string.detail_audio_channels_format)
+    val qualityLabel = remember(videoStream) { mediaQualityLabel(videoStream) }
+    val audioLabel = remember(defaultAudio, audioChannelsFormat) {
+        mediaAudioLabel(defaultAudio, audioChannelsFormat)
+    }
+
+    val subtitleOff = stringResource(R.string.detail_local_subtitle_off)
+    val currentSubtitle = subtitles.firstOrNull { it.index == selectedSubtitleIndex }
+    val subtitleLabel = currentSubtitle?.displayLabel() ?: subtitleOff
+    var subtitleSheetOpen by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // All badges share one Row so they align on a single line (matching the
+        // remote section) rather than wrapping the subtitle onto its own row.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (hasStreamBadges) {
+                FadingItem(modifier = Modifier.weight(1f)) {
+                    QuickInfoPill(
+                        icon = Tabler.Outline.BadgeHd,
+                        text = qualityLabel,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                FadingItem(modifier = Modifier.weight(1f)) {
+                    QuickInfoPill(
+                        icon = Tabler.Outline.WaveSine,
+                        text = audioLabel,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            if (subtitles.isNotEmpty()) {
+                FadingItem(modifier = Modifier.weight(1f)) {
+                    QuickInfoPill(
+                        icon = Tabler.Outline.Subtitles,
+                        text = subtitleLabel,
+                        showTrailingIndicator = true,
+                        onClick = { subtitleSheetOpen = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+
+        if (subtitleSheetOpen) {
+            TvSafeSheet(
+                onDismissRequest = { subtitleSheetOpen = false },
+                title = stringResource(R.string.detail_local_subtitles),
+            ) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    item(key = "local_sub_off", contentType = "localSubOption") {
+                        LocalSubtitleOptionRow(
+                            label = subtitleOff,
+                            isSelected = selectedSubtitleIndex == null,
+                            isDefault = false,
+                            forcedBadge = false,
+                            onClick = {
+                                onSelectSubtitle(null)
+                                subtitleSheetOpen = false
+                            },
+                        )
+                    }
+                    items(subtitles, key = { "local_sub_${it.index}" }, contentType = { "localSubOption" }) { option ->
+                        LocalSubtitleOptionRow(
+                            label = option.displayLabel(),
+                            isSelected = option.index == selectedSubtitleIndex,
+                            isDefault = option.isDefault,
+                            forcedBadge = option.isForced,
+                            onClick = {
+                                onSelectSubtitle(option.index)
+                                subtitleSheetOpen = false
+                            },
+                        )
+                    }
+                }
             }
         }
     }

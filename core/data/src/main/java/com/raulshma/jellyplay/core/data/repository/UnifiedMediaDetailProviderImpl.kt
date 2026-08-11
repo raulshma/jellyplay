@@ -18,6 +18,8 @@ import com.raulshma.jellyplay.core.model.LocalSubtitleOption
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -77,6 +79,7 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
     private val episodeCatalogue: EpisodeCatalogue,
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val offlineModeManager: OfflineModeManager,
+    private val localStreamProbe: LocalStreamProbe,
     @ApplicationScope private val appScope: CoroutineScope,
 ) : MediaDetailProvider {
 
@@ -178,6 +181,12 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         private val refCount = AtomicLong(0L)
         @Volatile private var started = false
         @Volatile private var lastTick = -1L
+        // Probe cache: (file lastModified millis → streams). Re-probe only when
+        // the file changes; stable across re-resolves (refresh/expand) so opening
+        // the detail screen probes once per file version per session. Not private
+        // so the Session extension functions (publishLocal/probeStreamInfo) can
+        // touch it — Session itself is a private inner class, so this stays scoped.
+        @Volatile var probedStreamsCache: Pair<Long, List<MediaStream>>? = null
 
         val content: MutableStateFlow<ContentResolution> = MutableStateFlow(ContentResolution.Initial)
 
@@ -419,12 +428,45 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         }
     }
 
+    /**
+     * Probes the downloaded file's audio/video tracks, memoized per file
+     * `lastModified` so re-resolves (refresh, expand) don't re-probe an
+     * unchanged file. Returns `emptyList()` when there is no path or the probe
+     * fails — the caller then skips synthesizing a media source.
+     */
+    private suspend fun Session.probeStreamInfo(downloadPath: String?): List<MediaStream> {
+        if (downloadPath.isNullOrEmpty()) return emptyList()
+        val mtime = runCatching { java.io.File(downloadPath).lastModified() }.getOrDefault(-1L)
+        probedStreamsCache?.let { (cachedMtime, cached) ->
+            if (cachedMtime == mtime && mtime >= 0L) return cached
+        }
+        val streams = localStreamProbe.probe(downloadPath)
+        if (mtime >= 0L) probedStreamsCache = mtime to streams
+        return streams
+    }
+
     private suspend fun Session.publishLocal(
         targetGen: Long,
         origin: DetailOrigin,
         local: OfflineMediaItem,
     ) {
         val detail = local.toMediaDetail()
+        // Probe the actual downloaded file for its real audio/video tracks.
+        // Server metadata is unreliable here: a transcoded download bakes a
+        // different track set than the source. Only the file is authoritative,
+        // and the probe is the same ground truth the player uses at playback.
+        val probedStreams = probeStreamInfo(local.downloadPath)
+        val detailWithStreams = if (probedStreams.isEmpty()) {
+            detail
+        } else {
+            detail.copy(mediaSources = listOf(
+                MediaSource(
+                    id = LOCAL_SOURCE_ID,
+                    name = "Local",
+                    mediaStreams = probedStreams,
+                ),
+            ))
+        }
         val usable = playbackSourceResolver.resolveUsableDownload(itemId) != null
         val seriesData = loadSeriesData(detail, offline = true)
         val album = loadAlbumTracks(detail, offline = true)
@@ -457,7 +499,7 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         content.value = ContentResolution.Resolved(
             contentGen = targetGen,
             origin = origin,
-            detail = detail,
+            detail = detailWithStreams,
             seasons = seriesData.seasons,
             episodesBySeason = seriesData.episodesBySeason,
             fetchedSeasonIds = seriesData.fetchedSeasonIds,
@@ -568,6 +610,8 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
             remoteDiscovery = isRemote,
             remoteStreamSelection = isRemote,
             localSubtitleSelection = content.localSubtitles.isNotEmpty(),
+            localStreamInfo = !isRemote &&
+                content.detail.mediaSources.firstOrNull()?.mediaStreams?.isNotEmpty() == true,
             personNavigation = isRemote,
             studioNavigation = isRemote && content.detail.studios.isNotEmpty(),
             smartPlay = isRemote,
@@ -662,5 +706,7 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
         const val REFRESH_TIMEOUT_MS = 15_000L
+        // Synthesized MediaSource id for the probed local file's track inventory.
+        const val LOCAL_SOURCE_ID = "local"
     }
 }

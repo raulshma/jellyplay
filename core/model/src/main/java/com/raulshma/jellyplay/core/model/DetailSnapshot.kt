@@ -161,6 +161,10 @@ data class DetailCapabilities(
     val remoteStreamSelection: Boolean,
     /** Local manifest-backed external subtitle selector is available. */
     val localSubtitleSelection: Boolean,
+    /** The local file was probed successfully — read-only quality/audio badges
+     *  can render from the synthesized media source. The player remains the
+     *  place to switch audio offline; this only gates informational badges. */
+    val localStreamInfo: Boolean,
     /** Person drill-in (`Route.PersonDetail`) is enabled. */
     val personNavigation: Boolean,
     /** Studio drill-in (`Route.StudioDetail`) is enabled — requires a persisted server id. */
