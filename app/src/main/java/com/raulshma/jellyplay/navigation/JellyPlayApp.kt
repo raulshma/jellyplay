@@ -1155,6 +1155,25 @@ private fun PhoneContent(
                         )
                     }
                 }
+                // Tablet NavigationRail has no floating nav bar, so the "More"
+                // overflow toggle that phones carry in the nav bar is absent
+                // here. Append it as a rail item so Settings/Downloads/SyncPlay/
+                // Play On/Shortcuts/Surprise/Offline stay reachable (#115).
+                // On phones navigationSuiteType is None, so this never renders.
+                if (isExpanded) {
+                    NavigationSuiteItem(
+                        selected = isOverflowExpanded,
+                        onClick = { onOverflowToggle(!isOverflowExpanded) },
+                        icon = {
+                            MoreToggleIcon(
+                                isExpanded = isOverflowExpanded,
+                                tint = androidx.compose.material3.LocalContentColor.current,
+                                badgeCount = downloadCount,
+                            )
+                        },
+                        label = { Text(stringResource(R.string.nav_more)) },
+                    )
+                }
             },
             navigationSuiteColors = NavigationSuiteDefaults.colors(
                 navigationBarContainerColor = if (isAudioPlayerScreen) Color.Transparent else MaterialTheme.colorScheme.surface,
@@ -1291,6 +1310,9 @@ private fun PhoneContent(
                 // of destinations upward, so Settings/Downloads/SyncPlay/Play On
                 // are reachable from anywhere (#115). The items render as an
                 // overlay above the nav bar (see OverflowMenuItems below).
+                // On tablet the toggle lives in the NavigationRail (left edge),
+                // so the pills dock bottom-start beside the rail and left-align;
+                // on phone they dock bottom-end beside the floating nav toggle.
                 if (isOverflowExpanded) {
                     com.raulshma.jellyplay.navigation.components.OverflowMenuScrim(
                         onDismiss = { isOverflowExpanded = false },
@@ -1328,10 +1350,15 @@ private fun PhoneContent(
                         offlineMode = offlineMode,
                         isGoingOnline = isGoingOnline,
                         downloadCount = downloadCount,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .clearFloatingNav(extraBottom = 0.dp)
-                            .padding(end = 16.dp, bottom = 4.dp),
+                        alignToStart = isExpanded,
+                        modifier = if (isExpanded) {
+                            // Clear the 80dp rail + 8dp margin; sit beside the rail toggle.
+                            Modifier.align(Alignment.BottomStart).padding(start = 88.dp, bottom = 4.dp)
+                        } else {
+                            Modifier.align(Alignment.BottomEnd)
+                                .clearFloatingNav(extraBottom = 0.dp)
+                                .padding(end = 16.dp, bottom = 4.dp)
+                        },
                     )
                 }
                 if (!isExpanded) {
