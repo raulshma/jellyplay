@@ -48,7 +48,6 @@ import androidx.core.view.WindowCompat
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
-import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.designsystem.theme.JellyPlayTheme
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.ui.components.AuthChallengeScreen
@@ -66,7 +65,6 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
 
-    @Inject lateinit var playerLifecycleManager: PlayerLifecycleManager
     @Inject lateinit var pipController: PipController
 
     private val viewModel: MainViewModel by viewModels()
@@ -467,10 +465,8 @@ class MainActivity : FragmentActivity() {
         super.onTopResumedActivityChanged(isTopResumed)
         if (isTopResumed && justExitedPip) {
             // Safety net for OEM lifecycle quirks: onResume() normally clears
-            // justExitedPip on expand, but if it didn't fire, handle the expand
-            // here so the engine resumes.
+            // justExitedPip on expand, but if it didn't fire, handle it here.
             justExitedPip = false
-            playerLifecycleManager.onActivityResume()
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             !isTopResumed &&
             !isInPictureInPictureMode &&
@@ -519,10 +515,6 @@ class MainActivity : FragmentActivity() {
             // or onStop can resolve it).
             if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                 justExitedPip = true
-                // Pause the engine immediately so audio doesn't leak after the PiP
-                // window closes on dismiss. onActivityResume() restores playback on
-                // expand. No-op when backgroundVideoAudioEnabled is ON.
-                playerLifecycleManager.onActivityPause()
             }
         }
         pipController.setPipMode(isInPictureInPictureMode)
@@ -530,24 +522,19 @@ class MainActivity : FragmentActivity() {
 
     override fun onPause() {
         super.onPause()
-        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
-        val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
-        val isScreenOffOrLocked = keyguardManager?.isKeyguardLocked == true || powerManager?.isInteractive == false
-
-        if (!isInPictureInPictureMode || isScreenOffOrLocked) {
-            playerLifecycleManager.onActivityPause()
-            backgroundedAt = System.currentTimeMillis()
-        }
+        // The video engine is hosted by PlayerActivity now. MainActivity no longer
+        // drives the shared PlayerLifecycleManager: doing so contaminated
+        // PlayerActivity's engine on app-background / PiP-expand / lock-unlock
+        // (the shared singleton's activeCallbacks is PlayerActivity's engine, so
+        // a pause here reached across Activities). LiveTV does not use it either
+        // (it manages its own engine lifecycle), so there is nothing to pause.
+        // Only record backgrounding for the PIN auto-lock timer.
+        backgroundedAt = System.currentTimeMillis()
     }
 
     override fun onResume() {
         super.onResume()
-        // Clear justExitedPip: if we just expanded from PiP, this prevents
-        // onStop() from treating the next stop as a PiP dismiss. The engine
-        // was paused in onPipModeChanged(false) for the surface transition;
-        // onActivityResume() restores playback.
         justExitedPip = false
-        playerLifecycleManager.onActivityResume()
 
         if (backgroundedAt > 0L) {
             val prefs = viewModel.preferences.value
@@ -563,22 +550,11 @@ class MainActivity : FragmentActivity() {
 
     override fun onStop() {
         super.onStop()
-        if (justExitedPip) {
-            // PiP was dismissed (swiped away). If background audio is OFF, close
-            // the player via the existing dismiss path. If ON, leave the engine
-            // running so audio continues in the background.
-            justExitedPip = false
-            if (!playerLifecycleManager.isBackgroundAudioEnabled) {
-                pipController.notifyPipDismissed()
-            }
-        } else if (isInPictureInPictureMode) {
-            // Screen off or app switch while in PiP: pause the engine so audio
-            // doesn't keep playing with bg audio OFF. onPause() can't catch this
-            // because the activity is already PAUSED during PiP — only onStop()
-            // fires. onActivityResume() restores playback when the activity
-            // resumes (screen on / return to app). No-op when bg audio is ON.
-            playerLifecycleManager.onActivityPause()
-        }
+        // No engine lifecycle here. The video engine lives in PlayerActivity
+        // (which owns its own PiP + pause/resume handling); LiveTV manages
+        // itself. MainActivity can no longer enter PiP, so the former PiP-dismiss
+        // branches were dead and are removed along with the cross-Activity
+        // playerLifecycleManager contamination.
     }
 
     fun enterPipMode(): Boolean {

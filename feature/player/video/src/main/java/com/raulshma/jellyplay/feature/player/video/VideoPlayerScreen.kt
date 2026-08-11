@@ -221,6 +221,11 @@ fun VideoPlayerScreen(
     onEnterPip: () -> Unit = {},
     onEnterMiniMode: () -> Unit = {},
     onOpenSubtitleTester: () -> Unit = {},
+    // When false (e.g. hosted by the dedicated PlayerActivity), the back / swipe-down
+    // "enter mini-player" path is skipped in favour of onBack, since system PiP
+    // floating over the browse UI replaces the in-app floating card. True keeps the
+    // legacy in-app mini-player behaviour (MainActivity nav host).
+    miniModeEnabled: Boolean = true,
     viewModel: VideoPlayerViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -315,7 +320,11 @@ fun VideoPlayerScreen(
 
     val isScreenLocked = uiState.isScreenLocked
 
-
+    // Mirror the screen-lock state to PipController so the host Activity can gate
+    // PiP auto-entry while the controls are locked
+    LaunchedEffect(isScreenLocked) {
+        viewModel.pipController.setControlsLocked(isScreenLocked)
+    }
 
     val localSubtitleLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -561,17 +570,27 @@ fun VideoPlayerScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    BackHandler {
-        if (currentSheet != PlayerSheet.None) {
-            currentSheet = PlayerSheet.None
-        } else if (isTv && showControls) {
-            showControls = false
-        } else if (!isTv && uiState.isPlaying && uiState.engineCapabilities.supportsMiniMode) {
+    // Shared trigger for entering the in-app mini-player, invoked from both the
+    // back handler and the swipe-down-to-dismiss gesture. Self-guards so the
+    // swipe path (which has no upstream precondition check) only minimizes when
+    // mini-mode is actually supported for the current playback.
+    val enterMiniMode: () -> Unit = {
+        if (!isTv && uiState.isPlaying && miniModeEnabled && uiState.engineCapabilities.supportsMiniMode) {
             viewModel.prepareForMiniMode(
                 title = uiState.title,
                 subtitle = uiState.subtitle,
             )
             onEnterMiniMode()
+        }
+    }
+
+    BackHandler {
+        if (currentSheet != PlayerSheet.None) {
+            currentSheet = PlayerSheet.None
+        } else if (isTv && showControls) {
+            showControls = false
+        } else if (!isTv && uiState.isPlaying && miniModeEnabled && uiState.engineCapabilities.supportsMiniMode) {
+            enterMiniMode()
         } else {
             onBack()
         }
@@ -1128,7 +1147,10 @@ fun VideoPlayerScreen(
                 val tvBaselineZoom = if (isTv && uiState.tvZoomModePercent != 0f) {
                     1f + (uiState.tvZoomModePercent / 100f)
                 } else 1f
-                val effectiveZoom = videoZoom * tvBaselineZoom
+                // Suppress zoom while in PiP: the pinch-zoomed crop has no meaning in
+                // the floating window, and restoring on exit is automatic since the
+                // underlying videoZoom state is untouched.
+                val effectiveZoom = if (isInPipMode) 1f else videoZoom * tvBaselineZoom
                 val zoomed = effectiveZoom > 1f
                 key(currentEngine) {
                     AndroidView(
@@ -1277,6 +1299,7 @@ fun VideoPlayerScreen(
                         }
                     }
                 },
+                onSwipeDownDismiss = enterMiniMode,
                 onHapticPulse = remember(activity, viewModel) {
                     {
                         if (viewModel.hapticsEnabled) {

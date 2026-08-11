@@ -452,7 +452,7 @@ class MpvPlayerEngine(
             }
 
             // Tag the output stream so Android routes it correctly (movie role →
-            // speaker, ignores notifications). findroid sets this unconditionally.
+            // speaker, ignores notifications).
             mpv.setOptionString("audio-set-media-role", "yes")
 
             mpv.setOptionString(
@@ -1485,7 +1485,7 @@ class MpvPlayerEngine(
 
         // Guard against duplicate sub-add. mpv lists every track (demuxed +
         // previously sub-add'd) in track-list; if a side-load with the same
-        // label is already present, skip it. findroid hit the same class of bug
+        // label is already present, skip it. hit the same class of bug
         // (START_FILE re-firing re-flushed its initialCommands) and fixed it by
         // clearing the buffer; here the equivalent is checking the live
         // track-list, which also covers a load() called twice without a

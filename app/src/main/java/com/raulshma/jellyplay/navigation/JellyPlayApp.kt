@@ -416,6 +416,29 @@ private fun MainContent(
                     }
             }
             false
+        } else if (route is Route.VideoPlayer) {
+            // Route fullscreen video to the dedicated PlayerActivity so system
+            // Picture-in-Picture floats over this browse UI (back-stack
+            // choreography: shared taskAffinity, singleTask). Returning false
+            // prevents the in-nav VideoPlayerScreen from composing.
+            val intent = Intent(context, com.raulshma.jellyplay.PlayerActivity::class.java).apply {
+                putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_ITEM_ID, route.itemId)
+                route.mediaSourceId?.let {
+                    putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_MEDIA_SOURCE_ID, it)
+                }
+                putExtra(
+                    com.raulshma.jellyplay.PlayerActivity.EXTRA_START_POSITION_TICKS,
+                    route.startPositionTicks,
+                )
+                route.subtitleStreamIndex?.let {
+                    putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_SUBTITLE_STREAM_INDEX, it)
+                }
+                route.audioStreamIndex?.let {
+                    putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_AUDIO_STREAM_INDEX, it)
+                }
+            }
+            context.startActivity(intent)
+            false
         } else {
             true
         }

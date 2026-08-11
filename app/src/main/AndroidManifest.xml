@@ -61,7 +61,6 @@
             android:launchMode="singleTask"
             android:theme="@style/Theme.JellyPlay.Starting"
             android:windowSoftInputMode="adjustResize"
-            android:supportsPictureInPicture="true"
             android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|keyboard|keyboardHidden|navigation">
             <intent-filter>
@@ -92,6 +91,17 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
+
+        <!-- Fullscreen video host. Shares the default taskAffinity with
+             MainActivity so entering PiP here reveals the browse UI behind the
+             floating window (back-stack choreography). -->
+        <activity
+            android:name=".PlayerActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|keyboard|keyboardHidden|navigation" />
 
         <meta-data
             android:name="com.google.android.gms.car.application"
