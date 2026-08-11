@@ -114,7 +114,7 @@ internal fun LocalSubtitlePicker(
 }
 
 @Composable
-private fun LocalSubtitleOptionRow(
+internal fun LocalSubtitleOptionRow(
     label: String,
     isSelected: Boolean,
     isDefault: Boolean,

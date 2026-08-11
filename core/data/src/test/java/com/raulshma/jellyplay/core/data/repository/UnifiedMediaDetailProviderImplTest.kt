@@ -10,12 +10,14 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSubtitleEntry
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.network.api.ApiException
 import io.mockk.clearMocks
 import io.mockk.coEvery
@@ -49,6 +51,7 @@ class UnifiedMediaDetailProviderImplTest {
     private val episodeCatalogue: EpisodeCatalogue = mockk(relaxed = true)
     private val playbackSourceResolver: PlaybackSourceResolver = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
+    private val localStreamProbe: LocalStreamProbe = mockk(relaxed = true)
 
     private fun TestScope.buildProvider() = UnifiedMediaDetailProviderImpl(
         mediaRepository = mediaRepository,
@@ -57,6 +60,7 @@ class UnifiedMediaDetailProviderImplTest {
         episodeCatalogue = episodeCatalogue,
         playbackSourceResolver = playbackSourceResolver,
         offlineModeManager = offlineModeManager,
+        localStreamProbe = localStreamProbe,
         appScope = this,
     )
 
@@ -149,6 +153,9 @@ class UnifiedMediaDetailProviderImplTest {
             it.status == DownloadStatus.COMPLETED
         }
         coEvery { downloadRepository.loadLocalSubtitleManifest(any()) } returns null
+        // Default: no probed local tracks → no synthesized media source (preserves
+        // the pre-feature local-snapshot shape). Per-test stubs override this.
+        coEvery { localStreamProbe.probe(any()) } returns emptyList()
     }
 
     private suspend fun firstResolved(provider: MediaDetailProvider, itemId: String): DetailLoadState =
@@ -248,10 +255,36 @@ class UnifiedMediaDetailProviderImplTest {
         // No synthesized media source / audio selection for local.
         assertTrue(snapshot.detail.mediaSources.isEmpty())
         assertTrue(snapshot.capabilities.localSubtitleSelection)
+        assertFalse(snapshot.capabilities.localStreamInfo) // probe returned empty (relaxed mock)
         assertFalse(snapshot.capabilities.remoteStreamSelection)
         assertFalse(snapshot.capabilities.personNavigation)
         assertFalse(snapshot.capabilities.studioNavigation)
         assertFalse(snapshot.capabilities.remoteDiscovery)
+    }
+
+    @Test
+    fun `local snapshot injects probed streams and advertises localStreamInfo`() = runTest {
+        val local = localMovie()
+        wireStubs("m1", mode = OfflineMode.OFFLINE_MANUAL, localItem = local, download = completedDownload())
+        // Probe returns the file's real tracks (a 4K HDR video + a 5.1 audio).
+        coEvery { localStreamProbe.probe(local.downloadPath!!) } returns listOf(
+            MediaStream(index = 0, type = StreamType.VIDEO, height = 2160, videoRangeType = "HDR"),
+            MediaStream(index = 1, type = StreamType.AUDIO, language = "eng", channels = 6),
+        )
+
+        val state = firstResolved(buildProvider(), "m1")
+
+        val snapshot = (state as DetailLoadState.Loaded).snapshot
+        // The probed tracks are surfaced as a synthesized media source so the
+        // read-only quality/audio badges can render from the same data path the
+        // remote MediaInfoSection uses.
+        assertEquals(1, snapshot.detail.mediaSources.size)
+        val source = snapshot.detail.mediaSources.first()
+        assertEquals(2, source.mediaStreams.size)
+        assertTrue(snapshot.capabilities.localStreamInfo)
+        // Audio is still switched in the player, not on the detail screen.
+        assertFalse(snapshot.capabilities.remoteStreamSelection)
+        coVerify(exactly = 1) { localStreamProbe.probe(local.downloadPath!!) }
     }
 
     @Test

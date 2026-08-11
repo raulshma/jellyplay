@@ -149,6 +149,7 @@ data class DetailUiState(
             remoteDiscovery = false,
             remoteStreamSelection = false,
             localSubtitleSelection = false,
+            localStreamInfo = false,
             personNavigation = false,
             studioNavigation = false,
             smartPlay = false,

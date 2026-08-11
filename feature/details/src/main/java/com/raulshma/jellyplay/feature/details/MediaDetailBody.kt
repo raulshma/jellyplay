@@ -472,28 +472,46 @@ internal fun DetailContentBody(
             // Stream selection is source-aware:
             //  - REMOTE (remoteStreamSelection): full MediaInfoSection with audio
             //    + subtitle inventories from the server MediaSource.
-            //  - LOCAL (localSubtitleSelection): manifest-backed LocalSubtitlePicker
-            //    only — a local file has no audio-stream inventory.
-            // The two are mutually exclusive in practice (a snapshot advertises
-            // one or the other); each is gated independently so a plain remote
-            // item with no source still renders nothing.
+            //  - LOCAL (localStreamInfo): read-only quality/audio badges probed
+            //    from the downloaded file, plus the manifest-backed
+            //    LocalSubtitlePicker. Audio is switched in the player, not here.
+            //  - LOCAL subtitles only (localSubtitleSelection): LocalSubtitlePicker
+            //    alone — the file couldn't be probed (missing/corrupt/legacy).
+            // Each branch is gated independently so a plain remote item with no
+            // source still renders nothing.
             val source = detail.mediaSources.firstOrNull()
-            if (state.capabilities.remoteStreamSelection && source != null) {
-                MediaInfoSection(
-                    mediaStreams = source.mediaStreams,
-                    selectedAudioIndex = state.selectedAudioIndex,
-                    selectedSubtitleIndex = state.selectedSubtitleIndex,
-                    onAudioSelect = callbacks.onAudioSelect,
-                    onSubtitleSelect = callbacks.onSubtitleSelect,
-                    preferences = state.preferences,
-                )
-            } else if (state.capabilities.localSubtitleSelection) {
-                LocalSubtitlePicker(
-                    subtitles = state.localSubtitles,
-                    selectedIndex = state.selectedLocalSubtitleIndex,
-                    onSelect = callbacks.onSelectLocalSubtitle,
-                    modifier = Modifier.padding(horizontal = bodyContentPad),
-                )
+            when {
+                state.capabilities.remoteStreamSelection && source != null -> {
+                    MediaInfoSection(
+                        mediaStreams = source.mediaStreams,
+                        selectedAudioIndex = state.selectedAudioIndex,
+                        selectedSubtitleIndex = state.selectedSubtitleIndex,
+                        onAudioSelect = callbacks.onAudioSelect,
+                        onSubtitleSelect = callbacks.onSubtitleSelect,
+                        preferences = state.preferences,
+                    )
+                }
+                state.capabilities.localStreamInfo && source != null -> {
+                    // Quality + audio (read-only, probed) share a single badge row
+                    // with the interactive local subtitle pill, matching the remote
+                    // section's 3-pill layout. Subtitles are only passed when the
+                    // manifest advertises them.
+                    LocalMediaInfoSection(
+                        mediaStreams = source.mediaStreams,
+                        subtitles = if (state.capabilities.localSubtitleSelection) state.localSubtitles else emptyList(),
+                        selectedSubtitleIndex = state.selectedLocalSubtitleIndex,
+                        onSelectSubtitle = callbacks.onSelectLocalSubtitle,
+                        horizontalPadding = bodyContentPad,
+                    )
+                }
+                state.capabilities.localSubtitleSelection -> {
+                    LocalSubtitlePicker(
+                        subtitles = state.localSubtitles,
+                        selectedIndex = state.selectedLocalSubtitleIndex,
+                        onSelect = callbacks.onSelectLocalSubtitle,
+                        modifier = Modifier.padding(horizontal = bodyContentPad),
+                    )
+                }
             }
         }
 
