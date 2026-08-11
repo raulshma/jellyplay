@@ -626,7 +626,6 @@ class ExoPlayerEngine(
             .setMediaMetadata(metadataBuilder.build())
             .build()
 
-        exo.setMediaItem(mediaItem)
         currentMediaItem = mediaItem
         serverDurationMs = request.serverDurationMs
         currentSubtitleConfigs.clear()
@@ -648,6 +647,7 @@ class ExoPlayerEngine(
             exo.prepare()
             exo.play()
         } else {
+            exo.setMediaItem(mediaItem)
             exo.prepare()
             if (request.startPositionMs > 0) {
                 exo.seekTo(request.startPositionMs)

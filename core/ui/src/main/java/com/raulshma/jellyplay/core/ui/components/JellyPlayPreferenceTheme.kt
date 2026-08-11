@@ -43,13 +43,19 @@ fun rememberPreferenceDarkTheme(preferences: MainPreferences): Boolean {
     }
     return remember(preferences, isSystemDark) {
         derivedStateOf {
-            @Suppress("UnusedExpression") themeClockTick // time-based input
             preferences.synthwaveMode || when (preferences.themeMode) {
                 ThemeMode.DARK -> true
                 ThemeMode.LIGHT -> false
                 ThemeMode.SYSTEM -> isSystemDark
                 ThemeMode.SCHEDULED -> {
-                    val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                    // Reading themeClockTick here makes derivedStateOf recompute
+                    // on the 60s tick above, so an hour-boundary crossing flips
+                    // the theme without a relaunch. Base the hour on the tick's
+                    // captured time so the read is both tracked and used (and
+                    // non-scheduled modes don't recompute every tick).
+                    val hour = Calendar.getInstance()
+                        .apply { if (themeClockTick > 0) timeInMillis = themeClockTick }
+                        .get(Calendar.HOUR_OF_DAY)
                     val start = preferences.scheduledThemeStartHour
                     val end = preferences.scheduledThemeEndHour
                     if (start > end) {

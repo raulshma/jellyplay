@@ -130,14 +130,7 @@ class PlayerActivity : FragmentActivity() {
                         audioStreamIndex = audioStreamIndex,
                         onBack = { finish() },
                         onEnterPip = { enterPipMode() },
-                        // Mini-mode is intentionally a no-op here: the separate-Activity
-                        // architecture replaces the in-app floating card with system PiP
-                        // floating over the browse UI. Will be removed with VideoMiniPlayer.
-                        onEnterMiniMode = {},
                         onOpenSubtitleTester = { showSubtitleTester = true },
-                        // System PiP floating over browse replaces the in-app mini-player;
-                        // route back/swipe-down to onBack (finish) instead of the mini path.
-                        miniModeEnabled = false,
                     )
                     if (showSubtitleTester) {
                         com.raulshma.jellyplay.feature.subtitle.tester.SubtitleTesterScreen(
@@ -295,11 +288,7 @@ class PlayerActivity : FragmentActivity() {
 
     override fun onPause() {
         super.onPause()
-        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
-        val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
-        val isScreenOffOrLocked = keyguardManager?.isKeyguardLocked == true || powerManager?.isInteractive == false
-
-        if (!isInPictureInPictureMode || isScreenOffOrLocked) {
+        if (!isInPictureInPictureMode || isScreenOffOrLocked()) {
             playerLifecycleManager.onActivityPause()
         }
     }
@@ -326,11 +315,7 @@ class PlayerActivity : FragmentActivity() {
             // onPause can't reliably see the screen-off state; by onStop the
             // keyguard / non-interactive flags have settled. onActivityPause is
             // itself a no-op when backgroundVideoAudioEnabled is ON.
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
-            val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
-            val isScreenOffOrLocked =
-                keyguardManager?.isKeyguardLocked == true || powerManager?.isInteractive == false
-            if (isScreenOffOrLocked) {
+            if (isScreenOffOrLocked()) {
                 playerLifecycleManager.onActivityPause()
             }
             // Else: plain minimise while in PiP — intentionally keep playing.
@@ -355,6 +340,13 @@ class PlayerActivity : FragmentActivity() {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
+    /** True when the keyguard is showing or the screen is off (non-interactive). */
+    private fun isScreenOffOrLocked(): Boolean {
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        return keyguardManager?.isKeyguardLocked == true || powerManager?.isInteractive == false
+    }
+
     private fun buildPipParams(
         preArm: Boolean,
         includeActions: Boolean,
@@ -365,11 +357,7 @@ class PlayerActivity : FragmentActivity() {
             if (isValidSourceRect(src)) setSourceRectHint(src)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
-            val powerManager = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
-            val isScreenOffOrLocked = keyguardManager?.isKeyguardLocked == true || powerManager?.isInteractive == false
-
-            val autoEnter = if (preArm && !isScreenOffOrLocked) {
+            val autoEnter = if (preArm && !isScreenOffOrLocked()) {
                 pipController.shouldAutoEnterPip.value && pipController.isPlaying.value
             } else false
             setAutoEnterEnabled(autoEnter)

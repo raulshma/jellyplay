@@ -1981,17 +1981,22 @@ class VideoPlayerViewModel @Inject constructor(
         pipController.updatePipSourceRect(rect)
     }
 
+    /**
+     * Persists [style] to the subtitle store while preserving the persisted
+     * global "Subtitle sync offset" default. The in-memory
+     * [SubtitleStyle.offsetMs] is the resolved per-item delay, not a global
+     * default, so a font/colour/edge/font-family change must not clobber it into
+     * the global store — the cached global default is restored before writing.
+     */
+    private suspend fun persistSubtitleStylePreservingGlobalOffset(style: SubtitleStyle) {
+        val globalOffsetMs = cachedAggregate.subtitle.subtitleStyle.offsetMs
+        subtitleStore.setSubtitleStyle(style.copy(offsetMs = globalOffsetMs))
+    }
+
     fun setSubtitleStyle(style: SubtitleStyle) {
         _uiState.update { it.copy(subtitleStyle = style) }
         updateConfigWithUiState()
-        launch {
-            // The in-memory `style.offsetMs` is the resolved per-item delay, not a
-            // global default. Persist the style with the persisted global
-            // "Subtitle sync offset" default preserved, so a font/colour/edge
-            // change can't clobber the per-item delay into the global store.
-            val globalOffsetMs = cachedAggregate.subtitle.subtitleStyle.offsetMs
-            subtitleStore.setSubtitleStyle(style.copy(offsetMs = globalOffsetMs))
-        }
+        launch { persistSubtitleStylePreservingGlobalOffset(style) }
     }
 
     /**
@@ -2013,11 +2018,10 @@ class VideoPlayerViewModel @Inject constructor(
             )
             _uiState.update { it.copy(subtitleStyle = newStyle) }
             updateConfigWithUiState()
-            // Preserve the persisted global subtitle-delay default (see
-            // [setSubtitleStyle]): the in-memory offsetMs is the resolved per-item
-            // value and must not leak into the global store.
-            val globalOffsetMs = cachedAggregate.subtitle.subtitleStyle.offsetMs
-            subtitleStore.setSubtitleStyle(newStyle.copy(offsetMs = globalOffsetMs))
+            // Preserve the persisted global subtitle-delay default: the in-memory
+            // offsetMs is the resolved per-item value and must not leak into the
+            // global store.
+            persistSubtitleStylePreservingGlobalOffset(newStyle)
         }
     }
 
@@ -3078,27 +3082,6 @@ class VideoPlayerViewModel @Inject constructor(
     fun setAbRepeatPointB() = abRepeatController.setPointB(_currentPositionMs.value)
     fun clearAbRepeat() = abRepeatController.clear()
     val abRepeatState: StateFlow<AbRepeatState> get() = abRepeatController.state
-
-    fun prepareForMiniMode(
-        title: String,
-        subtitle: String,
-    ) {
-        val engine = playerSessionManager.engine ?: return
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-
-        videoMiniPlayerState.enterMiniMode(
-            engine = engine,
-            itemId = itemId,
-            mediaSourceId = null,
-            title = title,
-            subtitle = subtitle,
-        )
-
-        playerSessionManager.detachEngine()
-        progressReporter.cancelJobs()
-        playerLifecycleManager.activeCallbacks = null
-        pipController.requestAutoEnterPip(false)
-    }
 
     private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

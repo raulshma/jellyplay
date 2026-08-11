@@ -109,7 +109,6 @@ internal fun GestureOverlay(
     onVolumeGesture: (Float) -> Unit,
     onClearOverlays: () -> Unit,
     onEdgeSwipe: () -> Unit,
-    onSwipeDownDismiss: () -> Unit = {},
     onHapticPulse: () -> Unit = {},
     overlayDismissDelayMs: Long = 800L,
     onStartGesture: () -> Unit = {},
@@ -120,7 +119,6 @@ internal fun GestureOverlay(
     val currentOnVolumeGesture by rememberUpdatedState(onVolumeGesture)
     val currentOnClearOverlays by rememberUpdatedState(onClearOverlays)
     val currentOnEdgeSwipe by rememberUpdatedState(onEdgeSwipe)
-    val currentOnSwipeDownDismiss by rememberUpdatedState(onSwipeDownDismiss)
     val currentOnHapticPulse by rememberUpdatedState(onHapticPulse)
     val currentOnStartGesture by rememberUpdatedState(onStartGesture)
     val currentOnCancelOverlays by rememberUpdatedState(onCancelOverlays)
@@ -129,10 +127,6 @@ internal fun GestureOverlay(
 
     val edgeThresholdPx = with(LocalDensity.current) { 40.dp.toPx() }
     val deadZonePx = with(LocalDensity.current) { 30.dp.toPx() }
-    // Minimum downward flick velocity (px/s) for a vertical drag to count as
-    // "swipe down to dismiss" → minimize into the in-app mini-player. Tuned to a
-    // deliberate flick; slow vertical drags keep adjusting brightness/volume.
-    val swipeDownDismissVelocityPx = with(LocalDensity.current) { 800.dp.toPx() }
 
     var lastBrightnessBoundHaptic by remember { mutableLongStateOf(0L) }
     var lastVolumeBoundHaptic by remember { mutableLongStateOf(0L) }
@@ -190,14 +184,6 @@ internal fun GestureOverlay(
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val startX = down.position.x
                         val startY = down.position.y
-                        // Manual vertical-velocity tracking so a fast downward
-                        // flick ("swipe down to minimize") can be distinguished
-                        // from a slow vertical drag (brightness/volume). Uses the
-                        // last sample pair → instantaneous px/s; sufficient for a
-                        // flick threshold and avoids pulling in a velocity type.
-                        var lastVelTime = down.uptimeMillis
-                        var lastVelY = down.position.y
-                        var velocityYPxPerSec = 0f
                         var decided = false
                         var isHorizontal = false
                         var isEdgeSwipeGesture = false
@@ -205,10 +191,6 @@ internal fun GestureOverlay(
                         var prevBrightnessBoundHapticTime = 0L
                         var prevVolumeBoundHapticTime = 0L
                         var wasMultiTouchCancelled = false
-                        // Once a downward flick crosses the dismiss velocity we
-                        // stop forwarding brightness/volume deltas for the rest
-                        // of the gesture so the minimize intent wins cleanly.
-                        var suppressBrightnessVolume = false
                         currentOnStartGesture()
                         do {
                             val event = awaitPointerEvent()
@@ -224,12 +206,6 @@ internal fun GestureOverlay(
                             }
                             val change = event.changes.firstOrNull() ?: break
                             if (!change.pressed) break
-                            val dtMs = change.uptimeMillis - lastVelTime
-                            if (dtMs > 0) {
-                                velocityYPxPerSec = (change.position.y - lastVelY) / dtMs * 1000f
-                                lastVelTime = change.uptimeMillis
-                                lastVelY = change.position.y
-                            }
                             val totalDx = change.position.x - startX
                             val totalDy = change.position.y - startY
                             if (!decided && (abs(totalDx) > deadZonePx || abs(totalDy) > deadZonePx)) {
@@ -248,41 +224,29 @@ internal fun GestureOverlay(
                                     val seekDeltaMs = ((totalDx / size.width) * swipeSeekMaxMs).toLong()
                                     currentOnSeekGesture(seekDeltaMs)
                                 } else {
-                                    // Fast downward flick → swipe-down-to-minimize.
-                                    // Once the velocity threshold is crossed we stop
-                                    // adjusting brightness/volume so the dismiss
-                                    // gesture is clean; slow vertical drags below keep
-                                    // the existing left=brightness / right=volume UX.
-                                    if (!suppressBrightnessVolume && totalDy > 0f) {
-                                        if (velocityYPxPerSec >= swipeDownDismissVelocityPx) {
-                                            suppressBrightnessVolume = true
-                                        }
-                                    }
-                                    if (!suppressBrightnessVolume) {
-                                        val halfWidth = size.width / 2f
-                                        val dy = change.position.y - change.previousPosition.y
-                                        val rawDelta = -(dy / size.height) * 0.5f
-                                        val delta = applySensitivityCurve(rawDelta)
-                                        // Monotonic clock — avoids the wall-clock syscall of
-                                        // System.currentTimeMillis() per move event and is immune
-                                        // to wall-clock jumps. Gesture timing is duration-based
-                                        // (hapticMinInterval), so this is strictly more correct.
-                                        val now = SystemClock.elapsedRealtime()
-                                        if (change.position.x > halfWidth) {
-                                            currentOnVolumeGesture(delta)
-                                            if ((volumeValue <= 0f && delta < 0f) || (volumeValue >= 1f && delta > 0f)) {
-                                                if (now - prevVolumeBoundHapticTime > hapticMinInterval) {
-                                                    prevVolumeBoundHapticTime = now
-                                                    currentOnHapticPulse()
-                                                }
+                                    val halfWidth = size.width / 2f
+                                    val dy = change.position.y - change.previousPosition.y
+                                    val rawDelta = -(dy / size.height) * 0.5f
+                                    val delta = applySensitivityCurve(rawDelta)
+                                    // Monotonic clock — avoids the wall-clock syscall of
+                                    // System.currentTimeMillis() per move event and is immune
+                                    // to wall-clock jumps. Gesture timing is duration-based
+                                    // (hapticMinInterval), so this is strictly more correct.
+                                    val now = SystemClock.elapsedRealtime()
+                                    if (change.position.x > halfWidth) {
+                                        currentOnVolumeGesture(delta)
+                                        if ((volumeValue <= 0f && delta < 0f) || (volumeValue >= 1f && delta > 0f)) {
+                                            if (now - prevVolumeBoundHapticTime > hapticMinInterval) {
+                                                prevVolumeBoundHapticTime = now
+                                                currentOnHapticPulse()
                                             }
-                                        } else {
-                                            currentOnBrightnessGesture(delta)
-                                            if ((brightnessValue <= 0f && delta < 0f) || (brightnessValue >= 1f && delta > 0f)) {
-                                                if (now - prevBrightnessBoundHapticTime > hapticMinInterval) {
-                                                    prevBrightnessBoundHapticTime = now
-                                                    currentOnHapticPulse()
-                                                }
+                                        }
+                                    } else {
+                                        currentOnBrightnessGesture(delta)
+                                        if ((brightnessValue <= 0f && delta < 0f) || (brightnessValue >= 1f && delta > 0f)) {
+                                            if (now - prevBrightnessBoundHapticTime > hapticMinInterval) {
+                                                prevBrightnessBoundHapticTime = now
+                                                currentOnHapticPulse()
                                             }
                                         }
                                     }
@@ -294,14 +258,6 @@ internal fun GestureOverlay(
                             currentOnCancelOverlays()
                         } else {
                             currentOnClearOverlays()
-                            // Swipe-down-to-minimize: a decided non-edge vertical
-                            // gesture that crossed the dismiss velocity (mid-drag or
-                            // on release) fires dismiss into the in-app mini-player.
-                            if (decided && !isHorizontal && !isEdgeSwipeGesture) {
-                                if (suppressBrightnessVolume || velocityYPxPerSec >= swipeDownDismissVelocityPx) {
-                                    currentOnSwipeDownDismiss()
-                                }
-                            }
                         }
                     }
                 } else Modifier
