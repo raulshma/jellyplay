@@ -45,6 +45,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import android.util.Rational
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.raulshma.jellyplay.R
 import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
@@ -506,6 +507,12 @@ class MainActivity : FragmentActivity() {
             // and would otherwise leave the remote actions dead.
             registerPipActionReceiver()
             refreshPipActions()
+            // Release immersive mode on PiP entry so the system's gesture-nav
+            // handle anchors correctly (bottom). Kept hidden from fullscreen,
+            // the handle floats mid-screen until a later layout pass — the
+            // "minimize + reopen fixes it" symptom. Mirrors PlayerActivity.
+            WindowCompat.getInsetsController(window, window.decorView)
+                .show(WindowInsetsCompat.Type.systemBars())
         } else {
             unregisterPipActionReceiver()
             // onPictureInPictureModeChanged and onResume/onStop arrive as separate
