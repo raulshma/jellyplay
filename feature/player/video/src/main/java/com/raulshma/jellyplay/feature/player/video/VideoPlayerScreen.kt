@@ -238,7 +238,10 @@ fun VideoPlayerScreen(
     val restartLabel = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_restart)
     // Resume-position marker on the seekbar (§2.2). Mirrors the resume chip:
     // the value comes from viewModel.resumeReminder, collected once per screen.
-    var resumePositionMs by remember { mutableLongStateOf(0L) }
+    // Keyed on itemId so the marker clears when switching media (the VM is
+    // Activity-scoped and reused); otherwise the previous item's resume tick
+    // persists until the new item emits its own resumeReminder.
+    var resumePositionMs by remember(itemId) { mutableLongStateOf(0L) }
     LaunchedEffect(Unit) { viewModel.resumeReminder.collect { resumePositionMs = it } }
     LaunchedEffect(viewModel) {
         viewModel.resumeReminder.collect {

@@ -3062,6 +3062,17 @@ class VideoPlayerViewModel @Inject constructor(
                 sleepTimerLastUsedDurationMs = currentState.sleepTimerLastUsedDurationMs,
             )
         }
+
+        // Clear the high-frequency display streams the seek bar reads. They live
+        // outside uiState (to avoid ~4 Hz whole-screen recomposition) and are
+        // only ever reset on a fresh VM, so without this the previous item's
+        // position/duration bleed into the next item until the new engine emits
+        // its first position tick (~1-2 s). With duration == 0 the seek bar
+        // renders empty (its else-branch) instead of the stale fraction.
+        _currentPositionMs.value = 0L
+        _durationMs.value = 0L
+        _bufferedPositionMs.value = 0L
+        _videoStats.value = EngineVideoStats()
     }
 
     fun startSleepTimer(durationMs: Long) = sleepTimerController.startSleepTimer(durationMs)
