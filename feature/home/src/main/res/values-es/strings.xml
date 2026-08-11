@@ -19,6 +19,8 @@
     <string name="sync_event_stop">Detenido</string>
     <string name="sync_event_played">Marcado como reproducido</string>
     <string name="sync_event_unplayed">Marcado como no reproducido</string>
+    <string name="sync_event_favorite">Añadido a favoritos</string>
+    <string name="sync_event_unfavorite">Eliminado de favoritos</string>
 
     <!-- Title shown for a pending row whose media could not be resolved. -->
     <string name="sync_unknown_title">Elemento desconocido</string>

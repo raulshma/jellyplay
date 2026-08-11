@@ -19,6 +19,8 @@
     <string name="sync_event_stop">停止</string>
     <string name="sync_event_played">再生済みに設定</string>
     <string name="sync_event_unplayed">未再生に設定</string>
+    <string name="sync_event_favorite">お気に入りに追加</string>
+    <string name="sync_event_unfavorite">お気に入りから削除</string>
 
     <!-- Title shown for a pending row whose media could not be resolved. -->
     <string name="sync_unknown_title">不明なアイテム</string>

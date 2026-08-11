@@ -171,6 +171,7 @@
     <string name="detail_error_download_failed">下载失败</string>
     <string name="detail_error_not_a_series">这不是剧集</string>
     <string name="detail_error_queue_failed">加入下载队列失败</string>
+    <string name="detail_error_unavailable_offline">此项目离线不可用。</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
     <string name="detail_option_manage_series">管理剧集</string>
@@ -282,6 +283,13 @@
     <string name="detail_downloaded">下载时间</string>
     <string name="detail_status">状态</string>
     <string name="detail_progress">进度</string>
+    <string name="detail_download_status_pending">等待中</string>
+    <string name="detail_download_status_queued">已排队</string>
+    <string name="detail_download_status_downloading">下载中</string>
+    <string name="detail_download_status_paused">已暂停</string>
+    <string name="detail_download_status_completed">已完成</string>
+    <string name="detail_download_status_failed">失败</string>
+    <string name="detail_download_status_cancelled">已取消</string>
     <string name="detail_watch_status">观看状态</string>
     <string name="detail_watched_status_watched">已观看</string>
     <string name="detail_watched_status_label">已观看</string>
@@ -310,4 +318,27 @@
     <plurals name="detail_episodes_count">
         <item quantity="other">%1$d 集</item>
     </plurals>
+
+    <!-- Sync / resync download -->
+    <string name="detail_resync_title">同步下载</string>
+    <string name="detail_resync_checking">正在检查更新…</string>
+    <string name="detail_resync_update_available">有新的信息可用</string>
+    <string name="detail_resync_media_changed">媒体文件已更改 — 需要重新下载</string>
+    <string name="detail_resync_in_progress">正在同步最新详情…</string>
+    <string name="detail_resync_complete">下载已与最新详情同步</string>
+    <string name="detail_resync_failed">同步失败</string>
+    <string name="detail_resync_up_to_date">此下载已是最新。</string>
+    <string name="detail_resync_description">服务器上有更新的信息。同步以刷新元数据和图片。</string>
+    <string name="detail_resync_change_metadata">元数据已更新（简介、演员、评分）</string>
+    <string name="detail_resync_change_images">图片已更新（海报/背景）</string>
+    <string name="detail_resync_change_media">媒体文件本身已更改</string>
+    <string name="detail_resync_media_explanation">元数据同步无法更新媒体文件。删除并重新下载此项目以获取新文件。</string>
+    <string name="detail_resync_action">立即同步</string>
+    <string name="detail_resync_redownload">重新下载媒体</string>
+
+    <!-- Local subtitles -->
+    <string name="detail_local_subtitles">字幕</string>
+    <string name="detail_local_subtitle_off">关闭</string>
+    <string name="detail_local_subtitle_default_badge">默认</string>
+    <string name="detail_local_subtitle_forced_badge">强制</string>
 </resources>
