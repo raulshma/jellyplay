@@ -276,4 +276,38 @@
     <string name="detail_season_empty_title">没有可用的剧集</string>
     <string name="detail_season_empty_description">添加剧集后将显示在这里。</string>
 
+    <!-- Unified download / offline-detail strings. Resync falls back to default. -->
+    <string name="detail_download_info">下载信息</string>
+    <string name="detail_file_size">文件大小</string>
+    <string name="detail_downloaded">下载时间</string>
+    <string name="detail_status">状态</string>
+    <string name="detail_progress">进度</string>
+    <string name="detail_watch_status">观看状态</string>
+    <string name="detail_watched_status_watched">已观看</string>
+    <string name="detail_watched_status_label">已观看</string>
+    <string name="detail_watched_status_in_progress">观看中</string>
+    <string name="detail_watched_status_started">已开始</string>
+    <string name="detail_position">进度位置</string>
+    <string name="detail_position_of">%2$s 中的 %1$s</string>
+    <string name="detail_last_watched">上次观看</string>
+    <string name="detail_close">关闭</string>
+    <string name="detail_delete">删除</string>
+    <string name="detail_delete_download_title">删除下载</string>
+    <string name="detail_delete_download_cd">删除下载</string>
+    <string name="detail_delete_download_message">从设备移除“%1$s”？此操作将释放 %2$s。</string>
+    <string name="detail_delete_episode_title">删除剧集</string>
+    <string name="detail_delete_episode_cd">删除剧集</string>
+    <string name="detail_delete_episode_message">从设备移除“%1$s”？</string>
+    <string name="detail_delete_downloads_title">删除下载</string>
+    <string name="detail_select_episodes_to_remove">选择要从设备移除的剧集。</string>
+    <string name="detail_episodes_selected">已选 %1$d / %2$d 集</string>
+    <string name="detail_episodes_selected_with_freed">已选 %1$d / %2$d 集 · %3$s</string>
+    <string name="detail_delete_count">删除 %1$d</string>
+    <string name="detail_delete_count_with_freed">删除 %1$d · %2$s</string>
+    <string name="detail_season_default">第 %1$d 季</string>
+    <string name="detail_delete_entire_series">删除整部剧集</string>
+    <string name="detail_option_delete_downloads">删除下载</string>
+    <plurals name="detail_episodes_count">
+        <item quantity="other">%1$d 集</item>
+    </plurals>
 </resources>

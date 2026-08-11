@@ -5,7 +5,6 @@
     <!-- Screen titles / scaffolds -->
     <string name="downloads_screen_title">下载</string>
     <string name="downloads_library_title">已下载</string>
-    <string name="downloads_loading">加载中…</string>
     <string name="downloads_not_found">未找到</string>
     <string name="downloads_download_unavailable">此下载已不可用</string>
 
@@ -23,10 +22,6 @@
     <plurals name="downloads_item_count">
         <item quantity="other">%1$d 个项目</item>
     </plurals>
-    <plurals name="downloads_episodes_count">
-        <item quantity="other">%1$d 集</item>
-    </plurals>
-    <string name="downloads_episodes_count_with_size">%1$d 集 · %2$s</string>
     <string name="downloads_selected_count">已选 %1$d 项</string>
 
     <!-- Common actions / buttons -->
@@ -45,8 +40,6 @@
     <string name="downloads_action_clear_selection">清除选择</string>
     <string name="downloads_pause_all">全部暂停</string>
     <string name="downloads_retry_failed">重试所有失败项</string>
-    <string name="downloads_select_all">全选</string>
-    <string name="downloads_deselect_all">取消全选</string>
     <string name="downloads_clear_cd">清除</string>
     <string name="downloads_search_cd">搜索</string>
     <string name="downloads_sort_cd">排序</string>
@@ -65,11 +58,6 @@
     <string name="downloads_delete_episode_title">删除剧集</string>
     <string name="downloads_delete_episode_cd">删除剧集</string>
     <string name="downloads_delete_episode_message">从设备移除“%1$s”？</string>
-    <string name="downloads_select_episodes_to_remove">选择要从设备移除的剧集。</string>
-    <string name="downloads_episodes_selected">已选 %1$d / %2$d 集</string>
-    <string name="downloads_episodes_selected_with_freed">已选 %1$d / %2$d 集 · %3$s</string>
-    <string name="downloads_delete_count">删除 %1$d</string>
-    <string name="downloads_delete_count_with_freed">删除 %1$d · %2$s</string>
     <string name="downloads_deleted">已删除</string>
     <string name="downloads_deleted_message">下载已移除</string>
 
@@ -82,7 +70,6 @@
 
     <!-- Offline detail -->
     <string name="downloads_series_default">剧集</string>
-    <string name="downloads_season_default">第 %1$d 季</string>
     <string name="downloads_play_resume">继续观看</string>
     <string name="downloads_play_again">再次播放</string>
     <string name="downloads_show_less">收起</string>
@@ -95,10 +82,8 @@
     <string name="downloads_status">状态</string>
     <string name="downloads_progress">进度</string>
     <string name="downloads_watch_status">观看状态</string>
-    <string name="downloads_watched">已观看</string>
     <string name="downloads_cd_switch_to_list">切换到垂直剧集列表</string>
     <string name="downloads_cd_switch_to_cards">切换到横向剧集卡片</string>
-    <string name="downloads_watched_label">已观看</string>
     <string name="downloads_in_progress">观看中</string>
     <string name="downloads_started">已开始</string>
     <string name="downloads_position">进度位置</string>
@@ -108,8 +93,6 @@
 
     <!-- Seasons / episodes -->
     <string name="downloads_seasons">季</string>
-    <string name="downloads_collapse">收起</string>
-    <string name="downloads_expand">展开</string>
     <string name="downloads_mark_season_cd">将本季标记为已观看/未观看</string>
     <string name="downloads_mark_season_watched">将本季标记为已观看</string>
     <string name="downloads_mark_season_unwatched">将本季标记为未观看</string>

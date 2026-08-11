@@ -70,13 +70,6 @@ sealed class Route : NavKey {
 
     @Serializable data object OfflineLibrary : Route()
 
-    @Serializable data class OfflineSeries(val seriesId: String) : Route()
-
-    /** Offline detail screen for a single downloaded movie/album/track.
-     *  Mirrors the online MediaDetail layout but reads entirely from the
-     *  on-device offline store. */
-    @Serializable data class OfflineDetail(val itemId: String) : Route()
-
     @Serializable data object Settings : Route()
 
     @Serializable data object Onboarding : Route()
@@ -330,8 +323,6 @@ val Route.isDetail: Boolean
         is Route.MediaInfo,
         is Route.LibrarySection,
         is Route.CollectionDetail,
-        is Route.OfflineSeries,
-        is Route.OfflineDetail,
         is Route.ArtistDetail,
         is Route.AlbumDetail,
         is Route.SmartPlaylistDetail,

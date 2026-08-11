@@ -400,6 +400,76 @@ class TrackSelectionHelperTest {
         }
     }
 
+    // ─── Offline subtitle restore via the "offline:${index}" id ──────────────
+    //
+    // The detail screen's local-subtitle selector writes the chosen
+    // OfflineSubtitleEntry.index (== the original server stream index) into the
+    // per-item subtitleStreamIndex. PlayerSessionManager.loadOfflineSubtitles
+    // stamps id == "offline:${index}" onto each side-loaded SubtitleSource,
+    // and both ExoPlayer and mpv propagate that id into MediaTrack.id. The
+    // restore path must resolve the stored index to that track — NOT to the
+    // engine positional index, which is unrelated to the server index.
+
+    @Test
+    fun updateTracksFromEngine_offlineStoredIndex_resolvesByOfflineSubtitleId() {
+        // Empty server mediaStreams (offline), stored subtitleStreamIndex = 2
+        // (the original server stream index), and two side-loaded subs whose
+        // ids encode their server indices. The restore path must pick the
+        // offline:2 sub (engine index 1), not the positional-index match.
+        every { engineStore.playerEngine } returns MutableStateFlow(
+            PlayerEngineSlice(
+                mediaStreamSelections = mapOf("item1" to MediaStreamSelection(subtitleStreamIndex = 2)),
+            ),
+        )
+        state.value = VideoPlayerUiState() // empty mediaStreams == offline
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false, id = "offline:0"),
+            mediaTrack(1, "Spanish", "spa", TrackType.SUBTITLE, isSelected = false, id = "offline:2"),
+        )
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
+        assertEquals(1, state.value.subtitleTracks.first { it.isSelected }.index)
+    }
+
+    @Test
+    fun updateTracksFromEngine_offlinePendingIndex_resolvesByOfflineSubtitleId() {
+        // Same outcome via the pending route-param path: a pending
+        // subtitleStreamIndex threaded from MediaDetailScreen.onPlayClick for a
+        // LOCAL origin must resolve to the offline:${pending} sub even with
+        // empty server mediaStreams (which previously dropped it silently).
+        state.value = VideoPlayerUiState() // empty mediaStreams == offline
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false, id = "offline:0"),
+            mediaTrack(1, "Spanish", "spa", TrackType.SUBTITLE, isSelected = false, id = "offline:2"),
+        )
+        helper.setPendingStreams(subtitleIndex = 2, audioIndex = null)
+        helper.updateTracksFromEngine()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
+    }
+
+    @Test
+    fun updateTracksFromEngine_offlineStoredIndex_fallsBackToPositionalWhenNoId() {
+        // Legacy / engine that does not propagate the offline id: the restore
+        // path must still fall back to the positional-index match so behaviour
+        // does not regress for tracks without the "offline:${index}" id.
+        every { engineStore.playerEngine } returns MutableStateFlow(
+            PlayerEngineSlice(
+                mediaStreamSelections = mapOf("item1" to MediaStreamSelection(subtitleStreamIndex = 0)),
+            ),
+        )
+        state.value = VideoPlayerUiState() // empty mediaStreams == offline
+        availableTracks.value = listOf(
+            // No offline: id — synthetic engine ids only.
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false, id = "mpv_sub_1"),
+        )
+        helper.updateTracksFromEngine()
+
+        // Falls back to positional-index match (subIdx 0 == engine index 0).
+        verify { engine.selectTrack(TrackType.SUBTITLE, 0) }
+    }
+
     @Test
     fun updateTracksFromEngine_autoOffDoesNotLatch_allowsLaterSidecarSelection() {
         // First emission has no subtitle tracks yet (offline sidecar subs load
@@ -512,8 +582,9 @@ class TrackSelectionHelperTest {
         language: String?,
         type: TrackType,
         isSelected: Boolean,
+        id: String = "$index",
     ) = MediaTrack(
-        id = "$index",
+        id = id,
         index = index,
         label = label,
         language = language,

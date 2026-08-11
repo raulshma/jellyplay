@@ -22,10 +22,27 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.size.Size as CoilSize
+import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+
+/**
+ * Adapts a remote [PersonInfo] into the [OfflinePersonInfo] shape consumed by
+ * the non-navigable cast row ([OfflinePersonItem]) for a LOCAL origin. The
+ * local portrait path is NOT carried here — the call site resolves
+ * `assets.castImages[id]` and passes it as the image URL (the offline item's
+ * own `localImagePath` field stays null at this seam).
+ */
+internal fun PersonInfo.toOfflinePersonInfo(): OfflinePersonInfo = OfflinePersonInfo(
+    id = id,
+    name = name,
+    role = role,
+    type = type,
+    imageTag = primaryImageTag,
+    blurHash = primaryBlurHash,
+)
 
 @Composable
 internal fun PersonItem(

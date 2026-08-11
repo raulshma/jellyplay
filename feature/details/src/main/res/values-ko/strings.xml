@@ -276,4 +276,38 @@
     <string name="detail_season_empty_title">사용 가능한 에피소드가 없습니다</string>
     <string name="detail_season_empty_description">에피소드가 추가되면 여기에 표시됩니다.</string>
 
+    <!-- Unified download / offline-detail strings. Resync falls back to default. -->
+    <string name="detail_download_info">다운로드 정보</string>
+    <string name="detail_file_size">파일 크기</string>
+    <string name="detail_downloaded">다운로드됨</string>
+    <string name="detail_status">상태</string>
+    <string name="detail_progress">진행률</string>
+    <string name="detail_watch_status">시청 상태</string>
+    <string name="detail_watched_status_watched">시청함</string>
+    <string name="detail_watched_status_label">시청함</string>
+    <string name="detail_watched_status_in_progress">진행 중</string>
+    <string name="detail_watched_status_started">시작됨</string>
+    <string name="detail_position">위치</string>
+    <string name="detail_position_of">%2$s 중 %1$s</string>
+    <string name="detail_last_watched">마지막 시청</string>
+    <string name="detail_close">닫기</string>
+    <string name="detail_delete">삭제</string>
+    <string name="detail_delete_download_title">다운로드 삭제</string>
+    <string name="detail_delete_download_cd">다운로드 삭제</string>
+    <string name="detail_delete_download_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
+    <string name="detail_delete_episode_title">에피소드 삭제</string>
+    <string name="detail_delete_episode_cd">에피소드 삭제</string>
+    <string name="detail_delete_episode_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까?</string>
+    <string name="detail_delete_downloads_title">다운로드 삭제</string>
+    <string name="detail_select_episodes_to_remove">기기에서 제거할 에피소드를 선택하세요.</string>
+    <string name="detail_episodes_selected">에피소드 %2$d개 중 %1$d개 선택됨</string>
+    <string name="detail_episodes_selected_with_freed">에피소드 %2$d개 중 %1$d개 선택됨 · %3$s</string>
+    <string name="detail_delete_count">%1$d개 삭제</string>
+    <string name="detail_delete_count_with_freed">%1$d개 삭제 · %2$s</string>
+    <string name="detail_season_default">시즌 %1$d</string>
+    <string name="detail_delete_entire_series">전체 시리즈 삭제</string>
+    <string name="detail_option_delete_downloads">다운로드 삭제</string>
+    <plurals name="detail_episodes_count">
+        <item quantity="other">에피소드 %1$d개</item>
+    </plurals>
 </resources>

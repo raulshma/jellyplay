@@ -114,8 +114,8 @@ fun DownloadsScreen(
     val resyncProgress by viewModel.resyncProgress.collectAsStateWithLifecycle()
 
     // Pending delete confirmation. Deleting a completed download removes the
-    // file from disk, so we confirm first — matching OfflineDetailScreen and
-    // OfflineSeriesScreen within the same module.
+    // file from disk, so we confirm first — matching the unified
+    // MediaDetailScreen delete confirmations.
     var pendingDelete by remember { mutableStateOf<DownloadItem?>(null) }
     var pendingBulkDelete by remember { mutableStateOf(false) }
     var showResyncSheet by remember { mutableStateOf(false) }
@@ -573,7 +573,8 @@ private fun DownloadItemRow(
                 )
                 // For series episodes, surface the parent series and an SXXEXX
                 // tag below the episode title so rows are identifiable in a flat
-                // download list (mirrors the context line on OfflineDetailScreen).
+                // download list (mirrors the context line on the unified
+                // MediaDetailScreen).
                 // The SxxExx + " · " + series shape is shared with the resync
                 // sheets via [episodeContextLine] so a format change is one place.
                 episodeContextLine(
@@ -1095,8 +1096,9 @@ private fun ResyncSheetRow(
  * regular resync sheet's progress granularity.
  *
  * Entry is via the resync sheet's header action, so the resync icon remains the
- * single freshness hub. Mirrors [DeleteSeriesSheet]'s multi-select pattern
- * (tri-state select-all header + per-item checkboxes) for consistency.
+ * single freshness hub. Mirrors the unified detail tree's
+ * `DeleteDownloadedEpisodesSheet` multi-select pattern (tri-state select-all
+ * header + per-item checkboxes) for consistency.
  *
  * Three phases, derived from live [progress] + the local [started] latch:
  *  - **picker** (default): editable items + data checkboxes;

@@ -140,7 +140,7 @@ class OfflineLibraryViewModel @Inject constructor(
      * sheet. Routes through [MediaRepository.markPlayed]/[MediaRepository.markUnplayed]
      * so the change is applied to the local offline DB AND enqueued into the
      * playback outbox for server sync on reconnect (or pushed immediately when
-     * online) — mirroring [OfflineSeriesViewModel.markSeasonPlayed].
+     * online) — mirroring the unified DetailViewModel.markSeasonPlayed.
      */
     fun markItemPlayed(item: MediaItem, played: Boolean) {
         launch {

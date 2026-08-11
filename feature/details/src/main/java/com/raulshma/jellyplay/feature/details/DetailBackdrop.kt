@@ -49,6 +49,12 @@ internal fun DetailBackdrop(
     scrollState: DetailScrollState,
     isExpanded: Boolean,
     modifier: Modifier = Modifier,
+    /**
+     * On-disk backdrop path for the current item (DetailAssets.backdropPath).
+     * Preferred over the server [getBackdropUrl] so a LOCAL origin renders
+     * without a network round-trip. Null for REMOTE (behavior unchanged).
+     */
+    localBackdropPath: String? = null,
 ) {
     val baseBackdropHeight = scrollState.baseBackdropHeight
     val backdropHeight = scrollState.backdropHeight
@@ -109,8 +115,11 @@ internal fun DetailBackdrop(
                     scaleX = scale
                     scaleY = scale
                 }
+            // Prefer the on-disk backdrop (DetailAssets.backdropPath) for a LOCAL
+            // origin; fall back to the server URL for REMOTE or when no local
+            // path was resolved.
             MediaImage(
-                url = getBackdropUrl(backdropId),
+                url = localBackdropPath ?: getBackdropUrl(backdropId),
                 contentDescription = null,
                 blurHash = backdropBlurHash,
                 modifier = backdropModifier,

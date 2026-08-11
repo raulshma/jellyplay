@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Snackbar
@@ -30,9 +32,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.quickActions
@@ -92,6 +97,16 @@ fun MediaDetailScreen(
         ?.takeIf { it.mediaType == MediaType.EPISODE }?.seriesId
         ?: currentItem?.id
         ?: itemId
+    // On-entry freshness check (TTL-gated, safe on every entry) — ports the
+    // old OfflineDetailScreen auto-fire. Only relevant when there's local
+    // content to check (an attached download or a local origin); the sync
+    // manager no-ops within the per-item 1h TTL or while offline.
+    val hasLocalContent = uiState.detailContext?.download != null || uiState.origin?.isLocal == true
+    LaunchedEffect(currentItem?.id, hasLocalContent) {
+        if (currentItem != null && hasLocalContent) {
+            viewModel.checkForUpdates()
+        }
+    }
     // Memoized so the URL isn't rebuilt on every recomposition (e.g. on each
     // scroll-derived state change funnelling through ArtworkThemeWrapper).
     val backdropUrl = remember(targetBackdropId) { viewModel.getBackdropUrl(targetBackdropId) }
@@ -99,8 +114,20 @@ fun MediaDetailScreen(
     val outerIsLightTheme = rememberIsLightTheme()
 
     var showSeriesDownloadSheet by remember { mutableStateOf(false) }
+    /** Series batch-delete sheet (multi-select downloaded episodes). */
+    var showDeleteEpisodesSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarContext = LocalContext.current
+
+    // ── Unified-provider action dialog state. Delete / resync /
+    // re-download get the same TV/mobile focus, back, and snackbar handling as
+    // the existing detail actions. ──
+    /** Pending delete of the current item's attached download (single item or episode). */
+    var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
+    /** Pending delete of a downloaded episode from the seasons section. */
+    var pendingDeleteEpisode by remember { mutableStateOf<PendingEpisodeDelete?>(null) }
+    /** Resync bottom-sheet visibility (banner tap). */
+    var showResyncSheet by remember { mutableStateOf(false) }
 
     // Series/season mark-played cascades recurse into every episode and clear all
     // resume positions, so they're gated behind a confirm
@@ -141,16 +168,6 @@ fun MediaDetailScreen(
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message ->
             when (message) {
-                is DetailMessage.OpenOffline -> {
-                    // Online detail failed but the item is downloaded: redirect to
-                    // the offline detail/series page instead of showing a snackbar.
-                    val route = if (message.mediaType == MediaType.SERIES) {
-                        Route.OfflineSeries(message.itemId)
-                    } else {
-                        Route.OfflineDetail(message.itemId)
-                    }
-                    onNavigate(route)
-                }
                 is DetailMessage.Text -> snackbarHostState.showSnackbar(message.text)
                 is DetailMessage.SeriesDownload -> {
                     val text = if (message.error != null) {
@@ -293,6 +310,14 @@ fun MediaDetailScreen(
                     isSeerrRecommendationsEnabled = uiState.isSeerrRecommendationsEnabled,
                     preferences = preferences,
                     canManageSeries = canManageSeries,
+                    origin = uiState.origin,
+                    detailContext = uiState.detailContext,
+                    capabilities = uiState.capabilities,
+                    assets = uiState.assets,
+                    localSubtitles = uiState.localSubtitles,
+                    selectedLocalSubtitleIndex = uiState.selectedLocalSubtitleIndex,
+                    resyncState = uiState.resyncState,
+                    downloadedEpisodeIds = uiState.downloadedEpisodeIds,
                 )
 
                 val onVideoClick = rememberVideoClickHandler(
@@ -312,11 +337,23 @@ fun MediaDetailScreen(
                         onRetry = { viewModel.loadItem(itemId) },
                         onRefresh = { viewModel.forceRefresh() },
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
+                            // For a LOCAL origin the server stream index is meaningless; pass
+                            // the chosen local-manifest subtitle index instead so the player's
+                            // offline-id wiring (TrackSelectionPolicy.resolveByOfflineSubtitleId)
+                            // resolves the right side-loaded subtitle. The remote audio index is
+                            // still threaded because the local audio inventory is not selectable
+                            // here.
+                            val isLocalOrigin = uiState.origin?.isLocal == true
+                            val subtitleIndex = if (isLocalOrigin) {
+                                viewModel.selectedLocalSubtitleIndex
+                            } else {
+                                viewModel.selectedSubtitleIndex
+                            }
                             onPlayClick(
                                 playItemId,
                                 sourceId,
                                 start,
-                                viewModel.selectedSubtitleIndex,
+                                subtitleIndex,
                                 viewModel.selectedAudioIndex,
                             )
                         },
@@ -385,6 +422,29 @@ fun MediaDetailScreen(
                         onAddToPlaylist = { viewModel.openPlaylistPicker() },
                         onMediaQuickActions = { item -> quickActionController.show(item) },
                         onFocusedMediaItem = { item -> tvFocusedItem = item },
+                        onDeleteDownload = {
+                            val target = detail?.item
+                            val isEpisode = target?.mediaType == MediaType.EPISODE
+                            pendingDelete = PendingDelete(
+                                itemId = target?.id ?: itemId,
+                                name = target?.name ?: "",
+                                sizeBytes = uiState.detailContext?.download?.totalSizeBytes ?: 0L,
+                                isEpisode = isEpisode,
+                            )
+                        },
+                        onDeleteDownloadedEpisodes = { showDeleteEpisodesSheet = true },
+                        onDeleteEpisode = { episodeId ->
+                            val ep = uiState.episodes.values.flatten().firstOrNull { it.id == episodeId }
+                            pendingDeleteEpisode = PendingEpisodeDelete(
+                                episodeId = episodeId,
+                                name = ep?.name ?: "",
+                            )
+                        },
+                        onOpenResync = { showResyncSheet = true },
+                        onResync = { viewModel.resync() },
+                        onRedownloadMedia = { viewModel.redownloadMedia() },
+                        onClearResync = { viewModel.clearResyncState() },
+                        onSelectLocalSubtitle = { index -> viewModel.selectLocalSubtitle(index) },
                     )
                 }
 
@@ -495,6 +555,50 @@ fun MediaDetailScreen(
             }
         }
 
+        // ── Series batch-delete sheet. Replaces the old
+        // OfflineSeriesScreen trash flow: multi-select downloaded episodes /
+        // whole seasons / the entire series, then route through the merged
+        // DetailViewModel offline-delete methods (which collapse a fully-
+        // selected season into a single deleteOfflineSeason transaction). ──
+        if (showDeleteEpisodesSheet && detailItem?.mediaType == MediaType.SERIES) {
+            // For a LOCAL origin every episode in the snapshot is downloaded;
+            // the sheet treats each listed episode as deletable. Only seasons
+            // that actually carry episodes are passed so the sheet renders no
+            // empty rows.
+            val downloadedEpisodesBySeason = uiState.episodes
+                .filterValues { it.isNotEmpty() }
+            val downloadableSeasons = uiState.seasons.filter { it.id in downloadedEpisodesBySeason }
+            val totalSizeBytes = uiState.detailContext?.seriesAggregate?.totalSizeBytes ?: 0L
+            val downloadedEpisodeCount = uiState.detailContext?.seriesAggregate?.downloadedEpisodeCount
+                ?: downloadedEpisodesBySeason.values.sumOf { it.size }
+            val deleteSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            TvSafeSheet(
+                onDismissRequest = { showDeleteEpisodesSheet = false },
+                sheetState = deleteSheetState,
+            ) {
+                DeleteDownloadedEpisodesSheet(
+                    seasons = downloadableSeasons,
+                    episodes = downloadedEpisodesBySeason,
+                    totalSizeBytes = totalSizeBytes,
+                    onDelete = { episodeIds ->
+                        showDeleteEpisodesSheet = false
+                        viewModel.deleteOfflineEpisodes(episodeIds.toList())
+                        // If every downloaded episode was selected there's nothing
+                        // left to show — pop back to where the user came from.
+                        if (episodeIds.size >= downloadedEpisodeCount) {
+                            onBack()
+                        }
+                    },
+                    onDeleteEntireSeries = {
+                        showDeleteEpisodesSheet = false
+                        viewModel.deleteOfflineSeries(itemId)
+                        onBack()
+                    },
+                    onDismiss = { showDeleteEpisodesSheet = false },
+                )
+            }
+        }
+
         com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -570,5 +674,101 @@ fun MediaDetailScreen(
 
         // Long-press / TV-Menu quick actions for row cards.
         MediaQuickActionHost(quickActionController)
+
+        // ── Unified-provider delete confirmation. ──
+        // Single item: deletes the current item's attached download. Episode: a
+        // downloaded episode from the seasons section. Both route through the
+        // merged DetailViewModel offline-delete methods.
+        pendingDelete?.let { target ->
+            AlertDialog(
+                onDismissRequest = { pendingDelete = null },
+                icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
+                title = { Text(stringResource(R.string.detail_delete_download_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.detail_delete_download_message,
+                            target.name,
+                            target.sizeBytes.formatBytes(),
+                        ),
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.deleteOfflineItem(target.itemId)
+                            pendingDelete = null
+                        },
+                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) { Text(stringResource(R.string.detail_delete)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDelete = null }) {
+                        Text(stringResource(R.string.detail_cancel))
+                    }
+                },
+            )
+        }
+        pendingDeleteEpisode?.let { ep ->
+            AlertDialog(
+                onDismissRequest = { pendingDeleteEpisode = null },
+                icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
+                title = { Text(stringResource(R.string.detail_delete_episode_title)) },
+                text = { Text(stringResource(R.string.detail_delete_episode_message, ep.name)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.deleteOfflineEpisode(ep.episodeId)
+                            pendingDeleteEpisode = null
+                        },
+                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) { Text(stringResource(R.string.detail_delete)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDeleteEpisode = null }) {
+                        Text(stringResource(R.string.detail_cancel))
+                    }
+                },
+            )
+        }
+
+        // ── Resync bottom sheet. Lists what changed and offers a
+        // resync / re-download action with live status. ──
+        if (showResyncSheet) {
+            ResyncSheet(
+                syncState = uiState.detailContext?.syncState,
+                resyncState = uiState.resyncState,
+                onResync = { viewModel.resync() },
+                onRedownloadMedia = { viewModel.redownloadMedia() },
+                onDismiss = {
+                    showResyncSheet = false
+                    viewModel.clearResyncState()
+                },
+            )
+        }
     } // Box
 }
+
+/**
+ * Pending delete of the current item's attached download (single item or the
+ * current episode). Surfaced as a confirm dialog because removing the file
+ * clears resume state and frees storage.
+ */
+@androidx.compose.runtime.Immutable
+private data class PendingDelete(
+    val itemId: String,
+    val name: String,
+    val sizeBytes: Long,
+    val isEpisode: Boolean,
+)
+
+/** Pending delete of a downloaded episode from the seasons section. */
+@androidx.compose.runtime.Immutable
+private data class PendingEpisodeDelete(
+    val episodeId: String,
+    val name: String,
+)

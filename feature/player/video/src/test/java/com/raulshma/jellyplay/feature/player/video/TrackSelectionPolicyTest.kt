@@ -278,6 +278,43 @@ class TrackSelectionPolicyTest {
         assertEquals(1, result)
     }
 
+    // ─── resolveByOfflineSubtitleId: offline side-loaded subtitle restore ─────
+    //
+    // Offline playback carries no server MediaStreams, so the only stable handle
+    // linking the detail selector's persisted server-stream index to an engine
+    // track is the `"offline:${index}"` id stamped onto the SubtitleSource.
+
+    @Test
+    fun resolveByOfflineSubtitleId_matchesIdEqualToOfflineIndex() {
+        // The detail selector stored the original server stream index (2) as
+        // subtitleStreamIndex; the side-loaded sub carries it as id == "offline:2".
+        val tracks = listOf(
+            opt(-1, "Off", null),
+            opt(0, "English", "eng", id = "offline:0"),
+            opt(1, "Spanish", "spa", id = "offline:2"),
+        )
+        val match = policy.resolveByOfflineSubtitleId(tracks, index = 2)
+        assertEquals(1, match?.index)
+    }
+
+    @Test
+    fun resolveByOfflineSubtitleId_noMatchingId_returnsNull() {
+        val tracks = listOf(opt(0, "English", "eng", id = "offline:0"))
+        assertNull(policy.resolveByOfflineSubtitleId(tracks, index = 2))
+    }
+
+    @Test
+    fun resolveByOfflineSubtitleId_ignoresPlaceholderAndNonOfflineIds() {
+        // The Off placeholder (index < 0) and tracks whose id follows a different
+        // contract (mpv synthetic, remote external) must never match.
+        val tracks = listOf(
+            opt(-1, "Off", null, id = "offline:2"), // placeholder — index < 0
+            opt(0, "English", "eng", id = "mpv_sub_2"),
+            opt(1, "Spanish", "spa", id = "external:2"),
+        )
+        assertNull(policy.resolveByOfflineSubtitleId(tracks, index = 2))
+    }
+
     // ─── helpers ──────────────────────────────────────────────────────────────
 
     private fun opt(
@@ -286,7 +323,8 @@ class TrackSelectionPolicyTest {
         language: String?,
         streamIndex: Int? = null,
         badges: List<TrackBadge> = emptyList(),
-    ) = TrackOption(index, label, language, isSelected = false, streamIndex = streamIndex, badges = badges)
+        id: String? = null,
+    ) = TrackOption(index, label, language, isSelected = false, streamIndex = streamIndex, badges = badges, id = id)
 
     private fun subArgs(
         tracks: List<TrackOption>,

@@ -110,6 +110,19 @@ val MediaItem.hasPlaybackPosition: Boolean
 val MediaItem.hasWatchProgress: Boolean
     get() = hasPlaybackPosition && !isPlayed
 
+/**
+ * The series id this detail entry resolves to for series-scoped operations
+ * (seasons/episodes load, smart-play, playlist expansion): a series resolves to
+ * itself, an episode/season to its parent [seriesId], anything else to null.
+ * Lifts the repeated `when (mediaType)` fork out of the provider and ViewModel.
+ */
+val MediaItem.seriesIdForDetail: String?
+    get() = when (mediaType) {
+        MediaType.SERIES -> id
+        MediaType.EPISODE, MediaType.SEASON -> seriesId
+        else -> null
+    }
+
 @Immutable
 @Serializable
 data class NameGuidPair(

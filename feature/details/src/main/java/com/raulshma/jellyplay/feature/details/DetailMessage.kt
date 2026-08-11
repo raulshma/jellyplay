@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.model.MediaType
 
 /**
  * One-shot user-facing messages emitted from [DetailViewModel]. Consumed by the
@@ -15,13 +14,15 @@ import com.raulshma.jellyplay.core.model.MediaType
  * - [Text] is a fully-resolved string (caller already did resource lookup).
  * - [SeriesDownload] keeps the raw count/error so the screen can resolve the
  *   plural `detail_episodes_queued` resource, which only the UI layer can do.
- * - [OpenOffline] is a navigation request, not a snackbar: the online detail
- *   failed to load but the item is downloaded, so the screen redirects to the
- *   offline detail/series page instead of showing a load error.
+ *
+ * The former `OpenOffline` navigation request has been removed: the
+ * [com.raulshma.jellyplay.core.data.repository.MediaDetailProvider] now performs
+ * the remote/local fallback in place (origin `LOCAL_REMOTE_FAILURE`) instead of
+ * redirecting to a separate offline screen, so a load failure no longer carries
+ * a navigation side effect.
  */
 @Immutable
 sealed interface DetailMessage {
     data class Text(val text: String) : DetailMessage
     data class SeriesDownload(val queuedCount: Int, val error: String?) : DetailMessage
-    data class OpenOffline(val itemId: String, val mediaType: MediaType) : DetailMessage
 }
