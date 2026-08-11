@@ -60,6 +60,10 @@ import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
  * Items enter with a staggered slide-up + fade + scale-in (anchored at the
  * bottom, nearest the toggle first). Items compose bottom-up: the last declared
  * entry sits closest to the toggle.
+ *
+ * [alignToStart] left-aligns the pills (for the tablet NavigationRail, where the
+ * "More" toggle lives on the left); the default right-aligns them beside the
+ * phone floating nav bar's trailing toggle.
  */
 @Composable
 fun OverflowMenuItems(
@@ -73,6 +77,7 @@ fun OverflowMenuItems(
     offlineMode: OfflineMode,
     isGoingOnline: Boolean,
     downloadCount: Int = 0,
+    alignToStart: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val isOfflineActive = offlineMode != OfflineMode.ONLINE
@@ -126,7 +131,7 @@ fun OverflowMenuItems(
     )
 
     Column(
-        horizontalAlignment = Alignment.End,
+        horizontalAlignment = if (alignToStart) Alignment.Start else Alignment.End,
         verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom),
         modifier = modifier,
     ) {
