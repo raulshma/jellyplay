@@ -19,6 +19,8 @@
     <string name="sync_event_stop">중지됨</string>
     <string name="sync_event_played">재생됨으로 표시됨</string>
     <string name="sync_event_unplayed">재생 안 됨으로 표시됨</string>
+    <string name="sync_event_favorite">즐겨찾기에 추가됨</string>
+    <string name="sync_event_unfavorite">즐겨찾기에서 제거됨</string>
 
     <!-- Title shown for a pending row whose media could not be resolved. -->
     <string name="sync_unknown_title">알 수 없는 항목</string>

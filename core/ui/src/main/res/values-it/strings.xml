@@ -33,6 +33,9 @@
     <string name="core_action_mark_unwatched">Segna come non visto</string>
     <string name="core_action_download">Scarica</string>
     <string name="core_action_add_to_playlist">Aggiungi alla playlist</string>
+    <string name="core_action_favorite">Aggiungi ai preferiti</string>
+    <string name="core_action_unfavorite">Rimuovi dai preferiti</string>
+    <string name="core_action_delete">Elimina download</string>
     <string name="core_action_details">Vedi dettagli</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer

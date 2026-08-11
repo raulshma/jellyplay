@@ -171,6 +171,7 @@
     <string name="detail_error_download_failed">다운로드 실패</string>
     <string name="detail_error_not_a_series">시리즈가 아닙니다</string>
     <string name="detail_error_queue_failed">다운로드 대기열 추가 실패</string>
+    <string name="detail_error_unavailable_offline">이 항목은 오프라인에서 사용할 수 없습니다.</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
     <string name="detail_option_manage_series">시리즈 관리</string>
@@ -282,6 +283,13 @@
     <string name="detail_downloaded">다운로드됨</string>
     <string name="detail_status">상태</string>
     <string name="detail_progress">진행률</string>
+    <string name="detail_download_status_pending">대기 중</string>
+    <string name="detail_download_status_queued">대기열에 있음</string>
+    <string name="detail_download_status_downloading">다운로드 중</string>
+    <string name="detail_download_status_paused">일시정지됨</string>
+    <string name="detail_download_status_completed">완료됨</string>
+    <string name="detail_download_status_failed">실패</string>
+    <string name="detail_download_status_cancelled">취소됨</string>
     <string name="detail_watch_status">시청 상태</string>
     <string name="detail_watched_status_watched">시청함</string>
     <string name="detail_watched_status_label">시청함</string>
@@ -310,4 +318,27 @@
     <plurals name="detail_episodes_count">
         <item quantity="other">에피소드 %1$d개</item>
     </plurals>
+
+    <!-- Sync / resync download -->
+    <string name="detail_resync_title">다운로드 동기화</string>
+    <string name="detail_resync_checking">업데이트 확인 중…</string>
+    <string name="detail_resync_update_available">새 정보가 있습니다</string>
+    <string name="detail_resync_media_changed">미디어 파일이 변경됨 — 재다운로드 필요</string>
+    <string name="detail_resync_in_progress">최신 세부 정보 동기화 중…</string>
+    <string name="detail_resync_complete">다운로드가 최신 세부 정보와 동기화됨</string>
+    <string name="detail_resync_failed">동기화 실패</string>
+    <string name="detail_resync_up_to_date">이 다운로드는 최신 상태입니다.</string>
+    <string name="detail_resync_description">서버에 더 새로운 정보가 있습니다. 동기화하여 메타데이터와 이미지를 새로 고치세요.</string>
+    <string name="detail_resync_change_metadata">메타데이터 업데이트됨 (개요, 출연진, 평점)</string>
+    <string name="detail_resync_change_images">아트워크 업데이트됨 (포스터/배경)</string>
+    <string name="detail_resync_change_media">미디어 파일 자체가 변경됨</string>
+    <string name="detail_resync_media_explanation">메타데이터 동기화로는 미디어 파일을 업데이트할 수 없습니다. 새 파일을 받으려면 이 항목을 삭제하고 다시 다운로드하세요.</string>
+    <string name="detail_resync_action">지금 동기화</string>
+    <string name="detail_resync_redownload">미디어 재다운로드</string>
+
+    <!-- Local subtitles -->
+    <string name="detail_local_subtitles">자막</string>
+    <string name="detail_local_subtitle_off">끔</string>
+    <string name="detail_local_subtitle_default_badge">기본</string>
+    <string name="detail_local_subtitle_forced_badge">강제</string>
 </resources>

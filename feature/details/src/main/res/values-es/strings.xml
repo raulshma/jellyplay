@@ -174,6 +174,7 @@
     <string name="detail_error_download_failed">Error en la descarga</string>
     <string name="detail_error_not_a_series">Esto no es una serie</string>
     <string name="detail_error_queue_failed">No se pudieron poner las descargas en cola</string>
+    <string name="detail_error_unavailable_offline">Este elemento no está disponible sin conexión.</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
     <string name="detail_option_manage_series">Gestionar serie</string>
@@ -285,6 +286,13 @@
     <string name="detail_downloaded">Descargado</string>
     <string name="detail_status">Estado</string>
     <string name="detail_progress">Progreso</string>
+    <string name="detail_download_status_pending">Pendiente</string>
+    <string name="detail_download_status_queued">En cola</string>
+    <string name="detail_download_status_downloading">Descargando</string>
+    <string name="detail_download_status_paused">En pausa</string>
+    <string name="detail_download_status_completed">Completado</string>
+    <string name="detail_download_status_failed">Error</string>
+    <string name="detail_download_status_cancelled">Cancelado</string>
     <string name="detail_watch_status">Estado de visualización</string>
     <string name="detail_watched_status_watched">Visto</string>
     <string name="detail_watched_status_label">Visto</string>
@@ -315,4 +323,27 @@
         <item quantity="many">%1$d episodios</item>
         <item quantity="other">%1$d episodios</item>
     </plurals>
+
+    <!-- Sync / resync download -->
+    <string name="detail_resync_title">Sincronizar descarga</string>
+    <string name="detail_resync_checking">Buscando actualizaciones…</string>
+    <string name="detail_resync_update_available">Nueva información disponible</string>
+    <string name="detail_resync_media_changed">El archivo multimedia cambió — es necesario volver a descargar</string>
+    <string name="detail_resync_in_progress">Sincronizando los últimos detalles…</string>
+    <string name="detail_resync_complete">Descarga sincronizada con los últimos detalles</string>
+    <string name="detail_resync_failed">La sincronización falló</string>
+    <string name="detail_resync_up_to_date">Esta descarga está actualizada.</string>
+    <string name="detail_resync_description">Hay información más reciente en el servidor. Sincroniza para actualizar metadatos e imágenes.</string>
+    <string name="detail_resync_change_metadata">Metadatos actualizados (resumen, reparto, valoraciones)</string>
+    <string name="detail_resync_change_images">Imágenes actualizadas (póster/fondo)</string>
+    <string name="detail_resync_change_media">El propio archivo multimedia cambió</string>
+    <string name="detail_resync_media_explanation">Una sincronización de metadatos no puede actualizar el archivo multimedia. Elimina y vuelve a descargar este elemento para obtener el nuevo archivo.</string>
+    <string name="detail_resync_action">Sincronizar ahora</string>
+    <string name="detail_resync_redownload">Volver a descargar medios</string>
+
+    <!-- Local subtitles -->
+    <string name="detail_local_subtitles">Subtítulos</string>
+    <string name="detail_local_subtitle_off">Desactivados</string>
+    <string name="detail_local_subtitle_default_badge">PREDETERMINADOS</string>
+    <string name="detail_local_subtitle_forced_badge">FORZADOS</string>
 </resources>

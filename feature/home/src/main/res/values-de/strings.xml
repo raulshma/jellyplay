@@ -19,6 +19,8 @@
     <string name="sync_event_stop">Gestoppt</string>
     <string name="sync_event_played">Als gespielt markiert</string>
     <string name="sync_event_unplayed">Als ungespielt markiert</string>
+    <string name="sync_event_favorite">Zu Favoriten hinzugefügt</string>
+    <string name="sync_event_unfavorite">Aus Favoriten entfernt</string>
 
     <!-- Title shown for a pending row whose media could not be resolved. -->
     <string name="sync_unknown_title">Unbekannter Eintrag</string>
