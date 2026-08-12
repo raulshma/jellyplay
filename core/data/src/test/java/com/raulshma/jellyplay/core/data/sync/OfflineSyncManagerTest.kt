@@ -6,7 +6,8 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
-import com.raulshma.jellyplay.core.database.dao.SyncBaselineRow
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
+import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -25,6 +26,7 @@ import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -50,6 +52,7 @@ class OfflineSyncManagerTest {
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val downloadRepository: DownloadRepository = mockk()
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
+    private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
     private val writer = RecordingWriter()
@@ -67,7 +70,7 @@ class OfflineSyncManagerTest {
         downloadFile.createNewFile()
         every { offlineModeManager.isOffline } returns false
         coEvery { mediaRepository.getMediaDetail(itemId) } returns Result.success(detail())
-        coEvery { offlineMediaDao.getSyncBaseline(itemId) } returns baselineRow()
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity()
         coEvery { offlineMediaDao.getLocalImagePaths(itemId) } returns null
         coEvery { downloadRepository.getDownloadByMediaItemId(itemId) } returns
             DownloadItem(
@@ -87,6 +90,7 @@ class OfflineSyncManagerTest {
             writer = writer,
             downloadRepository = downloadRepository,
             offlineMediaDao = offlineMediaDao,
+            syncBaselineDao = syncBaselineDao,
             comparator = comparator,
             offlineModeManager = offlineModeManager,
             playbackRepository = playbackRepository,
@@ -148,22 +152,16 @@ class OfflineSyncManagerTest {
     fun `resyncItem retains skipped subtitle signature in the persisted baseline`() = runTest {
         // Baseline carries a real subtitle signature; options.subtitles = false
         // must carry it forward unchanged instead of wiping it.
-        coEvery { offlineMediaDao.getSyncBaseline(itemId) } returns baselineRow(subtitleSignature = "prior-sub-sig")
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(subtitleSignature = "prior-sub-sig")
 
         manager.resyncItem(
             itemId,
             options = ResyncOptions(metadata = false, poster = false, backdrop = false, subtitles = false, trickplay = true, segments = true),
         )
 
-        // updateSyncBaseline positional args: itemId, posterTag, backdropTag,
-        // metadataSignature, subtitleSignature, trickplaySignature, ...
-        coVerify {
-            offlineMediaDao.updateSyncBaseline(
-                itemId, any(), any(), any(),
-                eq("prior-sub-sig"), // subtitle retained
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
-            )
-        }
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals("prior-sub-sig", slot.captured.syncedSubtitleSignature)
     }
 
     @Test
@@ -173,7 +171,7 @@ class OfflineSyncManagerTest {
         // best-effort write failure: the step must report success=false AND the
         // prior signature must be retained (not re-seeded from the fresh fetch),
         // so the next check still flags subtitles as changed.
-        coEvery { offlineMediaDao.getSyncBaseline(itemId) } returns baselineRow(subtitleSignature = "stale-sub-sig")
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(subtitleSignature = "stale-sub-sig")
         writer.subtitlesResult = false
 
         val result = manager.resyncItem(
@@ -184,15 +182,9 @@ class OfflineSyncManagerTest {
         val subsStep = result.steps.firstOrNull { it.step == ResyncStep.DOWNLOAD_SUBTITLES }
         assertNotNull(subsStep)
         assertEquals(false, subsStep?.success)
-        // updateSyncBaseline positional args: itemId, posterTag, backdropTag,
-        // metadataSignature, subtitleSignature(5th), ...
-        coVerify {
-            offlineMediaDao.updateSyncBaseline(
-                itemId, any(), any(), any(),
-                eq("stale-sub-sig"), // prior signature retained, not re-seeded
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
-            )
-        }
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals("stale-sub-sig", slot.captured.syncedSubtitleSignature)
     }
 
     @Test
@@ -211,24 +203,20 @@ class OfflineSyncManagerTest {
     fun `resyncItem seeds fresh subtitle signature on first contact`() = runTest {
         // No prior baseline -> first contact seeds every detail-derived axis
         // (subtitles/trickplay) from the fresh detail, not from a stale value.
-        coEvery { offlineMediaDao.getSyncBaseline(itemId) } returns null
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns null
 
         manager.resyncItem(itemId)
 
         val expectedSub = comparator.subtitleSignature(detail())
-        coVerify {
-            offlineMediaDao.updateSyncBaseline(
-                itemId, any(), any(), any(),
-                eq(expectedSub), // fresh subtitle signature seeded
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
-            )
-        }
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals(expectedSub, slot.captured.syncedSubtitleSignature)
     }
 
     @Test
     fun `checkForUpdates within TTL returns cached state without fetching`() = runTest {
-        coEvery { offlineMediaDao.getSyncBaseline(itemId) } returns
-            baselineRow(lastSyncedAt = System.currentTimeMillis()) // within 1h TTL
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns
+            baselineEntity(lastSyncedAt = System.currentTimeMillis()) // within 1h TTL
 
         val result = manager.checkForUpdates(itemId)
 
@@ -241,7 +229,7 @@ class OfflineSyncManagerTest {
     @Test
     fun `checkForUpdates retains prior segments signature instead of wiping it`() = runTest {
         // A baseline with a recorded segments signature and an expired TTL.
-        coEvery { offlineMediaDao.getSyncBaseline(itemId) } returns baselineRow(
+        coEvery { syncBaselineDao.getBaseline(itemId) } returns baselineEntity(
             segmentsSignature = "prior-seg-sig",
             lastSyncedAt = 0L, // force TTL expiry
         )
@@ -250,15 +238,10 @@ class OfflineSyncManagerTest {
         manager.checkForUpdates(itemId)
 
         // checkForUpdates does not fetch segments; the prior signature is carried
-        // forward through updateSyncBaseline's segmentsSignature (7th positional
-        // arg, after subtitle/trickplay).
-        coVerify {
-            offlineMediaDao.updateSyncBaseline(
-                itemId, any(), any(), any(), any(), any(),
-                eq("prior-seg-sig"), // segments retained
-                any(), any(), any(), any(), any(), any(), any(),
-            )
-        }
+        // forward through the upserted SyncBaselineEntity's syncedSegmentsSignature.
+        val slot = slot<SyncBaselineEntity>()
+        coVerify { syncBaselineDao.upsert(capture(slot)) }
+        assertEquals("prior-seg-sig", slot.captured.syncedSegmentsSignature)
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -333,16 +316,15 @@ class OfflineSyncManagerTest {
         )
     }
 
-    /** A baseline row whose signatures deliberately differ from [detail] so the
+    /** A baseline entity whose signatures deliberately differ from [detail] so the
      *  change-gates fire (subtitle/trickplay "stale" -> resync re-fetches). */
-    private fun baselineRow(
+    private fun baselineEntity(
         subtitleSignature: String? = "stale-sub-sig",
         trickplaySignature: String? = "stale-trick-sig",
         segmentsSignature: String? = "stale-seg-sig",
         lastSyncedAt: Long? = 0L, // expired TTL by default so checks/resyncs don't short-circuit
-    ): SyncBaselineRow = SyncBaselineRow(
+    ): SyncBaselineEntity = SyncBaselineEntity(
         id = itemId,
-        name = "Test",
         syncedPosterTag = "poster-1",
         syncedBackdropTag = "backdrop-1",
         syncedMetadataSignature = comparator.metadataSignature(detail()),

@@ -4,7 +4,10 @@ import androidx.room.withTransaction
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
 import com.raulshma.jellyplay.core.database.dao.OfflinePeopleRow
+import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.MediaType
@@ -43,6 +46,8 @@ class OfflineRepositoryImplArtworkTest {
     val tempFolder = TemporaryFolder()
 
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
+    private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
+    private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
     private val downloadDao: DownloadDao = mockk(relaxed = true)
     private val database: JellyPlayDatabase = mockk(relaxed = true)
 
@@ -59,7 +64,7 @@ class OfflineRepositoryImplArtworkTest {
         // By default no surviving rows reference anyone; each delete test
         // overrides this when it needs a "still referenced" sibling.
         coEvery { offlineMediaDao.getAllPeopleJson() } returns emptyList()
-        repository = OfflineRepositoryImpl(offlineMediaDao, downloadDao, database)
+        repository = OfflineRepositoryImpl(offlineMediaDao, playbackStateDao, syncBaselineDao, downloadDao, database)
     }
 
     @After
@@ -136,8 +141,17 @@ class OfflineRepositoryImplArtworkTest {
         status = "COMPLETED",
     )
 
+    private fun OfflineMediaEntity.withPlayback() = OfflineMediaWithPlayback(
+        media = this,
+        playbackPositionTicks = null,
+        playedPercentage = null,
+        isPlayed = null,
+        isFavorite = null,
+        lastPlayedDate = null,
+    )
+
     private fun stubDetail(episode: OfflineMediaEntity, download: DownloadEntity?) {
-        coEvery { offlineMediaDao.getByIdFlow(episode.id) } returns flowOf(episode)
+        coEvery { offlineMediaDao.getByIdWithPlaybackFlow(episode.id) } returns flowOf(episode.withPlayback())
         coEvery { downloadDao.getDownloadByMediaItemIdFlow(episode.id) } returns flowOf(download)
     }
 
@@ -221,11 +235,11 @@ class OfflineRepositoryImplArtworkTest {
         poster.writeText("poster-bytes")
         val backdrop = File(dir, DownloadArtifacts.backdropFile("series-1"))
         backdrop.writeText("backdrop-bytes")
-        coEvery { offlineMediaDao.getByIdFlow("series-1") } returns flowOf(
+        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("series-1") } returns flowOf(
             seriesEntity(
                 posterPath = "https://server/Items/series-1/Images/Primary",
                 backdropPath = "https://server/Items/series-1/Images/Backdrop",
-            ),
+            ).withPlayback(),
         )
         coEvery { downloadDao.getDownloadByMediaItemIdFlow("series-1") } returns flowOf(null)
         coEvery { downloadDao.getDownloadsForSeries("series-1") } returns listOf(downloadEntity("ep-1", dir))
@@ -240,8 +254,8 @@ class OfflineRepositoryImplArtworkTest {
     fun `series row with local artwork is left untouched`() = runTest {
         val dir = tempFolder.newFolder("seriesLocal")
         val localPoster = File(dir, DownloadArtifacts.posterFile("series-1")).absolutePath
-        coEvery { offlineMediaDao.getByIdFlow("series-1") } returns flowOf(
-            seriesEntity(posterPath = localPoster),
+        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("series-1") } returns flowOf(
+            seriesEntity(posterPath = localPoster).withPlayback(),
         )
         coEvery { downloadDao.getDownloadByMediaItemIdFlow("series-1") } returns flowOf(null)
 
@@ -264,11 +278,11 @@ class OfflineRepositoryImplArtworkTest {
         localPoster.writeText("poster-bytes")
         val localBackdrop = File(dir, DownloadArtifacts.backdropFile("movie-1"))
         localBackdrop.writeText("backdrop-bytes")
-        coEvery { offlineMediaDao.getByIdFlow("movie-1") } returns flowOf(
+        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("movie-1") } returns flowOf(
             movieEntity(
                 posterPath = "https://server/Items/movie-1/Images/Primary",
                 backdropPath = "https://server/Items/movie-1/Images/Backdrop",
-            ),
+            ).withPlayback(),
         )
         coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
             flowOf(movieDownloadEntity("movie-1", dir))
@@ -282,8 +296,8 @@ class OfflineRepositoryImplArtworkTest {
     @Test
     fun `movie with no local artwork keeps the remote url`() = runTest {
         val dir = tempFolder.newFolder("movieNoArt")
-        coEvery { offlineMediaDao.getByIdFlow("movie-1") } returns flowOf(
-            movieEntity(posterPath = "https://server/Items/movie-1/Images/Primary"),
+        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("movie-1") } returns flowOf(
+            movieEntity(posterPath = "https://server/Items/movie-1/Images/Primary").withPlayback(),
         )
         coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
             flowOf(movieDownloadEntity("movie-1", dir))
@@ -305,7 +319,7 @@ class OfflineRepositoryImplArtworkTest {
         localPoster.writeText("poster-bytes")
         coEvery { offlineMediaDao.getTopLevelItems() } returns flowOf(
             listOf(
-                movieEntity(posterPath = "https://server/Items/movie-1/Images/Primary"),
+                movieEntity(posterPath = "https://server/Items/movie-1/Images/Primary").withPlayback(),
             ),
         )
         coEvery { downloadDao.getDownloadsByMediaItemIdsFlow(listOf("movie-1")) } returns
@@ -326,7 +340,7 @@ class OfflineRepositoryImplArtworkTest {
                 episodeEntity(
                     id = "ep-1",
                     posterPath = "https://server/Items/ep-1/Images/Primary",
-                ).copy(seasonId = "season-1"),
+                ).copy(seasonId = "season-1").withPlayback(),
             ),
         )
         coEvery { downloadDao.getDownloadsByMediaItemIdsFlow(listOf("ep-1")) } returns
@@ -353,13 +367,13 @@ class OfflineRepositoryImplArtworkTest {
         // never downloaded or its write failed).
         val actor1File = File(dir, DownloadArtifacts.personImageFile("person-1"))
         actor1File.writeText("actor1-bytes")
-        coEvery { offlineMediaDao.getByIdFlow("movie-1") } returns flowOf(
+        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("movie-1") } returns flowOf(
             movieEntity().copy(
                 peopleJson = castJson(
                     OfflinePersonInfo(id = "person-1", name = "Lead"),
                     OfflinePersonInfo(id = "person-2", name = "Director", type = "Director"),
                 ),
-            ),
+            ).withPlayback(),
         )
         coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
             flowOf(movieDownloadEntity("movie-1", dir))
@@ -376,10 +390,10 @@ class OfflineRepositoryImplArtworkTest {
         val dir = tempFolder.newFolder("seriesCast")
         val actorFile = File(dir, DownloadArtifacts.personImageFile("person-1"))
         actorFile.writeText("actor-bytes")
-        coEvery { offlineMediaDao.getByIdFlow("series-1") } returns flowOf(
+        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("series-1") } returns flowOf(
             seriesEntity().copy(
                 peopleJson = castJson(OfflinePersonInfo(id = "person-1", name = "Lead")),
-            ),
+            ).withPlayback(),
         )
         coEvery { downloadDao.getDownloadByMediaItemIdFlow("series-1") } returns flowOf(null)
         coEvery { downloadDao.getDownloadsForSeries("series-1") } returns listOf(downloadEntity("ep-1", dir))
@@ -392,10 +406,10 @@ class OfflineRepositoryImplArtworkTest {
     @Test
     fun `cast without disk files keeps null local paths`() = runTest {
         val dir = tempFolder.newFolder("noCastArt")
-        coEvery { offlineMediaDao.getByIdFlow("movie-1") } returns flowOf(
+        coEvery { offlineMediaDao.getByIdWithPlaybackFlow("movie-1") } returns flowOf(
             movieEntity().copy(
                 peopleJson = castJson(OfflinePersonInfo(id = "person-1", name = "Lead")),
-            ),
+            ).withPlayback(),
         )
         coEvery { downloadDao.getDownloadByMediaItemIdFlow("movie-1") } returns
             flowOf(movieDownloadEntity("movie-1", dir))

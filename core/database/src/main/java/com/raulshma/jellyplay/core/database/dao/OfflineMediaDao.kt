@@ -8,97 +8,76 @@ import androidx.room.Transaction
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * Browse / lookup / lifecycle access to offline item identity + metadata.
+ *
+ * Playback state and freshness baseline each have their own DAO
+ * ([PlaybackStateDao], [SyncBaselineDao]) after the row split. The browse
+ * queries below read from the [OfflineMediaWithPlayback] view (a single
+ * `offline_media ⟕ playback_state` join) so the library grid, episode lists,
+ * detail, and search paths still surface resume / watched / favorite state in
+ * one query — no N+1 — while a metadata-only lookup ([getById] / [getByIdFlow])
+ * stays available for the cast-reference and series-link reads that don't need
+ * playback.
+ */
 @Dao
 interface OfflineMediaDao {
 
-    @Query("SELECT * FROM offline_media WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC') ORDER BY createdAt DESC LIMIT 500")
-    fun getTopLevelItems(): Flow<List<OfflineMediaEntity>>
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC')
+        ORDER BY createdAt DESC
+        LIMIT 500
+        """
+    )
+    fun getTopLevelItems(): Flow<List<OfflineMediaWithPlayback>>
 
-    @Query("SELECT * FROM offline_media WHERE seriesId = :seriesId AND mediaType = 'SEASON' ORDER BY seasonNumber ASC")
-    fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaEntity>>
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE seriesId = :seriesId AND mediaType = 'SEASON'
+        ORDER BY seasonNumber ASC
+        """
+    )
+    fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaWithPlayback>>
 
-    @Query("SELECT * FROM offline_media WHERE seasonId = :seasonId AND mediaType = 'EPISODE' ORDER BY episodeNumber ASC")
-    fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaEntity>>
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE seasonId = :seasonId AND mediaType = 'EPISODE'
+        ORDER BY episodeNumber ASC
+        """
+    )
+    fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaWithPlayback>>
 
-    @Query("SELECT * FROM offline_media WHERE parentId = :parentId ORDER BY indexNumber ASC")
-    fun getChildrenByParent(parentId: String): Flow<List<OfflineMediaEntity>>
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE parentId = :parentId
+        ORDER BY indexNumber ASC
+        """
+    )
+    fun getChildrenByParent(parentId: String): Flow<List<OfflineMediaWithPlayback>>
 
+    /** Metadata-only single-row lookup (cast-reference, series-link reads). */
     @Query("SELECT * FROM offline_media WHERE id = :id")
     suspend fun getById(id: String): OfflineMediaEntity?
 
+    /** Metadata-only reactive single-row lookup. */
     @Query("SELECT * FROM offline_media WHERE id = :id")
     fun getByIdFlow(id: String): Flow<OfflineMediaEntity?>
 
+    /** Single-row lookup with playback state joined, for the offline detail / item paths. */
+    @Query("SELECT * FROM offline_media_with_playback WHERE id = :id")
+    suspend fun getByIdWithPlayback(id: String): OfflineMediaWithPlayback?
+
+    /** Reactive single-row lookup with playback state joined. */
+    @Query("SELECT * FROM offline_media_with_playback WHERE id = :id")
+    fun getByIdWithPlaybackFlow(id: String): Flow<OfflineMediaWithPlayback?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: OfflineMediaEntity)
-
-    /**
-     * Updates only the playback-progress columns for a row. A
-     * targeted UPDATE avoids clobbering metadata fields and is cheaper than a
-     * full upsert. `lastPlayedDate` is set to the supplied ISO timestamp.
-     */
-    @Query(
-        """
-        UPDATE offline_media
-        SET playbackPositionTicks = :positionTicks,
-            playedPercentage = :percentage,
-            isPlayed = :isPlayed,
-            lastPlayedDate = :lastPlayedDate
-        WHERE id = :itemId
-        """
-    )
-    suspend fun updatePlaybackProgress(
-        itemId: String,
-        positionTicks: Long?,
-        percentage: Double,
-        isPlayed: Boolean,
-        lastPlayedDate: String?,
-    )
-
-    /**
-     * Batch-applies a played/unplayed state to a single item and every offline
-     * row in its hierarchy: the item itself, its direct children (`parentId`),
-     * and any season/episode under it (`seasonId` / `seriesId`). Used when the
-     * user marks a season or series played/unplayed online — the Jellyfin
-     * `markPlayedItem` endpoint cascades the same change to children server-side,
-     * so this mirrors that cascade into the local offline store.
-     *
-     * `lastPlayedDate` is set on mark-played and cleared on mark-unplayed so the
-     * row reflects the server's UserData semantics.
-     */
-    @Query(
-        """
-        UPDATE offline_media
-        SET isPlayed = :isPlayed,
-            playedPercentage = CASE WHEN :isPlayed THEN 100.0 ELSE 0.0 END,
-            -- Marking either watched or unwatched is an explicit reset of the
-            -- resume state. Keeping an old position when marking watched lets
-            -- a later offline resume reopen a title the user intentionally
-            -- completed; keeping it when marking unwatched shows stale
-            -- Continue Watching progress. Jellyfin clears this field for both
-            -- endpoints, so mirror that contract locally.
-            playbackPositionTicks = NULL,
-            lastPlayedDate = :lastPlayedDate
-        WHERE id = :itemId
-           OR parentId = :itemId
-           OR seasonId = :itemId
-           OR seriesId = :itemId
-        """
-    )
-    suspend fun applyPlayedStateToHierarchy(
-        itemId: String,
-        isPlayed: Boolean,
-        lastPlayedDate: String?,
-    )
-
-    /**
-     * Applies a favorite-state flip to a single offline row. Favorite is
-     * per-item (no hierarchy cascade — unlike [applyPlayedStateToHierarchy], the
-     * Jellyfin favorite endpoints act on one item only), so this is a targeted
-     * single-row UPDATE. No-op (matches zero rows) for a non-downloaded item.
-     */
-    @Query("UPDATE offline_media SET isFavorite = :isFavorite WHERE id = :itemId")
-    suspend fun applyFavoriteState(itemId: String, isFavorite: Boolean)
 
     @Transaction
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -130,7 +109,7 @@ interface OfflineMediaDao {
 
     @Query(
         """
-        SELECT * FROM offline_media
+        SELECT * FROM offline_media_with_playback
         WHERE (name LIKE :pattern ESCAPE '\' OR seriesName LIKE :pattern ESCAPE '\' OR seasonName LIKE :pattern ESCAPE '\')
         ORDER BY
             CASE WHEN name LIKE :prefixPattern ESCAPE '\' THEN 0 ELSE 1 END,
@@ -138,117 +117,7 @@ interface OfflineMediaDao {
         LIMIT :limit
         """
     )
-    suspend fun search(pattern: String, prefixPattern: String, limit: Int): List<OfflineMediaEntity>
-
-    // ---- Offline resync queries (migration 42→43) ----
-
-    /**
-     * Lightweight freshness-baseline projection for batch checks. Carries only
-     * the baseline + result columns needed by the sync comparator so a batch
-     * check over many items doesn't load full rows (no `peopleJson`, no paths).
-     */
-    @Query(
-        """
-        SELECT id, name, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature,
-               syncedSubtitleSignature, syncedTrickplaySignature, syncedSegmentsSignature,
-               syncedMediaSourceId, syncedMediaSizeBytes, lastSyncedAt,
-               syncUpdateAvailable, syncMediaChanged, syncChecking, syncError
-        FROM offline_media
-        WHERE id IN (:ids)
-        """
-    )
-    suspend fun getSyncBaselines(ids: List<String>): List<SyncBaselineRow>
-
-    /** Single-item baseline lookup, used by the check/resync paths. */
-    @Query(
-        """
-        SELECT id, name, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature,
-               syncedSubtitleSignature, syncedTrickplaySignature, syncedSegmentsSignature,
-               syncedMediaSourceId, syncedMediaSizeBytes, lastSyncedAt,
-               syncUpdateAvailable, syncMediaChanged, syncChecking, syncError
-        FROM offline_media
-        WHERE id = :itemId
-        """
-    )
-    suspend fun getSyncBaseline(itemId: String): SyncBaselineRow?
-
-    /**
-     * Targeted UPDATE of the freshness baseline + result flags after a check or
-     * resync completes. Avoids clobbering playback/metadata columns and is
-     * cheaper than a full upsert. Mirrors [updatePlaybackProgress].
-     */
-    @Query(
-        """
-        UPDATE offline_media
-        SET syncedPosterTag = :posterTag,
-            syncedBackdropTag = :backdropTag,
-            syncedMetadataSignature = :metadataSignature,
-            syncedSubtitleSignature = :subtitleSignature,
-            syncedTrickplaySignature = :trickplaySignature,
-            syncedSegmentsSignature = :segmentsSignature,
-            syncedMediaSourceId = :mediaSourceId,
-            syncedMediaSizeBytes = :mediaSizeBytes,
-            lastSyncedAt = :lastSyncedAt,
-            syncUpdateAvailable = :updateAvailable,
-            syncMediaChanged = :mediaChanged,
-            syncChecking = :checking,
-            syncError = :error
-        WHERE id = :itemId
-        """
-    )
-    suspend fun updateSyncBaseline(
-        itemId: String,
-        posterTag: String?,
-        backdropTag: String?,
-        metadataSignature: String?,
-        subtitleSignature: String?,
-        trickplaySignature: String?,
-        segmentsSignature: String?,
-        mediaSourceId: String?,
-        mediaSizeBytes: Long?,
-        lastSyncedAt: Long?,
-        updateAvailable: Int,
-        mediaChanged: Int,
-        checking: Int,
-        error: Int,
-    )
-
-    /**
-     * Lightweight flag flip for the "check in progress" marker, set before a
-     * network fetch and cleared on completion (success or failure). Decoupled
-     * from [updateSyncBaseline] so a failed check can clear the marker without
-     * touching the baseline columns.
-     */
-    @Query("UPDATE offline_media SET syncChecking = :checking WHERE id = :itemId")
-    suspend fun setSyncChecking(itemId: String, checking: Int)
-
-    /** Clears a stale `syncChecking=1` marker left by a crashed check. */
-    @Query("UPDATE offline_media SET syncChecking = 0 WHERE syncChecking = 1")
-    suspend fun clearAllCheckingFlags()
-
-    /**
-     * Items flagged as having a metadata/image update or a media-file change.
-     * Drives the per-row "update available" badge and the downloads-screen
-     * aggregate count. Reactive — re-emits as flags flip during a batch check.
-     */
-    @Query(
-        """
-        SELECT id, name, mediaType,
-               seriesName, seasonNumber, episodeNumber,
-               CASE WHEN syncMediaChanged = 1 THEN 1 ELSE 0 END AS mediaFileChanged,
-               CASE WHEN syncUpdateAvailable = 1 THEN 1 ELSE 0 END AS updateAvailable,
-               CASE WHEN syncChecking = 1 THEN 1 ELSE 0 END AS checking,
-               lastSyncedAt
-        FROM offline_media
-        WHERE syncUpdateAvailable = 1 OR syncMediaChanged = 1
-        ORDER BY lastSyncedAt DESC
-        """
-    )
-    fun getItemsWithUpdates(): Flow<List<OfflineSyncUpdateRow>>
-
-    /** Count of items with any pending update, for the appbar badge. */
-    @Query("SELECT COUNT(*) FROM offline_media WHERE syncUpdateAvailable = 1 OR syncMediaChanged = 1")
-    fun getUpdatesCount(): Flow<Int>
+    suspend fun search(pattern: String, prefixPattern: String, limit: Int): List<OfflineMediaWithPlayback>
 
     /** Ids of every top-level offline item (for batch freshness checks). */
     @Query("SELECT id FROM offline_media WHERE mediaType IN ('SERIES', 'MOVIE', 'AUDIO', 'MUSIC', 'EPISODE')")
@@ -284,44 +153,4 @@ data class OfflineImagePaths(
 data class OfflinePeopleRow(
     val id: String,
     val peopleJson: String?,
-)
-
-/**
- * Freshness-baseline projection — the persisted snapshot a check diffs a fresh
- * [com.raulshma.jellyplay.core.model.MediaDetail] against. See
- * [OfflineMediaDao.getSyncBaselines] / [OfflineMediaDao.getSyncBaseline].
- */
-data class SyncBaselineRow(
-    val id: String,
-    val name: String,
-    val syncedPosterTag: String?,
-    val syncedBackdropTag: String?,
-    val syncedMetadataSignature: String?,
-    val syncedSubtitleSignature: String?,
-    val syncedTrickplaySignature: String?,
-    val syncedSegmentsSignature: String?,
-    val syncedMediaSourceId: String?,
-    val syncedMediaSizeBytes: Long?,
-    val lastSyncedAt: Long?,
-    val syncUpdateAvailable: Int,
-    val syncMediaChanged: Int,
-    val syncChecking: Int,
-    val syncError: Int,
-)
-
-/**
- * Reactive projection of items flagged for resync — drives the downloads
- * screen's resync sheet and per-row badges without loading full rows.
- */
-data class OfflineSyncUpdateRow(
-    val id: String,
-    val name: String,
-    val mediaType: String?,
-    val seriesName: String?,
-    val seasonNumber: Int?,
-    val episodeNumber: Int?,
-    val mediaFileChanged: Int,
-    val updateAvailable: Int,
-    val checking: Int,
-    val lastSyncedAt: Long?,
 )

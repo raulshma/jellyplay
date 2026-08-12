@@ -7,6 +7,8 @@ import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackOutboxDao
+import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.migration.allMigrations
 import dagger.Module
 import dagger.Provides
@@ -48,6 +50,12 @@ object DatabaseModule {
 
     @Provides
     fun provideOfflineMediaDao(database: JellyPlayDatabase) = database.offlineMediaDao()
+
+    @Provides
+    fun providePlaybackStateDao(database: JellyPlayDatabase) = database.playbackStateDao()
+
+    @Provides
+    fun provideSyncBaselineDao(database: JellyPlayDatabase) = database.syncBaselineDao()
 
     @Provides
     fun provideAuditLogDao(database: JellyPlayDatabase) = database.auditLogDao()
