@@ -1170,6 +1170,9 @@
     <string name="settings_nav_hide_on_scroll">Hide on Scroll</string>
     <string name="settings_nav_hide_on_scroll_on">Bar hides when scrolling down</string>
     <string name="settings_nav_hide_on_scroll_off">Bar stays visible</string>
+    <string name="settings_hide_top_header_on_scroll">Hide Top Header on Scroll</string>
+    <string name="settings_hide_top_header_on_scroll_on">Header hides when scrolling down</string>
+    <string name="settings_hide_top_header_on_scroll_off">Header stays visible</string>
     <string name="settings_nav_item_home">Home</string>
     <string name="settings_nav_item_home_subtitle">Home dashboard</string>
     <string name="settings_nav_item_library">Library</string>

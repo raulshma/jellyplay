@@ -60,6 +60,16 @@ class HomeDiscoveryStoreTest {
         assertTrue(slice.libraryHomeSectionOverrides.isEmpty())
         assertTrue(slice.pinnedHomeSections.isEmpty())
         assertEquals(ContinueWatchingClickBehavior.DETAILS, slice.continueWatchingClickBehavior)
+        // Default off — current pinned behaviour until the user opts in.
+        assertEquals(false, slice.hideTopHeaderOnScroll)
+    }
+
+    @Test
+    fun `setHideTopHeaderOnScroll round-trips`() = runTest {
+        store.setHideTopHeaderOnScroll(true)
+        assertEquals(true, store.homeDiscovery.first().hideTopHeaderOnScroll)
+        store.setHideTopHeaderOnScroll(false)
+        assertEquals(false, store.homeDiscovery.first().hideTopHeaderOnScroll)
     }
 
     @Test
