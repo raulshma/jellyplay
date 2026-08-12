@@ -211,7 +211,7 @@ dependencies {
 
     // Generates and merges a Baseline Profile from the :baselineprofile
     // macrobenchmark module. AGP installs the resulting baseline-prof.txt /
-    // startup-prof into release builds (see P3 in docs/performance-audit.md).
+    // startup-prof into release builds.
     // The androidx.baselineprofile 1.5.x consumer plugin (required for AGP 9)
     // exposes the producer via the `baselineProfile` configuration.
     "baselineProfile"(project(":baselineprofile"))

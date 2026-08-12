@@ -116,7 +116,7 @@ class UserPreferencesStore @Inject constructor(
     // All stores share the same `"user_prefs"` DataStore, so writes are
     // consistent regardless of which entry point a consumer uses.
     // (The Widget / ServerIdentity / PinRateLimiter collaborators were pruned
-    // in Phase D — those consumers now inject those stores directly.)
+    // — those consumers now inject those stores directly.)
     private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
     private val appearanceStore: com.raulshma.jellyplay.core.datastore.appearance.AppearanceStore,
     private val videoPlayerStore: com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore,
