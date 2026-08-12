@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
+import com.raulshma.jellyplay.core.database.entity.PlaybackStateEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -24,6 +25,7 @@ class OfflineMediaDaoTest {
 
     private lateinit var database: JellyPlayDatabase
     private lateinit var offlineMediaDao: OfflineMediaDao
+    private lateinit var playbackStateDao: PlaybackStateDao
 
     @Before
     fun setup() {
@@ -32,6 +34,7 @@ class OfflineMediaDaoTest {
             .allowMainThreadQueries()
             .build()
         offlineMediaDao = database.offlineMediaDao()
+        playbackStateDao = database.playbackStateDao()
     }
 
     @After
@@ -134,15 +137,15 @@ class OfflineMediaDaoTest {
         offlineMediaDao.upsert(createMedia(id = "series-2", mediaType = "SERIES"))
         offlineMediaDao.upsert(createMedia(id = "ep-x", mediaType = "EPISODE", seriesId = "series-2", seasonId = "season-2"))
 
-        offlineMediaDao.applyPlayedStateToHierarchy(itemId = "series-1", isPlayed = true, lastPlayedDate = "2026-07-21T10:00:00Z")
+        playbackStateDao.applyPlayedStateToHierarchy(itemId = "series-1", isPlayed = true, lastPlayedDate = "2026-07-21T10:00:00Z")
 
-        assertEquals(true, offlineMediaDao.getById("series-1")?.isPlayed)
-        assertEquals(true, offlineMediaDao.getById("season-1")?.isPlayed)
-        assertEquals(true, offlineMediaDao.getById("ep-1")?.isPlayed)
-        assertEquals(true, offlineMediaDao.getById("ep-2")?.isPlayed)
-        // Unrelated hierarchy untouched.
-        assertEquals(false, offlineMediaDao.getById("series-2")?.isPlayed)
-        assertEquals(false, offlineMediaDao.getById("ep-x")?.isPlayed)
+        assertEquals(true, playbackStateDao.getById("series-1")?.isPlayed)
+        assertEquals(true, playbackStateDao.getById("season-1")?.isPlayed)
+        assertEquals(true, playbackStateDao.getById("ep-1")?.isPlayed)
+        assertEquals(true, playbackStateDao.getById("ep-2")?.isPlayed)
+        // Unrelated hierarchy untouched (no playback row created => effectively not played).
+        assertEquals(false, playbackStateDao.getById("series-2")?.isPlayed ?: false)
+        assertEquals(false, playbackStateDao.getById("ep-x")?.isPlayed ?: false)
     }
 
     @Test
@@ -153,21 +156,23 @@ class OfflineMediaDaoTest {
         offlineMediaDao.upsert(createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1"))
         offlineMediaDao.upsert(createMedia(id = "ep-2", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-2"))
 
-        offlineMediaDao.applyPlayedStateToHierarchy(itemId = "season-1", isPlayed = true, lastPlayedDate = "2026-07-21T10:00:00Z")
+        playbackStateDao.applyPlayedStateToHierarchy(itemId = "season-1", isPlayed = true, lastPlayedDate = "2026-07-21T10:00:00Z")
 
-        assertEquals(true, offlineMediaDao.getById("season-1")?.isPlayed)
-        assertEquals(true, offlineMediaDao.getById("ep-1")?.isPlayed)
-        // season-2 and its episode untouched.
-        assertEquals(false, offlineMediaDao.getById("season-2")?.isPlayed)
-        assertEquals(false, offlineMediaDao.getById("ep-2")?.isPlayed)
-        assertEquals(false, offlineMediaDao.getById("series-1")?.isPlayed)
+        assertEquals(true, playbackStateDao.getById("season-1")?.isPlayed)
+        assertEquals(true, playbackStateDao.getById("ep-1")?.isPlayed)
+        // season-2 and its episode untouched (no playback row created => effectively not played).
+        assertEquals(false, playbackStateDao.getById("season-2")?.isPlayed ?: false)
+        assertEquals(false, playbackStateDao.getById("ep-2")?.isPlayed ?: false)
+        assertEquals(false, playbackStateDao.getById("series-1")?.isPlayed ?: false)
     }
 
     @Test
     fun `applyPlayedStateToHierarchy unplayed resets percentage and clears position`() = runTest {
-        // Seed a played episode with position/percentage set.
-        offlineMediaDao.upsert(
-            createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1").copy(
+        // Seed the episode metadata and a played playback row with position/percentage set.
+        offlineMediaDao.upsert(createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1"))
+        playbackStateDao.upsert(
+            PlaybackStateEntity(
+                id = "ep-1",
                 isPlayed = true,
                 playedPercentage = 100.0,
                 playbackPositionTicks = 5_000_000_000L,
@@ -175,9 +180,9 @@ class OfflineMediaDaoTest {
             ),
         )
 
-        offlineMediaDao.applyPlayedStateToHierarchy(itemId = "season-1", isPlayed = false, lastPlayedDate = null)
+        playbackStateDao.applyPlayedStateToHierarchy(itemId = "season-1", isPlayed = false, lastPlayedDate = null)
 
-        val row = offlineMediaDao.getById("ep-1")!!
+        val row = playbackStateDao.getById("ep-1")!!
         assertEquals(false, row.isPlayed)
         assertEquals(0.0, row.playedPercentage, 0.001)
         assertEquals(null, row.playbackPositionTicks)
@@ -186,20 +191,22 @@ class OfflineMediaDaoTest {
 
     @Test
     fun `applyPlayedStateToHierarchy played resets stale resume position`() = runTest {
-        offlineMediaDao.upsert(
-            createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1").copy(
+        offlineMediaDao.upsert(createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1"))
+        playbackStateDao.upsert(
+            PlaybackStateEntity(
+                id = "ep-1",
                 playbackPositionTicks = 5_000_000_000L,
                 playedPercentage = 50.0,
             ),
         )
 
-        offlineMediaDao.applyPlayedStateToHierarchy(
+        playbackStateDao.applyPlayedStateToHierarchy(
             itemId = "season-1",
             isPlayed = true,
             lastPlayedDate = "2026-07-21T10:00:00Z",
         )
 
-        val row = offlineMediaDao.getById("ep-1")!!
+        val row = playbackStateDao.getById("ep-1")!!
         assertTrue(row.isPlayed)
         assertEquals(100.0, row.playedPercentage, 0.001)
         assertNull(row.playbackPositionTicks)
@@ -210,8 +217,9 @@ class OfflineMediaDaoTest {
     fun `applyPlayedStateToHierarchy is a no-op when no rows match`() = runTest {
         offlineMediaDao.upsert(createMedia(id = "ep-1", mediaType = "EPISODE", seriesId = "series-1", seasonId = "season-1"))
 
-        offlineMediaDao.applyPlayedStateToHierarchy(itemId = "nonexistent", isPlayed = true, lastPlayedDate = "2026-07-21T10:00:00Z")
+        playbackStateDao.applyPlayedStateToHierarchy(itemId = "nonexistent", isPlayed = true, lastPlayedDate = "2026-07-21T10:00:00Z")
 
-        assertEquals(false, offlineMediaDao.getById("ep-1")?.isPlayed)
+        // No playback row is created for ep-1 => effectively not played.
+        assertEquals(false, playbackStateDao.getById("ep-1")?.isPlayed ?: false)
     }
 }

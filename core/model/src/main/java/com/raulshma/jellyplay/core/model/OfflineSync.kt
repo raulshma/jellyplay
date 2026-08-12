@@ -29,7 +29,9 @@ enum class SyncStatus {
 
 /**
  * The freshness state of a single offline item, surfaced to the UI. Persisted
- * on the `offline_media` row so a badge can render from the DB with no network.
+ * (per content axis) on the `sync_baseline` row so a badge can render from the
+ * DB with no network, and projected losslessly by
+ * [com.raulshma.jellyplay.core.data.sync.OfflineSyncManager].
  */
 @Immutable
 @Serializable
@@ -38,13 +40,13 @@ data class OfflineSyncState(
     val metadataChanged: Boolean = false,
     val imagesChanged: Boolean = false,
     /** External subtitle streams differ from the persisted baseline signature.
-     *  Computed live in [com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator]
-     *  from the MediaDetail subtitle inventory; not surfaced by the DB-driven
-     *  composite badge (defaults false there) so it doesn't render a false chip
-     *  when only metadata flipped. */
+     *  Computed in [com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator]
+     *  from the MediaDetail subtitle inventory and persisted as its own flag so
+     *  the DB-driven badge surfaces it accurately. Only flipped by a resync that
+     *  fetches fresh detail (the proactive check derives it from MediaDetail). */
     val subtitlesChanged: Boolean = false,
-    /** Trickplay sprite manifest differs from the baseline signature. Same
-     *  live-only surfacing semantics as [subtitlesChanged]. */
+    /** Trickplay sprite manifest differs from the baseline signature. Persisted
+     *  on its own flag and surfaced accurately by the DB-driven badge. */
     val trickplayChanged: Boolean = false,
     /** Media segments (intro/outro/recap) differ from the baseline signature.
      *  Only computed inside a resync that fetches fresh segments (segments are
@@ -187,59 +189,4 @@ data class OfflineSyncUpdate(
     val seriesName: String? = null,
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
-)
-
-/**
- * The single source of truth for projecting the persisted sync-baseline flags
- * (all stored as `Int` 0/1 columns on the `offline_media` row) into a UI-facing
- * [OfflineSyncState]. Shared by [OfflineSyncManager] and [OfflineRepository] so
- * the badge rendered from the DB (offline detail) and the state returned from a
- * check/resync agree — one decision shape, not two that can drift.
- *
- * Precedence: a stale `checking` marker wins (transient), then error, then
- * media-changed, then update-available, then current/unknown. Note that the
- * stored `syncUpdateAvailable` flag is coarse — it doesn't split metadata vs
- * images — so both are surfaced to drive the badge; the check path returns the
- * precise split via [ResyncCheckResult].
- *
- * The boolean params accept `Int`-as-Boolean so callers can pass the DAO column
- * values (`1`/`0`) directly without a per-call conversion.
- */
-fun offlineSyncStateOf(
-    checking: Boolean,
-    error: Boolean,
-    mediaChanged: Boolean,
-    updateAvailable: Boolean,
-    lastSyncedAt: Long?,
-): OfflineSyncState = when {
-    checking -> OfflineSyncState(SyncStatus.CHECKING, lastCheckedAt = lastSyncedAt)
-    error -> OfflineSyncState(SyncStatus.ERROR, lastCheckedAt = lastSyncedAt)
-    mediaChanged -> OfflineSyncState(
-        status = SyncStatus.UPDATE_AVAILABLE,
-        mediaFileChanged = true,
-        lastCheckedAt = lastSyncedAt,
-    )
-    updateAvailable -> OfflineSyncState(
-        status = SyncStatus.UPDATE_AVAILABLE,
-        metadataChanged = true,
-        imagesChanged = true,
-        lastCheckedAt = lastSyncedAt,
-    )
-    lastSyncedAt != null -> OfflineSyncState(SyncStatus.CURRENT, lastCheckedAt = lastSyncedAt)
-    else -> OfflineSyncState(SyncStatus.UNKNOWN)
-}
-
-/** Convenience overload taking the raw `Int` (0/1) column values. */
-fun offlineSyncStateOf(
-    checking: Int,
-    error: Int,
-    mediaChanged: Int,
-    updateAvailable: Int,
-    lastSyncedAt: Long?,
-): OfflineSyncState = offlineSyncStateOf(
-    checking = checking != 0,
-    error = error != 0,
-    mediaChanged = mediaChanged != 0,
-    updateAvailable = updateAvailable != 0,
-    lastSyncedAt = lastSyncedAt,
 )

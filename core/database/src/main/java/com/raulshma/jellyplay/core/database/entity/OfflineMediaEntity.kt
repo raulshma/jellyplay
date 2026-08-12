@@ -5,6 +5,28 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+/**
+ * Identity + browsable metadata mirror for an offline item.
+ *
+ * The historical 49-column row was split along its jobs into three tables,
+ * each with one invariant:
+ *  - `offline_media` (this entity): identity + the browsable metadata mirror.
+ *  - [PlaybackStateEntity]: playback progress + watched/favorite state.
+ *  - [SyncBaselineEntity]: freshness baseline signatures + result flags.
+ *
+ * Previously this row carried four jobs at once with every column
+ * nullable/defaultable, so it could represent a bare stub, a full metadata
+ * mirror, a progress row, or a freshness baseline row indistinguishably. The
+ * split gives each concern its own home and its own invariant; a metadata
+ * re-persist no longer needs to copy the sync or playback columns forward to
+ * avoid clobbering them.
+ *
+ * Playback state for a row is read via the `OfflineMediaWithPlayback` LEFT JOIN
+ * projection (see [com.raulshma.jellyplay.core.database.dao.OfflineMediaDao]);
+ * freshness state via [SyncBaselineEntity]. Hierarchy link columns
+ * (`parentId`/`seriesId`/`seasonId`) remain FK-by-convention, matching the rest
+ * of the schema.
+ */
 @Entity(
     tableName = "offline_media",
     indices = [
@@ -44,20 +66,9 @@ data class OfflineMediaEntity(
     val genres: String? = null,
     @ColumnInfo(defaultValue = "0")
     val createdAt: Long = System.currentTimeMillis(),
-    // Playback progress. Nullable/defaulted so existing rows
-    // (no recorded progress) resolve to "not started". Added in migration 28→29.
-    val playbackPositionTicks: Long? = null,
-    @ColumnInfo(defaultValue = "0.0")
-    val playedPercentage: Double = 0.0,
-    @ColumnInfo(defaultValue = "0")
-    val isPlayed: Boolean = false,
-    @ColumnInfo(defaultValue = "0")
-    val isFavorite: Boolean = false,
-    val lastPlayedDate: String? = null,
     // Rich metadata persisted at download time so offline detail screens can
-    // show the same information as the online detail screen. Added in
-    // migration 29→30; all columns are nullable so existing rows degrade
-    // gracefully until re-download.
+    // show the same information as the online detail screen. All columns are
+    // nullable so existing rows degrade gracefully until re-download.
     val originalTitle: String? = null,
     val criticRating: Float? = null,
     val studios: String? = null,
@@ -66,36 +77,7 @@ data class OfflineMediaEntity(
     // Provider ids (tmdb/imdb/…) and external URLs persisted as JSON blobs at
     // download time so the offline subtitle search can resolve a TMDB/IMDb id
     // without a server round-trip. Nullable so existing rows degrade
-    // gracefully until re-download. Added in migration 43→44.
+    // gracefully until re-download.
     val providerIdsJson: String? = null,
     val externalUrlsJson: String? = null,
-    // ---- Offline resync baseline + result columns (migration 42→43) ----
-    // Persisted snapshot of the server's image tags / metadata hash / media source
-    // captured at download time and after every resync. Lets a freshness check
-    // diff a fresh fetch against this baseline without an extra round-trip, and
-    // lets the UI render an "update available" badge from the DB with no network.
-    // All nullable/defaulted so existing rows degrade gracefully until first check.
-    val syncedPosterTag: String? = null,
-    val syncedBackdropTag: String? = null,
-    val syncedMetadataSignature: String? = null,
-    val syncedMediaSourceId: String? = null,
-    val syncedMediaSizeBytes: Long? = null,
-    val lastSyncedAt: Long? = null,
-    // Sidecar-artifact signatures (migration 45→46) for subtitles, trickplay,
-    // and media segments. Subtitles + trickplay are seeded at download time
-    // (derived from MediaDetail); segments is seeded on the first segments
-    // resync (segments aren't part of MediaDetail). Nullable so pre-migration
-    // rows degrade to "never recorded" — the comparator treats an empty/null
-    // signature as a first-contact axis that never flags a spurious change.
-    val syncedSubtitleSignature: String? = null,
-    val syncedTrickplaySignature: String? = null,
-    val syncedSegmentsSignature: String? = null,
-    @ColumnInfo(defaultValue = "0")
-    val syncUpdateAvailable: Int = 0,
-    @ColumnInfo(defaultValue = "0")
-    val syncMediaChanged: Int = 0,
-    @ColumnInfo(defaultValue = "0")
-    val syncChecking: Int = 0,
-    @ColumnInfo(defaultValue = "0")
-    val syncError: Int = 0,
 )

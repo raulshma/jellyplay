@@ -3,6 +3,9 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
+import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
@@ -23,6 +26,8 @@ import org.junit.Test
 class OfflineRepositoryImplSearchTest {
 
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
+    private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
+    private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
     private val downloadDao: DownloadDao = mockk(relaxed = true)
     private val database: JellyPlayDatabase = mockk(relaxed = true)
 
@@ -49,7 +54,7 @@ class OfflineRepositoryImplSearchTest {
 
     @Before
     fun setup() {
-        repository = OfflineRepositoryImpl(offlineMediaDao, downloadDao, database)
+        repository = OfflineRepositoryImpl(offlineMediaDao, playbackStateDao, syncBaselineDao, downloadDao, database)
     }
 
     @Test
@@ -80,7 +85,10 @@ class OfflineRepositoryImplSearchTest {
     fun `valid query builds substring pattern and maps results`() = runTest {
         coEvery {
             offlineMediaDao.search(pattern = "%Matrix%", prefixPattern = "Matrix%", limit = 20)
-        } returns listOf(matrixEntity, matrixReloadedEntity)
+        } returns listOf(
+            OfflineMediaWithPlayback(media = matrixEntity, playbackPositionTicks = null, playedPercentage = null, isPlayed = null, isFavorite = null, lastPlayedDate = null),
+            OfflineMediaWithPlayback(media = matrixReloadedEntity, playbackPositionTicks = null, playedPercentage = null, isPlayed = null, isFavorite = null, lastPlayedDate = null),
+        )
 
         val result = repository.searchOffline("Matrix")
 
@@ -95,7 +103,7 @@ class OfflineRepositoryImplSearchTest {
     fun `query is trimmed before pattern building`() = runTest {
         coEvery {
             offlineMediaDao.search(pattern = "%Matrix%", prefixPattern = "Matrix%", limit = 10)
-        } returns listOf(matrixEntity)
+        } returns listOf(OfflineMediaWithPlayback(media = matrixEntity, playbackPositionTicks = null, playedPercentage = null, isPlayed = null, isFavorite = null, lastPlayedDate = null))
 
         repository.searchOffline("  Matrix  ", limit = 10)
 
@@ -136,7 +144,7 @@ class OfflineRepositoryImplSearchTest {
             name = "Mystery",
             mediaType = "NOT_A_REAL_TYPE",
         )
-        coEvery { offlineMediaDao.search(any(), any(), any()) } returns listOf(weirdEntity)
+        coEvery { offlineMediaDao.search(any(), any(), any()) } returns listOf(OfflineMediaWithPlayback(media = weirdEntity, playbackPositionTicks = null, playedPercentage = null, isPlayed = null, isFavorite = null, lastPlayedDate = null))
 
         val result = repository.searchOffline("Mystery")
 
@@ -152,7 +160,7 @@ class OfflineRepositoryImplSearchTest {
             mediaType = "ALBUM",
             genres = "Rock , Progressive, ",
         )
-        coEvery { offlineMediaDao.search(any(), any(), any()) } returns listOf(entity)
+        coEvery { offlineMediaDao.search(any(), any(), any()) } returns listOf(OfflineMediaWithPlayback(media = entity, playbackPositionTicks = null, playedPercentage = null, isPlayed = null, isFavorite = null, lastPlayedDate = null))
 
         val result = repository.searchOffline("Dark")
 

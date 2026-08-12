@@ -9,11 +9,11 @@ import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
-import com.raulshma.jellyplay.core.database.dao.SyncBaselineRow
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
+import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
-import com.raulshma.jellyplay.core.model.offlineSyncStateOf
 import com.raulshma.jellyplay.core.model.ResyncCheckResult
 import com.raulshma.jellyplay.core.model.ResyncItemProgress
 import com.raulshma.jellyplay.core.model.ResyncOptions
@@ -39,26 +39,36 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Orchestrates offline download freshness checks and metadata/image resyncs.
+ * The single home of offline freshness state. Owns all three of:
+ *  - **decision** — delegated to the pure [OfflineSyncComparator] (the internal
+ *    seam; no I/O there),
+ *  - **persistence** — read/written through [SyncBaselineDao], the freshness
+ *    table split out of `offline_media`,
+ *  - **projection** — [getOfflineSyncState] / [getUpdatesCount] /
+ *    [getItemsWithUpdates] turn the persisted baseline + per-axis flags into a
+ *    UI-facing [OfflineSyncState] / [OfflineSyncUpdate].
+ *
+ * Consolidating the three here kills the historical drift between the
+ * DB-driven badge and the check/resync result: there is now one projection
+ * (lossless, because each content axis has its own persisted flag) instead of a
+ * lossy "5 axes → 1 flag" mapper reconstructed in two places. The 14-positional
+ * argument DAO updater collapses to a single [SyncBaselineDao.upsert] call.
  *
  * **What it does not do**: re-download the media file. A server-side MediaSource
  * change is surfaced as [OfflineSyncState.mediaFileChanged] and left for the UI
  * to route through the existing delete + download path; this manager only ever
- * refreshes the lightweight artifacts (offline metadata row, poster, backdrop).
+ * refreshes the lightweight artifacts (offline metadata row, poster, backdrop,
+ * subtitles, trickplay, segments).
  *
  * **TTL gate.** [checkForUpdates] is a no-op network-wise when the persisted
  * `lastSyncedAt` is within [SYNC_TTL_MS] of now, so an offline-detail screen can
- * call it on every entry without spamming the server — most calls resolve from
- * the DB. The same gate applies to [checkForUpdatesBatch] per item.
+ * call it on every entry without spamming the server. The same gate applies to
+ * [checkForUpdatesBatch] per item.
  *
  * **Baseline seeding.** Items downloaded before this feature shipped have no
- * baseline. The first check treats a missing baseline as "first sync": it
+ * baseline row. The first check treats a missing baseline as "first sync": it
  * records the fresh baseline and reports CURRENT (no spurious update flag on
  * first contact), so users aren't prompted to resync items they just opened.
- *
- * **Decision purity.** All freshness logic (signature, tag/media-source diff)
- * lives in [OfflineSyncComparator]; this class only moves data between the
- * network, the DAO, and the disk image cache.
  */
 @Singleton
 class OfflineSyncManager @Inject constructor(
@@ -66,6 +76,7 @@ class OfflineSyncManager @Inject constructor(
     private val writer: OfflineDownloadWriter,
     private val downloadRepository: DownloadRepository,
     private val offlineMediaDao: OfflineMediaDao,
+    private val syncBaselineDao: SyncBaselineDao,
     private val comparator: OfflineSyncComparator,
     private val offlineModeManager: OfflineModeManager,
     private val playbackRepository: PlaybackRepository,
@@ -79,8 +90,10 @@ class OfflineSyncManager @Inject constructor(
     init {
         // Clear any `syncChecking=1` markers left by a process death mid-check
         // so they don't render as a stuck "checking…" badge forever.
-        ioScope.launch { runCatching { offlineMediaDao.clearAllCheckingFlags() } }
+        ioScope.launch { runCatching { syncBaselineDao.clearAllCheckingFlags() } }
     }
+
+    // ── Decision orchestration (check / resync) ───────────────────────────────
 
     /**
      * Checks [itemId] against the server, TTL-gated. Returns the resulting state.
@@ -89,27 +102,27 @@ class OfflineSyncManager @Inject constructor(
      * device is online. Pass [force] to bypass the TTL gate (e.g. pull-to-refresh).
      */
     suspend fun checkForUpdates(itemId: String, force: Boolean = false): ResyncCheckResult {
-        val baseline = offlineMediaDao.getSyncBaseline(itemId)
+        val baseline = syncBaselineDao.getBaseline(itemId)
             ?: return ResyncCheckResult(itemId, OfflineSyncState(SyncStatus.UNKNOWN))
 
         val now = System.currentTimeMillis()
         val lastSynced = baseline.lastSyncedAt
         if (!force && lastSynced != null && now - lastSynced < SYNC_TTL_MS) {
-            return ResyncCheckResult(itemId, baseline.toState())
+            return ResyncCheckResult(itemId, baseline.toOfflineSyncState())
         }
         if (offlineModeManager.isOffline) {
             // Can't fetch; surface the last known state rather than spinning.
-            return ResyncCheckResult(itemId, baseline.toState())
+            return ResyncCheckResult(itemId, baseline.toOfflineSyncState())
         }
 
-        offlineMediaDao.setSyncChecking(itemId, 1)
+        syncBaselineDao.setSyncChecking(itemId, 1)
         try {
             // Bust the TTL detail cache so we get a fresh fetch, not a stale read.
             mediaRepository.invalidateDetailCache(itemId)
             val fresh = mediaRepository.getMediaDetail(itemId).getOrNull()
             if (fresh == null) {
                 recordError(itemId, baseline)
-                return ResyncCheckResult(itemId, baseline.toState().copy(status = SyncStatus.ERROR))
+                return ResyncCheckResult(itemId, baseline.toOfflineSyncState().copy(status = SyncStatus.ERROR))
             }
             val result = comparator.diff(baseline.toSyncBaseline(), fresh, itemId)
             persistCheckResult(
@@ -127,9 +140,9 @@ class OfflineSyncManager @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Freshness check failed for $itemId", e)
             recordError(itemId, baseline)
-            return ResyncCheckResult(itemId, baseline.toState().copy(status = SyncStatus.ERROR))
+            return ResyncCheckResult(itemId, baseline.toOfflineSyncState().copy(status = SyncStatus.ERROR))
         } finally {
-            offlineMediaDao.setSyncChecking(itemId, 0)
+            syncBaselineDao.setSyncChecking(itemId, 0)
         }
     }
 
@@ -150,21 +163,18 @@ class OfflineSyncManager @Inject constructor(
     }
 
     /**
-     * Resyncs a single item's metadata and changed images from the server. Does
-     * NOT touch the media file. Updates the persisted baseline on success and
-     * clears the update-available flag (a media-source change keeps the
-     * media-changed flag set so the UI can still prompt for a full re-download).
-     * Reports progress via [batchProgress] and returns the step-by-step result.
+     * Resyncs a single item's metadata and changed images/sidecars from the
+     * server. Does NOT touch the media file. Updates the persisted baseline on
+     * success and clears the update-available flag (a media-source change keeps
+     * the media-changed flag set so the UI can still prompt for a full
+     * re-download). Reports progress via [batchProgress] and returns the
+     * step-by-step result.
      *
      * [options] selects which data categories to refresh. Skipped categories
      * retain their existing baseline, so a partial sync only clears the
      * update-available flag for the categories actually synced — the comparator
      * is re-run against an effective baseline that blends synced-fresh values
-     * with the retained values. This recheck governs only the metadata/image
-     * axes (the selectable categories); the media-source axis is fixed
-     * separately from [mediaFileChanged] and is not part of that re-check.
-     * Defaults to [ResyncOptions.ALL] (the historical "resync everything"
-     * behaviour).
+     * with the retained values. Defaults to [ResyncOptions.ALL].
      */
     suspend fun resyncItem(
         itemId: String,
@@ -188,7 +198,7 @@ class OfflineSyncManager @Inject constructor(
             }
             steps += ResyncStepResult(itemId, ResyncStep.FETCH_DETAIL, success = true)
 
-            val baselineRow = offlineMediaDao.getSyncBaseline(itemId)
+            val baselineRow = syncBaselineDao.getBaseline(itemId)
             val baseline = baselineRow?.toSyncBaseline()
             val freshSource = detail.mediaSources.firstOrNull()
             mediaFileChanged = baseline != null && comparator.isMediaSourceChanged(baseline, freshSource)
@@ -313,21 +323,17 @@ class OfflineSyncManager @Inject constructor(
             // a partial sync clears the flag only for the synced categories.
             val effectiveBaseline = baseline.mergePartial(seededBaseline, options, baseline == null)
             val recheck = comparator.diff(effectiveBaseline, detail, itemId, freshSegments)
-            offlineMediaDao.updateSyncBaseline(
-                itemId = itemId,
-                posterTag = effectiveBaseline.posterTag,
-                backdropTag = effectiveBaseline.backdropTag,
-                metadataSignature = effectiveBaseline.metadataSignature,
-                subtitleSignature = effectiveBaseline.subtitleSignature,
-                trickplaySignature = effectiveBaseline.trickplaySignature,
-                segmentsSignature = effectiveBaseline.segmentsSignature,
-                mediaSourceId = freshBaseline.mediaSourceId,
-                mediaSizeBytes = freshBaseline.mediaSizeBytes,
-                lastSyncedAt = System.currentTimeMillis(),
-                updateAvailable = if (recheck.state.needsResync) 1 else 0,
-                mediaChanged = if (mediaFileChanged) 1 else 0,
-                checking = 0,
-                error = 0,
+            syncBaselineDao.upsert(
+                baselineEntity(
+                    itemId = itemId,
+                    baseline = effectiveBaseline,
+                    // Media-source id/size always come from the fresh detail.
+                    mediaSourceId = freshBaseline.mediaSourceId,
+                    mediaSizeBytes = freshBaseline.mediaSizeBytes,
+                    state = recheck.state,
+                    lastSyncedAt = System.currentTimeMillis(),
+                    error = false,
+                )
             )
             steps += ResyncStepResult(itemId, ResyncStep.UPDATE_BASELINE, success = true)
             setProgress(itemId, ResyncPhase.DONE, null)
@@ -378,54 +384,82 @@ class OfflineSyncManager @Inject constructor(
         // First-contact (no prior baseline): record the fresh baseline as
         // CURRENT instead of flagging an update on the very first check, so
         // opening a long-dormant download doesn't prompt an immediate resync.
+        val firstContact = !hadBaseline
         val freshBaseline = comparator.baseline(fresh)
-        val (updateFlag, mediaFlag) = if (!hadBaseline) {
-            0 to 0
-        } else {
-            (if (state.needsResync) 1 else 0) to (if (state.mediaFileChanged) 1 else 0)
-        }
-        offlineMediaDao.updateSyncBaseline(
-            itemId = itemId,
-            posterTag = freshBaseline.posterTag,
-            backdropTag = freshBaseline.backdropTag,
-            metadataSignature = freshBaseline.metadataSignature,
-            subtitleSignature = freshBaseline.subtitleSignature,
-            trickplaySignature = freshBaseline.trickplaySignature,
-            // Check never fetches segments, so carry the prior signature forward
-            // (empty when never recorded) instead of clobbering it.
-            segmentsSignature = retainedSegmentsSignature,
-            mediaSourceId = freshBaseline.mediaSourceId,
-            mediaSizeBytes = freshBaseline.mediaSizeBytes,
-            lastSyncedAt = state.lastCheckedAt,
-            updateAvailable = updateFlag,
-            mediaChanged = mediaFlag,
-            checking = 0,
-            error = 0,
+        syncBaselineDao.upsert(
+            baselineEntity(
+                itemId = itemId,
+                baseline = freshBaseline,
+                state = if (firstContact) state.copy(
+                    metadataChanged = false,
+                    imagesChanged = false,
+                    subtitlesChanged = false,
+                    trickplayChanged = false,
+                    segmentsChanged = false,
+                    mediaFileChanged = false,
+                ) else state,
+                // Check never fetches segments, so carry the prior signature
+                // forward (empty when never recorded) instead of clobbering it.
+                segmentsSignatureOverride = retainedSegmentsSignature,
+                lastSyncedAt = state.lastCheckedAt,
+                error = false,
+            )
         )
     }
 
     /**
      * Records a check failure: sets the `syncError` flag (so the badge keeps
      * surfacing it past the TTL gate instead of flickering once) while
-     * preserving the last-known baseline. A later successful check clears the
-     * flag via [persistCheckResult].
+     * preserving the last-known baseline + flags. A later successful check
+     * clears the flag via [persistCheckResult].
      */
-    private suspend fun recordError(itemId: String, baseline: SyncBaselineRow) {
-        offlineMediaDao.updateSyncBaseline(
-            itemId = itemId,
-            posterTag = baseline.syncedPosterTag,
-            backdropTag = baseline.syncedBackdropTag,
-            metadataSignature = baseline.syncedMetadataSignature,
-            subtitleSignature = baseline.syncedSubtitleSignature,
-            trickplaySignature = baseline.syncedTrickplaySignature,
-            segmentsSignature = baseline.syncedSegmentsSignature,
-            mediaSourceId = baseline.syncedMediaSourceId,
-            mediaSizeBytes = baseline.syncedMediaSizeBytes,
-            lastSyncedAt = baseline.lastSyncedAt,
-            updateAvailable = baseline.syncUpdateAvailable,
-            mediaChanged = baseline.syncMediaChanged,
-            checking = 0,
-            error = 1,
+    private suspend fun recordError(itemId: String, baseline: SyncBaselineEntity) {
+        syncBaselineDao.upsert(baseline.copy(syncError = 1, syncChecking = 0))
+    }
+
+    /**
+     * Builds the persisted [SyncBaselineEntity] from a comparator baseline + the
+     * freshly computed [OfflineSyncState]. The denormalized `syncUpdateAvailable`
+     * is the OR of the five resyncable per-axis flags, so the "items with
+     * updates" query and badge count stay one predicate while projection stays
+     * lossless. Each per-axis flag mirrors the corresponding state boolean.
+     */
+    private fun baselineEntity(
+        itemId: String,
+        baseline: SyncBaseline,
+        state: OfflineSyncState,
+        lastSyncedAt: Long?,
+        error: Boolean,
+        mediaSourceId: String? = baseline.mediaSourceId,
+        mediaSizeBytes: Long? = baseline.mediaSizeBytes,
+        segmentsSignatureOverride: String? = baseline.segmentsSignature.ifEmpty { null },
+    ): SyncBaselineEntity {
+        val metadataChanged = if (state.metadataChanged) 1 else 0
+        val imagesChanged = if (state.imagesChanged) 1 else 0
+        val subtitlesChanged = if (state.subtitlesChanged) 1 else 0
+        val trickplayChanged = if (state.trickplayChanged) 1 else 0
+        val segmentsChanged = if (state.segmentsChanged) 1 else 0
+        val updateAvailable = if (state.needsResync) 1 else 0
+        return SyncBaselineEntity(
+            id = itemId,
+            syncedPosterTag = baseline.posterTag,
+            syncedBackdropTag = baseline.backdropTag,
+            syncedMetadataSignature = baseline.metadataSignature,
+            syncedSubtitleSignature = baseline.subtitleSignature,
+            syncedTrickplaySignature = baseline.trickplaySignature,
+            syncedSegmentsSignature = segmentsSignatureOverride,
+            syncedMediaSourceId = mediaSourceId,
+            syncedMediaSizeBytes = mediaSizeBytes,
+            lastSyncedAt = lastSyncedAt,
+            syncUpdateAvailable = updateAvailable,
+            syncMediaChanged = if (state.mediaFileChanged) 1 else 0,
+            syncChecking = 0,
+            syncError = if (error) 1 else 0,
+            syncMetadataChanged = metadataChanged,
+            syncImagesChanged = imagesChanged,
+            syncSubtitlesChanged = subtitlesChanged,
+            syncTrickplayChanged = trickplayChanged,
+            syncSegmentsChanged = segmentsChanged,
         )
     }
 
@@ -438,8 +472,8 @@ class OfflineSyncManager @Inject constructor(
     }
 }
 
-/** Adapts a DAO baseline row to the comparator's input type. */
-private fun SyncBaselineRow.toSyncBaseline(): SyncBaseline = SyncBaseline(
+/** Adapts a persisted baseline row to the comparator's input type. */
+private fun SyncBaselineEntity.toSyncBaseline(): SyncBaseline = SyncBaseline(
     posterTag = syncedPosterTag,
     backdropTag = syncedBackdropTag,
     metadataSignature = syncedMetadataSignature ?: "",
@@ -480,14 +514,5 @@ private fun SyncBaseline?.mergePartial(
 }
 
 /** True when at least the metadata signature was ever recorded (vs. pre-feature rows). */
-private fun SyncBaselineRow.hasStoredBaseline(): Boolean =
+private fun SyncBaselineEntity.hasStoredBaseline(): Boolean =
     syncedMetadataSignature != null || syncedPosterTag != null || syncedBackdropTag != null
-
-/** Maps the persisted columns to a UI-facing state via the shared mapper. */
-private fun SyncBaselineRow.toState(): OfflineSyncState = offlineSyncStateOf(
-    checking = syncChecking,
-    error = syncError,
-    mediaChanged = syncMediaChanged,
-    updateAvailable = syncUpdateAvailable,
-    lastSyncedAt = lastSyncedAt,
-)

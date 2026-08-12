@@ -15,8 +15,12 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
+import com.raulshma.jellyplay.core.database.entity.PlaybackStateEntity
+import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.data.worker.DownloadNotificationHelper
 import com.raulshma.jellyplay.core.data.worker.awaitResponse
@@ -63,6 +67,8 @@ class DownloadRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadDao: DownloadDao,
     private val offlineMediaDao: OfflineMediaDao,
+    private val playbackStateDao: PlaybackStateDao,
+    private val syncBaselineDao: SyncBaselineDao,
     private val database: JellyPlayDatabase,
     private val mediaRepository: MediaRepository,
     /**
@@ -837,8 +843,15 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     private suspend fun saveOfflineMetadataForItem(item: MediaItem, imageUrl: String?, backdropUrl: String?) {
-        val entity = item.toOfflineMediaEntity(imageUrl, backdropUrl)
-        offlineMediaDao.upsert(entity)
+        // Metadata + playback are split across two tables; seed both from the
+        // fresh item in one transaction so a reader never sees a metadata row
+        // without its playback snapshot. The freshness baseline is seeded only
+        // on the detail path ([saveOfflineMetadataForDetail]) where a full
+        // MediaDetail is available.
+        database.withTransaction {
+            offlineMediaDao.upsert(item.toOfflineMediaEntity(imageUrl, backdropUrl))
+            playbackStateDao.upsert(item.toPlaybackState())
+        }
         preloadImageToCache(imageUrl)
         preloadImageToCache(backdropUrl)
     }
@@ -850,53 +863,42 @@ class DownloadRepositoryImpl @Inject constructor(
      * the cast row without network access.
      */
     private suspend fun saveOfflineMetadataForDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
-        // Preserve any existing sync-baseline columns when re-persisting metadata
-        // (resync path). The upsert below uses REPLACE, which would otherwise wipe
-        // them to defaults and briefly flip the offline-detail freshness badge to
-        // UNKNOWN before the manager's updateSyncBaseline restores them. Copying
-        // them forward keeps the row coherent across the re-persist.
-        val existing = offlineMediaDao.getById(detail.item.id)
-        val entity = detail.toOfflineMediaEntity(imageUrl, backdropUrl).let { fresh ->
-            if (existing != null) fresh.copy(
-                syncedPosterTag = existing.syncedPosterTag,
-                syncedBackdropTag = existing.syncedBackdropTag,
-                syncedMetadataSignature = existing.syncedMetadataSignature,
-                syncedMediaSourceId = existing.syncedMediaSourceId,
-                syncedMediaSizeBytes = existing.syncedMediaSizeBytes,
-                lastSyncedAt = existing.lastSyncedAt,
-                syncUpdateAvailable = existing.syncUpdateAvailable,
-                syncMediaChanged = existing.syncMediaChanged,
-                syncChecking = existing.syncChecking,
-                syncError = existing.syncError,
-            ) else fresh
+        // Metadata, playback, and freshness baseline each live in their own
+        // table now. A metadata re-persist (the resync PERSIST_METADATA step
+        // re-uses this) can no longer clobber the baseline — it's in
+        // `sync_baseline` — so the old "copy the sync columns forward" block is
+        // gone.
+        val existingMeta = offlineMediaDao.getById(detail.item.id)
+        database.withTransaction {
+            offlineMediaDao.upsert(detail.toOfflineMediaEntity(imageUrl, backdropUrl))
+            playbackStateDao.upsert(detail.item.toPlaybackState())
         }
-        offlineMediaDao.upsert(entity)
         // Seed the freshness baseline from the detail we just persisted so the
         // first auto-check has a reference to diff against. Without this, a fresh
-        // download enters with a null baseline and the first check treats itself
+        // download enters with no baseline row and the first check treats itself
         // as "first contact" — swallowing a real change that happened before that
         // first check (and always reporting CURRENT for new downloads). Only seed
         // when no baseline existed yet, so a re-download doesn't clobber a recent
         // check's flags; a genuine re-download is itself a fresh server snapshot.
-        if (existing == null || existing.syncedMetadataSignature == null) {
+        val existingBaseline = syncBaselineDao.getBaseline(detail.item.id)
+        if (existingMeta == null || existingBaseline?.syncedMetadataSignature == null) {
             val baseline = syncComparator.baseline(detail)
-            offlineMediaDao.updateSyncBaseline(
-                itemId = detail.item.id,
-                posterTag = baseline.posterTag,
-                backdropTag = baseline.backdropTag,
-                metadataSignature = baseline.metadataSignature,
-                subtitleSignature = baseline.subtitleSignature,
-                trickplaySignature = baseline.trickplaySignature,
-                // Segments aren't part of MediaDetail; their signature is seeded
-                // on the first segments resync rather than at download time.
-                segmentsSignature = null,
-                mediaSourceId = baseline.mediaSourceId,
-                mediaSizeBytes = baseline.mediaSizeBytes,
-                lastSyncedAt = System.currentTimeMillis(),
-                updateAvailable = 0,
-                mediaChanged = 0,
-                checking = 0,
-                error = 0,
+            syncBaselineDao.upsert(
+                SyncBaselineEntity(
+                    id = detail.item.id,
+                    syncedPosterTag = baseline.posterTag,
+                    syncedBackdropTag = baseline.backdropTag,
+                    syncedMetadataSignature = baseline.metadataSignature,
+                    syncedSubtitleSignature = baseline.subtitleSignature,
+                    syncedTrickplaySignature = baseline.trickplaySignature,
+                    // Segments aren't part of MediaDetail; their signature is
+                    // seeded on the first segments resync rather than at
+                    // download time.
+                    syncedSegmentsSignature = null,
+                    syncedMediaSourceId = baseline.mediaSourceId,
+                    syncedMediaSizeBytes = baseline.mediaSizeBytes,
+                    lastSyncedAt = System.currentTimeMillis(),
+                ),
             )
         }
         preloadImageToCache(imageUrl)
@@ -965,8 +967,16 @@ class DownloadRepositoryImpl @Inject constructor(
         blurHashBackdrop = blurHashes.backdrop,
         premiereDate = premiereDate,
         genres = genres.joinToString(","),
-        // Seed playback progress from server UserData so the download shows its
-        // watched/resume state immediately.
+    )
+
+    /**
+     * Server `UserData` snapshot seeded at download time (and re-seeded on a
+     * metadata re-persist) into `playback_state`. Mirrors the playback fields
+     * the metadata row used to carry, so a freshly downloaded item shows its
+     * watched / resume state immediately.
+     */
+    private fun MediaItem.toPlaybackState(): PlaybackStateEntity = PlaybackStateEntity(
+        id = id,
         playbackPositionTicks = playbackPositionTicks,
         playedPercentage = PlayedStateSync.computePlayedPercentage(playbackPositionTicks, runTimeTicks, isPlayed),
         isPlayed = isPlayed,
@@ -1014,8 +1024,12 @@ class DownloadRepositoryImpl @Inject constructor(
         database.withTransaction {
             downloadDao.deleteDownloadById(entity.id)
             offlineMediaDao.deleteById(entity.mediaItemId)
+            playbackStateDao.deleteById(entity.mediaItemId)
+            syncBaselineDao.deleteById(entity.mediaItemId)
             offlineMediaDao.deleteOrphanedSeasons()
             offlineMediaDao.deleteOrphanedSeries()
+            playbackStateDao.deleteUnreferenced()
+            syncBaselineDao.deleteUnreferenced()
         }
     }
 
