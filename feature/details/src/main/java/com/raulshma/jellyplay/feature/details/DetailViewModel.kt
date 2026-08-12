@@ -373,6 +373,31 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
+     * Loads the on-disk file inventory (media + sidecar artifacts) for the
+     * download-details sheet. Runs only when the sheet opens — sidecar sizes
+     * aren't persisted, so this is the one place the filesystem walk executes.
+     * Resolves the item id from the current snapshot, falling back to
+     * [currentItemId] so a not-yet-snapshotted download still inventories.
+     */
+    fun loadDownloadFileInventory() {
+        val itemId = _uiState.value.detail?.item?.id ?: currentItemId ?: return
+        _uiState.update { it.copy(isLoadingDownloadFiles = true) }
+        launch {
+            val inventory = downloadRepository.getDownloadFileInventory(itemId)
+            _uiState.update {
+                it.copy(downloadFileInventory = inventory, isLoadingDownloadFiles = false)
+            }
+        }
+    }
+
+    /** Clears the loaded inventory so the next sheet open re-reads fresh sizes. */
+    fun clearDownloadFileInventory() {
+        _uiState.update {
+            it.copy(downloadFileInventory = null, isLoadingDownloadFiles = false)
+        }
+    }
+
+    /**
      * Single persistence seam for the stream selectors: writes the resolved
      * subtitle/audio pair to [PlayerEngineStore.setMediaStreamSelection]. Extracted
      * so [selectSubtitle], [selectAudio], and [selectLocalSubtitle] cannot drift

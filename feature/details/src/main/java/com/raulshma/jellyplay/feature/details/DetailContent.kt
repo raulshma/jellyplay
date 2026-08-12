@@ -132,7 +132,7 @@ internal fun DetailContent(
         canManageSeries = state.canManageSeries,
         canDeleteDownloadedSeries = state.origin?.isLocal == true &&
             isSeries &&
-            state.capabilities.localDownloadManagement,
+            (state.detailContext?.seriesAggregate?.downloadedEpisodeCount ?: 0) > 0,
         canEditMetadata = state.capabilities.remoteDiscovery,
         canAddToPlaylist = state.capabilities.remoteDiscovery,
         onClose = { /* menus close themselves */ },
@@ -140,6 +140,7 @@ internal fun DetailContent(
         onShare = shareMedia,
         onDownload = { showDownloadDialog = true },
         onDownloadSeries = callbacks.onDownloadSeriesClick,
+        onDeleteDownload = callbacks.onDeleteDownload,
         onDeleteDownloadedSeries = callbacks.onDeleteDownloadedEpisodes,
         onHideFromNextUp = callbacks.onHideFromNextUp,
         onShowFromNextUp = callbacks.onShowFromNextUp,

@@ -697,7 +697,7 @@ internal val offlineJson: Json = Json {
 }
 
 /** Decodes a [peopleJson] blob into a cast list, tolerating null/garbage rows. */
-private fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> {
+internal fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> {
     if (peopleJson.isNullOrBlank()) return emptyList()
     return runCatching {
         offlineJson.decodeFromString<List<OfflinePersonInfo>>(peopleJson)

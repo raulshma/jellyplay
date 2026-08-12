@@ -303,6 +303,44 @@
     <string name="detail_download_status_completed">Completed</string>
     <string name="detail_download_status_failed">Failed</string>
     <string name="detail_download_status_cancelled">Cancelled</string>
+
+    <!-- Download-details bottom sheet (tapped from DownloadInfoCard). English-only
+         here, mirroring the resync strings above; locales fall back to these defaults. -->
+    <string name="detail_download_details_title">Download details</string>
+    <string name="detail_download_section_download">Download</string>
+    <string name="detail_download_section_media">Media</string>
+    <string name="detail_download_section_media_info">Media info</string>
+    <string name="detail_download_section_files">Downloaded files</string>
+    <string name="detail_downloaded_bytes">Downloaded</string>
+    <string name="detail_container">Container</string>
+    <string name="detail_file_present">File present</string>
+    <string name="detail_media_source">Media source</string>
+    <string name="detail_download_path">Path</string>
+    <string name="detail_media_title">Title</string>
+    <string name="detail_media_type">Type</string>
+    <string name="detail_original_title">Original title</string>
+    <string name="detail_year">Year</string>
+    <string name="detail_runtime">Runtime</string>
+    <string name="detail_file_name">File</string>
+    <string name="detail_episode_label">Episode</string>
+    <string name="detail_no_downloaded_subtitles">No downloaded subtitles</string>
+    <string name="detail_view_download_details">View download details</string>
+
+    <!-- Download-details: on-disk file inventory (media + sidecar artifacts). -->
+    <string name="detail_download_files_total">Total on disk</string>
+    <string name="detail_download_files_loading">Calculating file sizes…</string>
+    <string name="detail_download_files_empty">No downloaded files found</string>
+    <string name="detail_download_files_location">Location</string>
+    <plurals name="detail_files_count">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <string name="detail_file_category_media">Media</string>
+    <string name="detail_file_category_subtitle">Subtitles</string>
+    <string name="detail_file_category_trickplay">Trickplay</string>
+    <string name="detail_file_category_segment">Segments</string>
+    <string name="detail_file_category_image">Images</string>
+
     <string name="detail_watch_status">Watch status</string>
     <string name="detail_watched_status_watched">Watched</string>
     <string name="detail_watched_status_label">Watched</string>
