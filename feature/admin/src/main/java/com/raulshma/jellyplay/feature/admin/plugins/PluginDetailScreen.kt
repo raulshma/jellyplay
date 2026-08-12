@@ -21,8 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +60,8 @@ import com.raulshma.jellyplay.core.model.PluginVersionInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
@@ -241,58 +241,36 @@ fun PluginDetailScreen(
     }
 
     if (showUninstallDialog) {
-        AlertDialog(
-            onDismissRequest = { showUninstallDialog = false },
-            title = { Text(stringResource(R.string.admin_uninstall_plugin_title)) },
-            text = {
-                Text(stringResource(R.string.admin_uninstall_plugin_body, state.plugin?.name ?: ""))
+        ConfirmDialog(
+            title = stringResource(R.string.admin_uninstall_plugin_title),
+            message = stringResource(R.string.admin_uninstall_plugin_body, state.plugin?.name ?: ""),
+            confirmText = stringResource(R.string.admin_uninstall),
+            dismissText = stringResource(R.string.admin_cancel),
+            tone = ConfirmTone.DESTRUCTIVE,
+            confirmLoading = state.isUninstalling,
+            onConfirm = {
+                showUninstallDialog = false
+                viewModel.uninstall { onBack() }
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showUninstallDialog = false
-                        viewModel.uninstall { onBack() }
-                    },
-                    enabled = !state.isUninstalling,
-                ) {
-                    if (state.isUninstalling) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                    } else {
-                        Text(stringResource(R.string.admin_uninstall), color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showUninstallDialog = false }) {
-                    Text(stringResource(R.string.admin_cancel))
-                }
-            },
+            onDismiss = { showUninstallDialog = false },
         )
     }
 
     // Third-party install disclaimer (mirrors jellyfin-web MessagePluginInstallDisclaimer).
     pendingTrustInstall?.let { version ->
-        AlertDialog(
-            onDismissRequest = { pendingTrustInstall = null },
-            icon = { Icon(Tabler.Outline.AlertTriangle, contentDescription = null) },
-            title = { Text(stringResource(R.string.admin_install_third_party_title)) },
-            text = {
-                Text(
-                    "Plugins have the same system access as your Jellyfin server. " +
-                        "Only install plugins from sources you trust. Continue installing " +
-                        "version ${version.version}?",
-                )
+        ConfirmDialog(
+            title = stringResource(R.string.admin_install_third_party_title),
+            message = stringResource(R.string.admin_install_third_party_body, "version ${version.version}"),
+            confirmText = stringResource(R.string.admin_continue),
+            dismissText = stringResource(R.string.admin_cancel),
+            tone = ConfirmTone.WARNING,
+            icon = Tabler.Outline.AlertTriangle,
+            onConfirm = {
+                val v = version
+                pendingTrustInstall = null
+                viewModel.installVersion(v)
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    val v = version
-                    pendingTrustInstall = null
-                    viewModel.installVersion(v)
-                }) { Text(stringResource(R.string.admin_continue)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingTrustInstall = null }) { Text(stringResource(R.string.admin_cancel)) }
-            },
+            onDismiss = { pendingTrustInstall = null },
         )
     }
 }

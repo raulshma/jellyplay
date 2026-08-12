@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +53,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
@@ -267,22 +268,18 @@ fun HomeLayoutPresetsScreen(
     }
 
     if (resetConfirm) {
-        AlertDialog(
-            onDismissRequest = { resetConfirm = false },
-            title = { Text(stringResource(R.string.settings_home_layout_reset_title)) },
-            text = { Text(stringResource(R.string.settings_home_layout_reset_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.resetHomeLayout()
-                    resetConfirm = false
-                    userMessageBus.info(uiTextOf(R.string.settings_home_layout_reset))
-                }) { Text(stringResource(com.raulshma.jellyplay.core.ui.R.string.core_reset)) }
+        ConfirmDialog(
+            title = stringResource(R.string.settings_home_layout_reset_title),
+            message = stringResource(R.string.settings_home_layout_reset_message),
+            confirmText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_reset),
+            onConfirm = {
+                viewModel.resetHomeLayout()
+                resetConfirm = false
+                userMessageBus.info(uiTextOf(R.string.settings_home_layout_reset))
             },
-            dismissButton = {
-                TextButton(onClick = { resetConfirm = false }) {
-                    Text(stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel))
-                }
-            },
+            onDismiss = { resetConfirm = false },
+            dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+            tone = ConfirmTone.NEUTRAL,
         )
     }
 }

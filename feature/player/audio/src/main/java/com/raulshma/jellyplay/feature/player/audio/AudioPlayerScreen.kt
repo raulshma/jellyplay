@@ -28,7 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,6 +52,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.data.playback.QueueUndoEvent
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.feature.player.audio.R
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
@@ -855,25 +856,17 @@ fun AudioPlayerScreen(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text(stringResource(R.string.audio_download_delete_title)) },
-            text = { Text(stringResource(R.string.audio_download_delete_message)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirm = false
-                        viewModel.downloadCurrentTrack()
-                    },
-                ) {
-                    Text(stringResource(R.string.audio_download_delete_confirm), color = MaterialTheme.colorScheme.error)
-                }
+        ConfirmDialog(
+            title = stringResource(R.string.audio_download_delete_title),
+            message = stringResource(R.string.audio_download_delete_message),
+            confirmText = stringResource(R.string.audio_download_delete_confirm),
+            dismissText = stringResource(R.string.audio_cancel),
+            tone = ConfirmTone.DESTRUCTIVE,
+            onConfirm = {
+                showDeleteConfirm = false
+                viewModel.downloadCurrentTrack()
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text(stringResource(R.string.audio_cancel))
-                }
-            },
+            onDismiss = { showDeleteConfirm = false },
         )
     }
 }

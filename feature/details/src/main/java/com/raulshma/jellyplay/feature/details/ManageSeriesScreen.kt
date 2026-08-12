@@ -18,8 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -31,7 +29,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,6 +60,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -155,34 +154,19 @@ fun ManageSeriesScreen(
 
     // Delete-file confirmation dialog.
     uiState.pendingDeleteEpisode?.let { episode ->
-        AlertDialog(
-            onDismissRequest = { viewModel.cancelDeleteEpisode() },
-            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text(stringResource(R.string.detail_manage_delete_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.detail_manage_delete_message,
-                        episode.title,
-                        "S${episode.seasonNumber}E${episode.episodeNumber}",
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.confirmDeleteEpisode() },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Text(stringResource(R.string.detail_manage_delete_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.cancelDeleteEpisode() }) {
-                    Text(stringResource(R.string.detail_cancel))
-                }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.detail_manage_delete_title),
+            message = stringResource(
+                R.string.detail_manage_delete_message,
+                episode.title,
+                "S${episode.seasonNumber}E${episode.episodeNumber}",
+            ),
+            confirmText = stringResource(R.string.detail_manage_delete_confirm),
+            dismissText = stringResource(R.string.detail_cancel),
+            icon = Tabler.Outline.Trash,
+            tone = ConfirmTone.DESTRUCTIVE,
+            onConfirm = { viewModel.confirmDeleteEpisode() },
+            onDismiss = { viewModel.cancelDeleteEpisode() },
         )
     }
 }

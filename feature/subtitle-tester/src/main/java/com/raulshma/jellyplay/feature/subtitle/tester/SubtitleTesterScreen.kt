@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -36,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleControls
 import com.raulshma.jellyplay.feature.subtitle.tester.components.PreviewTile
 import com.raulshma.jellyplay.feature.subtitle.tester.preview.PreviewEngineHost
@@ -150,20 +151,14 @@ fun SubtitleTesterScreen(
     }
 
     if (showDiscardDialog) {
-        AlertDialog(
-            onDismissRequest = { showDiscardDialog = false },
-            title = { Text(stringResource(R.string.subtitle_tester_discard_title)) },
-            text = { Text(stringResource(R.string.subtitle_tester_discard_message)) },
-            confirmButton = {
-                TextButton(onClick = onBack) {
-                    Text(stringResource(R.string.subtitle_tester_discard_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDiscardDialog = false }) {
-                    Text(stringResource(R.string.subtitle_tester_discard_cancel))
-                }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.subtitle_tester_discard_title),
+            message = stringResource(R.string.subtitle_tester_discard_message),
+            confirmText = stringResource(R.string.subtitle_tester_discard_confirm),
+            onConfirm = { onBack() },
+            onDismiss = { showDiscardDialog = false },
+            dismissText = stringResource(R.string.subtitle_tester_discard_cancel),
+            tone = ConfirmTone.NEUTRAL,
         )
     }
 }

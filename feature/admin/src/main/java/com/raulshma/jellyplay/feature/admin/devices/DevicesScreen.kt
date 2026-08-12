@@ -59,6 +59,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -93,23 +95,14 @@ fun DevicesScreen(
     )
 
     if (state.showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissDeleteDialog() },
-            title = { Text(stringResource(R.string.admin_delete_device_title)) },
-            text = {
-                Text(stringResource(R.string.admin_delete_device_body, state.selectedDevice?.displayName() ?: ""))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.deleteDevice() },
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) { Text(stringResource(R.string.admin_delete)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissDeleteDialog() }) { Text(stringResource(R.string.admin_cancel)) }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.admin_delete_device_title),
+            message = stringResource(R.string.admin_delete_device_body, state.selectedDevice?.displayName() ?: ""),
+            confirmText = stringResource(R.string.admin_delete),
+            dismissText = stringResource(R.string.admin_cancel),
+            tone = ConfirmTone.DESTRUCTIVE,
+            onConfirm = { viewModel.deleteDevice() },
+            onDismiss = { viewModel.dismissDeleteDialog() },
         )
     }
 

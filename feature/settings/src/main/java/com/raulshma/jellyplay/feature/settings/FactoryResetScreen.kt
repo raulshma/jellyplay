@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,7 +30,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +53,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -156,7 +155,7 @@ fun FactoryResetScreen(
 
     // ---- Single shared confirmation dialog ------------------------------
     pendingReset?.let { target ->
-        DestructiveConfirmDialog(
+        ConfirmDialog(
             title = stringResource(
                 if (target is PendingReset.All) R.string.settings_factory_reset_all
                 else R.string.settings_factory_reset
@@ -165,7 +164,7 @@ fun FactoryResetScreen(
                 if (target is PendingReset.All) R.string.settings_factory_reset_all_message
                 else R.string.settings_factory_reset_category_message
             ),
-            onDismiss = { pendingReset = null },
+            confirmText = stringResource(R.string.settings_reset),
             onConfirm = {
                 when (target) {
                     is PendingReset.All -> {
@@ -179,6 +178,8 @@ fun FactoryResetScreen(
                 }
                 pendingReset = null
             },
+            onDismiss = { pendingReset = null },
+            dismissText = stringResource(R.string.settings_cancel),
         )
     }
 
@@ -204,42 +205,6 @@ private data class CategoryDiff(
     val changed: List<PreferenceField>,
     val total: Int,
 )
-
-// ---------------------------------------------------------------------------
-// Shared destructive confirmation dialog (used for Reset All + per-category)
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun DestructiveConfirmDialog(
-    title: String,
-    message: String,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(
-                    stringResource(R.string.settings_reset),
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.settings_cancel))
-            }
-        },
-    )
-}
 
 // ---------------------------------------------------------------------------
 // Summary card

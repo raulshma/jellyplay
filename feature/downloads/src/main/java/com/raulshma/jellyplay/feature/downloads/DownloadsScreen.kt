@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -45,6 +44,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TriStateCheckbox
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.episodeContextLine
@@ -376,53 +377,31 @@ fun DownloadsScreen(
     }
 
     pendingDelete?.let { item ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text(stringResource(R.string.downloads_delete_download_title)) },
-            text = {
-                Text(stringResource(R.string.downloads_delete_download_message, item.name, viewModel.formatBytes(item.totalSizeBytes)))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pendingDelete = null
-                        viewModel.deleteDownload(item)
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text(stringResource(R.string.downloads_delete)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.downloads_cancel)) }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.downloads_delete_download_title),
+            message = stringResource(R.string.downloads_delete_download_message, item.name, viewModel.formatBytes(item.totalSizeBytes)),
+            confirmText = stringResource(R.string.downloads_delete),
+            dismissText = stringResource(R.string.downloads_cancel),
+            icon = Tabler.Outline.Trash,
+            tone = ConfirmTone.DESTRUCTIVE,
+            onConfirm = { viewModel.deleteDownload(item) },
+            onDismiss = { pendingDelete = null },
         )
     }
 
     if (pendingBulkDelete) {
         val count = selectedIds.size
         val freedBytes = selectedItems.sumOf { it.totalSizeBytes }
-        AlertDialog(
-            onDismissRequest = { pendingBulkDelete = false },
-            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text(stringResource(R.string.downloads_delete_downloads_title)) },
-            text = {
-                Text(
-                    pluralStringResource(R.plurals.downloads_delete_downloads_message, count, count) +
-                        if (freedBytes > 0) stringResource(R.string.downloads_frees_up_sentence, viewModel.formatBytes(freedBytes)) else "",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pendingBulkDelete = false
-                        viewModel.deleteSelected()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text(stringResource(R.string.downloads_delete)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingBulkDelete = false }) { Text(stringResource(R.string.downloads_cancel)) }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.downloads_delete_downloads_title),
+            message = pluralStringResource(R.plurals.downloads_delete_downloads_message, count, count) +
+                if (freedBytes > 0) stringResource(R.string.downloads_frees_up_sentence, viewModel.formatBytes(freedBytes)) else "",
+            confirmText = stringResource(R.string.downloads_delete),
+            dismissText = stringResource(R.string.downloads_cancel),
+            icon = Tabler.Outline.Trash,
+            tone = ConfirmTone.DESTRUCTIVE,
+            onConfirm = { viewModel.deleteSelected() },
+            onDismiss = { pendingBulkDelete = false },
         )
     }
 

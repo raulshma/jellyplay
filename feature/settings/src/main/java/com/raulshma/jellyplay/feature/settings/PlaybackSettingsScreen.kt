@@ -7,13 +7,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -54,6 +51,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
@@ -1637,23 +1635,16 @@ fun PlaybackSettingsScreen(
     }
 
     if (showResetDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = { Text(stringResource(R.string.settings_reset_playback_title)) },
-            text = { Text(stringResource(R.string.settings_reset_playback_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.resetPlaybackSettings()
-                    showResetDialog = false
-                }) {
-                    Text(stringResource(R.string.settings_reset), color = MaterialTheme.colorScheme.error)
-                }
+        ConfirmDialog(
+            title = stringResource(R.string.settings_reset_playback_title),
+            message = stringResource(R.string.settings_reset_playback_message),
+            confirmText = stringResource(R.string.settings_reset),
+            onConfirm = {
+                viewModel.resetPlaybackSettings()
+                showResetDialog = false
             },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
-                    Text(stringResource(R.string.settings_cancel))
-                }
-            },
+            onDismiss = { showResetDialog = false },
+            dismissText = stringResource(R.string.settings_cancel),
         )
     }
 

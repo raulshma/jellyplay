@@ -5,11 +5,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +26,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 
@@ -40,7 +37,7 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
  * (clear search history) and the account group (sign out) into a single
  * drill-in from [SettingsScreen].
  *
- * Each action is gated by a shared confirmation [AlertDialog] (mirrors the
+ * Each action is gated by a shared confirmation [ConfirmDialog] (mirrors the
  * sign-out confirm in [SettingsScreen]); the pending action is tracked with
  * a single nullable state. Sign-out is delegated to the app-level
  * `onLogout(fromServer)` callback threaded through the nav graph — the same
@@ -140,34 +137,22 @@ fun PrivacyDataScreen(
 
     // ---- Single shared confirmation dialog ------------------------------
     pendingAction?.let { action ->
-        AlertDialog(
-            onDismissRequest = { pendingAction = null },
-            title = { Text(stringResource(action.titleRes)) },
-            text = { Text(stringResource(action.messageRes)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        when (action) {
-                            PendingPrivacyAction.ClearCache -> viewModel.clearCache()
-                            PendingPrivacyAction.ClearImageCache -> viewModel.clearImageCache()
-                            PendingPrivacyAction.ClearSearchHistory -> viewModel.clearSearchHistory()
-                            PendingPrivacyAction.FactoryReset -> viewModel.factoryReset()
-                            is PendingPrivacyAction.SignOut -> onLogout(action.fromServer)
-                        }
-                        pendingAction = null
-                    },
-                ) {
-                    Text(
-                        stringResource(R.string.settings_reset),
-                        color = MaterialTheme.colorScheme.error,
-                    )
+        ConfirmDialog(
+            title = stringResource(action.titleRes),
+            message = stringResource(action.messageRes),
+            confirmText = stringResource(R.string.settings_reset),
+            onConfirm = {
+                when (action) {
+                    PendingPrivacyAction.ClearCache -> viewModel.clearCache()
+                    PendingPrivacyAction.ClearImageCache -> viewModel.clearImageCache()
+                    PendingPrivacyAction.ClearSearchHistory -> viewModel.clearSearchHistory()
+                    PendingPrivacyAction.FactoryReset -> viewModel.factoryReset()
+                    is PendingPrivacyAction.SignOut -> onLogout(action.fromServer)
                 }
+                pendingAction = null
             },
-            dismissButton = {
-                TextButton(onClick = { pendingAction = null }) {
-                    Text(stringResource(R.string.settings_cancel))
-                }
-            },
+            onDismiss = { pendingAction = null },
+            dismissText = stringResource(R.string.settings_cancel),
         )
     }
 }

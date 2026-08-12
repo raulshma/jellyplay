@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -65,6 +64,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.feature.arrqueue.R
@@ -194,19 +195,23 @@ fun ArrQueueScreen(
                     viewModel.deleteSelected(blocklist = blocklist, searchAgain = searchAgain)
                 },
             )
-            is ArrQueueAction.Grab -> ConfirmActionDialog(
+            is ArrQueueAction.Grab -> ConfirmDialog(
                 title = stringResource(R.string.arrqueue_grab_title),
                 message = stringResource(R.string.arrqueue_grab_message, action.item.title),
-                confirmLabel = stringResource(R.string.arrqueue_grab),
-                onDismiss = { viewModel.dismissAction() },
+                confirmText = stringResource(R.string.arrqueue_grab),
                 onConfirm = { viewModel.grabItem(action.item) },
+                onDismiss = { viewModel.dismissAction() },
+                dismissText = stringResource(R.string.arrqueue_cancel),
+                tone = ConfirmTone.NEUTRAL,
             )
-            is ArrQueueAction.Import -> ConfirmActionDialog(
+            is ArrQueueAction.Import -> ConfirmDialog(
                 title = stringResource(R.string.arrqueue_import_title),
                 message = stringResource(R.string.arrqueue_import_message, action.item.title, serviceName(action.item.serverKind)),
-                confirmLabel = stringResource(R.string.arrqueue_import),
-                onDismiss = { viewModel.dismissAction() },
+                confirmText = stringResource(R.string.arrqueue_import),
                 onConfirm = { viewModel.importItem(action.item) },
+                onDismiss = { viewModel.dismissAction() },
+                dismissText = stringResource(R.string.arrqueue_cancel),
+                tone = ConfirmTone.NEUTRAL,
             )
         }
     }
@@ -543,55 +548,57 @@ private fun DeleteActionDialog(
     onDismiss: () -> Unit,
     onConfirm: (blocklist: Boolean, searchAgain: Boolean) -> Unit,
 ) {
-    val title = if (bulk) stringResource(R.string.arrqueue_remove_selected_title) else stringResource(R.string.arrqueue_remove_item_title, item?.title ?: "")
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
-                Text(
-                    if (bulk) stringResource(R.string.arrqueue_remove_body_bulk) else stringResource(R.string.arrqueue_remove_body_single),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
+    // Three-way choice (remove-only / remove + search / blocklist + search): this
+    // is a selection dialog, not a binary confirm. The real actions live in the
+    // `content` slot as full-width buttons; `confirmText` is omitted so no primary
+    // confirm button renders, and Cancel lives in the dismiss slot.
+    ConfirmDialog(
+        title = if (bulk) {
+            stringResource(R.string.arrqueue_remove_selected_title)
+        } else {
+            stringResource(R.string.arrqueue_remove_item_title, item?.title ?: "")
         },
-        confirmButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = { onConfirm(false, false) }) {
+        message = if (bulk) {
+            stringResource(R.string.arrqueue_remove_body_bulk)
+        } else {
+            stringResource(R.string.arrqueue_remove_body_single)
+        },
+        onDismiss = onDismiss,
+        dismissText = stringResource(R.string.arrqueue_cancel),
+        tone = ConfirmTone.DESTRUCTIVE,
+        icon = Tabler.Outline.Trash,
+        content = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = { onConfirm(false, false); onDismiss() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text(stringResource(R.string.arrqueue_remove_only))
                 }
-                TextButton(onClick = { onConfirm(false, true) }) {
+                OutlinedButton(
+                    onClick = { onConfirm(false, true); onDismiss() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.arrqueue_remove_search))
                 }
-                TextButton(onClick = { onConfirm(true, true) }) {
+                OutlinedButton(
+                    onClick = { onConfirm(true, true); onDismiss() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
                     Icon(Tabler.Outline.Ban, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.arrqueue_blocklist_search))
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.arrqueue_cancel)) } },
-    )
-}
-
-@Composable
-private fun ConfirmActionDialog(
-    title: String,
-    message: String,
-    confirmLabel: String,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { Text(message, style = MaterialTheme.typography.bodyMedium) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text(confirmLabel) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.arrqueue_cancel)) } },
     )
 }
 

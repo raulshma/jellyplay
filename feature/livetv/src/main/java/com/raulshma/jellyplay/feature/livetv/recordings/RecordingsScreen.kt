@@ -18,13 +18,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,6 +45,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -83,32 +82,15 @@ fun RecordingsScreen(
 
     // Delete confirm dialog. Long-press a recording to open it.
     uiState.pendingDelete?.let { recording ->
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissDeleteDialog() },
-            title = { Text(stringResource(R.string.livetv_delete_recording_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.livetv_delete_recording_body,
-                        recording.name,
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.deleteRecording() },
-                    enabled = !uiState.isDeleting,
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) { Text(stringResource(R.string.livetv_delete)) }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { viewModel.dismissDeleteDialog() },
-                    enabled = !uiState.isDeleting,
-                ) { Text(stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel)) }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.livetv_delete_recording_title),
+            message = stringResource(R.string.livetv_delete_recording_body, recording.name),
+            confirmText = stringResource(R.string.livetv_delete),
+            dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+            tone = ConfirmTone.DESTRUCTIVE,
+            confirmLoading = uiState.isDeleting,
+            onConfirm = { viewModel.deleteRecording() },
+            onDismiss = { viewModel.dismissDeleteDialog() },
         )
     }
 

@@ -41,20 +41,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.progressFraction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
@@ -1154,23 +1153,18 @@ fun SearchScreen(
     }
 
     if (showClearHistoryDialog) {
-        AlertDialog(
-            onDismissRequest = { showClearHistoryDialog = false },
-            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text(stringResource(R.string.search_clear_search_history)) },
-            text = { Text(stringResource(R.string.search_clear_history_confirm)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showClearHistoryDialog = false
-                        viewModel.clearHistory()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text(stringResource(R.string.search_action_clear)) }
+        ConfirmDialog(
+            title = stringResource(R.string.search_clear_search_history),
+            message = stringResource(R.string.search_clear_history_confirm),
+            confirmText = stringResource(R.string.search_action_clear),
+            dismissText = stringResource(R.string.search_action_cancel),
+            tone = ConfirmTone.DESTRUCTIVE,
+            icon = Tabler.Outline.Trash,
+            onConfirm = {
+                showClearHistoryDialog = false
+                viewModel.clearHistory()
             },
-            dismissButton = {
-                TextButton(onClick = { showClearHistoryDialog = false }) { Text(stringResource(R.string.search_action_cancel)) }
-            },
+            onDismiss = { showClearHistoryDialog = false },
         )
     }
 }

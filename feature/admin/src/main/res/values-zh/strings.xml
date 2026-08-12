@@ -98,6 +98,7 @@
     <string name="admin_search_plugins">搜索插件…</string>
     <string name="admin_installed">已安装</string>
     <string name="admin_install_third_party_title">安装第三方插件？</string>
+    <string name="admin_install_third_party_body">插件拥有与您的 Jellyfin 服务器相同的系统访问权限。请仅安装来自您信任的来源的插件。是否继续安装 %1$s？</string>
     <string name="admin_latest_version">最新：v%1$s</string>
     <string name="admin_installing">正在安装 %1$s</string>
     <string name="admin_add_repository_title">添加仓库</string>

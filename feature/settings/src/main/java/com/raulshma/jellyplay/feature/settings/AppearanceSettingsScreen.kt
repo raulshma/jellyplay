@@ -9,13 +9,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +41,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.tv.CenterBringIntoViewSpec
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
@@ -1231,23 +1229,16 @@ fun AppearanceSettingsScreen(
     }
 
     if (showResetDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = { Text(stringResource(R.string.settings_reset_appearance_title)) },
-            text = { Text(stringResource(R.string.settings_reset_appearance_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.resetCategory(PreferenceResetCategory.APPEARANCE)
-                    showResetDialog = false
-                }) {
-                    Text(stringResource(R.string.settings_reset), color = MaterialTheme.colorScheme.error)
-                }
+        ConfirmDialog(
+            title = stringResource(R.string.settings_reset_appearance_title),
+            message = stringResource(R.string.settings_reset_appearance_message),
+            confirmText = stringResource(R.string.settings_reset),
+            onConfirm = {
+                viewModel.resetCategory(PreferenceResetCategory.APPEARANCE)
+                showResetDialog = false
             },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
-                    Text(stringResource(R.string.settings_cancel))
-                }
-            },
+            onDismiss = { showResetDialog = false },
+            dismissText = stringResource(R.string.settings_cancel),
         )
     }
 
