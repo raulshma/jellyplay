@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +46,7 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -91,12 +93,17 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         try {
             emitAll(session.snapshots)
         } finally {
-            releaseSession(itemId)
+            // NonCancellable so a collector cancelled mid-flight (e.g. the VM
+            // reusing its scope across navigations) cannot strand the session —
+            // refCount must always decrement + destroy() when it hits zero.
+            withContext(NonCancellable) { releaseSession(itemId) }
         }
     }
 
     override suspend fun refresh(itemId: String) {
-        val session = acquireSession(itemId)
+        // revalidate = false: refresh() forces its own re-resolve below (and
+        // awaits it), so the reuse-path revalidation would only duplicate it.
+        val session = acquireSession(itemId, revalidate = false)
         try {
             session.refresh()
         } finally {
@@ -116,6 +123,16 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         // cache drop. The active session already holds the optimistic snapshot
         // in its content flow, so consumers see the flip via [observe].
         episodeCatalogue.invalidateSeries(seriesIdToInvalidate)
+    }
+
+    override suspend fun applyOptimisticItemState(
+        itemId: String,
+        isFavorite: Boolean?,
+        isPlayed: Boolean?,
+    ) {
+        val session = sessions[itemId]
+            ?: sessions.values.firstOrNull { it.containsItem(itemId) }
+        session?.rewriteItemState(itemId, isFavorite, isPlayed)
     }
 
     override suspend fun expandSeason(itemId: String, seasonId: String): List<MediaItem> {
@@ -145,11 +162,22 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         episodeCatalogue.invalidateSeries(seriesId)
     }
 
-    private suspend fun acquireSession(itemId: String): Session =
+    /**
+     * Resolves the [Session] for [itemId], creating + starting one on first use.
+     * On reuse, [revalidate] (default true) bumps the refresh tick so the running
+     * [Session.start] collector force-re-resolves instead of replaying the cached
+     * snapshot — the DetailViewModel is Activity-scoped (Navigation3 has no
+     * per-entry ViewModelStore), so a back→home→detail trip reuses this session,
+     * and without revalidation every re-entry would serve stale state. Pass
+     * [revalidate] = false when the caller drives its own re-resolve (see
+     * [refresh]).
+     */
+    private suspend fun acquireSession(itemId: String, revalidate: Boolean = true): Session =
         sessionsMutex.withLock {
             val existing = sessions[itemId]
             if (existing != null) {
                 existing.acquire()
+                if (revalidate) existing.requestRevalidate()
                 existing
             } else {
                 val session = Session(itemId)
@@ -215,6 +243,14 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
             return remaining <= 0
         }
 
+        fun containsItem(targetItemId: String): Boolean {
+            val current = content.value as? ContentResolution.Resolved ?: return false
+            return current.detail.item.id == targetItemId ||
+                current.episodesBySeason.values.any { episodes ->
+                    episodes.any { episode -> episode.id == targetItemId }
+                }
+        }
+
         fun start() {
             if (started) return
             started = true
@@ -235,11 +271,32 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         }
 
         /**
+         * Bumps the refresh tick so the running [start] collector runs its next
+         * resolve with force=true (drops the detail cache + re-fetches). Returns
+         * the new generation. Shared by [requestRevalidate] (fire-and-forget,
+         * used on session re-entry) and [refresh] (which additionally awaits the
+         * new generation).
+         */
+        private fun bumpRefreshTick(): Long {
+            val gen = generation.incrementAndGet()
+            refreshTick.value = gen
+            return gen
+        }
+
+        /**
+         * Fire-and-forget content re-resolve used on session re-entry — see
+         * [acquireSession]. Non-suspending: callers (observe) are not delayed;
+         * they pick up the fresh emission through [snapshots].
+         */
+        fun requestRevalidate() {
+            bumpRefreshTick()
+        }
+
+        /**
          * Forces a content re-resolution and waits for the new generation to land.
          */
         suspend fun refresh() {
-            val gen = generation.incrementAndGet()
-            refreshTick.value = gen
+            val gen = bumpRefreshTick()
             // Wait for the resolver to publish a resolution for this generation.
             withTimeoutOrNull(REFRESH_TIMEOUT_MS) {
                 content.first { it.contentGen >= gen }
@@ -274,15 +331,109 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
             // canonical re-sort owned by EpisodeCatalogueSnapshot.
             val rebuilt = episodeCatalogue.updateSeasonEpisodes(seriesId, seasonId, transform)
                 ?: return@withLock null
+            // Optimistically reconcile the series-header watched state from the
+            // rebuilt episode set so the header (not just the episode cards)
+            // reflects the flip on the current screen. Only when every season is
+            // loaded, so a partial fetch can't push a misleading unplayed count.
+            // A subsequent re-entry re-resolve (see acquireSession) authoritatively
+            // reconciles it regardless.
+            val allSeasonsLoaded = rebuilt.seasons.isNotEmpty() &&
+                rebuilt.seasons.all { it.id in rebuilt.fetchedSeasonIds }
+            val updatedDetail = if (allSeasonsLoaded && rebuilt.sortedEpisodes.isNotEmpty()) {
+                val unplayed = rebuilt.sortedEpisodes.count { !it.isPlayed }
+                current.detail.copy(
+                    item = current.detail.item.copy(
+                        isPlayed = unplayed == 0,
+                        unplayedItemCount = unplayed,
+                    ),
+                )
+            } else {
+                current.detail
+            }
             val targetGen = generation.incrementAndGet()
             content.value = current.copy(
                 contentGen = targetGen,
+                detail = updatedDetail,
                 seasons = rebuilt.seasons,
                 episodesBySeason = rebuilt.episodesBySeason,
                 fetchedSeasonIds = rebuilt.fetchedSeasonIds,
                 sortedEpisodes = rebuilt.sortedEpisodes,
             )
             seriesId
+        }
+
+        /**
+         * Rewrites the targeted detail item or episode projections shown in the
+         * same screen. A series played flip cascades to its episodes. Keeping
+         * this in the provider means a re-emitted snapshot cannot overwrite the
+         * ViewModel's optimistic state with the pre-action content.
+         */
+        suspend fun rewriteItemState(
+            itemId: String,
+            isFavorite: Boolean?,
+            isPlayed: Boolean?,
+        ) = resolveMutex.withLock {
+            val current = content.value as? ContentResolution.Resolved ?: return@withLock
+            if (isFavorite == null && isPlayed == null) return@withLock
+
+            val currentItem = current.detail.item
+            val isDetailItem = currentItem.id == itemId
+            val hasEpisode = current.episodesBySeason.values.any { episodes ->
+                episodes.any { episode -> episode.id == itemId }
+            }
+            if (!isDetailItem && !hasEpisode) return@withLock
+
+            val updatedItem = currentItem.copy(
+                isFavorite = if (isDetailItem) isFavorite ?: currentItem.isFavorite else currentItem.isFavorite,
+                isPlayed = if (isDetailItem) isPlayed ?: currentItem.isPlayed else currentItem.isPlayed,
+                playbackPositionTicks = if (isDetailItem && isPlayed != null) 0L
+                else currentItem.playbackPositionTicks,
+            )
+            val updateEpisode: (MediaItem) -> MediaItem = { episode ->
+                if (isPlayed == null || (!isDetailItem && episode.id != itemId)) {
+                    if (isFavorite != null && episode.id == itemId) {
+                        episode.copy(isFavorite = isFavorite)
+                    } else {
+                        episode
+                    }
+                } else {
+                    episode.copy(
+                        isPlayed = isPlayed,
+                        playbackPositionTicks = 0L,
+                        isFavorite = if (episode.id == itemId && isFavorite != null) {
+                            isFavorite
+                        } else {
+                            episode.isFavorite
+                        },
+                    )
+                }
+            }
+            val cascadePlayedState = isDetailItem && isPlayed != null && currentItem.mediaType == MediaType.SERIES
+            // Guard above guarantees isPlayed/isFavorite are not both null, so the
+            // per-episode rewrite always runs for the present projection(s).
+            val updatedEpisodesBySeason = current.episodesBySeason.mapValues { (_, episodes) ->
+                episodes.map { episode ->
+                    if (cascadePlayedState) {
+                        episode.copy(isPlayed = isPlayed, playbackPositionTicks = 0L)
+                    } else {
+                        updateEpisode(episode)
+                    }
+                }
+            }
+            val updatedSortedEpisodes = current.sortedEpisodes.map { episode ->
+                if (cascadePlayedState) {
+                    episode.copy(isPlayed = isPlayed, playbackPositionTicks = 0L)
+                } else {
+                    updateEpisode(episode)
+                }
+            }
+
+            content.value = current.copy(
+                contentGen = generation.incrementAndGet(),
+                detail = if (isDetailItem) current.detail.copy(item = updatedItem) else current.detail,
+                episodesBySeason = updatedEpisodesBySeason,
+                sortedEpisodes = updatedSortedEpisodes,
+            )
         }
 
         /**
@@ -470,7 +621,7 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         val usable = playbackSourceResolver.resolveUsableDownload(itemId) != null
         val seriesData = loadSeriesData(detail, offline = true)
         val album = loadAlbumTracks(detail, offline = true)
-        val subtitles = loadLocalSubtitles(local.downloadPath)
+        val subtitles = loadLocalSubtitles(itemId, local.downloadPath)
         // One-shot read of the local series' episodes: the catalogue's
         // [MediaItem] projection drops `posterPath` and `totalSizeBytes`
         // (storage concerns), so the aggregate header AND the per-episode
@@ -544,9 +695,9 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
         }
     }
 
-    private suspend fun loadLocalSubtitles(downloadPath: String?): List<LocalSubtitleOption> {
+    private suspend fun loadLocalSubtitles(itemId: String, downloadPath: String?): List<LocalSubtitleOption> {
         if (downloadPath == null) return emptyList()
-        val manifest = downloadRepository.loadLocalSubtitleManifest(downloadPath) ?: return emptyList()
+        val manifest = downloadRepository.loadLocalSubtitleManifest(downloadPath, itemId) ?: return emptyList()
         // The persisted manifest drops the SDH flag and carries no audio inventory;
         // expose only manifest-backed external subtitle entries.
         return manifest.subtitles.map { entry ->

@@ -310,7 +310,7 @@ class PlayerSessionManager(
         initializeEngine(playerType, detail, null, url, startPositionTicks, agg, mimeType = mimeHint)
 
         // Attach external subtitles bundled with the download (offline subs).
-        loadOfflineSubtitles(downloadPath)
+        loadOfflineSubtitles(itemId, downloadPath)
 
         // Re-attach provider-sourced subtitles (OpenSubtitles/Wyzie) persisted
         // for this item in the streaming-subtitle store. `SubtitleManager`
@@ -320,7 +320,7 @@ class PlayerSessionManager(
         loadStreamingSubtitles(itemId)
 
         val trickplayDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
-            .getLocalTrickplayDir(downloadPath)
+            .getLocalTrickplayDir(downloadPath, itemId)
 
         _sessionState.update { it.copy(
             isReady = true,
@@ -764,11 +764,13 @@ class PlayerSessionManager(
         }
     }
 
-    private suspend fun loadOfflineSubtitles(downloadPath: String) {
-        val manifest = downloadRepository.loadLocalSubtitleManifest(downloadPath) ?: return
+    private suspend fun loadOfflineSubtitles(itemId: String, downloadPath: String) {
+        val manifest = downloadRepository.loadLocalSubtitleManifest(downloadPath, itemId) ?: return
         if (manifest.subtitles.isEmpty()) return
         val parentDir = java.io.File(downloadPath).parentFile ?: return
-        val subtitlesDir = java.io.File(parentDir, "subtitles")
+        // Try item-scoped directory first, fall back to legacy un-scoped.
+        val scopedDir = java.io.File(parentDir, "subtitles_$itemId")
+        val subtitlesDir = if (scopedDir.exists()) scopedDir else java.io.File(parentDir, "subtitles")
         for (entry in manifest.subtitles) {
             val file = java.io.File(subtitlesDir, entry.fileName)
             if (!file.exists()) continue

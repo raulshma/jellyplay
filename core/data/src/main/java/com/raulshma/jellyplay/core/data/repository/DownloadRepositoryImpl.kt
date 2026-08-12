@@ -556,7 +556,7 @@ class DownloadRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             try {
                 val parentDir = File(downloadPath).parentFile ?: return@withContext
-                val trickplayDir = File(parentDir, "trickplay").apply { mkdirs() }
+                val trickplayDir = File(parentDir, DownloadArtifacts.trickplayDir(itemId)).apply { mkdirs() }
                 val thumbnailsPerSheet = trickplayInfo.tileWidth * trickplayInfo.tileHeight
                 val totalSheets = (trickplayInfo.thumbnailCount + thumbnailsPerSheet - 1) / thumbnailsPerSheet
 
@@ -596,7 +596,7 @@ class DownloadRepositoryImpl @Inject constructor(
                 }
                 if (subtitleStreams.isEmpty()) return@withContext
 
-                val subtitlesDir = File(parentDir, DownloadArtifacts.SUBTITLES_DIR).apply { mkdirs() }
+                val subtitlesDir = File(parentDir, DownloadArtifacts.subtitlesDir(itemId)).apply { mkdirs() }
                 val entries = mutableListOf<OfflineSubtitleEntry>()
 
                 for (stream in subtitleStreams) {
@@ -651,7 +651,7 @@ class DownloadRepositoryImpl @Inject constructor(
                 val segments = playbackRepository.getMediaSegments(itemId).getOrDefault(emptyList())
                 if (segments.isEmpty()) return@withContext
                 val parentDir = File(downloadPath).parentFile ?: return@withContext
-                File(parentDir, DownloadArtifacts.SEGMENTS_FILE)
+                File(parentDir, DownloadArtifacts.segmentsFile(itemId))
                     .writeText(json.encodeToString(segments))
             } catch (e: Exception) {
                 Log.d(TAG, "Failed to download media segments for $itemId", e)
@@ -669,22 +669,38 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun loadLocalSubtitleManifest(
         downloadPath: String,
+        itemId: String?,
     ): OfflineSubtitleManifest? = withContext(Dispatchers.IO) {
         val dir = File(downloadPath).parentFile ?: return@withContext null
-        val file = File(dir, "${DownloadArtifacts.SUBTITLES_DIR}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
+        // Try item-scoped path first (new downloads).
+        if (itemId != null) {
+            val scopedFile = File(dir, "${DownloadArtifacts.subtitlesDir(itemId)}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
+            if (scopedFile.exists()) {
+                return@withContext runCatching { json.decodeFromString<OfflineSubtitleManifest>(scopedFile.readText()) }
+                    .onFailure { Log.w(TAG, "Failed to decode local subtitle manifest", it) }
+                    .getOrNull()
+            }
+        }
+        // Fall back to legacy un-scoped path (pre-fix downloads).
+        val file = File(dir, "${DownloadArtifacts.LEGACY_SUBTITLES_DIR}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
         if (!file.exists()) return@withContext null
         runCatching { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }
-            .onFailure { Log.w("DownloadRepository", "Failed to decode local subtitle manifest", it) }
+            .onFailure { Log.w(TAG, "Failed to decode local subtitle manifest", it) }
             .getOrNull()
     }
 
     override suspend fun loadLocalSegments(itemId: String): List<MediaSegment>? = withContext(Dispatchers.IO) {
         val download = downloadDao.getDownloadByMediaItemId(itemId) ?: return@withContext null
         val dir = File(download.downloadPath).parentFile ?: return@withContext null
-        val file = File(dir, DownloadArtifacts.SEGMENTS_FILE)
-        if (!file.exists()) return@withContext null
+        // Try item-scoped file first.
+        val scopedFile = File(dir, DownloadArtifacts.segmentsFile(itemId))
+        val file = if (scopedFile.exists()) scopedFile else {
+            val legacy = File(dir, DownloadArtifacts.LEGACY_SEGMENTS_FILE)
+            if (!legacy.exists()) return@withContext null
+            legacy
+        }
         runCatching { json.decodeFromString<List<MediaSegment>>(file.readText()) }
-            .onFailure { Log.w("DownloadRepository", "Failed to decode local segments", it) }
+            .onFailure { Log.w(TAG, "Failed to decode local segments", it) }
             .getOrNull()
     }
 

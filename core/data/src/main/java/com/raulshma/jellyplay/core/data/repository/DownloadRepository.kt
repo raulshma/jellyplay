@@ -62,7 +62,7 @@ interface DownloadRepository : OfflineDownloadWriter {
     suspend fun getDownloadedSeriesIds(): List<String>
 
     /** Returns the locally-cached subtitle manifest for a downloaded item, if any. */
-    suspend fun loadLocalSubtitleManifest(downloadPath: String): com.raulshma.jellyplay.core.model.OfflineSubtitleManifest?
+    suspend fun loadLocalSubtitleManifest(downloadPath: String, itemId: String? = null): com.raulshma.jellyplay.core.model.OfflineSubtitleManifest?
 
     /** Returns locally-cached media segments for a downloaded item, if any. */
     suspend fun loadLocalSegments(itemId: String): List<com.raulshma.jellyplay.core.model.MediaSegment>?

@@ -1687,10 +1687,10 @@ class VideoPlayerViewModel @Inject constructor(
                 val downloadPath = offlinePlaybackFacade.getDownloadPath(itemId)
                 if (downloadPath != null) {
                     val localInfo = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
-                        .loadLocalTrickplayInfo(downloadPath)
+                        .loadLocalTrickplayInfo(downloadPath, itemId)
                     if (localInfo != null) {
                         val cacheDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
-                            .getLocalTrickplayDir(downloadPath)
+                            .getLocalTrickplayDir(downloadPath, itemId)
                         if (cacheDir != null) {
                             trickplayManager.initializeLocal(itemId, localInfo, cacheDir)
                             _uiState.update { it.copy(trickplayInfo = localInfo) }

@@ -154,6 +154,9 @@ class DetailViewModelTest {
         coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())
         // Provider refresh is a no-op by default; tests that drive refresh override.
         coEvery { mediaDetailProvider.refresh(any()) } returns Unit
+        // Successful user-data mutations update the provider's active replay
+        // snapshot in production; most tests only exercise the ViewModel state.
+        coEvery { mediaDetailProvider.applyOptimisticItemState(any(), any(), any()) } returns Unit
         // loadItemInternal invalidates the previous series through the provider on
         // re-entry; stub it as a no-op so strict-mock calls don't throw.
         every { mediaDetailProvider.invalidate(any()) } just Runs
@@ -238,6 +241,45 @@ class DetailViewModelTest {
         providerFlows[itemId] = flow
         every { mediaDetailProvider.observe(itemId) } returns flow
         return flow
+    }
+
+    /** Mirrors the provider's optimistic item rewrite for re-entry tests. */
+    private fun stubOptimisticItemState(
+        itemId: String,
+        flow: MutableStateFlow<DetailLoadState>,
+    ) {
+        coEvery {
+            mediaDetailProvider.applyOptimisticItemState(itemId, any(), any())
+        } coAnswers {
+            val isFavorite = args[1] as Boolean?
+            val isPlayed = args[2] as Boolean?
+            val current = (flow.value as DetailLoadState.Loaded).snapshot
+            val currentItem = current.detail.item
+            val updateItem: (MediaItem) -> MediaItem = { item ->
+                if (item.id == itemId) {
+                    item.copy(
+                        isFavorite = isFavorite ?: item.isFavorite,
+                        isPlayed = isPlayed ?: item.isPlayed,
+                        playbackPositionTicks = if (isPlayed != null) 0L else item.playbackPositionTicks,
+                    )
+                } else item
+            }
+            flow.value = DetailLoadState.Loaded(
+                current.copy(
+                    detail = current.detail.copy(
+                        item = if (currentItem.id == itemId) updateItem(currentItem) else currentItem,
+                    ),
+                    episodesBySeason = current.episodesBySeason.mapValues { (_, episodes) ->
+                        episodes.map { episode ->
+                            if (episode.id == itemId) updateItem(episode) else episode
+                        }
+                    },
+                    sortedEpisodes = current.sortedEpisodes.map { episode ->
+                        if (episode.id == itemId) updateItem(episode) else episode
+                    },
+                ),
+            )
+        }
     }
 
     // ── Snapshot builders ────────────────────────────────────────────────
@@ -645,6 +687,175 @@ class DetailViewModelTest {
         val updated = viewModel.uiState.value.detail!!.item
         assertFalse(updated.isPlayed)
         assertEquals(0L, updated.playbackPositionTicks)
+    }
+
+    @Test
+    fun toggleFavorite_reentryKeepsTheNewFavoriteState() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val item = MediaItem(
+            id = "movie-1",
+            name = "Movie",
+            mediaType = MediaType.MOVIE,
+            isFavorite = true,
+        )
+        val flow = stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
+        coEvery { mediaRepository.toggleFavorite("movie-1") } returns Result.success(false)
+        stubOptimisticItemState("movie-1", flow)
+
+        viewModel.loadItem("movie-1")
+        advanceUntilIdle()
+        viewModel.toggleFavorite()
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.detail!!.item.isFavorite)
+
+        // Re-entry replays the provider's source snapshot, just as a real
+        // detail screen does after navigating home and opening the item again.
+        viewModel.loadItem("movie-1")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.detail!!.item.isFavorite)
+        assertEquals(false, (flow.value as DetailLoadState.Loaded).snapshot.detail.item.isFavorite)
+    }
+
+    @Test
+    fun toggleFavorite_rapidTapsApplyAuthoritativeTargetsInOrder() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val item = MediaItem(
+                id = "movie-1",
+                name = "Movie",
+                mediaType = MediaType.MOVIE,
+                isFavorite = true,
+            )
+            stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
+            var calls = 0
+            coEvery { mediaRepository.toggleFavorite("movie-1") } coAnswers {
+                calls += 1
+                Result.success(calls == 2)
+            }
+
+            viewModel.loadItem("movie-1")
+            advanceUntilIdle()
+            viewModel.toggleFavorite()
+            viewModel.toggleFavorite()
+            advanceUntilIdle()
+
+            // Two toggles return to the original server state; the second
+            // result must not be overwritten by a stale captured boolean.
+            assertTrue(viewModel.uiState.value.detail!!.item.isFavorite)
+            assertEquals(2, calls)
+        }
+
+    @Test
+    fun markPlayed_reentryKeepsTheNewWatchedState() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val item = MediaItem(id = "movie-1", name = "Movie", mediaType = MediaType.MOVIE)
+        val flow = stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
+        coEvery { mediaRepository.markPlayed("movie-1") } returns Result.success(Unit)
+        stubOptimisticItemState("movie-1", flow)
+
+        viewModel.loadItem("movie-1")
+        advanceUntilIdle()
+        viewModel.markPlayed()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.detail!!.item.isPlayed)
+
+        viewModel.loadItem("movie-1")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.detail!!.item.isPlayed)
+        assertTrue((flow.value as DetailLoadState.Loaded).snapshot.detail.item.isPlayed)
+    }
+
+    @Test
+    fun markUnplayed_reentryKeepsTheNewUnwatchedState() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val item = MediaItem(
+            id = "movie-1",
+            name = "Movie",
+            mediaType = MediaType.MOVIE,
+            isPlayed = true,
+        )
+        val flow = stubProvider("movie-1", remoteSnapshot(MediaDetail(item = item)))
+        coEvery { mediaRepository.markUnplayed("movie-1") } returns Result.success(Unit)
+        stubOptimisticItemState("movie-1", flow)
+
+        viewModel.loadItem("movie-1")
+        advanceUntilIdle()
+        viewModel.markUnplayed()
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.detail!!.item.isPlayed)
+
+        viewModel.loadItem("movie-1")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.detail!!.item.isPlayed)
+        assertFalse((flow.value as DetailLoadState.Loaded).snapshot.detail.item.isPlayed)
+    }
+
+    @Test
+    fun markEpisodePlayed_reentryKeepsTheNewWatchedState() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val season = MediaItem(id = "season-1", name = "Season", mediaType = MediaType.SEASON)
+        val episode = episode("episode-1", 1, 1, isPlayed = false)
+        val flow = stubProvider(
+            "series-1",
+            remoteSnapshot(
+                detail = MediaDetail(
+                    item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES),
+                ),
+                seasons = listOf(season),
+                episodesBySeason = mapOf("season-1" to listOf(episode)),
+                fetchedSeasonIds = setOf("season-1"),
+            ),
+        )
+        coEvery { mediaRepository.markPlayed("episode-1") } returns Result.success(Unit)
+        stubOptimisticItemState("episode-1", flow)
+
+        viewModel.loadItem("series-1")
+        advanceUntilIdle()
+        viewModel.markEpisodePlayed("episode-1", played = true)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.episodes["season-1"]!!.single().isPlayed)
+
+        viewModel.loadItem("series-1")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.episodes["season-1"]!!.single().isPlayed)
+        assertTrue((flow.value as DetailLoadState.Loaded).snapshot.sortedEpisodes.single().isPlayed)
+    }
+
+    @Test
+    fun markRowItemPlayed_reentryKeepsTheNewWatchedState() = runTest(mainDispatcherRule.testDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val season = MediaItem(id = "season-1", name = "Season", mediaType = MediaType.SEASON)
+        val item = episode("episode-1", 1, 1, isPlayed = false)
+        val flow = stubProvider(
+            "series-1",
+            remoteSnapshot(
+                detail = MediaDetail(
+                    item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES),
+                ),
+                seasons = listOf(season),
+                episodesBySeason = mapOf("season-1" to listOf(item)),
+                fetchedSeasonIds = setOf("season-1"),
+            ),
+        )
+        coEvery { mediaRepository.markPlayed("episode-1") } returns Result.success(Unit)
+        stubOptimisticItemState("episode-1", flow)
+
+        viewModel.loadItem("series-1")
+        advanceUntilIdle()
+        // The row action is fed directly with the card item, as MediaDetailScreen does.
+        viewModel.markRowItemPlayed(item, played = true)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.episodes["season-1"]!!.single().isPlayed)
+        viewModel.loadItem("series-1")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.episodes["season-1"]!!.single().isPlayed)
+        assertTrue((flow.value as DetailLoadState.Loaded).snapshot.sortedEpisodes.single().isPlayed)
     }
 
     // ---- Season-level mark played / unplayed --------------------------------

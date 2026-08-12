@@ -152,7 +152,7 @@ class UnifiedMediaDetailProviderImplTest {
         coEvery { playbackSourceResolver.resolveUsableDownload(itemId) } returns download?.takeIf {
             it.status == DownloadStatus.COMPLETED
         }
-        coEvery { downloadRepository.loadLocalSubtitleManifest(any()) } returns null
+        coEvery { downloadRepository.loadLocalSubtitleManifest(any(), any()) } returns null
         // Default: no probed local tracks → no synthesized media source (preserves
         // the pre-feature local-snapshot shape). Per-test stubs override this.
         coEvery { localStreamProbe.probe(any()) } returns emptyList()
@@ -238,7 +238,7 @@ class UnifiedMediaDetailProviderImplTest {
     fun `local snapshot carries local artwork and manifest-backed subtitles only`() = runTest {
         val local = localMovie()
         wireStubs("m1", mode = OfflineMode.OFFLINE_MANUAL, localItem = local, download = completedDownload())
-        coEvery { downloadRepository.loadLocalSubtitleManifest(any()) } returns OfflineSubtitleManifest(
+        coEvery { downloadRepository.loadLocalSubtitleManifest(any(), any()) } returns OfflineSubtitleManifest(
             subtitles = listOf(
                 OfflineSubtitleEntry(index = 2, fileName = "sub.srt", displayTitle = "English", isDefault = true),
             ),
@@ -298,7 +298,7 @@ class UnifiedMediaDetailProviderImplTest {
             EpisodeCatalogueSnapshot.empty("unused"),
         )
         coEvery { playbackSourceResolver.resolveUsableDownload("m1") } returns null
-        coEvery { downloadRepository.loadLocalSubtitleManifest(any()) } returns null
+        coEvery { downloadRepository.loadLocalSubtitleManifest(any(), any()) } returns null
 
         var attempts = 0
         coEvery { mediaRepository.getMediaDetail("m1") } answers {
@@ -373,6 +373,76 @@ class UnifiedMediaDetailProviderImplTest {
         // The rewrite mirrored through the catalogue and dropped its cache.
         coVerify(exactly = 1) { episodeCatalogue.updateSeasonEpisodes("s1", "season1", any()) }
         coVerify(exactly = 1) { episodeCatalogue.invalidateSeries("s1") }
+        job.cancel()
+    }
+
+    @Test
+    fun `applyOptimisticSeasonRewrite recomputes the series header when all seasons are loaded`() = runTest {
+        // The series header (isPlayed / unplayedItemCount) is derived from the
+        // rebuilt full episode set so a mark-season flip shows immediately on the
+        // current screen, not only after the next re-entry re-resolve.
+        val snapshot = seriesCatalogueSnapshot() // 1 season, 2 episodes, all unplayed
+        wireStubs("s1", mode = OfflineMode.ONLINE)
+        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(snapshot)
+        val rewritten = snapshot.copy(
+            episodesBySeason = snapshot.episodesBySeason.mapValues { (_, eps) ->
+                eps.map { it.copy(isPlayed = true) }
+            },
+            sortedEpisodes = snapshot.sortedEpisodes.map { it.copy(isPlayed = true) },
+        )
+        coEvery { episodeCatalogue.updateSeasonEpisodes("s1", "season1", any()) } returns rewritten
+
+        val provider = buildProvider()
+        val states = mutableListOf<DetailLoadState>()
+        val job = launch { provider.observe("s1").collect { states += it } }
+        advanceUntilIdle()
+
+        provider.applyOptimisticSeasonRewrite("s1", "season1") { episodes ->
+            episodes.map { it.copy(isPlayed = true) }
+        }
+        advanceUntilIdle()
+
+        val after = states.filterIsInstance<DetailLoadState.Loaded>().last()
+        // Every episode played → series header reflects fully-watched.
+        assertTrue(after.snapshot.detail.item.isPlayed)
+        assertEquals(0, after.snapshot.detail.item.unplayedItemCount)
+        job.cancel()
+    }
+
+    @Test
+    fun `applyOptimisticSeasonRewrite leaves the series header alone when seasons are partially loaded`() = runTest {
+        // Two seasons, only one fetched: a recompute from the partial episode set
+        // would push a misleading unplayed count, so the header must stay untouched
+        // (the next re-entry re-resolve reconciles it authoritatively).
+        val full = seriesCatalogueSnapshot(seasonIds = listOf("season1", "season2"), episodesPerSeason = 2)
+        val partial = full.copy(fetchedSeasonIds = setOf("season1"))
+        wireStubs("s1", mode = OfflineMode.ONLINE)
+        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(seriesDetail())
+        coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(partial)
+        val rewritten = partial.copy(
+            episodesBySeason = partial.episodesBySeason.mapValues { (_, eps) ->
+                eps.map { it.copy(isPlayed = true) }
+            },
+            sortedEpisodes = partial.sortedEpisodes.map { it.copy(isPlayed = true) },
+        )
+        coEvery { episodeCatalogue.updateSeasonEpisodes("s1", "season1", any()) } returns rewritten
+
+        val provider = buildProvider()
+        val states = mutableListOf<DetailLoadState>()
+        val job = launch { provider.observe("s1").collect { states += it } }
+        advanceUntilIdle()
+
+        provider.applyOptimisticSeasonRewrite("s1", "season1") { episodes ->
+            episodes.map { it.copy(isPlayed = true) }
+        }
+        advanceUntilIdle()
+
+        val after = states.filterIsInstance<DetailLoadState.Loaded>().last()
+        // Header unchanged: the default series detail started isPlayed=false /
+        // unplayedItemCount=null and must remain so for a partial load.
+        assertFalse(after.snapshot.detail.item.isPlayed)
+        assertNull(after.snapshot.detail.item.unplayedItemCount)
         job.cancel()
     }
 
@@ -671,6 +741,36 @@ class UnifiedMediaDetailProviderImplTest {
         coVerify(atLeast = 1) { mediaRepository.invalidateDetailCache("m1") }
         coVerify(atLeast = 1) { mediaRepository.getMediaDetail("m1") }
         job.cancel()
+    }
+
+    // ── Re-entry re-resolution: a re-attached observer reuses the session but
+    //    must NOT replay stale state — it forces a fresh resolve. This is the
+    //    fix for the Activity-scoped DetailViewModel replaying a pre-mutation
+    //    snapshot on back→home→detail. ───────────────────────────────────────
+
+    @Test
+    fun `re-observing an already-loaded item forces a re-resolve instead of replaying stale state`() = runTest {
+        wireStubs("m1", mode = OfflineMode.ONLINE)
+        coEvery { mediaRepository.getMediaDetail("m1") } returns Result.success(movieDetail())
+
+        val provider = buildProvider()
+        val firstJob = launch { provider.observe("m1").collect { } }
+        advanceUntilIdle()
+
+        // Initial entry force-resolved once; clear the call log so the assertions
+        // isolate the second observer's re-resolve. Stub answers are preserved.
+        clearMocks(mediaRepository, answers = false, recordedCalls = true, childMocks = false)
+
+        // A second observer on the same item reuses the existing session (the
+        // Activity-scoped VM pattern: back→home→detail). The reused session must
+        // re-resolve rather than replay its cached snapshot.
+        val secondJob = launch { provider.observe("m1").collect { } }
+        advanceUntilIdle()
+
+        coVerify(atLeast = 1) { mediaRepository.invalidateDetailCache("m1") }
+        coVerify(atLeast = 1) { mediaRepository.getMediaDetail("m1") }
+        firstJob.cancel()
+        secondJob.cancel()
     }
 
     // ── expandSeason idempotency ─────────────────────────────────────────────

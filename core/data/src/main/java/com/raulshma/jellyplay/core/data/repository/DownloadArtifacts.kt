@@ -8,9 +8,9 @@ import java.io.File
  * so every download/delete path stays consistent — adding a new artifact type
  * only requires extending [cleanup] and the relevant writer.
  *
- *  - `<dir>/trickplay/`                       trickplay sprite sheets + `meta.json`
- *  - `<dir>/subtitles/`                       offline external subtitles + `manifest.json`
- *  - `<dir>/segments.json`                    serialized intro/outro/recap media segments
+ *  - `<dir>/trickplay_<itemId>/`              trickplay sprite sheets + `meta.json`
+ *  - `<dir>/subtitles_<itemId>/`              offline external subtitles + `manifest.json`
+ *  - `<dir>/<itemId>_segments.json`           serialized intro/outro/recap media segments
  *  - `<dir>/<itemId>_poster.jpg`              offline poster (primary) image, unique per item
  *  - `<dir>/<itemId>_backdrop.jpg`            offline backdrop image, unique per item
  *  - `<dir>/<personId>_person.jpg`            offline cast/person image, unique per person
@@ -28,10 +28,14 @@ import java.io.File
  * episodes/movies.
  */
 internal object DownloadArtifacts {
-    const val TRICKPLAY_DIR = "trickplay"
-    const val SUBTITLES_DIR = "subtitles"
+    const val LEGACY_TRICKPLAY_DIR = "trickplay"
+    const val LEGACY_SUBTITLES_DIR = "subtitles"
     const val SUBTITLE_MANIFEST_FILE = "manifest.json"
-    const val SEGMENTS_FILE = "segments.json"
+    const val LEGACY_SEGMENTS_FILE = "segments.json"
+
+    fun trickplayDir(itemId: String): String = "trickplay_$itemId"
+    fun subtitlesDir(itemId: String): String = "subtitles_$itemId"
+    fun segmentsFile(itemId: String): String = "${itemId}_segments.json"
 
     /** Per-item poster filename, unique within the shared downloads dir. */
     fun posterFile(itemId: String): String = "${itemId}_poster.jpg"
@@ -52,10 +56,13 @@ internal object DownloadArtifacts {
      */
     fun cleanup(parentDir: File?, itemId: String? = null) {
         if (parentDir == null) return
-        File(parentDir, TRICKPLAY_DIR).takeIf { it.exists() }?.deleteRecursively()
-        File(parentDir, SUBTITLES_DIR).takeIf { it.exists() }?.deleteRecursively()
-        File(parentDir, SEGMENTS_FILE).takeIf { it.exists() }?.delete()
+        File(parentDir, LEGACY_TRICKPLAY_DIR).takeIf { it.exists() }?.deleteRecursively()
+        File(parentDir, LEGACY_SUBTITLES_DIR).takeIf { it.exists() }?.deleteRecursively()
+        File(parentDir, LEGACY_SEGMENTS_FILE).takeIf { it.exists() }?.delete()
         if (itemId != null) {
+            File(parentDir, trickplayDir(itemId)).takeIf { it.exists() }?.deleteRecursively()
+            File(parentDir, subtitlesDir(itemId)).takeIf { it.exists() }?.deleteRecursively()
+            File(parentDir, segmentsFile(itemId)).takeIf { it.exists() }?.delete()
             File(parentDir, posterFile(itemId)).takeIf { it.exists() }?.delete()
             File(parentDir, backdropFile(itemId)).takeIf { it.exists() }?.delete()
         }
