@@ -80,6 +80,7 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.ui.NavDisplay
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -1093,6 +1094,7 @@ private fun PhoneContent(
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var isBottomNavVisible by isBottomNavVisibleState
 
     // Play On (cast-to-Jellyfin-session) lives at the app shell so the mini
@@ -1311,7 +1313,7 @@ private fun PhoneContent(
                 // are reachable from anywhere (#115). The items render as an
                 // overlay above the nav bar (see OverflowMenuItems below).
                 // On tablet the toggle lives in the NavigationRail (left edge),
-                // so the pills dock bottom-start beside the rail and left-align;
+                // so the pills dock top-start beside the rail and flow top-down;
                 // on phone they dock bottom-end beside the floating nav toggle.
                 if (isOverflowExpanded) {
                     com.raulshma.jellyplay.navigation.components.OverflowMenuScrim(
@@ -1352,8 +1354,11 @@ private fun PhoneContent(
                         downloadCount = downloadCount,
                         alignToStart = isExpanded,
                         modifier = if (isExpanded) {
-                            // Clear the 80dp rail + 8dp margin; sit beside the rail toggle.
-                            Modifier.align(Alignment.BottomStart).padding(start = 88.dp, bottom = 4.dp)
+                            // The scaffold body already starts beside the rail, so a small
+                            // margin keeps the pills flush to the drawer. Anchor at the top
+                            // (under the status bar) so the list flows top-down.
+                            Modifier.align(Alignment.TopStart)
+                                .padding(start = 12.dp, top = statusBarTop + 8.dp)
                         } else {
                             Modifier.align(Alignment.BottomEnd)
                                 .clearFloatingNav(extraBottom = 0.dp)
