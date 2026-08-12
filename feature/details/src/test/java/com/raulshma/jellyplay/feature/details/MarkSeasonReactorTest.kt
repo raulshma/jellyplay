@@ -8,6 +8,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -36,6 +37,7 @@ class MarkSeasonReactorTest {
         scope: TestScope,
         itemId: String? = "s1",
         episodes: Map<String, List<MediaItem>> = emptyMap(),
+        seriesId: String? = null,
     ): MarkSeasonReactor {
         messages.clear()
         rewriteCalls.clear()
@@ -49,6 +51,7 @@ class MarkSeasonReactorTest {
                 rewriteCalls += RewriteCall(iid, sid, transform)
             },
             messageSink = { message -> messages += message },
+            seriesIdProvider = { seriesId },
         )
     }
 
@@ -86,6 +89,22 @@ class MarkSeasonReactorTest {
         // The mark-played endpoint clears the resume position; transform mirrors it.
         assertEquals(0L, rewritten.first().playbackPositionTicks)
         assertEquals(0L, rewritten.last().playbackPositionTicks)
+    }
+
+    @Test
+    fun `markSeasonPlayed invalidates the parent series detail cache after success`() = runTest {
+        // The repository's markPlayed(seasonId) invalidation cannot derive the
+        // parent series (seasons are never cached), so the reactor must drop
+        // detailCache[seriesId] explicitly — otherwise re-entry serves the stale
+        // series header until a forced re-resolve.
+        val episodes = listOf(episode("e1", played = false), episode("e2", played = false))
+        val reactor = reactor(this, episodes = mapOf("season1" to episodes), seriesId = "s1")
+        coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
+
+        reactor.markSeasonPlayed("season1")
+        advanceUntilIdle()
+
+        verify(exactly = 1) { mediaRepository.invalidateUserDataCaches("s1") }
     }
 
     @Test
@@ -161,6 +180,30 @@ class MarkSeasonReactorTest {
         assertTrue(rewritten.none { it.isPlayed })
         // Resume position cleared on unplayed (mirrors mark-played).
         assertEquals(0L, rewritten.first().playbackPositionTicks)
+    }
+
+    @Test
+    fun `rapid season toggles are applied in order`() = runTest {
+        var currentEpisodes = listOf(episode("e1", played = false))
+        val reactor = MarkSeasonReactor(
+            scope = this,
+            mediaRepository = mediaRepository,
+            context = context,
+            itemIdProvider = { "s1" },
+            episodesProvider = { mapOf("season1" to currentEpisodes) },
+            applyRewrite = { _, _, transform -> currentEpisodes = transform(currentEpisodes) },
+            messageSink = { message -> messages += message },
+        )
+        coEvery { mediaRepository.markPlayed("season1") } returns Result.success(Unit)
+        coEvery { mediaRepository.markUnplayed("season1") } returns Result.success(Unit)
+
+        reactor.markSeasonPlayed("season1")
+        reactor.markSeasonUnplayed("season1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mediaRepository.markPlayed("season1") }
+        coVerify(exactly = 1) { mediaRepository.markUnplayed("season1") }
+        assertTrue(currentEpisodes.none { it.isPlayed })
     }
     // endregion
 

@@ -68,6 +68,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -259,6 +261,8 @@ class DetailViewModel @Inject constructor(
     private var currentSeriesId: String? = null
     private var seerrDataLoaded = false
     private var seerrDataGeneration = 0L
+    /** Serializes user-data mutations so rapid taps resolve in input order. */
+    private val userDataMutationMutex = Mutex()
     /**
      * The [MediaDetailSnapshot.contentGeneration] of the last snapshot whose
      * *content* sections (detail, seasons, episodes, album tracks, subtitles,
@@ -303,6 +307,16 @@ class DetailViewModel @Inject constructor(
         episodesProvider = { _uiState.value.episodes },
         applyRewrite = mediaDetailProvider::applyOptimisticSeasonRewrite,
         messageSink = { _messages.tryEmit(it) },
+        seriesIdProvider = { currentSeriesId },
+        onItemPlayed = { itemId, played, seriesId ->
+            updatePlayedStateInUi(itemId, played)
+            applyOptimisticItemMutation(
+                itemId = itemId,
+                isPlayed = played,
+                seriesId = seriesId,
+            )
+        },
+        mutationMutex = userDataMutationMutex,
     )
     private val playlistActions = PlaylistActions(
         scope = scope,
@@ -826,24 +840,19 @@ class DetailViewModel @Inject constructor(
     }
 
     fun toggleFavorite() {
-        val detail = _uiState.value.detail ?: return
-        val itemId = detail.item.id
-        val currentIsFavorite = detail.item.isFavorite
         launch {
-            mediaRepository.toggleFavorite(itemId)
+            userDataMutationMutex.withLock {
+                val itemId = _uiState.value.detail?.item?.id ?: return@withLock
+                mediaRepository.toggleFavorite(itemId)
                 .onSuccess {
-                    _uiState.update { state ->
-                        state.copy(
-                            detail = state.detail?.copy(
-                                item = state.detail.item.copy(isFavorite = !currentIsFavorite)
-                            )
-                        )
-                    }
+                    val targetIsFavorite = it
+                    applyFavoriteMutation(itemId, targetIsFavorite)
                 }
                 .onFailure {
                     // Don't leave the user guessing why the heart didn't flip.
                     _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_update_favorite)))
                 }
+            }
         }
     }
 
@@ -858,59 +867,135 @@ class DetailViewModel @Inject constructor(
      * queued/offline mutation syncs.
      */
     private fun setPlayed(played: Boolean) {
-        val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
-            val result = if (played) mediaRepository.markPlayed(itemId)
-            else mediaRepository.markUnplayed(itemId)
-            result.onSuccess {
-                _uiState.update { state ->
-                    state.copy(
-                        detail = state.detail?.copy(
-                            item = state.detail.item.copy(
-                                isPlayed = played,
-                                playbackPositionTicks = 0L,
+            userDataMutationMutex.withLock {
+                val itemId = _uiState.value.detail?.item?.id ?: return@withLock
+                val result = if (played) mediaRepository.markPlayed(itemId)
+                else mediaRepository.markUnplayed(itemId)
+                result.onSuccess {
+                    updatePlayedStateInUi(itemId, played)
+                    applyOptimisticItemMutation(
+                        itemId = itemId,
+                        isPlayed = played,
+                    )
+                }.onFailure {
+                    _messages.emit(
+                        DetailMessage.Text(
+                            context.getString(
+                                if (played) R.string.detail_msg_couldnt_mark_played
+                                else R.string.detail_msg_couldnt_mark_unplayed
                             )
                         )
                     )
                 }
-            }.onFailure {
-                _messages.emit(
-                    DetailMessage.Text(
-                        context.getString(
-                            if (played) R.string.detail_msg_couldnt_mark_played
-                            else R.string.detail_msg_couldnt_mark_unplayed
-                        )
-                    )
-                )
             }
         }
     }
 
     /**
+     * Applies a played flip to every visible projection of an item. Detail
+     * actions can target the current item, a related/collection card, or an
+     * episode card; keeping these projections together prevents one card from
+     * replaying the old state until the next full detail load.
+     */
+    private fun updatePlayedStateInUi(itemId: String, played: Boolean) {
+        var shouldRecomputeSmartPlay = false
+        _uiState.update { state ->
+            val currentDetail = state.detail
+            val isCurrentDetail = currentDetail?.item?.id == itemId
+            shouldRecomputeSmartPlay = isCurrentDetail || state.sortedEpisodes.any { it.id == itemId }
+            val updateItem: (MediaItem) -> MediaItem = { item ->
+                if (item.id == itemId) item.copy(isPlayed = played, playbackPositionTicks = 0L) else item
+            }
+            state.copy(
+                detail = currentDetail?.let { detail ->
+                    if (isCurrentDetail) detail.copy(item = updateItem(detail.item)) else detail
+                },
+                relatedItems = state.relatedItems.map(updateItem),
+                collectionItems = state.collectionItems.map(updateItem),
+                episodes = state.episodes.mapValues { (_, episodes) -> episodes.map(updateItem) },
+                sortedEpisodes = state.sortedEpisodes.map(updateItem),
+            )
+        }
+        if (shouldRecomputeSmartPlay) maybeComputeSmartPlayTarget()
+    }
+
+    /** Updates the active provider snapshot and invalidates any parent series cache. */
+    private suspend fun applyOptimisticItemMutation(
+        itemId: String,
+        isFavorite: Boolean? = null,
+        isPlayed: Boolean? = null,
+        seriesId: String? = null,
+    ) {
+        mediaDetailProvider.applyOptimisticItemState(
+            itemId = itemId,
+            isFavorite = isFavorite,
+            isPlayed = isPlayed,
+        )
+        (seriesId ?: seriesIdForItem(itemId))?.let(mediaDetailProvider::invalidate)
+        currentItemId?.takeIf { it != itemId }?.let { parentItemId ->
+            // Related/collection cards are loaded through parent-keyed caches,
+            // so invalidating only the mutated item's detail is insufficient.
+            mediaRepository.invalidateDetailCache(parentItemId)
+            mediaRepository.invalidateCollectionItemsCache(parentItemId)
+        }
+    }
+
+    private fun seriesIdForItem(itemId: String): String? {
+        val state = _uiState.value
+        val episodeSeriesId = state.episodes.values
+            .asSequence()
+            .flatten()
+            .firstOrNull { it.id == itemId }
+            ?.seriesId
+        if (episodeSeriesId != null) return episodeSeriesId
+        return state.detail?.item
+            ?.takeIf { it.id == itemId }
+            ?.seriesIdForDetail
+    }
+
+    /** Keeps every visible projection of an item aligned after a favorite flip. */
+    private fun updateFavoriteStateInUi(itemId: String, favorite: Boolean) {
+        _uiState.update { state ->
+            val currentDetail = state.detail
+            val isCurrentDetail = currentDetail?.item?.id == itemId
+            val updateItem: (MediaItem) -> MediaItem = { item ->
+                if (item.id == itemId) item.copy(isFavorite = favorite) else item
+            }
+            state.copy(
+                detail = currentDetail?.let { detail ->
+                    if (isCurrentDetail) detail.copy(item = updateItem(detail.item)) else detail
+                },
+                relatedItems = state.relatedItems.map(updateItem),
+                collectionItems = state.collectionItems.map(updateItem),
+                episodes = state.episodes.mapValues { (_, episodes) -> episodes.map(updateItem) },
+                sortedEpisodes = state.sortedEpisodes.map(updateItem),
+            )
+        }
+    }
+
+    private suspend fun applyFavoriteMutation(itemId: String, favorite: Boolean) {
+        updateFavoriteStateInUi(itemId, favorite)
+        applyOptimisticItemMutation(itemId = itemId, isFavorite = favorite)
+    }
+
+    /**
      * Marks a row item (related/collection/episode) played or
      * unplayed without switching the screen's current detail item. Flips the
-     * item in-place in [DetailUiState.relatedItems] so the card's badge updates
-     * immediately; the next detail fetch reconciles the server truth.
+     * item in-place across all visible projections and invalidates the parent
+     * content/catalogue caches so re-entry cannot replay the old state.
      */
     fun markRowItemPlayed(item: MediaItem, played: Boolean) {
         launch {
-            val result = if (played) mediaRepository.markPlayed(item.id)
-            else mediaRepository.markUnplayed(item.id)
-            result.onSuccess {
-                _uiState.update { state ->
-                    state.copy(
-                        relatedItems = state.relatedItems.map {
-                            if (it.id == item.id) it.copy(
-                                isPlayed = played,
-                                playbackPositionTicks = 0L,
-                            ) else it
-                        },
-                        collectionItems = state.collectionItems.map {
-                            if (it.id == item.id) it.copy(
-                                isPlayed = played,
-                                playbackPositionTicks = 0L,
-                            ) else it
-                        },
+            userDataMutationMutex.withLock {
+                val result = if (played) mediaRepository.markPlayed(item.id)
+                else mediaRepository.markUnplayed(item.id)
+                result.onSuccess {
+                    updatePlayedStateInUi(item.id, played)
+                    applyOptimisticItemMutation(
+                        itemId = item.id,
+                        isPlayed = played,
+                        seriesId = item.seriesId,
                     )
                 }
             }
@@ -1199,7 +1284,8 @@ class DetailViewModel @Inject constructor(
 
     /**
      * Marks a single episode played/unplayed (offline-aware + outboxed). Does NOT
-     * refetch — provider/local row reactivity updates the snapshot. Delegates to
+     * refetch the server — the provider snapshot is rewritten optimistically and
+     * the parent catalogue is invalidated for re-entry. Delegates to
      * [MarkSeasonReactor.markEpisodePlayed].
      */
     fun markEpisodePlayed(episodeId: String, played: Boolean) =
@@ -1210,7 +1296,13 @@ class DetailViewModel @Inject constructor(
      * no-arg [toggleFavorite], which flips the current detail item optimistically.
      */
     fun toggleFavorite(itemId: String) {
-        launch { mediaRepository.toggleFavorite(itemId) }
+        launch {
+            userDataMutationMutex.withLock {
+                mediaRepository.toggleFavorite(itemId).onSuccess { targetIsFavorite ->
+                    applyFavoriteMutation(itemId, targetIsFavorite)
+                }
+            }
+        }
     }
 
     override fun onCleared() {

@@ -73,6 +73,20 @@ interface MediaDetailProvider {
     )
 
     /**
+     * Applies a successful user-data mutation to the active detail session.
+     * This keeps the provider's replayed snapshot aligned with the ViewModel's
+     * optimistic state when the user leaves and immediately re-enters detail.
+     * A missing or unresolved session is a no-op; the repository cache
+     * invalidation still guarantees that the next cold resolution fetches fresh
+     * server/local state.
+     */
+    suspend fun applyOptimisticItemState(
+        itemId: String,
+        isFavorite: Boolean? = null,
+        isPlayed: Boolean? = null,
+    )
+
+    /**
      * On-demand per-season expand. Fetches [seasonId]'s episodes via the shared
      * catalogue (serving from the cached series snapshot if present, else fetching
      * the one season), merges the result into the [itemId] session's content as a

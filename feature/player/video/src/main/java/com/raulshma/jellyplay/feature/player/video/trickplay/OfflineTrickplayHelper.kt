@@ -55,14 +55,19 @@ object OfflineTrickplayHelper {
         }
     }
 
-    fun getLocalTrickplayDir(downloadPath: String): File? {
+    fun getLocalTrickplayDir(downloadPath: String, itemId: String? = null): File? {
         val file = File(downloadPath)
         val parent = file.parentFile ?: return null
+        // Try item-scoped directory first, fall back to legacy un-scoped.
+        if (itemId != null) {
+            val scoped = File(parent, "trickplay_$itemId")
+            if (scoped.exists()) return scoped
+        }
         return File(parent, "trickplay")
     }
 
-    suspend fun loadLocalTrickplayInfo(downloadPath: String): TrickplayInfo? {
-        val trickplayDir = getLocalTrickplayDir(downloadPath) ?: return null
+    suspend fun loadLocalTrickplayInfo(downloadPath: String, itemId: String? = null): TrickplayInfo? {
+        val trickplayDir = getLocalTrickplayDir(downloadPath, itemId) ?: return null
         val metaFile = File(trickplayDir, "meta.json")
         if (!metaFile.exists()) return null
 
