@@ -407,6 +407,13 @@ data class AppearanceScreenPreferences(
     val showClockOnHome: Boolean = false,
     /** Show settings search results alongside media in the home search bar. */
     val showSettingsInHomeSearch: Boolean = true,
+    /**
+     * Whether the home screen's top header dock auto-hides on scroll-down and
+     * reappears on scroll-up. Default `false` — the dock stays pinned (current
+     * behaviour) until the user opts in. Mirrors the floating nav-bar
+     * `hideBottomNavOnScroll` toggle.
+     */
+    val hideTopHeaderOnScroll: Boolean = false,
     val newsletterEnabled: Boolean = true,
     val newsletterDayOfWeek: Int = 7,
     val enabledNewsletterSections: Set<NewsletterSectionType> = setOf(

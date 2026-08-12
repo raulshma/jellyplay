@@ -108,6 +108,8 @@ class AppearanceSettingsViewModel @Inject constructor(
     fun setShowClockOnHome(enabled: Boolean) =
         editor.edit { homeDiscovery.setShowClockOnHome(enabled) }
     fun setShowSettingsInHomeSearch(enabled: Boolean) = editor.setShowSettingsInHomeSearch(enabled)
+    fun setHideTopHeaderOnScroll(enabled: Boolean) =
+        editor.edit { homeDiscovery.setHideTopHeaderOnScroll(enabled) }
     fun setContinueWatchingClickBehavior(behavior: ContinueWatchingClickBehavior) =
         editor.edit { homeDiscovery.setContinueWatchingClickBehavior(behavior) }
     fun setMergeContinueWatchingAndNextUp(enabled: Boolean) =

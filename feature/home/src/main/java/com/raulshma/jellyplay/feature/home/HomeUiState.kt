@@ -41,6 +41,13 @@ data class HomeUiState(
     val homeBackdropEnabled: Boolean = true,
     val performanceMode: Boolean = false,
     val showClock: Boolean = false,
+    /**
+     * Whether the home top header dock auto-hides on scroll-down and reappears
+     * on scroll-up. Default `false` (current pinned behaviour). Read by
+     * `HomeTopDockScrim`, which owns the hide animation so the orchestrator
+     * never recomposes on scroll.
+     */
+    val hideTopHeaderOnScroll: Boolean = false,
     val continueWatchingClickBehavior: com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior = com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior.DETAILS,
     val discoverSections: Map<DiscoverSectionType, List<SeerrSearchItem>> = emptyMap(),
     val searchState: HomeSearchState = HomeSearchState(),

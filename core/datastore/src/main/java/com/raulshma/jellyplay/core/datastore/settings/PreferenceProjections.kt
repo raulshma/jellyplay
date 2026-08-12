@@ -490,6 +490,7 @@ class PreferenceProjections @Inject constructor(
             hideSearchHistory = g1.experimental.hideSearchHistory,
             showClockOnHome = g1.home.showClockOnHome,
             showSettingsInHomeSearch = g1.home.showSettingsInHomeSearch,
+            hideTopHeaderOnScroll = g1.home.hideTopHeaderOnScroll,
             newsletterEnabled = notification.newsletterEnabled,
             newsletterDayOfWeek = notification.newsletterDayOfWeek,
             enabledNewsletterSections = notification.enabledNewsletterSections,

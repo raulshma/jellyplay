@@ -247,6 +247,7 @@ fun AppearanceSettingsScreen(
                                 add("hero_section")
                                 add("home_backdrop")
                                 add("clock_home")
+                                add("hide_top_header")
                                 add("settings_in_home_search")
                                 add("continue_watching_click")
                                 if (preferences.hiddenCwItemIds.isNotEmpty()) {
@@ -471,6 +472,16 @@ fun AppearanceSettingsScreen(
                                     checked = preferences.showClockOnHome,
                                     highlighted = highlightSettingId == "clock_home",
                                     onCheckedChange = { viewModel.setShowClockOnHome(it) },
+                                )
+                            }
+                            "hide_top_header" -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.ArrowBarToDown,
+                                    title = stringResource(R.string.settings_hide_top_header_on_scroll),
+                                    subtitle = if (preferences.hideTopHeaderOnScroll) stringResource(R.string.settings_hide_top_header_on_scroll_on) else stringResource(R.string.settings_hide_top_header_on_scroll_off),
+                                    checked = preferences.hideTopHeaderOnScroll,
+                                    highlighted = highlightSettingId == "hide_top_header",
+                                    onCheckedChange = { viewModel.setHideTopHeaderOnScroll(it) },
                                 )
                             }
                             "settings_in_home_search" -> {

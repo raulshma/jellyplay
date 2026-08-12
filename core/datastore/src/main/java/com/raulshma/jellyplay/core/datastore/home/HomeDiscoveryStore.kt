@@ -38,7 +38,7 @@ import javax.inject.Singleton
  * all-or-nothing "hide library from home" key), pinned sections, layout
  * presets, continue-watching click behaviour, the watched/badge/ratings home
  * toggles, the Next-Up + hidden-CW item lists, and the home clock + settings
- * search toggles.
+ * search toggles, plus the home top-header hide-on-scroll toggle.
  *
  * Extracted from the `UserPreferencesStore` god object so this concern owns its
  * keys, its setters (including the read-modify-write JSON list/map invariants),
@@ -106,6 +106,7 @@ class HomeDiscoveryStore @Inject constructor(
         val HIDDEN_CW_ITEM_IDS = stringPreferencesKey("hidden_cw_item_ids")
         val SHOW_CLOCK_ON_HOME = booleanPreferencesKey("show_clock_on_home")
         val SHOW_SETTINGS_IN_HOME_SEARCH = booleanPreferencesKey("show_settings_in_home_search")
+        val HIDE_TOP_HEADER_ON_SCROLL = booleanPreferencesKey("hide_top_header_on_scroll")
     }
 
     private var cachedEnabledHomeSectionTypes = ParsedCache<Set<HomeSectionType>>(null, HomeSectionType.CONFIGURABLE.toSet())
@@ -145,6 +146,7 @@ class HomeDiscoveryStore @Inject constructor(
         hiddenCwItemIds = readHiddenCwItemIds(prefs),
         showClockOnHome = PreferenceCodec.readBool(prefs, Keys.SHOW_CLOCK_ON_HOME, "show_clock_on_home", false),
         showSettingsInHomeSearch = PreferenceCodec.readBool(prefs, Keys.SHOW_SETTINGS_IN_HOME_SEARCH, "show_settings_in_home_search", true),
+        hideTopHeaderOnScroll = PreferenceCodec.readBool(prefs, Keys.HIDE_TOP_HEADER_ON_SCROLL, "hide_top_header_on_scroll", false),
     )
 
     private fun readHomeMode(prefs: Preferences): HomeMode = try {
@@ -436,6 +438,10 @@ class HomeDiscoveryStore @Inject constructor(
         dataStore.edit { it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = enabled }
     }
 
+    suspend fun setHideTopHeaderOnScroll(enabled: Boolean) {
+        dataStore.edit { it[Keys.HIDE_TOP_HEADER_ON_SCROLL] = enabled }
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. This is the
      * home/discovery subset of the legacy `HOME_DISCOVERY` reset category — the
@@ -454,6 +460,7 @@ class HomeDiscoveryStore @Inject constructor(
         Keys.HIDDEN_CW_ITEM_IDS, Keys.PINNED_HOME_SECTIONS,
         Keys.HOME_LAYOUT_PRESETS, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR,
         Keys.SHOW_CLOCK_ON_HOME, Keys.SHOW_SETTINGS_IN_HOME_SEARCH,
+        Keys.HIDE_TOP_HEADER_ON_SCROLL,
     )
 
     /**
@@ -475,6 +482,7 @@ class HomeDiscoveryStore @Inject constructor(
             Keys.HIDDEN_CW_ITEM_IDS, Keys.PINNED_HOME_SECTIONS,
             Keys.HOME_LAYOUT_PRESETS, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR,
             Keys.SHOW_CLOCK_ON_HOME, Keys.SHOW_SETTINGS_IN_HOME_SEARCH,
+            Keys.HIDE_TOP_HEADER_ON_SCROLL,
         )
         else -> emptyList()
     }
@@ -510,6 +518,7 @@ class HomeDiscoveryStore @Inject constructor(
             it[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(userPreferences.hiddenCwItemIds)
             it[Keys.SHOW_CLOCK_ON_HOME] = userPreferences.showClockOnHome
             it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = userPreferences.showSettingsInHomeSearch
+            it[Keys.HIDE_TOP_HEADER_ON_SCROLL] = userPreferences.hideTopHeaderOnScroll
         }
     }
 
@@ -540,6 +549,7 @@ class HomeDiscoveryStore @Inject constructor(
             it[Keys.HIDDEN_CW_ITEM_IDS] = json.encodeToString(slice.hiddenCwItemIds)
             it[Keys.SHOW_CLOCK_ON_HOME] = slice.showClockOnHome
             it[Keys.SHOW_SETTINGS_IN_HOME_SEARCH] = slice.showSettingsInHomeSearch
+            it[Keys.HIDE_TOP_HEADER_ON_SCROLL] = slice.hideTopHeaderOnScroll
         }
     }
 }
@@ -571,4 +581,11 @@ data class HomeDiscoverySlice(
     val hiddenCwItemIds: Set<String> = emptySet(),
     val showClockOnHome: Boolean = false,
     val showSettingsInHomeSearch: Boolean = true,
+    /**
+     * Whether the home screen's top header dock auto-hides on scroll-down and
+     * reappears on scroll-up. Default `false` — the dock stays pinned (current
+     * behaviour) until the user opts in. Mirrors the floating nav-bar
+     * `hideBottomNavOnScroll` toggle.
+     */
+    val hideTopHeaderOnScroll: Boolean = false,
 )

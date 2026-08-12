@@ -278,6 +278,7 @@ private fun downloadsNetworkFields(prefs: UserPreferences, factory: UserPreferen
 private fun homeDiscoveryFields(prefs: UserPreferences, factory: UserPreferences): List<PreferenceField> = listOf(
     PreferenceField("Home Mode", prefs.homeMode.enumDisplay(), factory.homeMode.enumDisplay()),
     PreferenceField("Home Hero", prefs.homeHeroEnabled.onOff(), factory.homeHeroEnabled.onOff()),
+    PreferenceField("Hide Top Header On Scroll", prefs.hideTopHeaderOnScroll.onOff(), factory.hideTopHeaderOnScroll.onOff()),
     PreferenceField("Enabled Home Sections", prefs.enabledHomeSectionTypes.size.toString() + " sections", factory.enabledHomeSectionTypes.size.toString() + " sections"),
     PreferenceField("Home Section Order", prefs.homeSectionOrder.size.toString() + " sections", factory.homeSectionOrder.size.toString() + " sections"),
     PreferenceField("Library Home Overrides", prefs.libraryHomeSectionOverrides.size.toString(), factory.libraryHomeSectionOverrides.size.toString()),
