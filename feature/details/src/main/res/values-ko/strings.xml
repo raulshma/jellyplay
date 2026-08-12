@@ -280,7 +280,6 @@
     <!-- Unified download / offline-detail strings. Resync falls back to default. -->
     <string name="detail_download_info">다운로드 정보</string>
     <string name="detail_file_size">파일 크기</string>
-    <string name="detail_downloaded">다운로드됨</string>
     <string name="detail_status">상태</string>
     <string name="detail_progress">진행률</string>
     <string name="detail_download_status_pending">대기 중</string>
@@ -341,4 +340,43 @@
     <string name="detail_local_subtitle_off">끔</string>
     <string name="detail_local_subtitle_default_badge">기본</string>
     <string name="detail_local_subtitle_forced_badge">강제</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">다운로드 세부정보</string>
+    <string name="detail_download_section_download">다운로드</string>
+    <string name="detail_download_section_media">미디어</string>
+    <string name="detail_download_section_media_info">미디어 정보</string>
+    <string name="detail_download_section_files">다운로드된 파일</string>
+    <string name="detail_downloaded_bytes">다운로드된 크기</string>
+    <string name="detail_downloaded_date">다운로드 날짜</string>
+    <string name="detail_container">컨테이너</string>
+    <string name="detail_file_present">파일 존재 여부</string>
+    <string name="detail_media_source">미디어 소스</string>
+    <string name="detail_download_path">경로</string>
+    <string name="detail_media_title">제목</string>
+    <string name="detail_media_type">유형</string>
+    <string name="detail_original_title">원제</string>
+    <string name="detail_year">연도</string>
+    <string name="detail_runtime">재생 시간</string>
+    <string name="detail_file_name">파일</string>
+    <string name="detail_episode_label">에피소드</string>
+    <string name="detail_no_downloaded_subtitles">다운로드된 자막 없음</string>
+    <string name="detail_view_download_details">다운로드 세부정보 보기</string>
+    <string name="detail_download_tab_overview">개요</string>
+    <string name="detail_download_tab_media_info">미디어 정보</string>
+    <string name="detail_download_tab_storage">저장 공간</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">디스크 총 용량</string>
+    <string name="detail_download_files_loading">파일 크기 계산 중…</string>
+    <string name="detail_download_files_empty">다운로드된 파일을 찾을 수 없습니다</string>
+    <string name="detail_download_files_location">위치</string>
+    <plurals name="detail_files_count">
+        <item quantity="other">%1$d개 파일</item>
+    </plurals>
+    <string name="detail_file_category_media">미디어</string>
+    <string name="detail_file_category_subtitle">자막</string>
+    <string name="detail_file_category_trickplay">트릭플레이</string>
+    <string name="detail_file_category_segment">세그먼트</string>
+    <string name="detail_file_category_image">이미지</string>
 </resources>

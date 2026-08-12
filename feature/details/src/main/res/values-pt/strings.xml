@@ -283,7 +283,6 @@
     <!-- Unified download / offline-detail strings. Resync falls back to default. -->
     <string name="detail_download_info">Informações do download</string>
     <string name="detail_file_size">Tamanho do ficheiro</string>
-    <string name="detail_downloaded">Baixado</string>
     <string name="detail_status">Estado</string>
     <string name="detail_progress">Progresso</string>
     <string name="detail_download_status_pending">Pendente</string>
@@ -346,4 +345,44 @@
     <string name="detail_local_subtitle_off">Desativadas</string>
     <string name="detail_local_subtitle_default_badge">PADRÃO</string>
     <string name="detail_local_subtitle_forced_badge">FORÇADAS</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">Detalhes do download</string>
+    <string name="detail_download_section_download">Download</string>
+    <string name="detail_download_section_media">Mídia</string>
+    <string name="detail_download_section_media_info">Informações da mídia</string>
+    <string name="detail_download_section_files">Arquivos baixados</string>
+    <string name="detail_downloaded_bytes">Tamanho baixado</string>
+    <string name="detail_downloaded_date">Data do download</string>
+    <string name="detail_container">Contêiner</string>
+    <string name="detail_file_present">Arquivo presente</string>
+    <string name="detail_media_source">Fonte de mídia</string>
+    <string name="detail_download_path">Caminho</string>
+    <string name="detail_media_title">Título</string>
+    <string name="detail_media_type">Tipo</string>
+    <string name="detail_original_title">Título original</string>
+    <string name="detail_year">Ano</string>
+    <string name="detail_runtime">Duração</string>
+    <string name="detail_file_name">Arquivo</string>
+    <string name="detail_episode_label">Episódio</string>
+    <string name="detail_no_downloaded_subtitles">Nenhuma legenda baixada</string>
+    <string name="detail_view_download_details">Ver detalhes do download</string>
+    <string name="detail_download_tab_overview">Visão geral</string>
+    <string name="detail_download_tab_media_info">Informações de mídia</string>
+    <string name="detail_download_tab_storage">Armazenamento</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">Total no disco</string>
+    <string name="detail_download_files_loading">Calculando tamanhos dos arquivos…</string>
+    <string name="detail_download_files_empty">Nenhum arquivo baixado encontrado</string>
+    <string name="detail_download_files_location">Localização</string>
+    <plurals name="detail_files_count">
+        <item quantity="one">%1$d arquivo</item>
+        <item quantity="other">%1$d arquivos</item>
+    </plurals>
+    <string name="detail_file_category_media">Mídia</string>
+    <string name="detail_file_category_subtitle">Legendas</string>
+    <string name="detail_file_category_trickplay">Trickplay</string>
+    <string name="detail_file_category_segment">Segmentos</string>
+    <string name="detail_file_category_image">Imagens</string>
 </resources>

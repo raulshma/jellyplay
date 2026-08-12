@@ -280,7 +280,6 @@
     <!-- Unified download / offline-detail strings. Resync falls back to default. -->
     <string name="detail_download_info">ダウンロード情報</string>
     <string name="detail_file_size">ファイルサイズ</string>
-    <string name="detail_downloaded">ダウンロード日</string>
     <string name="detail_status">ステータス</string>
     <string name="detail_progress">進捗</string>
     <string name="detail_download_status_pending">保留中</string>
@@ -341,4 +340,43 @@
     <string name="detail_local_subtitle_off">オフ</string>
     <string name="detail_local_subtitle_default_badge">デフォルト</string>
     <string name="detail_local_subtitle_forced_badge">強制</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">ダウンロードの詳細</string>
+    <string name="detail_download_section_download">ダウンロード</string>
+    <string name="detail_download_section_media">メディア</string>
+    <string name="detail_download_section_media_info">メディア情報</string>
+    <string name="detail_download_section_files">ダウンロードしたファイル</string>
+    <string name="detail_downloaded_bytes">ダウンロード済みサイズ</string>
+    <string name="detail_downloaded_date">ダウンロード日時</string>
+    <string name="detail_container">コンテナ</string>
+    <string name="detail_file_present">ファイルの有無</string>
+    <string name="detail_media_source">メディアソース</string>
+    <string name="detail_download_path">パス</string>
+    <string name="detail_media_title">タイトル</string>
+    <string name="detail_media_type">タイプ</string>
+    <string name="detail_original_title">原題</string>
+    <string name="detail_year">公開年</string>
+    <string name="detail_runtime">再生時間</string>
+    <string name="detail_file_name">ファイル</string>
+    <string name="detail_episode_label">エピソード</string>
+    <string name="detail_no_downloaded_subtitles">ダウンロードされた字幕はありません</string>
+    <string name="detail_view_download_details">ダウンロードの詳細を表示</string>
+    <string name="detail_download_tab_overview">概要</string>
+    <string name="detail_download_tab_media_info">メディア情報</string>
+    <string name="detail_download_tab_storage">ストレージ</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">ディスク上の合計</string>
+    <string name="detail_download_files_loading">ファイルサイズを計算中…</string>
+    <string name="detail_download_files_empty">ダウンロードされたファイルが見つかりません</string>
+    <string name="detail_download_files_location">場所</string>
+    <plurals name="detail_files_count">
+        <item quantity="other">%1$d 個のファイル</item>
+    </plurals>
+    <string name="detail_file_category_media">メディア</string>
+    <string name="detail_file_category_subtitle">字幕</string>
+    <string name="detail_file_category_trickplay">Trickplay</string>
+    <string name="detail_file_category_segment">セグメント</string>
+    <string name="detail_file_category_image">画像</string>
 </resources>

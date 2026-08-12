@@ -283,7 +283,6 @@
     <!-- Unified download / offline-detail strings. Resync falls back to default. -->
     <string name="detail_download_info">Info sul download</string>
     <string name="detail_file_size">Dimensione file</string>
-    <string name="detail_downloaded">Scaricato</string>
     <string name="detail_status">Stato</string>
     <string name="detail_progress">Avanzamento</string>
     <string name="detail_download_status_pending">In attesa</string>
@@ -346,4 +345,44 @@
     <string name="detail_local_subtitle_off">Disattivati</string>
     <string name="detail_local_subtitle_default_badge">PREDEFINITI</string>
     <string name="detail_local_subtitle_forced_badge">FORZATI</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">Dettagli download</string>
+    <string name="detail_download_section_download">Download</string>
+    <string name="detail_download_section_media">Elemento multimediale</string>
+    <string name="detail_download_section_media_info">Info multimediali</string>
+    <string name="detail_download_section_files">File scaricati</string>
+    <string name="detail_downloaded_bytes">Dimensione scaricata</string>
+    <string name="detail_downloaded_date">Data di download</string>
+    <string name="detail_container">Contenitore</string>
+    <string name="detail_file_present">File presente</string>
+    <string name="detail_media_source">Sorgente multimediale</string>
+    <string name="detail_download_path">Percorso</string>
+    <string name="detail_media_title">Titolo</string>
+    <string name="detail_media_type">Tipo</string>
+    <string name="detail_original_title">Titolo originale</string>
+    <string name="detail_year">Anno</string>
+    <string name="detail_runtime">Durata</string>
+    <string name="detail_file_name">File</string>
+    <string name="detail_episode_label">Episodio</string>
+    <string name="detail_no_downloaded_subtitles">Nessun sottotitolo scaricato</string>
+    <string name="detail_view_download_details">Visualizza dettagli download</string>
+    <string name="detail_download_tab_overview">Panoramica</string>
+    <string name="detail_download_tab_media_info">Informazioni media</string>
+    <string name="detail_download_tab_storage">Archiviazione</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">Totale su disco</string>
+    <string name="detail_download_files_loading">Calcolo dimensioni file in corso…</string>
+    <string name="detail_download_files_empty">Nessun file scaricato trovato</string>
+    <string name="detail_download_files_location">Posizione</string>
+    <plurals name="detail_files_count">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d file</item>
+    </plurals>
+    <string name="detail_file_category_media">Media</string>
+    <string name="detail_file_category_subtitle">Sottotitoli</string>
+    <string name="detail_file_category_trickplay">Trickplay</string>
+    <string name="detail_file_category_segment">Segmenti</string>
+    <string name="detail_file_category_image">Immagini</string>
 </resources>
