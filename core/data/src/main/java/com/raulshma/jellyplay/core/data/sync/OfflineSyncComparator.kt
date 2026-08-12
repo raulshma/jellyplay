@@ -264,10 +264,6 @@ class OfflineSyncComparator @Inject constructor() {
     fun isTrickplayChanged(baselineTrickplaySignature: String, fresh: MediaDetail): Boolean =
         hasChanged(baselineTrickplaySignature, trickplaySignature(fresh))
 
-    /** True when the fresh segments signature differs from the baseline. */
-    fun isSegmentsChanged(baselineSegmentsSignature: String, freshSegments: List<MediaSegment>): Boolean =
-        hasChanged(baselineSegmentsSignature, segmentsSignature(freshSegments))
-
     private fun deliverableSubtitles(detail: MediaDetail): List<MediaStream> =
         detail.mediaSources.firstOrNull()?.mediaStreams
             ?.filter { it.type == StreamType.SUBTITLE && (it.isExternal || !it.deliveryUrl.isNullOrBlank()) }

@@ -172,7 +172,7 @@ class ExoPlayerEngine(
     private var assOverlayView: AssSubtitleView? = null
     private var assEnabledForSession: Boolean = false
     // Reflects whether the *currently selected* text track is ASS. Drives the
-    // SubtitleView/AssSubtitleView visibility toggle in applySubtitleStyleToView.
+    // SubtitleView/AssSubtitleView visibility toggle in applySubtitleStyle.
     private var activeTrackIsAss: Boolean = false
     // Cached id of the currently selected text track group, so onTracksChanged
     // can detect a *subtitle* track switch (vs an audio-only change) and reset
@@ -837,7 +837,7 @@ class ExoPlayerEngine(
         }
 
         if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
-            playerView?.let { pv -> applySubtitleStyleToView(pv, newConfig.subtitleStyle) }
+            applySubtitleStyle(newConfig.subtitleStyle)
             // The offset lives on SubtitleStyle.offsetMs, so a delay change also
             // flows through here. Media3 caches parsed cues for the active text
             // track and will not re-invoke the OffsettingSubtitleParserFactory
@@ -945,7 +945,7 @@ class ExoPlayerEngine(
             }
             if (newlyAss != activeTrackIsAss) {
                 activeTrackIsAss = newlyAss
-                playerView?.let { applySubtitleStyleToView(it, currentConfig.subtitleStyle) }
+                applySubtitleStyle(currentConfig.subtitleStyle)
             }
         }
     }
@@ -1023,7 +1023,7 @@ class ExoPlayerEngine(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
-                // Hidden until an ASS track is selected (see applySubtitleStyleToView /
+                // Hidden until an ASS track is selected (see applySubtitleStyle /
                 // selectTrack toggle). Non-ASS tracks keep using the native SubtitleView.
                 visibility = if (activeTrackIsAss) View.VISIBLE else View.GONE
             }
@@ -1035,7 +1035,7 @@ class ExoPlayerEngine(
             pv.post { reparentSubtitleViews(pv) }
         }
 
-        applySubtitleStyleToView(pv, currentConfig.subtitleStyle)
+        applySubtitleStyle(currentConfig.subtitleStyle)
         return pv
     }
 
@@ -1104,8 +1104,8 @@ class ExoPlayerEngine(
         }
     }
 
-    override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
-        val pv = (view as? PlayerView) ?: playerView ?: return
+    override fun applySubtitleStyle(style: SubtitleStyle) {
+        val pv = playerView ?: return
         val bgAlpha = (style.backgroundOpacity * 255).toInt()
         val bgColorWithAlpha = (bgAlpha shl 24) or
             (com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver.resolveBackgroundColor(style) and 0x00FFFFFF)
@@ -1189,11 +1189,22 @@ class ExoPlayerEngine(
         assOverlayView?.setVisibility(if (activeTrackIsAss) View.VISIBLE else View.GONE)
     }
 
-    override fun setAspectRatio(mode: Int, ratio: Float?) {
-        playerView?.setResizeMode(mode)
-        if (ratio != null && ratio > 0f) {
-            (playerView as? AspectRatioFrameLayout)?.setAspectRatio(ratio)
-        } else if (ratio == null || ratio == 0f) {
+    override fun setAspectRatio(ratio: AspectRatio) {
+        // Map the engine-neutral enum to the media3 resize mode here, inside the
+        // only adapter that uses media3's AspectRatioFrameLayout, so no media3
+        // constant crosses the engine seam.
+        val resizeMode = when (ratio) {
+            AspectRatio.FIT, AspectRatio.AUTO -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+            AspectRatio.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            AspectRatio.CROP -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            AspectRatio.RATIO_16_9, AspectRatio.RATIO_4_3, AspectRatio.RATIO_21_9 ->
+                AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+        }
+        playerView?.setResizeMode(resizeMode)
+        val aspectValue = ratio.ratio
+        if (aspectValue != null && aspectValue > 0f) {
+            (playerView as? AspectRatioFrameLayout)?.setAspectRatio(aspectValue)
+        } else {
             (playerView as? AspectRatioFrameLayout)?.setAspectRatio(0f)
         }
     }

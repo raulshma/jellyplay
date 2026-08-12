@@ -63,7 +63,7 @@ import com.raulshma.jellyplay.core.model.isMusicTrack
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.R
-import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
@@ -2021,9 +2021,9 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
 
-    fun applySubtitleStyleToView(view: android.view.View?) {
+    fun applySubtitleStyle() {
         val engine = playerSessionManager.engine ?: return
-        if (view != null) engine.applySubtitleStyleToView(view, _uiState.value.subtitleStyle)
+        engine.applySubtitleStyle(_uiState.value.subtitleStyle)
     }
 
     fun toggleDialogueBoost() {

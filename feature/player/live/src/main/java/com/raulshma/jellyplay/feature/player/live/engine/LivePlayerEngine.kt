@@ -68,13 +68,6 @@ interface LivePlayerEngine {
      */
     fun refreshLiveWindow()
 
-    /**
-     * Callback hook the ViewModel installs to trigger a transcode re-resolve
-     * when direct stream fails. See
-     * [com.raulshma.jellyplay.feature.player.live.LiveTvPlayerViewModel.onTranscodeFallback].
-     */
-    var onTranscodeFallbackNeeded: (() -> Unit)?
-
     /** Tear down player resources. Idempotent. */
     fun release()
 }

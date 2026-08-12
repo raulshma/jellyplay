@@ -140,6 +140,7 @@ class VideoPlayerCleanupTest {
         val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
+        syncPlayManager.stubEmptyEvents()
 
         val uiState = StateFlowHandle(MutableStateFlow(VideoPlayerUiState()))
         val bridge = SyncPlayBridge(
@@ -236,6 +237,7 @@ class VideoPlayerCleanupTest {
         every { sleepTimerManager.remainingMs } returns MutableStateFlow(0L)
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
+        syncPlayManager.stubEmptyEvents()
 
         val viewModel = VideoPlayerViewModel(
             context = context,
@@ -310,6 +312,7 @@ class VideoPlayerCleanupTest {
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         val syncPlayManager = mockk<SyncPlayManager>(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
+        syncPlayManager.stubEmptyEvents()
 
         val viewModel = VideoPlayerViewModel(
             context = mockk(relaxed = true),

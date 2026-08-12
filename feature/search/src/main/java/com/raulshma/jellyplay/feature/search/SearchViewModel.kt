@@ -41,22 +41,11 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.serialization.json.Json
+import com.raulshma.jellyplay.core.data.util.FilterCodec
+import com.raulshma.jellyplay.core.data.util.loadListWithRetry
 import javax.inject.Inject
 
 /**
- * Lenient codec for the persisted search-filter blob. `ignoreUnknownKeys`
- * keeps decode forward-compatible when fields are added later; `encodeDefaults`
- * guarantees a complete on-disk snapshot. Mirrors [LibraryViewModel]'s
- * `libraryJson` codec shape so the two feature modules stay consistent.
- */
-private val searchJson = Json {
-    ignoreUnknownKeys = true
-    encodeDefaults = true
-}
-
-/**
- * Maximum number of offline items to surface in the "On-device" search row.
  * Maximum number of offline items to surface in the "On-device" search row.
  * Kept small because the row is supplementary to the paginated library grid.
  */
@@ -68,12 +57,6 @@ private const val OFFLINE_SEARCH_RESULT_LIMIT: Int = 10
  * keystrokes and avoiding one network round-trip per character.
  */
 private const val SEARCH_DEBOUNCE_MS: Long = 300
-
-/**
- * Delay before a single retry of the genre/tag filter lookups. A transient
- * network blip shouldn't leave the filter sheet permanently missing a section.
- */
-private const val FILTER_RETRY_DELAY_MS: Long = 800
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -186,7 +169,7 @@ class SearchViewModel @Inject constructor(
     private fun loadPersistedFilters() {
         launch {
             val raw = searchFiltersStore.searchFiltersJson.first() ?: return@launch
-            val restored = runCatching { searchJson.decodeFromString<LibraryFilters>(raw) }
+            val restored = runCatching { FilterCodec.decodeFromString<LibraryFilters>(raw) }
                 .getOrNull() ?: return@launch
             _filters.set(restored)
         }
@@ -199,7 +182,7 @@ class SearchViewModel @Inject constructor(
      */
     private fun persistFilters(filters: LibraryFilters) {
         launch {
-            runCatching { searchFiltersStore.setSearchFilters(searchJson.encodeToString(filters)) }
+            runCatching { searchFiltersStore.setSearchFilters(FilterCodec.encodeToString(filters)) }
         }
     }
 
@@ -341,23 +324,6 @@ class SearchViewModel @Inject constructor(
         launch {
             loadListWithRetry(mediaRepository::getTags) { _tags.set(it) }
         }
-    }
-
-    /**
-     * Fetches [fetch] and publishes the result via [onResult]. On failure, retries
-     * once after [FILTER_RETRY_DELAY_MS] so a transient network blip doesn't leave
-     * a filter section permanently empty.
-     */
-    private suspend fun <T> loadListWithRetry(
-        fetch: suspend () -> Result<List<T>>,
-        onResult: (List<T>) -> Unit,
-    ) {
-        var result = fetch()
-        if (result.isFailure) {
-            kotlinx.coroutines.delay(FILTER_RETRY_DELAY_MS)
-            result = fetch()
-        }
-        result.onSuccess(onResult)
     }
 
     /**

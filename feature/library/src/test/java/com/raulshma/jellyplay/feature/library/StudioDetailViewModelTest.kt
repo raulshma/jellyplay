@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.library
 import androidx.lifecycle.SavedStateHandle
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.testing.MainDispatcherRule
 import io.mockk.every
@@ -55,7 +56,7 @@ class StudioDetailViewModelTest {
         verify {
             mediaRepository.getMediaItemsPaged(
                 studioIds = listOf(expectedStudioId),
-                sortBy = "SortName",
+                filters = match { it.sortBy == SortOption.SORT_NAME },
             )
         }
     }
@@ -76,7 +77,7 @@ class StudioDetailViewModelTest {
         verify {
             mediaRepository.getMediaItemsPaged(
                 studioIds = listOf("my-studio-id"),
-                sortBy = any(),
+                filters = any(),
             )
         }
     }
@@ -88,7 +89,7 @@ class StudioDetailViewModelTest {
         verify {
             mediaRepository.getMediaItemsPaged(
                 studioIds = any(),
-                sortBy = "SortName",
+                filters = match { it.sortBy == SortOption.SORT_NAME },
             )
         }
     }

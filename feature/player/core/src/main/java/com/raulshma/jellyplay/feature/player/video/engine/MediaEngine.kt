@@ -422,7 +422,15 @@ interface MediaEngine :
     // ── Per-engine subtitle styling applied to the engine's native subtitle
     //    surface (Media3 `SubtitleView` / libass / VLC freetype), and the
     //    mechanical hooks the screen's zoom-safe strategies drive. ──
-    fun applySubtitleStyleToView(view: View, style: SubtitleStyle)
+    /**
+     * Apply [style] to this engine's own native subtitle surface. Each engine
+     * owns its surface (ExoPlayer its `PlayerView`/`SubtitleView`, mpv its
+     * libass properties, libVLC its freetype media options), so no `View` is
+     * handed across the seam — the previous `view` parameter had three
+     * incompatible meanings (load-bearing for ExoPlayer, ignored by mpv,
+     * triggering a media reload for libVLC). Callers just hand the [style].
+     */
+    fun applySubtitleStyle(style: SubtitleStyle)
 
     /**
      * Optionally reparents the engine's native subtitle `View`(s) into an
@@ -446,8 +454,13 @@ interface MediaEngine :
 
     // ── Native surface creation and aspect-ratio control. ──
     fun createSurfaceView(context: Context): View
-    fun setAspectRatio(mode: Int, ratio: Float? = null)
 
-    // ── Special-case internal hooks. ──
-    fun setRenderer(renderer: Any?) {}
+    /**
+     * Apply the user's aspect-ratio choice to this engine's native surface.
+     * The [AspectRatio] enum is the engine-neutral contract; each adapter maps
+     * it to its own native mode (ExoPlayer `RESIZE_MODE_*`, mpv
+     * `video-aspect-override`/`panscan`, libVLC `aspectRatio`/`scale`) so no
+     * media3 constant crosses the seam.
+     */
+    fun setAspectRatio(ratio: AspectRatio)
 }

@@ -1067,8 +1067,8 @@ class MpvPlayerEngine(
         return view
     }
 
-    override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
-        // Not used via view in MPV, we apply via mpv properties
+    override fun applySubtitleStyle(style: SubtitleStyle) {
+        // mpv applies styles via properties, not via a View.
         applySubtitleStyleInternal(style)
     }
     
@@ -1083,12 +1083,11 @@ class MpvPlayerEngine(
         }
     }
 
-    override fun setAspectRatio(mode: Int, ratio: Float?) {
+    override fun setAspectRatio(ratio: AspectRatio) {
+        val numeric = ratio.ratio
         val aspectValue = when {
-            mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL -> "-1"
-            mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> "-1"
-            ratio != null && ratio > 0f -> {
-                val w = (ratio * 100).toInt()
+            numeric != null && numeric > 0f -> {
+                val w = (numeric * 100).toInt()
                 val h = 100
                 val gcd = gcd(w, h)
                 "${w / gcd}:${h / gcd}"
@@ -1098,7 +1097,7 @@ class MpvPlayerEngine(
         val m = mpvView?.mpv ?: return
         try { m.setPropertyString("video-aspect-override", aspectValue) } catch (_: Exception) {}
 
-        val isZoom = mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        val isZoom = ratio == AspectRatio.CROP
         try {
             m.setPropertyDouble("panscan", if (isZoom) 1.0 else 0.0)
             m.setPropertyString("sub-use-margins", if (isZoom) "yes" else "no")

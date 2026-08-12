@@ -7,8 +7,8 @@ import android.os.Build
 import androidx.core.content.FileProvider
 import androidx.core.content.pm.PackageInfoCompat
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
+import com.raulshma.jellyplay.core.model.compareVersions
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
-import com.raulshma.jellyplay.core.network.github.GitHubReleasesApiImpl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -235,7 +235,7 @@ class AppUpdateRepositoryImpl @Inject constructor(
      * and [cleanupDownloadedApk] share one definition of "pending".
      */
     private fun isNewerThanInstalled(version: String): Boolean =
-        GitHubReleasesApiImpl.compareVersions(version, currentVersionName()) > 0
+        compareVersions(version, currentVersionName()) > 0
 
     /**
      * Writes [PendingUpdateMeta] derived from [info] into the sidecar file in

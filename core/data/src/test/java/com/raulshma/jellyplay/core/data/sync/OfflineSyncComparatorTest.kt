@@ -390,6 +390,5 @@ class OfflineSyncComparatorTest {
         val fresh = detail(mediaStreams = listOf(subtitle()))
         assertFalse(comparator.isSubtitleChanged("", fresh))
         assertFalse(comparator.isTrickplayChanged("", fresh))
-        assertFalse(comparator.isSegmentsChanged("", listOf(segment())))
     }
 }

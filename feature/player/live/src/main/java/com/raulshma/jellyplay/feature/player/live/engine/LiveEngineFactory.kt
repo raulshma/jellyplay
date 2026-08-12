@@ -1,21 +1,22 @@
 package com.raulshma.jellyplay.feature.player.live.engine
 
 import android.content.Context
-import com.raulshma.jellyplay.core.model.PlayerType
 import okhttp3.OkHttpClient
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
 
 /**
- * Selects the live engine for the user's preferred [PlayerType].
+ * Constructs the live engine, injecting the app-scoped dependencies
+ * ([appContext], the streaming OkHttpClient) the engine itself shouldn't own
+ * and the transcode-fallback callback the ViewModel supplies.
  *
- * v1 only ships an ExoPlayer-based live engine — every [PlayerType] resolves
- * to [ExoLiveEngine]. The previous `when` arms and a stub `MpvLiveEngine`
- * (every override threw) existed only as speculative scaffolding for an MPV
- * live path that was never built; both were removed to stop implying a
- * switch that never happens. Revisit if a real MPV-Live implementation
- * lands — at that point restore the `when` and the engine class together.
+ * v1 ships a single ExoPlayer-based live engine — every call resolves to
+ * [ExoLiveEngine]. The previous `preferred: PlayerType` parameter and the
+ * speculative `when` arms / stub `MpvLiveEngine` existed only to imply a switch
+ * that never happens; they were removed. Revisit if a real second live adapter
+ * lands — at that point restore the dispatch (and the [LivePlayerEngine] seam)
+ * together, not before.
  *
  * Injected via Hilt. The streaming OkHttpClient is the same `@Named("streaming")`
  * instance used by the VOD `PlayerEngineFactory`.
@@ -26,7 +27,7 @@ class LiveEngineFactory @Inject constructor(
     @Named("streaming") private val streamingClient: OkHttpClient,
 ) {
     fun create(
-        preferred: PlayerType,
         config: LiveEngineConfig,
-    ): LivePlayerEngine = ExoLiveEngine(appContext, config, streamingClient)
+        onTranscodeFallbackNeeded: () -> Unit,
+    ): LivePlayerEngine = ExoLiveEngine(appContext, config, streamingClient, onTranscodeFallbackNeeded)
 }

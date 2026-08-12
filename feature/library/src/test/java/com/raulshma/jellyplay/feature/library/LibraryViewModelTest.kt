@@ -38,6 +38,7 @@ class LibraryViewModelTest {
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var photoFolderPrefetcher: PhotoFolderPrefetcher
     private lateinit var libraryStore: LibraryStore
+    private lateinit var userMessageBus: com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 
     @Before
     fun setUp() {
@@ -45,6 +46,7 @@ class LibraryViewModelTest {
         imageUrlProvider = mockk(relaxed = true)
         photoFolderPrefetcher = mockk(relaxed = true)
         libraryStore = mockk(relaxed = true)
+        userMessageBus = mockk(relaxed = true)
 
         every { imageUrlProvider.getImageUrl(any(), any()) } returns "https://example.com/image.jpg"
         every { libraryStore.library } returns MutableStateFlow(LibrarySlice())
@@ -62,6 +64,7 @@ class LibraryViewModelTest {
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
         libraryStore = libraryStore,
+        userMessageBus = userMessageBus,
     )
 
     /** Browser-state snapshot, the single source of truth post-refactor. */

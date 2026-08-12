@@ -9,9 +9,8 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
-import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.async
@@ -30,8 +29,10 @@ import kotlinx.coroutines.sync.withPermit
  *     [PlaybackSyncReconnectListener]).
  *   - Periodically (backstop) via [PlaybackSyncScheduler].
  *
- * The drain replays outbox entries directly through [JellyfinApiClient] rather
- * than the repository, so a retry does not recurse back into the outbox.
+ * The drain replays outbox entries through [PlaybackRepository.replayOutboxEntry],
+ * a pure dispatch (no enqueue) so a retry does not recurse back into the outbox;
+ * the worker owns the drain loop (delete on success, retry/dead-letter on
+ * failure, reconcile), the repository owns the entry-type → API-call mapping.
  *
  * Latest-wins reconciliation: for each item that has a downloaded offline row,
  * the server's `MediaItem` is fetched and compared. If the server's
@@ -45,7 +46,7 @@ class PlaybackSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val outbox: PlaybackOutboxRepository,
-    private val apiClient: JellyfinApiClient,
+    private val playbackRepository: PlaybackRepository,
     private val offlineModeManager: OfflineModeManager,
     private val playedStateSync: PlayedStateSync,
     private val offlineRepository: OfflineRepository,
@@ -96,10 +97,10 @@ class PlaybackSyncWorker @AssistedInject constructor(
         // discarding the row lost both the audit trail and any chance of repair.
         //
         // Note on atomicity: each entry's "replay + delete" cannot be wrapped
-        // in a single Room transaction because replay() is a network call and
+        // in a single Room transaction because replayOutboxEntry() is a network call and
         // holding the SQLite lock across network I/O is an anti-pattern (and
         // blocks every other DB client). The residual risk is re-delivery if
-        // the process is killed between a successful replay() and the delete():
+        // the process is killed between a successful replayOutboxEntry() and the delete():
         // the Jellyfin playback-report endpoints are keyed by sessionId/itemId
         // and treat a later report as latest-wins, so a duplicate is idempotent
         // in effect. The dead-letter flag closes the data-loss half of the bug.
@@ -109,7 +110,7 @@ class PlaybackSyncWorker @AssistedInject constructor(
         if (pending.isNotEmpty()) {
             var remaining = pending.size
             for (entry in pending) {
-                val ok = runCatching { replay(entry) }.getOrElse { false }
+                val ok = runCatching { playbackRepository.replayOutboxEntry(entry) }.getOrElse { false }
                 if (ok) {
                     outbox.delete(entry.id)
                     reconciledItems.add(entry.itemId)
@@ -192,38 +193,6 @@ class PlaybackSyncWorker @AssistedInject constructor(
         // guaranteeing the outbox count reaches 0.
         return if (anyFailure) Result.retry() else Result.success()
     }
-
-    private suspend fun replay(entry: PlaybackOutboxEntry): Boolean =
-        when (entry.eventType) {
-            PlaybackOutboxEventType.START ->
-                apiClient.reportPlaybackStart(
-                    entry.itemId,
-                    entry.sessionId,
-                    entry.playMethod,
-                ).isSuccess
-            PlaybackOutboxEventType.PROGRESS ->
-                apiClient.reportPlaybackProgress(
-                    entry.itemId,
-                    entry.sessionId,
-                    entry.positionTicks,
-                    entry.isPaused,
-                    entry.playMethod,
-                ).isSuccess
-            PlaybackOutboxEventType.STOP ->
-                apiClient.reportPlaybackStopped(
-                    entry.itemId,
-                    entry.sessionId,
-                    entry.positionTicks,
-                ).isSuccess
-            PlaybackOutboxEventType.PLAYED ->
-                apiClient.markPlayed(entry.itemId).isSuccess
-            PlaybackOutboxEventType.UNPLAYED ->
-                apiClient.markUnplayed(entry.itemId).isSuccess
-            PlaybackOutboxEventType.FAVORITE ->
-                apiClient.setFavorite(entry.itemId, isFavorite = true).isSuccess
-            PlaybackOutboxEventType.UNFAVORITE ->
-                apiClient.setFavorite(entry.itemId, isFavorite = false).isSuccess
-        }
 
     companion object {
         const val UNIQUE_PERIODIC_NAME = "com.raulshma.jellyplay.work.playback_sync_periodic"

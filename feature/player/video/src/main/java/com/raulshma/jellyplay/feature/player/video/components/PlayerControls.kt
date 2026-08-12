@@ -118,6 +118,7 @@ import com.composables.icons.tabler.outline.*
 import androidx.compose.foundation.layout.offset
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
 import com.raulshma.jellyplay.feature.player.video.TrackOption

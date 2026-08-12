@@ -189,7 +189,7 @@ abstract class MediaEngineContractTest {
         engine.setMuted(false)
         engine.selectTrack(TrackType.AUDIO, 0)
         engine.setMaxVideoBitrate(null)
-        engine.setAspectRatio(0)
+        engine.setAspectRatio(AspectRatio.FIT)
         engine.updateConfig(EngineConfig())
         engine.setPollingIntervalMs(500L)
         engine.setVideoStatsEnabled(true)

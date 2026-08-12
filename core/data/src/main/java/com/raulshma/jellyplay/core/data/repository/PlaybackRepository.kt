@@ -21,6 +21,20 @@ interface PlaybackRepository {
 
     suspend fun reportPlaybackStopped(itemId: String, sessionId: String, positionTicks: Long): Result<Unit>
 
+    /**
+     * Replays a single staged [entry] straight to the server, returning whether
+     * it landed. This is the drain counterpart to the `reportPlayback*` capture
+     * methods: it performs a **pure** dispatch (no offline check, no enqueue on
+     * failure) so [com.raulshma.jellyplay.core.data.worker.PlaybackSyncWorker]
+     * can retry a failing entry without recursing back into the outbox.
+     *
+     * Collocating the entry-type → API-call mapping here keeps playback
+     * reporting in one module — the worker drives the drain loop (delete on
+     * success, retry/dead-letter on failure, reconcile) and delegates the
+     * dispatch to the repository.
+     */
+    suspend fun replayOutboxEntry(entry: PlaybackOutboxEntry): Boolean
+
     fun getImageUrl(itemId: String, imageType: String = "Primary", maxWidth: Int? = 400): String
 
     fun getBackdropUrl(itemId: String, maxWidth: Int = 1280): String

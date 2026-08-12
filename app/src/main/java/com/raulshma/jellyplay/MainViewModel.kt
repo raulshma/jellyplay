@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
+import com.raulshma.jellyplay.update.AppUpdateDecision
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
@@ -167,13 +168,6 @@ class MainViewModel @Inject constructor(
     private val adminRefreshIntervalMs = 30_000L
 
     /**
-     * After the user dismisses an update prompt, the launch-time auto-check
-     * suppresses the *same* version for this long. Manual checks (Settings)
-     * are unaffected. 24 hours.
-     */
-    private val dismissedUpdateSuppressMs = 24L * 60 * 60 * 1000
-
-    /**
      * Preferences read by the app-shell composables (MainActivity +
      * JellyPlayApp). Built off [PreferenceProjections.mainPreferences] (which
      * covers all slice-owned fields) with the two runtime-only fields —
@@ -269,9 +263,7 @@ class MainViewModel @Inject constructor(
             val experimental = experimentalStore.experimental.first()
             if (experimental.selfUpdateCheckEnabled) {
                 val pending = runCatching { appUpdateRepository.getPendingUpdate() }.getOrNull()
-                if (pending != null &&
-                    !isUpdateRecentlyDismissed(pending.info.latestVersion, experimental)
-                ) {
+                if (pending != null && !isUpdateRecentlyDismissed(pending.info.latestVersion, experimental)) {
                     _updateState.set(UpdateState.Downloaded(pending.info, pending.apkFile))
                 } else {
                     checkForAppUpdate()
@@ -388,6 +380,19 @@ class MainViewModel @Inject constructor(
     }
 
     /**
+     * True when [version] matches the last dismissed update within the 24h
+     * suppression window. Centralizes the experimental-slice unpacking and the
+     * clock so both launch-time update-check sites apply identical rules.
+     */
+    private fun isUpdateRecentlyDismissed(version: String, experimental: ExperimentalSlice): Boolean =
+        AppUpdateDecision.isRecentlyDismissed(
+            version = version,
+            dismissedVersion = experimental.dismissedUpdateVersion,
+            dismissedAtMs = experimental.dismissedUpdateAtMs,
+            nowMs = System.currentTimeMillis(),
+        )
+
+    /**
      * Checks GitHub Releases for a newer build, called once on launch after
      * session restore. Gated by `selfUpdateCheckEnabled`. Stays silent unless
      * an update is actually available — it never surfaces a sheet for an
@@ -409,27 +414,13 @@ class MainViewModel @Inject constructor(
                 if (isUpdateRecentlyDismissed(info.latestVersion, experimental)) return@onSuccess
                 // With auto-download enabled, skip the prompt and stream the APK
                 // straight away (the sheet surfaces download progress/cancel).
-                if (experimental.selfUpdateDownloadEnabled && info.downloadAssetUrl != null) {
+                if (AppUpdateDecision.shouldAutoDownload(experimental.selfUpdateDownloadEnabled, info)) {
                     startUpdateDownload(info)
                 } else {
                     _updateState.set(UpdateState.UpdateAvailable(info))
                 }
             }
         }
-    }
-
-    /**
-     * True when [version] matches the last dismissed update and that dismissal
-     * happened within [dismissedUpdateSuppressMs]. Manual checks ignore this.
-     */
-    private fun isUpdateRecentlyDismissed(
-        version: String,
-        experimental: ExperimentalSlice,
-    ): Boolean {
-        val dismissedVersion = experimental.dismissedUpdateVersion ?: return false
-        if (dismissedVersion != version) return false
-        val elapsed = System.currentTimeMillis() - experimental.dismissedUpdateAtMs
-        return elapsed in 0..dismissedUpdateSuppressMs
     }
 
     /**
@@ -453,7 +444,7 @@ class MainViewModel @Inject constructor(
             // the newer version (ties keep the pending APK so its already-downloaded
             // bytes stay the install path). On network failure fall back to pending.
             val remote = result.getOrNull()
-            val surface = pickUpdateToSurface(pending?.info, remote)
+            val surface = AppUpdateDecision.pickUpdateToSurface(pending?.info, remote)
             when {
                 // A newer version is available to download.
                 surface != null && surface.isUpdateAvailable -> {
@@ -461,7 +452,7 @@ class MainViewModel @Inject constructor(
                     // otherwise prompt (or auto-download) as usual.
                     if (pending != null && surface.latestVersion == pending.info.latestVersion) {
                         _updateState.set(UpdateState.Downloaded(pending.info, pending.apkFile))
-                    } else if (experimental.selfUpdateDownloadEnabled && surface.downloadAssetUrl != null) {
+                    } else if (AppUpdateDecision.shouldAutoDownload(experimental.selfUpdateDownloadEnabled, surface)) {
                         startUpdateDownload(surface)
                     } else {
                         _updateState.set(UpdateState.UpdateAvailable(surface))
@@ -476,24 +467,6 @@ class MainViewModel @Inject constructor(
                 else -> _updateState.set(UpdateState.Error(result.exceptionOrNull()?.message ?: "Update check failed"))
             }
         }
-    }
-
-    /**
-     * Picks the [AppUpdateInfo] to surface for a manual check: the pending
-     * (on-disk) version, the freshly-fetched remote version, or null when the
-     * remote failed *and* nothing is pending. When both exist, prefers the
-     * newer version — ties keep the pending one so the already-downloaded APK
-     * stays the install path instead of forcing a re-download.
-     */
-    private fun pickUpdateToSurface(
-        pending: com.raulshma.jellyplay.core.model.AppUpdateInfo?,
-        remote: com.raulshma.jellyplay.core.model.AppUpdateInfo?,
-    ): com.raulshma.jellyplay.core.model.AppUpdateInfo? {
-        if (remote == null) return pending
-        if (pending == null) return remote
-        return if (com.raulshma.jellyplay.core.network.github.GitHubReleasesApiImpl
-                .compareVersions(remote.latestVersion, pending.latestVersion) > 0
-        ) remote else pending
     }
 
     /**
@@ -550,12 +523,7 @@ class MainViewModel @Inject constructor(
      * still surface the result regardless of dismissal.
      */
     fun dismissUpdate() {
-        val state = _updateState.value
-        val dismissedVersion = when (state) {
-            is UpdateState.UpdateAvailable -> state.info.latestVersion
-            is UpdateState.Downloaded -> state.info.latestVersion
-            else -> null
-        }
+        val dismissedVersion = AppUpdateDecision.dismissedVersion(_updateState.value)
         if (dismissedVersion != null) {
             launch {
                 experimentalStore.setDismissedUpdate(dismissedVersion)
