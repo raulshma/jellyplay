@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.player.live.engine
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.raulshma.jellyplay.core.model.PlayerType
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertNotNull
 import org.junit.Before
@@ -25,9 +24,9 @@ class LiveEngineFactoryTest {
     }
 
     @Test
-    fun create_returnsExoLiveEngineInstanceForAnyPlayerType() {
+    fun create_returnsExoLiveEngineInstance() {
         val config = LiveEngineConfig()
-        val engine = factory.create(PlayerType.EXO_PLAYER, config)
+        val engine = factory.create(config) {}
         assertNotNull(engine)
     }
 }

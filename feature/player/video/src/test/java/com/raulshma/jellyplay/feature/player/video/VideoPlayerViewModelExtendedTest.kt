@@ -139,6 +139,7 @@ class VideoPlayerViewModelExtendedTest {
         every { sleepTimerManager.remainingMs } returns MutableStateFlow(0L)
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
+        syncPlayManager.stubEmptyEvents()
 
         viewModel = VideoPlayerViewModel(
             context = context,

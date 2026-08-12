@@ -82,7 +82,7 @@ class NoOpEngineTest {
         engine.setMaxVideoBitrate(1_000)
         engine.setPollingIntervalMs(500L)
         engine.setVideoStatsEnabled(true)
-        engine.setAspectRatio(0)
+        engine.setAspectRatio(AspectRatio.FIT)
         engine.release()
         // State is unchanged by any control call.
         assertEquals(EnginePlaybackState.IDLE, engine.playbackState.value)

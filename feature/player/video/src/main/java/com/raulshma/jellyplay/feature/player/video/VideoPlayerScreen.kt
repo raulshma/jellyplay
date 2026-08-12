@@ -116,7 +116,7 @@ import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.R
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
-import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -164,7 +164,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.PlayerDarkTheme
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
-import androidx.media3.ui.AspectRatioFrameLayout
 
 // ── Player overlay/animation timing (ms) ─────────────────────────────────
 // Named so the tuning is discoverable instead of scattered as bare literals.
@@ -667,17 +666,9 @@ fun VideoPlayerScreen(
         } else {
             aspectRatio
         }
-
-        val resizeMode = when (effectiveRatio) {
-            AspectRatio.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-            AspectRatio.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-            AspectRatio.CROP -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-            AspectRatio.RATIO_16_9, AspectRatio.RATIO_4_3, AspectRatio.RATIO_21_9 ->
-                AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
-            AspectRatio.AUTO -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-        }
-        val targetRatio = effectiveRatio.ratio
-        engine?.setAspectRatio(resizeMode, targetRatio)
+        // The engine maps the enum to its native mode (media3 resize mode / mpv
+        // panscan / VLC aspectRatio) — no media3 constant crosses the seam here.
+        engine?.setAspectRatio(effectiveRatio)
     }
 
     val playMethod = uiState.playMethod
@@ -1138,7 +1129,7 @@ fun VideoPlayerScreen(
                         factory = { ctx ->
                             val view = currentEngine.createSurfaceView(ctx)
                             lastAppliedSubtitleStyle = uiState.subtitleStyle
-                            viewModel.applySubtitleStyleToView(view)
+                            viewModel.applySubtitleStyle()
                             playerViewRef = view
                             view
                         },
@@ -1146,7 +1137,7 @@ fun VideoPlayerScreen(
                             val currentStyle = uiState.subtitleStyle
                             if (lastAppliedSubtitleStyle != currentStyle) {
                                 lastAppliedSubtitleStyle = currentStyle
-                                viewModel.applySubtitleStyleToView(view)
+                                viewModel.applySubtitleStyle()
                             }
                         },
                         modifier = Modifier

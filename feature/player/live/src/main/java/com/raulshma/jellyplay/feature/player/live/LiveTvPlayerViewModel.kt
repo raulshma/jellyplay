@@ -401,7 +401,7 @@ class LiveTvPlayerViewModel @Inject constructor(
         // HTTP data-source factory), not per-request — see ensureEngine.
         val livePlayMethod = resolved.playMethod.toLivePlayMethod()
         _state.value = _state.value.copy(playMethod = livePlayMethod)
-        ensureEngine(playback.preferredPlayer)
+        ensureEngine()
             .load(
                 LivePlaybackRequest(
                     url = resolved.streamUrl,
@@ -561,16 +561,13 @@ class LiveTvPlayerViewModel @Inject constructor(
         )
     }
 
-    private fun ensureEngine(
-        preferred: com.raulshma.jellyplay.core.model.PlayerType,
-    ): LivePlayerEngine {
+    private fun ensureEngine(): LivePlayerEngine {
         val existing = engine
         if (existing != null) return existing
         val config = LiveEngineConfig(
             authToken = playbackRepository.getAccessToken(),
         )
-        val newEngine = engineFactory.create(preferred, config)
-        newEngine.onTranscodeFallbackNeeded = ::onTranscodeFallback
+        val newEngine = engineFactory.create(config, ::onTranscodeFallback)
         observeEngine(newEngine)
         engine = newEngine
         // Install becoming-noisy + audio-focus only once for the (reused)

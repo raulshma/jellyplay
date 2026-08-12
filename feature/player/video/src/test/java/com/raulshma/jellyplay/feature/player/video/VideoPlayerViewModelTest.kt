@@ -37,7 +37,7 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
-import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -147,6 +147,7 @@ class VideoPlayerViewModelTest {
         every { sleepTimerManager.remainingMs } returns MutableStateFlow(0L)
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
+        syncPlayManager.stubEmptyEvents()
 
         viewModel = VideoPlayerViewModel(
             context = context,

@@ -26,32 +26,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.json.Json
+import com.raulshma.jellyplay.core.data.util.FilterCodec
+import com.raulshma.jellyplay.core.data.util.loadListWithRetry
 import javax.inject.Inject
-
-/**
- * Lenient codec for the persisted library-filter blob. `ignoreUnknownKeys`
- * keeps decode forward-compatible when fields are added later; `encodeDefaults`
- * guarantees a complete on-disk snapshot (matching the legacy mirror's output).
- * Note: `ignoreUnknownKeys` does NOT suppress unknown enum constants —
- * [selectFolder] keeps its try/catch as the resilience boundary for those.
- */
-private val libraryJson = Json {
-    ignoreUnknownKeys = true
-    encodeDefaults = true
-}
 
 /** Projected slice of [UserPreferences] used to derive the active library view mode. */
 private data class ViewModePrefs(
     val libraryViewMode: LibraryViewMode,
     val libraryViewModes: Map<String, String>,
 )
-
-/**
- * Delay before a single retry of the genre/tag filter lookups. A transient
- * network blip shouldn't leave the filter sheet permanently missing a section.
- */
-private const val FILTER_RETRY_DELAY_MS: Long = 800
 
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
@@ -317,23 +300,6 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Fetches [fetch] and publishes the result via [onResult]. On failure, retries
-     * once after [FILTER_RETRY_DELAY_MS] so a transient network blip doesn't leave
-     * a filter section permanently empty.
-     */
-    private suspend fun <T> loadListWithRetry(
-        fetch: suspend () -> Result<List<T>>,
-        onResult: (List<T>) -> Unit,
-    ) {
-        var result = fetch()
-        if (result.isFailure) {
-            kotlinx.coroutines.delay(FILTER_RETRY_DELAY_MS)
-            result = fetch()
-        }
-        result.onSuccess(onResult)
-    }
-
     fun selectFolder(folder: LibraryFolder?) {
         userTouchedViewMode = false
         val prefs = libraryStore.library.value
@@ -344,7 +310,7 @@ class LibraryViewModel @Inject constructor(
             val savedFiltersJson = prefs.libraryFilters[folder.id]
             if (savedFiltersJson != null) {
                 try {
-                    newFilters = libraryJson.decodeFromString<LibraryFilters>(savedFiltersJson)
+                    newFilters = FilterCodec.decodeFromString<LibraryFilters>(savedFiltersJson)
                 } catch (_: Exception) {
                     newFilters = LibraryFilters()
                 }
@@ -381,7 +347,7 @@ class LibraryViewModel @Inject constructor(
             val folderId = state.folder!!.id
             launch {
                 libraryStore.setDefaultLibrarySortOrder(folderId, newFilters.sortBy.name)
-                libraryStore.setLibraryFilters(folderId, libraryJson.encodeToString(newFilters))
+                libraryStore.setLibraryFilters(folderId, FilterCodec.encodeToString(newFilters))
             }
         }
     }
@@ -456,7 +422,7 @@ class LibraryViewModel @Inject constructor(
         _browserState.set(result.state)
         launch {
             result.realFolderIdToClean?.let { folderId ->
-                libraryStore.setLibraryFilters(folderId, libraryJson.encodeToString(LibraryFilters()))
+                libraryStore.setLibraryFilters(folderId, FilterCodec.encodeToString(LibraryFilters()))
                 libraryStore.setDefaultLibrarySortOrder(folderId, SortOption.YEAR_DESC.name)
             }
             libraryStore.setLibraryPosterSize(result.state.posterSize)

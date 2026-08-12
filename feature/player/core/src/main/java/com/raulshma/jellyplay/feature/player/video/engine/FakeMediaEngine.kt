@@ -96,8 +96,8 @@ class FakeMediaEngine : MediaEngine {
     override fun decreaseVolume(delta: Float) = setVolume(volumeValue - delta)
     override fun setMuted(muted: Boolean) { if (muted) setVolume(0f) }
     override fun createSurfaceView(context: Context): View = View(context)
-    override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {}
-    override fun setAspectRatio(mode: Int, ratio: Float?) {}
+    override fun applySubtitleStyle(style: SubtitleStyle) {}
+    override fun setAspectRatio(ratio: AspectRatio) {}
 
     // Test helpers — not part of MediaEngine; called from tests.
     fun simulateEnd() { playbackState.value = EnginePlaybackState.ENDED }
