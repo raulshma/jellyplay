@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.graphics.drawable.Icon
@@ -184,6 +185,18 @@ class PlayerActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Drop any orientation lock the player applied so the browse host
+        // (MainActivity, UNSPECIFIED) resumes into a clean, system-controlled
+        // orientation. VideoPlayerScreen.onDispose skips its orientation restore
+        // when the activity is finishing (its `!isFinishing` guard), so without
+        // this the activity exits while still requesting landscape — leaving the
+        // device rotated and the browse UI stuck in landscape after playback on
+        // devices with system auto-rotate off (no in-app rotate on browse).
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
     override fun onUserLeaveHint() {
