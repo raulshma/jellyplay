@@ -29,7 +29,7 @@ import com.raulshma.jellyplay.core.model.resolveAgainst
  * (background opacity, edge type/edge color, vertical position), not just
  * fontSize/fontColor. Shared between onboarding (SubtitlesStep) and the main
  * settings path (LanguageSettingsScreen subtitle group) so fine-tuning there
- * isn't blind — see analysis finding "Subtitle style sheet has no live preview".
+ * isn't blind.
  *
  * The background is a dark gradient stand-in for video content so light/dark
  * subtitle colors are both legible.
