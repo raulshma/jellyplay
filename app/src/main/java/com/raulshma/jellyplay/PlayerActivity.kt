@@ -299,6 +299,24 @@ class PlayerActivity : FragmentActivity() {
         pipController.setPipMode(isInPictureInPictureMode)
     }
 
+    override fun finish() {
+        // Release the immersive hidden-bars state before the window tears down.
+        // Without this, finishing a fully-immersive player leaves the system
+        // gesture-nav handle floating mid-screen on the returning window until
+        // the next layout pass (the "minimize + reopen fixes it" symptom) — same
+        // class of bug as PiP entry, which releases the hidden state in
+        // onPipModeChanged above. VideoPlayerScreen's onDispose also tries to
+        // show(), but its restore branches are guarded by !isFinishing, so a real
+        // back-close (activity finishing) skips it and tears down still-immersive.
+        // Skipped during PiP since that path shows the bars itself and the
+        // activity is not dying.
+        if (!isInPictureInPictureMode) {
+            WindowCompat.getInsetsController(window, window.decorView)
+                .show(WindowInsetsCompat.Type.systemBars())
+        }
+        super.finish()
+    }
+
     override fun onPause() {
         super.onPause()
         if (!isInPictureInPictureMode || isScreenOffOrLocked()) {
