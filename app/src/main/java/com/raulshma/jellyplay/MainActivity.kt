@@ -3,6 +3,7 @@ package com.raulshma.jellyplay
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -70,6 +71,13 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Clear any orientation lock a previous in-nav player (e.g. Live TV) may
+        // have written onto this singleTask activity before the process was
+        // killed. Because configChanges includes orientation, MainActivity is
+        // never recreated, so without this reset a restored task can boot stuck
+        // in landscape with no control to unlock it. UNSPECIFIED follows the
+        // system auto-rotate setting, matching the fresh-install default.
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         // Initialize Cast SDK off the main thread. The MediaRouteButton is set
         // up lazily inside setContent's AndroidView.factory and
         // CastButtonFactory.setUpMediaRouteButton resolves CastContext lazily,

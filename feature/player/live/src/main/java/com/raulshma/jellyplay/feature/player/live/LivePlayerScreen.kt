@@ -110,7 +110,6 @@ fun LivePlayerScreen(
     DisposableEffect(activity) {
         val window = activity?.window
         val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
-        val originalOrientation = activity?.requestedOrientation
         if (controller != null) {
             controller.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -122,11 +121,11 @@ fun LivePlayerScreen(
 
         onDispose {
             controller?.show(WindowInsetsCompat.Type.systemBars())
-            if (originalOrientation != null && activity != null) {
-                activity.requestedOrientation = originalOrientation
-            } else {
-                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            }
+            // Restore the browse host's default orientation unconditionally.
+            // The captured "original" could itself be a landscape lock pushed by
+            // an earlier screen, which would chain the leak; MainActivity never
+            // legitimately needs a non-default orientation outside a player.
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }

@@ -444,7 +444,7 @@ fun VideoPlayerScreen(
                 viewModel.backgroundCastingEnabled
             val restoreOrientation = if (isTv)
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             if (isBgCasting && !currentlyInPip) {
                 activity?.let {
                     if (!it.isDestroyed && !it.isFinishing) {
