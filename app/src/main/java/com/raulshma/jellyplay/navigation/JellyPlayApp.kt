@@ -1120,6 +1120,13 @@ private fun PhoneContent(
     // nav bar (see OverflowMenuItems / OverflowMenuScrim below).
     var isOverflowExpanded by remember { mutableStateOf(false) }
     val onOverflowToggle: (Boolean) -> Unit = { isOverflowExpanded = it }
+    // Close the overflow on system/gesture back instead of navigating. Registered
+    // only while the menu is open, so when it's disabled the global handler at
+    // the call site (back = goBack / exit) takes over again. This also gives the
+    // predictive-back system a real OnBackInvokedCallback for the overlay, which
+    // stops the back-gesture preview indicator from freezing mid-screen when the
+    // scrim's full-screen clickable intercepts the edge swipe (#115).
+    BackHandler(enabled = isOverflowExpanded) { isOverflowExpanded = false }
 
     // When hide-on-scroll is disabled, keep the nav bar permanently visible
         //. The nestedScrollConnection is still constructed so its
