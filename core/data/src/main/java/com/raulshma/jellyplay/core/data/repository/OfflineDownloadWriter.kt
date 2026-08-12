@@ -88,30 +88,42 @@ interface OfflineDownloadWriter {
         fileName: String,
     ): String?
 
+    /**
+     * Writes the trickplay sprite sheets + `meta.json` for [itemId] to disk.
+     * Returns `true` only when the write completed; `false` signals a best-effort
+     * failure (network/IO) so the caller can avoid re-seeding the freshness
+     * baseline from a fetch the disk never received.
+     */
     suspend fun downloadTrickplayData(
         itemId: String,
         trickplayInfo: TrickplayInfo,
         downloadPath: String,
-    )
+    ): Boolean
 
     /**
      * Downloads every external/deliverable subtitle stream in [mediaStreams] for
      * offline playback, storing them under `<video-dir>/subtitles/` alongside a
      * [com.raulshma.jellyplay.core.model.OfflineSubtitleManifest]. Failures for
      * individual streams are tolerated (best-effort) and never abort the download.
+     * Returns `true` when the overall write (manifest + at least the attempted
+     * streams) completed; `false` lets the caller skip baseline re-seeding so a
+     * failed fetch isn't masked as "synced".
      */
     suspend fun downloadExternalSubtitles(
         itemId: String,
         mediaSourceId: String,
         mediaStreams: List<MediaStream>,
         downloadPath: String,
-    )
+    ): Boolean
 
     /**
      * Fetches media segments (intro/outro/recap/…) for [itemId] and persists them
      * to `<video-dir>/segments.json` so skip controls work for offline playback.
+     * Returns `true` on a successful write, `false` on a best-effort failure so
+     * the caller can retain the prior baseline instead of re-seeding from a
+     * fetch whose result never reached disk.
      */
-    suspend fun downloadMediaSegments(itemId: String, downloadPath: String)
+    suspend fun downloadMediaSegments(itemId: String, downloadPath: String): Boolean
 
     fun enqueueDownload(downloadId: String)
 }

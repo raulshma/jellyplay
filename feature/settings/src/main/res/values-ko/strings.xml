@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">뉴스레터</string>
     <string name="settings_advanced_badge">고급</string>
     <string name="settings_no_matches">일치하는 설정이 없습니다</string>
+    <string name="settings_search_hint">입력하여 설정 검색</string>
+    <string name="settings_recents_title">최근</string>
+    <string name="settings_clear_recents">지우기</string>
     <string name="settings_signed_in_as_label">로그인됨</string>
     <string name="settings_account">계정</string>
     <string name="settings_signed_in_as_name">%1$s(으)로 로그인됨</string>

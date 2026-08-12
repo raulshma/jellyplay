@@ -105,4 +105,53 @@
     <string name="downloads_filter_all">전체</string>
     <string name="downloads_filter_videos">동영상</string>
     <string name="downloads_filter_music">음악</string>
+    <!-- Offline download resync -->
+    <string name="downloads_resync">동기화</string>
+    <string name="downloads_resync_cd">업데이트된 메타데이터 및 이미지 확인</string>
+    <string name="downloads_resync_title">다운로드 동기화</string>
+    <string name="downloads_resync_checking">업데이트 확인 중…</string>
+    <string name="downloads_resync_update_available">새 정보가 있습니다</string>
+    <string name="downloads_resync_media_changed">미디어 파일이 변경됨 — 재다운로드 필요</string>
+    <string name="downloads_resync_in_progress">최신 세부 정보 동기화 중…</string>
+    <string name="downloads_resync_complete">다운로드가 최신 세부 정보와 동기화됨</string>
+    <string name="downloads_resync_failed">동기화 실패</string>
+    <string name="downloads_resync_up_to_date">이 다운로드는 최신 상태입니다.</string>
+    <string name="downloads_resync_description">서버에 더 새로운 정보가 있습니다. 동기화하여 메타데이터와 이미지를 새로 고치세요.</string>
+    <string name="downloads_resync_change_metadata">메타데이터 업데이트됨 (개요, 출연진, 평점)</string>
+    <string name="downloads_resync_change_images">아트워크 업데이트됨 (포스터/배경)</string>
+    <string name="downloads_resync_change_media">미디어 파일 자체가 변경됨</string>
+    <string name="downloads_resync_media_explanation">메타데이터 동기화로는 미디어 파일을 업데이트할 수 없습니다. 새 파일을 받으려면 이 항목을 삭제하고 다시 다운로드하세요.</string>
+    <string name="downloads_resync_action">지금 동기화</string>
+    <string name="downloads_resync_redownload">미디어 재다운로드</string>
+    <string name="downloads_resync_check_all">모두 업데이트 확인</string>
+    <string name="downloads_resync_check_all_cd">모든 다운로드의 업데이트 확인</string>
+    <string name="downloads_resync_batch_title">사용 가능한 업데이트</string>
+    <string name="downloads_resync_batch_empty">업데이트가 필요한 다운로드가 없습니다.</string>
+    <string name="downloads_resync_batch_checking">다운로드를 확인하는 중…</string>
+    <string name="downloads_resync_resync_all">모두 동기화</string>
+    <string name="downloads_resync_progress">%1$d / %2$d 동기화됨</string>
+
+    <!-- Force resync (granular item + data selection) -->
+    <string name="downloads_force_resync_action">강제 동기화</string>
+    <string name="downloads_force_resync_title">강제 동기화</string>
+    <string name="downloads_force_resync_description">업데이트가 감지되었는지 여부와 관계없이 서버에서 새로고침할 다운로드 항목과 데이터를 선택하세요.</string>
+    <string name="downloads_force_resync_items_header">동기화할 항목</string>
+    <string name="downloads_force_resync_data_header">동기화할 데이터</string>
+    <string name="downloads_force_resync_data_metadata">메타데이터</string>
+    <string name="downloads_force_resync_data_metadata_desc">개요, 출연진, 평점</string>
+    <string name="downloads_force_resync_data_poster">포스터</string>
+    <string name="downloads_force_resync_data_poster_desc">기본 아트워크</string>
+    <string name="downloads_force_resync_data_backdrop">배경</string>
+    <string name="downloads_force_resync_data_backdrop_desc">배경 아트워크</string>
+    <string name="downloads_force_resync_data_subtitles">자막</string>
+    <string name="downloads_force_resync_data_subtitles_desc">외부 자막 트랙</string>
+    <string name="downloads_force_resync_data_trickplay">트릭플레이</string>
+    <string name="downloads_force_resync_data_trickplay_desc">탐색 미리보기 썸네일</string>
+    <string name="downloads_force_resync_data_segments">세그먼트</string>
+    <string name="downloads_force_resync_data_segments_desc">인트로/아웃트로 건너뛰기 지점</string>
+    <string name="downloads_force_resync_summary">%1$d개 항목 동기화</string>
+    <string name="downloads_force_resync_empty">동기화할 다운로드 항목이 없습니다.</string>
+    <string name="downloads_force_resync_in_progress">%1$d / %2$d 동기화 중…</string>
+    <string name="downloads_force_resync_done">%1$d / %2$d 동기화 완료.</string>
+    <string name="downloads_force_resync_no_data">하나 이상의 데이터 유형을 선택하세요.</string>
 </resources>

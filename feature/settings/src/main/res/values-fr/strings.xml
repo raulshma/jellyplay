@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">Newsletter</string>
     <string name="settings_advanced_badge">Av.</string>
     <string name="settings_no_matches">Aucun paramètre correspondant trouvé</string>
+    <string name="settings_search_hint">Saisissez pour rechercher des paramètres</string>
+    <string name="settings_recents_title">Récents</string>
+    <string name="settings_clear_recents">Effacer</string>
     <string name="settings_signed_in_as_label">Connecté en tant que</string>
     <string name="settings_account">Compte</string>
     <string name="settings_signed_in_as_name">Connecté en tant que %1$s</string>

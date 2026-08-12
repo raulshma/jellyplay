@@ -105,4 +105,53 @@
     <string name="downloads_filter_all">すべて</string>
     <string name="downloads_filter_videos">動画</string>
     <string name="downloads_filter_music">音楽</string>
+    <!-- Offline download resync -->
+    <string name="downloads_resync">同期</string>
+    <string name="downloads_resync_cd">更新されたメタデータと画像を確認</string>
+    <string name="downloads_resync_title">ダウンロードを同期</string>
+    <string name="downloads_resync_checking">アップデートを確認中…</string>
+    <string name="downloads_resync_update_available">新しい情報が利用可能です</string>
+    <string name="downloads_resync_media_changed">メディアファイルが変更されました — 再ダウンロードが必要です</string>
+    <string name="downloads_resync_in_progress">最新の詳細を同期中…</string>
+    <string name="downloads_resync_complete">ダウンロードを最新の詳細と同期しました</string>
+    <string name="downloads_resync_failed">同期に失敗しました</string>
+    <string name="downloads_resync_up_to_date">このダウンロードは最新です。</string>
+    <string name="downloads_resync_description">サーバーに新しい情報があります。同期するとメタデータと画像が更新されます。</string>
+    <string name="downloads_resync_change_metadata">メタデータを更新（概要、キャスト、評価）</string>
+    <string name="downloads_resync_change_images">アートワークを更新（ポスター/背景）</string>
+    <string name="downloads_resync_change_media">メディアファイル自体が変更されました</string>
+    <string name="downloads_resync_media_explanation">メタデータの同期ではメディアファイルを更新できません。このアイテムを削除して再ダウンロードすると、新しいファイルを取得できます。</string>
+    <string name="downloads_resync_action">今すぐ同期</string>
+    <string name="downloads_resync_redownload">メディアを再ダウンロード</string>
+    <string name="downloads_resync_check_all">すべて更新を確認</string>
+    <string name="downloads_resync_check_all_cd">すべてのダウンロードの更新を確認</string>
+    <string name="downloads_resync_batch_title">利用可能な更新</string>
+    <string name="downloads_resync_batch_empty">更新が必要なダウンロードはありません。</string>
+    <string name="downloads_resync_batch_checking">ダウンロードを確認中…</string>
+    <string name="downloads_resync_resync_all">すべて同期</string>
+    <string name="downloads_resync_progress">%1$d / %2$d 件 同期済み</string>
+
+    <!-- Force resync (granular item + data selection) -->
+    <string name="downloads_force_resync_action">強制同期</string>
+    <string name="downloads_force_resync_title">強制同期</string>
+    <string name="downloads_force_resync_description">更新が検出されたかどうかにかかわらず、サーバーから更新するダウンロードアイテムとデータを選択します。</string>
+    <string name="downloads_force_resync_items_header">同期するアイテム</string>
+    <string name="downloads_force_resync_data_header">同期するデータ</string>
+    <string name="downloads_force_resync_data_metadata">メタデータ</string>
+    <string name="downloads_force_resync_data_metadata_desc">概要、キャスト、評価</string>
+    <string name="downloads_force_resync_data_poster">ポスター</string>
+    <string name="downloads_force_resync_data_poster_desc">メインアートワーク</string>
+    <string name="downloads_force_resync_data_backdrop">背景</string>
+    <string name="downloads_force_resync_data_backdrop_desc">背景アートワーク</string>
+    <string name="downloads_force_resync_data_subtitles">字幕</string>
+    <string name="downloads_force_resync_data_subtitles_desc">外部字幕トラック</string>
+    <string name="downloads_force_resync_data_trickplay">トリックプレイ</string>
+    <string name="downloads_force_resync_data_trickplay_desc">シークバーのサムネイル</string>
+    <string name="downloads_force_resync_data_segments">セグメント</string>
+    <string name="downloads_force_resync_data_segments_desc">イントロ/エンディングのスキップポイント</string>
+    <string name="downloads_force_resync_summary">%1$d 件を同期</string>
+    <string name="downloads_force_resync_empty">同期するダウンロード済みアイテムがありません。</string>
+    <string name="downloads_force_resync_in_progress">%1$d / %2$d 件を同期中…</string>
+    <string name="downloads_force_resync_done">%1$d / %2$d 件を同期しました。</string>
+    <string name="downloads_force_resync_no_data">同期するデータを少なくとも1つ選択してください。</string>
 </resources>

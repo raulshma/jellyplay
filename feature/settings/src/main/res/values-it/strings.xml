@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">Newsletter</string>
     <string name="settings_advanced_badge">Avanz</string>
     <string name="settings_no_matches">Nessuna impostazione corrispondente trovata</string>
+    <string name="settings_search_hint">Digita per cercare impostazioni</string>
+    <string name="settings_recents_title">Recenti</string>
+    <string name="settings_clear_recents">Cancella</string>
     <string name="settings_signed_in_as_label">Connesso come</string>
     <string name="settings_account">Account</string>
     <string name="settings_signed_in_as_name">Connesso come %1$s</string>

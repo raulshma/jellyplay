@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadArtifacts
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineRow
@@ -67,6 +68,7 @@ class OfflineSyncManager @Inject constructor(
     private val offlineMediaDao: OfflineMediaDao,
     private val comparator: OfflineSyncComparator,
     private val offlineModeManager: OfflineModeManager,
+    private val playbackRepository: PlaybackRepository,
     @ApplicationScope private val appScope: CoroutineScope,
 ) {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -110,7 +112,17 @@ class OfflineSyncManager @Inject constructor(
                 return ResyncCheckResult(itemId, baseline.toState().copy(status = SyncStatus.ERROR))
             }
             val result = comparator.diff(baseline.toSyncBaseline(), fresh, itemId)
-            persistCheckResult(itemId, fresh, result, baseline.hasStoredBaseline())
+            persistCheckResult(
+                itemId = itemId,
+                fresh = fresh,
+                result = result,
+                hadBaseline = baseline.hasStoredBaseline(),
+                // Segments aren't part of MediaDetail and aren't fetched on the
+                // proactive check, so retain the prior segments signature rather
+                // than wipe it to empty (which would re-seed on next segments
+                // resync and swallow a real change).
+                retainedSegmentsSignature = baseline.syncedSegmentsSignature,
+            )
             return result
         } catch (e: Exception) {
             Log.w(TAG, "Freshness check failed for $itemId", e)
@@ -181,8 +193,15 @@ class OfflineSyncManager @Inject constructor(
             val freshSource = detail.mediaSources.firstOrNull()
             mediaFileChanged = baseline != null && comparator.isMediaSourceChanged(baseline, freshSource)
 
+            // Resolve the on-disk download location once: image writes need the
+            // parent dir, sidecar writes (subtitles/trickplay/segments) need the
+            // video file path. Null when the download row is gone (e.g. deleted
+            // mid-resync) — image/sidecar blocks skip themselves in that case.
+            val downloadPath = downloadRepository.getDownloadByMediaItemId(itemId)?.downloadPath
+            val parentDir = downloadPath?.let { File(it).parentFile }
+
             // Metadata: re-persist the offline detail row. Skipped when the user
-            // only asked for images — the existing metadata row is left as-is.
+            // only asked for images/sidecars — the existing metadata row is left as-is.
             if (options.metadata) {
                 setProgress(itemId, ResyncPhase.WORKING, ResyncStep.PERSIST_METADATA)
                 // Preserve the existing local image paths so the re-persisted row
@@ -195,8 +214,6 @@ class OfflineSyncManager @Inject constructor(
                 steps += ResyncStepResult(itemId, ResyncStep.PERSIST_METADATA, success = true)
             }
 
-            val parentDir = downloadRepository.getDownloadByMediaItemId(itemId)?.downloadPath
-                ?.let { File(it).parentFile }
             if (parentDir != null) {
                 if (options.poster) {
                     val posterChanged = baseline == null || comparator.isImageChanged(baseline.posterTag, detail.posterImageTag)
@@ -220,19 +237,90 @@ class OfflineSyncManager @Inject constructor(
                 }
             }
 
+            // ── Sidecar artifacts: subtitles + trickplay ─────────────────────
+            // Both inventories ride on the MediaDetail fetch above (free), so the
+            // change check is a pure signature compare. Gated like the image
+            // blocks: only re-fetched when the signature differs or on first
+            // contact (baseline == null). Each writer returns its own success so
+            // a best-effort failure is reported honestly and — see the baseline
+            // masking below — not re-seeded as if it had landed on disk.
+            var subtitlesOk = true
+            var trickplayOk = true
+            var segmentsOk = true
+            if (downloadPath != null && freshSource != null) {
+                if (options.subtitles) {
+                    val subsChanged = baseline == null ||
+                        comparator.isSubtitleChanged(baseline.subtitleSignature, detail)
+                    if (subsChanged) {
+                        setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_SUBTITLES)
+                        // The writer filters to deliverable SUBTITLE streams and
+                        // clears the subtitles dir when none remain, so a
+                        // server-side removal is mirrored to disk.
+                        subtitlesOk = writer.downloadExternalSubtitles(
+                            itemId, freshSource.id, freshSource.mediaStreams, downloadPath,
+                        )
+                        steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_SUBTITLES, success = subtitlesOk)
+                    }
+                }
+                if (options.trickplay) {
+                    val info = freshSource.trickplayInfo
+                    if (info != null) {
+                        val trickplayChanged = baseline == null ||
+                            comparator.isTrickplayChanged(baseline.trickplaySignature, detail)
+                        if (trickplayChanged) {
+                            setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_TRICKPLAY)
+                            trickplayOk = writer.downloadTrickplayData(itemId, info, downloadPath)
+                            steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_TRICKPLAY, success = trickplayOk)
+                        }
+                    }
+                }
+            }
+
+            // ── Sidecar artifacts: media segments ────────────────────────────
+            // Segments aren't part of MediaDetail, so a separate fetch is
+            // required. Bust the segments cache so the writer fetches fresh
+            // server state, then re-read (cache hit, free) to compute the
+            // baseline signature — one network call total. Always refreshed when
+            // the option is on (no change-gate) because the detection fetch would
+            // otherwise double the round-trips for a rarely-changing artifact.
+            var freshSegments: List<com.raulshma.jellyplay.core.model.MediaSegment>? = null
+            if (options.segments && downloadPath != null) {
+                setProgress(itemId, ResyncPhase.WORKING, ResyncStep.DOWNLOAD_SEGMENTS)
+                playbackRepository.invalidateSegmentsCache(itemId)
+                segmentsOk = writer.downloadMediaSegments(itemId, downloadPath)
+                freshSegments = playbackRepository.getMediaSegments(itemId).getOrDefault(emptyList())
+                steps += ResyncStepResult(itemId, ResyncStep.DOWNLOAD_SEGMENTS, success = segmentsOk)
+            }
+
             setProgress(itemId, ResyncPhase.WORKING, ResyncStep.UPDATE_BASELINE)
-            val freshBaseline = comparator.baseline(detail)
+            val freshBaseline = comparator.baseline(detail, freshSegments)
+            // A failed sidecar fetch must not re-seed its axis: roll each failed
+            // axis back to the prior baseline value (empty on first contact) so
+            // the next check still flags it as changed instead of reporting
+            // CURRENT for artifacts the disk never received. Successful (or
+            // un-attempted) axes keep the freshly computed signature.
+            val seededBaseline = freshBaseline.copy(
+                subtitleSignature = if (subtitlesOk) freshBaseline.subtitleSignature
+                    else baseline?.subtitleSignature ?: "",
+                trickplaySignature = if (trickplayOk) freshBaseline.trickplaySignature
+                    else baseline?.trickplaySignature ?: "",
+                segmentsSignature = if (segmentsOk) freshBaseline.segmentsSignature
+                    else baseline?.segmentsSignature ?: "",
+            )
             // Effective baseline blends synced-fresh values with the retained
             // (skipped-category) values from the prior baseline. Re-running the
             // comparator against it yields an accurate update-available flag:
             // a partial sync clears the flag only for the synced categories.
-            val effectiveBaseline = baseline.mergePartial(freshBaseline, options, baseline == null)
-            val recheck = comparator.diff(effectiveBaseline, detail, itemId)
+            val effectiveBaseline = baseline.mergePartial(seededBaseline, options, baseline == null)
+            val recheck = comparator.diff(effectiveBaseline, detail, itemId, freshSegments)
             offlineMediaDao.updateSyncBaseline(
                 itemId = itemId,
                 posterTag = effectiveBaseline.posterTag,
                 backdropTag = effectiveBaseline.backdropTag,
                 metadataSignature = effectiveBaseline.metadataSignature,
+                subtitleSignature = effectiveBaseline.subtitleSignature,
+                trickplaySignature = effectiveBaseline.trickplaySignature,
+                segmentsSignature = effectiveBaseline.segmentsSignature,
                 mediaSourceId = freshBaseline.mediaSourceId,
                 mediaSizeBytes = freshBaseline.mediaSizeBytes,
                 lastSyncedAt = System.currentTimeMillis(),
@@ -284,6 +372,7 @@ class OfflineSyncManager @Inject constructor(
         fresh: MediaDetail,
         result: ResyncCheckResult,
         hadBaseline: Boolean,
+        retainedSegmentsSignature: String?,
     ) {
         val state = result.state
         // First-contact (no prior baseline): record the fresh baseline as
@@ -300,6 +389,11 @@ class OfflineSyncManager @Inject constructor(
             posterTag = freshBaseline.posterTag,
             backdropTag = freshBaseline.backdropTag,
             metadataSignature = freshBaseline.metadataSignature,
+            subtitleSignature = freshBaseline.subtitleSignature,
+            trickplaySignature = freshBaseline.trickplaySignature,
+            // Check never fetches segments, so carry the prior signature forward
+            // (empty when never recorded) instead of clobbering it.
+            segmentsSignature = retainedSegmentsSignature,
             mediaSourceId = freshBaseline.mediaSourceId,
             mediaSizeBytes = freshBaseline.mediaSizeBytes,
             lastSyncedAt = state.lastCheckedAt,
@@ -322,6 +416,9 @@ class OfflineSyncManager @Inject constructor(
             posterTag = baseline.syncedPosterTag,
             backdropTag = baseline.syncedBackdropTag,
             metadataSignature = baseline.syncedMetadataSignature,
+            subtitleSignature = baseline.syncedSubtitleSignature,
+            trickplaySignature = baseline.syncedTrickplaySignature,
+            segmentsSignature = baseline.syncedSegmentsSignature,
             mediaSourceId = baseline.syncedMediaSourceId,
             mediaSizeBytes = baseline.syncedMediaSizeBytes,
             lastSyncedAt = baseline.lastSyncedAt,
@@ -346,6 +443,9 @@ private fun SyncBaselineRow.toSyncBaseline(): SyncBaseline = SyncBaseline(
     posterTag = syncedPosterTag,
     backdropTag = syncedBackdropTag,
     metadataSignature = syncedMetadataSignature ?: "",
+    subtitleSignature = syncedSubtitleSignature ?: "",
+    trickplaySignature = syncedTrickplaySignature ?: "",
+    segmentsSignature = syncedSegmentsSignature ?: "",
     mediaSourceId = syncedMediaSourceId,
     mediaSizeBytes = syncedMediaSizeBytes,
 )
@@ -369,6 +469,9 @@ private fun SyncBaseline?.mergePartial(
         posterTag = if (options.poster) fresh.posterTag else posterTag,
         backdropTag = if (options.backdrop) fresh.backdropTag else backdropTag,
         metadataSignature = if (options.metadata) fresh.metadataSignature else metadataSignature,
+        subtitleSignature = if (options.subtitles) fresh.subtitleSignature else subtitleSignature,
+        trickplaySignature = if (options.trickplay) fresh.trickplaySignature else trickplaySignature,
+        segmentsSignature = if (options.segments) fresh.segmentsSignature else segmentsSignature,
         // Media-source id/size are always recomputed from the fresh detail
         // (not user-selectable); they never retain a stale value.
         mediaSourceId = fresh.mediaSourceId,

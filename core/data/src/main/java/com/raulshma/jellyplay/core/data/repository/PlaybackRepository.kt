@@ -101,6 +101,14 @@ interface PlaybackRepository {
 
     suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>>
 
+    /**
+     * Evicts the cached media segments for [itemId] so the next
+     * [getMediaSegments] call performs a fresh server fetch rather than serving
+     * the TTL-cached list. Used by a force resync to ensure the segments axis
+     * reflects the current server state instead of a recently cached snapshot.
+     */
+    fun invalidateSegmentsCache(itemId: String)
+
     suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>>
 
     suspend fun downloadSubtitle(itemId: String, subtitleId: String): Result<Unit>

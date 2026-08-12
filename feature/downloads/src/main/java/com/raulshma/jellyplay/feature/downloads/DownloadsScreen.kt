@@ -1108,6 +1108,9 @@ private fun ForceResyncSheet(
     var syncMetadata by remember { androidx.compose.runtime.mutableStateOf(true) }
     var syncPoster by remember { androidx.compose.runtime.mutableStateOf(true) }
     var syncBackdrop by remember { androidx.compose.runtime.mutableStateOf(true) }
+    var syncSubtitles by remember { androidx.compose.runtime.mutableStateOf(true) }
+    var syncTrickplay by remember { androidx.compose.runtime.mutableStateOf(true) }
+    var syncSegments by remember { androidx.compose.runtime.mutableStateOf(true) }
     // Latch: sticky once a sync has been kicked off (or is still running from a
     // prior mid-batch dismiss). Derived purely from live progress so an
     // orphaned background batch latches this sheet straight into the running/
@@ -1260,8 +1263,31 @@ private fun ForceResyncSheet(
                             checked = syncBackdrop,
                             onToggle = { syncBackdrop = !syncBackdrop },
                         )
+                        ForceResyncDataRow(
+                            label = stringResource(R.string.downloads_force_resync_data_subtitles),
+                            description = stringResource(R.string.downloads_force_resync_data_subtitles_desc),
+                            checked = syncSubtitles,
+                            onToggle = { syncSubtitles = !syncSubtitles },
+                        )
+                        ForceResyncDataRow(
+                            label = stringResource(R.string.downloads_force_resync_data_trickplay),
+                            description = stringResource(R.string.downloads_force_resync_data_trickplay_desc),
+                            checked = syncTrickplay,
+                            onToggle = { syncTrickplay = !syncTrickplay },
+                        )
+                        ForceResyncDataRow(
+                            label = stringResource(R.string.downloads_force_resync_data_segments),
+                            description = stringResource(R.string.downloads_force_resync_data_segments_desc),
+                            checked = syncSegments,
+                            onToggle = { syncSegments = !syncSegments },
+                        )
                         val options = com.raulshma.jellyplay.core.model.ResyncOptions(
-                            metadata = syncMetadata, poster = syncPoster, backdrop = syncBackdrop,
+                            metadata = syncMetadata,
+                            poster = syncPoster,
+                            backdrop = syncBackdrop,
+                            subtitles = syncSubtitles,
+                            trickplay = syncTrickplay,
+                            segments = syncSegments,
                         )
                         if (options.isEmpty) {
                             Text(
@@ -1280,7 +1306,12 @@ private fun ForceResyncSheet(
             // In the picker phase the primary Sync action sits beside it so the
             // two terminal controls share a row.
             val options = com.raulshma.jellyplay.core.model.ResyncOptions(
-                metadata = syncMetadata, poster = syncPoster, backdrop = syncBackdrop,
+                metadata = syncMetadata,
+                poster = syncPoster,
+                backdrop = syncBackdrop,
+                subtitles = syncSubtitles,
+                trickplay = syncTrickplay,
+                segments = syncSegments,
             )
             val canSync = !showRunning && !showDone && selectedIds.isNotEmpty() && !options.isEmpty
             Row(

@@ -105,4 +105,53 @@
     <string name="downloads_filter_all">全部</string>
     <string name="downloads_filter_videos">视频</string>
     <string name="downloads_filter_music">音乐</string>
+    <!-- Offline download resync -->
+    <string name="downloads_resync">同步</string>
+    <string name="downloads_resync_cd">检查已更新的元数据和图片</string>
+    <string name="downloads_resync_title">同步下载</string>
+    <string name="downloads_resync_checking">正在检查更新…</string>
+    <string name="downloads_resync_update_available">有新的信息可用</string>
+    <string name="downloads_resync_media_changed">媒体文件已更改 — 需要重新下载</string>
+    <string name="downloads_resync_in_progress">正在同步最新详情…</string>
+    <string name="downloads_resync_complete">下载已与最新详情同步</string>
+    <string name="downloads_resync_failed">同步失败</string>
+    <string name="downloads_resync_up_to_date">此下载已是最新。</string>
+    <string name="downloads_resync_description">服务器上有更新的信息。同步以刷新元数据和图片。</string>
+    <string name="downloads_resync_change_metadata">元数据已更新（简介、演员、评分）</string>
+    <string name="downloads_resync_change_images">图片已更新（海报/背景）</string>
+    <string name="downloads_resync_change_media">媒体文件本身已更改</string>
+    <string name="downloads_resync_media_explanation">元数据同步无法更新媒体文件。删除并重新下载此项目以获取新文件。</string>
+    <string name="downloads_resync_action">立即同步</string>
+    <string name="downloads_resync_redownload">重新下载媒体</string>
+    <string name="downloads_resync_check_all">检查全部更新</string>
+    <string name="downloads_resync_check_all_cd">检查每个下载是否有可用更新</string>
+    <string name="downloads_resync_batch_title">可用更新</string>
+    <string name="downloads_resync_batch_empty">没有需要更新的下载。</string>
+    <string name="downloads_resync_batch_checking">正在检查下载…</string>
+    <string name="downloads_resync_resync_all">全部同步</string>
+    <string name="downloads_resync_progress">已同步 %1$d / %2$d</string>
+
+    <!-- Force resync (granular item + data selection) -->
+    <string name="downloads_force_resync_action">强制同步</string>
+    <string name="downloads_force_resync_title">强制同步</string>
+    <string name="downloads_force_resync_description">选择要从服务器刷新哪些已下载项目和哪些数据，无论是否检测到更新。</string>
+    <string name="downloads_force_resync_items_header">要同步的项目</string>
+    <string name="downloads_force_resync_data_header">要同步的数据</string>
+    <string name="downloads_force_resync_data_metadata">元数据</string>
+    <string name="downloads_force_resync_data_metadata_desc">简介、演员、评分</string>
+    <string name="downloads_force_resync_data_poster">海报</string>
+    <string name="downloads_force_resync_data_poster_desc">主要图片</string>
+    <string name="downloads_force_resync_data_backdrop">背景</string>
+    <string name="downloads_force_resync_data_backdrop_desc">背景图片</string>
+    <string name="downloads_force_resync_data_subtitles">字幕</string>
+    <string name="downloads_force_resync_data_subtitles_desc">外部字幕轨道</string>
+    <string name="downloads_force_resync_data_trickplay">Trickplay</string>
+    <string name="downloads_force_resync_data_trickplay_desc">进度条预览缩略图</string>
+    <string name="downloads_force_resync_data_segments">片段</string>
+    <string name="downloads_force_resync_data_segments_desc">片头/片尾跳过点</string>
+    <string name="downloads_force_resync_summary">同步 %1$d 个项目</string>
+    <string name="downloads_force_resync_empty">没有可同步的已下载项目。</string>
+    <string name="downloads_force_resync_in_progress">正在同步 %1$d / %2$d…</string>
+    <string name="downloads_force_resync_done">已同步 %1$d / %2$d。</string>
+    <string name="downloads_force_resync_no_data">请至少选择一种要同步的数据。</string>
 </resources>

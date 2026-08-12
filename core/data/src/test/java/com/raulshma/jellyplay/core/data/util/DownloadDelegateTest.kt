@@ -90,17 +90,17 @@ class DownloadDelegateTest {
             itemId: String,
             trickplayInfo: TrickplayInfo,
             downloadPath: String,
-        ) { calls += "downloadTrickplayData($itemId)" }
+        ): Boolean { calls += "downloadTrickplayData($itemId)"; return true }
 
         override suspend fun downloadExternalSubtitles(
             itemId: String,
             mediaSourceId: String,
             mediaStreams: List<MediaStream>,
             downloadPath: String,
-        ) { calls += "downloadExternalSubtitles($itemId)" }
+        ): Boolean { calls += "downloadExternalSubtitles($itemId)"; return true }
 
-        override suspend fun downloadMediaSegments(itemId: String, downloadPath: String) {
-            calls += "downloadMediaSegments($itemId)"
+        override suspend fun downloadMediaSegments(itemId: String, downloadPath: String): Boolean {
+            calls += "downloadMediaSegments($itemId)"; return true
         }
 
         override fun enqueueDownload(downloadId: String) {

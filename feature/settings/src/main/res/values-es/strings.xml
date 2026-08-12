@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">Boletín</string>
     <string name="settings_advanced_badge">Avanzado</string>
     <string name="settings_no_matches">No se encontraron ajustes coincidentes</string>
+    <string name="settings_search_hint">Escribe para buscar ajustes</string>
+    <string name="settings_recents_title">Recientes</string>
+    <string name="settings_clear_recents">Borrar</string>
     <string name="settings_signed_in_as_label">Sesión iniciada como</string>
     <string name="settings_account">Cuenta</string>
     <string name="settings_signed_in_as_name">Sesión iniciada como %1$s</string>

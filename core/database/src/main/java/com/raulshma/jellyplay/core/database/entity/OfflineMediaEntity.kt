@@ -81,6 +81,15 @@ data class OfflineMediaEntity(
     val syncedMediaSourceId: String? = null,
     val syncedMediaSizeBytes: Long? = null,
     val lastSyncedAt: Long? = null,
+    // Sidecar-artifact signatures (migration 45→46) for subtitles, trickplay,
+    // and media segments. Subtitles + trickplay are seeded at download time
+    // (derived from MediaDetail); segments is seeded on the first segments
+    // resync (segments aren't part of MediaDetail). Nullable so pre-migration
+    // rows degrade to "never recorded" — the comparator treats an empty/null
+    // signature as a first-contact axis that never flags a spurious change.
+    val syncedSubtitleSignature: String? = null,
+    val syncedTrickplaySignature: String? = null,
+    val syncedSegmentsSignature: String? = null,
     @ColumnInfo(defaultValue = "0")
     val syncUpdateAvailable: Int = 0,
     @ColumnInfo(defaultValue = "0")

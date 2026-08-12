@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">简报</string>
     <string name="settings_advanced_badge">高级</string>
     <string name="settings_no_matches">未找到匹配的设置</string>
+    <string name="settings_search_hint">输入以搜索设置</string>
+    <string name="settings_recents_title">最近</string>
+    <string name="settings_clear_recents">清除</string>
     <string name="settings_signed_in_as_label">已登录账号</string>
     <string name="settings_account">账号</string>
     <string name="settings_signed_in_as_name">已登录为 %1$s</string>

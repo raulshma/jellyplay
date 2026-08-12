@@ -341,6 +341,10 @@ class PlaybackRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun invalidateSegmentsCache(itemId: String) {
+        segmentsCache.remove(itemId)
+    }
+
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =
         apiClient.getRemoteSubtitles(itemId)
 

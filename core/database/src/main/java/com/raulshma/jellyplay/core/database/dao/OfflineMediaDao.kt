@@ -150,6 +150,7 @@ interface OfflineMediaDao {
     @Query(
         """
         SELECT id, name, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature,
+               syncedSubtitleSignature, syncedTrickplaySignature, syncedSegmentsSignature,
                syncedMediaSourceId, syncedMediaSizeBytes, lastSyncedAt,
                syncUpdateAvailable, syncMediaChanged, syncChecking, syncError
         FROM offline_media
@@ -162,6 +163,7 @@ interface OfflineMediaDao {
     @Query(
         """
         SELECT id, name, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature,
+               syncedSubtitleSignature, syncedTrickplaySignature, syncedSegmentsSignature,
                syncedMediaSourceId, syncedMediaSizeBytes, lastSyncedAt,
                syncUpdateAvailable, syncMediaChanged, syncChecking, syncError
         FROM offline_media
@@ -181,6 +183,9 @@ interface OfflineMediaDao {
         SET syncedPosterTag = :posterTag,
             syncedBackdropTag = :backdropTag,
             syncedMetadataSignature = :metadataSignature,
+            syncedSubtitleSignature = :subtitleSignature,
+            syncedTrickplaySignature = :trickplaySignature,
+            syncedSegmentsSignature = :segmentsSignature,
             syncedMediaSourceId = :mediaSourceId,
             syncedMediaSizeBytes = :mediaSizeBytes,
             lastSyncedAt = :lastSyncedAt,
@@ -196,6 +201,9 @@ interface OfflineMediaDao {
         posterTag: String?,
         backdropTag: String?,
         metadataSignature: String?,
+        subtitleSignature: String?,
+        trickplaySignature: String?,
+        segmentsSignature: String?,
         mediaSourceId: String?,
         mediaSizeBytes: Long?,
         lastSyncedAt: Long?,
@@ -289,6 +297,9 @@ data class SyncBaselineRow(
     val syncedPosterTag: String?,
     val syncedBackdropTag: String?,
     val syncedMetadataSignature: String?,
+    val syncedSubtitleSignature: String?,
+    val syncedTrickplaySignature: String?,
+    val syncedSegmentsSignature: String?,
     val syncedMediaSourceId: String?,
     val syncedMediaSizeBytes: Long?,
     val lastSyncedAt: Long?,

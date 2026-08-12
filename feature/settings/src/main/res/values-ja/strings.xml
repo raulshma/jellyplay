@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">ニュースレター</string>
     <string name="settings_advanced_badge">詳細</string>
     <string name="settings_no_matches">一致する設定が見つかりません</string>
+    <string name="settings_search_hint">入力して設定を検索</string>
+    <string name="settings_recents_title">最近</string>
+    <string name="settings_clear_recents">クリア</string>
     <string name="settings_signed_in_as_label">サインイン中</string>
     <string name="settings_account">アカウント</string>
     <string name="settings_signed_in_as_name">%1$s としてサインイン中</string>
