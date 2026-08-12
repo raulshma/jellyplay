@@ -729,12 +729,20 @@ fun MediaDetailScreen(
         // item so a mid-open clearance simply dismisses it. ──
         val detailsItem = detail?.item
         if (showDownloadDetailsSheet && detailsItem != null) {
+            val sheetBackdropUrl = uiState.assets.backdropPath
+                ?: viewModel.getBackdropUrl(detailsItem.seriesId ?: detailsItem.id)
+
+            val sheetPosterUrl = uiState.assets.posterPath
+                ?: viewModel.getImageUrl(detailsItem.id)
+
             DownloadDetailsSheet(
                 download = uiState.detailContext?.download,
                 item = detailsItem,
                 mediaSources = detail.mediaSources,
                 inventory = uiState.downloadFileInventory,
                 isLoadingInventory = uiState.isLoadingDownloadFiles,
+                backdropUrl = sheetBackdropUrl,
+                posterUrl = sheetPosterUrl,
                 onDismiss = {
                     showDownloadDetailsSheet = false
                     viewModel.clearDownloadFileInventory()

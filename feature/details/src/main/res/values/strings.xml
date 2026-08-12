@@ -290,7 +290,6 @@
          never translated them); locales fall back to these defaults. -->
     <string name="detail_download_info">Download info</string>
     <string name="detail_file_size">File size</string>
-    <string name="detail_downloaded">Downloaded</string>
     <string name="detail_status">Status</string>
     <string name="detail_progress">Progress</string>
 
@@ -307,11 +306,15 @@
     <!-- Download-details bottom sheet (tapped from DownloadInfoCard). English-only
          here, mirroring the resync strings above; locales fall back to these defaults. -->
     <string name="detail_download_details_title">Download details</string>
+    <string name="detail_download_tab_overview">Overview</string>
+    <string name="detail_download_tab_media_info">Media Info</string>
+    <string name="detail_download_tab_storage">Storage</string>
     <string name="detail_download_section_download">Download</string>
     <string name="detail_download_section_media">Media</string>
     <string name="detail_download_section_media_info">Media info</string>
     <string name="detail_download_section_files">Downloaded files</string>
-    <string name="detail_downloaded_bytes">Downloaded</string>
+    <string name="detail_downloaded_bytes">Downloaded size</string>
+    <string name="detail_downloaded_date">Date downloaded</string>
     <string name="detail_container">Container</string>
     <string name="detail_file_present">File present</string>
     <string name="detail_media_source">Media source</string>

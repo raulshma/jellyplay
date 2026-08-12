@@ -108,7 +108,7 @@ internal fun DownloadInfoCard(
             value = download.totalSizeBytes.formatBytes().takeIf { it.isNotBlank() } ?: "—",
         )
         InfoLine(
-            label = stringResource(R.string.detail_downloaded),
+            label = stringResource(R.string.detail_downloaded_date),
             value = if (download.createdAtEpochMillis > 0) {
                 formatDate(download.createdAtEpochMillis)
             } else "—",
@@ -122,7 +122,7 @@ internal fun DownloadInfoCard(
         ) {
             InfoLine(
                 label = stringResource(R.string.detail_progress),
-                value = "${(download.downloadedBytes.toFloat() / download.totalSizeBytes * 100).toInt()}%",
+                value = formatPercentage(download.downloadedBytes, download.totalSizeBytes),
             )
         }
 
