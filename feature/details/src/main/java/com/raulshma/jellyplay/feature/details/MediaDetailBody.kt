@@ -555,6 +555,7 @@ internal fun DetailContentBody(
                 DownloadInfoCard(
                     download = attachedDownload,
                     item = item,
+                    onClick = callbacks.onOpenDownloadDetails,
                 )
             }
         }

@@ -154,6 +154,8 @@ internal data class DetailContentCallbacks(
     val onRedownloadMedia: () -> Unit = {},
     /** Clear the resync action status (sheet dismiss). */
     val onClearResync: () -> Unit = {},
+    /** Open the full download-details bottom sheet (DownloadInfoCard tap). */
+    val onOpenDownloadDetails: () -> Unit = {},
     /** Persist a local-subtitle selection for the current item. */
     val onSelectLocalSubtitle: (index: Int?) -> Unit = {},
 )

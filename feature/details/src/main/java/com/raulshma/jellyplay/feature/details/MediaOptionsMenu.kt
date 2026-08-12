@@ -5,7 +5,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Eye
 import com.composables.icons.tabler.outline.EyeOff
@@ -66,6 +65,7 @@ internal fun rememberMediaOptions(
     onShare: () -> Unit,
     onDownload: () -> Unit,
     onDownloadSeries: () -> Unit,
+    onDeleteDownload: () -> Unit,
     onDeleteDownloadedSeries: () -> Unit,
     onHideFromNextUp: () -> Unit,
     onShowFromNextUp: () -> Unit,
@@ -95,7 +95,7 @@ internal fun rememberMediaOptions(
     // below is not a composable scope, so stringResource cannot be called inside it.
     val labelEdit = stringResource(R.string.detail_option_edit)
     val labelShare = stringResource(R.string.detail_option_share)
-    val labelDownloaded = stringResource(R.string.detail_option_downloaded)
+    val labelDeleteDownload = stringResource(R.string.detail_delete_download_title)
     val labelDownloadingPercent = stringResource(R.string.detail_option_downloading_percent, (downloadProgress * 100).toInt())
     val labelDownloading = stringResource(R.string.detail_option_downloading)
     val labelDownload = stringResource(R.string.detail_option_download)
@@ -134,26 +134,33 @@ internal fun rememberMediaOptions(
                 })
             }
             if (canDownload) {
-                val label = when {
-                    isDownloadCompleted -> labelDownloaded
-                    isDownloading || isDownloadActive -> {
-                        if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                            labelDownloadingPercent
-                        } else {
-                            labelDownloading
+                // A completed, on-disk download is deletable in place of the old
+                // dead "Downloaded" indicator — restores the delete affordance the
+                // standalone offline detail screen had. An in-progress download
+                // stays a read-only status row (cancel via the download manager).
+                when {
+                    isDownloadCompleted -> add(
+                        MediaOption(labelDeleteDownload, Tabler.Outline.Trash) {
+                            onClose(); onDeleteDownload()
                         }
-                    }
-                    else -> labelDownload
+                    )
+                    isDownloading || isDownloadActive -> add(
+                        MediaOption(
+                            label = if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
+                                labelDownloadingPercent
+                            } else {
+                                labelDownloading
+                            },
+                            icon = Tabler.Outline.Download,
+                            enabled = false,
+                        ) { onClose(); onDownload() }
+                    )
+                    else -> add(
+                        MediaOption(labelDownload, Tabler.Outline.Download) {
+                            onClose(); onDownload()
+                        }
+                    )
                 }
-                add(
-                    MediaOption(
-                        label = label,
-                        icon = if (isDownloadCompleted) Tabler.Outline.Check else Tabler.Outline.Download,
-                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
-                    ) {
-                        onClose(); onDownload()
-                    }
-                )
             } else if (!isAudio && item != null && isSeries && seasons.isNotEmpty()) {
                 add(
                     MediaOption(
@@ -165,9 +172,9 @@ internal fun rememberMediaOptions(
                     }
                 )
             }
-            // Series batch-delete: a non-remote (downloaded) series with local
-            // download-management capability. Opens the multi-select sheet that
-            // drives DetailViewModel.deleteOfflineEpisodes / deleteOfflineSeries.
+            // Series batch-delete: a local-origin series that actually has
+            // downloaded episodes. Opens the multi-select sheet that drives
+            // DetailViewModel.deleteOfflineEpisodes / deleteOfflineSeries.
             if (canDeleteDownloadedSeries) {
                 add(MediaOption(labelDeleteDownloads, Tabler.Outline.Trash) {
                     onClose(); onDeleteDownloadedSeries()

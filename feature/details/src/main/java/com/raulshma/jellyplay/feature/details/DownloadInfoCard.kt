@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -17,8 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.ChevronRight
 import com.composables.icons.tabler.outline.DeviceFloppy
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.DownloadAttachment
@@ -49,6 +53,10 @@ internal fun DownloadInfoCard(
     download: DownloadAttachment?,
     item: MediaItem,
     modifier: Modifier = Modifier,
+    /** When non-null, the card header becomes a tappable affordance that opens
+     *  the full download-details sheet. Null keeps the card informational only
+     *  (previews, legacy callers). */
+    onClick: (() -> Unit)? = null,
 ) {
     if (download == null) return
     Column(
@@ -59,7 +67,21 @@ internal fun DownloadInfoCard(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // Header row: title + optional chevron. When [onClick] is supplied the
+        // whole header is clickable (rounded ripple) and announces itself as a
+        // button so the "open full details" intent is discoverable.
+        Row(
+            modifier = if (onClick != null) {
+                Modifier
+                    .fillMaxWidth()
+                    .clip(ShapeCache.smooth12)
+                    .clickable(onClick = onClick)
+                    .padding(vertical = 2.dp)
+            } else {
+                Modifier.fillMaxWidth()
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Icon(
                 Tabler.Outline.DeviceFloppy,
                 contentDescription = null,
@@ -68,9 +90,18 @@ internal fun DownloadInfoCard(
             )
             Text(
                 text = stringResource(R.string.detail_download_info),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
             )
+            if (onClick != null) {
+                Icon(
+                    Tabler.Outline.ChevronRight,
+                    contentDescription = stringResource(R.string.detail_view_download_details),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
         InfoLine(
             label = stringResource(R.string.detail_file_size),

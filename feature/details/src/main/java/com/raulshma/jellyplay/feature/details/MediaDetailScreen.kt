@@ -123,6 +123,8 @@ fun MediaDetailScreen(
     var pendingDeleteEpisode by remember { mutableStateOf<PendingEpisodeDelete?>(null) }
     /** Resync bottom-sheet visibility (banner tap). */
     var showResyncSheet by remember { mutableStateOf(false) }
+    /** Full download-details bottom-sheet visibility (DownloadInfoCard tap). */
+    var showDownloadDetailsSheet by remember { mutableStateOf(false) }
 
     // Series/season mark-played cascades recurse into every episode and clear all
     // resume positions, so they're gated behind a confirm
@@ -429,6 +431,12 @@ fun MediaDetailScreen(
                         onResync = { viewModel.resync() },
                         onRedownloadMedia = { viewModel.redownloadMedia() },
                         onClearResync = { viewModel.clearResyncState() },
+                        onOpenDownloadDetails = {
+                            // Load the on-disk inventory (media + sidecars) before showing
+                            // the sheet so sizes are fresh; it re-reads on every open.
+                            viewModel.loadDownloadFileInventory()
+                            showDownloadDetailsSheet = true
+                        },
                         onSelectLocalSubtitle = { index -> viewModel.selectLocalSubtitle(index) },
                     )
                 }
@@ -676,7 +684,13 @@ fun MediaDetailScreen(
                 dismissText = stringResource(R.string.detail_cancel),
                 icon = Tabler.Outline.Trash,
                 tone = ConfirmTone.DESTRUCTIVE,
-                onConfirm = { viewModel.deleteOfflineItem(target.itemId) },
+                onConfirm = {
+                    viewModel.deleteOfflineItem(target.itemId)
+                    // A LOCAL origin has nothing left once its only download is
+                    // removed — pop back instead of stranding the user on an
+                    // empty detail (matches the series batch-delete behavior).
+                    if (uiState.origin?.isLocal == true) onBack()
+                },
                 onDismiss = { pendingDelete = null },
             )
         }
@@ -704,6 +718,26 @@ fun MediaDetailScreen(
                 onDismiss = {
                     showResyncSheet = false
                     viewModel.clearResyncState()
+                },
+            )
+        }
+
+        // ── Full download-details bottom sheet. Consolidates the attached
+        // download lifecycle, media identity + watch progress, per-source media
+        // info, and the on-disk downloaded files into one scrollable surface.
+        // Opened by tapping the DownloadInfoCard header. Gated on the snapshot
+        // item so a mid-open clearance simply dismisses it. ──
+        val detailsItem = detail?.item
+        if (showDownloadDetailsSheet && detailsItem != null) {
+            DownloadDetailsSheet(
+                download = uiState.detailContext?.download,
+                item = detailsItem,
+                mediaSources = detail.mediaSources,
+                inventory = uiState.downloadFileInventory,
+                isLoadingInventory = uiState.isLoadingDownloadFiles,
+                onDismiss = {
+                    showDownloadDetailsSheet = false
+                    viewModel.clearDownloadFileInventory()
                 },
             )
         }

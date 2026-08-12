@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.model.DetailAssets
 import com.raulshma.jellyplay.core.model.DetailCapabilities
 import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
+import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.LocalSubtitleOption
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -111,6 +112,13 @@ data class DetailUiState(
     val downloadSheetEpisodes: Map<String, List<MediaItem>> = emptyMap(),
     val downloadSheetLoadingSeasons: Set<String> = emptySet(),
     val downloadedEpisodeIds: Set<String> = emptySet(),
+    // Download-details bottom sheet: on-disk file inventory (media file +
+    // subtitles/trickplay/segments/images sidecars) with live byte sizes. Null
+    // until the sheet is opened and the inventory is loaded; the inventory itself
+    // is empty once loaded if no files resolved on disk. Loaded lazily on open so
+    // the filesystem walk only runs for users who actually open the sheet.
+    val downloadFileInventory: DownloadFileInventory? = null,
+    val isLoadingDownloadFiles: Boolean = false,
     // "Manage Series" (DIRECT_ARR_INTEGRATION). Shown for a series with a tvdb
     // id when the experimental flag is on; server resolution is deferred to the
     // ManageSeriesScreen itself (cheap gate here — no network on the detail screen).

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.DownloadItem
 import kotlinx.coroutines.flow.Flow
 
@@ -66,6 +67,15 @@ interface DownloadRepository : OfflineDownloadWriter {
 
     /** Returns locally-cached media segments for a downloaded item, if any. */
     suspend fun loadLocalSegments(itemId: String): List<com.raulshma.jellyplay.core.model.MediaSegment>?
+
+    /**
+     * Enumerates every on-disk file belonging to a downloaded item — the media
+     * file plus all sidecar artifacts (subtitles, trickplay, segments, images)
+     * — each with its absolute path and actual on-disk byte size. Sidecar sizes
+     * are not persisted, so they are read live from the filesystem. Returns
+     * [DownloadFileInventory.EMPTY] when the item has no resolvable download path.
+     */
+    suspend fun getDownloadFileInventory(itemId: String): DownloadFileInventory
 
     /**
      * Auto-resume pass run by the network-reconnect path. Resumes interrupted

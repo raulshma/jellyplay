@@ -24,6 +24,9 @@ import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.DownloadFileEntry
+import com.raulshma.jellyplay.core.model.DownloadFileInventory
+import com.raulshma.jellyplay.core.model.DownloadedFileCategory
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
@@ -705,6 +708,76 @@ class DownloadRepositoryImpl @Inject constructor(
         runCatching { json.decodeFromString<List<MediaSegment>>(file.readText()) }
             .onFailure { Log.w(TAG, "Failed to decode local segments", it) }
             .getOrNull()
+    }
+
+    override suspend fun getDownloadFileInventory(itemId: String): DownloadFileInventory = withContext(Dispatchers.IO) {
+        val download = downloadDao.getDownloadByMediaItemId(itemId)
+        val mediaPath = download?.downloadPath?.takeIf { it.isNotBlank() && File(it).isFile }
+        if (mediaPath == null) return@withContext DownloadFileInventory.EMPTY
+        val parentDir = File(mediaPath).parentFile ?: return@withContext DownloadFileInventory.EMPTY
+
+        // Person ids (for cast-image enumeration) + series id (for series-keyed
+        // artwork) are sourced from the offline_media row; the downloads row
+        // alone doesn't carry cast. Both tables are keyed by the same item id.
+        val offline = offlineMediaDao.getById(itemId)
+        val seriesId = download.seriesId ?: offline?.seriesId
+        val personIds = offline?.let { decodeCast(it.peopleJson).map { person -> person.id } } ?: emptyList()
+
+        val entries = mutableListOf<DownloadFileEntry>()
+
+        fun addFile(category: DownloadedFileCategory, file: File) {
+            if (file.isFile) {
+                entries += DownloadFileEntry(
+                    category = category,
+                    displayName = file.name,
+                    path = file.absolutePath,
+                    sizeBytes = file.length(),
+                )
+            }
+        }
+
+        // ── Media file ──
+        addFile(DownloadedFileCategory.MEDIA, File(mediaPath))
+
+        // ── Trickplay sprite sheets + meta (item-scoped dir, then legacy) ──
+        listOf(DownloadArtifacts.trickplayDir(itemId), DownloadArtifacts.LEGACY_TRICKPLAY_DIR)
+            .map { File(parentDir, it) }
+            .filter { it.isDirectory }
+            .forEach { dir ->
+                dir.walkTopDown().filter { it.isFile }.forEach { f ->
+                    addFile(DownloadedFileCategory.TRICKPLAY, f)
+                }
+            }
+
+        // ── Subtitle bundle (item-scoped dir, then legacy) ──
+        listOf(DownloadArtifacts.subtitlesDir(itemId), DownloadArtifacts.LEGACY_SUBTITLES_DIR)
+            .map { File(parentDir, it) }
+            .filter { it.isDirectory }
+            .forEach { dir ->
+                dir.walkTopDown().filter { it.isFile }.forEach { f ->
+                    addFile(DownloadedFileCategory.SUBTITLE, f)
+                }
+            }
+
+        // ── Segments (intro/outro/recap markers JSON) ──
+        addFile(DownloadedFileCategory.SEGMENT, File(parentDir, DownloadArtifacts.segmentsFile(itemId)))
+        addFile(DownloadedFileCategory.SEGMENT, File(parentDir, DownloadArtifacts.LEGACY_SEGMENTS_FILE))
+
+        // ── Images: per-item poster/backdrop, series-keyed artwork, cast portraits ──
+        addFile(DownloadedFileCategory.IMAGE, File(parentDir, DownloadArtifacts.posterFile(itemId)))
+        addFile(DownloadedFileCategory.IMAGE, File(parentDir, DownloadArtifacts.backdropFile(itemId)))
+        if (!seriesId.isNullOrBlank() && seriesId != itemId) {
+            addFile(DownloadedFileCategory.IMAGE, File(parentDir, DownloadArtifacts.posterFile(seriesId)))
+            addFile(DownloadedFileCategory.IMAGE, File(parentDir, DownloadArtifacts.backdropFile(seriesId)))
+        }
+        personIds.forEach { personId ->
+            addFile(DownloadedFileCategory.IMAGE, File(parentDir, DownloadArtifacts.personImageFile(personId)))
+        }
+
+        DownloadFileInventory(
+            entries = entries.sortedBy { it.category.ordinal },
+            totalSizeBytes = entries.sumOf { it.sizeBytes },
+        )
     }
 
     private fun subtitleFileExtension(codec: String?): String = when (codec?.lowercase()) {
