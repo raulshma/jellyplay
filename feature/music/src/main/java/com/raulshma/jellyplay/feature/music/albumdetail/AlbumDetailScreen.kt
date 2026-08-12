@@ -386,7 +386,6 @@ private fun AlbumDetailContent(
             message = stringResource(R.string.music_delete_album_downloads_confirm_message),
             confirmText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_delete),
             dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
-            isDestructive = true,
         )
     }
 }

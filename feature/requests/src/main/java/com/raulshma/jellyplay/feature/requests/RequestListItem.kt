@@ -38,6 +38,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.requests.R
@@ -327,7 +328,7 @@ fun RequestListItem(
             message = stringResource(if (isApprove) R.string.requests_dialog_approve_message else R.string.requests_dialog_decline_message),
             confirmText = stringResource(if (isApprove) R.string.requests_action_approve else R.string.requests_action_decline),
             dismissText = stringResource(R.string.requests_action_cancel),
-            isDestructive = !isApprove,
+            tone = if (isApprove) ConfirmTone.PRIMARY else ConfirmTone.DESTRUCTIVE,
             onConfirm = {
                 if (isApprove) onApprove() else onDecline()
             },

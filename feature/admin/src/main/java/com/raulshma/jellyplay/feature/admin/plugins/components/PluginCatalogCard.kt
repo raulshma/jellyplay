@@ -13,14 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +37,8 @@ import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Puzzle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PluginPackage
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -69,26 +69,18 @@ fun PluginCatalogCard(
     }
 
     if (showTrustDialog && latestVer != null) {
-        AlertDialog(
-            onDismissRequest = { showTrustDialog = false },
-            icon = { Icon(Tabler.Outline.AlertTriangle, contentDescription = null) },
-            title = { Text(stringResource(R.string.admin_install_third_party_title)) },
-            text = {
-                Text(
-                    "Plugins have the same system access as your Jellyfin server. " +
-                        "Only install plugins from sources you trust. Continue installing " +
-                        "\"${packageInfo.name}\"?",
-                )
+        ConfirmDialog(
+            title = stringResource(R.string.admin_install_third_party_title),
+            message = stringResource(R.string.admin_install_third_party_body, "\"${packageInfo.name}\""),
+            confirmText = stringResource(R.string.admin_continue),
+            dismissText = stringResource(R.string.admin_cancel),
+            tone = ConfirmTone.WARNING,
+            icon = Tabler.Outline.AlertTriangle,
+            onConfirm = {
+                showTrustDialog = false
+                onInstall(packageInfo.name, packageInfo.guid, latestVer.version, latestVer.repositoryUrl)
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    showTrustDialog = false
-                    onInstall(packageInfo.name, packageInfo.guid, latestVer.version, latestVer.repositoryUrl)
-                }) { Text(stringResource(R.string.admin_continue)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTrustDialog = false }) { Text(stringResource(R.string.admin_cancel)) }
-            },
+            onDismiss = { showTrustDialog = false },
         )
     }
 

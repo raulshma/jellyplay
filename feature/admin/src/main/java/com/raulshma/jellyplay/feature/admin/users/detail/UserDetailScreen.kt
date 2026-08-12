@@ -19,7 +19,6 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,6 +46,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.AlertTriangle
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.PasswordTextField
@@ -79,19 +80,14 @@ fun UserDetailScreen(
     val effectiveName = state.editedName ?: user?.name ?: ""
 
     if (state.showDeleteDialog && user != null) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissDeleteDialog() },
-            title = { Text(stringResource(R.string.admin_delete_user_title)) },
-            text = { Text(stringResource(R.string.admin_delete_user_body, user.name)) },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.deleteUser(onDone = onBack) },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) { Text(stringResource(R.string.admin_delete)) }
-            },
-            dismissButton = { TextButton(onClick = { viewModel.dismissDeleteDialog() }) { Text(stringResource(R.string.admin_cancel)) } },
+        ConfirmDialog(
+            title = stringResource(R.string.admin_delete_user_title),
+            message = stringResource(R.string.admin_delete_user_body, user.name),
+            confirmText = stringResource(R.string.admin_delete),
+            dismissText = stringResource(R.string.admin_cancel),
+            tone = ConfirmTone.DESTRUCTIVE,
+            onConfirm = { viewModel.deleteUser(onDone = onBack) },
+            onDismiss = { viewModel.dismissDeleteDialog() },
         )
     }
 

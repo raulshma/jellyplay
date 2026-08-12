@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,6 +38,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.components.ConfirmAction
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -74,26 +76,25 @@ fun EditorScreen(
         showDiscardDialog = true
     }
     if (showDiscardDialog) {
-        AlertDialog(
-            onDismissRequest = { showDiscardDialog = false },
-            title = { Text(stringResource(R.string.editor_discard_title)) },
-            text = { Text(stringResource(R.string.editor_discard_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDiscardDialog = false
-                    onBack()
-                }) { Text(stringResource(R.string.editor_discard_action)) }
-            },
-            dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (uiState.isDirty && !uiState.isSaving) {
-                        TextButton(onClick = {
-                            showDiscardDialog = false
-                            viewModel.saveMetadata()
-                        }) { Text(stringResource(R.string.editor_save)) }
-                    }
-                    TextButton(onClick = { showDiscardDialog = false }) { Text(stringResource(R.string.editor_keep_editing)) }
-                }
+        ConfirmDialog(
+            title = stringResource(R.string.editor_discard_title),
+            message = stringResource(R.string.editor_discard_message),
+            confirmText = stringResource(R.string.editor_discard_action),
+            onConfirm = { onBack() },
+            onDismiss = { showDiscardDialog = false },
+            dismissText = stringResource(R.string.editor_keep_editing),
+            tone = ConfirmTone.DESTRUCTIVE,
+            // The third "Save" choice only makes sense when the user can still
+            // save (dirty + not mid-save); otherwise this collapses to a plain
+            // Discard / Keep editing pair.
+            secondaryAction = if (!uiState.isSaving) {
+                ConfirmAction(
+                    text = stringResource(R.string.editor_save),
+                    tone = ConfirmTone.PRIMARY,
+                    onClick = { viewModel.saveMetadata() },
+                )
+            } else {
+                null
             },
         )
     }

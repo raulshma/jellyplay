@@ -98,6 +98,7 @@
     <string name="admin_search_plugins">플러그인 검색…</string>
     <string name="admin_installed">설치됨</string>
     <string name="admin_install_third_party_title">타사 플러그인을 설치하시겠습니까?</string>
+    <string name="admin_install_third_party_body">플러그인은 Jellyfin 서버와 동일한 시스템 접근 권한을 갖습니다. 신뢰할 수 있는 출처의 플러그인만 설치하세요. %1$s을(를) 설치하시겠습니까?</string>
     <string name="admin_latest_version">최신: v%1$s</string>
     <string name="admin_installing">%1$s 설치 중</string>
     <string name="admin_add_repository_title">리포지토리 추가</string>

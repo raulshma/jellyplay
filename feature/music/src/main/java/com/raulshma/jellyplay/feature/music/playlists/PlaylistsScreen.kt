@@ -45,6 +45,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.feature.music.R
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -196,25 +198,15 @@ private fun PlaylistDialogHost(viewModel: PlaylistsViewModel) {
             )
         }
         is PlaylistDialogState.Delete -> {
-            AlertDialog(
-                onDismissRequest = { viewModel.dismissDialog() },
-                title = { Text(stringResource(R.string.music_delete_playlist)) },
-                text = {
-                    Text(stringResource(R.string.music_delete_playlist_confirm, state.playlist.name))
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = { viewModel.deletePlaylist(state.playlist) },
-                        enabled = !viewModel.isMutating,
-                    ) {
-                        Text(stringResource(R.string.music_delete), color = MaterialTheme.colorScheme.error)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { viewModel.dismissDialog() }) {
-                        Text(stringResource(R.string.music_cancel))
-                    }
-                },
+            ConfirmDialog(
+                title = stringResource(R.string.music_delete_playlist),
+                message = stringResource(R.string.music_delete_playlist_confirm, state.playlist.name),
+                confirmText = stringResource(R.string.music_delete),
+                dismissText = stringResource(R.string.music_cancel),
+                tone = ConfirmTone.DESTRUCTIVE,
+                confirmEnabled = !viewModel.isMutating,
+                onConfirm = { viewModel.deletePlaylist(state.playlist) },
+                onDismiss = { viewModel.dismissDialog() },
             )
         }
     }

@@ -16,12 +16,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,6 +43,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -169,31 +169,29 @@ private fun SeriesDetailDialog(
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(timer.name) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                timer.channelName?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text(
-                    "Days: ${if (timer.days.isEmpty()) "Any" else timer.days.joinToString(", ")}",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "Keep up to: ${if (timer.keepUpTo <= 0) "All" else timer.keepUpTo}",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "Channel: ${if (timer.recordAnyChannel) "Any" else (timer.channelName ?: "—")}",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    ConfirmDialog(
+        title = timer.name,
+        confirmText = stringResource(R.string.livetv_cancel_series),
+        dismissText = stringResource(R.string.livetv_action_close),
+        tone = ConfirmTone.NEUTRAL,
+        onConfirm = onCancel,
+        onDismiss = onDismiss,
+        content = {
+            timer.channelName?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Text(
+                "Days: ${if (timer.days.isEmpty()) "Any" else timer.days.joinToString(", ")}",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "Keep up to: ${if (timer.keepUpTo <= 0) "All" else timer.keepUpTo}",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "Channel: ${if (timer.recordAnyChannel) "Any" else (timer.channelName ?: "—")}",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         },
-        confirmButton = {
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.livetv_cancel_series)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_close)) } },
     )
 }

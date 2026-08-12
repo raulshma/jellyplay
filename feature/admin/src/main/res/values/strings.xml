@@ -98,6 +98,7 @@
     <string name="admin_search_plugins">Search plugins…</string>
     <string name="admin_installed">Installed</string>
     <string name="admin_install_third_party_title">Install third-party plugin?</string>
+    <string name="admin_install_third_party_body">Plugins have the same system access as your Jellyfin server. Only install plugins from sources you trust. Continue installing %1$s?</string>
     <string name="admin_latest_version">Latest: v%1$s</string>
     <string name="admin_installing">Installing %1$s</string>
     <string name="admin_add_repository_title">Add Repository</string>

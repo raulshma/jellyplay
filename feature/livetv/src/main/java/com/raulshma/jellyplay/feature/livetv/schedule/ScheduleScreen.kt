@@ -2,7 +2,6 @@ package com.raulshma.jellyplay.feature.livetv.schedule
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,12 +16,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,6 +43,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -209,24 +208,22 @@ private fun TimerDetailDialog(
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(timer.programName) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                timer.channelName?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text(stringResource(R.string.livetv_schedule_start, formatStart(timer.startDate)), style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(stringResource(R.string.livetv_schedule_end, formatStart(timer.endDate)), style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+    ConfirmDialog(
+        title = timer.programName,
+        confirmText = stringResource(R.string.livetv_cancel_recording),
+        dismissText = stringResource(R.string.livetv_action_close),
+        tone = ConfirmTone.NEUTRAL,
+        onConfirm = onCancel,
+        onDismiss = onDismiss,
+        content = {
+            timer.channelName?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Text(stringResource(R.string.livetv_schedule_start, formatStart(timer.startDate)), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.livetv_schedule_end, formatStart(timer.endDate)), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         },
-        confirmButton = {
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.livetv_cancel_recording)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_close)) } },
     )
 }
 

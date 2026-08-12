@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,7 +20,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,6 +43,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColor
@@ -209,28 +209,17 @@ fun PluginsScreen(
     }
 
     pendingUninstallId?.let { pluginId ->
-        AlertDialog(
-            onDismissRequest = { pendingUninstallId = null },
-            title = { Text(stringResource(R.string.admin_uninstall_plugin_confirm_title)) },
-            text = {
-                Text(
-                    "This removes the plugin from the server. It can be reinstalled from the Catalog.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+        ConfirmDialog(
+            title = stringResource(R.string.admin_uninstall_plugin_confirm_title),
+            message = "This removes the plugin from the server. It can be reinstalled from the Catalog.",
+            confirmText = stringResource(R.string.admin_uninstall),
+            dismissText = stringResource(R.string.admin_cancel),
+            tone = ConfirmTone.NEUTRAL,
+            onConfirm = {
+                viewModel.uninstallPlugin(pluginId)
+                pendingUninstallId = null
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.uninstallPlugin(pluginId)
-                    pendingUninstallId = null
-                }) {
-                    Text(stringResource(R.string.admin_uninstall))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingUninstallId = null }) {
-                    Text(stringResource(R.string.admin_cancel))
-                }
-            },
+            onDismiss = { pendingUninstallId = null },
         )
     }
 }

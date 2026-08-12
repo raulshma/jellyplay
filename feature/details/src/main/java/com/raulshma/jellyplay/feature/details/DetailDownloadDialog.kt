@@ -1,18 +1,18 @@
 package com.raulshma.jellyplay.feature.details
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 
 /**
  * Storage confirmation dialog shown before a single-item download.
@@ -52,34 +52,36 @@ internal fun DownloadConfirmationDialog(
     }
     val enoughSpace = fileSize == null || fileSize <= availableBytes
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.detail_download_dialog_title)) },
-        text = {
-            Column {
-                Text(stringResource(R.string.detail_estimated_size, fileSizeText))
+    ConfirmDialog(
+        title = stringResource(R.string.detail_download_dialog_title),
+        message = null,
+        confirmText = stringResource(R.string.detail_download_dialog_title),
+        dismissText = stringResource(R.string.detail_cancel),
+        tone = ConfirmTone.NEUTRAL,
+        confirmEnabled = enoughSpace,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+        content = {
+            Text(
+                text = stringResource(R.string.detail_estimated_size, fileSizeText),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.detail_available_storage, availableText),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!enoughSpace) {
                 Spacer(Modifier.height(8.dp))
-                Text(stringResource(R.string.detail_available_storage, availableText))
-                if (!enoughSpace) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        stringResource(R.string.detail_not_enough_storage),
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onConfirm,
-                enabled = enoughSpace,
-            ) {
-                Text(stringResource(R.string.detail_download_dialog_title))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.detail_cancel))
+                Text(
+                    text = stringResource(R.string.detail_not_enough_storage),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         },
     )

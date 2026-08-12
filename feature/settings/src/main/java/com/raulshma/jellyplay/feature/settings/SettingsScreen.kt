@@ -29,12 +29,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -80,6 +78,7 @@ import androidx.compose.ui.focus.onFocusEvent
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -1278,30 +1277,21 @@ fun SettingsScreen(
         }
 
         if (showSignOutConfirm) {
-            AlertDialog(
-                onDismissRequest = { showSignOutConfirm = false },
-                title = { Text(if (signOutFromServer) stringResource(R.string.settings_sign_out_confirm_title_server) else stringResource(R.string.settings_sign_out_confirm_title)) },
-                text = {
-                    Text(
-                        if (signOutFromServer) {
-                            stringResource(R.string.settings_sign_out_confirm_message_server)
-                        } else {
-                            stringResource(R.string.settings_sign_out_confirm_message)
-                        },
-                    )
+            ConfirmDialog(
+                title = if (signOutFromServer) stringResource(R.string.settings_sign_out_confirm_title_server) else stringResource(R.string.settings_sign_out_confirm_title),
+                message = if (signOutFromServer) {
+                    stringResource(R.string.settings_sign_out_confirm_message_server)
+                } else {
+                    stringResource(R.string.settings_sign_out_confirm_message)
                 },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            val fromServer = signOutFromServer
-                            showSignOutConfirm = false
-                            onLogout(fromServer)
-                        },
-                    ) { Text(stringResource(R.string.settings_sign_out), color = MaterialTheme.colorScheme.error) }
+                confirmText = stringResource(R.string.settings_sign_out),
+                onConfirm = {
+                    val fromServer = signOutFromServer
+                    showSignOutConfirm = false
+                    onLogout(fromServer)
                 },
-                dismissButton = {
-                    TextButton(onClick = { showSignOutConfirm = false }) { Text(stringResource(R.string.settings_cancel)) }
-                },
+                onDismiss = { showSignOutConfirm = false },
+                dismissText = stringResource(R.string.settings_cancel),
             )
         }
 

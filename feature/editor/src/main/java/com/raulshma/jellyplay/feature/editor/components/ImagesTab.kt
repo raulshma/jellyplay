@@ -22,8 +22,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -156,24 +157,23 @@ fun ImagesTab(
     }
 
     showDeleteConfirm?.let { imageInfo ->
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = null },
-            title = { Text(stringResource(R.string.editor_images_delete_title)) },
-            text = { Text(stringResource(R.string.editor_images_delete_message, stringResource(imageTypeLabelRes(imageInfo.imageType)))) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteImage(
-                            imageInfo.imageType,
-                            if (imageInfo.imageIndex > 0) imageInfo.imageIndex else null,
-                        )
-                        showDeleteConfirm = null
-                    },
-                ) { Text(stringResource(R.string.editor_images_delete_action)) }
+        ConfirmDialog(
+            title = stringResource(R.string.editor_images_delete_title),
+            message = stringResource(
+                R.string.editor_images_delete_message,
+                stringResource(imageTypeLabelRes(imageInfo.imageType)),
+            ),
+            confirmText = stringResource(R.string.editor_images_delete_action),
+            onConfirm = {
+                viewModel.deleteImage(
+                    imageInfo.imageType,
+                    if (imageInfo.imageIndex > 0) imageInfo.imageIndex else null,
+                )
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(R.string.editor_action_cancel)) }
-            },
+            onDismiss = { showDeleteConfirm = null },
+            dismissText = stringResource(R.string.editor_action_cancel),
+            tone = ConfirmTone.DESTRUCTIVE,
+            icon = Tabler.Outline.Trash,
         )
     }
 

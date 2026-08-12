@@ -4,16 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +38,7 @@ import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.InlineTrailerPlayer
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.MediaQuickActionHost
@@ -189,24 +184,14 @@ fun MediaDetailScreen(
 
     val cellularWarningMb = uiState.cellularDownloadWarningMb
     if (cellularWarningMb != null) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissCellularDownloadWarning() },
-            title = { Text(stringResource(R.string.detail_cellular_download_title)) },
-            text = {
-                Text(
-                    stringResource(R.string.detail_cellular_download_message, cellularWarningMb),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.confirmCellularDownload() }) {
-                    Text(stringResource(R.string.detail_download_anyway))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissCellularDownloadWarning() }) {
-                    Text(stringResource(R.string.detail_cancel))
-                }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.detail_cellular_download_title),
+            message = stringResource(R.string.detail_cellular_download_message, cellularWarningMb),
+            confirmText = stringResource(R.string.detail_download_anyway),
+            dismissText = stringResource(R.string.detail_cancel),
+            tone = ConfirmTone.NEUTRAL,
+            onConfirm = { viewModel.confirmCellularDownload() },
+            onDismiss = { viewModel.dismissCellularDownloadWarning() },
         )
     }
 
@@ -680,59 +665,31 @@ fun MediaDetailScreen(
         // downloaded episode from the seasons section. Both route through the
         // merged DetailViewModel offline-delete methods.
         pendingDelete?.let { target ->
-            AlertDialog(
-                onDismissRequest = { pendingDelete = null },
-                icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-                title = { Text(stringResource(R.string.detail_delete_download_title)) },
-                text = {
-                    Text(
-                        stringResource(
-                            R.string.detail_delete_download_message,
-                            target.name,
-                            target.sizeBytes.formatBytes(),
-                        ),
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel.deleteOfflineItem(target.itemId)
-                            pendingDelete = null
-                        },
-                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        ),
-                    ) { Text(stringResource(R.string.detail_delete)) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { pendingDelete = null }) {
-                        Text(stringResource(R.string.detail_cancel))
-                    }
-                },
+            ConfirmDialog(
+                title = stringResource(R.string.detail_delete_download_title),
+                message = stringResource(
+                    R.string.detail_delete_download_message,
+                    target.name,
+                    target.sizeBytes.formatBytes(),
+                ),
+                confirmText = stringResource(R.string.detail_delete),
+                dismissText = stringResource(R.string.detail_cancel),
+                icon = Tabler.Outline.Trash,
+                tone = ConfirmTone.DESTRUCTIVE,
+                onConfirm = { viewModel.deleteOfflineItem(target.itemId) },
+                onDismiss = { pendingDelete = null },
             )
         }
         pendingDeleteEpisode?.let { ep ->
-            AlertDialog(
-                onDismissRequest = { pendingDeleteEpisode = null },
-                icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-                title = { Text(stringResource(R.string.detail_delete_episode_title)) },
-                text = { Text(stringResource(R.string.detail_delete_episode_message, ep.name)) },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel.deleteOfflineEpisode(ep.episodeId)
-                            pendingDeleteEpisode = null
-                        },
-                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        ),
-                    ) { Text(stringResource(R.string.detail_delete)) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { pendingDeleteEpisode = null }) {
-                        Text(stringResource(R.string.detail_cancel))
-                    }
-                },
+            ConfirmDialog(
+                title = stringResource(R.string.detail_delete_episode_title),
+                message = stringResource(R.string.detail_delete_episode_message, ep.name),
+                confirmText = stringResource(R.string.detail_delete),
+                dismissText = stringResource(R.string.detail_cancel),
+                icon = Tabler.Outline.Trash,
+                tone = ConfirmTone.DESTRUCTIVE,
+                onConfirm = { viewModel.deleteOfflineEpisode(ep.episodeId) },
+                onDismiss = { pendingDeleteEpisode = null },
             )
         }
 
