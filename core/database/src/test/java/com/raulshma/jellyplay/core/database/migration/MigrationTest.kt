@@ -655,6 +655,9 @@ class MigrationTest {
             assertEquals(null, syncedPosterTag)
             assertEquals(null, syncedBackdropTag)
             assertEquals(null, syncedMetadataSignature)
+            assertEquals(null, syncedSubtitleSignature)
+            assertEquals(null, syncedTrickplaySignature)
+            assertEquals(null, syncedSegmentsSignature)
             assertEquals(null, syncedMediaSourceId)
             assertEquals(null, syncedMediaSizeBytes)
             assertEquals(null, lastSyncedAt)
@@ -669,6 +672,9 @@ class MigrationTest {
             posterTag = "poster-1",
             backdropTag = "backdrop-1",
             metadataSignature = "sig",
+            subtitleSignature = "sub-sig",
+            trickplaySignature = "trick-sig",
+            segmentsSignature = "seg-sig",
             mediaSourceId = "src-1",
             mediaSizeBytes = 1000L,
             lastSyncedAt = 123L,
@@ -680,6 +686,9 @@ class MigrationTest {
         val updated = db.offlineMediaDao().getSyncBaseline("item-1")
         assertEquals("poster-1", updated!!.syncedPosterTag)
         assertEquals("sig", updated.syncedMetadataSignature)
+        assertEquals("sub-sig", updated.syncedSubtitleSignature)
+        assertEquals("trick-sig", updated.syncedTrickplaySignature)
+        assertEquals("seg-sig", updated.syncedSegmentsSignature)
         assertEquals(123L, updated.lastSyncedAt)
         assertEquals(1, updated.syncUpdateAvailable)
         db.close()
@@ -728,18 +737,72 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * Verifies the v45→v46 migration adds the nullable sidecar-signature columns
+     * (`syncedSubtitleSignature`, `syncedTrickplaySignature`,
+     * `syncedSegmentsSignature`) to `offline_media`. Pre-existing rows pick up
+     * null (degrading to "never recorded" so the comparator treats the axis as
+     * first-contact and never flags a spurious change), and a targeted
+     * `updateSyncBaseline` write round-trips all three signatures.
+     */
+    @Test
+    fun migrateAllFromV12_addsOfflineSidecarSignatureColumns() = runTest {
+        createDatabase(12) { db ->
+            createServersTable(db)
+            createDownloadsTableV11(db)
+            createUsersTableV10(db)
+            createLyricsCacheTable(db)
+            createOfflineMediaTable(db)
+            db.execSQL(
+                "INSERT INTO offline_media (id, name, mediaType) VALUES (?, ?, ?)",
+                arrayOf<Any>("item-1", "Test", "MOVIE"),
+            )
+        }
+
+        val db = openWithMigrations()
+        // Pre-existing row: the migration's new columns are NULL (first-contact
+        // axis — comparator treats empty/null as "never recorded").
+        val baseline = db.offlineMediaDao().getSyncBaseline("item-1")
+        assertNotNull(baseline)
+        assertEquals(null, baseline!!.syncedSubtitleSignature)
+        assertEquals(null, baseline.syncedTrickplaySignature)
+        assertEquals(null, baseline.syncedSegmentsSignature)
+        // A targeted baseline write round-trips the new signature columns.
+        db.offlineMediaDao().updateSyncBaseline(
+            itemId = "item-1",
+            posterTag = null,
+            backdropTag = null,
+            metadataSignature = null,
+            subtitleSignature = "sub-hash",
+            trickplaySignature = "trick-hash",
+            segmentsSignature = "seg-hash",
+            mediaSourceId = null,
+            mediaSizeBytes = null,
+            lastSyncedAt = 999L,
+            updateAvailable = 0,
+            mediaChanged = 0,
+            checking = 0,
+            error = 0,
+        )
+        val updated = db.offlineMediaDao().getSyncBaseline("item-1")
+        assertEquals("sub-hash", updated!!.syncedSubtitleSignature)
+        assertEquals("trick-hash", updated.syncedTrickplaySignature)
+        assertEquals("seg-hash", updated.syncedSegmentsSignature)
+        db.close()
+    }
+
     @Test
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = TokenCipher.forTestingWithPersistentKey()
         val migrations = allMigrations(tokenCipher)
-        // One migration per step from v1 up to the current schema version (45),
+        // One migration per step from v1 up to the current schema version (46),
         // each handing off to the next with no gaps or duplicate starts.
         // androidx.room.Database has CLASS retention, so getAnnotation() returns
         // null at runtime — the hardcoded fallback is the authoritative value
         // and must be bumped alongside JellyPlayDatabase's version.
         val expected = JellyPlayDatabase::class.java
             .getAnnotation(androidx.room.Database::class.java)?.version
-            ?: 45
+            ?: 46
         val startVersions = migrations.map { it.startVersion }
         assertEquals(
             "every version 1..<current must start exactly one migration",

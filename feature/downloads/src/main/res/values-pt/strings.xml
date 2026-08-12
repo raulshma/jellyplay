@@ -109,4 +109,53 @@
     <string name="downloads_filter_all">Tudo</string>
     <string name="downloads_filter_videos">Vídeos</string>
     <string name="downloads_filter_music">Música</string>
+    <!-- Offline download resync -->
+    <string name="downloads_resync">Sincronizar</string>
+    <string name="downloads_resync_cd">Verificar metadados e imagens atualizados</string>
+    <string name="downloads_resync_title">Sincronizar download</string>
+    <string name="downloads_resync_checking">A verificar atualizações…</string>
+    <string name="downloads_resync_update_available">Novas informações disponíveis</string>
+    <string name="downloads_resync_media_changed">O ficheiro multimédia mudou — é necessário voltar a descarregar</string>
+    <string name="downloads_resync_in_progress">A sincronizar os últimos detalhes…</string>
+    <string name="downloads_resync_complete">Download sincronizado com os últimos detalhes</string>
+    <string name="downloads_resync_failed">Falha na sincronização</string>
+    <string name="downloads_resync_up_to_date">Este download está atualizado.</string>
+    <string name="downloads_resync_description">Há informações mais recentes no servidor. Sincronize para atualizar metadados e imagens.</string>
+    <string name="downloads_resync_change_metadata">Metadados atualizados (resumo, elenco, classificações)</string>
+    <string name="downloads_resync_change_images">Arte atualizada (poster/fundo)</string>
+    <string name="downloads_resync_change_media">O próprio ficheiro multimédia mudou</string>
+    <string name="downloads_resync_media_explanation">Uma sincronização de metadados não pode atualizar o ficheiro multimédia. Elimine e volte a descarregar este item para obter o novo ficheiro.</string>
+    <string name="downloads_resync_action">Sincronizar agora</string>
+    <string name="downloads_resync_redownload">Voltar a descarregar multimédia</string>
+    <string name="downloads_resync_check_all">Verificar todas as atualizações</string>
+    <string name="downloads_resync_check_all_cd">Verificar todos os downloads por atualizações disponíveis</string>
+    <string name="downloads_resync_batch_title">Atualizações disponíveis</string>
+    <string name="downloads_resync_batch_empty">Nenhum download precisa de atualização.</string>
+    <string name="downloads_resync_batch_checking">A verificar os seus downloads…</string>
+    <string name="downloads_resync_resync_all">Sincronizar tudo</string>
+    <string name="downloads_resync_progress">%1$d de %2$d sincronizados</string>
+
+    <!-- Force resync (granular item + data selection) -->
+    <string name="downloads_force_resync_action">Forçar sincronização</string>
+    <string name="downloads_force_resync_title">Forçar sincronização</string>
+    <string name="downloads_force_resync_description">Escolha quais itens descarregados e quais dados atualizar a partir do servidor, independentemente de ter sido detetada uma atualização.</string>
+    <string name="downloads_force_resync_items_header">Itens a sincronizar</string>
+    <string name="downloads_force_resync_data_header">Dados a sincronizar</string>
+    <string name="downloads_force_resync_data_metadata">Metadados</string>
+    <string name="downloads_force_resync_data_metadata_desc">Resumo, elenco, classificações</string>
+    <string name="downloads_force_resync_data_poster">Poster</string>
+    <string name="downloads_force_resync_data_poster_desc">Arte principal</string>
+    <string name="downloads_force_resync_data_backdrop">Fundo</string>
+    <string name="downloads_force_resync_data_backdrop_desc">Arte de fundo</string>
+    <string name="downloads_force_resync_data_subtitles">Legendas</string>
+    <string name="downloads_force_resync_data_subtitles_desc">Faixas de legendas externas</string>
+    <string name="downloads_force_resync_data_trickplay">Trickplay</string>
+    <string name="downloads_force_resync_data_trickplay_desc">Miniaturas de pré-visualização de navegação</string>
+    <string name="downloads_force_resync_data_segments">Segmentos</string>
+    <string name="downloads_force_resync_data_segments_desc">Pontos de salto de intro/outro</string>
+    <string name="downloads_force_resync_summary">Sincronizar %1$d itens</string>
+    <string name="downloads_force_resync_empty">Nenhum item descarregado para sincronizar.</string>
+    <string name="downloads_force_resync_in_progress">A sincronizar %1$d de %2$d…</string>
+    <string name="downloads_force_resync_done">%1$d de %2$d sincronizados.</string>
+    <string name="downloads_force_resync_no_data">Selecione pelo menos um tipo de dados para sincronizar.</string>
 </resources>

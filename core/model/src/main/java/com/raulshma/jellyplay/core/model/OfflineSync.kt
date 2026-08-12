@@ -37,6 +37,19 @@ data class OfflineSyncState(
     val status: SyncStatus,
     val metadataChanged: Boolean = false,
     val imagesChanged: Boolean = false,
+    /** External subtitle streams differ from the persisted baseline signature.
+     *  Computed live in [com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator]
+     *  from the MediaDetail subtitle inventory; not surfaced by the DB-driven
+     *  composite badge (defaults false there) so it doesn't render a false chip
+     *  when only metadata flipped. */
+    val subtitlesChanged: Boolean = false,
+    /** Trickplay sprite manifest differs from the baseline signature. Same
+     *  live-only surfacing semantics as [subtitlesChanged]. */
+    val trickplayChanged: Boolean = false,
+    /** Media segments (intro/outro/recap) differ from the baseline signature.
+     *  Only computed inside a resync that fetches fresh segments (segments are
+     *  not part of MediaDetail), so this never flips from the proactive check. */
+    val segmentsChanged: Boolean = false,
     /** The media file itself changed server-side (different MediaSource id/size).
      *  Surfaced separately because a resync cannot fix it — it requires a full
      *  re-download of the media file. */
@@ -44,8 +57,10 @@ data class OfflineSyncState(
     /** Epoch millis of the last completed server check. Null when never checked. */
     val lastCheckedAt: Long? = null,
 ) {
-    /** True when a lightweight resync (metadata + images) will bring the item up to date. */
-    val needsResync: Boolean get() = metadataChanged || imagesChanged
+    /** True when a lightweight resync (metadata, images, subtitles, trickplay,
+     *  segments) will bring the item up to date. */
+    val needsResync: Boolean get() =
+        metadataChanged || imagesChanged || subtitlesChanged || trickplayChanged || segmentsChanged
 }
 
 /**
@@ -63,8 +78,10 @@ data class ResyncCheckResult(
 /**
  * User-facing selection of which data categories a resync should refresh. Maps
  * onto the optional [ResyncStep]s (metadata -> PERSIST_METADATA, poster ->
- * DOWNLOAD_POSTER, backdrop -> DOWNLOAD_BACKDROP); FETCH_DETAIL and
- * UPDATE_BASELINE are always-on infrastructure and therefore not selectable.
+ * DOWNLOAD_POSTER, backdrop -> DOWNLOAD_BACKDROP, subtitles ->
+ * DOWNLOAD_SUBTITLES, trickplay -> DOWNLOAD_TRICKPLAY, segments ->
+ * DOWNLOAD_SEGMENTS); FETCH_DETAIL and UPDATE_BASELINE are always-on
+ * infrastructure and therefore not selectable.
  *
  * Defaults to all-true so the existing "resync everything" call sites behave
  * identically when the parameter is omitted. A user-driven force resync passes
@@ -76,9 +93,13 @@ data class ResyncOptions(
     val metadata: Boolean = true,
     val poster: Boolean = true,
     val backdrop: Boolean = true,
+    val subtitles: Boolean = true,
+    val trickplay: Boolean = true,
+    val segments: Boolean = true,
 ) {
     /** True when no category is selected — callers should treat this as a no-op. */
-    val isEmpty: Boolean get() = !metadata && !poster && !backdrop
+    val isEmpty: Boolean get() =
+        !metadata && !poster && !backdrop && !subtitles && !trickplay && !segments
 
     companion object {
         /** Resync every category. The historical default behaviour. */
@@ -94,6 +115,9 @@ enum class ResyncStep {
     PERSIST_METADATA,
     DOWNLOAD_POSTER,
     DOWNLOAD_BACKDROP,
+    DOWNLOAD_SUBTITLES,
+    DOWNLOAD_TRICKPLAY,
+    DOWNLOAD_SEGMENTS,
     UPDATE_BASELINE,
 }
 

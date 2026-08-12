@@ -754,8 +754,22 @@ val MIGRATION_44_45 = object : Migration(44, 45) {
     }
 }
 
+// Sidecar-artifact freshness signatures for the download resync feature.
+// Subtitles + trickplay signatures are derived from MediaDetail and seeded at
+// download time; the segments signature is seeded on the first segments
+// resync. All three are nullable so pre-migration rows resolve to "never
+// recorded" — the comparator treats an empty/null signature as a first-contact
+// axis that never flags a spurious change.
+val MIGRATION_45_46 = object : Migration(45, 46) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedSubtitleSignature TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedTrickplaySignature TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedSegmentsSignature TEXT")
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v45 migration chain, with the
+ * The complete, correctly-ordered v1→v46 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -808,4 +822,5 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_42_43,
         MIGRATION_43_44,
         MIGRATION_44_45,
+        MIGRATION_45_46,
     )

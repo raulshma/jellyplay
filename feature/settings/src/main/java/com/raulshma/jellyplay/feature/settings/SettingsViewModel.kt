@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.datastore.LegacySettingsBackup
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
+import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.DreamImageCategory
@@ -50,6 +51,7 @@ class SettingsViewModel @Inject constructor(
     private val seerrRepository: SeerrRepository,
     private val apiClient: com.raulshma.jellyplay.core.network.JellyfinApiClient,
     private val editor: PreferencesEditor,
+    private val recentsStore: SettingsRecentsStore,
 ) : JellyPlayViewModel() {
 
     private companion object {
@@ -87,6 +89,14 @@ class SettingsViewModel @Inject constructor(
 
     val pendingRequestCount: kotlinx.coroutines.flow.StateFlow<Int> = seerrRepository.pendingRequestCount
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /**
+     * The ids of the last [SettingsRecentsStore.MAX_RECENTS] settings opened from
+     * the settings search, most-recent first. Backed by [recentsStore]; exposed
+     * directly (it is already an app-scoped `StateFlow`) so the screen can collect
+     * it lifecycle-aware without re-subscribing here.
+     */
+    val recentSettingIds: kotlinx.coroutines.flow.StateFlow<List<String>> = recentsStore.recents
 
     var activeSessions by composeState<List<com.raulshma.jellyplay.core.model.SessionInfo>>(emptyList())
         private set
@@ -223,6 +233,20 @@ class SettingsViewModel @Inject constructor(
 
     fun setShowAdvancedSettings(enabled: Boolean) {
         editor.edit { appearance.setShowAdvancedSettings(enabled) }
+    }
+
+    /**
+     * Records that the setting with [id] was opened from search. Destructive
+     * *actions* (logout, sign-out-from-server) are filtered out by the caller —
+     * only real settings are tracked.
+     */
+    fun recordSettingUsed(id: String) {
+        launch { recentsStore.addRecent(id) }
+    }
+
+    /** Clears the recorded recent settings list. */
+    fun clearRecentSettings() {
+        launch { recentsStore.clearRecents() }
     }
 
     fun setDreamImageCategories(categories: Set<DreamImageCategory>) {

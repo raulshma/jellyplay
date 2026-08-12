@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -74,6 +75,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.focus.onFocusEvent
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
@@ -130,6 +132,12 @@ private val SCREENSAVER_GROUP_IDS = setOf(
     "screensaver_transition_style",
 )
 
+// Search-result ids that are destructive *actions* rather than settings (open a
+// confirm dialog instead of navigating). These are deliberately excluded from the
+// "recent settings" list — recents track navigable settings the user revisits, not
+// one-off sign-out actions.
+private val ACTION_ONLY_IDS = setOf("logout", "sign_out_from_server")
+
 // Dream-screen pickers (slideshow interval, transition style) flow through the shared
 // `PickerState` dispatcher rather than a screen-local sealed dialog enum.
 
@@ -177,6 +185,136 @@ data class SettingsCallbacks(
     val onExperimentalSettings: (String?) -> Unit = {},
     val onOpenSubtitleTester: () -> Unit = {},
 )
+
+/**
+ * The shared column container for settings-search results (live matches and the
+ * recents list). Both lists share the same padding, spacing, and TV back-key
+ * handling (dismiss search + refocus the settings list); only the row content
+ * differs, passed as [content]. Extracted so the container wiring can't drift
+ * between the two branches the way the row rendering already can't.
+ */
+@Composable
+private fun SearchResultsColumn(
+    onBack: () -> Unit,
+    content: LazyListScope.() -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .then(Modifier.onDpadKeyEvent(
+                onBack = { e ->
+                    if (e.isKeyUp) { onBack() }
+                    true
+                },
+            )),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        content = content,
+    )
+}
+
+/**
+ * A single resolved settings-search result row, shared by the live search results
+ * and the recent-settings list so both render identically (leading icon, title,
+ * subtitle, category/advanced pills, chevron, expressive list shape, TV focus) and
+ * share one tap handler. Extracted from the inline result row so the two lists can
+ * not drift in appearance or click behavior.
+ */
+@Composable
+private fun SettingsSearchResultRow(
+    item: ResolvedSettingsItem,
+    index: Int,
+    count: Int,
+    advancedBadgeLabel: String,
+    onClick: () -> Unit,
+) {
+    val shape = com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, count, innerRadius = 0.dp)
+    val itemTvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+    ListItem(
+        headlineContent = {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        },
+        supportingContent = {
+            Text(
+                text = item.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        leadingContent = {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(ShapeCache.smooth8)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = item.icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        },
+        trailingContent = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = item.category,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                if (item.isAdvanced) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.tertiaryContainer)
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = advancedBadgeLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Tabler.Outline.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .then(itemTvFocusState.focusModifier)
+            .tvFocusIndicator(itemTvFocusState, shape)
+            .clickable(onClick = onClick),
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -290,6 +428,19 @@ fun SettingsScreen(
             .collect { value = it }
     }
 
+    // The last-used setting ids (most-recent first), resolved back to renderable
+    // items against the registry. Stale ids — a recorded setting whose registry
+    // entry no longer exists — drop out via mapNotNull and naturally age out as new
+    // ids displace them. Only re-resolved when the persisted id list changes.
+    val recentIds by viewModel.recentSettingIds.collectAsStateWithLifecycle()
+    val recentItems = remember(recentIds) {
+        if (recentIds.isEmpty()) emptyList()
+        else {
+            val byId = SettingsSearchRegistry.items.resolve(context::getString).associateBy { it.id }
+            recentIds.mapNotNull { byId[it] }
+        }
+    }
+
     BackHandler(enabled = isSearchActive) {
         isSearchActive = false
         searchQuery = ""
@@ -308,6 +459,140 @@ fun SettingsScreen(
                 userMessageBus.info(msg)
                 viewModel.clearMessageEvent()
             }
+        }
+
+        // Shared tap handler for both the live search results and the recent
+        // settings list: flips the advanced toggle on if needed, dispatches the
+        // per-route navigation, records the setting as recently used (skipping
+        // pure actions like logout), then collapses the search panel. Extracted so
+        // the two lists never drift in click behavior.
+        val onResultClick: (ResolvedSettingsItem) -> Unit = { item ->
+            if (item.isAdvanced && !preferences.showAdvancedSettings) {
+                viewModel.setShowAdvancedSettings(true)
+                userMessageBus.info(uiTextOf(R.string.settings_advanced_enabled))
+            }
+            if (item.id == "logout") {
+                signOutFromServer = false
+                showSignOutConfirm = true
+            } else {
+                when (item.route) {
+                    is Route.ServerManagement -> onServerManagement(item.id)
+                    is Route.UserManagement -> onUserManagement(item.id)
+                    is Route.SeerrSettings -> {
+                        lastClickedSettingId = "seerr_settings"
+                        onSeerrSettings(item.id)
+                    }
+                    Route.Favorites -> {
+                        lastClickedSettingId = "favorites"
+                        onFavoritesClick()
+                    }
+                    Route.WatchProgressHeatmap -> {
+                        lastClickedSettingId = "watch_progress_heatmap"
+                        onWatchProgressHeatmapClick()
+                    }
+                    Route.ArrQueue -> {
+                        lastClickedSettingId = "activity_queue"
+                        onActivityQueueClick()
+                    }
+                    Route.UpcomingCalendar -> {
+                        lastClickedSettingId = "upcoming"
+                        onUpcomingClick()
+                    }
+                    Route.Requests -> {
+                        lastClickedSettingId = "requests"
+                        onRequestsClick()
+                    }
+                    Route.AdminDashboard -> {
+                        lastClickedSettingId = "admin_dashboard"
+                        onAdminDashboard()
+                    }
+                    Route.Onboarding -> {
+                        lastClickedSettingId = "setup_wizard"
+                        onSetupWizard()
+                    }
+                    is Route.ArrSettings -> {
+                        lastClickedSettingId = "integrations"
+                        onArrSettings(item.id)
+                    }
+                    is Route.Integrations -> {
+                        lastClickedSettingId = "integrations"
+                        onIntegrations(item.id)
+                    }
+                    is Route.AppearanceSettings -> {
+                        lastClickedSettingId = "appearance"
+                        onAppearanceSettings(item.id)
+                    }
+                    is Route.PinnedHomeSections -> {
+                        lastClickedSettingId = "appearance"
+                        onPinnedHomeSections(item.id)
+                    }
+                    is Route.HomeLayoutPresets -> {
+                        lastClickedSettingId = "appearance"
+                        onHomeLayoutPresets(item.id)
+                    }
+                    is Route.PlaybackSettings -> {
+                        lastClickedSettingId = "playback"
+                        onPlaybackSettings(item.id)
+                    }
+                    is Route.AudioSettings -> {
+                        lastClickedSettingId = "audio"
+                        onAudioSettings(item.id)
+                    }
+                    is Route.LanguageSettings -> {
+                        lastClickedSettingId = "language"
+                        onLanguageSettings(item.id)
+                    }
+                    is Route.NotificationSettings -> {
+                        lastClickedSettingId = "notifications"
+                        onNotificationSettings(item.id)
+                    }
+                    is Route.StorageSettings -> {
+                        lastClickedSettingId = "storage"
+                        onStorageSettings(item.id)
+                    }
+                    is Route.SecuritySettings -> {
+                        lastClickedSettingId = "security"
+                        onSecuritySettings(item.id)
+                    }
+                    is Route.BackupSettings -> {
+                        lastClickedSettingId = "backup"
+                        onBackupSettings(item.id)
+                    }
+                    is Route.LibraryHomeSections -> {
+                        lastClickedSettingId = "configure_libraries"
+                        onConfigureLibraries(item.id)
+                    }
+                    Route.SubtitleTester -> {
+                        lastClickedSettingId = "subtitle_tester"
+                        onOpenSubtitleTester()
+                    }
+                    Route.Settings -> {
+                        // Bare-settings targets live on this screen: the
+                        // sign-out-from-server action opens the confirm dialog,
+                        // screensaver rows reveal their group.
+                        if (item.id == "sign_out_from_server") {
+                            signOutFromServer = true
+                            showSignOutConfirm = true
+                        } else {
+                            lastClickedSettingId = item.id
+                        }
+                    }
+                    is Route.ExperimentalSettings -> {
+                        lastClickedSettingId = "experimental"
+                        onExperimentalSettings(item.id)
+                    }
+                    Route.About -> {
+                        lastClickedSettingId = "about"
+                        onAboutClick()
+                    }
+                    else -> {}
+                }
+            }
+            if (item.id !in ACTION_ONLY_IDS) viewModel.recordSettingUsed(item.id)
+            // Dismiss search after navigation has been dispatched so the main
+            // settings list doesn't briefly reveal during the transition.
+            isSearchActive = false
+            searchQuery = ""
         }
 
         // Admin session polling is tied to screen visibility so it only runs
@@ -479,250 +764,83 @@ fun SettingsScreen(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                         ),
                     ) {
-                        if (filteredItems.isNotEmpty()) {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp)
-                                    .then(Modifier.onDpadKeyEvent(
-                                        onBack = { e ->
-                                            if (e.isKeyUp) {
-                                                isSearchActive = false
-                                                searchQuery = ""
-                                                listFocusRequester.tryRequestFocus()
-                                            }
-                                            true
-                                        },
-                                    )),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp)
-                            ) {
-                                itemsIndexed(filteredItems, key = { _, item -> item.id }) { index, item ->
-                                    val shape = com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, filteredItems.size, innerRadius = 0.dp)
-                                    val itemTvFocusState = rememberTvFocusState(focusedScale = 1.01f)
-                                    ListItem(
-                                        headlineContent = {
-                                            Text(
-                                                text = item.title,
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.Medium,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        },
-                                        supportingContent = {
-                                            Text(
-                                                text = item.subtitle,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        },
-                                        leadingContent = {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(ShapeCache.smooth8)
-                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = item.icon,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        },
-                                        trailingContent = {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(CircleShape)
-                                                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                                                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                                                ) {
-                                                    Text(
-                                                        text = item.category,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                        fontWeight = FontWeight.SemiBold
-                                                    )
-                                                }
-                                                if (item.isAdvanced) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .clip(CircleShape)
-                                                            .background(MaterialTheme.colorScheme.tertiaryContainer)
-                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = advLabel,
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                                            fontWeight = FontWeight.SemiBold
-                                                        )
-                                                    }
-                                                }
-                                                Icon(
-                                                    imageVector = Tabler.Outline.ChevronRight,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
-                                        },
-                                        colors = ListItemDefaults.colors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                        ),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(shape)
-                                            .then(itemTvFocusState.focusModifier)
-                                            .tvFocusIndicator(itemTvFocusState, shape)
-                                            .clickable {
-                                                if (item.isAdvanced && !preferences.showAdvancedSettings) {
-                                                    viewModel.setShowAdvancedSettings(true)
-                                                    userMessageBus.info(uiTextOf(R.string.settings_advanced_enabled))
-                                                }
-                                                  if (item.id == "logout") {
-                                                      signOutFromServer = false
-                                                     showSignOutConfirm = true
-                                                 } else {
-                                                    when (item.route) {
-                                                        is Route.ServerManagement -> onServerManagement(item.id)
-                                                        is Route.UserManagement -> onUserManagement(item.id)
-                                                        is Route.SeerrSettings -> {
-                                                            lastClickedSettingId = "seerr_settings"
-                                                            onSeerrSettings(item.id)
-                                                        }
-                                                        Route.Favorites -> {
-                                                            lastClickedSettingId = "favorites"
-                                                            onFavoritesClick()
-                                                        }
-                                                        Route.WatchProgressHeatmap -> {
-                                                            lastClickedSettingId = "watch_progress_heatmap"
-                                                            onWatchProgressHeatmapClick()
-                                                        }
-                                                        Route.ArrQueue -> {
-                                                            lastClickedSettingId = "activity_queue"
-                                                            onActivityQueueClick()
-                                                        }
-                                                        Route.UpcomingCalendar -> {
-                                                            lastClickedSettingId = "upcoming"
-                                                            onUpcomingClick()
-                                                        }
-                                                        Route.Requests -> {
-                                                            lastClickedSettingId = "requests"
-                                                            onRequestsClick()
-                                                        }
-                                                        Route.AdminDashboard -> {
-                                                            lastClickedSettingId = "admin_dashboard"
-                                                            onAdminDashboard()
-                                                        }
-                                                        Route.Onboarding -> {
-                                                            lastClickedSettingId = "setup_wizard"
-                                                            onSetupWizard()
-                                                        }
-                                                        is Route.ArrSettings -> {
-                                                            lastClickedSettingId = "integrations"
-                                                            onArrSettings(item.id)
-                                                        }
-                                                        is Route.Integrations -> {
-                                                            lastClickedSettingId = "integrations"
-                                                            onIntegrations(item.id)
-                                                        }
-                                                        is Route.AppearanceSettings -> {
-                                                            lastClickedSettingId = "appearance"
-                                                            onAppearanceSettings(item.id)
-                                                        }
-                                                        is Route.PinnedHomeSections -> {
-                                                            lastClickedSettingId = "appearance"
-                                                            onPinnedHomeSections(item.id)
-                                                        }
-                                                        is Route.HomeLayoutPresets -> {
-                                                            lastClickedSettingId = "appearance"
-                                                            onHomeLayoutPresets(item.id)
-                                                        }
-                                                        is Route.PlaybackSettings -> {
-                                                            lastClickedSettingId = "playback"
-                                                            onPlaybackSettings(item.id)
-                                                        }
-                                                        is Route.AudioSettings -> {
-                                                            lastClickedSettingId = "audio"
-                                                            onAudioSettings(item.id)
-                                                        }
-                                                        is Route.LanguageSettings -> {
-                                                            lastClickedSettingId = "language"
-                                                            onLanguageSettings(item.id)
-                                                        }
-                                                        is Route.NotificationSettings -> {
-                                                            lastClickedSettingId = "notifications"
-                                                            onNotificationSettings(item.id)
-                                                        }
-                                                        is Route.StorageSettings -> {
-                                                            lastClickedSettingId = "storage"
-                                                            onStorageSettings(item.id)
-                                                        }
-                                                        is Route.SecuritySettings -> {
-                                                            lastClickedSettingId = "security"
-                                                            onSecuritySettings(item.id)
-                                                        }
-                                                        is Route.BackupSettings -> {
-                                                            lastClickedSettingId = "backup"
-                                                            onBackupSettings(item.id)
-                                                        }
-                                                        is Route.LibraryHomeSections -> {
-                                                            lastClickedSettingId = "configure_libraries"
-                                                            onConfigureLibraries(item.id)
-                                                        }
-                                                        Route.SubtitleTester -> {
-                                                            lastClickedSettingId = "subtitle_tester"
-                                                            onOpenSubtitleTester()
-                                                        }
-                                                        Route.Settings -> {
-                                                            // Bare-settings targets live on this screen: the
-                                                            // sign-out-from-server action opens the confirm
-                                                            // dialog, screensaver rows reveal their group.
-                                                            if (item.id == "sign_out_from_server") {
-                                                                signOutFromServer = true
-                                                                showSignOutConfirm = true
-                                                            } else {
-                                                                lastClickedSettingId = item.id
-                                                            }
-                                                        }
-                                                        is Route.ExperimentalSettings -> {
-                                                            lastClickedSettingId = "experimental"
-                                                            onExperimentalSettings(item.id)
-                                                        }
-                                                        Route.About -> {
-                                                            lastClickedSettingId = "about"
-                                                            onAboutClick()
-                                                        }
-                                                        else -> {}
-                                                    }
-                                                }
-                                                // Dismiss search after navigation has been dispatched so the
-                                                // main settings list doesn't briefly reveal during the transition.
-                                                isSearchActive = false
-                                                searchQuery = ""
-                                            }
-                                    )
+                        when {
+                            filteredItems.isNotEmpty() -> {
+                                SearchResultsColumn(
+                                    onBack = {
+                                        isSearchActive = false
+                                        searchQuery = ""
+                                        listFocusRequester.tryRequestFocus()
+                                    },
+                                ) {
+                                    itemsIndexed(filteredItems, key = { _, item -> item.id }) { index, item ->
+                                        SettingsSearchResultRow(
+                                            item = item,
+                                            index = index,
+                                            count = filteredItems.size,
+                                            advancedBadgeLabel = advLabel,
+                                            onClick = { onResultClick(item) },
+                                        )
+                                    }
                                 }
                             }
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.settings_no_matches),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            // Empty query: surface the last-used settings instead of a dead-end
+                            // "no matches" message. Same row rendering and click behavior as live
+                            // results, plus a header row with a Clear affordance.
+                            searchQuery.isBlank() && recentItems.isNotEmpty() -> {
+                                SearchResultsColumn(
+                                    onBack = {
+                                        isSearchActive = false
+                                        searchQuery = ""
+                                        listFocusRequester.tryRequestFocus()
+                                    },
+                                ) {
+                                    item(key = "recents_header") {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 6.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.settings_recents_title),
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontWeight = FontWeight.SemiBold,
+                                            )
+                                            TextButton(onClick = { viewModel.clearRecentSettings() }) {
+                                                Text(stringResource(R.string.settings_clear_recents))
+                                            }
+                                        }
+                                    }
+                                    itemsIndexed(recentItems, key = { _, item -> item.id }) { index, item ->
+                                        SettingsSearchResultRow(
+                                            item = item,
+                                            index = index,
+                                            count = recentItems.size,
+                                            advancedBadgeLabel = advLabel,
+                                            onClick = { onResultClick(item) },
+                                        )
+                                    }
+                                }
+                            }
+                            else -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = stringResource(
+                                            if (searchQuery.isBlank()) R.string.settings_search_hint
+                                            else R.string.settings_no_matches
+                                        ),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }

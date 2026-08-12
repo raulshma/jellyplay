@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">Boletim</string>
     <string name="settings_advanced_badge">Av</string>
     <string name="settings_no_matches">Nenhuma configuração correspondente encontrada</string>
+    <string name="settings_search_hint">Digite para pesquisar configurações</string>
+    <string name="settings_recents_title">Recentes</string>
+    <string name="settings_clear_recents">Limpar</string>
     <string name="settings_signed_in_as_label">Sessão iniciada como</string>
     <string name="settings_account">Conta</string>
     <string name="settings_signed_in_as_name">Sessão iniciada como %1$s</string>

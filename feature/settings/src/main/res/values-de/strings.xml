@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">Newsletter</string>
     <string name="settings_advanced_badge">Erw.</string>
     <string name="settings_no_matches">Keine passenden Einstellungen gefunden</string>
+    <string name="settings_search_hint">Tippen, um Einstellungen zu durchsuchen</string>
+    <string name="settings_recents_title">Zuletzt</string>
+    <string name="settings_clear_recents">Leeren</string>
     <string name="settings_signed_in_as_label">Angemeldet als</string>
     <string name="settings_account">Konto</string>
     <string name="settings_signed_in_as_name">Angemeldet als %1$s</string>

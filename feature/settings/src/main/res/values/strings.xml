@@ -32,6 +32,9 @@
     <string name="settings_member_badge">Member</string>
     <string name="settings_connected_server">Connected to server</string>
     <string name="settings_no_matches">No matching settings found</string>
+    <string name="settings_search_hint">Type to search settings</string>
+    <string name="settings_recents_title">Recent</string>
+    <string name="settings_clear_recents">Clear</string>
     <string name="settings_signed_in_as_label">Signed in as</string>
     <string name="settings_account">Account</string>
     <string name="settings_signed_in_as_name">Signed in as %1$s</string>
