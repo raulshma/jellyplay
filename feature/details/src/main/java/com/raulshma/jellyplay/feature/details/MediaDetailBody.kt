@@ -596,15 +596,16 @@ internal fun DetailContentBody(
             val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && state.seasons.isNotEmpty()
             if (showSeasons) {
                 CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-                    // Episode-card preferences that are deliberately deferred for a
-                    // LOCAL origin (see MediaDetailSeasons "DEFERRED FOR LOCAL
-                    // ORIGIN"): local cards always show art, never filter specials,
-                    // and use server order. Pass neutral values so a local series
-                    // renders correctly regardless of the user's online preferences
-                    // (otherwise hideEpisodeThumbnails + no local artwork = blank tiles).
+                    // Episode-card preferences: hideEpisodeThumbnails and skipSpecials
+                    // are neutralized for a LOCAL origin (see MediaDetailSeasons
+                    // "DEFERRED FOR LOCAL ORIGIN") — local cards always show art
+                    // (hiding without guaranteed local artwork yields blank tiles)
+                    // and render every season. Episode sort ([episodesDescending])
+                    // IS honored for a local origin since offline episodes load in
+                    // canonical ascending playback order, same as online.
                     val effectiveSkipSpecials = !isLocalOrigin && state.preferences.skipSpecials
                     val effectiveHideThumbnails = !isLocalOrigin && state.preferences.hideEpisodeThumbnails
-                    val effectiveEpisodesDescending = isLocalOrigin || state.preferences.episodesDescending
+                    val effectiveEpisodesDescending = state.preferences.episodesDescending
                     // Memoize the skip-specials filter so it is not recomputed (allocating
                     // a new Map + per-season Lists) on every recomposition of this
                     // detail item (scroll-driven FadingItem animations, sibling
@@ -644,7 +645,6 @@ internal fun DetailContentBody(
                         onCompactEpisodeListChange = callbacks.onCompactEpisodeListChange,
                         onMarkSeasonPlayed = callbacks.onMarkSeasonPlayed,
                         onMarkSeasonUnplayed = callbacks.onMarkSeasonUnplayed,
-                        isLocalOrigin = isLocalOrigin,
                         // ── Episode parity: per-episode delete + local artwork ──
                         // Downloaded-episode set: for a LOCAL origin every episode is
                         // downloaded; for a REMOTE series we surface the loaded
