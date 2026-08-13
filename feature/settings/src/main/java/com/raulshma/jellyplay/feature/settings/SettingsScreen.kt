@@ -89,8 +89,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.groupedItemContainerColor
 import com.raulshma.jellyplay.core.designsystem.theme.hairlineBorderColor
-import com.raulshma.jellyplay.core.designsystem.theme.settingsItemContainerColor
+import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
@@ -234,7 +235,6 @@ private fun SettingsSearchResultRow(
 ) {
     val shape = com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, count, innerRadius = 0.dp)
     val itemTvFocusState = rememberTvFocusState(focusedScale = 1.01f)
-    val isLight = LocalIsLightTheme.current
     ListItem(
         headlineContent = {
             Text(
@@ -309,12 +309,12 @@ private fun SettingsSearchResultRow(
             }
         },
         colors = ListItemDefaults.colors(
-            containerColor = settingsItemContainerColor(),
+            containerColor = groupedItemContainerColor(),
         ),
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .then(if (isLight) Modifier.border(1.dp, hairlineBorderColor(), shape) else Modifier)
+            .lightModeHairlineBorder(shape)
             .then(itemTvFocusState.focusModifier)
             .tvFocusIndicator(itemTvFocusState, shape)
             .clickable(onClick = onClick),
@@ -766,7 +766,7 @@ fun SettingsScreen(
                             ),
                         shape = ShapeCache.smooth16,
                         colors = SearchBarDefaults.colors(
-                            containerColor = settingsItemContainerColor(darkAlpha = 0.4f),
+                            containerColor = groupedItemContainerColor(darkAlpha = 0.4f),
                         ),
                     ) {
                         when {
@@ -1718,7 +1718,7 @@ private fun SettingsTvCollapsedSearchRow(
                 shape = ShapeCache.smooth16
             )
             .background(
-                color = settingsItemContainerColor(darkAlpha = 0.4f),
+                color = groupedItemContainerColor(darkAlpha = 0.4f),
                 shape = ShapeCache.smooth16
             )
             .padding(horizontal = 4.dp),

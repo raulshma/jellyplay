@@ -778,8 +778,6 @@
     <string name="settings_exp_press_hold_preview">Press-and-Hold Preview</string>
     <string name="settings_exp_press_hold_preview_subtitle">Long-press a media card to peek a blurred detail preview; release to dismiss</string>
     <string name="settings_exp_arr_integration_subtitle">Show download-queue progress on Requests and a coming-soon calendar on Home from your Radarr/Sonarr. Server details are auto-discovered from Seerr; manual override in *arr settings</string>
-    <string name="settings_exp_expressive_nav">Material 3 Expressive Navigation</string>
-    <string name="settings_exp_expressive_nav_subtitle">Google Photos redesign style floating navigation capsule with separate search button.</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">Subtitle Font Size</string>
@@ -1165,11 +1163,6 @@
     <string name="settings_nav_pinned">Pinned</string>
     <string name="settings_nav_items_summary">%1$d of %2$d items visible</string>
     <string name="settings_nav_items_summary_with_scroll">%1$d of %2$d items - %3$s</string>
-    <string name="settings_nav_style">Navigation Style</string>
-    <string name="settings_nav_style_expressive">Expressive (M3)</string>
-    <string name="settings_nav_style_classic">Classic</string>
-    <string name="settings_nav_style_expressive_subtitle">Google Photos style floating pill + standalone search button</string>
-    <string name="settings_nav_style_classic_subtitle">Traditional floating bottom navigation bar</string>
     <string name="settings_nav_hide_on_scroll">Hide on Scroll</string>
     <string name="settings_nav_hide_on_scroll_on">Bar hides when scrolling down</string>
     <string name="settings_nav_hide_on_scroll_off">Bar stays visible</string>

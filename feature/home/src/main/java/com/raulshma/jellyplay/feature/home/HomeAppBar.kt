@@ -65,6 +65,7 @@ import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.designsystem.theme.hairlineBorderColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -90,6 +91,9 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.Refresh
+
+/** Translucency of the home app-bar capsules and the expanded-search surface scrim. */
+private const val AppBarScrimAlpha = 0.85f
 
 @Composable
 fun HomeTopDock(
@@ -145,12 +149,12 @@ fun HomeTopDock(
         if (isSearchFocused) {
             Surface(
                 shape = ShapeCache.smooth24,
-                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha),
                 tonalElevation = 3.dp,
                 shadowElevation = 6.dp,
                 border = BorderStroke(
                     width = 1.dp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                    color = hairlineBorderColor(),
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -192,7 +196,7 @@ fun HomeTopDock(
                             .fillMaxWidth()
                             .heightIn(max = 400.dp)
                             .background(
-                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
+                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha)
                             ),
                     ) {
                         searchResultsContent()
@@ -426,12 +430,12 @@ private fun CollapsedDockContent(
     if (hasStatusIndicators) {
         Surface(
             shape = ShapeCache.smoothPill,
-            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha),
             tonalElevation = 2.dp,
             shadowElevation = 6.dp,
             border = BorderStroke(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                color = hairlineBorderColor(),
             ),
             modifier = Modifier.height(52.dp),
         ) {
@@ -497,12 +501,12 @@ private fun CollapsedDockContent(
     // ── End Side: Navigation, Actions & User Expressive Capsule ──
     Surface(
         shape = ShapeCache.smoothPill,
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha),
         tonalElevation = 2.dp,
         shadowElevation = 6.dp,
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+            color = hairlineBorderColor(),
         ),
         modifier = Modifier.height(52.dp),
     ) {

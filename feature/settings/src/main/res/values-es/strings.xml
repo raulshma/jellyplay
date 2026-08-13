@@ -709,8 +709,6 @@
     <string name="settings_exp_press_hold_preview">Vista previa al mantener pulsado</string>
     <string name="settings_exp_press_hold_preview_subtitle">Mantén pulsado una tarjeta de medios para ver una vista previa difuminada; suelta para cerrar</string>
     <string name="settings_exp_arr_integration_subtitle">Mostrar el progreso de la cola de descarga en Solicitudes y un próximo calendario en Inicio desde tu Radarr/Sonarr. Los detalles del servidor se detectan automáticamente desde Seerr; anulación manual en los ajustes *arr</string>
-    <string name="settings_exp_expressive_nav">Navegación expresiva Material 3</string>
-    <string name="settings_exp_expressive_nav_subtitle">Cápsula de navegación flotante estilo rediseño de Google Fotos con botón de búsqueda independiente.</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">Tamaño de fuente de subtítulos</string>
@@ -1169,9 +1167,4 @@
     <string name="settings_subtitles_test">Probar</string>
     <string name="settings_subtitles_testing">Probando…</string>
     <string name="settings_subtitles_connected">Conectado</string>
-    <string name="settings_nav_style">Estilo de navegación</string>
-    <string name="settings_nav_style_expressive">Expresivo (M3)</string>
-    <string name="settings_nav_style_classic">Clásico</string>
-    <string name="settings_nav_style_expressive_subtitle">Cápsula flotante estilo Google Fotos + botón de búsqueda independiente</string>
-    <string name="settings_nav_style_classic_subtitle">Barra de navegación inferior flotante tradicional</string>
 </resources>

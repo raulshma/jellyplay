@@ -19,7 +19,6 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
-import com.raulshma.jellyplay.core.model.NavigationStyle
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
@@ -148,8 +147,6 @@ class AppearanceSettingsViewModel @Inject constructor(
         editor.edit { navigation.setHiddenNavItems(items) }
     fun setNavItemOrder(order: List<String>) =
         editor.edit { navigation.setNavItemOrder(order) }
-    fun setNavigationStyle(style: NavigationStyle) =
-        editor.edit { navigation.setNavigationStyle(style) }
 
     fun resetCategory(category: PreferenceResetCategory) = editor.resetCategory(category)
 }

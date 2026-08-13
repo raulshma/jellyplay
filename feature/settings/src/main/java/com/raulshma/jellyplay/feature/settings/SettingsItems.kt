@@ -42,9 +42,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
-import com.raulshma.jellyplay.core.designsystem.theme.hairlineBorderColor
-import com.raulshma.jellyplay.core.designsystem.theme.settingsItemContainerColor
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
+import com.raulshma.jellyplay.core.designsystem.theme.groupedItemContainerColor
+import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
 import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -56,7 +55,6 @@ import androidx.compose.ui.focus.focusRequester
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -115,7 +113,6 @@ internal fun SettingReorderableToggleItem(
     )
 
     val shape = expressiveListShape(index, count, innerRadius = 0.dp)
-    val isLight = LocalIsLightTheme.current
 
     ListItem(
         headlineContent = {
@@ -186,7 +183,7 @@ internal fun SettingReorderableToggleItem(
             }
         },
         colors = ListItemDefaults.colors(
-            containerColor = settingsItemContainerColor(),
+            containerColor = groupedItemContainerColor(),
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -197,7 +194,7 @@ internal fun SettingReorderableToggleItem(
                 this.alpha = if (isDragging) 0.85f else pressAlpha
             }
             .clip(shape)
-            .then(if (isLight) Modifier.border(1.dp, hairlineBorderColor(), shape) else Modifier)
+            .lightModeHairlineBorder(shape)
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, shape)
             .clickable(
@@ -220,7 +217,6 @@ internal fun SettingInfoItem(
     copiedLabel: String = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_copied_to_clipboard),
 ) {
     val shape = expressiveListShape(index, count, innerRadius = 0.dp)
-    val isLight = LocalIsLightTheme.current
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     val userMessageBus = com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus.current
 
@@ -275,12 +271,12 @@ internal fun SettingInfoItem(
             }
         } else null,
         colors = ListItemDefaults.colors(
-            containerColor = settingsItemContainerColor(),
+            containerColor = groupedItemContainerColor(),
         ),
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .then(if (isLight) Modifier.border(1.dp, hairlineBorderColor(), shape) else Modifier),
+            .lightModeHairlineBorder(shape),
     )
 }
 

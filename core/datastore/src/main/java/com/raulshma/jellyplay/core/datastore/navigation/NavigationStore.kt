@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.di.ApplicationScope
 import com.raulshma.jellyplay.core.datastore.di.UserPreferencesDataStore
-import com.raulshma.jellyplay.core.model.NavigationStyle
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -28,7 +27,7 @@ import javax.inject.Singleton
 /**
  * Deep module owning the **bottom-navigation customisation** preference domain:
  * whether the nav bar shows labels, whether it hides on scroll, the
- * hidden-items set + custom item ordering, and the navigation bar style (Expressive vs Classic).
+ * hidden-items set + custom item ordering.
  *
  * Extracted from the `UserPreferencesStore` god object so this concern owns its
  * keys, its setters, its read projection, and its reset-key list end-to-end.
@@ -51,7 +50,6 @@ class NavigationStore @Inject constructor(
         val HIDE_BOTTOM_NAV_ON_SCROLL = booleanPreferencesKey("hide_bottom_nav_on_scroll")
         val HIDDEN_NAV_ITEMS = stringPreferencesKey("hidden_nav_items")
         val NAV_ITEM_ORDER = stringPreferencesKey("nav_item_order")
-        val NAVIGATION_STYLE = stringPreferencesKey("navigation_style")
     }
 
     private var cachedHiddenNavItems = ParsedCache<Set<String>>(null, emptySet())
@@ -70,21 +68,7 @@ class NavigationStore @Inject constructor(
         hideBottomNavOnScroll = PreferenceCodec.readBool(prefs, Keys.HIDE_BOTTOM_NAV_ON_SCROLL, "hide_bottom_nav_on_scroll", true),
         hiddenNavItems = readHiddenNavItems(prefs),
         navItemOrder = readNavItemOrder(prefs),
-        navigationStyle = readNavigationStyle(prefs),
     )
-
-    private fun readNavigationStyle(prefs: Preferences): NavigationStyle {
-        val raw = prefs[Keys.NAVIGATION_STYLE]
-        return if (raw != null) {
-            try {
-                enumValueOf<NavigationStyle>(raw)
-            } catch (_: Exception) {
-                NavigationStyle.CLASSIC
-            }
-        } else {
-            NavigationStyle.CLASSIC
-        }
-    }
 
     private fun readHiddenNavItems(prefs: Preferences): Set<String> {
         val raw = prefs[Keys.HIDDEN_NAV_ITEMS]
@@ -126,17 +110,13 @@ class NavigationStore @Inject constructor(
         dataStore.edit { it[Keys.NAV_ITEM_ORDER] = json.encodeToString(order) }
     }
 
-    suspend fun setNavigationStyle(style: NavigationStyle) {
-        dataStore.edit { it[Keys.NAVIGATION_STYLE] = style.name }
-    }
-
     /**
      * Keys owned by this store, for factory-reset participation. These are the
      * nav keys split out of the legacy `HOME_DISCOVERY` reset category.
      */
     internal val resetKeys: List<Preferences.Key<*>> = listOf(
         Keys.NAV_BAR_SHOW_LABELS, Keys.HIDE_BOTTOM_NAV_ON_SCROLL,
-        Keys.NAV_ITEM_ORDER, Keys.HIDDEN_NAV_ITEMS, Keys.NAVIGATION_STYLE,
+        Keys.NAV_ITEM_ORDER, Keys.HIDDEN_NAV_ITEMS,
     )
 
     /**
@@ -150,7 +130,6 @@ class NavigationStore @Inject constructor(
             Keys.HIDE_BOTTOM_NAV_ON_SCROLL,
             Keys.HIDDEN_NAV_ITEMS,
             Keys.NAV_ITEM_ORDER,
-            Keys.NAVIGATION_STYLE,
         )
         else -> emptyList()
     }
@@ -170,7 +149,6 @@ class NavigationStore @Inject constructor(
             it[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = userPreferences.hideBottomNavOnScroll
             it[Keys.HIDDEN_NAV_ITEMS] = json.encodeToString(userPreferences.hiddenNavItems)
             it[Keys.NAV_ITEM_ORDER] = json.encodeToString(userPreferences.navItemOrder)
-            it[Keys.NAVIGATION_STYLE] = NavigationStyle.CLASSIC.name
         }
     }
 
@@ -185,7 +163,6 @@ class NavigationStore @Inject constructor(
             it[Keys.HIDE_BOTTOM_NAV_ON_SCROLL] = slice.hideBottomNavOnScroll
             it[Keys.HIDDEN_NAV_ITEMS] = json.encodeToString(slice.hiddenNavItems)
             it[Keys.NAV_ITEM_ORDER] = json.encodeToString(slice.navItemOrder)
-            it[Keys.NAVIGATION_STYLE] = slice.navigationStyle.name
         }
     }
 }
@@ -201,5 +178,4 @@ data class NavigationSlice(
     val hideBottomNavOnScroll: Boolean = true,
     val hiddenNavItems: Set<String> = emptySet(),
     val navItemOrder: List<String> = emptyList(),
-    val navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
 )

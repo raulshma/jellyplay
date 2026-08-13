@@ -107,7 +107,6 @@ import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.NavigationStyle
 import com.raulshma.jellyplay.navigation.components.ExpressiveFloatingNavigationBar
 import com.raulshma.jellyplay.navigation.components.MoreToggleIcon
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -865,8 +864,6 @@ private fun MainContent(
                         audioArtworkUrl = audioArtworkUrl,
                         onDismissMiniPlayer = { isMiniPlayerDismissed = true },                        animatedNavBarColor = animatedNavBarColor,
                         showNavBarLabels = preferences.navBarShowLabels,
-                        navigationStyle = preferences.navigationStyle,
-                        isExpressiveNavExperimental = preferences.isExperimentalEnabled(ExperimentalFeature.EXPRESSIVE_NAVIGATION),
                         offlineMode = offlineMode,
                         isGoingOnline = isGoingOnline,
                         downloadCount = downloadCount,
@@ -1053,7 +1050,7 @@ private fun TvContent(
 
 /**
  * Phone (and large-screen NavigationRail) layout: [NavigationSuiteScaffold] hosting
- * [MainNavDisplay] with floating mini-player(s) and the optional [FloatingNavigationBar].
+ * [MainNavDisplay] with floating mini-player(s) and the [ExpressiveFloatingNavigationBar].
  * All scroll-coupled bottom-nav state is owned here.
  */
 @Composable
@@ -1084,8 +1081,6 @@ private fun PhoneContent(
     audioArtworkUrl: String,
     onDismissMiniPlayer: () -> Unit,    animatedNavBarColor: Color,
     showNavBarLabels: Boolean,
-    navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
-    isExpressiveNavExperimental: Boolean = false,
     offlineMode: com.raulshma.jellyplay.core.model.OfflineMode = com.raulshma.jellyplay.core.model.OfflineMode.ONLINE,
     isGoingOnline: Boolean = false,
     downloadCount: Int = 0,
@@ -1379,31 +1374,17 @@ private fun PhoneContent(
                         .padding(bottom = systemNavBarBottom + 4.dp)
                         .padding(horizontal = 16.dp)
                         .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
-                    if (navigationStyle == NavigationStyle.EXPRESSIVE || isExpressiveNavExperimental) {
-                        ExpressiveFloatingNavigationBar(
-                            routes = activeTopLevelRoutes,
-                            currentTopLevel = currentTopLevel,
-                            onNavigate = { navigator.navigate(it) },
-                            showLabels = showNavBarLabels,
-                            containerColor = animatedNavBarColor,
-                            isOverflowExpanded = isOverflowExpanded,
-                            onOverflowToggle = onOverflowToggle,
-                            downloadCount = downloadCount,
-                            modifier = navBarModifier,
-                        )
-                    } else {
-                        FloatingNavigationBar(
-                            routes = activeTopLevelRoutes,
-                            currentTopLevel = currentTopLevel,
-                            onNavigate = { navigator.navigate(it) },
-                            showLabels = showNavBarLabels,
-                            containerColor = animatedNavBarColor,
-                            isOverflowExpanded = isOverflowExpanded,
-                            onOverflowToggle = onOverflowToggle,
-                            downloadCount = downloadCount,
-                            modifier = navBarModifier,
-                        )
-                    }
+                    ExpressiveFloatingNavigationBar(
+                        routes = activeTopLevelRoutes,
+                        currentTopLevel = currentTopLevel,
+                        onNavigate = { navigator.navigate(it) },
+                        showLabels = showNavBarLabels,
+                        containerColor = animatedNavBarColor,
+                        isOverflowExpanded = isOverflowExpanded,
+                        onOverflowToggle = onOverflowToggle,
+                        downloadCount = downloadCount,
+                        modifier = navBarModifier,
+                    )
                 }
             }
         }
@@ -1670,101 +1651,4 @@ private fun MainNavDisplay(
         entryProvider = sharedEntryProvider,
         modifier = modifier,
     )
-}
-
-@Composable
-private fun FloatingNavigationBar(
-    routes: Map<Route, String>,
-    currentTopLevel: NavKey,
-    onNavigate: (Route) -> Unit,
-    showLabels: Boolean,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
-    isOverflowExpanded: Boolean = false,
-    onOverflowToggle: (Boolean) -> Unit = {},
-    downloadCount: Int = 0,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = ShapeCache.smoothPill,
-        color = containerColor.copy(alpha = 0.65f),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                // vertical padding 14.dp → 24.dp icon + 2×14 = 52.dp tall, matching the
-                // home header dock (HomeAppBar) and the Expressive nav capsule (#nav-height).
-                .padding(horizontal = 24.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(32.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            routes.forEach { (route, label) ->
-                // Wrap in key(route) so per-item slot identity (and the
-                // remember-ed MutableInteractionSource inside) survives route
-                // reordering instead of being positional only.
-                androidx.compose.runtime.key(route) {
-                    val selected = route == currentTopLevel
-                    val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    Row(
-                        modifier = Modifier
-                            .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                            .focusIndicator(androidx.compose.foundation.shape.CircleShape)
-                            .clickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null,
-                                onClick = { onNavigate(route) }
-                            ),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        NavIcon(route, label, selected = selected, tint = tint)
-                        if (selected && showLabels) {
-                            Text(
-                                text = label,
-                                color = tint,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-            // Trailing "More" toggle — expands the overflow destinations above
-            // the nav bar (#115). Styled as a sibling of the route items.
-            val overflowTint = if (isOverflowExpanded) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            }
-            Row(
-                modifier = Modifier
-                    .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                    .focusIndicator(androidx.compose.foundation.shape.CircleShape)
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null,
-                        onClick = { onOverflowToggle(!isOverflowExpanded) },
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                // Fixed-size box centered like the Expressive variant — guarantees
-                // the glyph paints even if the surrounding Row collapses width.
-                Box(
-                    modifier = Modifier.size(24.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    MoreToggleIcon(
-                        isExpanded = isOverflowExpanded,
-                        tint = overflowTint,
-                        badgeCount = downloadCount,
-                    )
-                }
-            }
-        }
-    }
 }

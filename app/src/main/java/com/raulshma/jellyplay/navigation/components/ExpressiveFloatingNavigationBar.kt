@@ -75,7 +75,7 @@ fun ExpressiveFloatingNavigationBar(
                     width = 1.dp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                 ),
-                modifier = Modifier.height(52.dp)
+                modifier = Modifier.height(56.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -125,7 +125,7 @@ fun ExpressiveFloatingNavigationBar(
                                         .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
                                         .padding(
                                             horizontal = if (shouldShowLabel) 14.dp else 10.dp,
-                                            vertical = 6.dp
+                                            vertical = 10.dp
                                         ),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -200,7 +200,7 @@ fun ExpressiveFloatingNavigationBar(
                         width = 1.dp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                     ),
-                    modifier = Modifier.height(52.dp),
+                    modifier = Modifier.height(56.dp),
                 ) {
                     Row(
                         modifier = Modifier
@@ -271,7 +271,7 @@ fun ExpressiveFloatingNavigationBar(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                     ),
                     modifier = Modifier
-                        .size(52.dp)
+                        .size(56.dp)
                         .focusIndicator(CircleShape)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
