@@ -18,13 +18,14 @@ class HomeBackdropTest {
     private fun state(
         enabled: Boolean = true,
         performanceMode: Boolean = false,
+        isLightTheme: Boolean = false,
         blurHash: String? = null,
         backdropUrl: String? = null,
     ) = HomeBackdropState(
         enabled = enabled,
         performanceMode = performanceMode,
         oledMode = false,
-        isLightTheme = false,
+        isLightTheme = isLightTheme,
         blurHash = blurHash,
         backdropUrl = backdropUrl,
         backgroundColor = Color.Black,
@@ -45,6 +46,13 @@ class HomeBackdropTest {
     @Test
     fun `does not render in performance mode even when enabled`() {
         assertFalse(shouldRenderBackdrop(state(enabled = true, performanceMode = true)))
+    }
+
+    @Test
+    fun `does not render in light theme even when enabled`() {
+        // Light mode shows the plain background fill instead — the colourful
+        // ambient/blurhash layers destroy text contrast on a light surface.
+        assertFalse(shouldRenderBackdrop(state(enabled = true, isLightTheme = true)))
     }
 
     // -- resolveBackdropLayer -------------------------------------------------

@@ -627,10 +627,14 @@ internal fun EpisodeCard(
                     size = coil3.size.Size(640, 360),
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (episode.isPlayed) Modifier.graphicsLayer { alpha = 0.65f } else Modifier),
+                        .playedAlpha(episode.isPlayed, PLAYED_THUMBNAIL_ALPHA),
                     contentScale = ContentScale.Crop,
                 )
-                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(episodeScrimColor(episode.isPlayed))
+                )
             } else {
                 Box(
                     modifier = Modifier
@@ -725,7 +729,11 @@ internal fun EpisodeCard(
             }
         }
 
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .playedAlpha(episode.isPlayed, PLAYED_META_ALPHA),
+        ) {
             Text(
                 text = buildString {
                     episode.indexNumber?.let { append("$it. ") }
@@ -897,10 +905,14 @@ private fun CompactEpisodeRow(
                     size = coil3.size.Size(256, 144),
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (episode.isPlayed) Modifier.graphicsLayer { alpha = 0.65f } else Modifier),
+                        .playedAlpha(episode.isPlayed, PLAYED_THUMBNAIL_ALPHA),
                     contentScale = ContentScale.Crop,
                 )
-                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.3f)))
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(episodeScrimColor(episode.isPlayed))
+                )
             } else {
                 Box(
                     modifier = Modifier
@@ -964,7 +976,8 @@ private fun CompactEpisodeRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .playedAlpha(episode.isPlayed, PLAYED_META_ALPHA),
         ) {
             Text(
                 text = buildString {
@@ -1062,3 +1075,21 @@ private fun CompactEpisodeRow(
         }
     }
 }
+
+// region Watched-episode dimming
+// Watched episodes dim their artwork + meta so a "completed" state reads at a glance.
+// The bright EpisodeWatchedTag already carries the watched signal, so meta text stays
+// legible (0.80) rather than receding into the dimmed thumbnail.
+
+private const val PLAYED_THUMBNAIL_ALPHA = 0.40f
+private const val PLAYED_META_ALPHA = 0.80f
+
+/** Scrim over episode thumbnails — heavier when watched to reinforce the dimmed artwork. */
+@Composable
+private fun episodeScrimColor(isPlayed: Boolean): Color =
+    MaterialTheme.colorScheme.scrim.copy(alpha = if (isPlayed) 0.5f else 0.3f)
+
+/** Applies [alpha] only when [isPlayed], leaving unplayed cards untouched. */
+private fun Modifier.playedAlpha(isPlayed: Boolean, alpha: Float): Modifier =
+    if (isPlayed) graphicsLayer { this.alpha = alpha } else this
+// endregion

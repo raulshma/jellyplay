@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -24,6 +26,7 @@ import com.composables.icons.tabler.outline.Check
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
+import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 
 /**
  * A translucent "glass" overlay badge for poster/wide media cards.
@@ -88,7 +91,7 @@ fun RatingBadge(
             text = ratingText,
             style = MaterialTheme.typography.labelSmall,
             color = textColor,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
         )
     }
 }
@@ -102,43 +105,38 @@ fun RatingBadge(
 fun WatchedBadge(
     modifier: Modifier = Modifier,
     accentTint: Color? = null,
-    iconColor: Color = Color.White,
+    iconColor: Color? = null,
 ) {
-    val background = accentTint?.copy(alpha = 0.55f) ?: Color.Black.copy(alpha = 0.45f)
+    val background = accentTint?.copy(alpha = 0.85f) ?: MaterialTheme.colorScheme.primaryContainer
+    val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
+    val effectiveIconColor = iconColor ?: remember(background, onPrimaryContainer) {
+        if (isLightColor(background)) onPrimaryContainer else Color.White
+    }
     GlassBadge(
         modifier = modifier,
         background = background,
-        borderColor = accentTint?.copy(alpha = 0.7f) ?: Color.White.copy(alpha = 0.18f),
+        borderColor = effectiveIconColor.copy(alpha = 0.25f),
     ) {
         Icon(
             imageVector = Tabler.Outline.Check,
             contentDescription = null,
-            tint = iconColor,
+            tint = effectiveIconColor,
             modifier = Modifier.size(12.dp),
         )
     }
 }
 
 /**
- * High-contrast "Watched" tag for episode thumbnails (online detail + offline downloads).
+ * Theme-adaptive, high-contrast "Watched" tag for episode cards & detail screen headers.
  *
- * Pairs a check icon with the localized "Watched" label on a bold surface that "pops"
- * over unpredictable episode artwork (dark scenes, bright frames, busy key art) so it
- * stays legible at a glance while scrolling quickly.
- *
- * Prominence is achieved with three reinforcing cues rather than color alone:
- *  - a saturated success-green surface (the universal "completed" semantic) instead of
- *    the theme `primary`, which is branding-driven and can wash out on bright artwork;
- *  - a hairline white border so the pill separates from similarly-colored art behind it;
- *  - a deeper shadow (6.dp) plus tonal elevation so the tag lifts off the thumbnail.
- *
- * The [label] is passed in (rather than read from a string resource) so this core-ui
- * composable stays module-agnostic: each feature screen supplies its own localization.
+ * Pairs a check icon with the localized "Watched" label on a surface that dynamically
+ * adapts to the active JellyPlay theme (MaterialTheme.colorScheme.primaryContainer or
+ * [accentTint]) and automatically computes content color via [isLightColor] to guarantee
+ * WCAG AA contrast (dark text on light containers, light text on dark containers).
  *
  * @param label localized "Watched" text (e.g. from a `stringResource`).
- * @param accentTint optional override for the surface color (personalized styling).
- * @param textColor optional override for the content color. Defaults to white for
- *  maximum contrast over the saturated surface.
+ * @param accentTint optional override for the surface color (e.g., extracted artwork color).
+ * @param textColor optional override for the content color. When null, derived dynamically.
  */
 @Composable
 fun EpisodeWatchedTag(
@@ -147,21 +145,24 @@ fun EpisodeWatchedTag(
     accentTint: Color? = null,
     textColor: Color? = null,
 ) {
-    val containerColor = accentTint ?: StatusColors.success
-    val contentColor = textColor ?: Color.White
-    androidx.compose.material3.Surface(
+    val containerColor = accentTint ?: MaterialTheme.colorScheme.primaryContainer
+    val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
+    val contentColor = textColor ?: remember(containerColor, onPrimaryContainer) {
+        if (isLightColor(containerColor)) onPrimaryContainer else Color.White
+    }
+    Surface(
         modifier = modifier,
         color = containerColor,
         contentColor = contentColor,
-        shape = ShapeCache.smooth8,
-        shadowElevation = 6.dp,
-        tonalElevation = 2.dp,
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.55f)),
+        shape = ShapeCache.smooth12,
+        shadowElevation = 2.dp,
+        tonalElevation = 1.dp,
+        border = BorderStroke(0.8.dp, contentColor.copy(alpha = 0.25f)),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         ) {
             Icon(
                 imageVector = Tabler.Outline.Check,
