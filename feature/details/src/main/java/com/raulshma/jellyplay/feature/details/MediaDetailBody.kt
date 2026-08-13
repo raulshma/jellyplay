@@ -600,6 +600,22 @@ internal fun DetailContentBody(
             }
         }
 
+        if (showContent && item.mediaType == MediaType.SERIES && state.smartPlayTarget != null && state.preferences.showDetailUpNext) {
+            StaggeredDetailSection(visible = showContent, delayIndex = 6) {
+                Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
+                    UpNextSection(
+                        target = state.smartPlayTarget,
+                        onPlayClick = {
+                            val target = state.smartPlayTarget
+                            val sourceId = null
+                            callbacks.onPlayClick(target.episode.id, sourceId, target.startPositionTicks)
+                        },
+                        onHideClick = callbacks.onHideDetailUpNext,
+                    )
+                }
+            }
+        }
+
         StaggeredDetailSection(visible = showContent, delayIndex = 6) {
             val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && state.seasons.isNotEmpty()
             if (showSeasons) {
@@ -667,22 +683,6 @@ internal fun DetailContentBody(
                         // Resolve a downloaded episode thumbnail from DetailAssets before
                         // falling back to the server image url (which won't load offline).
                         getEpisodeLocalImagePath = { episode -> state.assets.episodeImages[episode.id] },
-                    )
-                }
-            }
-        }
-
-        if (showContent && item.mediaType == MediaType.SERIES && state.smartPlayTarget != null && state.preferences.showDetailUpNext) {
-            StaggeredDetailSection(visible = showContent, delayIndex = 6) {
-                Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
-                    UpNextSection(
-                        target = state.smartPlayTarget,
-                        onPlayClick = {
-                            val target = state.smartPlayTarget
-                            val sourceId = null
-                            callbacks.onPlayClick(target.episode.id, sourceId, target.startPositionTicks)
-                        },
-                        onHideClick = callbacks.onHideDetailUpNext,
                     )
                 }
             }

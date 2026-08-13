@@ -1694,7 +1694,9 @@ private fun FloatingNavigationBar(
         Row(
             modifier = Modifier
                 .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                .padding(horizontal = 24.dp, vertical = 10.dp),
+                // vertical padding 14.dp → 24.dp icon + 2×14 = 52.dp tall, matching the
+                // home header dock (HomeAppBar) and the Expressive nav capsule (#nav-height).
+                .padding(horizontal = 24.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(32.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

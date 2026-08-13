@@ -89,6 +89,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.hairlineBorderColor
+import com.raulshma.jellyplay.core.designsystem.theme.settingsItemContainerColor
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ContrastLevel
@@ -231,6 +234,7 @@ private fun SettingsSearchResultRow(
 ) {
     val shape = com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(index, count, innerRadius = 0.dp)
     val itemTvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+    val isLight = LocalIsLightTheme.current
     ListItem(
         headlineContent = {
             Text(
@@ -305,11 +309,12 @@ private fun SettingsSearchResultRow(
             }
         },
         colors = ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            containerColor = settingsItemContainerColor(),
         ),
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
+            .then(if (isLight) Modifier.border(1.dp, hairlineBorderColor(), shape) else Modifier)
             .then(itemTvFocusState.focusModifier)
             .tvFocusIndicator(itemTvFocusState, shape)
             .clickable(onClick = onClick),
@@ -756,12 +761,12 @@ fun SettingsScreen(
                             )
                             .border(
                                 width = if (isSearchFocused && isTv) TvFocusDefaults.BorderWidth else 1.dp,
-                                color = if (isSearchFocused && isTv) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                color = if (isSearchFocused && isTv) MaterialTheme.colorScheme.primary else hairlineBorderColor(),
                                 shape = ShapeCache.smooth16
                             ),
                         shape = ShapeCache.smooth16,
                         colors = SearchBarDefaults.colors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            containerColor = settingsItemContainerColor(darkAlpha = 0.4f),
                         ),
                     ) {
                         when {
@@ -1452,12 +1457,12 @@ private fun SettingsProfileBanner(
 ) {
     Surface(
         shape = ShapeCache.smooth24,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
+        color = if (LocalIsLightTheme.current) MaterialTheme.colorScheme.surfaceContainerLowest else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f),
         tonalElevation = 3.dp,
         shadowElevation = 4.dp,
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+            color = hairlineBorderColor()
         ),
         modifier = modifier.fillMaxWidth()
     ) {
@@ -1709,11 +1714,11 @@ private fun SettingsTvCollapsedSearchRow(
             .height(56.dp)
             .border(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                color = hairlineBorderColor(),
                 shape = ShapeCache.smooth16
             )
             .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                color = settingsItemContainerColor(darkAlpha = 0.4f),
                 shape = ShapeCache.smooth16
             )
             .padding(horizontal = 4.dp),

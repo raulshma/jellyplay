@@ -595,10 +595,12 @@ class DetailViewModel @Inject constructor(
      * 1. **New resolution** (generation changed): adopts the content sections
      *    (detail, seasons, episodes, album tracks, local subtitles, origin,
      *    assets, capabilities, detailContext) atomically, clears the smart-play
-     *    target, then recomputes it. For a REMOTE origin, fires the remote-only
-     *    subordinate work (similar/collection items, theme music, Sonarr
-     *    resolution, Seerr discovery) exactly once per resolution. For a LOCAL
-     *    origin, smart-play is forced null and no remote coroutines start.
+     *    target, then recomputes it — for both origins, since a LOCAL series
+     *    carries the same loaded episode data and should expose the same
+     *    Play/Resume/Next up target. For a REMOTE origin, additionally fires the
+     *    remote-only subordinate work (similar/collection items, theme music,
+     *    Sonarr resolution, Seerr discovery) exactly once per resolution. For a
+     *    LOCAL origin no remote coroutines start.
      * 2. **Attachment tick** (same generation): updates ONLY detailContext,
      *    capabilities, assets and localSubtitles — the provider guarantees
      *    stable content references across attachment ticks, so the consumer's
@@ -661,10 +663,13 @@ class DetailViewModel @Inject constructor(
         }
         lastAppliedGeneration = snapshot.contentGeneration
 
-        // Smart-play is a remote-only affordance. For a LOCAL origin the target
-        // stays null (set above), which suppresses the Up Next section.
+        // Smart-play targets the next episode to watch from the already-loaded
+        // sorted episodes, so it runs for both origins: a LOCAL series with
+        // downloaded episodes shows the same Play/Resume/Next up target (and Up
+        // Next section) as its remote counterpart. Only the remote-only
+        // subordinate work stays gated on isRemote below.
+        maybeComputeSmartPlayTarget()
         if (isRemote) {
-            maybeComputeSmartPlayTarget()
             triggerRemoteSideEffects(itemId, detail, snapshot.capabilities)
         }
         // Collections are remote-only companion content (not part of the snapshot);

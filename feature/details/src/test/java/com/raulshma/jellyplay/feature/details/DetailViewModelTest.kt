@@ -1139,10 +1139,10 @@ class DetailViewModelTest {
             assertEquals(eps, viewModel.uiState.value.episodes["season1"])
         }
 
-    // ── NEW: LOCAL-origin snapshot suppresses smart-play + remote discovery ──
+    // ── LOCAL-origin snapshot computes smart-play but suppresses remote discovery ──
 
     @Test
-    fun localSnapshot_suppressesSmartPlayAndRemoteDiscovery() = runTest(mainDispatcherRule.testDispatcher) {
+    fun localSnapshot_computesSmartPlayButSuppressesRemoteDiscovery() = runTest(mainDispatcherRule.testDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
         val ep1 = episode("e1", 1, 1, isPlayed = false)
@@ -1161,10 +1161,13 @@ class DetailViewModelTest {
         viewModel.loadItem("s1")
         advanceUntilIdle()
 
-        // LOCAL origin → smart-play target is null (Up Next suppressed).
-        assertNull(viewModel.uiState.value.smartPlayTarget)
+        // LOCAL origin now resolves the smart-play target from downloaded
+        // episodes, matching the online play button + Up Next behavior.
+        val target = viewModel.uiState.value.smartPlayTarget
+        assertNotNull(target)
+        assertEquals("e1", target!!.episode.id)
         assertEquals(DetailOrigin.LOCAL_OFFLINE_MODE, viewModel.uiState.value.origin)
-        // No remote-only discovery coroutines fire for a local origin.
+        // Remote-only discovery coroutines still never fire for a local origin.
         io.mockk.coVerify(exactly = 0) { mediaRepository.getSimilarItems(any(), any()) }
         io.mockk.verify(exactly = 0) { themeMusicPlayer.playThemeFor(any()) }
         io.mockk.coVerify(exactly = 0) { seerrRepository.getMovieDetails(any()) }

@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -33,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -41,7 +43,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.FancyTransitionEasing
+import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.hairlineBorderColor
+import com.raulshma.jellyplay.core.designsystem.theme.settingsGroupContainerColor
 import com.raulshma.jellyplay.core.ui.animation.AnimationTokens
 import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -98,11 +103,15 @@ internal fun SettingsGroup(
         label = "headerPressScale",
     )
 
+    val isLight = LocalIsLightTheme.current
+
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .then(if (isLight) Modifier.shadow(2.dp, ShapeCache.smooth24) else Modifier)
             .clip(ShapeCache.smooth24)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(settingsGroupContainerColor())
+            .then(if (isLight) Modifier.border(1.dp, hairlineBorderColor(), ShapeCache.smooth24) else Modifier)
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Row(
