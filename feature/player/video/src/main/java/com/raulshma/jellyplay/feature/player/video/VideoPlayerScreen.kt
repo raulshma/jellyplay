@@ -407,7 +407,15 @@ fun VideoPlayerScreen(
     val isWindowFocused = rememberUpdatedState(windowInfo.isWindowFocused)
     LaunchedEffect(activity) {
         snapshotFlow { isWindowFocused.value }.distinctUntilChanged().collect { focused ->
-            if (focused) {
+            // Skip the immersive re-hide while in PiP (or mid-transition into
+            // it): PlayerActivity.onPipModeChanged shows the bars on PiP entry
+            // to force the relayout that anchors the gesture-nav handle at the
+            // bottom. Without this guard the window-focus flip during the PiP
+            // transition re-hides them here, defeating that fix and leaving the
+            // handle floating mid-screen. Uses the Activity's authoritative
+            // isInPictureInPictureMode flag (synchronously current, unlike the
+            // collected isInPipMode state which lags a frame).
+            if (focused && activity?.isInPictureInPictureMode != true) {
                 activity?.let { act ->
                     val window = act.window
                     val controller = WindowCompat.getInsetsController(window, window.decorView)
