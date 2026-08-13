@@ -94,3 +94,43 @@ fun playerScrimColor(): Color =
 @ReadOnlyComposable
 fun playerOnScrim(): Color =
     if (LocalIsLightTheme.current) Color.Black else Color.White
+
+/**
+ * Container fill for settings list rows, search-result rows, and similar grouped items.
+ *
+ * Dark mode keeps the translucent [androidx.compose.material3.ColorScheme.surfaceVariant] that
+ * reads as a gentle elevation over the dark background. Light mode returns a crisp solid white
+ * (`surfaceContainerLowest`) — mirroring the profile-banner hero — so rows read as clean outlined
+ * cards; callers pair this with [hairlineBorderColor] so white rows stay defined inside white
+ * group surfaces. [darkAlpha] lets callers preserve the exact dark-mode alpha they were using
+ * (e.g. 0.4f for search fields) without changing its light-mode behaviour.
+ */
+@Composable
+@ReadOnlyComposable
+fun settingsItemContainerColor(darkAlpha: Float = 0.3f): Color =
+    if (LocalIsLightTheme.current) MaterialTheme.colorScheme.surfaceContainerLowest
+    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = darkAlpha)
+
+/**
+ * Container fill for [com.raulshma.jellyplay.feature.settings.SettingsGroup]. Light mode returns a
+ * crisp solid white (`surfaceContainerLowest`) — the hero treatment — paired with a hairline border
+ * and drop shadow at the call site; dark mode keeps the original `surfaceContainerLow`.
+ */
+@Composable
+@ReadOnlyComposable
+fun settingsGroupContainerColor(): Color =
+    if (LocalIsLightTheme.current) MaterialTheme.colorScheme.surfaceContainerLowest
+    else MaterialTheme.colorScheme.surfaceContainerLow
+
+/**
+ * Hairline border used by search fields, the profile banner, and similar outlined surfaces.
+ *
+ * `onSurface` at low alpha reads fine in dark mode but vanishes against light surfaces; there we
+ * use the M3 `outlineVariant` token, which is purpose-made for subtle-but-visible dividers against
+ * light backgrounds.
+ */
+@Composable
+@ReadOnlyComposable
+fun hairlineBorderColor(): Color =
+    if (LocalIsLightTheme.current) MaterialTheme.colorScheme.outlineVariant
+    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
