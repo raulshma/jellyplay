@@ -5,7 +5,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Eye
 import com.composables.icons.tabler.outline.EyeOff
@@ -14,6 +13,7 @@ import com.composables.icons.tabler.outline.ListDetails
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Playlist
 import com.composables.icons.tabler.outline.Share
+import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -57,11 +57,17 @@ internal fun rememberMediaOptions(
     isDownloading: Boolean,
     isDownloadingSeries: Boolean,
     canManageSeries: Boolean,
+    canDeleteDownloadedSeries: Boolean,
+    canEditMetadata: Boolean,
+    canAddToPlaylist: Boolean,
+    isOffline: Boolean,
     onClose: () -> Unit,
     onEditClick: () -> Unit,
     onShare: () -> Unit,
     onDownload: () -> Unit,
     onDownloadSeries: () -> Unit,
+    onDeleteDownload: () -> Unit,
+    onDeleteDownloadedSeries: () -> Unit,
     onHideFromNextUp: () -> Unit,
     onShowFromNextUp: () -> Unit,
     onHideFromContinueWatching: () -> Unit,
@@ -90,7 +96,7 @@ internal fun rememberMediaOptions(
     // below is not a composable scope, so stringResource cannot be called inside it.
     val labelEdit = stringResource(R.string.detail_option_edit)
     val labelShare = stringResource(R.string.detail_option_share)
-    val labelDownloaded = stringResource(R.string.detail_option_downloaded)
+    val labelDeleteDownload = stringResource(R.string.detail_delete_download_title)
     val labelDownloadingPercent = stringResource(R.string.detail_option_downloading_percent, (downloadProgress * 100).toInt())
     val labelDownloading = stringResource(R.string.detail_option_downloading)
     val labelDownload = stringResource(R.string.detail_option_download)
@@ -105,43 +111,60 @@ internal fun rememberMediaOptions(
     val labelTechnicalInfo = stringResource(R.string.detail_option_technical_info)
     val labelManageSeries = stringResource(R.string.detail_option_manage_series)
     val labelAddToPlaylist = stringResource(R.string.detail_option_add_to_playlist)
+    val labelDeleteDownloads = stringResource(R.string.detail_option_delete_downloads)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
-        downloadStatus, downloadProgress, canManageSeries, labelManageSeries, labelAddToPlaylist,
+        downloadStatus, downloadProgress, canManageSeries, canDeleteDownloadedSeries, canEditMetadata,
+        canAddToPlaylist, isOffline, labelManageSeries,
+        labelAddToPlaylist, labelDeleteDownloads,
         labelHideDetailUpNext, labelShowDetailUpNext) {
         buildList {
-            add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
-                onClose(); onEditClick()
-            })
+            // Metadata editor is a remote-only action (feature matrix: local = No);
+            // gated on remoteDiscovery so a local origin never offers a server
+            // edit it cannot fulfill.
+            if (canEditMetadata) {
+                add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
+                    onClose(); onEditClick()
+                })
+            }
             if (preferences.showShareMediaOption) {
                 add(MediaOption(labelShare, Tabler.Outline.Share) {
                     onClose(); onShare()
                 })
             }
             if (canDownload) {
-                val label = when {
-                    isDownloadCompleted -> labelDownloaded
-                    isDownloading || isDownloadActive -> {
-                        if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
-                            labelDownloadingPercent
-                        } else {
-                            labelDownloading
+                // A completed, on-disk download is deletable in place of the old
+                // dead "Downloaded" indicator — restores the delete affordance the
+                // standalone offline detail screen had. An in-progress download
+                // stays a read-only status row (cancel via the download manager).
+                when {
+                    isDownloadCompleted -> add(
+                        MediaOption(labelDeleteDownload, Tabler.Outline.Trash) {
+                            onClose(); onDeleteDownload()
                         }
-                    }
-                    else -> labelDownload
+                    )
+                    isDownloading || isDownloadActive -> add(
+                        MediaOption(
+                            label = if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
+                                labelDownloadingPercent
+                            } else {
+                                labelDownloading
+                            },
+                            icon = Tabler.Outline.Download,
+                            enabled = false,
+                        ) { onClose(); onDownload() }
+                    )
+                    else -> add(
+                        MediaOption(labelDownload, Tabler.Outline.Download) {
+                            onClose(); onDownload()
+                        }
+                    )
                 }
-                add(
-                    MediaOption(
-                        label = label,
-                        icon = if (isDownloadCompleted) Tabler.Outline.Check else Tabler.Outline.Download,
-                        enabled = !isDownloading && !isDownloadActive && !isDownloadCompleted,
-                    ) {
-                        onClose(); onDownload()
-                    }
-                )
-            } else if (!isAudio && item != null && isSeries && seasons.isNotEmpty()) {
+            // Series download pulls media from the server, so it is offered only on a
+            // remote origin (offline mode cannot start a new transfer).
+            } else if (!isOffline && !isAudio && item != null && isSeries && seasons.isNotEmpty()) {
                 add(
                     MediaOption(
                         label = if (isDownloadingSeries) labelDownloadingSeries else labelDownloadSeries,
@@ -152,11 +175,20 @@ internal fun rememberMediaOptions(
                     }
                 )
             }
+            // Series batch-delete: a local-origin series that actually has
+            // downloaded episodes. Opens the multi-select sheet that drives
+            // DetailViewModel.deleteOfflineEpisodes / deleteOfflineSeries.
+            if (canDeleteDownloadedSeries) {
+                add(MediaOption(labelDeleteDownloads, Tabler.Outline.Trash) {
+                    onClose(); onDeleteDownloadedSeries()
+                })
+            }
             // Add to Playlist: only for playable video items and series (a
             // series expands to its episodes in the VM). Audio/album detail
             // already has its own playlist flow in feature/music, so it is
-            // excluded here to avoid a duplicate entry path.
-            if (item != null && (item.mediaType.isVideoType || item.mediaType == MediaType.SERIES)) {
+            // excluded here to avoid a duplicate entry path. Remote-only — a
+            // local origin has no server playlist target.
+            if (canAddToPlaylist && item != null && (item.mediaType.isVideoType || item.mediaType == MediaType.SERIES)) {
                 add(MediaOption(labelAddToPlaylist, Tabler.Outline.Playlist) {
                     onClose(); onAddToPlaylist()
                 })

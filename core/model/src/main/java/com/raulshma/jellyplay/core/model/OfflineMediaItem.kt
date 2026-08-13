@@ -36,6 +36,7 @@ data class OfflineMediaItem(
     val playbackPositionTicks: Long? = null,
     val playedPercentage: Double = 0.0,
     val isPlayed: Boolean = false,
+    val isFavorite: Boolean = false,
     val lastPlayedDate: String? = null,
     // Rich metadata persisted at download time so the offline detail screens
     // mirror the online detail screen. Populated from MediaDetail; null for
@@ -136,6 +137,7 @@ fun OfflineMediaItem.toMediaItem(): MediaItem {
         runTimeTicks = runTimeTicks,
         playbackPositionTicks = effectivePositionTicks,
         isPlayed = effectiveIsPlayed,
+        isFavorite = isFavorite,
         premiereDate = null,
         genres = genres,
         studios = studios,
@@ -151,3 +153,50 @@ fun OfflineMediaItem.toMediaItem(): MediaItem {
         blurHashes = ImageBlurHashes(primary = blurHashPrimary, backdrop = blurHashBackdrop),
     )
 }
+
+/**
+ * Adapts an [OfflinePersonInfo] into the online [PersonInfo] shape so the shared
+ * cast row can render offline cast unchanged. Maps `imageTag` to
+ * `primaryImageTag`; `localImagePath` is deliberately NOT carried here — it is
+ * storage-specific and is surfaced via [DetailAssets.castImages] by the provider
+ * so the UI resolves a local portrait before falling back to the server image.
+ */
+fun OfflinePersonInfo.toPersonInfo(): PersonInfo = PersonInfo(
+    id = id,
+    name = name,
+    role = role,
+    type = type,
+    primaryImageTag = imageTag,
+)
+
+/**
+ * Adapts an [OfflineMediaItem] into a [MediaDetail] so the unified detail screen
+ * can render a local projection through the same contract as a remote detail.
+ *
+ * The mapping is intentionally lossy: [OfflineMediaItem] carries a subset of
+ * [MediaDetail], so every field without an offline source defaults. Reuses
+ * [toMediaItem] for the embedded item (preserving the watched-state
+ * normalization). Named losses:
+ * - **Studios** are names only ([StudioInfo] requires a server id). They are
+ *   left on [MediaItem.studios] (populated by [toMediaItem]) and rendered as
+ *   non-navigable labels; [MediaDetail.studios] is left empty so no server id is
+ *   ever invented or navigated.
+ * - **No chapters**, no metadata-lock info (`lockData = false`, `lockedFields`
+ *   empty), and the server-only collections (`tagItems`, `productionLocations`,
+ *   `airDays`, `airTime`, `displayOrder`, `dateCreated`, `imageInfos`,
+ *   `relatedItems`, `sortName`, `customRating`, `logoImageTag`,
+ *   `overviewImageTag`, `mediaSources`) map to empty/null.
+ * - `tagline` (scalar) becomes a one-element `taglines` list. The unified body
+ *   must keep the italic rendering the offline screen used.
+ *
+ * Local artwork and cast file paths are not fields on [MediaDetail]; the provider
+ * carries them in [DetailAssets].
+ */
+fun OfflineMediaItem.toMediaDetail(): MediaDetail = MediaDetail(
+    item = toMediaItem(),
+    criticRating = criticRating,
+    taglines = tagline?.let { listOf(it) } ?: emptyList(),
+    people = cast.map { it.toPersonInfo() },
+    providerIds = providerIds,
+    externalUrls = externalUrls,
+)

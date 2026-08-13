@@ -110,7 +110,7 @@ internal class NoOpEngine : MediaEngine {
     // 6. UI binding
     override fun createSurfaceView(context: Context): View = View(context)
 
-    override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) { /* no-op */ }
+    override fun applySubtitleStyle(style: SubtitleStyle) { /* no-op */ }
 
-    override fun setAspectRatio(mode: Int, ratio: Float?) { /* no-op */ }
+    override fun setAspectRatio(ratio: AspectRatio) { /* no-op */ }
 }

@@ -42,7 +42,7 @@ class BasePlayerEngineTest {
         override val durationMs: Long get() = 0L
         override val positionFlow: Flow<Long> get() = emptyFlow()
         override fun createSurfaceView(context: Context): View = View(context)
-        override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {}
+        override fun applySubtitleStyle(style: SubtitleStyle) {}
         override fun selectTrack(type: TrackType, index: Int) {}
         override fun setMaxVideoBitrate(bps: Int?) {}
         override fun setPlaybackSpeed(speed: Float) {}
@@ -52,7 +52,7 @@ class BasePlayerEngineTest {
         override fun increaseVolume(delta: Float) {}
         override fun decreaseVolume(delta: Float) {}
         override fun setMuted(muted: Boolean) {}
-        override fun setAspectRatio(mode: Int, ratio: Float?) {}
+        override fun setAspectRatio(ratio: AspectRatio) {}
         override val audioSessionId: Int get() = -1
     }
 

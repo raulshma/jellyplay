@@ -171,6 +171,7 @@
     <string name="detail_error_download_failed">下载失败</string>
     <string name="detail_error_not_a_series">这不是剧集</string>
     <string name="detail_error_queue_failed">加入下载队列失败</string>
+    <string name="detail_error_unavailable_offline">此项目离线不可用。</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
     <string name="detail_option_manage_series">管理剧集</string>
@@ -276,4 +277,106 @@
     <string name="detail_season_empty_title">没有可用的剧集</string>
     <string name="detail_season_empty_description">添加剧集后将显示在这里。</string>
 
+    <!-- Unified download / offline-detail strings. Resync falls back to default. -->
+    <string name="detail_download_info">下载信息</string>
+    <string name="detail_file_size">文件大小</string>
+    <string name="detail_status">状态</string>
+    <string name="detail_progress">进度</string>
+    <string name="detail_download_status_pending">等待中</string>
+    <string name="detail_download_status_queued">已排队</string>
+    <string name="detail_download_status_downloading">下载中</string>
+    <string name="detail_download_status_paused">已暂停</string>
+    <string name="detail_download_status_completed">已完成</string>
+    <string name="detail_download_status_failed">失败</string>
+    <string name="detail_download_status_cancelled">已取消</string>
+    <string name="detail_watch_status">观看状态</string>
+    <string name="detail_watched_status_watched">已观看</string>
+    <string name="detail_watched_status_label">已观看</string>
+    <string name="detail_watched_status_in_progress">观看中</string>
+    <string name="detail_watched_status_started">已开始</string>
+    <string name="detail_position">进度位置</string>
+    <string name="detail_position_of">%2$s 中的 %1$s</string>
+    <string name="detail_last_watched">上次观看</string>
+    <string name="detail_close">关闭</string>
+    <string name="detail_delete">删除</string>
+    <string name="detail_delete_download_title">删除下载</string>
+    <string name="detail_delete_download_cd">删除下载</string>
+    <string name="detail_delete_download_message">从设备移除“%1$s”？此操作将释放 %2$s。</string>
+    <string name="detail_delete_episode_title">删除剧集</string>
+    <string name="detail_delete_episode_cd">删除剧集</string>
+    <string name="detail_delete_episode_message">从设备移除“%1$s”？</string>
+    <string name="detail_delete_downloads_title">删除下载</string>
+    <string name="detail_select_episodes_to_remove">选择要从设备移除的剧集。</string>
+    <string name="detail_episodes_selected">已选 %1$d / %2$d 集</string>
+    <string name="detail_episodes_selected_with_freed">已选 %1$d / %2$d 集 · %3$s</string>
+    <string name="detail_delete_count">删除 %1$d</string>
+    <string name="detail_delete_count_with_freed">删除 %1$d · %2$s</string>
+    <string name="detail_season_default">第 %1$d 季</string>
+    <string name="detail_delete_entire_series">删除整部剧集</string>
+    <string name="detail_option_delete_downloads">删除下载</string>
+    <plurals name="detail_episodes_count">
+        <item quantity="other">%1$d 集</item>
+    </plurals>
+
+    <!-- Sync / resync download -->
+    <string name="detail_resync_title">同步下载</string>
+    <string name="detail_resync_checking">正在检查更新…</string>
+    <string name="detail_resync_update_available">有新的信息可用</string>
+    <string name="detail_resync_media_changed">媒体文件已更改 — 需要重新下载</string>
+    <string name="detail_resync_in_progress">正在同步最新详情…</string>
+    <string name="detail_resync_complete">下载已与最新详情同步</string>
+    <string name="detail_resync_failed">同步失败</string>
+    <string name="detail_resync_up_to_date">此下载已是最新。</string>
+    <string name="detail_resync_description">服务器上有更新的信息。同步以刷新元数据和图片。</string>
+    <string name="detail_resync_change_metadata">元数据已更新（简介、演员、评分）</string>
+    <string name="detail_resync_change_images">图片已更新（海报/背景）</string>
+    <string name="detail_resync_change_media">媒体文件本身已更改</string>
+    <string name="detail_resync_media_explanation">元数据同步无法更新媒体文件。删除并重新下载此项目以获取新文件。</string>
+    <string name="detail_resync_action">立即同步</string>
+    <string name="detail_resync_redownload">重新下载媒体</string>
+
+    <!-- Local subtitles -->
+    <string name="detail_local_subtitles">字幕</string>
+    <string name="detail_local_subtitle_off">关闭</string>
+    <string name="detail_local_subtitle_default_badge">默认</string>
+    <string name="detail_local_subtitle_forced_badge">强制</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">下载详情</string>
+    <string name="detail_download_section_download">下载</string>
+    <string name="detail_download_section_media">媒体</string>
+    <string name="detail_download_section_media_info">媒体信息</string>
+    <string name="detail_download_section_files">已下载文件</string>
+    <string name="detail_downloaded_bytes">已下载大小</string>
+    <string name="detail_downloaded_date">下载日期</string>
+    <string name="detail_container">容器</string>
+    <string name="detail_file_present">文件是否存在</string>
+    <string name="detail_media_source">媒体源</string>
+    <string name="detail_download_path">路径</string>
+    <string name="detail_media_title">标题</string>
+    <string name="detail_media_type">类型</string>
+    <string name="detail_original_title">原名</string>
+    <string name="detail_year">年份</string>
+    <string name="detail_runtime">时长</string>
+    <string name="detail_file_name">文件</string>
+    <string name="detail_episode_label">剧集</string>
+    <string name="detail_no_downloaded_subtitles">暂无已下载字幕</string>
+    <string name="detail_view_download_details">查看下载详情</string>
+    <string name="detail_download_tab_overview">概览</string>
+    <string name="detail_download_tab_media_info">媒体信息</string>
+    <string name="detail_download_tab_storage">存储</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">磁盘总计</string>
+    <string name="detail_download_files_loading">正在计算文件大小…</string>
+    <string name="detail_download_files_empty">未找到已下载文件</string>
+    <string name="detail_download_files_location">位置</string>
+    <plurals name="detail_files_count">
+        <item quantity="other">%1$d 个文件</item>
+    </plurals>
+    <string name="detail_file_category_media">媒体</string>
+    <string name="detail_file_category_subtitle">字幕</string>
+    <string name="detail_file_category_trickplay">快进预览</string>
+    <string name="detail_file_category_segment">分段</string>
+    <string name="detail_file_category_image">图片</string>
 </resources>

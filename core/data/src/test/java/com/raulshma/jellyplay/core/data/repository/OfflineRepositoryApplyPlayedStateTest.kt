@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -22,11 +24,13 @@ import org.junit.Test
 class OfflineRepositoryApplyPlayedStateTest {
 
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
+    private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
+    private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
     private val downloadDao: DownloadDao = mockk(relaxed = true)
     private val database: JellyPlayDatabase = mockk(relaxed = true)
 
     private val repository by lazy {
-        OfflineRepositoryImpl(offlineMediaDao, downloadDao, database)
+        OfflineRepositoryImpl(offlineMediaDao, playbackStateDao, syncBaselineDao, downloadDao, database)
     }
 
     @Test
@@ -34,7 +38,7 @@ class OfflineRepositoryApplyPlayedStateTest {
         repository.applyPlayedState("season-1", isPlayed = true)
 
         coVerify(exactly = 1) {
-            offlineMediaDao.applyPlayedStateToHierarchy(
+            playbackStateDao.applyPlayedStateToHierarchy(
                 itemId = "season-1",
                 isPlayed = true,
                 lastPlayedDate = match { it.isNotBlank() },
@@ -47,7 +51,7 @@ class OfflineRepositoryApplyPlayedStateTest {
         repository.applyPlayedState("season-1", isPlayed = false)
 
         coVerify(exactly = 1) {
-            offlineMediaDao.applyPlayedStateToHierarchy(
+            playbackStateDao.applyPlayedStateToHierarchy(
                 itemId = "season-1",
                 isPlayed = false,
                 lastPlayedDate = null,
@@ -59,13 +63,13 @@ class OfflineRepositoryApplyPlayedStateTest {
     fun `applyPlayedState works for episode itemId`() = runTest {
         repository.applyPlayedState("episode-42", isPlayed = true)
 
-        coVerify { offlineMediaDao.applyPlayedStateToHierarchy("episode-42", true, any()) }
+        coVerify { playbackStateDao.applyPlayedStateToHierarchy("episode-42", true, any()) }
     }
 
     @Test
     fun `applyPlayedState works for series itemId`() = runTest {
         repository.applyPlayedState("series-7", isPlayed = false)
 
-        coVerify { offlineMediaDao.applyPlayedStateToHierarchy("series-7", false, null) }
+        coVerify { playbackStateDao.applyPlayedStateToHierarchy("series-7", false, null) }
     }
 }

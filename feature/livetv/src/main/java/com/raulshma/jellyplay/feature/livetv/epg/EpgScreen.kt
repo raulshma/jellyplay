@@ -54,6 +54,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
@@ -154,30 +156,23 @@ private fun RecordDialog(
     onDismiss: () -> Unit,
 ) {
     when (state) {
-        is RecordDialogState.Confirm -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(R.string.livetv_record_program_prompt)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        state.program.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    state.program.episodeTitle?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Text(
-                        stringResource(R.string.livetv_record_single_timer_note),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        is RecordDialogState.Confirm -> ConfirmDialog(
+            title = stringResource(R.string.livetv_record_program_prompt),
+            message = state.program.name,
+            confirmText = stringResource(R.string.livetv_record_once),
+            dismissText = stringResource(R.string.livetv_action_cancel),
+            tone = ConfirmTone.NEUTRAL,
+            onConfirm = onConfirm,
+            onDismiss = onDismiss,
+            content = {
+                state.program.episodeTitle?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = onConfirm) { Text(stringResource(R.string.livetv_record_once)) }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.livetv_action_cancel)) }
+                Text(
+                    stringResource(R.string.livetv_record_single_timer_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             },
         )
         is RecordDialogState.Requesting -> AlertDialog(

@@ -132,6 +132,32 @@ internal class TrackSelectionPolicy {
     }
 
     /**
+     * Resolves a stored/pending server stream [index] to the offline side-loaded
+     * subtitle whose [TrackOption.id] == `"offline:${index}"`.
+     *
+     * Offline playback carries no server [MediaStream]s, so the only stable
+     * handle linking the detail screen's persisted selection (the original server
+     * stream index) to an engine track is the `"offline:${index}"` id that
+     * `PlayerSessionManager.loadOfflineSubtitles` stamps onto every
+     * `SubtitleSource` and the engines propagate into [TrackOption.id]:
+     * ExoPlayer via the `MediaItem.SubtitleConfiguration.id` → track `format.id`,
+     * and mpv via its side-loaded-subtitle id registry. Returns `null` when no
+     * track carries that id (e.g. the sub failed to side-load, or an engine that
+     * doesn't propagate the id), so the caller can fall back to its legacy
+     * positional-index match.
+     *
+     * The `offline:${index}` contract is established in
+     * `PlayerSessionManager.loadOfflineSubtitles` and matched by the detail
+     * screen's local-subtitle selector, which writes the chosen
+     * `OfflineSubtitleEntry.index` into the per-item `subtitleStreamIndex`.
+     */
+    fun resolveByOfflineSubtitleId(
+        tracks: List<TrackOption>,
+        index: Int,
+    ): TrackOption? =
+        tracks.firstOrNull { it.index >= 0 && it.id == "offline:$index" }
+
+    /**
      * Maps a selected [TrackOption] back to the server [MediaStream.index] so it
      * can be persisted in the per-item selection row.
      *

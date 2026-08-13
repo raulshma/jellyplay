@@ -45,7 +45,7 @@ data class SubtitleRenderDefaults(
          * path uses). This is intentional — Media3's embedded-style path sizes
          * captions against the view height, and the smaller size keeps them stable
          * across orientation changes. Promoted from a silent inline literal in
-         * `ExoPlayerEngine.applySubtitleStyleToView` to a named override so the
+         * `ExoPlayerEngine.applySubtitleStyle` to a named override so the
          * divergence is a conscious, discoverable choice rather than drift.
          *
          * To align ExoPlayer with the other engines, repoint the engine's default

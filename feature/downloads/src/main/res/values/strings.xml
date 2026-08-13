@@ -5,7 +5,6 @@
     <!-- Screen titles / scaffolds -->
     <string name="downloads_screen_title">Downloads</string>
     <string name="downloads_library_title">Downloaded</string>
-    <string name="downloads_loading">Loading…</string>
     <string name="downloads_not_found">Not found</string>
     <string name="downloads_download_unavailable">This download is no longer available</string>
 
@@ -24,11 +23,6 @@
         <item quantity="one">%1$d item</item>
         <item quantity="other">%1$d items</item>
     </plurals>
-    <plurals name="downloads_episodes_count">
-        <item quantity="one">%1$d episode</item>
-        <item quantity="other">%1$d episodes</item>
-    </plurals>
-    <string name="downloads_episodes_count_with_size">%1$d episodes · %2$s</string>
     <string name="downloads_selected_count">%1$d selected</string>
 
     <!-- Common actions / buttons -->
@@ -47,8 +41,6 @@
     <string name="downloads_action_clear_selection">Clear selection</string>
     <string name="downloads_pause_all">Pause all</string>
     <string name="downloads_retry_failed">Retry all failed</string>
-    <string name="downloads_select_all">Select all</string>
-    <string name="downloads_deselect_all">Deselect all</string>
     <string name="downloads_clear_cd">Clear</string>
     <string name="downloads_search_cd">Search</string>
     <string name="downloads_sort_cd">Sort</string>
@@ -68,11 +60,6 @@
     <string name="downloads_delete_episode_title">Delete episode</string>
     <string name="downloads_delete_episode_cd">Delete episode</string>
     <string name="downloads_delete_episode_message">Remove \"%1$s\" from your device?</string>
-    <string name="downloads_select_episodes_to_remove">Select episodes to remove from your device.</string>
-    <string name="downloads_episodes_selected">%1$d of %2$d episodes selected</string>
-    <string name="downloads_episodes_selected_with_freed">%1$d of %2$d episodes selected · %3$s</string>
-    <string name="downloads_delete_count">Delete %1$d</string>
-    <string name="downloads_delete_count_with_freed">Delete %1$d · %2$s</string>
     <string name="downloads_deleted">Deleted</string>
     <string name="downloads_deleted_message">Download removed</string>
 
@@ -85,7 +72,6 @@
 
     <!-- Offline detail -->
     <string name="downloads_series_default">Series</string>
-    <string name="downloads_season_default">Season %1$d</string>
     <string name="downloads_play_resume">Resume</string>
     <string name="downloads_play_again">Play again</string>
     <string name="downloads_show_less">Show less</string>
@@ -98,10 +84,8 @@
     <string name="downloads_status">Status</string>
     <string name="downloads_progress">Progress</string>
     <string name="downloads_watch_status">Watch status</string>
-    <string name="downloads_watched">Watched</string>
     <string name="downloads_cd_switch_to_list">Switch to vertical episode list</string>
     <string name="downloads_cd_switch_to_cards">Switch to horizontal episode cards</string>
-    <string name="downloads_watched_label">Watched</string>
     <string name="downloads_in_progress">In progress</string>
     <string name="downloads_started">Started</string>
     <string name="downloads_position">Position</string>
@@ -111,8 +95,6 @@
 
     <!-- Seasons / episodes -->
     <string name="downloads_seasons">Seasons</string>
-    <string name="downloads_collapse">Collapse</string>
-    <string name="downloads_expand">Expand</string>
     <string name="downloads_mark_season_cd">Mark season watched or unwatched</string>
     <string name="downloads_mark_season_watched">Mark season as watched</string>
     <string name="downloads_mark_season_unwatched">Mark season as unwatched</string>
@@ -164,6 +146,12 @@
     <string name="downloads_force_resync_data_poster_desc">Primary artwork</string>
     <string name="downloads_force_resync_data_backdrop">Backdrop</string>
     <string name="downloads_force_resync_data_backdrop_desc">Background artwork</string>
+    <string name="downloads_force_resync_data_subtitles">Subtitles</string>
+    <string name="downloads_force_resync_data_subtitles_desc">External subtitle tracks</string>
+    <string name="downloads_force_resync_data_trickplay">Trickplay</string>
+    <string name="downloads_force_resync_data_trickplay_desc">Seek preview thumbnails</string>
+    <string name="downloads_force_resync_data_segments">Segments</string>
+    <string name="downloads_force_resync_data_segments_desc">Intro/outro skip points</string>
     <string name="downloads_force_resync_summary">Sync %1$d items</string>
     <string name="downloads_force_resync_empty">No downloaded items to sync.</string>
     <string name="downloads_force_resync_in_progress">Syncing %1$d of %2$d…</string>

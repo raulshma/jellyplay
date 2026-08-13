@@ -1,6 +1,12 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.model.DetailAssets
+import com.raulshma.jellyplay.core.model.DetailCapabilities
+import com.raulshma.jellyplay.core.model.DetailContext
+import com.raulshma.jellyplay.core.model.DetailOrigin
+import com.raulshma.jellyplay.core.model.DownloadFileInventory
+import com.raulshma.jellyplay.core.model.LocalSubtitleOption
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.Playlist
@@ -41,10 +47,40 @@ data class DetailUiState(
     // One-shot snackbar feedback for favorite / watched / download actions is
     // surfaced via [DetailViewModel.messages] (SharedFlow<DetailMessage>), not
     // here — see [DetailMessage].
+    // ── Unified-provider fields ───────────────────────────────────────────
+    // The source origin of the current snapshot (REMOTE / LOCAL_OFFLINE_MODE /
+    // LOCAL_REMOTE_FAILURE). Drives source-aware rendering and gates remote-only
+    // side effects. Null until the first snapshot lands.
+    val origin: DetailOrigin? = null,
+    // Carries the attached download, sync state, series aggregate and connectivity.
+    // Source of the download-info card and local-management affordances.
+    val detailContext: DetailContext? = null,
+    // Capability set for the current snapshot (what the UI may offer). Defaults
+    // to all-false until a snapshot resolves; the Compose default lives in
+    // [Companion.DefaultCapabilities].
+    val capabilities: DetailCapabilities = DefaultCapabilities,
+    // Local presentation artwork (on-disk poster/backdrop paths + cast portraits)
+    // resolved ahead of the server-image fallback for local origins.
+    val assets: DetailAssets = DetailAssets(),
+    // Manifest-backed external subtitles selectable for local playback.
+    val localSubtitles: List<LocalSubtitleOption> = emptyList(),
+    // The currently-selected local subtitle stream index (null = none/disabled).
+    // Independent from [selectedSubtitleIndex], which is the REMOTE stream index.
+    val selectedLocalSubtitleIndex: Int? = null,
+    // Resync / re-download action status. Owned by the ViewModel; reset to Idle
+    // via DetailViewModel.clearResyncState(). Distinct from the snapshot load state.
+    val resyncState: ResyncUiState = ResyncUiState.Idle,
+    // Monotonic per-item content generation of the last fully-applied snapshot.
+    // Used by the screen only for diagnostics; the VM gates side effects off it.
+    val contentGeneration: Long = 0L,
     // Series content
     val seasons: List<MediaItem> = emptyList(),
     val episodes: Map<String, List<MediaItem>> = emptyMap(),
     val fetchedSeasonIds: Set<String> = emptySet(),
+    // Every episode across [seasons] in canonical playback order. Mirrors the
+    // provider snapshot's sortedEpisodes so smart-play resolution and playlist
+    // expansion read from the UI state instead of a local catalogue snapshot.
+    val sortedEpisodes: List<MediaItem> = emptyList(),
     // Music content
     val albumTracks: List<MediaItem> = emptyList(),
     // Collection content
@@ -76,6 +112,13 @@ data class DetailUiState(
     val downloadSheetEpisodes: Map<String, List<MediaItem>> = emptyMap(),
     val downloadSheetLoadingSeasons: Set<String> = emptySet(),
     val downloadedEpisodeIds: Set<String> = emptySet(),
+    // Download-details bottom sheet: on-disk file inventory (media file +
+    // subtitles/trickplay/segments/images sidecars) with live byte sizes. Null
+    // until the sheet is opened and the inventory is loaded; the inventory itself
+    // is empty once loaded if no files resolved on disk. Loaded lazily on open so
+    // the filesystem walk only runs for users who actually open the sheet.
+    val downloadFileInventory: DownloadFileInventory? = null,
+    val isLoadingDownloadFiles: Boolean = false,
     // "Manage Series" (DIRECT_ARR_INTEGRATION). Shown for a series with a tvdb
     // id when the experimental flag is on; server resolution is deferred to the
     // ManageSeriesScreen itself (cheap gate here — no network on the detail screen).
@@ -102,4 +145,24 @@ data class DetailUiState(
         // Up Next card can render a thumbnail without an image-url dependency.
         val primaryImageUrl: String? = null,
     )
+
+    companion object {
+        /**
+         * Capability set used before any snapshot resolves and as the Compose
+         * default. All-false: nothing remote-only is offered until a snapshot
+         * confirms the source. Local-management flags flip on only when a
+         * completed download is attached.
+         */
+        val DefaultCapabilities: DetailCapabilities = DetailCapabilities(
+            remoteDiscovery = false,
+            remoteStreamSelection = false,
+            localSubtitleSelection = false,
+            localStreamInfo = false,
+            personNavigation = false,
+            studioNavigation = false,
+            smartPlay = false,
+            remoteWorkAllowed = false,
+            localDownloadManagement = false,
+        )
+    }
 }

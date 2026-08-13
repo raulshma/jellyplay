@@ -29,6 +29,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -154,7 +155,7 @@ fun NewsletterScreen(
             dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
             onConfirm = { viewModel.onEvent(NewsletterUiEvent.ConfirmSend) },
             onDismiss = { viewModel.onEvent(NewsletterUiEvent.DismissSendDialog) },
-            isDestructive = false,
+            tone = ConfirmTone.PRIMARY,
         )
     }
 }

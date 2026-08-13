@@ -118,6 +118,7 @@ import com.composables.icons.tabler.outline.*
 import androidx.compose.foundation.layout.offset
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
 import com.raulshma.jellyplay.feature.player.video.TrackOption
@@ -237,6 +238,7 @@ internal fun PlayerControls(
     mediaStreams: List<MediaStream> = emptyList(),
     audioTracks: List<TrackOption> = emptyList(),
     isConnectionMetered: Boolean = false,
+    subtitleDelayMs: Long = 0L,
     showPlaybackMetadata: Boolean = true,
     showClock: Boolean = false,
     showTimeRemaining: Boolean = false,
@@ -542,6 +544,7 @@ internal fun PlayerControls(
                         videoStats = playbackMetadata,
                         audioTracks = audioTracks,
                         isConnectionMetered = isConnectionMetered,
+                        subtitleDelayMs = subtitleDelayMs,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
                 }

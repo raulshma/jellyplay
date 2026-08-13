@@ -50,6 +50,19 @@ class PipController @Inject constructor() {
     var pipHasNext: Boolean = false
 
     /**
+     * Whether the player controls are currently locked (screen-lock overlay up).
+     * Mirrored from the player UI so the host Activity can suppress PiP auto-entry
+     * while locked (gates `onUserLeaveHint` on `!isControlsLocked`).
+     */
+    @Volatile
+    var isControlsLocked: Boolean = false
+        private set
+
+    fun setControlsLocked(locked: Boolean) {
+        isControlsLocked = locked
+    }
+
+    /**
      * The video's aspect ratio as a `Rational` (width:height), derived from the
      * server-reported [com.raulshma.jellyplay.core.model.MediaStream] width/height.
      * `null` until media streams are known; the Activity falls back to 16:9.
@@ -126,6 +139,7 @@ class PipController @Inject constructor() {
         pipTransport = null
         _isPlaying.value = false
         pipHasNext = false
+        isControlsLocked = false
         _isInPipMode.value = false
         _shouldAutoEnterPip.value = false
         _pipDismissed.value = false

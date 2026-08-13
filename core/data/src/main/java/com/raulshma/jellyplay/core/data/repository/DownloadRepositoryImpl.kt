@@ -15,8 +15,12 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
+import com.raulshma.jellyplay.core.database.entity.PlaybackStateEntity
+import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
 import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.data.worker.DownloadNotificationHelper
 import com.raulshma.jellyplay.core.data.worker.awaitResponse
@@ -24,6 +28,9 @@ import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.DownloadFileEntry
+import com.raulshma.jellyplay.core.model.DownloadFileInventory
+import com.raulshma.jellyplay.core.model.DownloadedFileCategory
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
@@ -60,6 +67,8 @@ class DownloadRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadDao: DownloadDao,
     private val offlineMediaDao: OfflineMediaDao,
+    private val playbackStateDao: PlaybackStateDao,
+    private val syncBaselineDao: SyncBaselineDao,
     private val database: JellyPlayDatabase,
     private val mediaRepository: MediaRepository,
     /**
@@ -552,33 +561,35 @@ class DownloadRepositoryImpl @Inject constructor(
         itemId: String,
         trickplayInfo: TrickplayInfo,
         downloadPath: String,
-    ) {
-        withContext(Dispatchers.IO) {
-            try {
-                val parentDir = File(downloadPath).parentFile ?: return@withContext
-                val trickplayDir = File(parentDir, "trickplay").apply { mkdirs() }
-                val thumbnailsPerSheet = trickplayInfo.tileWidth * trickplayInfo.tileHeight
-                val totalSheets = (trickplayInfo.thumbnailCount + thumbnailsPerSheet - 1) / thumbnailsPerSheet
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val parentDir = File(downloadPath).parentFile ?: return@withContext false
+            val trickplayDir = File(parentDir, DownloadArtifacts.trickplayDir(itemId)).apply { mkdirs() }
+            val thumbnailsPerSheet = trickplayInfo.tileWidth * trickplayInfo.tileHeight
+            val totalSheets = (trickplayInfo.thumbnailCount + thumbnailsPerSheet - 1) / thumbnailsPerSheet
 
-                for (sheetIndex in 0 until totalSheets) {
-                    val data = playbackRepository.getTrickplayTileImage(
-                        itemId,
-                        trickplayInfo.width,
-                        sheetIndex,
-                    ) ?: continue
-                    File(trickplayDir, "trickplay_${sheetIndex}.jpg").writeBytes(data)
-                }
+            for (sheetIndex in 0 until totalSheets) {
+                val data = playbackRepository.getTrickplayTileImage(
+                    itemId,
+                    trickplayInfo.width,
+                    sheetIndex,
+                ) ?: continue
+                File(trickplayDir, "trickplay_${sheetIndex}.jpg").writeBytes(data)
+            }
 
-                File(trickplayDir, "meta.json").writeText(buildString {
-                    appendLine("{\"width\":${trickplayInfo.width},")
-                    appendLine("\"height\":${trickplayInfo.height},")
-                    appendLine("\"tileWidth\":${trickplayInfo.tileWidth},")
-                    appendLine("\"tileHeight\":${trickplayInfo.tileHeight},")
-                    appendLine("\"thumbnailCount\":${trickplayInfo.thumbnailCount},")
-                    appendLine("\"interval\":${trickplayInfo.interval},")
-                    appendLine("\"bandwidth\":${trickplayInfo.bandwidth}}")
-                })
-            } catch (e: Exception) { Log.d(TAG, "Failed to write trickplay meta.json", e) }
+            File(trickplayDir, "meta.json").writeText(buildString {
+                appendLine("{\"width\":${trickplayInfo.width},")
+                appendLine("\"height\":${trickplayInfo.height},")
+                appendLine("\"tileWidth\":${trickplayInfo.tileWidth},")
+                appendLine("\"tileHeight\":${trickplayInfo.tileHeight},")
+                appendLine("\"thumbnailCount\":${trickplayInfo.thumbnailCount},")
+                appendLine("\"interval\":${trickplayInfo.interval},")
+                appendLine("\"bandwidth\":${trickplayInfo.bandwidth}}")
+            })
+            true
+        } catch (e: Exception) {
+            Log.d(TAG, "Failed to write trickplay meta.json", e)
+            false
         }
     }
 
@@ -587,77 +598,78 @@ class DownloadRepositoryImpl @Inject constructor(
         mediaSourceId: String,
         mediaStreams: List<MediaStream>,
         downloadPath: String,
-    ) {
-        withContext(Dispatchers.IO) {
-            try {
-                val parentDir = File(downloadPath).parentFile ?: return@withContext
-                val subtitleStreams = mediaStreams.filter {
-                    it.type == StreamType.SUBTITLE && (it.isExternal || !it.deliveryUrl.isNullOrBlank())
-                }
-                if (subtitleStreams.isEmpty()) return@withContext
-
-                val subtitlesDir = File(parentDir, DownloadArtifacts.SUBTITLES_DIR).apply { mkdirs() }
-                val entries = mutableListOf<OfflineSubtitleEntry>()
-
-                for (stream in subtitleStreams) {
-                    try {
-                        val subUrl = when {
-                            !stream.deliveryUrl.isNullOrBlank() ->
-                                playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
-                            stream.isExternal ->
-                                playbackRepository.buildSubtitleDeliveryUrl(itemId, mediaSourceId, stream.index, stream.codec)
-                            else -> continue
-                        }
-                        if (subUrl.isBlank()) continue
-
-                        val fileName = "${stream.index}.${subtitleFileExtension(stream.codec)}"
-                        val target = File(subtitlesDir, fileName)
-                        if (!downloadToFile(subUrl, target)) continue
-
-                        entries.add(
-                            OfflineSubtitleEntry(
-                                index = stream.index,
-                                fileName = fileName,
-                                language = stream.language,
-                                codec = stream.codec,
-                                title = stream.title,
-                                displayTitle = stream.displayTitle,
-                                isDefault = stream.isDefault,
-                                isForced = stream.isForced,
-                            )
-                        )
-                    } catch (e: Exception) {
-                        Log.d(TAG, "Failed to download subtitle stream ${stream.index} for $itemId", e)
-                    }
-                }
-
-                // Only persist a manifest when at least one subtitle was saved.
-                // Otherwise remove the dir so the player never reads a stale manifest.
-                if (entries.isNotEmpty()) {
-                    File(subtitlesDir, DownloadArtifacts.SUBTITLE_MANIFEST_FILE)
-                        .writeText(json.encodeToString(OfflineSubtitleManifest(entries)))
-                } else if (subtitlesDir.exists()) {
-                    subtitlesDir.deleteRecursively()
-                }
-            } catch (e: Exception) {
-                Log.d(TAG, "Failed to download external subtitles for $itemId", e)
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val parentDir = File(downloadPath).parentFile ?: return@withContext false
+            val subtitleStreams = mediaStreams.filter {
+                it.type == StreamType.SUBTITLE && (it.isExternal || !it.deliveryUrl.isNullOrBlank())
             }
+            if (subtitleStreams.isEmpty()) return@withContext true
+
+            val subtitlesDir = File(parentDir, DownloadArtifacts.subtitlesDir(itemId)).apply { mkdirs() }
+            val entries = mutableListOf<OfflineSubtitleEntry>()
+
+            for (stream in subtitleStreams) {
+                try {
+                    val subUrl = when {
+                        !stream.deliveryUrl.isNullOrBlank() ->
+                            playbackRepository.getSubtitleDeliveryUrl(stream.deliveryUrl!!)
+                        stream.isExternal ->
+                            playbackRepository.buildSubtitleDeliveryUrl(itemId, mediaSourceId, stream.index, stream.codec)
+                        else -> continue
+                    }
+                    if (subUrl.isBlank()) continue
+
+                    val fileName = "${stream.index}.${subtitleFileExtension(stream.codec)}"
+                    val target = File(subtitlesDir, fileName)
+                    if (!downloadToFile(subUrl, target)) continue
+
+                    entries.add(
+                        OfflineSubtitleEntry(
+                            index = stream.index,
+                            fileName = fileName,
+                            language = stream.language,
+                            codec = stream.codec,
+                            title = stream.title,
+                            displayTitle = stream.displayTitle,
+                            isDefault = stream.isDefault,
+                            isForced = stream.isForced,
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.d(TAG, "Failed to download subtitle stream ${stream.index} for $itemId", e)
+                }
+            }
+
+            // Only persist a manifest when at least one subtitle was saved.
+            // Otherwise remove the dir so the player never reads a stale manifest.
+            if (entries.isNotEmpty()) {
+                File(subtitlesDir, DownloadArtifacts.SUBTITLE_MANIFEST_FILE)
+                    .writeText(json.encodeToString(OfflineSubtitleManifest(entries)))
+            } else if (subtitlesDir.exists()) {
+                subtitlesDir.deleteRecursively()
+            }
+            true
+        } catch (e: Exception) {
+            Log.d(TAG, "Failed to download external subtitles for $itemId", e)
+            false
         }
     }
 
-    override suspend fun downloadMediaSegments(itemId: String, downloadPath: String) {
+    override suspend fun downloadMediaSegments(itemId: String, downloadPath: String): Boolean =
         withContext(Dispatchers.IO) {
             try {
                 val segments = playbackRepository.getMediaSegments(itemId).getOrDefault(emptyList())
-                if (segments.isEmpty()) return@withContext
-                val parentDir = File(downloadPath).parentFile ?: return@withContext
-                File(parentDir, DownloadArtifacts.SEGMENTS_FILE)
+                if (segments.isEmpty()) return@withContext true
+                val parentDir = File(downloadPath).parentFile ?: return@withContext false
+                File(parentDir, DownloadArtifacts.segmentsFile(itemId))
                     .writeText(json.encodeToString(segments))
+                true
             } catch (e: Exception) {
                 Log.d(TAG, "Failed to download media segments for $itemId", e)
+                false
             }
         }
-    }
 
     override suspend fun downloadOfflineImage(
         itemId: String,
@@ -669,23 +681,109 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override suspend fun loadLocalSubtitleManifest(
         downloadPath: String,
+        itemId: String?,
     ): OfflineSubtitleManifest? = withContext(Dispatchers.IO) {
         val dir = File(downloadPath).parentFile ?: return@withContext null
-        val file = File(dir, "${DownloadArtifacts.SUBTITLES_DIR}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
+        // Try item-scoped path first (new downloads).
+        if (itemId != null) {
+            val scopedFile = File(dir, "${DownloadArtifacts.subtitlesDir(itemId)}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
+            if (scopedFile.exists()) {
+                return@withContext runCatching { json.decodeFromString<OfflineSubtitleManifest>(scopedFile.readText()) }
+                    .onFailure { Log.w(TAG, "Failed to decode local subtitle manifest", it) }
+                    .getOrNull()
+            }
+        }
+        // Fall back to legacy un-scoped path (pre-fix downloads).
+        val file = File(dir, "${DownloadArtifacts.LEGACY_SUBTITLES_DIR}/${DownloadArtifacts.SUBTITLE_MANIFEST_FILE}")
         if (!file.exists()) return@withContext null
         runCatching { json.decodeFromString<OfflineSubtitleManifest>(file.readText()) }
-            .onFailure { Log.w("DownloadRepository", "Failed to decode local subtitle manifest", it) }
+            .onFailure { Log.w(TAG, "Failed to decode local subtitle manifest", it) }
             .getOrNull()
     }
 
     override suspend fun loadLocalSegments(itemId: String): List<MediaSegment>? = withContext(Dispatchers.IO) {
         val download = downloadDao.getDownloadByMediaItemId(itemId) ?: return@withContext null
         val dir = File(download.downloadPath).parentFile ?: return@withContext null
-        val file = File(dir, DownloadArtifacts.SEGMENTS_FILE)
-        if (!file.exists()) return@withContext null
+        // Try item-scoped file first.
+        val scopedFile = File(dir, DownloadArtifacts.segmentsFile(itemId))
+        val file = if (scopedFile.exists()) scopedFile else {
+            val legacy = File(dir, DownloadArtifacts.LEGACY_SEGMENTS_FILE)
+            if (!legacy.exists()) return@withContext null
+            legacy
+        }
         runCatching { json.decodeFromString<List<MediaSegment>>(file.readText()) }
-            .onFailure { Log.w("DownloadRepository", "Failed to decode local segments", it) }
+            .onFailure { Log.w(TAG, "Failed to decode local segments", it) }
             .getOrNull()
+    }
+
+    override suspend fun getDownloadFileInventory(itemId: String): DownloadFileInventory = withContext(Dispatchers.IO) {
+        val download = downloadDao.getDownloadByMediaItemId(itemId)
+        val mediaPath = download?.downloadPath?.takeIf { it.isNotBlank() && File(it).isFile }
+        if (mediaPath == null) return@withContext DownloadFileInventory.EMPTY
+        val parentDir = File(mediaPath).parentFile ?: return@withContext DownloadFileInventory.EMPTY
+
+        // Person ids (for cast-image enumeration) + series id (for series-keyed
+        // artwork) are sourced from the offline_media row; the downloads row
+        // alone doesn't carry cast. Both tables are keyed by the same item id.
+        val offline = offlineMediaDao.getById(itemId)
+        val seriesId = download.seriesId ?: offline?.seriesId
+        val personIds = offline?.let { decodeCast(it.peopleJson).map { person -> person.id } } ?: emptyList()
+
+        val entries = mutableListOf<DownloadFileEntry>()
+
+        fun addFile(category: DownloadedFileCategory, file: File) {
+            if (file.isFile) {
+                entries += DownloadFileEntry(
+                    category = category,
+                    displayName = file.name,
+                    path = file.absolutePath,
+                    sizeBytes = file.length(),
+                )
+            }
+        }
+
+        // ── Media file ──
+        addFile(DownloadedFileCategory.MEDIA, File(mediaPath))
+
+        // ── Trickplay sprite sheets + meta (item-scoped dir, then legacy) ──
+        listOf(DownloadArtifacts.trickplayDir(itemId), DownloadArtifacts.LEGACY_TRICKPLAY_DIR)
+            .map { File(parentDir, it) }
+            .filter { it.isDirectory }
+            .forEach { dir ->
+                dir.walkTopDown().filter { it.isFile }.forEach { f ->
+                    addFile(DownloadedFileCategory.TRICKPLAY, f)
+                }
+            }
+
+        // ── Subtitle bundle (item-scoped dir, then legacy) ──
+        listOf(DownloadArtifacts.subtitlesDir(itemId), DownloadArtifacts.LEGACY_SUBTITLES_DIR)
+            .map { File(parentDir, it) }
+            .filter { it.isDirectory }
+            .forEach { dir ->
+                dir.walkTopDown().filter { it.isFile }.forEach { f ->
+                    addFile(DownloadedFileCategory.SUBTITLE, f)
+                }
+            }
+
+        // ── Segments (intro/outro/recap markers JSON) ──
+        addFile(DownloadedFileCategory.SEGMENT, File(parentDir, DownloadArtifacts.segmentsFile(itemId)))
+        addFile(DownloadedFileCategory.SEGMENT, File(parentDir, DownloadArtifacts.LEGACY_SEGMENTS_FILE))
+
+        // ── Images: per-item poster/backdrop, series-keyed artwork, cast portraits ──
+        addFile(DownloadedFileCategory.IMAGE, File(parentDir, DownloadArtifacts.posterFile(itemId)))
+        addFile(DownloadedFileCategory.IMAGE, File(parentDir, DownloadArtifacts.backdropFile(itemId)))
+        if (!seriesId.isNullOrBlank() && seriesId != itemId) {
+            addFile(DownloadedFileCategory.IMAGE, File(parentDir, DownloadArtifacts.posterFile(seriesId)))
+            addFile(DownloadedFileCategory.IMAGE, File(parentDir, DownloadArtifacts.backdropFile(seriesId)))
+        }
+        personIds.forEach { personId ->
+            addFile(DownloadedFileCategory.IMAGE, File(parentDir, DownloadArtifacts.personImageFile(personId)))
+        }
+
+        DownloadFileInventory(
+            entries = entries.sortedBy { it.category.ordinal },
+            totalSizeBytes = entries.sumOf { it.sizeBytes },
+        )
     }
 
     private fun subtitleFileExtension(codec: String?): String = when (codec?.lowercase()) {
@@ -745,8 +843,15 @@ class DownloadRepositoryImpl @Inject constructor(
     }
 
     private suspend fun saveOfflineMetadataForItem(item: MediaItem, imageUrl: String?, backdropUrl: String?) {
-        val entity = item.toOfflineMediaEntity(imageUrl, backdropUrl)
-        offlineMediaDao.upsert(entity)
+        // Metadata + playback are split across two tables; seed both from the
+        // fresh item in one transaction so a reader never sees a metadata row
+        // without its playback snapshot. The freshness baseline is seeded only
+        // on the detail path ([saveOfflineMetadataForDetail]) where a full
+        // MediaDetail is available.
+        database.withTransaction {
+            offlineMediaDao.upsert(item.toOfflineMediaEntity(imageUrl, backdropUrl))
+            playbackStateDao.upsert(item.toPlaybackState())
+        }
         preloadImageToCache(imageUrl)
         preloadImageToCache(backdropUrl)
     }
@@ -758,48 +863,42 @@ class DownloadRepositoryImpl @Inject constructor(
      * the cast row without network access.
      */
     private suspend fun saveOfflineMetadataForDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) {
-        // Preserve any existing sync-baseline columns when re-persisting metadata
-        // (resync path). The upsert below uses REPLACE, which would otherwise wipe
-        // them to defaults and briefly flip the offline-detail freshness badge to
-        // UNKNOWN before the manager's updateSyncBaseline restores them. Copying
-        // them forward keeps the row coherent across the re-persist.
-        val existing = offlineMediaDao.getById(detail.item.id)
-        val entity = detail.toOfflineMediaEntity(imageUrl, backdropUrl).let { fresh ->
-            if (existing != null) fresh.copy(
-                syncedPosterTag = existing.syncedPosterTag,
-                syncedBackdropTag = existing.syncedBackdropTag,
-                syncedMetadataSignature = existing.syncedMetadataSignature,
-                syncedMediaSourceId = existing.syncedMediaSourceId,
-                syncedMediaSizeBytes = existing.syncedMediaSizeBytes,
-                lastSyncedAt = existing.lastSyncedAt,
-                syncUpdateAvailable = existing.syncUpdateAvailable,
-                syncMediaChanged = existing.syncMediaChanged,
-                syncChecking = existing.syncChecking,
-                syncError = existing.syncError,
-            ) else fresh
+        // Metadata, playback, and freshness baseline each live in their own
+        // table now. A metadata re-persist (the resync PERSIST_METADATA step
+        // re-uses this) can no longer clobber the baseline — it's in
+        // `sync_baseline` — so the old "copy the sync columns forward" block is
+        // gone.
+        val existingMeta = offlineMediaDao.getById(detail.item.id)
+        database.withTransaction {
+            offlineMediaDao.upsert(detail.toOfflineMediaEntity(imageUrl, backdropUrl))
+            playbackStateDao.upsert(detail.item.toPlaybackState())
         }
-        offlineMediaDao.upsert(entity)
         // Seed the freshness baseline from the detail we just persisted so the
         // first auto-check has a reference to diff against. Without this, a fresh
-        // download enters with a null baseline and the first check treats itself
+        // download enters with no baseline row and the first check treats itself
         // as "first contact" — swallowing a real change that happened before that
         // first check (and always reporting CURRENT for new downloads). Only seed
         // when no baseline existed yet, so a re-download doesn't clobber a recent
         // check's flags; a genuine re-download is itself a fresh server snapshot.
-        if (existing == null || existing.syncedMetadataSignature == null) {
+        val existingBaseline = syncBaselineDao.getBaseline(detail.item.id)
+        if (existingMeta == null || existingBaseline?.syncedMetadataSignature == null) {
             val baseline = syncComparator.baseline(detail)
-            offlineMediaDao.updateSyncBaseline(
-                itemId = detail.item.id,
-                posterTag = baseline.posterTag,
-                backdropTag = baseline.backdropTag,
-                metadataSignature = baseline.metadataSignature,
-                mediaSourceId = baseline.mediaSourceId,
-                mediaSizeBytes = baseline.mediaSizeBytes,
-                lastSyncedAt = System.currentTimeMillis(),
-                updateAvailable = 0,
-                mediaChanged = 0,
-                checking = 0,
-                error = 0,
+            syncBaselineDao.upsert(
+                SyncBaselineEntity(
+                    id = detail.item.id,
+                    syncedPosterTag = baseline.posterTag,
+                    syncedBackdropTag = baseline.backdropTag,
+                    syncedMetadataSignature = baseline.metadataSignature,
+                    syncedSubtitleSignature = baseline.subtitleSignature,
+                    syncedTrickplaySignature = baseline.trickplaySignature,
+                    // Segments aren't part of MediaDetail; their signature is
+                    // seeded on the first segments resync rather than at
+                    // download time.
+                    syncedSegmentsSignature = null,
+                    syncedMediaSourceId = baseline.mediaSourceId,
+                    syncedMediaSizeBytes = baseline.mediaSizeBytes,
+                    lastSyncedAt = System.currentTimeMillis(),
+                ),
             )
         }
         preloadImageToCache(imageUrl)
@@ -868,11 +967,20 @@ class DownloadRepositoryImpl @Inject constructor(
         blurHashBackdrop = blurHashes.backdrop,
         premiereDate = premiereDate,
         genres = genres.joinToString(","),
-        // Seed playback progress from server UserData so the download shows its
-        // watched/resume state immediately.
+    )
+
+    /**
+     * Server `UserData` snapshot seeded at download time (and re-seeded on a
+     * metadata re-persist) into `playback_state`. Mirrors the playback fields
+     * the metadata row used to carry, so a freshly downloaded item shows its
+     * watched / resume state immediately.
+     */
+    private fun MediaItem.toPlaybackState(): PlaybackStateEntity = PlaybackStateEntity(
+        id = id,
         playbackPositionTicks = playbackPositionTicks,
         playedPercentage = PlayedStateSync.computePlayedPercentage(playbackPositionTicks, runTimeTicks, isPlayed),
         isPlayed = isPlayed,
+        isFavorite = isFavorite,
         lastPlayedDate = null,
     )
 
@@ -916,8 +1024,12 @@ class DownloadRepositoryImpl @Inject constructor(
         database.withTransaction {
             downloadDao.deleteDownloadById(entity.id)
             offlineMediaDao.deleteById(entity.mediaItemId)
+            playbackStateDao.deleteById(entity.mediaItemId)
+            syncBaselineDao.deleteById(entity.mediaItemId)
             offlineMediaDao.deleteOrphanedSeasons()
             offlineMediaDao.deleteOrphanedSeries()
+            playbackStateDao.deleteUnreferenced()
+            syncBaselineDao.deleteUnreferenced()
         }
     }
 

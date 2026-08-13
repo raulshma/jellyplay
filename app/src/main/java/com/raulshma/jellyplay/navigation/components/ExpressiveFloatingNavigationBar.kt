@@ -75,13 +75,13 @@ fun ExpressiveFloatingNavigationBar(
                     width = 1.dp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                 ),
-                modifier = Modifier.height(60.dp)
+                modifier = Modifier.height(56.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
                         .fillMaxHeight()
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -124,13 +124,13 @@ fun ExpressiveFloatingNavigationBar(
                                     modifier = Modifier
                                         .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
                                         .padding(
-                                            horizontal = if (shouldShowLabel) 16.dp else 14.dp,
-                                            vertical = 8.dp
+                                            horizontal = if (shouldShowLabel) 14.dp else 10.dp,
+                                            vertical = 10.dp
                                         ),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    NavIcon(route, label, selected = selected, tint = contentColor, iconSize = 26.dp)
+                                    NavIcon(route, label, selected = selected, tint = contentColor, iconSize = 24.dp)
                                     if (shouldShowLabel) {
                                         Text(
                                             text = label,
@@ -200,19 +200,19 @@ fun ExpressiveFloatingNavigationBar(
                         width = 1.dp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                     ),
-                    modifier = Modifier.height(60.dp),
+                    modifier = Modifier.height(56.dp),
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .padding(horizontal = 6.dp),
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         // Search (direct tab switch) — own highlight.
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(42.dp)
                                 .background(searchBg, CircleShape)
                                 .focusIndicator(CircleShape)
                                 .clickable(
@@ -226,13 +226,13 @@ fun ExpressiveFloatingNavigationBar(
                                 imageVector = Tabler.Outline.Search,
                                 contentDescription = searchEntry.value,
                                 tint = searchTint,
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(22.dp),
                             )
                         }
                         // "More" toggle — own highlight, expands overflow.
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(42.dp)
                                 .background(moreBg, CircleShape)
                                 .focusIndicator(CircleShape)
                                 .clickable(
@@ -271,7 +271,7 @@ fun ExpressiveFloatingNavigationBar(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                     ),
                     modifier = Modifier
-                        .size(60.dp)
+                        .size(56.dp)
                         .focusIndicator(CircleShape)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },

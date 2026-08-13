@@ -2,6 +2,8 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,10 +21,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +36,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -68,6 +73,7 @@ import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionControl
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
+import com.raulshma.jellyplay.core.ui.navigation.withHighlightSettingId
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -100,8 +106,10 @@ data class HomeCallbacks(
     val onModeChange: (HomeMode) -> Unit = {},
     val onSearchItemClick: (String) -> Unit = {},
     val onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
-    /** Open a settings destination surfaced by the home search bar. The [Route]
-     * carries its own `highlightSettingId` for deep-link scroll/highlight. */
+    /** Open a settings destination surfaced by the home search bar. The passed
+     * [com.raulshma.jellyplay.core.ui.navigation.Route] already has its
+     * `highlightSettingId` populated (via [withHighlightSettingId]) so the
+     * destination screen scrolls to / focuses the matched setting row. */
     val onSettingsSearchItemClick: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     val onNewsletterClick: () -> Unit = {},
     /** Deep-link into Settings → Home Screen Layout. Reached from the inline
@@ -528,7 +536,10 @@ private fun MainHomeContent(
                         viewModel.onEvent(HomeUiEvent.ClearSearch)
                         focusManager.clearFocus()
                         viewModel.onSettingsResultClicked(item)
-                        callbacks.onSettingsSearchItemClick(item.route)
+                        // Inject the matched setting's id as the deep-link scroll/
+                        // focus target so the destination screen scrolls to and
+                        // highlights it — same behavior as the in-settings search.
+                        callbacks.onSettingsSearchItemClick(item.route.withHighlightSettingId(item.id))
                     }
                 }
 
@@ -569,6 +580,7 @@ private fun MainHomeContent(
                     homeHeroEnabled = state.homeHeroEnabled,
                     hasFeaturedItem = heroController.featuredItem != null,
                     isTv = isTv,
+                    hideTopHeaderOnScroll = state.hideTopHeaderOnScroll,
                     currentUser = state.currentUser,
                     currentServerUsers = currentServerUsers,
                     onUserSwitch = onUserSwitch,
@@ -749,6 +761,7 @@ private fun HomeTopDockScrim(
     homeHeroEnabled: Boolean,
     hasFeaturedItem: Boolean,
     isTv: Boolean,
+    hideTopHeaderOnScroll: Boolean,
     currentUser: com.raulshma.jellyplay.core.model.UserInfo?,
     currentServerUsers: List<com.raulshma.jellyplay.core.model.UserInfo>,
     onUserSwitch: (String) -> Unit,
@@ -773,6 +786,47 @@ private fun HomeTopDockScrim(
     // the scrollFraction deferral documented at the top of this KDoc.
     val query by searchQuery.collectAsStateWithLifecycle()
 
+    // ── Auto-hide top header on scroll ──
+    // Mirrors the floating nav-bar hide-on-scroll: hide on scroll-down, reveal
+    // on scroll-up, always visible at the very top. The dock is an overlay
+    // sibling of the LazyColumn (not a scroll ancestor), so it can't host a
+    // NestedScrollConnection; direction is derived here from the shared
+    // LazyListState via snapshotFlow. Kept inside this leaf so the 510-line
+    // MainHomeContent orchestrator never recomposes on scroll — the same
+    // isolation discipline as scrollFraction above. Forced visible while
+    // search is focused and disabled entirely on TV.
+    val listState = homeScrollState.listState
+    val canHide = hideTopHeaderOnScroll && !isTv
+    var isHeaderVisible by remember { mutableStateOf(true) }
+    val hideThresholdPx = with(LocalDensity.current) { 12.dp.toPx() }
+    LaunchedEffect(canHide, isSearchFocused) {
+        if (!canHide || isSearchFocused) {
+            isHeaderVisible = true
+            return@LaunchedEffect
+        }
+        var prevIndex = listState.firstVisibleItemIndex
+        var prevOffset = listState.firstVisibleItemScrollOffset
+        snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) ->
+            when {
+                index == 0 && offset == 0 -> isHeaderVisible = true
+                index > prevIndex -> isHeaderVisible = false
+                index < prevIndex -> isHeaderVisible = true
+                offset - prevOffset > hideThresholdPx -> isHeaderVisible = false
+                prevOffset - offset > hideThresholdPx -> isHeaderVisible = true
+            }
+            prevIndex = index
+            prevOffset = offset
+        }
+    }
+    val hideProgress by animateFloatAsState(
+        targetValue = if (isHeaderVisible) 0f else 1f,
+        animationSpec = tween(durationMillis = 200),
+        label = "topHeaderHide",
+    )
+    var headerHeightPx by remember { mutableIntStateOf(0) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         HomeTopDock(
         appBarIconColor = appBarIconColor,
@@ -796,17 +850,28 @@ private fun HomeTopDockScrim(
         isGoingOnline = isGoingOnline,
         onShowSyncDetails = onShowSyncDetails,
         searchResultsContent = searchResultsContent,
-        modifier = Modifier.then(
-            if (isTv) {
-                Modifier.onDpadKey(
-                    onDown = {
-                        if (!isSearchFocused && homeHeroEnabled && hasFeaturedItem) {
-                            onHeroFocusDown()
-                        } else false
-                    }
-                )
-            } else Modifier
-        )
+        modifier = Modifier
+            .then(
+                if (isTv) {
+                    Modifier.onDpadKey(
+                        onDown = {
+                            if (!isSearchFocused && homeHeroEnabled && hasFeaturedItem) {
+                                onHeroFocusDown()
+                            } else false
+                        }
+                    )
+                } else Modifier
+            )
+            .then(
+                if (canHide) {
+                    Modifier
+                        .onSizeChanged { headerHeightPx = it.height }
+                        .graphicsLayer {
+                            translationY = -headerHeightPx * hideProgress
+                            alpha = 1f - hideProgress
+                        }
+                } else Modifier
+            )
     )
     } // end Box(fillMaxSize) wrapper providing BoxScope for align()
 }

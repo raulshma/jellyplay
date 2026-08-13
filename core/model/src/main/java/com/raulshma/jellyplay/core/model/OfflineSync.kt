@@ -29,7 +29,9 @@ enum class SyncStatus {
 
 /**
  * The freshness state of a single offline item, surfaced to the UI. Persisted
- * on the `offline_media` row so a badge can render from the DB with no network.
+ * (per content axis) on the `sync_baseline` row so a badge can render from the
+ * DB with no network, and projected losslessly by
+ * [com.raulshma.jellyplay.core.data.sync.OfflineSyncManager].
  */
 @Immutable
 @Serializable
@@ -37,6 +39,19 @@ data class OfflineSyncState(
     val status: SyncStatus,
     val metadataChanged: Boolean = false,
     val imagesChanged: Boolean = false,
+    /** External subtitle streams differ from the persisted baseline signature.
+     *  Computed in [com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator]
+     *  from the MediaDetail subtitle inventory and persisted as its own flag so
+     *  the DB-driven badge surfaces it accurately. Only flipped by a resync that
+     *  fetches fresh detail (the proactive check derives it from MediaDetail). */
+    val subtitlesChanged: Boolean = false,
+    /** Trickplay sprite manifest differs from the baseline signature. Persisted
+     *  on its own flag and surfaced accurately by the DB-driven badge. */
+    val trickplayChanged: Boolean = false,
+    /** Media segments (intro/outro/recap) differ from the baseline signature.
+     *  Only computed inside a resync that fetches fresh segments (segments are
+     *  not part of MediaDetail), so this never flips from the proactive check. */
+    val segmentsChanged: Boolean = false,
     /** The media file itself changed server-side (different MediaSource id/size).
      *  Surfaced separately because a resync cannot fix it — it requires a full
      *  re-download of the media file. */
@@ -44,8 +59,10 @@ data class OfflineSyncState(
     /** Epoch millis of the last completed server check. Null when never checked. */
     val lastCheckedAt: Long? = null,
 ) {
-    /** True when a lightweight resync (metadata + images) will bring the item up to date. */
-    val needsResync: Boolean get() = metadataChanged || imagesChanged
+    /** True when a lightweight resync (metadata, images, subtitles, trickplay,
+     *  segments) will bring the item up to date. */
+    val needsResync: Boolean get() =
+        metadataChanged || imagesChanged || subtitlesChanged || trickplayChanged || segmentsChanged
 }
 
 /**
@@ -63,8 +80,10 @@ data class ResyncCheckResult(
 /**
  * User-facing selection of which data categories a resync should refresh. Maps
  * onto the optional [ResyncStep]s (metadata -> PERSIST_METADATA, poster ->
- * DOWNLOAD_POSTER, backdrop -> DOWNLOAD_BACKDROP); FETCH_DETAIL and
- * UPDATE_BASELINE are always-on infrastructure and therefore not selectable.
+ * DOWNLOAD_POSTER, backdrop -> DOWNLOAD_BACKDROP, subtitles ->
+ * DOWNLOAD_SUBTITLES, trickplay -> DOWNLOAD_TRICKPLAY, segments ->
+ * DOWNLOAD_SEGMENTS); FETCH_DETAIL and UPDATE_BASELINE are always-on
+ * infrastructure and therefore not selectable.
  *
  * Defaults to all-true so the existing "resync everything" call sites behave
  * identically when the parameter is omitted. A user-driven force resync passes
@@ -76,9 +95,13 @@ data class ResyncOptions(
     val metadata: Boolean = true,
     val poster: Boolean = true,
     val backdrop: Boolean = true,
+    val subtitles: Boolean = true,
+    val trickplay: Boolean = true,
+    val segments: Boolean = true,
 ) {
     /** True when no category is selected — callers should treat this as a no-op. */
-    val isEmpty: Boolean get() = !metadata && !poster && !backdrop
+    val isEmpty: Boolean get() =
+        !metadata && !poster && !backdrop && !subtitles && !trickplay && !segments
 
     companion object {
         /** Resync every category. The historical default behaviour. */
@@ -94,6 +117,9 @@ enum class ResyncStep {
     PERSIST_METADATA,
     DOWNLOAD_POSTER,
     DOWNLOAD_BACKDROP,
+    DOWNLOAD_SUBTITLES,
+    DOWNLOAD_TRICKPLAY,
+    DOWNLOAD_SEGMENTS,
     UPDATE_BASELINE,
 }
 
@@ -163,59 +189,4 @@ data class OfflineSyncUpdate(
     val seriesName: String? = null,
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
-)
-
-/**
- * The single source of truth for projecting the persisted sync-baseline flags
- * (all stored as `Int` 0/1 columns on the `offline_media` row) into a UI-facing
- * [OfflineSyncState]. Shared by [OfflineSyncManager] and [OfflineRepository] so
- * the badge rendered from the DB (offline detail) and the state returned from a
- * check/resync agree — one decision shape, not two that can drift.
- *
- * Precedence: a stale `checking` marker wins (transient), then error, then
- * media-changed, then update-available, then current/unknown. Note that the
- * stored `syncUpdateAvailable` flag is coarse — it doesn't split metadata vs
- * images — so both are surfaced to drive the badge; the check path returns the
- * precise split via [ResyncCheckResult].
- *
- * The boolean params accept `Int`-as-Boolean so callers can pass the DAO column
- * values (`1`/`0`) directly without a per-call conversion.
- */
-fun offlineSyncStateOf(
-    checking: Boolean,
-    error: Boolean,
-    mediaChanged: Boolean,
-    updateAvailable: Boolean,
-    lastSyncedAt: Long?,
-): OfflineSyncState = when {
-    checking -> OfflineSyncState(SyncStatus.CHECKING, lastCheckedAt = lastSyncedAt)
-    error -> OfflineSyncState(SyncStatus.ERROR, lastCheckedAt = lastSyncedAt)
-    mediaChanged -> OfflineSyncState(
-        status = SyncStatus.UPDATE_AVAILABLE,
-        mediaFileChanged = true,
-        lastCheckedAt = lastSyncedAt,
-    )
-    updateAvailable -> OfflineSyncState(
-        status = SyncStatus.UPDATE_AVAILABLE,
-        metadataChanged = true,
-        imagesChanged = true,
-        lastCheckedAt = lastSyncedAt,
-    )
-    lastSyncedAt != null -> OfflineSyncState(SyncStatus.CURRENT, lastCheckedAt = lastSyncedAt)
-    else -> OfflineSyncState(SyncStatus.UNKNOWN)
-}
-
-/** Convenience overload taking the raw `Int` (0/1) column values. */
-fun offlineSyncStateOf(
-    checking: Int,
-    error: Int,
-    mediaChanged: Int,
-    updateAvailable: Int,
-    lastSyncedAt: Long?,
-): OfflineSyncState = offlineSyncStateOf(
-    checking = checking != 0,
-    error = error != 0,
-    mediaChanged = mediaChanged != 0,
-    updateAvailable = updateAvailable != 0,
-    lastSyncedAt = lastSyncedAt,
 )

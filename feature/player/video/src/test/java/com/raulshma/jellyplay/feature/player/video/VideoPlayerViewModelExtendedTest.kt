@@ -34,6 +34,8 @@ import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
+import io.mockk.clearMocks
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +59,7 @@ class VideoPlayerViewModelExtendedTest {
 
     private lateinit var viewModel: VideoPlayerViewModel
     private lateinit var itemPlaybackPreferenceRepository: ItemPlaybackPreferenceRepository
+    private lateinit var subtitleStore: SubtitleLanguageStore
 
     @Before
     fun setUp() {
@@ -72,7 +75,7 @@ class VideoPlayerViewModelExtendedTest {
         itemPlaybackPreferenceRepository = mockk(relaxed = true)
         val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         val engineStore = mockk<PlayerEngineStore>(relaxed = true)
-        val subtitleStore = mockk<SubtitleLanguageStore>(relaxed = true)
+        subtitleStore = mockk<SubtitleLanguageStore>(relaxed = true)
         val securityStore = mockk<SecurityStore>(relaxed = true)
         val syncPlayCastStore = mockk<SyncPlayCastStore>(relaxed = true)
         val playbackStore = mockk<PlaybackStore>(relaxed = true)
@@ -136,6 +139,7 @@ class VideoPlayerViewModelExtendedTest {
         every { sleepTimerManager.remainingMs } returns MutableStateFlow(0L)
         val playbackCore = mockk<SyncPlayPlaybackCore>(relaxed = true)
         every { syncPlayManager.playbackCore } returns playbackCore
+        syncPlayManager.stubEmptyEvents()
 
         viewModel = VideoPlayerViewModel(
             context = context,
@@ -210,6 +214,37 @@ class VideoPlayerViewModelExtendedTest {
     fun setSubtitleDelay_updatesState() {
         viewModel.setSubtitleDelay(-200L)
         assertEquals(-200L, viewModel.uiState.value.subtitleStyle.offsetMs)
+    }
+
+    @Test
+    fun setSubtitleDelay_doesNotClobberGlobalStyle() {
+        // A per-media delay correction must persist only to the per-item store,
+        // never through the global "Subtitle sync offset" style bucket — that
+        // global write was the cross-media leak. currentItemId is null in this
+        // harness, so the per-item write is skipped; we assert the global bucket
+        // is untouched regardless.
+        clearMocks(subtitleStore, answers = false, recordedCalls = true, childMocks = false)
+        viewModel.setSubtitleDelay(-200L)
+        assertEquals(-200L, viewModel.uiState.value.subtitleStyle.offsetMs)
+        coVerify(exactly = 0) { subtitleStore.setSubtitleStyle(any()) }
+    }
+
+    @Test
+    fun setSubtitleStyle_preservesGlobalSubtitleDelayOnPersist() {
+        // Resolve a per-item delay into in-memory state, then make an unrelated
+        // style edit (font size). The persisted style must carry the global
+        // default offsetMs (0 from the default aggregate), NOT the in-memory
+        // per-item delay — otherwise a font/colour change re-leaks the delay.
+        viewModel.setSubtitleDelay(-300L)
+        assertEquals(-300L, viewModel.uiState.value.subtitleStyle.offsetMs)
+        clearMocks(subtitleStore, answers = false, recordedCalls = true, childMocks = false)
+
+        val edited = viewModel.uiState.value.subtitleStyle.copy(fontSize = 40)
+        viewModel.setSubtitleStyle(edited)
+
+        coVerify {
+            subtitleStore.setSubtitleStyle(match { it.offsetMs == 0L && it.fontSize == 40 })
+        }
     }
 
     @Test

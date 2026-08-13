@@ -330,10 +330,18 @@ abstract class NetworkModule {
                         path.startsWith("/Sessions") -> 10
                         path.startsWith("/ScheduledTasks") -> 30
                         path == "/Shows/NextUp" || query.contains("resume") && path == "/Items" -> 120
-                        path.startsWith("/Shows/") && path.contains("/Episodes") -> 300
-                        path.startsWith("/Shows/") && path.contains("/Seasons") -> 300
                         path.contains("/Similar") -> 300
-                        path == "/Items" && !query.contains("Resume") -> 60
+                        // /Items?Ids=… (detail-by-id) carries per-item UserData; the
+                        // similar /Shows/.../Episodes and /Shows/.../Seasons reads (now
+                        // uncached — they fall through to `else`) carry it too. Don't
+                        // blind-cache them: mark-watched / favorite writes hit different
+                        // URIs (PlayedItems / FavoriteItems), so OkHttp won't invalidate
+                        // these entries (RFC 7234 §4.4), and the repo's detailCache /
+                        // EpisodeCatalogue are the cache layers that DO get invalidated on
+                        // every write. Library browse (/Items?ParentId=…) keeps the cache.
+                        path == "/Items" &&
+                            !query.contains("Resume") &&
+                            !query.any { it.equals("Ids", ignoreCase = true) } -> 60
                         else -> null
                     }
                     if (response.isSuccessful && cacheMaxAge != null) {

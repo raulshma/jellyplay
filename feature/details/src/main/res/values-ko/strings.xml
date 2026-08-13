@@ -171,6 +171,7 @@
     <string name="detail_error_download_failed">다운로드 실패</string>
     <string name="detail_error_not_a_series">시리즈가 아닙니다</string>
     <string name="detail_error_queue_failed">다운로드 대기열 추가 실패</string>
+    <string name="detail_error_unavailable_offline">이 항목은 오프라인에서 사용할 수 없습니다.</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
     <string name="detail_option_manage_series">시리즈 관리</string>
@@ -276,4 +277,106 @@
     <string name="detail_season_empty_title">사용 가능한 에피소드가 없습니다</string>
     <string name="detail_season_empty_description">에피소드가 추가되면 여기에 표시됩니다.</string>
 
+    <!-- Unified download / offline-detail strings. Resync falls back to default. -->
+    <string name="detail_download_info">다운로드 정보</string>
+    <string name="detail_file_size">파일 크기</string>
+    <string name="detail_status">상태</string>
+    <string name="detail_progress">진행률</string>
+    <string name="detail_download_status_pending">대기 중</string>
+    <string name="detail_download_status_queued">대기열에 있음</string>
+    <string name="detail_download_status_downloading">다운로드 중</string>
+    <string name="detail_download_status_paused">일시정지됨</string>
+    <string name="detail_download_status_completed">완료됨</string>
+    <string name="detail_download_status_failed">실패</string>
+    <string name="detail_download_status_cancelled">취소됨</string>
+    <string name="detail_watch_status">시청 상태</string>
+    <string name="detail_watched_status_watched">시청함</string>
+    <string name="detail_watched_status_label">시청함</string>
+    <string name="detail_watched_status_in_progress">진행 중</string>
+    <string name="detail_watched_status_started">시작됨</string>
+    <string name="detail_position">위치</string>
+    <string name="detail_position_of">%2$s 중 %1$s</string>
+    <string name="detail_last_watched">마지막 시청</string>
+    <string name="detail_close">닫기</string>
+    <string name="detail_delete">삭제</string>
+    <string name="detail_delete_download_title">다운로드 삭제</string>
+    <string name="detail_delete_download_cd">다운로드 삭제</string>
+    <string name="detail_delete_download_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
+    <string name="detail_delete_episode_title">에피소드 삭제</string>
+    <string name="detail_delete_episode_cd">에피소드 삭제</string>
+    <string name="detail_delete_episode_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까?</string>
+    <string name="detail_delete_downloads_title">다운로드 삭제</string>
+    <string name="detail_select_episodes_to_remove">기기에서 제거할 에피소드를 선택하세요.</string>
+    <string name="detail_episodes_selected">에피소드 %2$d개 중 %1$d개 선택됨</string>
+    <string name="detail_episodes_selected_with_freed">에피소드 %2$d개 중 %1$d개 선택됨 · %3$s</string>
+    <string name="detail_delete_count">%1$d개 삭제</string>
+    <string name="detail_delete_count_with_freed">%1$d개 삭제 · %2$s</string>
+    <string name="detail_season_default">시즌 %1$d</string>
+    <string name="detail_delete_entire_series">전체 시리즈 삭제</string>
+    <string name="detail_option_delete_downloads">다운로드 삭제</string>
+    <plurals name="detail_episodes_count">
+        <item quantity="other">에피소드 %1$d개</item>
+    </plurals>
+
+    <!-- Sync / resync download -->
+    <string name="detail_resync_title">다운로드 동기화</string>
+    <string name="detail_resync_checking">업데이트 확인 중…</string>
+    <string name="detail_resync_update_available">새 정보가 있습니다</string>
+    <string name="detail_resync_media_changed">미디어 파일이 변경됨 — 재다운로드 필요</string>
+    <string name="detail_resync_in_progress">최신 세부 정보 동기화 중…</string>
+    <string name="detail_resync_complete">다운로드가 최신 세부 정보와 동기화됨</string>
+    <string name="detail_resync_failed">동기화 실패</string>
+    <string name="detail_resync_up_to_date">이 다운로드는 최신 상태입니다.</string>
+    <string name="detail_resync_description">서버에 더 새로운 정보가 있습니다. 동기화하여 메타데이터와 이미지를 새로 고치세요.</string>
+    <string name="detail_resync_change_metadata">메타데이터 업데이트됨 (개요, 출연진, 평점)</string>
+    <string name="detail_resync_change_images">아트워크 업데이트됨 (포스터/배경)</string>
+    <string name="detail_resync_change_media">미디어 파일 자체가 변경됨</string>
+    <string name="detail_resync_media_explanation">메타데이터 동기화로는 미디어 파일을 업데이트할 수 없습니다. 새 파일을 받으려면 이 항목을 삭제하고 다시 다운로드하세요.</string>
+    <string name="detail_resync_action">지금 동기화</string>
+    <string name="detail_resync_redownload">미디어 재다운로드</string>
+
+    <!-- Local subtitles -->
+    <string name="detail_local_subtitles">자막</string>
+    <string name="detail_local_subtitle_off">끔</string>
+    <string name="detail_local_subtitle_default_badge">기본</string>
+    <string name="detail_local_subtitle_forced_badge">강제</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">다운로드 세부정보</string>
+    <string name="detail_download_section_download">다운로드</string>
+    <string name="detail_download_section_media">미디어</string>
+    <string name="detail_download_section_media_info">미디어 정보</string>
+    <string name="detail_download_section_files">다운로드된 파일</string>
+    <string name="detail_downloaded_bytes">다운로드된 크기</string>
+    <string name="detail_downloaded_date">다운로드 날짜</string>
+    <string name="detail_container">컨테이너</string>
+    <string name="detail_file_present">파일 존재 여부</string>
+    <string name="detail_media_source">미디어 소스</string>
+    <string name="detail_download_path">경로</string>
+    <string name="detail_media_title">제목</string>
+    <string name="detail_media_type">유형</string>
+    <string name="detail_original_title">원제</string>
+    <string name="detail_year">연도</string>
+    <string name="detail_runtime">재생 시간</string>
+    <string name="detail_file_name">파일</string>
+    <string name="detail_episode_label">에피소드</string>
+    <string name="detail_no_downloaded_subtitles">다운로드된 자막 없음</string>
+    <string name="detail_view_download_details">다운로드 세부정보 보기</string>
+    <string name="detail_download_tab_overview">개요</string>
+    <string name="detail_download_tab_media_info">미디어 정보</string>
+    <string name="detail_download_tab_storage">저장 공간</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">디스크 총 용량</string>
+    <string name="detail_download_files_loading">파일 크기 계산 중…</string>
+    <string name="detail_download_files_empty">다운로드된 파일을 찾을 수 없습니다</string>
+    <string name="detail_download_files_location">위치</string>
+    <plurals name="detail_files_count">
+        <item quantity="other">%1$d개 파일</item>
+    </plurals>
+    <string name="detail_file_category_media">미디어</string>
+    <string name="detail_file_category_subtitle">자막</string>
+    <string name="detail_file_category_trickplay">트릭플레이</string>
+    <string name="detail_file_category_segment">세그먼트</string>
+    <string name="detail_file_category_image">이미지</string>
 </resources>

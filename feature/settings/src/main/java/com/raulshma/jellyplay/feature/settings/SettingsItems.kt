@@ -42,6 +42,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
+import com.raulshma.jellyplay.core.designsystem.theme.groupedItemContainerColor
+import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
 import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
 import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -181,7 +183,7 @@ internal fun SettingReorderableToggleItem(
             }
         },
         colors = ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            containerColor = groupedItemContainerColor(),
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -192,6 +194,7 @@ internal fun SettingReorderableToggleItem(
                 this.alpha = if (isDragging) 0.85f else pressAlpha
             }
             .clip(shape)
+            .lightModeHairlineBorder(shape)
             .then(tvFocusState.focusModifier)
             .tvFocusIndicator(tvFocusState, shape)
             .clickable(
@@ -268,11 +271,12 @@ internal fun SettingInfoItem(
             }
         } else null,
         colors = ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            containerColor = groupedItemContainerColor(),
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape),
+            .clip(shape)
+            .lightModeHairlineBorder(shape),
     )
 }
 

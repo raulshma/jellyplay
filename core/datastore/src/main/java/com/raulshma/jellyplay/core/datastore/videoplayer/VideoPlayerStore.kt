@@ -388,7 +388,7 @@ class VideoPlayerStore @Inject constructor(
 
     /**
      * Keys owned by this store, for factory-reset participation. Aggregated by
-     * the facade's reset-coverage guard (Phase C).
+     * the facade's reset-coverage guard.
      */
     internal val resetKeys: List<Preferences.Key<*>> = listOf(
         Keys.VIDEO_SEEK_DURATION_MS,

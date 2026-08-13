@@ -257,6 +257,8 @@ private fun PlaybackOutboxEntry.eventTypeLabel(): String = when (eventType) {
     PlaybackOutboxEventType.STOP -> stringResource(R.string.sync_event_stop)
     PlaybackOutboxEventType.PLAYED -> stringResource(R.string.sync_event_played)
     PlaybackOutboxEventType.UNPLAYED -> stringResource(R.string.sync_event_unplayed)
+    PlaybackOutboxEventType.FAVORITE -> stringResource(R.string.sync_event_favorite)
+    PlaybackOutboxEventType.UNFAVORITE -> stringResource(R.string.sync_event_unfavorite)
 }
 
 /**

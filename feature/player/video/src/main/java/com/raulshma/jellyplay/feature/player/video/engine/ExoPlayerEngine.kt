@@ -119,6 +119,14 @@ class ExoPlayerEngine(
     @Volatile
     private var lastAppliedAudioSessionId: Int = -1
 
+    // Mirrors MPV/LibVLC: remembers play state across Activity pause so the
+    // engine pauses on lock/home (unless background audio is enabled) and
+    // resumes only if it was actually playing. Without this override the
+    // inherited PlayerLifecycleCallbacks default is a no-op, so ExoPlayer
+    // would keep playing audio silently when the screen locks.
+    @Volatile
+    private var wasPlayingBeforeActivityPause = false
+
     private inline fun runOnPlayerThread(crossinline block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             block()
@@ -164,7 +172,7 @@ class ExoPlayerEngine(
     private var assOverlayView: AssSubtitleView? = null
     private var assEnabledForSession: Boolean = false
     // Reflects whether the *currently selected* text track is ASS. Drives the
-    // SubtitleView/AssSubtitleView visibility toggle in applySubtitleStyleToView.
+    // SubtitleView/AssSubtitleView visibility toggle in applySubtitleStyle.
     private var activeTrackIsAss: Boolean = false
     // Cached id of the currently selected text track group, so onTracksChanged
     // can detect a *subtitle* track switch (vs an audio-only change) and reset
@@ -618,16 +626,34 @@ class ExoPlayerEngine(
             .setMediaMetadata(metadataBuilder.build())
             .build()
 
-        exo.setMediaItem(mediaItem)
         currentMediaItem = mediaItem
         serverDurationMs = request.serverDurationMs
         currentSubtitleConfigs.clear()
         currentSubtitleConfigs.addAll(subtitleConfigs)
-        exo.prepare()
-        if (request.startPositionMs > 0) {
-            exo.seekTo(request.startPositionMs)
+        if (currentConfig.subtitleDelayMs != 0L) {
+            // A non-zero subtitle delay configured at boot (typically a persisted
+            // per-item correction) never ran the onConfigChanged →
+            // refreshSubtitlesForOffsetChange reload: updateConfig fires before
+            // load() creates the player, so player/currentMediaItem are null at
+            // boot and refreshSubtitlesForOffsetChange() no-ops. The saved delay
+            // therefore only took effect once the user re-adjusted it
+            // mid-playback (which fires the reload with the player alive). Reload
+            // once here at the requested start position so Media3 re-parses cues
+            // through the OffsettingSubtitleParserFactory with the delay applied
+            // — the same proven path the live slider uses. setMediaItem(item,
+            // startPosMs) folds the seek into the reload so there is a single
+            // prepare (no double-buffer) and the resume position is preserved.
+            exo.setMediaItem(mediaItem, request.startPositionMs)
+            exo.prepare()
+            exo.play()
+        } else {
+            exo.setMediaItem(mediaItem)
+            exo.prepare()
+            if (request.startPositionMs > 0) {
+                exo.seekTo(request.startPositionMs)
+            }
+            exo.play()
         }
-        exo.play()
 
         applyAudioEffects()
     }
@@ -692,6 +718,7 @@ class ExoPlayerEngine(
         releaseAudioEffects()
         cachedVolume = 1f
         lastUnmuteVolume = 1f
+        wasPlayingBeforeActivityPause = false
         _playbackState.value = EnginePlaybackState.IDLE
         _isPlaying.value = false
         _availableTracks.value = emptyList()
@@ -722,6 +749,22 @@ class ExoPlayerEngine(
         p.play()
     }
     override fun pause() = runOnPlayerThread { player?.pause() }
+
+    // Activity lifecycle bridge: unlike MPV/LibVLC, ExoPlayer does not detach
+    // views here (PlayerView handles the surface lifecycle). Pausing keeps the
+    // seek position; onActivityResume restores play only if it was active.
+    override fun onActivityPause() {
+        wasPlayingBeforeActivityPause = _isPlaying.value
+        pause()
+    }
+
+    override fun onActivityResume() {
+        if (wasPlayingBeforeActivityPause) {
+            wasPlayingBeforeActivityPause = false
+            play()
+        }
+    }
+
     override fun stop() = runOnPlayerThread { player?.stop() }
     override fun seekTo(positionMs: Long) = runOnPlayerThread { player?.seekTo(positionMs) }
     override fun setPlaybackSpeed(speed: Float) = runOnPlayerThread { player?.setPlaybackSpeed(speed) }
@@ -779,18 +822,12 @@ class ExoPlayerEngine(
         // handled by the upper layer recreating the player — nothing to do here.
         //
         // subtitleDelayMs change: the OffsettingSubtitleParserFactory's
-        // wrapper reads currentConfig.subtitleDelayMs on each parse() call, so
-        // a delay adjustment takes effect for subsequent cues without a media
-        // reload. (Previously the offset was snapshotted at prepare() time and
-        // the delay slider appeared broken for side-loaded subtitles.)
-        //
-        // KNOWN LIMITATION: Media3 parses a progressive side-car subtitle file
-        // once and caches the cues; parse() is not re-invoked when the delay
-        // changes mid-playback, so cues already loaded keep their original
-        // timestamps until the user seeks (which re-invokes the parser). mpv and
-        // libVLC re-evaluate the delay continuously, so their offset is truly
-        // live. Forcing a re-parse on every delay change risks perf/jank, so the
-        // buffered-cue limitation is accepted; seeking refreshes the offset.
+        // wrapper reads currentConfig.subtitleDelayMs on each parse() call. A
+        // delay adjustment is applied live by refreshSubtitlesForOffsetChange(),
+        // which reloads the current MediaItem so Media3 re-parses the subtitles
+        // through the offset wrapper with the new value. mpv and libVLC
+        // re-evaluate the delay continuously (sub-delay / setSpuDelay), so no
+        // reload is needed there.
 
         if (oldConfig.audioEffects != newConfig.audioEffects) {
             applyAudioEffects()
@@ -800,7 +837,16 @@ class ExoPlayerEngine(
         }
 
         if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
-            playerView?.let { pv -> applySubtitleStyleToView(pv, newConfig.subtitleStyle) }
+            applySubtitleStyle(newConfig.subtitleStyle)
+            // The offset lives on SubtitleStyle.offsetMs, so a delay change also
+            // flows through here. Media3 caches parsed cues for the active text
+            // track and will not re-invoke the OffsettingSubtitleParserFactory
+            // for the cached sample — so the overlay would look like it does
+            // nothing until the next reload/seek. Rebuild the media item so the
+            // subtitle is parsed through the offset wrapper with the new value.
+            if (oldConfig.subtitleStyle.offsetMs != newConfig.subtitleStyle.offsetMs) {
+                refreshSubtitlesForOffsetChange()
+            }
         }
 
         if (oldConfig.pauseOnAudioFocusLoss != newConfig.pauseOnAudioFocusLoss) {
@@ -809,6 +855,37 @@ class ExoPlayerEngine(
                 .setUsage(C.USAGE_MEDIA)
                 .build()
             player?.setAudioAttributes(audioAttrs, newConfig.pauseOnAudioFocusLoss)
+        }
+    }
+
+    /**
+     * Reloads the current MediaItem so Media3 re-parses the subtitles through
+     * the [OffsettingSubtitleParserFactory] with the new offset.
+     *
+     * Media3 caches parsed cues for the active text track: neither a track
+     * reselection nor a same-position seek reliably re-invokes the parser for
+     * the already-parsed sample (the two-phase disable/re-enable collapses into
+     * a net-zero parameter diff before the renderer re-evaluates; a small seek
+     * reuses the cached sample). The only reliable nudge is a media-period
+     * reset, which tears down the text renderer stream and rebuilds it from
+     * scratch — re-running the offset wrapper.
+     *
+     * Mirrors [reconfigureAudioPipeline] / [addExternalSubtitle]: preserve the
+     * position and play state, then [setMediaItem] + [prepare] + resume. The
+     * [SubtitleDelayOverlay]'s 250 ms flush debounce coalesces rapid taps into
+     * fewer [VideoPlayerViewModel.setSubtitleDelay] calls, and that method
+     * further debounces the engine apply (~500 ms) so a whole fine-tune burst
+     * triggers a single reload / rebuffer.
+     */
+    private fun refreshSubtitlesForOffsetChange() {
+        val exo = player ?: return
+        val mediaItem = currentMediaItem ?: return
+        runOnPlayerThread {
+            val positionMs = exo.currentPosition
+            val wasPlaying = exo.isPlaying
+            exo.setMediaItem(mediaItem, positionMs)
+            exo.prepare()
+            if (wasPlaying) exo.play()
         }
     }
 
@@ -868,7 +945,7 @@ class ExoPlayerEngine(
             }
             if (newlyAss != activeTrackIsAss) {
                 activeTrackIsAss = newlyAss
-                playerView?.let { applySubtitleStyleToView(it, currentConfig.subtitleStyle) }
+                applySubtitleStyle(currentConfig.subtitleStyle)
             }
         }
     }
@@ -946,7 +1023,7 @@ class ExoPlayerEngine(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
-                // Hidden until an ASS track is selected (see applySubtitleStyleToView /
+                // Hidden until an ASS track is selected (see applySubtitleStyle /
                 // selectTrack toggle). Non-ASS tracks keep using the native SubtitleView.
                 visibility = if (activeTrackIsAss) View.VISIBLE else View.GONE
             }
@@ -958,7 +1035,7 @@ class ExoPlayerEngine(
             pv.post { reparentSubtitleViews(pv) }
         }
 
-        applySubtitleStyleToView(pv, currentConfig.subtitleStyle)
+        applySubtitleStyle(currentConfig.subtitleStyle)
         return pv
     }
 
@@ -1027,8 +1104,8 @@ class ExoPlayerEngine(
         }
     }
 
-    override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
-        val pv = (view as? PlayerView) ?: playerView ?: return
+    override fun applySubtitleStyle(style: SubtitleStyle) {
+        val pv = playerView ?: return
         val bgAlpha = (style.backgroundOpacity * 255).toInt()
         val bgColorWithAlpha = (bgAlpha shl 24) or
             (com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleColorResolver.resolveBackgroundColor(style) and 0x00FFFFFF)
@@ -1112,11 +1189,22 @@ class ExoPlayerEngine(
         assOverlayView?.setVisibility(if (activeTrackIsAss) View.VISIBLE else View.GONE)
     }
 
-    override fun setAspectRatio(mode: Int, ratio: Float?) {
-        playerView?.setResizeMode(mode)
-        if (ratio != null && ratio > 0f) {
-            (playerView as? AspectRatioFrameLayout)?.setAspectRatio(ratio)
-        } else if (ratio == null || ratio == 0f) {
+    override fun setAspectRatio(ratio: AspectRatio) {
+        // Map the engine-neutral enum to the media3 resize mode here, inside the
+        // only adapter that uses media3's AspectRatioFrameLayout, so no media3
+        // constant crosses the engine seam.
+        val resizeMode = when (ratio) {
+            AspectRatio.FIT, AspectRatio.AUTO -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+            AspectRatio.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            AspectRatio.CROP -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            AspectRatio.RATIO_16_9, AspectRatio.RATIO_4_3, AspectRatio.RATIO_21_9 ->
+                AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+        }
+        playerView?.setResizeMode(resizeMode)
+        val aspectValue = ratio.ratio
+        if (aspectValue != null && aspectValue > 0f) {
+            (playerView as? AspectRatioFrameLayout)?.setAspectRatio(aspectValue)
+        } else {
             (playerView as? AspectRatioFrameLayout)?.setAspectRatio(0f)
         }
     }

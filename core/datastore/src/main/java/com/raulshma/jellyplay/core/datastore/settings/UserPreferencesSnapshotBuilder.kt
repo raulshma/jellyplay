@@ -165,6 +165,7 @@ fun buildUserPreferencesSnapshot(
     hideBottomNavOnScroll = navigation.hideBottomNavOnScroll,
     homeHeroEnabled = homeDiscovery.homeHeroEnabled,
     homeBackdropEnabled = homeDiscovery.homeBackdropEnabled,
+    hideTopHeaderOnScroll = homeDiscovery.hideTopHeaderOnScroll,
     onboardingCompleted = runtime.onboardingCompleted,
     mpvConfig = engine.mpvConfig,
     libVlcConfig = engine.libVlcConfig,

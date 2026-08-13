@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -62,6 +63,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.legacy.UserPreferences
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
@@ -70,6 +72,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.detailBodyMaxWidth
+import com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag
 import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
@@ -187,12 +190,11 @@ internal fun DetailContentBody(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 8.dp)
                                 .clip(ShapeCache.smooth8)
                                 .then(seriesNavFocusState.focusModifier)
                                 .then(Modifier.tvFocusIndicator(seriesNavFocusState, ShapeCache.smooth8))
                                 .clickable { item.seriesId?.let(callbacks.onNavigateToSeries) }
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
@@ -230,21 +232,29 @@ internal fun DetailContentBody(
                             if (isNotEmpty()) append(" · ")
                             append("E$episode")
                         }
-                        item.seriesName?.takeIf { it.isNotBlank() }?.let { series ->
-                            if (isNotEmpty()) append(" · ")
-                            append(series)
-                        }
                     }
-                    if (episodeContext.isNotBlank()) {
+                    if (episodeContext.isNotBlank() || item.isPlayed) {
                         FadingItem {
                             Column {
-                                Text(
-                                    text = episodeContext,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Spacer(Modifier.height(6.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    if (episodeContext.isNotBlank()) {
+                                        Text(
+                                            text = episodeContext,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                    if (item.isPlayed) {
+                                        EpisodeWatchedTag(
+                                            label = stringResource(R.string.detail_watched_badge),
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(2.dp))
                             }
                         }
                     }
@@ -380,6 +390,11 @@ internal fun DetailContentBody(
 
                 detail.studios.takeIf { it.isNotEmpty() }?.let { studios ->
                     Spacer(Modifier.height(10.dp))
+                    // Studio chips: REMOTE keeps click -> StudioDetail; LOCAL
+                    // (detail.item.studios names only, no server id) renders as
+                    // non-clickable labels. Gated by capabilities.studioNavigation
+                    // so a local origin never offers a drill-in it can't fulfill.
+                    val studioNavEnabled = state.capabilities.studioNavigation
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
@@ -392,9 +407,17 @@ internal fun DetailContentBody(
                                     modifier = Modifier
                                         .clip(ShapeCache.smooth16)
                                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                                        .then(studioFocusState.focusModifier)
-                                        .then(Modifier.tvFocusIndicator(studioFocusState, ShapeCache.smooth16))
-                                        .clickable { callbacks.onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.StudioDetail(studio.id, studio.name)) }
+                                        .then(if (studioNavEnabled) studioFocusState.focusModifier else Modifier)
+                                        .then(if (studioNavEnabled) Modifier.tvFocusIndicator(studioFocusState, ShapeCache.smooth16) else Modifier)
+                                        .then(
+                                            if (studioNavEnabled) {
+                                                Modifier.clickable {
+                                                    callbacks.onNavigate(
+                                                        com.raulshma.jellyplay.core.ui.navigation.Route.StudioDetail(studio.id, studio.name),
+                                                    )
+                                                }
+                                            } else Modifier,
+                                        )
                                         .padding(horizontal = 14.dp, vertical = 7.dp)
                                 ) {
                                     Text(
@@ -405,6 +428,40 @@ internal fun DetailContentBody(
                                 }
                             }
                         }
+                    }
+                }
+
+                // ── Aggregate local-series header ("N episodes · size") ──
+                // Mirrors OfflineSeriesScreen. Rendered only for a local series
+                // (detailContext.seriesAggregate != null on a SERIES item). Placed
+                // in the title metadata block so the count is visible alongside
+                // genres/studios.
+                if (item.mediaType == MediaType.SERIES) {
+                    state.detailContext?.seriesAggregate?.let { aggregate ->
+                    if (aggregate.downloadedEpisodeCount > 0 || aggregate.totalSizeBytes > 0L) {
+                        Spacer(Modifier.height(10.dp))
+                        FadingItem {
+                            val parts = buildList {
+                                if (aggregate.downloadedEpisodeCount > 0) {
+                                    add(
+                                        pluralStringResource(
+                                            R.plurals.detail_episodes_count,
+                                            aggregate.downloadedEpisodeCount,
+                                            aggregate.downloadedEpisodeCount,
+                                        ),
+                                    )
+                                }
+                                if (aggregate.totalSizeBytes > 0L) {
+                                    add(aggregate.totalSizeBytes.formatBytes())
+                                }
+                            }
+                            Text(
+                                text = parts.joinToString(" · "),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                     }
                 }
             }
@@ -420,16 +477,49 @@ internal fun DetailContentBody(
         }
 
         if (showMediaInfo) StaggeredDetailSection(visible = showContent && !isAudio, delayIndex = 2) {
+            // Stream selection is source-aware:
+            //  - REMOTE (remoteStreamSelection): full MediaInfoSection with audio
+            //    + subtitle inventories from the server MediaSource.
+            //  - LOCAL (localStreamInfo): read-only quality/audio badges probed
+            //    from the downloaded file, plus the manifest-backed
+            //    LocalSubtitlePicker. Audio is switched in the player, not here.
+            //  - LOCAL subtitles only (localSubtitleSelection): LocalSubtitlePicker
+            //    alone — the file couldn't be probed (missing/corrupt/legacy).
+            // Each branch is gated independently so a plain remote item with no
+            // source still renders nothing.
             val source = detail.mediaSources.firstOrNull()
-            if (source != null) {
-                MediaInfoSection(
-                    mediaStreams = source.mediaStreams,
-                    selectedAudioIndex = state.selectedAudioIndex,
-                    selectedSubtitleIndex = state.selectedSubtitleIndex,
-                    onAudioSelect = callbacks.onAudioSelect,
-                    onSubtitleSelect = callbacks.onSubtitleSelect,
-                    preferences = state.preferences,
-                )
+            when {
+                state.capabilities.remoteStreamSelection && source != null -> {
+                    MediaInfoSection(
+                        mediaStreams = source.mediaStreams,
+                        selectedAudioIndex = state.selectedAudioIndex,
+                        selectedSubtitleIndex = state.selectedSubtitleIndex,
+                        onAudioSelect = callbacks.onAudioSelect,
+                        onSubtitleSelect = callbacks.onSubtitleSelect,
+                        preferences = state.preferences,
+                    )
+                }
+                state.capabilities.localStreamInfo && source != null -> {
+                    // Quality + audio (read-only, probed) share a single badge row
+                    // with the interactive local subtitle pill, matching the remote
+                    // section's 3-pill layout. Subtitles are only passed when the
+                    // manifest advertises them.
+                    LocalMediaInfoSection(
+                        mediaStreams = source.mediaStreams,
+                        subtitles = if (state.capabilities.localSubtitleSelection) state.localSubtitles else emptyList(),
+                        selectedSubtitleIndex = state.selectedLocalSubtitleIndex,
+                        onSelectSubtitle = callbacks.onSelectLocalSubtitle,
+                        horizontalPadding = bodyContentPad,
+                    )
+                }
+                state.capabilities.localSubtitleSelection -> {
+                    LocalSubtitlePicker(
+                        subtitles = state.localSubtitles,
+                        selectedIndex = state.selectedLocalSubtitleIndex,
+                        onSelect = callbacks.onSelectLocalSubtitle,
+                        modifier = Modifier.padding(horizontal = bodyContentPad),
+                    )
+                }
             }
         }
 
@@ -448,6 +538,33 @@ internal fun DetailContentBody(
                         modifier = Modifier.padding(horizontal = bodyContentPad),
                     )
                 }
+            }
+        }
+
+        // ── Download info card + freshness banner ──
+        // Rendered for a snapshot with an attached download (remote-with-download
+        // OR local origin). Gated so a plain remote-no-download item never shows
+        // it. Placed after the overview to match the offline screen's ordering.
+        // The seriesAggregate-only local series (no per-item download) is handled
+        // by the header above; this card is per-item.
+        val attachedDownload = state.detailContext?.download
+        val isLocalOrigin = state.origin?.isLocal == true
+        val showDownloadCard = showContent && (attachedDownload != null || isLocalOrigin)
+        if (showDownloadCard) StaggeredDetailSection(visible = true, delayIndex = 4) {
+            Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
+                // Freshness banner: surfaces a server-detected update or a media-file
+                // change that needs a full re-download. Tappable -> opens the resync
+                // sheet. Hidden when there's nothing to act on.
+                SyncUpdateBanner(
+                    syncState = state.detailContext?.syncState,
+                    resyncState = state.resyncState,
+                    onClick = callbacks.onOpenResync,
+                )
+                DownloadInfoCard(
+                    download = attachedDownload,
+                    item = item,
+                    onClick = callbacks.onOpenDownloadDetails,
+                )
             }
         }
 
@@ -483,17 +600,43 @@ internal fun DetailContentBody(
             }
         }
 
+        if (showContent && item.mediaType == MediaType.SERIES && state.smartPlayTarget != null && state.preferences.showDetailUpNext) {
+            StaggeredDetailSection(visible = showContent, delayIndex = 6) {
+                Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
+                    UpNextSection(
+                        target = state.smartPlayTarget,
+                        onPlayClick = {
+                            val target = state.smartPlayTarget
+                            val sourceId = null
+                            callbacks.onPlayClick(target.episode.id, sourceId, target.startPositionTicks)
+                        },
+                        onHideClick = callbacks.onHideDetailUpNext,
+                    )
+                }
+            }
+        }
+
         StaggeredDetailSection(visible = showContent, delayIndex = 6) {
             val showSeasons = (item.mediaType == MediaType.SERIES || item.mediaType == MediaType.EPISODE) && state.seasons.isNotEmpty()
             if (showSeasons) {
                 CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                    // Episode-card preferences: hideEpisodeThumbnails and skipSpecials
+                    // are neutralized for a LOCAL origin (see MediaDetailSeasons
+                    // "DEFERRED FOR LOCAL ORIGIN") — local cards always show art
+                    // (hiding without guaranteed local artwork yields blank tiles)
+                    // and render every season. Episode sort ([episodesDescending])
+                    // IS honored for a local origin since offline episodes load in
+                    // canonical ascending playback order, same as online.
+                    val effectiveSkipSpecials = !isLocalOrigin && state.preferences.skipSpecials
+                    val effectiveHideThumbnails = !isLocalOrigin && state.preferences.hideEpisodeThumbnails
+                    val effectiveEpisodesDescending = state.preferences.episodesDescending
                     // Memoize the skip-specials filter so it is not recomputed (allocating
                     // a new Map + per-season Lists) on every recomposition of this
                     // detail item (scroll-driven FadingItem animations, sibling
                     // sections animating). Only re-runs when episodes or the
                     // skipSpecials flag actually change.
-                    val filteredEpisodes = remember(state.episodes, state.preferences.skipSpecials) {
-                        if (state.preferences.skipSpecials) {
+                    val filteredEpisodes = remember(state.episodes, effectiveSkipSpecials) {
+                        if (effectiveSkipSpecials) {
                             state.episodes.mapValues { (_, eps) -> eps.filter { it.seasonNumber != 0 } }
                         } else {
                             state.episodes
@@ -519,29 +662,27 @@ internal fun DetailContentBody(
                         onEpisodeLongPress = callbacks.onMediaQuickActions,
                         onFocusedEpisodeChange = callbacks.onFocusedMediaItem,
                         onSeasonSelected = callbacks.onSeasonSelected,
-                        hideEpisodeThumbnails = state.preferences.hideEpisodeThumbnails,
-                        episodesDescending = state.preferences.episodesDescending,
+                        hideEpisodeThumbnails = effectiveHideThumbnails,
+                        episodesDescending = effectiveEpisodesDescending,
                         onEpisodesDescendingChange = callbacks.onEpisodesDescendingChange,
                         compactEpisodeList = state.preferences.compactEpisodeList,
                         onCompactEpisodeListChange = callbacks.onCompactEpisodeListChange,
                         onMarkSeasonPlayed = callbacks.onMarkSeasonPlayed,
                         onMarkSeasonUnplayed = callbacks.onMarkSeasonUnplayed,
-                    )
-                }
-            }
-        }
-
-        if (showContent && item.mediaType == MediaType.SERIES && state.smartPlayTarget != null && state.preferences.showDetailUpNext) {
-            StaggeredDetailSection(visible = showContent, delayIndex = 6) {
-                Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
-                    UpNextSection(
-                        target = state.smartPlayTarget,
-                        onPlayClick = {
-                            val target = state.smartPlayTarget
-                            val sourceId = null
-                            callbacks.onPlayClick(target.episode.id, sourceId, target.startPositionTicks)
+                        // ── Episode parity: per-episode delete + local artwork ──
+                        // Downloaded-episode set: for a LOCAL origin every episode is
+                        // downloaded; for a REMOTE series we surface the loaded
+                        // downloadedEpisodeIds (populated when the download sheet
+                        // opened) so the trash badge matches the on-disk truth.
+                        downloadedEpisodeIds = when {
+                            isLocalOrigin -> state.episodes.values.flatten().map { it.id }.toSet()
+                            state.downloadedEpisodeIds.isNotEmpty() -> state.downloadedEpisodeIds
+                            else -> null
                         },
-                        onHideClick = callbacks.onHideDetailUpNext,
+                        onEpisodeDeleteClick = { episode -> callbacks.onDeleteEpisode(episode.id) },
+                        // Resolve a downloaded episode thumbnail from DetailAssets before
+                        // falling back to the server image url (which won't load offline).
+                        getEpisodeLocalImagePath = { episode -> state.assets.episodeImages[episode.id] },
                     )
                 }
             }
@@ -601,12 +742,20 @@ internal fun DetailContentBody(
                     }
                     Spacer(Modifier.height(16.dp))
                         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                        // Cast rendering branches on capabilities.personNavigation:
+                        //  - REMOTE (personNavigation true): existing PersonItem,
+                        //    click -> onPersonClick, image via getImageUrl.
+                        //  - LOCAL (personNavigation false): OfflinePersonItem with
+                        //    the on-disk cast portrait (assets.castImages[id])
+                        //    preferred over the server URL fallback, NO click.
+                        val personNavEnabled = state.capabilities.personNavigation
                         TvFocusableItemRow(
                             items = detail.people,
                             key = { "person_${it.id}" },
                             contentPadding = PaddingValues(horizontal = bodyContentPad),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) { _, person, focusModifier ->
+                            if (personNavEnabled) {
                                 val personClick = remember(person.id) { { callbacks.onPersonClick(person.id) } }
                                 val personImageUrl = remember(person.id) { callbacks.getImageUrl(person.id) }
                                 PersonItem(
@@ -615,6 +764,19 @@ internal fun DetailContentBody(
                                     onClick = personClick,
                                     modifier = focusModifier,
                                 )
+                            } else {
+                                // Local portrait preferred, then server URL fallback.
+                                val localPortrait = state.assets.castImages[person.id]
+                                val personImageUrl = remember(person.id, localPortrait) {
+                                    localPortrait ?: callbacks.getImageUrl(person.id)
+                                }
+                                com.raulshma.jellyplay.core.ui.components.OfflinePersonItem(
+                                    person = person.toOfflinePersonInfo(),
+                                    imageUrl = personImageUrl,
+                                    modifier = focusModifier,
+                                    // No onClick — local persons have no server id to drill into.
+                                )
+                            }
                 }
 
         }

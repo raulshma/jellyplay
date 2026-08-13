@@ -1186,6 +1186,25 @@ class LibraryApiClientImpl @Inject constructor(
         }
     }
 
+    override suspend fun setFavorite(itemId: String, isFavorite: Boolean): Result<Unit> = engine.apiResultWithRetry {
+        val userId = engine.currentUser.value?.id
+            ?: throw IllegalStateException("Not authenticated")
+        val uuid = itemId.toUUID()
+        if (isFavorite) {
+            engine.requireApi().userLibraryApi.markFavoriteItem(
+                userId = userId.toUUID(),
+                itemId = uuid,
+            )
+        } else {
+            engine.requireApi().userLibraryApi.unmarkFavoriteItem(
+                userId = userId.toUUID(),
+                itemId = uuid,
+            )
+        }
+        favoriteCache.put("$userId:$uuid", isFavorite)
+        Unit
+    }
+
     private val favoriteCache = androidx.collection.LruCache<String, Boolean>(200)
 
     /**

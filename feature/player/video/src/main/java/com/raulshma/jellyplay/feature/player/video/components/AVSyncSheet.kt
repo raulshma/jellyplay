@@ -29,7 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -50,22 +50,21 @@ import com.composables.icons.tabler.outline.Plus
 import com.composables.icons.tabler.outline.Refresh
 import kotlin.math.roundToLong
 
+/**
+ * The A/V Sync sheet. Audio-delay-only since the subtitle offset moved to a
+ * transparent video overlay (reached from the subtitle hub's Delay tab) so it
+ * can be dialed in while watching the live subtitles. A "Reset audio" chip
+ * zeroes the audio delay.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AVSyncSheet(
     currentAudioDelayMs: Long,
-    currentSubtitleDelayMs: Long,
     onAudioDelayChange: (Long) -> Unit,
-    onSubtitleDelayChange: (Long) -> Unit,
     onDismiss: () -> Unit,
-    activeSubtitleCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>? = null,
-    subtitlePreviewSource: com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource = com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource.NONE,
-    playbackPositionMs: () -> Long = { 0L },
     audioDelaySupported: Boolean = true,
-    subtitleDelaySupported: Boolean = true,
 ) {
     var audioDelayMs by remember { mutableLongStateOf(currentAudioDelayMs) }
-    var subtitleDelayMs by remember { mutableLongStateOf(currentSubtitleDelayMs) }
     val isTv = LocalTvMode.current
     val focusRequester = remember { FocusRequester() }
 
@@ -102,36 +101,14 @@ fun AVSyncSheet(
                     )
                 }
 
-                Spacer(Modifier.height(16.dp))
-            }
-
-            // Cue-preview subtitle-offset sync helper. Shows the subtitle line
-            // active at a chosen timestamp with its previous/next neighbours,
-            // and a live offset slider that recomputes the active cue as it
-            // drags. This is the sole subtitle-offset control — when no cues can
-            // be parsed (embedded/image subs) the cue stack degrades to an
-            // "unavailable" message but the offset slider still renders.
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                SubtitleSyncPreview(
-                    positionMs = playbackPositionMs,
-                    currentOffsetMs = subtitleDelayMs,
-                    cues = activeSubtitleCues,
-                    source = subtitlePreviewSource,
-                    isTv = isTv,
-                    focusRequester = if (audioDelaySupported) null else focusRequester,
-                    onOffsetChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
-                    onReset = {
-                        subtitleDelayMs = 0L
-                        onSubtitleDelayChange(0L)
-                    },
-                )
-
                 Spacer(Modifier.height(20.dp))
 
                 val resetFocus = rememberTvFocusState()
-                val anyOffset = audioDelayMs != 0L || subtitleDelayMs != 0L
+                val anyOffset = audioDelayMs != 0L
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.End,
                 ) {
                     Box(
@@ -142,9 +119,7 @@ fun AVSyncSheet(
                             .tvFocusIndicator(resetFocus, CircleShape)
                             .clickable(enabled = anyOffset) {
                                 audioDelayMs = 0L
-                                subtitleDelayMs = 0L
                                 onAudioDelayChange(0L)
-                                onSubtitleDelayChange(0L)
                             }
                             .padding(horizontal = 18.dp, vertical = 10.dp),
                         contentAlignment = Alignment.Center,
@@ -159,7 +134,7 @@ fun AVSyncSheet(
                             )
                             Spacer(Modifier.size(8.dp))
                             Text(
-                                stringResource(R.string.player_video_reset_both),
+                                stringResource(R.string.player_video_reset_audio),
                                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                                 color = if (anyOffset) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
@@ -174,8 +149,8 @@ fun AVSyncSheet(
 
 /**
  * Formats a delay/offset in ms as a signed seconds label ("0.0s", "+1.5s",
- * "-0.5s"). Shared by the delay rows and the cue-preview slider so both show
- * the same label for the same value.
+ * "-0.5s"). Shared by the delay rows and the subtitle-delay overlay so both
+ * show the same label for the same value.
  */
 internal fun formatDelayLabel(delayMs: Long): String {
     val delaySec = delayMs / 1000.0
@@ -221,7 +196,7 @@ private fun DelayRow(
         ) {
             if (isTv) {
                 DelayStepper(icon = Tabler.Outline.Minus, description = stringResource(R.string.player_video_av_sync_decrease, label)) {
-                    val newDelay = (delayMs - 100L).coerceIn(-30000L, 30000L)
+                    val newDelay = (delayMs - DELAY_STEP_MS).coerceIn(MIN_DELAY_MS, MAX_DELAY_MS)
                     onValueChange(newDelay)
                 }
             }
@@ -229,17 +204,17 @@ private fun DelayRow(
             TvOrTouchSlider(
                 value = delayMs.toFloat(),
                 onValueChange = { onValueChange((it / 50f).roundToLong() * 50) },
-                valueRange = -30000f..30000f,
+                valueRange = MIN_DELAY_MS.toFloat()..MAX_DELAY_MS.toFloat(),
                 modifier = Modifier.weight(1f),
                 isTv = isTv,
                 steps = 1199,
-                dpadStep = 100f,
+                dpadStep = DELAY_STEP_MS.toFloat(),
                 focusRequester = focusRequester,
             )
 
             if (isTv) {
                 DelayStepper(icon = Tabler.Outline.Plus, description = stringResource(R.string.player_video_av_sync_increase, label)) {
-                    val newDelay = (delayMs + 100L).coerceIn(-30000L, 30000L)
+                    val newDelay = (delayMs + DELAY_STEP_MS).coerceIn(MIN_DELAY_MS, MAX_DELAY_MS)
                     onValueChange(newDelay)
                 }
             }
@@ -256,7 +231,7 @@ private fun DelayRow(
 
 @Composable
 internal fun DelayStepper(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     description: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
@@ -276,51 +251,6 @@ internal fun DelayStepper(
     }
 }
 
-/**
- * Subtitle-delay-only section for the unified subtitle hub's "Delay" tab.
- *
- * This is the subtitle half of [AVSyncSheet]: the cue-preview sync helper plus
- * its reset affordance. Audio delay is intentionally NOT included — it stays in
- * [AVSyncSheet] (reached via the overflow "A/V Sync" item), since the hub is
- * subtitle-scoped. Reuses [SubtitleSyncPreview] verbatim.
- */
-@OptIn(androidx.media3.common.util.UnstableApi::class)
-@Composable
-internal fun SubtitleDelaySection(
-    currentSubtitleDelayMs: Long,
-    onSubtitleDelayChange: (Long) -> Unit,
-    activeSubtitleCues: List<com.raulshma.jellyplay.feature.player.video.subtitle.TimedCue>?,
-    subtitlePreviewSource: com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource =
-        com.raulshma.jellyplay.feature.player.video.SubtitlePreviewSource.NONE,
-    playbackPositionMs: () -> Long = { 0L },
-    isTv: Boolean = false,
-) {
-    var subtitleDelayMs by remember(currentSubtitleDelayMs) { mutableLongStateOf(currentSubtitleDelayMs) }
-    val focusRequester = remember { FocusRequester() }
-
-    LaunchedEffect(isTv) {
-        if (isTv) focusRequester.tryRequestFocus("subtitle-delay")
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 16.dp),
-    ) {
-        SubtitleSyncPreview(
-            positionMs = playbackPositionMs,
-            currentOffsetMs = subtitleDelayMs,
-            cues = activeSubtitleCues,
-            source = subtitlePreviewSource,
-            isTv = isTv,
-            focusRequester = focusRequester,
-            onOffsetChange = { subtitleDelayMs = it; onSubtitleDelayChange(it) },
-            onReset = {
-                subtitleDelayMs = 0L
-                onSubtitleDelayChange(0L)
-            },
-        )
-    }
-}
+private const val DELAY_STEP_MS = 100L
+private const val MIN_DELAY_MS = -30000L
+private const val MAX_DELAY_MS = 30000L

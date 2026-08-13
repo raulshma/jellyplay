@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.InterruptedResumeRow
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import dagger.Lazy
@@ -44,6 +46,8 @@ class DownloadRepositoryImplResumeTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val downloadDao: DownloadDao = mockk(relaxed = true)
     private val offlineMediaDao: OfflineMediaDao = mockk(relaxed = true)
+    private val playbackStateDao: PlaybackStateDao = mockk(relaxed = true)
+    private val syncBaselineDao: SyncBaselineDao = mockk(relaxed = true)
     private val database: JellyPlayDatabase = mockk(relaxed = true)
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
@@ -72,6 +76,8 @@ class DownloadRepositoryImplResumeTest {
         context = context,
         downloadDao = downloadDao,
         offlineMediaDao = offlineMediaDao,
+        playbackStateDao = playbackStateDao,
+        syncBaselineDao = syncBaselineDao,
         database = database,
         mediaRepository = mediaRepository,
         episodeCatalogue = episodeCatalogue,

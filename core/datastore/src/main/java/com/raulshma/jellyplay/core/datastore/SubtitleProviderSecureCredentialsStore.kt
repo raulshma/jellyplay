@@ -13,7 +13,7 @@ import javax.inject.Singleton
 
 /**
  * Encrypted store for subtitle-provider credentials (Wyzie API key,
- * OpenSubtitles API key + optional username/password/JWT).
+ * OpenSubtitles username/password + cached JWT).
  *
  * Mirrors [ArrSecureCredentialsStore] / [SeerrSecureCredentialsStore] verbatim
  * in encryption scheme (AES256_GCM master key, AES256_SIV keys, AES256_GCM

@@ -63,7 +63,7 @@ import com.raulshma.jellyplay.core.model.isMusicTrack
 import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.R
-import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
@@ -167,6 +167,15 @@ internal fun resolveResumeTicks(
 }
 /** Debounce window for engine config syncs driven by slider drags. */
 private const val CONFIG_SYNC_DEBOUNCE_MS = 150L
+
+/**
+ * Debounce window for the engine apply of a subtitle-delay change. A delay
+ * change forces ExoPlayer/LibVLC to reload the media item to re-parse cues
+ * through the offset wrapper (a rebuffer), so a burst of fine-tune nudges is
+ * coalesced into a single reload. The in-memory value (and thus the overlay
+ * readout) updates immediately; only the expensive engine push waits.
+ */
+private const val SUBTITLE_DELAY_APPLY_DEBOUNCE_MS = 500L
 
 /**
  * Initial-buffering watchdog. If the engine has not reached READY within this
@@ -654,10 +663,26 @@ class VideoPlayerViewModel @Inject constructor(
         },
         onWatchedThresholdReached = { itemId ->
             handleSmartDownloadCleanup(itemId)
-            // Mark the offline copy as fully watched so its row shows the
-            // watched state. No-op for non-downloaded items.
+            // Closes the gap where playback crossed the watched threshold but no
+            // clean Stop telemetry reached the server (process kill / crash),
+            // leaving the item unplayed server-side.
+            //
+            // Normal mode: mark watched through PlayedStateSync.flip (via
+            // markPlayed) so the change applies to the offline store AND reaches
+            // the server — immediately when online, or via the playback outbox
+            // on reconnect when offline.
+            //
+            // Incognito: never reach the server or create outbox rows — the same
+            // invariant reportCurrentPlaybackStopped enforces. Fall back to the
+            // local-only offline mark so a downloaded copy still shows watched,
+            // matching how persistPlaybackPosition keeps writing the local resume
+            // cache in incognito.
             launch {
-                offlinePlaybackFacade.recordPlayed(itemId)
+                if (cachedAggregate.videoPlayer.incognitoModeEnabled) {
+                    offlinePlaybackFacade.recordPlayed(itemId)
+                } else {
+                    mediaRepository.markPlayed(itemId)
+                }
             }
         },
         onPositionPersisted = { positionMs -> persistPlaybackPosition(positionMs, force = false) },
@@ -684,6 +709,11 @@ class VideoPlayerViewModel @Inject constructor(
     )
 
     private var engineCollectionJob: Job? = null
+
+    // Coalesces a burst of subtitle-delay fine-tune changes into one engine
+    // apply (one media reload on ExoPlayer/LibVLC). Cancelled/replaced on each
+    // setSubtitleDelay call so only the last value wins.
+    private var subtitleDelayApplyJob: Job? = null
 
     // Tracks the in-flight media-load coroutine so a new [initializeInternal]
     // call can cancel it before launching its own — prevents overlapping
@@ -791,6 +821,18 @@ class VideoPlayerViewModel @Inject constructor(
         // which nulls the transport — but init never re-runs on the reused
         // instance, so every load must re-arm it or PiP controls go dead.
         registerPipTransport()
+        launch {
+            pipController.pipDismissed.collect { dismissed ->
+                if (dismissed) {
+                    activePlayerController.engine?.pause()
+                    playerSessionManager.engine?.pause()
+                    mediaSessionController.release()
+                    videoMiniPlayerState.release()
+                    release()
+                    _closePlayer.trySend(Unit)
+                }
+            }
+        }
         launch {
             aggregateStore.aggregate.collect { agg ->
                 val oldAggregate = cachedAggregate
@@ -968,8 +1010,14 @@ class VideoPlayerViewModel @Inject constructor(
                         audioDelayMs = agg.audio.audioDelayMs,
                         decoderMode = agg.playback.decoderMode,
                         audioPassthrough = agg.playback.audioPassthrough,
-                        subtitleStyle = resolveSubtitleStyle(
+                        // Subtitle delay is per-media: resolve it for the
+                        // current item (per-item override, else the global
+                        // default) rather than seeding from the global style,
+                        // so an engine swap / reloadWithEngine never resets a
+                        // per-item correction to the global default.
+                        subtitleStyle = resolveSubtitleStyleWithDelay(
                             agg.subtitle,
+                            playerSessionManager.sessionState.value.currentItemId,
                             isHdr = isHdrFromStreams(playerSessionManager.sessionState.value.mediaStreams),
                         ),
                         // Dialogue Boost defaults to OFF until the per-item resolver
@@ -1179,14 +1227,6 @@ class VideoPlayerViewModel @Inject constructor(
                 }
             }
         }
-
-        launch {
-            pipController.pipDismissed.collect { dismissed ->
-                if (dismissed) {
-                    playerSessionManager.engine?.pause()
-                }
-            }
-        }
     }
 
     /**
@@ -1293,7 +1333,7 @@ class VideoPlayerViewModel @Inject constructor(
 
     /**
      * Offline resume: the offline entry points (Downloads, OfflineLibrary,
-     * OfflineSeries, deep links, remote control, mini-player) all navigate with
+     * MediaDetail (offline), deep links, remote control, mini-player) all navigate with
      * `startPositionTicks = 0`. When no explicit position was requested and the
      * item is a completed download, fall back to the last-known position stored
      * on the downloaded item (seeded from server UserData and updated while
@@ -1576,7 +1616,7 @@ class VideoPlayerViewModel @Inject constructor(
             }
 
             // Offline resume: the offline entry points (Downloads, OfflineLibrary,
-            // OfflineSeries, deep links, remote control, mini-player) all navigate with
+            // MediaDetail (offline), deep links, remote control, mini-player) all navigate with
             // startPositionTicks = 0. When no explicit position was requested and the item
             // is a completed download, fall back to the last-known position stored on the
             // downloaded item (seeded from server UserData and updated while watching
@@ -1590,25 +1630,36 @@ class VideoPlayerViewModel @Inject constructor(
             val source = sessionState.currentMediaSource
             val detail = sessionState.mediaDetail
 
+            // Re-snapshot the aggregate now that loadMedia has returned. loadMedia
+            // awaits aggregateRaw.first() internally, so by here the DataStore has
+            // emitted the hydrated preferences — but the local `agg` captured at
+            // the top of this coroutine is the cold-start empty default until the
+            // separate prefs collector hydrates cachedAggregate, which races on
+            // coroutine scheduling. Per-item maps read from the stale `agg`
+            // (subtitle delay, video effects) resolve to 0/empty and then clobber
+            // the real values the engine already booted with (the saved delay
+            // would appear in media-info then vanish, with no delay on the track).
+            // Use a fresh hydrated snapshot for per-item lookups; global UI seeding
+            // above is reconciled by downstream collectors, so it keeps `agg`.
+            val hydratedAgg = aggregateStore.aggregateRaw.first()
+
             // Restore per-item persisted video filters (if any) before playback kicks off.
-            val hydratedEffects = agg.engine.videoEffectsByItem[itemId] ?: VideoEffectsConfig()
+            val hydratedEffects = hydratedAgg.engine.videoEffectsByItem[itemId] ?: VideoEffectsConfig()
             if (_uiState.value.videoEffects != hydratedEffects) {
                 _uiState.update { it.copy(videoEffects = hydratedEffects) }
                 updateConfigWithUiStateDebounced()
             }
-            // G9: restore a per-item subtitle-sync delay so a user's correction
-            // for a badly-timed track survives a re-watch / resume. Falls back to
-            // the global offset when no per-item value is stored. Push the
-            // resolved delay to the engine immediately — without this the engine
-            // keeps the global offset until the user touches any setting that
-            // triggers a config push, leaving the AV-sync slider display out of
-            // sync with what is actually rendered on resume.
-            agg.subtitle.subtitleDelayByItem[itemId]?.let { itemDelay ->
-                val currentStyle = _uiState.value.subtitleStyle
-                if (currentStyle.offsetMs != itemDelay) {
-                    _uiState.update { it.copy(subtitleStyle = currentStyle.copy(offsetMs = itemDelay)) }
-                    updateConfigWithUiStateDebounced()
-                }
+            // Resolve the effective subtitle-sync delay for this item: a stored
+            // per-item correction wins, otherwise the global "Subtitle sync
+            // offset" default applies. Always apply (even when no per-item entry
+            // exists) so the previous item's in-memory delay can't bleed into
+            // this one. Push to the engine immediately so the AV-sync slider and
+            // the rendered cues stay in sync on resume.
+            val itemDelay = resolveSubtitleDelayMs(hydratedAgg.subtitle, itemId)
+            val currentStyle = _uiState.value.subtitleStyle
+            if (currentStyle.offsetMs != itemDelay) {
+                _uiState.update { it.copy(subtitleStyle = currentStyle.copy(offsetMs = itemDelay)) }
+                updateConfigWithUiStateDebounced()
             }
 
             if (sessionState.streamUrl != null) {
@@ -1636,10 +1687,10 @@ class VideoPlayerViewModel @Inject constructor(
                 val downloadPath = offlinePlaybackFacade.getDownloadPath(itemId)
                 if (downloadPath != null) {
                     val localInfo = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
-                        .loadLocalTrickplayInfo(downloadPath)
+                        .loadLocalTrickplayInfo(downloadPath, itemId)
                     if (localInfo != null) {
                         val cacheDir = com.raulshma.jellyplay.feature.player.video.trickplay.OfflineTrickplayHelper
-                            .getLocalTrickplayDir(downloadPath)
+                            .getLocalTrickplayDir(downloadPath, itemId)
                         if (cacheDir != null) {
                             trickplayManager.initializeLocal(itemId, localInfo, cacheDir)
                             _uiState.update { it.copy(trickplayInfo = localInfo) }
@@ -1926,12 +1977,22 @@ class VideoPlayerViewModel @Inject constructor(
         pipController.updatePipSourceRect(rect)
     }
 
+    /**
+     * Persists [style] to the subtitle store while preserving the persisted
+     * global "Subtitle sync offset" default. The in-memory
+     * [SubtitleStyle.offsetMs] is the resolved per-item delay, not a global
+     * default, so a font/colour/edge/font-family change must not clobber it into
+     * the global store — the cached global default is restored before writing.
+     */
+    private suspend fun persistSubtitleStylePreservingGlobalOffset(style: SubtitleStyle) {
+        val globalOffsetMs = cachedAggregate.subtitle.subtitleStyle.offsetMs
+        subtitleStore.setSubtitleStyle(style.copy(offsetMs = globalOffsetMs))
+    }
+
     fun setSubtitleStyle(style: SubtitleStyle) {
         _uiState.update { it.copy(subtitleStyle = style) }
         updateConfigWithUiState()
-        launch {
-            subtitleStore.setSubtitleStyle(style)
-        }
+        launch { persistSubtitleStylePreservingGlobalOffset(style) }
     }
 
     /**
@@ -1953,13 +2014,16 @@ class VideoPlayerViewModel @Inject constructor(
             )
             _uiState.update { it.copy(subtitleStyle = newStyle) }
             updateConfigWithUiState()
-            subtitleStore.setSubtitleStyle(newStyle)
+            // Preserve the persisted global subtitle-delay default: the in-memory
+            // offsetMs is the resolved per-item value and must not leak into the
+            // global store.
+            persistSubtitleStylePreservingGlobalOffset(newStyle)
         }
     }
 
-    fun applySubtitleStyleToView(view: android.view.View?) {
+    fun applySubtitleStyle() {
         val engine = playerSessionManager.engine ?: return
-        if (view != null) engine.applySubtitleStyleToView(view, _uiState.value.subtitleStyle)
+        engine.applySubtitleStyle(_uiState.value.subtitleStyle)
     }
 
     fun toggleDialogueBoost() {
@@ -2032,10 +2096,24 @@ class VideoPlayerViewModel @Inject constructor(
     fun setSubtitleDelay(ms: Long) {
         val current = _uiState.value.subtitleStyle
         if (current.offsetMs == ms) return
-        setSubtitleStyle(current.copy(offsetMs = ms))
-        // G9: also persist per-item so the correction survives a re-watch/resume.
+        // Subtitle delay is per-media: update the in-memory resolved value (which
+        // feeds the overlay readout and the engine) and persist only to the
+        // per-item store. This must NOT route through [setSubtitleStyle] — that
+        // persists the whole style to the global "Subtitle sync offset" default,
+        // which is how a correction for one item previously leaked into every
+        // other item.
+        _uiState.update { it.copy(subtitleStyle = current.copy(offsetMs = ms)) }
         playerSessionManager.sessionState.value.currentItemId?.let { itemId ->
             launch { subtitleStore.setSubtitleDelayForItem(itemId, ms) }
+        }
+        // Debounce the engine apply: a delay change forces ExoPlayer/LibVLC to
+        // reload the media item to re-parse cues through the offset wrapper (a
+        // rebuffer). Coalesce a burst of fine-tune nudges into a single reload —
+        // the readout already reflects the live in-memory value instantly.
+        subtitleDelayApplyJob?.cancel()
+        subtitleDelayApplyJob = launch {
+            delay(SUBTITLE_DELAY_APPLY_DEBOUNCE_MS)
+            updateConfigWithUiState()
         }
     }
 
@@ -2847,7 +2925,7 @@ class VideoPlayerViewModel @Inject constructor(
             val sessionState = playerSessionManager.sessionState.value
             val itemId = sessionState.currentItemId ?: return
             val player = engine.underlyingPlayer ?: return
-            mediaSessionController.createForPlayer(player, "jellyplay_video_$itemId")
+            mediaSessionController.createForPlayer(player, "jellyplay_video_$itemId", itemId)
         }
     }
 
@@ -2984,6 +3062,17 @@ class VideoPlayerViewModel @Inject constructor(
                 sleepTimerLastUsedDurationMs = currentState.sleepTimerLastUsedDurationMs,
             )
         }
+
+        // Clear the high-frequency display streams the seek bar reads. They live
+        // outside uiState (to avoid ~4 Hz whole-screen recomposition) and are
+        // only ever reset on a fresh VM, so without this the previous item's
+        // position/duration bleed into the next item until the new engine emits
+        // its first position tick (~1-2 s). With duration == 0 the seek bar
+        // renders empty (its else-branch) instead of the stale fraction.
+        _currentPositionMs.value = 0L
+        _durationMs.value = 0L
+        _bufferedPositionMs.value = 0L
+        _videoStats.value = EngineVideoStats()
     }
 
     fun startSleepTimer(durationMs: Long) = sleepTimerController.startSleepTimer(durationMs)
@@ -3000,27 +3089,6 @@ class VideoPlayerViewModel @Inject constructor(
     fun setAbRepeatPointB() = abRepeatController.setPointB(_currentPositionMs.value)
     fun clearAbRepeat() = abRepeatController.clear()
     val abRepeatState: StateFlow<AbRepeatState> get() = abRepeatController.state
-
-    fun prepareForMiniMode(
-        title: String,
-        subtitle: String,
-    ) {
-        val engine = playerSessionManager.engine ?: return
-        val itemId = playerSessionManager.sessionState.value.currentItemId ?: return
-
-        videoMiniPlayerState.enterMiniMode(
-            engine = engine,
-            itemId = itemId,
-            mediaSourceId = null,
-            title = title,
-            subtitle = subtitle,
-        )
-
-        playerSessionManager.detachEngine()
-        progressReporter.cancelJobs()
-        playerLifecycleManager.activeCallbacks = null
-        pipController.requestAutoEnterPip(false)
-    }
 
     private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

@@ -45,7 +45,7 @@ fun Modifier.playSoundOnFocus(enabled: Boolean): Modifier {
  *
  * Implementation note: a `@Composable` modifier (not a `composed { }` extension) so the
  * `remember`/`LaunchedEffect` are hosted directly in the caller's composition without a
- * per-recomposition factory allocation (see audit U-2).
+ * per-recomposition factory allocation.
  */
 @Composable
 fun Modifier.enableMarqueeOnFocus(

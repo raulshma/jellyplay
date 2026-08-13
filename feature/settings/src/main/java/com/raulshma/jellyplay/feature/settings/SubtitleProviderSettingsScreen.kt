@@ -41,11 +41,13 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 
 /**
- * Settings surface for subtitle providers (Wyzie Subs + OpenSubtitles). Each
- * provider has an enable switch + an API-key field (and, for OpenSubtitles,
- * optional username/password for higher download quotas via JWT login). A
- * "Test" action exercises the provider's auth + search path and surfaces a
- * Connected / Error status, mirroring the *arr server-probe UX.
+ * Settings surface for subtitle providers (Wyzie Subs + OpenSubtitles). Wyzie
+ * has an enable switch + an API-key field; OpenSubtitles has an enable switch +
+ * username/password (it authenticates with the user's opensubtitles.com account
+ * — the API key is a compiled-in shared app key, never user-visible, mirroring
+ * the Jellyfin plugin). A "Test" action exercises the provider's auth + search
+ * path and surfaces a Connected / Error status, mirroring the *arr
+ * server-probe UX.
  *
  * Mirrors [ArrSettingsScreen]'s scaffold + grouped-list layout. The screen is
  * purely a configuration surface; the player + editor consume the configured
@@ -121,15 +123,15 @@ fun SubtitleProviderSettingsScreen(
                     ProviderSection(
                         enabled = preferences.openSubtitlesEnabled,
                         onEnabledChange = viewModel::setOpenSubtitlesEnabled,
-                        apiKeyLabel = stringResource(R.string.settings_subtitles_api_key),
-                        initialApiKey = osCreds?.apiKey.orEmpty(),
-                        usernameLabel = stringResource(R.string.settings_subtitles_username_optional),
+                        apiKeyLabel = null,
+                        initialApiKey = null,
+                        usernameLabel = stringResource(R.string.settings_subtitles_username),
                         initialUsername = osCreds?.username.orEmpty(),
-                        passwordLabel = stringResource(R.string.settings_subtitles_password_optional),
+                        passwordLabel = stringResource(R.string.settings_subtitles_password),
                         initialPassword = osCreds?.password.orEmpty(),
                         status = providerStatus[SubtitleProviderKind.OPENSUBTITLES],
-                        onSave = { apiKey, username, password ->
-                            viewModel.saveOpenSubtitlesCredentials(apiKey, username, password)
+                        onSave = { _, username, password ->
+                            viewModel.saveOpenSubtitlesCredentials(username, password)
                         },
                         onTest = { viewModel.testProvider(SubtitleProviderKind.OPENSUBTITLES) },
                         helperText = stringResource(R.string.settings_subtitles_opensubtitles_help),
@@ -141,16 +143,16 @@ fun SubtitleProviderSettingsScreen(
 }
 
 /**
- * One provider's configuration card: enable switch, API key (always), optional
- * username/password (OpenSubtitles), Save + Test actions, and the connection
- * status. Reused for both providers.
+ * One provider's configuration card: enable switch, optional API key (Wyzie),
+ * optional username/password (OpenSubtitles), Save + Test actions, and the
+ * connection status. Reused for both providers.
  */
 @Composable
 private fun ProviderSection(
     enabled: Boolean,
     onEnabledChange: (Boolean) -> Unit,
-    apiKeyLabel: String,
-    initialApiKey: String,
+    apiKeyLabel: String?,
+    initialApiKey: String?,
     usernameLabel: String?,
     initialUsername: String?,
     passwordLabel: String?,
@@ -173,18 +175,20 @@ private fun ProviderSection(
         }
         Spacer(Modifier.height(8.dp))
 
-        var apiKey by remember(initialApiKey) { mutableStateOf(initialApiKey) }
+        var apiKey by remember(initialApiKey) { mutableStateOf(initialApiKey.orEmpty()) }
         var username by remember(initialUsername) { mutableStateOf(initialUsername.orEmpty()) }
         var password by remember(initialPassword) { mutableStateOf(initialPassword.orEmpty()) }
 
-        OutlinedTextField(
-            value = apiKey,
-            onValueChange = { apiKey = it },
-            label = { Text(apiKeyLabel) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (apiKeyLabel != null) {
+            OutlinedTextField(
+                value = apiKey,
+                onValueChange = { apiKey = it },
+                label = { Text(apiKeyLabel) },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         if (usernameLabel != null) {
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.github
 
 import com.raulshma.jellyplay.core.model.AppUpdateInfo
+import com.raulshma.jellyplay.core.model.compareVersions
 import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.coroutines.Dispatchers
@@ -124,24 +125,6 @@ class GitHubReleasesApiImpl @Inject constructor(
     companion object {
         const val LATEST_RELEASE_URL =
             "https://api.github.com/repos/raulshma/jellyplay/releases/latest"
-
-        /**
-         * Compares two dotted numeric version strings. Returns a positive int if
-         * [v1] is newer, negative if older, 0 if equal. Non-numeric segments
-         * are treated as 0. Lifted verbatim from the former
-         * `AboutViewModel.compareVersions` so the comparison semantics are
-         * unchanged.
-         */
-        fun compareVersions(v1: String, v2: String): Int {
-            val parts1 = v1.split(".").map { it.toIntOrNull() ?: 0 }
-            val parts2 = v2.split(".").map { it.toIntOrNull() ?: 0 }
-            for (i in 0 until maxOf(parts1.size, parts2.size)) {
-                val p1 = parts1.getOrElse(i) { 0 }
-                val p2 = parts2.getOrElse(i) { 0 }
-                if (p1 != p2) return p1 - p2
-            }
-            return 0
-        }
 
         /**
          * Picks the APK asset whose name matches the running [flavor] and the

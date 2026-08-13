@@ -26,9 +26,9 @@ import javax.inject.Inject
  * encrypted store with a single entry).
  *
  * A "Test" action probes a provider with a known TMDB id so the user can verify
- * their API key + (for OpenSubtitles) username/password before leaving the
- * screen. The status is a small sealed class mirroring Arr's
- * `ServerConnectionStatus`.
+ * their Wyzie API key or OpenSubtitles username/password (the OpenSubtitles test
+ * also exercises the JWT login flow) before leaving the screen. The status is a
+ * small sealed class mirroring Arr's `ServerConnectionStatus`.
  */
 @HiltViewModel
 class SubtitleProviderSettingsViewModel @Inject constructor(
@@ -69,48 +69,48 @@ class SubtitleProviderSettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Saves the OpenSubtitles credentials. Blank apiKey clears everything;
-     * a non-blank apiKey (with optional username/password) is persisted. JWT
-     * fields are preserved across a save when username/password change (the
-     * token is refreshed lazily by the provider on next use).
-     */
-    fun saveOpenSubtitlesCredentials(apiKey: String, username: String?, password: String?) {
-        launch {
-            val trimmedKey = apiKey.trim()
-            if (trimmedKey.isBlank()) {
-                preferencesStore.clearCredentials(SubtitleProviderKind.OPENSUBTITLES)
-                return@launch
-            }
-            val existing = preferencesStore.getCredentials(SubtitleProviderKind.OPENSUBTITLES)
-                as? SubtitleProviderCredentials.OpenSubtitles
-            // If username/password changed, drop the cached JWT so the provider
-            // re-logs-in with the new credentials next time.
-            val userChanged = existing?.username != username?.ifBlank { null } ||
-                existing?.password != password?.ifBlank { null }
-            preferencesStore.setCredentials(
-                SubtitleProviderKind.OPENSUBTITLES,
-                SubtitleProviderCredentials.OpenSubtitles(
-                    apiKey = trimmedKey,
-                    username = username?.trim()?.ifBlank { null },
-                    password = password?.ifBlank { null },
-                    jwt = if (userChanged) null else existing?.jwt,
-                    jwtExpiresAt = if (userChanged) 0 else existing?.jwtExpiresAt ?: 0,
-                ),
-            )
+/**
+ * Saves the OpenSubtitles credentials (username + password). Blank username
+ * clears everything; a non-blank username (with password) is persisted. JWT
+ * fields are preserved across a save when username/password don't change (the
+ * token is refreshed lazily by the provider on next use). The OpenSubtitles
+ * API key is a compiled-in shared app key, so the user never supplies one.
+ */
+fun saveOpenSubtitlesCredentials(username: String?, password: String?) {
+    launch {
+        val trimmedUser = username?.trim()?.ifBlank { null }
+        if (trimmedUser == null) {
+            preferencesStore.clearCredentials(SubtitleProviderKind.OPENSUBTITLES)
+            return@launch
         }
+        val existing = preferencesStore.getCredentials(SubtitleProviderKind.OPENSUBTITLES)
+            as? SubtitleProviderCredentials.OpenSubtitles
+        // If username/password changed, drop the cached JWT so the provider
+        // re-logs-in with the new credentials next time.
+        val userChanged = existing?.username != trimmedUser ||
+            existing?.password != password?.ifBlank { null }
+        preferencesStore.setCredentials(
+            SubtitleProviderKind.OPENSUBTITLES,
+            SubtitleProviderCredentials.OpenSubtitles(
+                username = trimmedUser,
+                password = password?.ifBlank { null },
+                jwt = if (userChanged) null else existing?.jwt,
+                jwtExpiresAt = if (userChanged) 0 else existing?.jwtExpiresAt ?: 0,
+            ),
+        )
     }
+}
 
     /**
      * Probes [kind] with a known TMDB id so the user can verify their key works
-     * even before flipping the enable Switch on. For OpenSubtitles with
-     * username/password, this also exercises the JWT login flow. Surfaces
-     * [ProviderStatus] per provider.
+     * even before flipping the enable Switch on. For OpenSubtitles, search
+     * triggers a mandatory JWT login first, so this validates the configured
+     * username/password end-to-end. Surfaces [ProviderStatus] per provider.
      */
     fun testProvider(kind: SubtitleProviderKind) {
-        // Fail fast when there is no key to test — no point launching a coroutine.
-        if (preferencesStore.getCredentials(kind) == null) {
-            _providerStatus.update { it + (kind to ProviderStatus.Error("Enter a key first")) }
+        // Fail fast when there is nothing configured to test.
+        if (preferencesStore.getCredentials(kind)?.isConfigured != true) {
+            _providerStatus.update { it + (kind to ProviderStatus.Error("Enter credentials first")) }
             return
         }
         launch {

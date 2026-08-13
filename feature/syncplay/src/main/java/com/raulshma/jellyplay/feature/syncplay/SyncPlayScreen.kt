@@ -78,6 +78,7 @@ import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
@@ -305,22 +306,14 @@ fun SyncPlayScreen(
     }
 
     uiState.pendingJoin?.let { pending ->
-        AlertDialog(
-            onDismissRequest = { viewModel.cancelJoin() },
-            title = { Text(stringResource(R.string.syncplay_join_group_question)) },
-            text = { Text(stringResource(R.string.syncplay_join_group_confirm, pending.groupName)) },
-            confirmButton = {
-                FilledTonalButton(
-                    onClick = { viewModel.confirmJoin() },
-                    modifier = Modifier.focusIndicator(),
-                ) { Text(stringResource(R.string.syncplay_join)) }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { viewModel.cancelJoin() },
-                    modifier = Modifier.focusIndicator(),
-                ) { Text(stringResource(R.string.syncplay_cancel)) }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.syncplay_join_group_question),
+            message = stringResource(R.string.syncplay_join_group_confirm, pending.groupName),
+            confirmText = stringResource(R.string.syncplay_join),
+            onConfirm = { viewModel.confirmJoin() },
+            onDismiss = { viewModel.cancelJoin() },
+            dismissText = stringResource(R.string.syncplay_cancel),
+            tone = ConfirmTone.NEUTRAL,
         )
     }
 }

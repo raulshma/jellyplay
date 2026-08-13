@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -79,6 +81,7 @@ internal class MediaSessionController(
 
         activate(MediaLibrarySession.Builder(context, sessionPlayer, NO_OP_LIBRARY_CALLBACK)
             .setId("${SESSION_ID_PREFIX}$itemId")
+            .setSessionActivity(buildPlayerSessionActivity(itemId))
             .build())
     }
 
@@ -86,11 +89,18 @@ internal class MediaSessionController(
      * Build + activate a bare session around [player] with the given [sessionId]
      * (used by background-cast detach/reattach, which swap the player surface).
      * Atomic replace semantics — see [createForItem].
+     *
+     * [videoItemId], when supplied (the local-engine reattach path), pins the
+     * session activity to [buildPlayerSessionActivity] so the notification still
+     * reopens the fullscreen video after a session rebuild. The background-cast
+     * detach path omits it — that session's notification falls back to the app
+     * launcher intent (browse UI), preserving prior behaviour.
      */
-    fun createForPlayer(player: Player, sessionId: String) {
-        activate(MediaLibrarySession.Builder(context, player, NO_OP_LIBRARY_CALLBACK)
+    fun createForPlayer(player: Player, sessionId: String, videoItemId: String? = null) {
+        val builder = MediaLibrarySession.Builder(context, player, NO_OP_LIBRARY_CALLBACK)
             .setId(sessionId)
-            .build())
+        videoItemId?.let { builder.setSessionActivity(buildPlayerSessionActivity(it)) }
+        activate(builder.build())
     }
 
     /** Tear down the active session. Idempotent. */
@@ -108,9 +118,47 @@ internal class MediaSessionController(
         sessionManager.setActiveSession(newSession)
     }
 
+    /**
+     * PendingIntent that the system fires when the user taps the media
+     * notification / lock-screen artwork — reopens the fullscreen
+     * [PLAYER_ACTIVITY_CLASS_NAME] (PlayerActivity).
+     *
+     * PlayerActivity lives in the `app` module, which this feature module
+     * cannot compile against, so it is referenced by class name. [EXTRA_ITEM_ID_KEY]
+     * mirrors `PlayerActivity.EXTRA_ITEM_ID` (the same launch contract the
+     * `Route.VideoPlayer` handler in JellyPlayApp.kt uses).
+     *
+     * Because PlayerActivity is `singleTask` and shares the default
+     * taskAffinity, firing this while a PlayerActivity instance is alive — the
+     * PiP case, where it is the floating window — brings that task forward and
+     * expands it out of PiP instead of recreating the activity. Without a
+     * session activity the notification content intent fell back to the app
+     * launcher (MainActivity), so tapping it from PiP dropped the user on the
+     * browse UI rather than the fullscreen video.
+     */
+    private fun buildPlayerSessionActivity(itemId: String): PendingIntent {
+        val intent = Intent().apply {
+            setClassName(context, PLAYER_ACTIVITY_CLASS_NAME)
+            putExtra(EXTRA_ITEM_ID_KEY, itemId)
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        return PendingIntent.getActivity(
+            context,
+            // Per-item request code so rebuilt/overlapping sessions don't alias.
+            itemId.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     private companion object {
         const val SESSION_ID_PREFIX = "jellyplay_video_"
         const val ARTWORK_MAX_WIDTH = 300
+
+        // PlayerActivity lives in the `app` module; reference by class name.
+        private const val PLAYER_ACTIVITY_CLASS_NAME = "com.raulshma.jellyplay.PlayerActivity"
+        // Must match PlayerActivity.EXTRA_ITEM_ID ("player_item_id").
+        private const val EXTRA_ITEM_ID_KEY = "player_item_id"
 
         /**
          * Video playback never exposes a browsable library; the callback exists

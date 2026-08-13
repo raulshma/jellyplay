@@ -19,7 +19,6 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
-import com.raulshma.jellyplay.core.model.NavigationStyle
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
@@ -108,6 +107,8 @@ class AppearanceSettingsViewModel @Inject constructor(
     fun setShowClockOnHome(enabled: Boolean) =
         editor.edit { homeDiscovery.setShowClockOnHome(enabled) }
     fun setShowSettingsInHomeSearch(enabled: Boolean) = editor.setShowSettingsInHomeSearch(enabled)
+    fun setHideTopHeaderOnScroll(enabled: Boolean) =
+        editor.edit { homeDiscovery.setHideTopHeaderOnScroll(enabled) }
     fun setContinueWatchingClickBehavior(behavior: ContinueWatchingClickBehavior) =
         editor.edit { homeDiscovery.setContinueWatchingClickBehavior(behavior) }
     fun setMergeContinueWatchingAndNextUp(enabled: Boolean) =
@@ -146,8 +147,6 @@ class AppearanceSettingsViewModel @Inject constructor(
         editor.edit { navigation.setHiddenNavItems(items) }
     fun setNavItemOrder(order: List<String>) =
         editor.edit { navigation.setNavItemOrder(order) }
-    fun setNavigationStyle(style: NavigationStyle) =
-        editor.edit { navigation.setNavigationStyle(style) }
 
     fun resetCategory(category: PreferenceResetCategory) = editor.resetCategory(category)
 }

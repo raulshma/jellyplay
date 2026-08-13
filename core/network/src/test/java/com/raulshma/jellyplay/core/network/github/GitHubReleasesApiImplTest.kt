@@ -12,33 +12,6 @@ import org.junit.Test
 
 class GitHubReleasesApiImplTest {
 
-    // ---- compareVersions ----
-
-    @Test
-    fun `compareVersions returns positive when first is newer`() {
-        assertTrue(GitHubReleasesApiImpl.compareVersions("1.2.4", "1.2.3") > 0)
-        assertTrue(GitHubReleasesApiImpl.compareVersions("2.0.0", "1.9.9") > 0)
-        assertTrue(GitHubReleasesApiImpl.compareVersions("1.2", "1.1.9") > 0)
-    }
-
-    @Test
-    fun `compareVersions returns negative when first is older`() {
-        assertTrue(GitHubReleasesApiImpl.compareVersions("1.2.2", "1.2.3") < 0)
-        assertTrue(GitHubReleasesApiImpl.compareVersions("1.9.9", "2.0.0") < 0)
-    }
-
-    @Test
-    fun `compareVersions returns zero when equal`() {
-        assertEquals(0, GitHubReleasesApiImpl.compareVersions("1.2.3", "1.2.3"))
-        assertEquals(0, GitHubReleasesApiImpl.compareVersions("1.2", "1.2.0"))
-    }
-
-    @Test
-    fun `compareVersions treats non-numeric segments as zero`() {
-        assertEquals(0, GitHubReleasesApiImpl.compareVersions("1.2.x", "1.2.0"))
-        assertTrue(GitHubReleasesApiImpl.compareVersions("1.2.1", "1.2.x") > 0)
-    }
-
     // ---- selectAsset ----
 
     private fun asset(name: String, url: String = "https://x/$name", size: Long = 1L) =

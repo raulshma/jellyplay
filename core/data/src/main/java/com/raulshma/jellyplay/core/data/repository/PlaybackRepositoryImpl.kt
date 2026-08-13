@@ -111,6 +111,34 @@ class PlaybackRepositoryImpl @Inject constructor(
         return result
     }
 
+    override suspend fun replayOutboxEntry(entry: PlaybackOutboxEntry): Boolean =
+        // Pure dispatch — no offline check, no enqueue. The worker owns the
+        // drain loop (delete on success, retry/dead-letter on failure); this is
+        // the single home for the entry-type → API-call mapping so capture and
+        // drain can't drift apart.
+        when (entry.eventType) {
+            PlaybackOutboxEventType.START ->
+                apiClient.reportPlaybackStart(entry.itemId, entry.sessionId, entry.playMethod).isSuccess
+            PlaybackOutboxEventType.PROGRESS ->
+                apiClient.reportPlaybackProgress(
+                    entry.itemId,
+                    entry.sessionId,
+                    entry.positionTicks,
+                    entry.isPaused,
+                    entry.playMethod,
+                ).isSuccess
+            PlaybackOutboxEventType.STOP ->
+                apiClient.reportPlaybackStopped(entry.itemId, entry.sessionId, entry.positionTicks).isSuccess
+            PlaybackOutboxEventType.PLAYED ->
+                apiClient.markPlayed(entry.itemId).isSuccess
+            PlaybackOutboxEventType.UNPLAYED ->
+                apiClient.markUnplayed(entry.itemId).isSuccess
+            PlaybackOutboxEventType.FAVORITE ->
+                apiClient.setFavorite(entry.itemId, isFavorite = true).isSuccess
+            PlaybackOutboxEventType.UNFAVORITE ->
+                apiClient.setFavorite(entry.itemId, isFavorite = false).isSuccess
+        }
+
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?): String =
         apiClient.getImageUrl(itemId, imageType, maxWidth)
 
@@ -339,6 +367,10 @@ class PlaybackRepositoryImpl @Inject constructor(
             }
             Result.success(fallbackSegments)
         }
+    }
+
+    override fun invalidateSegmentsCache(itemId: String) {
+        segmentsCache.remove(itemId)
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =

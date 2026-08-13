@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.StreamType
-import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 
 /**
  * Deep module: derives the player's aspect-ratio mode from a media item's

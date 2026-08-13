@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.core.database.migration
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
+import com.raulshma.jellyplay.core.database.dao.OFFLINE_MEDIA_WITH_PLAYBACK_SQL
+import com.raulshma.jellyplay.core.database.dao.OFFLINE_MEDIA_WITH_PLAYBACK_VIEW_NAME
 
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -744,8 +746,201 @@ val MIGRATION_43_44 = object : Migration(43, 44) {
     }
 }
 
+// Offline favorite flag, seeded from server UserData at download time and
+// updated locally as the user toggles favorite offline. Mirrors the `isPlayed`
+// column shape from migration 28→29 (NOT NULL DEFAULT 0 so existing rows
+// resolve to not-favorite until the user acts or the item is re-downloaded).
+val MIGRATION_44_45 = object : Migration(44, 45) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN isFavorite INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+// Sidecar-artifact freshness signatures for the download resync feature.
+// Subtitles + trickplay signatures are derived from MediaDetail and seeded at
+// download time; the segments signature is seeded on the first segments
+// resync. All three are nullable so pre-migration rows resolve to "never
+// recorded" — the comparator treats an empty/null signature as a first-contact
+// axis that never flags a spurious change.
+val MIGRATION_45_46 = object : Migration(45, 46) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedSubtitleSignature TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedTrickplaySignature TEXT")
+        db.execSQL("ALTER TABLE offline_media ADD COLUMN syncedSegmentsSignature TEXT")
+    }
+}
+
+// Split the overloaded `offline_media` row along its jobs into three tables,
+// each with one invariant.
+//
+//   offline_media      — identity + browsable metadata mirror (trimmed)
+//   playback_state     — playback progress + watched/favorite (new)
+//   sync_baseline      — freshness baseline signatures + per-axis flags (new)
+//
+// The freshness module (OfflineSyncManager) finally gets a persistence home of
+// its own: the baseline + result flags move off the metadata row, so a metadata
+// re-persist can no longer clobber them and the lossy 5-axis-→-1-flag projection
+// is replaced by persisted per-axis change flags.
+//
+// SQLite (minSdk 28 framework) predates `ALTER TABLE … DROP COLUMN`, so the
+// `offline_media` trim is done as the canonical create-copy-drop-rename dance.
+// Column order in the recreated table follows the trimmed entity declaration
+// order; Room's TableInfo equality is order-insensitive, but matching it keeps
+// the schema diff readable. Every existing row's playback + sync column values
+// are carried into the two new tables before the old columns are dropped, so no
+// data is lost. Per-axis change flags (syncMetadataChanged / syncImagesChanged /
+// syncSubtitlesChanged / syncTrickplayChanged / syncSegmentsChanged) have no
+// derivation from the old coarse `syncUpdateAvailable` flag and default to 0;
+// they are populated accurately on the next freshness check.
+val MIGRATION_46_47 = object : Migration(46, 47) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // ── playback_state: create + backfill from the live columns ──────────
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS playback_state (
+                id TEXT PRIMARY KEY NOT NULL,
+                playbackPositionTicks INTEGER,
+                playedPercentage REAL NOT NULL DEFAULT 0.0,
+                isPlayed INTEGER NOT NULL DEFAULT 0,
+                isFavorite INTEGER NOT NULL DEFAULT 0,
+                lastPlayedDate TEXT
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO playback_state (
+                id, playbackPositionTicks, playedPercentage, isPlayed, isFavorite, lastPlayedDate
+            )
+            SELECT id, playbackPositionTicks, playedPercentage, isPlayed, isFavorite, lastPlayedDate
+            FROM offline_media
+            """.trimIndent()
+        )
+
+        // ── sync_baseline: create + backfill from the live columns ───────────
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS sync_baseline (
+                id TEXT PRIMARY KEY NOT NULL,
+                syncedPosterTag TEXT,
+                syncedBackdropTag TEXT,
+                syncedMetadataSignature TEXT,
+                syncedSubtitleSignature TEXT,
+                syncedTrickplaySignature TEXT,
+                syncedSegmentsSignature TEXT,
+                syncedMediaSourceId TEXT,
+                syncedMediaSizeBytes INTEGER,
+                lastSyncedAt INTEGER,
+                syncUpdateAvailable INTEGER NOT NULL DEFAULT 0,
+                syncMediaChanged INTEGER NOT NULL DEFAULT 0,
+                syncChecking INTEGER NOT NULL DEFAULT 0,
+                syncError INTEGER NOT NULL DEFAULT 0,
+                syncMetadataChanged INTEGER NOT NULL DEFAULT 0,
+                syncImagesChanged INTEGER NOT NULL DEFAULT 0,
+                syncSubtitlesChanged INTEGER NOT NULL DEFAULT 0,
+                syncTrickplayChanged INTEGER NOT NULL DEFAULT 0,
+                syncSegmentsChanged INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO sync_baseline (
+                id, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature,
+                syncedSubtitleSignature, syncedTrickplaySignature, syncedSegmentsSignature,
+                syncedMediaSourceId, syncedMediaSizeBytes, lastSyncedAt,
+                syncUpdateAvailable, syncMediaChanged, syncChecking, syncError
+            )
+            SELECT id, syncedPosterTag, syncedBackdropTag, syncedMetadataSignature,
+                   syncedSubtitleSignature, syncedTrickplaySignature, syncedSegmentsSignature,
+                   syncedMediaSourceId, syncedMediaSizeBytes, lastSyncedAt,
+                   syncUpdateAvailable, syncMediaChanged, syncChecking, syncError
+            FROM offline_media
+            """.trimIndent()
+        )
+
+        // ── offline_media: trim via create-copy-drop-rename ───────────────────
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS offline_media_new (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                mediaType TEXT NOT NULL,
+                overview TEXT,
+                year INTEGER,
+                communityRating REAL,
+                officialRating TEXT,
+                runTimeTicks INTEGER,
+                parentId TEXT,
+                seriesId TEXT,
+                seasonId TEXT,
+                seriesName TEXT,
+                seasonName TEXT,
+                episodeNumber INTEGER,
+                seasonNumber INTEGER,
+                indexNumber INTEGER,
+                childCount INTEGER,
+                posterPath TEXT,
+                backdropPath TEXT,
+                blurHashPrimary TEXT,
+                blurHashBackdrop TEXT,
+                premiereDate TEXT,
+                genres TEXT,
+                createdAt INTEGER NOT NULL DEFAULT 0,
+                originalTitle TEXT,
+                criticRating REAL,
+                studios TEXT,
+                tagline TEXT,
+                peopleJson TEXT,
+                providerIdsJson TEXT,
+                externalUrlsJson TEXT
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO offline_media_new (
+                id, name, mediaType, overview, year, communityRating, officialRating,
+                runTimeTicks, parentId, seriesId, seasonId, seriesName, seasonName,
+                episodeNumber, seasonNumber, indexNumber, childCount, posterPath,
+                backdropPath, blurHashPrimary, blurHashBackdrop, premiereDate, genres,
+                createdAt, originalTitle, criticRating, studios, tagline, peopleJson,
+                providerIdsJson, externalUrlsJson
+            )
+            SELECT id, name, mediaType, overview, year, communityRating, officialRating,
+                   runTimeTicks, parentId, seriesId, seasonId, seriesName, seasonName,
+                   episodeNumber, seasonNumber, indexNumber, childCount, posterPath,
+                   backdropPath, blurHashPrimary, blurHashBackdrop, premiereDate, genres,
+                   createdAt, originalTitle, criticRating, studios, tagline, peopleJson,
+                   providerIdsJson, externalUrlsJson
+            FROM offline_media
+            """.trimIndent()
+        )
+        db.execSQL("DROP TABLE offline_media")
+        db.execSQL("ALTER TABLE offline_media_new RENAME TO offline_media")
+        // Recreate the eight offline_media indices dropped with the old table.
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_parentId ON offline_media(parentId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_seriesId ON offline_media(seriesId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_seasonId ON offline_media(seasonId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_mediaType ON offline_media(mediaType)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_name ON offline_media(name)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_seriesId_mediaType ON offline_media(seriesId, mediaType)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_seasonId_mediaType ON offline_media(seasonId, mediaType)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_media_mediaType_createdAt ON offline_media(mediaType, createdAt)")
+
+        // Read-only join view backing the browse / detail / search queries —
+        // the single shape every OfflineMediaDao read consumes, so the
+        // `offline_media ⟕ playback_state` join lives in one place. The SQL is
+        // shared verbatim with the @DatabaseView annotation (same const) so
+        // Room's post-migration schema check passes.
+        db.execSQL(
+            "CREATE VIEW `$OFFLINE_MEDIA_WITH_PLAYBACK_VIEW_NAME` AS $OFFLINE_MEDIA_WITH_PLAYBACK_SQL"
+        )
+    }
+}
+
 /**
- * The complete, correctly-ordered v1→v44 migration chain, with the
+ * The complete, correctly-ordered v1→v47 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) inserted at
  * its true position between v23→v24 and v25→v26. Room matches migrations by
  * start/end version regardless of list order, but keeping the chain in strict
@@ -797,4 +992,7 @@ fun allMigrations(tokenCipher: TokenCipher): List<Migration> =
         MIGRATION_41_42,
         MIGRATION_42_43,
         MIGRATION_43_44,
+        MIGRATION_44_45,
+        MIGRATION_45_46,
+        MIGRATION_46_47,
     )

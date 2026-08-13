@@ -16,12 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +37,8 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
@@ -91,68 +89,50 @@ fun AdminDashboardScreen(
     var showShutdownDialog by remember { mutableStateOf(false) }
 
     if (showRestartDialog) {
-        AlertDialog(
-            onDismissRequest = { showRestartDialog = false },
-            title = { Text(stringResource(R.string.admin_restart_server_title)) },
-            text = { Text(stringResource(R.string.admin_restart_server_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showRestartDialog = false
-                    viewModel.restartServer()
-                }) { Text(stringResource(R.string.admin_restart)) }
+        ConfirmDialog(
+            title = stringResource(R.string.admin_restart_server_title),
+            message = stringResource(R.string.admin_restart_server_body),
+            confirmText = stringResource(R.string.admin_restart),
+            dismissText = stringResource(R.string.admin_cancel),
+            tone = ConfirmTone.NEUTRAL,
+            onConfirm = {
+                showRestartDialog = false
+                viewModel.restartServer()
             },
-            dismissButton = {
-                TextButton(onClick = { showRestartDialog = false }) { Text(stringResource(R.string.admin_cancel)) }
-            },
+            onDismiss = { showRestartDialog = false },
         )
     }
 
     if (showShutdownDialog) {
-        AlertDialog(
-            onDismissRequest = { showShutdownDialog = false },
-            title = { Text(stringResource(R.string.admin_shutdown_server_title)) },
-            text = { Text(stringResource(R.string.admin_shutdown_server_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showShutdownDialog = false
-                    viewModel.shutdownServer()
-                }) { Text(stringResource(R.string.admin_shutdown)) }
+        ConfirmDialog(
+            title = stringResource(R.string.admin_shutdown_server_title),
+            message = stringResource(R.string.admin_shutdown_server_body),
+            confirmText = stringResource(R.string.admin_shutdown),
+            dismissText = stringResource(R.string.admin_cancel),
+            tone = ConfirmTone.NEUTRAL,
+            onConfirm = {
+                showShutdownDialog = false
+                viewModel.shutdownServer()
             },
-            dismissButton = {
-                TextButton(onClick = { showShutdownDialog = false }) { Text(stringResource(R.string.admin_cancel)) }
-            },
+            onDismiss = { showShutdownDialog = false },
         )
     }
 
     // Stop active playback confirm dialog. Session to stop is held in VM
     // state so it survives recomposition; dismissed on confirm/cancel/away-tap.
     state.pendingStopSession?.let { session ->
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissStopSessionDialog() },
-            title = { Text(stringResource(R.string.admin_stop_session_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.admin_stop_session_body,
-                        session.userName.ifBlank { session.deviceName },
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.stopSession() },
-                    enabled = !state.isStoppingSession,
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) { Text(stringResource(R.string.admin_stop)) }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { viewModel.dismissStopSessionDialog() },
-                    enabled = !state.isStoppingSession,
-                ) { Text(stringResource(R.string.admin_cancel)) }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.admin_stop_session_title),
+            message = stringResource(
+                R.string.admin_stop_session_body,
+                session.userName.ifBlank { session.deviceName },
+            ),
+            confirmText = stringResource(R.string.admin_stop),
+            dismissText = stringResource(R.string.admin_cancel),
+            tone = ConfirmTone.DESTRUCTIVE,
+            confirmLoading = state.isStoppingSession,
+            onConfirm = { viewModel.stopSession() },
+            onDismiss = { viewModel.dismissStopSessionDialog() },
         )
     }
 

@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -26,16 +28,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,9 +49,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
@@ -62,13 +66,13 @@ import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.core.designsystem.theme.hairlineBorderColor
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
-import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.ModeSwitch
 import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.composables.icons.tabler.Tabler
@@ -88,6 +92,9 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.res.stringResource
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.Refresh
+
+/** Translucency of the home app-bar capsules and the expanded-search surface scrim. */
+private const val AppBarScrimAlpha = 0.85f
 
 @Composable
 fun HomeTopDock(
@@ -114,19 +121,20 @@ fun HomeTopDock(
     searchResultsContent: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Icon colors are now derived once in MainHomeContent and passed in; this
-    // previously recomputed an identical derivedStateOf + lerp on every
-    // recompose, duplicating work the caller had already done.
     val focusManager = LocalFocusManager.current
-
     val isTv = LocalTvMode.current
+
+    val hasStatusIndicators = headerStatus !is HeaderStatus.None || showClock || pendingSyncCount > 0 || offlineMode != OfflineMode.ONLINE
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .then(if (!isTv) Modifier.statusBarsPadding() else Modifier)
             .padding(
-                horizontal = 16.dp,
-                vertical = 4.dp
+                start = 16.dp,
+                top = 4.dp,
+                end = 16.dp,
+                bottom = 0.dp,
             )
             .onDpadKey(
                 onBack = {
@@ -137,85 +145,90 @@ fun HomeTopDock(
                     } else false
                 },
             ),
-        contentAlignment = Alignment.TopEnd
+        contentAlignment = Alignment.TopStart
     ) {
-        Column(
-            modifier = Modifier
-                .then(if (isSearchFocused) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
-                .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                .graphicsLayer {
-                    shadowElevation = if (isSearchFocused) 4f else 0f
-                    shape = ShapeCache.smooth24
-                    clip = true
-                }
-                .background(
-                    if (isSearchFocused) {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    } else {
-                        Color.Transparent
-                    }
-                )
-        ) {
-            Row(
+        if (isSearchFocused) {
+            Surface(
+                shape = ShapeCache.smooth24,
+                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha),
+                tonalElevation = 3.dp,
+                shadowElevation = 6.dp,
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = hairlineBorderColor(),
+                ),
                 modifier = Modifier
-                    .then(if (isSearchFocused) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
-                    .height(64.dp)
-                    .padding(
-                        start = 8.dp,
-                        top = 0.dp,
-                        end = if (isSearchFocused) 8.dp else 0.dp,
-                        bottom = 0.dp
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End
+                    .fillMaxWidth()
+                    .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
             ) {
-                if (isSearchFocused) {
-                    SearchExpandedContent(
-                        searchQuery = searchQuery,
-                        appBarIconColor = appBarIconColor,
-                        appBarIconColorFaded = appBarIconColorFaded,
-                        onBack = {
-                            onSearchExpanded(false)
-                            onClearSearch()
-                            focusManager.clearFocus()
-                        },
-                        onQueryChange = onSearchQueryChange,
-                        onClear = {
-                            onClearSearch()
-                            focusManager.clearFocus()
-                        },
-                    )
-                } else {
-                    CollapsedDockContent(
-                        offlineMode = offlineMode,
-                        homeMode = homeMode,
-                        headerStatus = headerStatus,
-                        appBarIconColorFaded = appBarIconColorFaded,
-                        pendingSyncCount = pendingSyncCount,
-                        showClock = showClock,
-                        currentUser = currentUser,
-                        currentServerUsers = currentServerUsers,
-                        onUserSwitch = onUserSwitch,
-                        onToggleOffline = onToggleOffline,
-                        isGoingOnline = isGoingOnline,
-                        onShowSyncDetails = onShowSyncDetails,
-                        onModeChange = onModeChange,
-                        onSearchExpand = { onSearchExpanded(true) },
-                    )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .padding(
+                                start = 4.dp,
+                                top = 0.dp,
+                                end = 4.dp,
+                                bottom = 0.dp,
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        SearchExpandedContent(
+                            searchQuery = searchQuery,
+                            appBarIconColor = appBarIconColor,
+                            appBarIconColorFaded = appBarIconColorFaded,
+                            onBack = {
+                                onSearchExpanded(false)
+                                onClearSearch()
+                                focusManager.clearFocus()
+                            },
+                            onQueryChange = onSearchQueryChange,
+                            onClear = {
+                                onClearSearch()
+                                focusManager.clearFocus()
+                            },
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 400.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha)
+                            ),
+                    ) {
+                        searchResultsContent()
+                    }
                 }
             }
-
-            if (isSearchFocused) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f)
-                        ),
-                ) {
-                    searchResultsContent()
-                }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = if (!hasStatusIndicators) Arrangement.End else Arrangement.SpaceBetween,
+            ) {
+                CollapsedDockContent(
+                    hasStatusIndicators = hasStatusIndicators,
+                    offlineMode = offlineMode,
+                    homeMode = homeMode,
+                    headerStatus = headerStatus,
+                    appBarIconColorFaded = appBarIconColorFaded,
+                    pendingSyncCount = pendingSyncCount,
+                    showClock = showClock,
+                    currentUser = currentUser,
+                    currentServerUsers = currentServerUsers,
+                    onUserSwitch = onUserSwitch,
+                    onToggleOffline = onToggleOffline,
+                    isGoingOnline = isGoingOnline,
+                    onShowSyncDetails = onShowSyncDetails,
+                    onModeChange = onModeChange,
+                    onSearchExpand = { onSearchExpanded(true) },
+                )
             }
         }
     }
@@ -240,46 +253,46 @@ private fun RowScope.SearchExpandedContent(
     ) {
         IconButton(
             onClick = onBack,
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.size(38.dp),
         ) {
             Icon(
                 Tabler.Outline.ArrowLeft,
                 contentDescription = stringResource(R.string.home_back),
                 tint = appBarIconColorFaded,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(22.dp),
             )
         }
     }
 
-    @OptIn(ExperimentalMaterial3Api::class)
-    val searchTextFieldColors = TextFieldDefaults.colors(
-        focusedContainerColor = Color.Transparent,
-        unfocusedContainerColor = Color.Transparent,
-        focusedIndicatorColor = Color.Transparent,
-        unfocusedIndicatorColor = Color.Transparent,
-        cursorColor = appBarIconColor,
-    )
-
-    TextField(
+    BasicTextField(
         value = searchQuery,
         onValueChange = onQueryChange,
         modifier = Modifier
             .weight(1f)
-            .padding(horizontal = 4.dp)
-            .height(48.dp)
+            .padding(horizontal = 8.dp)
             .focusRequester(focusRequester),
-        placeholder = {
-            Text(
-                stringResource(R.string.home_search_placeholder),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        },
-        colors = searchTextFieldColors,
         textStyle = MaterialTheme.typography.bodyMedium.copy(
             color = appBarIconColor,
         ),
         singleLine = true,
+        cursorBrush = SolidColor(appBarIconColor),
+        decorationBox = { innerTextField ->
+            Box(
+                contentAlignment = Alignment.CenterStart,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (searchQuery.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.home_search_placeholder),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                innerTextField()
+            }
+        },
     )
 
     RequestOrRestoreFocus(focusRequester, "home_search")
@@ -294,19 +307,20 @@ private fun RowScope.SearchExpandedContent(
             IconButton(
                 onClick = onClear,
                 shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(38.dp),
             ) {
                 Icon(
                     Tabler.Outline.X,
                     contentDescription = stringResource(R.string.home_clear_search),
                     tint = appBarIconColorFaded,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun OfflineToggleIcon(
     isGoingOnline: Boolean,
@@ -315,18 +329,19 @@ private fun OfflineToggleIcon(
     IconButton(
         onClick = onToggleOffline,
         enabled = !isGoingOnline,
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier.size(38.dp),
     ) {
         if (isGoingOnline) {
-            JellyPlayCircularProgressIndicator(
+            LoadingIndicator(
                 modifier = Modifier.size(20.dp),
+                color = MaterialTheme.colorScheme.primary,
             )
         } else {
             Icon(
                 Tabler.Outline.Download,
                 contentDescription = stringResource(R.string.home_go_online),
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(22.dp),
             )
         }
     }
@@ -347,13 +362,6 @@ private fun SyncStatusIcon(
 ) {
     val syncFocusState = rememberTvFocusState()
     val reducedMotion = LocalReducedMotion.current
-    // The draining rotation only applies while isDraining. When the icon is
-    // shown offline with queued events (isDraining = false), the icon is
-    // visually static, so gate the sole infinite-transition child on it. An
-    // InfiniteTransition with no children stops its frame clock, eliminating a
-    // continuous ~60Hz recomposition of this composable while idle — the same
-    // gating pattern used for the hero pulse animations (HomeHero.kt). Honor
-    // reduced-motion/performance mode by holding the icon static.
     val infiniteTransition = rememberInfiniteTransition(label = "sync_draining")
     val rotation by if (isDraining && !reducedMotion) {
         infiniteTransition.animateFloat(
@@ -382,14 +390,14 @@ private fun SyncStatusIcon(
         ) {
             IconButton(
                 onClick = onClick,
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(38.dp),
             ) {
                 Icon(
                     imageVector = Tabler.Outline.Refresh,
                     contentDescription = contentDescription,
                     tint = if (isDraining) MaterialTheme.colorScheme.primary else tint,
                     modifier = Modifier
-                        .size(20.dp)
+                        .size(22.dp)
                         .then(
                             if (isDraining) Modifier.graphicsLayer { rotationZ = rotation }
                             else Modifier,
@@ -403,6 +411,7 @@ private fun SyncStatusIcon(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CollapsedDockContent(
+    hasStatusIndicators: Boolean,
     offlineMode: OfflineMode,
     homeMode: HomeMode,
     headerStatus: HeaderStatus,
@@ -418,106 +427,129 @@ private fun CollapsedDockContent(
     onModeChange: (HomeMode) -> Unit,
     onSearchExpand: () -> Unit,
 ) {
-    // Quick user switcher : tappable avatar chip in the dock, only when the
-    // server has ≥2 persisted users. Opens a DropdownMenu (mobile) or a
-    // TvSafeSheet (TV) — the project's canonical dual-renderer menu idiom.
-    if (currentUser != null && currentServerUsers.size >= 2) {
-        UserSwitcherChip(
-            currentUser = currentUser,
-            users = currentServerUsers,
-            onUserSwitch = onUserSwitch,
-        )
+    // ── Start Side: Connectivity & Status Expressive Capsule (Only shown when indicators exist) ──
+    if (hasStatusIndicators) {
+        Surface(
+            shape = ShapeCache.smoothPill,
+            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha),
+            tonalElevation = 2.dp,
+            shadowElevation = 6.dp,
+            border = BorderStroke(
+                width = 1.dp,
+                color = hairlineBorderColor(),
+            ),
+            modifier = Modifier.height(52.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (headerStatus !is HeaderStatus.None) {
+                    HeaderStatusIndicator(
+                        status = headerStatus,
+                        tint = appBarIconColorFaded,
+                    )
+                }
+                if (showClock) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Tabler.Outline.Clock,
+                            contentDescription = null,
+                            tint = appBarIconColorFaded,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = rememberWallClockTimeString(),
+                            color = appBarIconColorFaded,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.SemiBold,
+                            ),
+                        )
+                    }
+                }
+                if (pendingSyncCount > 0) {
+                    SyncStatusIcon(
+                        pendingCount = pendingSyncCount,
+                        isDraining = offlineMode == OfflineMode.ONLINE,
+                        tint = appBarIconColorFaded,
+                        onClick = onShowSyncDetails,
+                    )
+                }
+                if (offlineMode != OfflineMode.ONLINE) {
+                    val onlineFocusState = rememberTvFocusState()
+                    Box(
+                        modifier = Modifier
+                            .then(onlineFocusState.focusModifier)
+                            .tvFocusIndicator(onlineFocusState, CircleShape)
+                    ) {
+                        OfflineToggleIcon(
+                            isGoingOnline = isGoingOnline,
+                            onToggleOffline = onToggleOffline,
+                        )
+                    }
+                }
+            }
+        }
     }
-    if (showClock) {
+
+    // ── End Side: Navigation, Actions & User Expressive Capsule ──
+    Surface(
+        shape = ShapeCache.smoothPill,
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = AppBarScrimAlpha),
+        tonalElevation = 2.dp,
+        shadowElevation = 6.dp,
+        border = BorderStroke(
+            width = 1.dp,
+            color = hairlineBorderColor(),
+        ),
+        modifier = Modifier.height(52.dp),
+    ) {
         Row(
             modifier = Modifier
-                .padding(end = 12.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    shape = ShapeCache.smooth12
-                )
-                .border(
-                    width = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
-                    shape = ShapeCache.smooth12
-                )
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .fillMaxHeight()
+                .padding(horizontal = 6.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Icon(
-                imageVector = Tabler.Outline.Clock,
-                contentDescription = null,
-                tint = appBarIconColorFaded,
-                modifier = Modifier.size(14.dp)
+            if (currentUser != null && currentServerUsers.size >= 2) {
+                UserSwitcherChip(
+                    currentUser = currentUser,
+                    users = currentServerUsers,
+                    onUserSwitch = onUserSwitch,
+                )
+            }
+            ModeSwitch(
+                currentMode = homeMode,
+                onModeChange = onModeChange,
             )
-            Text(
-                text = rememberWallClockTimeString(),
-                color = appBarIconColorFaded,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.SemiBold
-                ),
-            )
-        }
-    }
-    if (offlineMode != OfflineMode.ONLINE) {
-        val onlineFocusState = rememberTvFocusState()
-        Box(
-            modifier = Modifier
-                .then(onlineFocusState.focusModifier)
-                .tvFocusIndicator(onlineFocusState, CircleShape)
-        ) {
-            // The offline toggle does one job: switch offline mode. Pending
-            // playback sync is surfaced by a dedicated SyncStatusIcon sibling
-            // (added below) so neither affordance obscures the other.
-            OfflineToggleIcon(
-                isGoingOnline = isGoingOnline,
-                onToggleOffline = onToggleOffline,
-            )
-        }
-    }
-    // Pending playback-progress events: show a dedicated sync affordance as a
-    // sibling of the offline toggle. It conveys purpose (sync icon + count)
-    // rather than hiding behind the offline button, and opens the pending
-    // sync details sheet on click. Renders both offline (queued, waiting for
-    // reconnect) and online (draining) — animated when draining.
-    if (pendingSyncCount > 0) {
-        SyncStatusIcon(
-            pendingCount = pendingSyncCount,
-            isDraining = offlineMode == OfflineMode.ONLINE,
-            tint = appBarIconColorFaded,
-            onClick = onShowSyncDetails,
-        )
-    }
-    ModeSwitch(
-        currentMode = homeMode,
-        onModeChange = onModeChange,
-    )
-    HeaderStatusIndicator(
-        status = headerStatus,
-        tint = appBarIconColorFaded,
-    )
-    val searchFocusState = rememberTvFocusState()
-    Box(
-        modifier = Modifier
-            .then(searchFocusState.focusModifier)
-            .tvFocusIndicator(searchFocusState, CircleShape)
-    ) {
-        IconButton(
-            onClick = onSearchExpand,
-            modifier = Modifier.size(40.dp),
-        ) {
-            Icon(
-                Tabler.Outline.Search,
-                contentDescription = stringResource(R.string.home_search),
-                tint = appBarIconColorFaded,
-                modifier = Modifier.size(20.dp),
-            )
+            val searchFocusState = rememberTvFocusState()
+            Box(
+                modifier = Modifier
+                    .then(searchFocusState.focusModifier)
+                    .tvFocusIndicator(searchFocusState, CircleShape)
+            ) {
+                IconButton(
+                    onClick = onSearchExpand,
+                    modifier = Modifier.size(38.dp),
+                ) {
+                    Icon(
+                        Tabler.Outline.Search,
+                        contentDescription = stringResource(R.string.home_search),
+                        tint = appBarIconColorFaded,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
         }
     }
 }
-
-
 
 /**
  * The home app-bar quick user switcher chip. Renders the current user's
@@ -548,7 +580,6 @@ private fun UserSwitcherChip(
     Box {
         Row(
             modifier = Modifier
-                .padding(end = 12.dp)
                 .then(chipFocusState.focusModifier)
                 .tvFocusIndicator(chipFocusState, CircleShape)
                 .clip(CircleShape)
@@ -564,13 +595,13 @@ private fun UserSwitcherChip(
                 ) {
                     if (isTv) showTvMenu = true else menuExpanded = true
                 }
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+                .padding(horizontal = 6.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             UserAvatar(
                 name = currentUser.name,
-                size = 22.dp,
+                size = 20.dp,
                 avatarColor = avatarColor,
                 onAvatarColor = onAvatarColor,
             )

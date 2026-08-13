@@ -80,6 +80,7 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.ui.NavDisplay
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -106,7 +107,6 @@ import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.NavigationStyle
 import com.raulshma.jellyplay.navigation.components.ExpressiveFloatingNavigationBar
 import com.raulshma.jellyplay.navigation.components.MoreToggleIcon
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -416,6 +416,29 @@ private fun MainContent(
                     }
             }
             false
+        } else if (route is Route.VideoPlayer) {
+            // Route fullscreen video to the dedicated PlayerActivity so system
+            // Picture-in-Picture floats over this browse UI (back-stack
+            // choreography: shared taskAffinity, singleTask). Returning false
+            // prevents the in-nav VideoPlayerScreen from composing.
+            val intent = Intent(context, com.raulshma.jellyplay.PlayerActivity::class.java).apply {
+                putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_ITEM_ID, route.itemId)
+                route.mediaSourceId?.let {
+                    putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_MEDIA_SOURCE_ID, it)
+                }
+                putExtra(
+                    com.raulshma.jellyplay.PlayerActivity.EXTRA_START_POSITION_TICKS,
+                    route.startPositionTicks,
+                )
+                route.subtitleStreamIndex?.let {
+                    putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_SUBTITLE_STREAM_INDEX, it)
+                }
+                route.audioStreamIndex?.let {
+                    putExtra(com.raulshma.jellyplay.PlayerActivity.EXTRA_AUDIO_STREAM_INDEX, it)
+                }
+            }
+            context.startActivity(intent)
+            false
         } else {
             true
         }
@@ -520,13 +543,6 @@ private fun MainContent(
         }
     }
 
-    val videoMiniPlayerState = viewModel.videoMiniPlayerState
-    val isVideoMiniMode by videoMiniPlayerState.isMiniMode.collectAsStateWithLifecycle()
-    val videoMiniTitle by videoMiniPlayerState.title.collectAsStateWithLifecycle()
-    val videoMiniSubtitle by videoMiniPlayerState.subtitle.collectAsStateWithLifecycle()
-    val videoMiniIsPlaying by videoMiniPlayerState.isPlaying.collectAsStateWithLifecycle()
-    val videoMiniItemId by videoMiniPlayerState.itemId.collectAsStateWithLifecycle()
-
     val pendingRoute by viewModel.pendingRoute.collectAsStateWithLifecycle()
     LaunchedEffect(pendingRoute) {
         pendingRoute?.let { route ->
@@ -592,14 +608,13 @@ private fun MainContent(
         }
     }
 
-    val enterPip: () -> Unit = remember(context) {
+    val enterPip: () -> Unit = remember(navigator) {
         {
-            (context as? MainActivity)?.enterPipMode()
-        }
-    }
-
-    val enterVideoMiniMode: () -> Unit = remember(navigator) {
-        {
+            // TODO(pip): in-nav player PiP (e.g. LiveTV) is broken since the
+            //  PlayerActivity migration (55cd569f8) removed
+            //  MainActivity:supportsPictureInPicture. The former enterPipMode()
+            //  call now always fails; this collapses to the goBack fallback.
+            //  Restore by routing live playback through PlayerActivity.
             navigator.goBack()
         }
     }
@@ -779,9 +794,7 @@ private fun MainContent(
                     onLogout = onLogout,
                     homeMode = homeMode,
                     onModeChange = onModeChange,
-                    enterPip = enterPip,
-                    enterVideoMiniMode = enterVideoMiniMode,
-                    saveableStateHolder = saveableStateHolder,
+                    enterPip = enterPip,                    saveableStateHolder = saveableStateHolder,
                     entryDecorator = entryDecorator,
                     onNowPlayingClick = onNowPlayingClick,
                     onAmbientClick = onAmbientClick,
@@ -797,14 +810,7 @@ private fun MainContent(
                     audioTitle = audioTitle,
                     audioArtist = audioArtist,
                     audioArtworkUrl = audioArtworkUrl,
-                    onDismissMiniPlayer = { isMiniPlayerDismissed = true },
-                    isVideoMiniMode = isVideoMiniMode,
-                    videoMiniPlayerState = videoMiniPlayerState,
-                    videoMiniTitle = videoMiniTitle,
-                    videoMiniSubtitle = videoMiniSubtitle,
-                    videoMiniIsPlaying = videoMiniIsPlaying,
-                    videoMiniItemId = videoMiniItemId,
-                )
+                    onDismissMiniPlayer = { isMiniPlayerDismissed = true },                )
             } else {
                 if (!isFullScreenRoute) {
                     // Wire the system/gesture back button to in-app navigation so back
@@ -839,9 +845,7 @@ private fun MainContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,
-                        enterVideoMiniMode = enterVideoMiniMode,
-                        saveableStateHolder = saveableStateHolder,
+                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
@@ -858,17 +862,8 @@ private fun MainContent(
                         audioTitle = audioTitle,
                         audioArtist = audioArtist,
                         audioArtworkUrl = audioArtworkUrl,
-                        onDismissMiniPlayer = { isMiniPlayerDismissed = true },
-                        isVideoMiniMode = isVideoMiniMode,
-                        videoMiniPlayerState = videoMiniPlayerState,
-                        videoMiniTitle = videoMiniTitle,
-                        videoMiniSubtitle = videoMiniSubtitle,
-                        videoMiniIsPlaying = videoMiniIsPlaying,
-                        videoMiniItemId = videoMiniItemId,
-                        animatedNavBarColor = animatedNavBarColor,
+                        onDismissMiniPlayer = { isMiniPlayerDismissed = true },                        animatedNavBarColor = animatedNavBarColor,
                         showNavBarLabels = preferences.navBarShowLabels,
-                        navigationStyle = preferences.navigationStyle,
-                        isExpressiveNavExperimental = preferences.isExperimentalEnabled(ExperimentalFeature.EXPRESSIVE_NAVIGATION),
                         offlineMode = offlineMode,
                         isGoingOnline = isGoingOnline,
                         downloadCount = downloadCount,
@@ -888,19 +883,10 @@ private fun MainContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,
-                        enterVideoMiniMode = enterVideoMiniMode,
-                        saveableStateHolder = saveableStateHolder,
+                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
-                        onAmbientClick = onAmbientClick,
-                        isVideoMiniMode = isVideoMiniMode,
-                        videoMiniPlayerState = videoMiniPlayerState,
-                        videoMiniTitle = videoMiniTitle,
-                        videoMiniSubtitle = videoMiniSubtitle,
-                        videoMiniIsPlaying = videoMiniIsPlaying,
-                        videoMiniItemId = videoMiniItemId,
-                    )
+                        onAmbientClick = onAmbientClick,                    )
                 }
                 }
             } // end inner blur Box
@@ -938,9 +924,7 @@ private fun TvContent(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,
-    enterVideoMiniMode: () -> Unit,
-    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    enterPip: () -> Unit,    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
@@ -956,14 +940,7 @@ private fun TvContent(
     audioTitle: String,
     audioArtist: String,
     audioArtworkUrl: String,
-    onDismissMiniPlayer: () -> Unit,
-    isVideoMiniMode: Boolean,
-    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
-    videoMiniTitle: String,
-    videoMiniSubtitle: String,
-    videoMiniIsPlaying: Boolean,
-    videoMiniItemId: String?,
-) {
+    onDismissMiniPlayer: () -> Unit,) {
     TvMaterial3Theme(
         colorScheme = tvDarkColorScheme(
             background = MaterialTheme.colorScheme.background,
@@ -1030,9 +1007,7 @@ private fun TvContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,
-                        enterVideoMiniMode = enterVideoMiniMode,
-                        saveableStateHolder = saveableStateHolder,
+                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
@@ -1040,7 +1015,7 @@ private fun TvContent(
                     // TV mini-player transport: the drawer's "Now Playing" row only opens the
                     // full player, so without this overlay backgrounded audio has no D-pad-
                     // reachable pause/skip/close bar on TV. The components are already TV-aware
-                    // (MiniPlayer/VideoMiniPlayer apply tvFocusIndicator); this is the host
+                    // (MiniPlayer applies tvFocusIndicator); this is the host
                     // wiring gap for TV navigation.
                     if (showMiniPlayer) {
                         Box(
@@ -1067,31 +1042,7 @@ private fun TvContent(
                                 },
                             )
                         }
-                    }
-                    if (isVideoMiniMode) {
-                        VideoMiniPlayer(
-                            isVisible = true,
-                            engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
-                            title = videoMiniTitle,
-                            subtitle = videoMiniSubtitle,
-                            isPlaying = videoMiniIsPlaying,
-                            onClick = {
-                                val itemId = videoMiniItemId ?: return@VideoMiniPlayer
-                                navigator.navigate(Route.VideoPlayer(itemId))
-                            },
-                            onClose = {
-                                videoMiniPlayerState.release()
-                            },
-                            onPlayPause = {
-                                videoMiniPlayerState.togglePlayPause()
-                            },
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(end = 8.dp, bottom = 8.dp)
-                                .fillMaxWidth(0.45f),
-                        )
-                    }
-                }
+                    }                }
             }
         }
     }
@@ -1099,7 +1050,7 @@ private fun TvContent(
 
 /**
  * Phone (and large-screen NavigationRail) layout: [NavigationSuiteScaffold] hosting
- * [MainNavDisplay] with floating mini-player(s) and the optional [FloatingNavigationBar].
+ * [MainNavDisplay] with floating mini-player(s) and the [ExpressiveFloatingNavigationBar].
  * All scroll-coupled bottom-nav state is owned here.
  */
 @Composable
@@ -1111,9 +1062,7 @@ private fun PhoneContent(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,
-    enterVideoMiniMode: () -> Unit,
-    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    enterPip: () -> Unit,    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
     onAmbientClick: () -> Unit,
@@ -1130,17 +1079,8 @@ private fun PhoneContent(
     audioTitle: String,
     audioArtist: String,
     audioArtworkUrl: String,
-    onDismissMiniPlayer: () -> Unit,
-    isVideoMiniMode: Boolean,
-    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
-    videoMiniTitle: String,
-    videoMiniSubtitle: String,
-    videoMiniIsPlaying: Boolean,
-    videoMiniItemId: String?,
-    animatedNavBarColor: Color,
+    onDismissMiniPlayer: () -> Unit,    animatedNavBarColor: Color,
     showNavBarLabels: Boolean,
-    navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
-    isExpressiveNavExperimental: Boolean = false,
     offlineMode: com.raulshma.jellyplay.core.model.OfflineMode = com.raulshma.jellyplay.core.model.OfflineMode.ONLINE,
     isGoingOnline: Boolean = false,
     downloadCount: Int = 0,
@@ -1149,6 +1089,7 @@ private fun PhoneContent(
     surpriseRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     val systemNavBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var isBottomNavVisible by isBottomNavVisibleState
 
     // Play On (cast-to-Jellyfin-session) lives at the app shell so the mini
@@ -1174,6 +1115,13 @@ private fun PhoneContent(
     // nav bar (see OverflowMenuItems / OverflowMenuScrim below).
     var isOverflowExpanded by remember { mutableStateOf(false) }
     val onOverflowToggle: (Boolean) -> Unit = { isOverflowExpanded = it }
+    // Close the overflow on system/gesture back instead of navigating. Registered
+    // only while the menu is open, so when it's disabled the global handler at
+    // the call site (back = goBack / exit) takes over again. This also gives the
+    // predictive-back system a real OnBackInvokedCallback for the overlay, which
+    // stops the back-gesture preview indicator from freezing mid-screen when the
+    // scrim's full-screen clickable intercepts the edge swipe (#115).
+    BackHandler(enabled = isOverflowExpanded) { isOverflowExpanded = false }
 
     // When hide-on-scroll is disabled, keep the nav bar permanently visible
         //. The nestedScrollConnection is still constructed so its
@@ -1211,6 +1159,25 @@ private fun PhoneContent(
                         )
                     }
                 }
+                // Tablet NavigationRail has no floating nav bar, so the "More"
+                // overflow toggle that phones carry in the nav bar is absent
+                // here. Append it as a rail item so Settings/Downloads/SyncPlay/
+                // Play On/Shortcuts/Surprise/Offline stay reachable (#115).
+                // On phones navigationSuiteType is None, so this never renders.
+                if (isExpanded) {
+                    NavigationSuiteItem(
+                        selected = isOverflowExpanded,
+                        onClick = { onOverflowToggle(!isOverflowExpanded) },
+                        icon = {
+                            MoreToggleIcon(
+                                isExpanded = isOverflowExpanded,
+                                tint = androidx.compose.material3.LocalContentColor.current,
+                                badgeCount = downloadCount,
+                            )
+                        },
+                        label = { Text(stringResource(R.string.nav_more)) },
+                    )
+                }
             },
             navigationSuiteColors = NavigationSuiteDefaults.colors(
                 navigationBarContainerColor = if (isAudioPlayerScreen) Color.Transparent else MaterialTheme.colorScheme.surface,
@@ -1239,9 +1206,7 @@ private fun PhoneContent(
                         onLogout = onLogout,
                         homeMode = homeMode,
                         onModeChange = onModeChange,
-                        enterPip = enterPip,
-                        enterVideoMiniMode = enterVideoMiniMode,
-                        saveableStateHolder = saveableStateHolder,
+                        enterPip = enterPip,                        saveableStateHolder = saveableStateHolder,
                         entryDecorator = entryDecorator,
                         onNowPlayingClick = onNowPlayingClick,
                         onAmbientClick = onAmbientClick,
@@ -1306,44 +1271,7 @@ private fun PhoneContent(
                             },
                         )
                     }
-                }
-                if (isVideoMiniMode) {
-                    VideoMiniPlayer(
-                        isVisible = true,
-                        // The host app knows the engine is a video `MediaEngine` even though
-                        // the cross-feature holder types it as the more general
-                        // `RemotePlayableEngine`. Cast is safe because only the video
-                        // engine ever enters mini mode.
-                        engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
-                        title = videoMiniTitle,
-                        subtitle = videoMiniSubtitle,
-                        isPlaying = videoMiniIsPlaying,
-                        onClick = {
-                            val itemId = videoMiniItemId ?: return@VideoMiniPlayer
-                            navigator.navigate(Route.VideoPlayer(itemId))
-                        },
-                        onClose = {
-                            videoMiniPlayerState.release()
-                        },
-                        onPlayPause = {
-                            videoMiniPlayerState.togglePlayPause()
-                        },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 8.dp, bottom = systemNavBarBottom + (if (!isExpanded) 64.dp else 8.dp))
-                            .fillMaxWidth(0.45f)
-                            .offset {
-                                if (!isExpanded) {
-                                    val maxOffset = com.raulshma.jellyplay.core.designsystem.theme.Dimensions.floatingNavHeight.toPx()
-                                    val yOffset = (-bottomNavOffsetHeightPx.floatValue).coerceAtMost(maxOffset)
-                                    IntOffset(x = 0, y = yOffset.roundToInt())
-                                } else {
-                                    IntOffset.Zero
-                                }
-                            },
-                    )
-                }
-                // Play On persistent transport bar — visible while a Jellyfin
+                }                // Play On persistent transport bar — visible while a Jellyfin
                 // remote session is active and the full-screen companion is not
                 // already open. Sits above the floating nav bar.
                 if (playOnState.isConnected && !isPlayOnCompanionOpen) {
@@ -1386,6 +1314,9 @@ private fun PhoneContent(
                 // of destinations upward, so Settings/Downloads/SyncPlay/Play On
                 // are reachable from anywhere (#115). The items render as an
                 // overlay above the nav bar (see OverflowMenuItems below).
+                // On tablet the toggle lives in the NavigationRail (left edge),
+                // so the pills dock top-start beside the rail and flow top-down;
+                // on phone they dock bottom-end beside the floating nav toggle.
                 if (isOverflowExpanded) {
                     com.raulshma.jellyplay.navigation.components.OverflowMenuScrim(
                         onDismiss = { isOverflowExpanded = false },
@@ -1423,10 +1354,18 @@ private fun PhoneContent(
                         offlineMode = offlineMode,
                         isGoingOnline = isGoingOnline,
                         downloadCount = downloadCount,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .clearFloatingNav(extraBottom = 0.dp)
-                            .padding(end = 16.dp, bottom = 4.dp),
+                        alignToStart = isExpanded,
+                        modifier = if (isExpanded) {
+                            // The scaffold body already starts beside the rail, so a small
+                            // margin keeps the pills flush to the drawer. Anchor at the top
+                            // (under the status bar) so the list flows top-down.
+                            Modifier.align(Alignment.TopStart)
+                                .padding(start = 12.dp, top = statusBarTop + 8.dp)
+                        } else {
+                            Modifier.align(Alignment.BottomEnd)
+                                .clearFloatingNav(extraBottom = 0.dp)
+                                .padding(end = 16.dp, bottom = 4.dp)
+                        },
                     )
                 }
                 if (!isExpanded) {
@@ -1435,31 +1374,17 @@ private fun PhoneContent(
                         .padding(bottom = systemNavBarBottom + 4.dp)
                         .padding(horizontal = 16.dp)
                         .offset { IntOffset(x = 0, y = -bottomNavOffsetHeightPx.floatValue.roundToInt()) }
-                    if (navigationStyle == NavigationStyle.EXPRESSIVE || isExpressiveNavExperimental) {
-                        ExpressiveFloatingNavigationBar(
-                            routes = activeTopLevelRoutes,
-                            currentTopLevel = currentTopLevel,
-                            onNavigate = { navigator.navigate(it) },
-                            showLabels = showNavBarLabels,
-                            containerColor = animatedNavBarColor,
-                            isOverflowExpanded = isOverflowExpanded,
-                            onOverflowToggle = onOverflowToggle,
-                            downloadCount = downloadCount,
-                            modifier = navBarModifier,
-                        )
-                    } else {
-                        FloatingNavigationBar(
-                            routes = activeTopLevelRoutes,
-                            currentTopLevel = currentTopLevel,
-                            onNavigate = { navigator.navigate(it) },
-                            showLabels = showNavBarLabels,
-                            containerColor = animatedNavBarColor,
-                            isOverflowExpanded = isOverflowExpanded,
-                            onOverflowToggle = onOverflowToggle,
-                            downloadCount = downloadCount,
-                            modifier = navBarModifier,
-                        )
-                    }
+                    ExpressiveFloatingNavigationBar(
+                        routes = activeTopLevelRoutes,
+                        currentTopLevel = currentTopLevel,
+                        onNavigate = { navigator.navigate(it) },
+                        showLabels = showNavBarLabels,
+                        containerColor = animatedNavBarColor,
+                        isOverflowExpanded = isOverflowExpanded,
+                        onOverflowToggle = onOverflowToggle,
+                        downloadCount = downloadCount,
+                        modifier = navBarModifier,
+                    )
                 }
             }
         }
@@ -1467,7 +1392,7 @@ private fun PhoneContent(
 
 /**
  * Full-screen layout (player / onboarding / ambient / photo viewer): bare [Box] with
- * [MainNavDisplay] and an optional picture-in-picture [VideoMiniPlayer]. Deliberately
+ * [MainNavDisplay]. Deliberately
  * omits drawer / nav-bar / mini-player chrome.
  */
 @Composable
@@ -1477,19 +1402,10 @@ private fun FullScreenContent(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,
-    enterVideoMiniMode: () -> Unit,
-    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    enterPip: () -> Unit,    saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     onNowPlayingClick: () -> Unit,
-    onAmbientClick: () -> Unit,
-    isVideoMiniMode: Boolean,
-    videoMiniPlayerState: com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState,
-    videoMiniTitle: String,
-    videoMiniSubtitle: String,
-    videoMiniIsPlaying: Boolean,
-    videoMiniItemId: String?,
-) {
+    onAmbientClick: () -> Unit,) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1501,37 +1417,11 @@ private fun FullScreenContent(
             onLogout = onLogout,
             homeMode = homeMode,
             onModeChange = onModeChange,
-            enterPip = enterPip,
-            enterVideoMiniMode = enterVideoMiniMode,
-            saveableStateHolder = saveableStateHolder,
+            enterPip = enterPip,            saveableStateHolder = saveableStateHolder,
             entryDecorator = entryDecorator,
             onNowPlayingClick = onNowPlayingClick,
             onAmbientClick = onAmbientClick,
-        )
-        if (isVideoMiniMode) {
-            VideoMiniPlayer(
-                isVisible = true,
-                engine = videoMiniPlayerState.engine as? com.raulshma.jellyplay.feature.player.video.engine.MediaEngine,
-                title = videoMiniTitle,
-                subtitle = videoMiniSubtitle,
-                isPlaying = videoMiniIsPlaying,
-                onClick = {
-                    val itemId = videoMiniItemId ?: return@VideoMiniPlayer
-                    navigator.navigate(Route.VideoPlayer(itemId))
-                },
-                onClose = {
-                    videoMiniPlayerState.release()
-                },
-                onPlayPause = {
-                    videoMiniPlayerState.togglePlayPause()
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 8.dp, bottom = 8.dp)
-                    .fillMaxWidth(0.5f),
-            )
-        }
-    }
+        )    }
 }
 
 /**
@@ -1586,9 +1476,7 @@ private fun MainNavDisplay(
     onLogout: (Boolean) -> Unit,
     homeMode: HomeMode,
     onModeChange: (HomeMode) -> Unit,
-    enterPip: () -> Unit,
-    enterVideoMiniMode: () -> Unit = {},
-    innerPadding: PaddingValues = PaddingValues(0.dp),
+    enterPip: () -> Unit,    innerPadding: PaddingValues = PaddingValues(0.dp),
     saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     entryDecorator: NavEntryDecorator<NavKey>,
     modifier: Modifier = Modifier,
@@ -1671,9 +1559,7 @@ private fun MainNavDisplay(
         onModeChange,
         onNowPlayingClick,
         onAmbientClick,
-        enterPip,
-        enterVideoMiniMode,
-        onLogout,
+        enterPip,        onLogout,
         onPlayOnClick,
         playOnStrategy,
     ) {
@@ -1704,8 +1590,8 @@ private fun MainNavDisplay(
             liveTvSection(navigator)
             detailsSection(navigator)
             editorSection(navigator)
-            videoPlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
-            livePlayerSection(navigator, onEnterPip = enterPip, onEnterMiniMode = enterVideoMiniMode)
+            videoPlayerSection(navigator, onEnterPip = enterPip)
+            livePlayerSection(navigator, onEnterPip = enterPip)
             audioPlayerSection(navigator)
             downloadsSection(navigator)
             authSection(navigator) { navigator.goBack() }
@@ -1765,99 +1651,4 @@ private fun MainNavDisplay(
         entryProvider = sharedEntryProvider,
         modifier = modifier,
     )
-}
-
-@Composable
-private fun FloatingNavigationBar(
-    routes: Map<Route, String>,
-    currentTopLevel: NavKey,
-    onNavigate: (Route) -> Unit,
-    showLabels: Boolean,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
-    isOverflowExpanded: Boolean = false,
-    onOverflowToggle: (Boolean) -> Unit = {},
-    downloadCount: Int = 0,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = ShapeCache.smoothPill,
-        color = containerColor.copy(alpha = 0.65f),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                .padding(horizontal = 28.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(32.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            routes.forEach { (route, label) ->
-                // Wrap in key(route) so per-item slot identity (and the
-                // remember-ed MutableInteractionSource inside) survives route
-                // reordering instead of being positional only.
-                androidx.compose.runtime.key(route) {
-                    val selected = route == currentTopLevel
-                    val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    Row(
-                        modifier = Modifier
-                            .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                            .focusIndicator(androidx.compose.foundation.shape.CircleShape)
-                            .clickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null,
-                                onClick = { onNavigate(route) }
-                            ),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        NavIcon(route, label, selected = selected, tint = tint)
-                        if (selected && showLabels) {
-                            Text(
-                                text = label,
-                                color = tint,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-            // Trailing "More" toggle — expands the overflow destinations above
-            // the nav bar (#115). Styled as a sibling of the route items.
-            val overflowTint = if (isOverflowExpanded) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            }
-            Row(
-                modifier = Modifier
-                    .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                    .focusIndicator(androidx.compose.foundation.shape.CircleShape)
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null,
-                        onClick = { onOverflowToggle(!isOverflowExpanded) },
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                // Fixed-size box centered like the Expressive variant — guarantees
-                // the glyph paints even if the surrounding Row collapses width.
-                Box(
-                    modifier = Modifier.size(24.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    MoreToggleIcon(
-                        isExpanded = isOverflowExpanded,
-                        tint = overflowTint,
-                        badgeCount = downloadCount,
-                    )
-                }
-            }
-        }
-    }
 }

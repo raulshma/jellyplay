@@ -31,6 +31,11 @@ series, music, and more — and plays it back with zero network.
 - 🔄 **Watch-progress sync outbox** — playback position, start/stop, and
   played/unplayed state are captured offline and drained back to your
   server the next time you're online.
+- 🔁 **Freshness resync** — detect when a download's metadata, artwork,
+  subtitles, trickplay, or intro/outro segments have changed server-side and
+  refresh just those artifacts (no full re-download). A force-resync lets you
+  pick exactly which items and which data categories to refresh. See
+  [Keeping downloads fresh](#keeping-downloads-fresh-resync).
 - 🔒 **App-private storage** — media is kept in Android's per-app sandbox
   and is wiped on uninstall. See [Security note](#security-note) for
   what is and isn't encrypted.
@@ -154,6 +159,55 @@ You can also toggle **Offline mode** manually from the home screen at any
 time — useful to force offline playback even when a flaky connection is
 available.
 
+## Keeping downloads fresh (resync)
+
+A download captures a server snapshot at the moment it finished. Servers
+keep changing — artwork gets replaced, metadata is corrected, new subtitle
+tracks are added, intro/outro markers get refined. JellyPlay's **resync**
+brings a download back in step with the server **without re-downloading the
+media file**.
+
+### What gets checked
+
+When you open a downloaded item (or tap **Check all for updates** from the
+Downloads screen), JellyPlay compares the server's current state against the
+baseline captured at download time, across these axes:
+
+- **Metadata** — overview, cast, ratings, genres, studios, runtime (watched /
+  favorite flips are deliberately excluded so they don't trigger a resync)
+- **Artwork** — poster and backdrop (Jellyfin issues a new image tag whenever
+  an image is replaced)
+- **Subtitles** — the set of deliverable external subtitle tracks
+- **Trickplay** — the seek-preview thumbnail grid
+- **Segments** — intro / outro / recap skip points *(checked only during a
+  resync, not on the proactive open-item check — they change rarely and the
+  check avoids an extra round-trip)*
+
+If anything differs, an **update available** badge appears on the item.
+
+### Refreshing an item
+
+- **Sync now** (detail screen) refreshes every changed axis at once.
+- **Force resync** (Downloads → resync icon → **Force resync**) lets you pick
+  exactly which items and which data categories to refresh, regardless of
+  whether a change was detected. Skipped categories keep their existing
+  baseline, so a partial sync only clears the badge for what it actually
+  refreshed.
+
+### When the media file itself changed
+
+If the server's underlying file changed (different media-source id or size),
+a metadata resync can't fix that — JellyPlay surfaces it separately and
+offers **Re-download media**, which deletes the stale file and re-downloads
+the new one.
+
+### How often it checks
+
+The proactive check is **TTL-gated to once per hour per item**, so opening a
+download repeatedly doesn't spam the server. It's also a no-op while offline.
+There's no background freshness worker; only items you actually open (or a
+manual **Check all for updates**) get re-checked.
+
 ## Watch-progress sync
 
 When you watch offline, JellyPlay doesn't just remember your position
@@ -242,13 +296,19 @@ is the **real container** reported by Jellyfin (defaulting to `mp4` /
 Each download brings more than the media file. Sibling artifacts are
 written alongside it so offline playback matches online:
 
-- `trickplay/` — sprite sheets (`trickplay_*.jpg` + `meta.json`) for
+- `trickplay_<itemId>/` — sprite sheets (`trickplay_*.jpg` + `meta.json`) for
   thumbnail seeking
-- `subtitles/` — external subtitle files + a `manifest.json` describing
+- `subtitles_<itemId>/` — external subtitle files + a `manifest.json` describing
   each track (language, codec, default flag)
-- `segments.json` — intro / outro / recap markers
+- `<itemId>_segments.json` — intro / outro / recap markers
 - `${itemId}_poster.jpg` / `${itemId}_backdrop.jpg` — artwork, keyed by
   itemId because all downloads share one flat directory
+
+Artifacts are **scoped per item** (the `_<itemId>` suffix) so downloads
+sharing the flat directory never overwrite each other's siblings. A resync
+that refreshes an axis overwrites exactly that item's artifact in place; the
+writers are idempotent and `downloadExternalSubtitles` clears its dir when no
+deliverable tracks remain (mirroring a server-side subtitle removal).
 
 Deleting a download removes the media file and all of its artifacts.
 
@@ -350,7 +410,7 @@ multi-connection chunking, and concurrency than the ExoPlayer helper.
 
 ### Persistence (Room)
 
-A single `JellyPlayDatabase` (v36) holds three relevant tables:
+A single `JellyPlayDatabase` (v46) holds three relevant tables:
 
 - **`downloads`** — live transfer state (path, url, sizes, status,
   speed, priority, error, container, series/season linkage). Indexed
@@ -359,7 +419,12 @@ A single `JellyPlayDatabase` (v36) holds three relevant tables:
 - **`offline_media`** — browsable offline metadata (overview, ratings,
   cast JSON, genres, studios, posters, blurHash) plus playback-progress
   columns (`playbackPositionTicks`, `playedPercentage`, `isPlayed`,
-  `lastPlayedDate`). `applyPlayedStateToHierarchy` cascades a played /
+  `lastPlayedDate`) and the **freshness-resync baseline + result flags**
+  (`syncedPosterTag`, `syncedBackdropTag`, `syncedMetadataSignature`,
+  `syncedSubtitleSignature`, `syncedTrickplaySignature`,
+  `syncedSegmentsSignature`, `syncedMediaSourceId`, `syncedMediaSizeBytes`,
+  `lastSyncedAt`, `syncUpdateAvailable`, `syncMediaChanged`, `syncChecking`,
+  `syncError`). `applyPlayedStateToHierarchy` cascades a played /
   unplayed flip across an item and its whole series/season hierarchy in
   one UPDATE, mirroring Jellyfin's server-side behavior.
 - **`playback_outbox`** — the offline telemetry queue drained by
@@ -380,17 +445,84 @@ A single `JellyPlayDatabase` (v36) holds three relevant tables:
   offline-mode signals); `PlaybackSyncScheduler` provides the periodic
   backstop and a manual `enqueueNow()`.
 
+### Freshness & resync
+
+A two-layer split keeps the freshness rules testable and the I/O isolated:
+
+- **`OfflineSyncComparator`** (`core/data/.../sync`) — the pure, side-effect-free
+  decision layer. It computes deterministic **content-hash signatures** for each
+  resync axis (metadata, subtitles, trickplay, segments) from a `MediaDetail`,
+  captures a `SyncBaseline`, and diffs a fresh fetch against it. No I/O here —
+  network, DB, and disk live one layer up.
+- **`OfflineSyncManager`** (`core/data/.../sync`) — the orchestrator that moves
+  data between the network (`MediaRepository`, `PlaybackRepository`), the DAO
+  (`OfflineMediaDao`), and the artifact writers (`OfflineDownloadWriter`). Owns
+  the TTL gate, the offline short-circuit, batch progress, and the partial-sync
+  baseline merge.
+
+**Signatures, not version tags.** Jellyfin exposes no etag/version/count for
+these artifacts, so every axis is a content hash: metadata is a SHA-256 over
+the user-facing fields (excluding `UserData` so a watched flip elsewhere can't
+trigger a resync); subtitles hash the deliverable SUBTITLE streams; trickplay
+folds the tile-grid fields (bandwidth-insensitive, since a quality-only change
+doesn't invalidate the tiles); segments hash the typed `(start, end)` list.
+
+**TTL gate.** `checkForUpdates` is a no-op network-wise when `lastSyncedAt` is
+within `SYNC_TTL_MS` (1 hour) or the device is offline, so the on-entry check
+an offline detail screen fires is effectively free most of the time.
+
+**Baseline seeding + first-contact guard.** Subtitles and trickplay signatures
+are seeded at download time (derived free from `MediaDetail`); the segments
+signature seeds on the first segments resync (segments aren't part of
+`MediaDetail`). An empty signature means "never recorded" and never flags a
+spurious change — so a pre-feature row or a not-yet-synced axis degrades to
+first-contact seeding rather than a false "update available".
+
+**Composite badge.** The DB stores one coarse `syncUpdateAvailable` flag for the
+metadata/images/subtitles/trickplay/segments axes (the per-axis split lives
+only in the in-memory `ResyncCheckResult`), so the badge renders from the DB
+with no network. `mediaFileChanged` is a separate flag because a resync can't
+fix it — it routes through the delete + re-download path.
+
+**Partial sync.** `ResyncOptions` selects which categories to refresh. A
+partial sync blends synced-fresh values with retained (skipped-category) values
+via `mergePartial`, then re-runs the comparator against that effective baseline
+so the update-available flag clears only for the synced categories.
+
+**Segments cache.** A force-resync busts the 5-minute in-memory `segmentsCache`
+(`PlaybackRepositoryImpl`) before refreshing, so the axis sees current server
+state instead of a recently cached snapshot. The writer fetches fresh; the
+manager re-reads (cache hit) for the signature — one network call total.
+
+**Process-death recovery.** The manager clears stale `syncChecking` markers on
+construction so a check interrupted by process death doesn't render as a stuck
+"checking…" badge forever.
+
 ### UI layer
 
-- **`feature/downloads`** — `DownloadsScreen` (queue + per-row actions),
-  `OfflineLibraryScreen` (grid with search/sort/filter + storage
-  header), `OfflineDetailScreen` / `OfflineSeriesScreen` /
-  `OfflineSeasonsSection` / `OfflineEpisodeCard` for browsing, and their
-  `@HiltViewModel`s backed by `DownloadRepository` /
-  `OfflineRepository` flows.
-- **`feature/details`** — the `DownloadConfirmationDialog` and
-  `SeriesDownloadSheet` that initiate downloads; `DetailViewModel`
-  performs the cellular-warning check and calls `DownloadIntake`.
+- **`feature/details`** — **one** `MediaDetailScreen` renders detail for
+  online, remote-with-attached-download, and local/offline/fallback items.
+  `MediaDetailProvider` (in `core/data`) owns the remote/local source decision,
+  the source-dependent read graph (detail, seasons/episodes via the shared
+  `EpisodeCatalogue`, album children, local subtitles, local artwork), the
+  reactive download/sync attachment, and a compact capability set. `DetailViewModel`
+  consumes the provider, drives remote-only discovery (Seerr, ARR, theme music,
+  similar/collection, playlists), and owns all write actions (watched/favorite,
+  download lifecycle: delete/resync/re-download, per-episode and whole-season
+  batch delete). Download/sync presentation (`DownloadInfoCard`,
+  `WatchProgressSection`, `SyncUpdateBanner`, `ResyncSheet`,
+  `DeleteDownloadedEpisodesSheet`) and a manifest-backed local subtitle selector
+  live here, gated by capability/attachment so they also serve a remote item with
+  a completed download. The `DownloadConfirmationDialog` and `SeriesDownloadSheet`
+  initiate downloads; `DetailViewModel` performs the cellular-warning check and
+  calls `DownloadIntake`.
+- **`feature/downloads`** — reserved for download **queue** and **offline-library**
+  management: `DownloadsScreen` (queue + per-row actions, the freshness-resync
+  appbar action with a batch check + `DownloadsResyncSheet`, and the granular
+  per-item / per-category `ForceResyncSheet`) and `OfflineLibraryScreen`
+  (grid with search/sort/filter + storage header). Both drill into
+  `Route.MediaDetail(id)` — there is no longer a separate offline detail or series
+  screen.
 - **`feature/home`** — the `SyncStatusIcon` + `SyncDetailsSheet` that
   surface pending playback-sync events.
 - **`feature/settings`** — `StorageSettingsScreen` exposes every

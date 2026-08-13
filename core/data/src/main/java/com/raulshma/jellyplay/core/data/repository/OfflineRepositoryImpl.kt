@@ -5,10 +5,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import com.raulshma.jellyplay.core.data.sync.toOfflineSyncState
+import com.raulshma.jellyplay.core.data.sync.toOfflineSyncUpdate
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
+import com.raulshma.jellyplay.core.database.dao.OfflineMediaWithPlayback
+import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SeriesSizeAggregate
+import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -17,7 +22,6 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
-import com.raulshma.jellyplay.core.model.offlineSyncStateOf
 import java.io.File
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -44,17 +48,19 @@ private val DOWNLOAD_STATUS_BY_NAME: Map<String, DownloadStatus> = DownloadStatu
 @Singleton
 class OfflineRepositoryImpl @Inject constructor(
     private val offlineMediaDao: OfflineMediaDao,
+    private val playbackStateDao: PlaybackStateDao,
+    private val syncBaselineDao: SyncBaselineDao,
     private val downloadDao: DownloadDao,
     private val database: JellyPlayDatabase,
 ) : OfflineRepository {
 
     override fun getOfflineDetail(id: String): Flow<OfflineMediaItem?> =
-        offlineMediaDao.getByIdFlow(id).flatMapLatest { entity ->
-            if (entity == null) {
+        offlineMediaDao.getByIdWithPlaybackFlow(id).flatMapLatest { row ->
+            if (row == null) {
                 flowOf(null)
             } else {
                 downloadDao.getDownloadByMediaItemIdFlow(id).flatMapLatest { download ->
-                    val item = entity.toOfflineMediaItem().copy(
+                    val item = row.toOfflineMediaItem().copy(
                         downloadPath = download?.downloadPath,
                         downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
                         downloadedBytes = download?.downloadedBytes ?: 0L,
@@ -72,16 +78,16 @@ class OfflineRepositoryImpl @Inject constructor(
         }.distinctUntilChanged()
 
     override fun getChildren(parentId: String): Flow<List<OfflineMediaItem>> =
-        offlineMediaDao.getChildrenByParent(parentId).flatMapLatest { children ->
-            val ids = children.map { it.id }
+        offlineMediaDao.getChildrenByParent(parentId).flatMapLatest { rows ->
+            val ids = rows.map { it.media.id }
             if (ids.isEmpty()) {
                 flowOf(emptyList())
             } else {
                 downloadDao.getDownloadsByMediaItemIdsFlow(ids).map { downloads ->
                     val downloadMap = downloads.associateBy { it.mediaItemId }
-                    children.map { entity ->
-                        val download = downloadMap[entity.id]
-                        entity.toOfflineMediaItem().copy(
+                    rows.map { row ->
+                        val download = downloadMap[row.media.id]
+                        row.toOfflineMediaItem().copy(
                             downloadPath = download?.downloadPath,
                             downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
                             downloadedBytes = download?.downloadedBytes ?: 0L,
@@ -93,8 +99,8 @@ class OfflineRepositoryImpl @Inject constructor(
         }.distinctUntilChanged()
 
     override fun getOfflineLibrary(): Flow<List<OfflineMediaItem>> =
-        offlineMediaDao.getTopLevelItems().flatMapLatest { entities ->
-            if (entities.isEmpty()) {
+        offlineMediaDao.getTopLevelItems().flatMapLatest { rows ->
+            if (rows.isEmpty()) {
                 kotlinx.coroutines.flow.flowOf(emptyList())
             } else {
                 // Partition top-level ids by type: SERIES has no `downloads`
@@ -103,13 +109,13 @@ class OfflineRepositoryImpl @Inject constructor(
                 // episodes. Movies/standalone audio keep the direct per-row
                 // join. Querying each partition only by the ids it can match
                 // avoids a wasted left-join against every series id.
-                val seriesIds = entities.asSequence()
-                    .filter { it.mediaType == MediaType.SERIES.name }
-                    .map { it.id }
+                val seriesIds = rows.asSequence()
+                    .filter { it.media.mediaType == MediaType.SERIES.name }
+                    .map { it.media.id }
                     .toList()
-                val directIds = entities.asSequence()
-                    .filter { it.mediaType != MediaType.SERIES.name }
-                    .map { it.id }
+                val directIds = rows.asSequence()
+                    .filter { it.media.mediaType != MediaType.SERIES.name }
+                    .map { it.media.id }
                     .toList()
                 val directDownloadsFlow: Flow<Map<String, DownloadEntity>> =
                     if (directIds.isEmpty()) {
@@ -130,16 +136,16 @@ class OfflineRepositoryImpl @Inject constructor(
                 // tables). SERIES rows take their bytes from the aggregate;
                 // everything else from its direct download row.
                 combine(directDownloadsFlow, seriesAggregatesFlow) { downloadMap, aggregateMap ->
-                    entities.map { entity ->
-                        if (entity.mediaType == MediaType.SERIES.name) {
-                            val agg = aggregateMap[entity.id]
-                            entity.toOfflineMediaItem().copy(
+                    rows.map { row ->
+                        if (row.media.mediaType == MediaType.SERIES.name) {
+                            val agg = aggregateMap[row.media.id]
+                            row.toOfflineMediaItem().copy(
                                 downloadedBytes = agg?.downloadedBytes ?: 0L,
                                 totalSizeBytes = agg?.totalSizeBytes ?: 0L,
                             )
                         } else {
-                            val download = downloadMap[entity.id]
-                            entity.toOfflineMediaItem().copy(
+                            val download = downloadMap[row.media.id]
+                            row.toOfflineMediaItem().copy(
                                 downloadPath = download?.downloadPath,
                                 downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
                                 downloadedBytes = download?.downloadedBytes ?: 0L,
@@ -152,20 +158,20 @@ class OfflineRepositoryImpl @Inject constructor(
         }.distinctUntilChanged()
 
     override fun getSeasonsForSeries(seriesId: String): Flow<List<OfflineMediaItem>> =
-        offlineMediaDao.getSeasonsForSeries(seriesId).map { entities ->
-            entities.map { it.toOfflineMediaItem() }
+        offlineMediaDao.getSeasonsForSeries(seriesId).map { rows ->
+            rows.map { it.toOfflineMediaItem() }
         }.flatMapLatest { items -> flow { emit(resolveArtworkList(items)) } }
             .distinctUntilChanged()
 
     override fun getEpisodesForSeason(seasonId: String): Flow<List<OfflineMediaItem>> =
-        offlineMediaDao.getEpisodesForSeason(seasonId).flatMapLatest { episodes ->
-            val ids = episodes.map { it.id }
+        offlineMediaDao.getEpisodesForSeason(seasonId).flatMapLatest { rows ->
+            val ids = rows.map { it.media.id }
             if (ids.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
             else downloadDao.getDownloadsByMediaItemIdsFlow(ids).map { downloads ->
                 val downloadMap = downloads.associateBy { it.mediaItemId }
-                episodes.map { entity ->
-                    val download = downloadMap[entity.id]
-                    entity.toOfflineMediaItem().copy(
+                rows.map { row ->
+                    val download = downloadMap[row.media.id]
+                    row.toOfflineMediaItem().copy(
                         downloadPath = download?.downloadPath,
                         downloadStatus = download?.status?.let { safeDownloadStatusOf(it) },
                         downloadedBytes = download?.downloadedBytes ?: 0L,
@@ -176,7 +182,7 @@ class OfflineRepositoryImpl @Inject constructor(
         }.distinctUntilChanged()
 
     override suspend fun getOfflineItem(id: String): OfflineMediaItem? =
-        offlineMediaDao.getById(id)?.toOfflineMediaItem()?.let { resolveItemArtwork(it) }
+        offlineMediaDao.getByIdWithPlayback(id)?.toOfflineMediaItem()?.let { resolveItemArtwork(it) }
 
     override fun getOfflineItemCount(): Flow<Int> =
         offlineMediaDao.getOfflineItemCount()
@@ -202,6 +208,8 @@ class OfflineRepositoryImpl @Inject constructor(
         database.withTransaction {
             download?.let { downloadDao.deleteDownloadById(it.id) }
             offlineMediaDao.deleteById(id)
+            playbackStateDao.deleteById(id)
+            syncBaselineDao.deleteById(id)
         }
         // Prune cast images after the row is gone so the reference scan only
         // counts surviving rows.
@@ -243,6 +251,8 @@ class OfflineRepositoryImpl @Inject constructor(
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
             offlineMediaDao.deleteBySeriesId(seriesId)
+            playbackStateDao.deleteBySeriesId(seriesId)
+            syncBaselineDao.deleteBySeriesId(seriesId)
         }
         cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
         cleanupOrphans()
@@ -272,6 +282,8 @@ class OfflineRepositoryImpl @Inject constructor(
             val ids = downloads.map { it.id }
             if (ids.isNotEmpty()) downloadDao.deleteDownloadsByIds(ids)
             offlineMediaDao.deleteBySeasonId(seasonId)
+            playbackStateDao.deleteBySeasonId(seasonId)
+            syncBaselineDao.deleteBySeasonId(seasonId)
         }
         cleanupOrphanedCastArtwork(episodeDirs, deletedCastIds)
         cleanupOrphans()
@@ -303,7 +315,15 @@ class OfflineRepositoryImpl @Inject constructor(
     }
 
     override suspend fun cleanupOrphans() {
-        offlineMediaDao.cleanupOrphans()
+        // Remove orphaned season/series metadata rows, then any playback /
+        // baseline rows whose metadata row just disappeared (or drifted from
+        // older data). One transaction so a concurrent read never sees a
+        // half-cleaned state.
+        database.withTransaction {
+            offlineMediaDao.cleanupOrphans()
+            playbackStateDao.deleteUnreferenced()
+            syncBaselineDao.deleteUnreferenced()
+        }
     }
 
     override suspend fun updatePlaybackProgress(
@@ -312,10 +332,11 @@ class OfflineRepositoryImpl @Inject constructor(
         percentage: Double,
         isPlayed: Boolean,
     ) {
-        // The UPDATE's `WHERE id = :itemId` already no-ops for a server-only
-        // item (no offline row), so the previous `getById` guard was a 28-column
-        // SELECT * on every playback-progress tick just to null-check existence.
-        offlineMediaDao.updatePlaybackProgress(
+        // The targeted UPSERT's `WHERE id` matches nothing for a server-only
+        // item (no playback row), so there is no existence guard here — the
+        // INSERT branch is harmless because the repository only calls this for
+        // items it has seeded.
+        playbackStateDao.updatePlaybackProgress(
             itemId = itemId,
             positionTicks = positionTicks,
             percentage = percentage.coerceIn(0.0, 100.0),
@@ -325,16 +346,27 @@ class OfflineRepositoryImpl @Inject constructor(
     }
 
     override suspend fun applyPlayedState(itemId: String, isPlayed: Boolean) {
-        // The batch UPDATE matches the item and every row in its hierarchy
-        // (parentId / seasonId / seriesId), mirroring Jellyfin's server-side
-        // cascade for markPlayedItem / markUnplayedItem. Zero rows match for a
-        // non-downloaded item, so there is no existence guard here. Stamp
-        // lastPlayedDate on mark-played (matches server UserData semantics) and
-        // clear it on mark-unplayed so the offline row reflects the reset.
-        offlineMediaDao.applyPlayedStateToHierarchy(
+        // The batch UPSERT matches the item and every row in its hierarchy
+        // (parentId / seasonId / seriesId resolved against offline_media),
+        // mirroring Jellyfin's server-side cascade for markPlayedItem /
+        // markUnplayedItem. Zero rows match for a non-downloaded item, so there
+        // is no existence guard here. Stamp lastPlayedDate on mark-played
+        // (matches server UserData semantics) and clear it on mark-unplayed so
+        // the offline row reflects the reset.
+        playbackStateDao.applyPlayedStateToHierarchy(
             itemId = itemId,
             isPlayed = isPlayed,
             lastPlayedDate = if (isPlayed) java.time.OffsetDateTime.now().toString() else null,
+        )
+    }
+
+    override suspend fun applyFavoriteState(itemId: String, isFavorite: Boolean) {
+        // Favorite is per-item (no hierarchy cascade — the Jellyfin favorite
+        // endpoints act on one item only), so this is a single-row UPSERT. Zero
+        // rows match for a non-downloaded item, so there is no existence guard.
+        playbackStateDao.applyFavoriteState(
+            itemId = itemId,
+            isFavorite = isFavorite,
         )
     }
 
@@ -355,45 +387,22 @@ class OfflineRepositoryImpl @Inject constructor(
             .map { it.toOfflineMediaItem() }
     }
 
+    /**
+     * Freshness reads project straight from the `sync_baseline` table via the
+     * shared, lossless [toOfflineSyncState] / [toOfflineSyncUpdate] functions.
+     * The decision + write persistence lives in `OfflineSyncManager`; the
+     * projection is a single pure function shared by the read path (here, the
+     * reactive DB-driven badge) and the write path's TTL / error short-circuits,
+     * so the two can no longer drift. The repository surface is preserved so
+     * existing consumers keep a stable seam.
+     */
     override fun getOfflineSyncState(id: String): Flow<OfflineSyncState?> =
-        offlineMediaDao.getByIdFlow(id).map { entity ->
-            // Project the persisted sync columns to a UI-facing state via the
-            // shared mapper (same one OfflineSyncManager uses) so the DB-driven
-            // badge and the check/resync-driven state agree. The reactive
-            // getByIdFlow re-emits on any row write, so a check/resync that flips
-            // a flag refreshes the badge on its own.
-            if (entity == null) null
-            else offlineSyncStateOf(
-                checking = entity.syncChecking,
-                error = entity.syncError,
-                mediaChanged = entity.syncMediaChanged,
-                updateAvailable = entity.syncUpdateAvailable,
-                lastSyncedAt = entity.lastSyncedAt,
-            )
-        }
+        syncBaselineDao.getBaselineFlow(id).map { row -> row?.toOfflineSyncState() }
 
-    override fun getUpdatesCount(): Flow<Int> = offlineMediaDao.getUpdatesCount()
+    override fun getUpdatesCount(): Flow<Int> = syncBaselineDao.getUpdatesCount()
 
     override fun getItemsWithUpdates(): Flow<List<OfflineSyncUpdate>> =
-        offlineMediaDao.getItemsWithUpdates().map { rows ->
-            rows.map {
-                OfflineSyncUpdate(
-                    id = it.id,
-                    name = it.name,
-                    mediaFileChanged = it.mediaFileChanged == 1,
-                    // Map the raw DB string to the typed enum at the repository
-                    // boundary so the UI never compares against a magic string.
-                    // Matches DownloadRepositoryImpl's mediaType mapping.
-                    mediaType = it.mediaType?.let { mt ->
-                        com.raulshma.jellyplay.core.model.MediaType.values()
-                            .firstOrNull { e -> e.name.equals(mt, ignoreCase = true) }
-                    },
-                    seriesName = it.seriesName,
-                    seasonNumber = it.seasonNumber,
-                    episodeNumber = it.episodeNumber,
-                )
-            }
-        }
+        syncBaselineDao.getItemsWithUpdates().map { rows -> rows.map { it.toOfflineSyncUpdate() } }
 
     override suspend fun getDownloadedItemIds(): List<String> =
         offlineMediaDao.getDownloadedItemIds()
@@ -639,44 +648,54 @@ class OfflineRepositoryImpl @Inject constructor(
     private fun safeDownloadStatusOf(name: String): DownloadStatus? =
         DOWNLOAD_STATUS_BY_NAME[name]
 
-    private fun OfflineMediaEntity.toOfflineMediaItem() = OfflineMediaItem(
-        id = id,
-        name = name,
-        mediaType = safeMediaTypeOf(mediaType),
-        overview = overview,
-        year = year,
-        communityRating = communityRating,
-        officialRating = officialRating,
-        runTimeTicks = runTimeTicks,
-        seriesId = seriesId,
-        seasonId = seasonId,
-        seriesName = seriesName,
-        seasonName = seasonName,
-        episodeNumber = episodeNumber,
-        seasonNumber = seasonNumber,
-        posterPath = posterPath,
-        backdropPath = backdropPath,
-        blurHashPrimary = blurHashPrimary,
-        blurHashBackdrop = blurHashBackdrop,
-        genres = genres?.split(",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() } ?: emptyList(),
-        childCount = childCount ?: 0,
-        playbackPositionTicks = playbackPositionTicks,
-        playedPercentage = playedPercentage,
-        isPlayed = isPlayed,
-        lastPlayedDate = lastPlayedDate,
-        originalTitle = originalTitle,
-        criticRating = criticRating,
-        studios = studios?.split(",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() } ?: emptyList(),
-        tagline = tagline,
-        cast = decodeCast(peopleJson),
-        providerIds = decodeProviderIds(providerIdsJson),
-        externalUrls = decodeExternalUrls(externalUrlsJson),
-        createdAt = createdAt,
-    )
+    /**
+     * Maps a metadata + playback join row to the UI model. Playback fields come
+     * from the LEFT JOIN'd `playback_state` columns and fall back to the same
+     * "not started" defaults a missing row carried under the old single-table
+     * shape.
+     */
+    private fun OfflineMediaWithPlayback.toOfflineMediaItem(): OfflineMediaItem {
+        val m = media
+        return OfflineMediaItem(
+            id = m.id,
+            name = m.name,
+            mediaType = safeMediaTypeOf(m.mediaType),
+            overview = m.overview,
+            year = m.year,
+            communityRating = m.communityRating,
+            officialRating = m.officialRating,
+            runTimeTicks = m.runTimeTicks,
+            seriesId = m.seriesId,
+            seasonId = m.seasonId,
+            seriesName = m.seriesName,
+            seasonName = m.seasonName,
+            episodeNumber = m.episodeNumber,
+            seasonNumber = m.seasonNumber,
+            posterPath = m.posterPath,
+            backdropPath = m.backdropPath,
+            blurHashPrimary = m.blurHashPrimary,
+            blurHashBackdrop = m.blurHashBackdrop,
+            genres = m.genres?.split(",")
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() } ?: emptyList(),
+            childCount = m.childCount ?: 0,
+            playbackPositionTicks = playbackPositionTicks,
+            playedPercentage = playedPercentage ?: 0.0,
+            isPlayed = isPlayed ?: false,
+            isFavorite = isFavorite ?: false,
+            lastPlayedDate = lastPlayedDate,
+            originalTitle = m.originalTitle,
+            criticRating = m.criticRating,
+            studios = m.studios?.split(",")
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() } ?: emptyList(),
+            tagline = m.tagline,
+            cast = decodeCast(m.peopleJson),
+            providerIds = decodeProviderIds(m.providerIdsJson),
+            externalUrls = decodeExternalUrls(m.externalUrlsJson),
+            createdAt = m.createdAt,
+        )
+    }
 }
 
 /** Reusable lenient Json for (de)serializing the offline cast JSON column. */
@@ -686,7 +705,7 @@ internal val offlineJson: Json = Json {
 }
 
 /** Decodes a [peopleJson] blob into a cast list, tolerating null/garbage rows. */
-private fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> {
+internal fun decodeCast(peopleJson: String?): List<OfflinePersonInfo> {
     if (peopleJson.isNullOrBlank()) return emptyList()
     return runCatching {
         offlineJson.decodeFromString<List<OfflinePersonInfo>>(peopleJson)
@@ -713,11 +732,10 @@ private fun decodeProviderIds(providerIdsJson: String?): Map<String, String> {
     }.getOrDefault(emptyMap())
 }
 
-/** Decodes an [externalUrlsJson] blob into a URL list, tolerating null/garbage. */
+/** Decodes a [externalUrlsJson] blob into a URL list, tolerating null/garbage. */
 private fun decodeExternalUrls(externalUrlsJson: String?): List<com.raulshma.jellyplay.core.model.ExternalUrl> {
     if (externalUrlsJson.isNullOrBlank()) return emptyList()
     return runCatching {
         offlineJson.decodeFromString<List<com.raulshma.jellyplay.core.model.ExternalUrl>>(externalUrlsJson)
     }.getOrDefault(emptyList())
 }
-

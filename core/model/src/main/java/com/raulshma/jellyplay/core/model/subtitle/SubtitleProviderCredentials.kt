@@ -38,8 +38,11 @@ sealed class SubtitleProviderCredentials {
     }
 
     /**
-     * OpenSubtitles — an `Api-Key` header is always required; an optional
-     * username + password unlocks a higher per-day download quota via JWT login.
+     * OpenSubtitles — the application authenticates with a shared app `Api-Key`
+     * (compiled in; never user-visible), and the **user supplies their
+     * opensubtitles.com username + password**, which are exchanged for a JWT via
+     * `/login` on every authenticated call. This mirrors the Jellyfin
+     * opensubtitles plugin: the user never sees an API key.
      *
      * [jwt] / [jwtExpiresAt] cache the logged-in bearer token (epoch millis) so
      * the provider can skip re-login on every request; they are refreshed by the
@@ -49,12 +52,11 @@ sealed class SubtitleProviderCredentials {
     @Serializable
     @SerialName("opensubtitles")
     data class OpenSubtitles(
-        val apiKey: String,
         val username: String? = null,
         val password: String? = null,
         val jwt: String? = null,
         val jwtExpiresAt: Long = 0,
     ) : SubtitleProviderCredentials() {
-        override val isConfigured: Boolean get() = apiKey.isNotBlank()
+        override val isConfigured: Boolean get() = !username.isNullOrBlank() && !password.isNullOrBlank()
     }
 }

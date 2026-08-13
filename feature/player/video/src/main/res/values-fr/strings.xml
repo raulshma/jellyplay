@@ -74,7 +74,6 @@
     <string name="player_video_border_width">Largeur de bordure : %1$s</string>
     <string name="player_video_shadow_offset">Décalage d\'ombre : %1$s</string>
     <string name="player_video_subtitle_offset">Décalage des sous-titres : %1$s</string>
-    <string name="player_video_sync_preview_reset">Réinitialiser le décalage</string>
     <string name="player_video_vertical_position">Position verticale : %1$d%%</string>
 
     <!-- Sleep timer sheet -->
@@ -220,7 +219,16 @@
     <string name="player_video_on">Activé</string>
 
     <!-- Misc. hardcoded strings -->
-    <string name="player_video_reset_both">Réinitialiser les deux</string>
+    <string name="player_video_reset_audio">Réinitialiser l\'audio</string>
+    <string name="player_video_subtitle_delay">Retard des sous-titres</string>
+    <string name="player_video_subtitle_delay_close">Fermer le retard des sous-titres</string>
+    <string name="player_video_subtitle_delay_reset">Réinitialiser</string>
+    <string name="player_video_subtitle_delay_decrease_coarse">Retarder les sous-titres d\'1 seconde</string>
+    <string name="player_video_subtitle_delay_decrease_fine">Retarder les sous-titres de 0,1 seconde</string>
+    <string name="player_video_subtitle_delay_increase_fine">Avancer les sous-titres de 0,1 seconde</string>
+    <string name="player_video_subtitle_delay_increase_coarse">Avancer les sous-titres d\'1 seconde</string>
+    <string name="player_video_subtitle_delay_show_controls">Régler le retard</string>
+    <string name="player_video_subtitle_delay_hub_hint">Ajustez le timing des sous-titres par rapport à la vidéo. Utilisez l\'overlay pour voir les sous-titres se déplacer pendant le réglage.</string>
     <string name="player_video_av_sync_audio_helper">Négatif : audio plus tôt. Positif : audio plus tard.</string>
     <string name="player_video_av_sync_decrease">Diminuer %1$s</string>
     <string name="player_video_av_sync_increase">Augmenter %1$s</string>

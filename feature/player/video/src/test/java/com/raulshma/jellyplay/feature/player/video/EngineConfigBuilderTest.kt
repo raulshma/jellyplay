@@ -313,4 +313,21 @@ class EngineConfigBuilderTest {
         assertEquals(333L, config.subtitleDelayMs)
         assertEquals(333L, config.subtitleStyle.offsetMs)
     }
+
+    @Test
+    fun buildFromPreferences_subtitleDelayResolvesPerItemOverride() {
+        // Regression: the initial-load / engine-swap config must carry the saved
+        // per-item delay, not the global default — otherwise the engine boots at
+        // the global value and the saved correction never reaches it (shows in
+        // metadata, not applied).
+        val agg = VideoPlayerAggregate(
+            subtitle = SubtitleSlice(
+                subtitleStyle = SubtitleStyle(offsetMs = 0L),
+                subtitleDelayByItem = mapOf("item-42" to -750L),
+            ),
+        )
+        val config = EngineConfigBuilder.buildFromPreferences(agg, emptyList(), "item-42", null)
+        assertEquals(-750L, config.subtitleDelayMs)
+        assertEquals(-750L, config.subtitleStyle.offsetMs)
+    }
 }

@@ -5,7 +5,6 @@
     <!-- Screen titles / scaffolds -->
     <string name="downloads_screen_title">Downloads</string>
     <string name="downloads_library_title">Baixados</string>
-    <string name="downloads_loading">Carregando…</string>
     <string name="downloads_not_found">Não encontrado</string>
     <string name="downloads_download_unavailable">Este download não está mais disponível</string>
 
@@ -25,12 +24,6 @@
         <item quantity="many">%1$d itens</item>
         <item quantity="other">%1$d itens</item>
     </plurals>
-    <plurals name="downloads_episodes_count">
-        <item quantity="one">%1$d episódio</item>
-        <item quantity="many">%1$d episódios</item>
-        <item quantity="other">%1$d episódios</item>
-    </plurals>
-    <string name="downloads_episodes_count_with_size">%1$d episódios · %2$s</string>
     <string name="downloads_selected_count">%1$d selecionado(s)</string>
 
     <!-- Common actions / buttons -->
@@ -49,8 +42,6 @@
     <string name="downloads_action_clear_selection">Limpar seleção</string>
     <string name="downloads_pause_all">Pausar tudo</string>
     <string name="downloads_retry_failed">Repetir todas as falhas</string>
-    <string name="downloads_select_all">Selecionar tudo</string>
-    <string name="downloads_deselect_all">Desmarcar tudo</string>
     <string name="downloads_clear_cd">Limpar</string>
     <string name="downloads_search_cd">Pesquisar</string>
     <string name="downloads_sort_cd">Ordenar</string>
@@ -71,11 +62,6 @@
     <string name="downloads_delete_episode_title">Excluir episódio</string>
     <string name="downloads_delete_episode_cd">Excluir episódio</string>
     <string name="downloads_delete_episode_message">Remover \"%1$s\" do seu dispositivo?</string>
-    <string name="downloads_select_episodes_to_remove">Selecione os episódios a serem removidos do dispositivo.</string>
-    <string name="downloads_episodes_selected">%1$d de %2$d episódios selecionados</string>
-    <string name="downloads_episodes_selected_with_freed">%1$d de %2$d episódios selecionados · %3$s</string>
-    <string name="downloads_delete_count">Excluir %1$d</string>
-    <string name="downloads_delete_count_with_freed">Excluir %1$d · %2$s</string>
     <string name="downloads_deleted">Excluído</string>
     <string name="downloads_deleted_message">Download removido</string>
 
@@ -88,7 +74,6 @@
 
     <!-- Offline detail -->
     <string name="downloads_series_default">Série</string>
-    <string name="downloads_season_default">Temporada %1$d</string>
     <string name="downloads_play_resume">Retomar</string>
     <string name="downloads_play_again">Reproduzir novamente</string>
     <string name="downloads_show_less">Mostrar menos</string>
@@ -101,10 +86,8 @@
     <string name="downloads_status">Estado</string>
     <string name="downloads_progress">Progresso</string>
     <string name="downloads_watch_status">Estado de visualização</string>
-    <string name="downloads_watched">Visto</string>
     <string name="downloads_cd_switch_to_list">Mudar para lista de episódios vertical</string>
     <string name="downloads_cd_switch_to_cards">Mudar para cartões de episódios horizontais</string>
-    <string name="downloads_watched_label">Visto</string>
     <string name="downloads_in_progress">Em curso</string>
     <string name="downloads_started">Iniciado</string>
     <string name="downloads_position">Posição</string>
@@ -114,8 +97,6 @@
 
     <!-- Seasons / episodes -->
     <string name="downloads_seasons">Temporadas</string>
-    <string name="downloads_collapse">Recolher</string>
-    <string name="downloads_expand">Expandir</string>
     <string name="downloads_mark_season_cd">Marcar temporada como vista ou não vista</string>
     <string name="downloads_mark_season_watched">Marcar temporada como vista</string>
     <string name="downloads_mark_season_unwatched">Marcar temporada como não vista</string>
@@ -128,4 +109,53 @@
     <string name="downloads_filter_all">Tudo</string>
     <string name="downloads_filter_videos">Vídeos</string>
     <string name="downloads_filter_music">Música</string>
+    <!-- Offline download resync -->
+    <string name="downloads_resync">Sincronizar</string>
+    <string name="downloads_resync_cd">Verificar metadados e imagens atualizados</string>
+    <string name="downloads_resync_title">Sincronizar download</string>
+    <string name="downloads_resync_checking">A verificar atualizações…</string>
+    <string name="downloads_resync_update_available">Novas informações disponíveis</string>
+    <string name="downloads_resync_media_changed">O ficheiro multimédia mudou — é necessário voltar a descarregar</string>
+    <string name="downloads_resync_in_progress">A sincronizar os últimos detalhes…</string>
+    <string name="downloads_resync_complete">Download sincronizado com os últimos detalhes</string>
+    <string name="downloads_resync_failed">Falha na sincronização</string>
+    <string name="downloads_resync_up_to_date">Este download está atualizado.</string>
+    <string name="downloads_resync_description">Há informações mais recentes no servidor. Sincronize para atualizar metadados e imagens.</string>
+    <string name="downloads_resync_change_metadata">Metadados atualizados (resumo, elenco, classificações)</string>
+    <string name="downloads_resync_change_images">Arte atualizada (poster/fundo)</string>
+    <string name="downloads_resync_change_media">O próprio ficheiro multimédia mudou</string>
+    <string name="downloads_resync_media_explanation">Uma sincronização de metadados não pode atualizar o ficheiro multimédia. Elimine e volte a descarregar este item para obter o novo ficheiro.</string>
+    <string name="downloads_resync_action">Sincronizar agora</string>
+    <string name="downloads_resync_redownload">Voltar a descarregar multimédia</string>
+    <string name="downloads_resync_check_all">Verificar todas as atualizações</string>
+    <string name="downloads_resync_check_all_cd">Verificar todos os downloads por atualizações disponíveis</string>
+    <string name="downloads_resync_batch_title">Atualizações disponíveis</string>
+    <string name="downloads_resync_batch_empty">Nenhum download precisa de atualização.</string>
+    <string name="downloads_resync_batch_checking">A verificar os seus downloads…</string>
+    <string name="downloads_resync_resync_all">Sincronizar tudo</string>
+    <string name="downloads_resync_progress">%1$d de %2$d sincronizados</string>
+
+    <!-- Force resync (granular item + data selection) -->
+    <string name="downloads_force_resync_action">Forçar sincronização</string>
+    <string name="downloads_force_resync_title">Forçar sincronização</string>
+    <string name="downloads_force_resync_description">Escolha quais itens descarregados e quais dados atualizar a partir do servidor, independentemente de ter sido detetada uma atualização.</string>
+    <string name="downloads_force_resync_items_header">Itens a sincronizar</string>
+    <string name="downloads_force_resync_data_header">Dados a sincronizar</string>
+    <string name="downloads_force_resync_data_metadata">Metadados</string>
+    <string name="downloads_force_resync_data_metadata_desc">Resumo, elenco, classificações</string>
+    <string name="downloads_force_resync_data_poster">Poster</string>
+    <string name="downloads_force_resync_data_poster_desc">Arte principal</string>
+    <string name="downloads_force_resync_data_backdrop">Fundo</string>
+    <string name="downloads_force_resync_data_backdrop_desc">Arte de fundo</string>
+    <string name="downloads_force_resync_data_subtitles">Legendas</string>
+    <string name="downloads_force_resync_data_subtitles_desc">Faixas de legendas externas</string>
+    <string name="downloads_force_resync_data_trickplay">Trickplay</string>
+    <string name="downloads_force_resync_data_trickplay_desc">Miniaturas de pré-visualização de navegação</string>
+    <string name="downloads_force_resync_data_segments">Segmentos</string>
+    <string name="downloads_force_resync_data_segments_desc">Pontos de salto de intro/outro</string>
+    <string name="downloads_force_resync_summary">Sincronizar %1$d itens</string>
+    <string name="downloads_force_resync_empty">Nenhum item descarregado para sincronizar.</string>
+    <string name="downloads_force_resync_in_progress">A sincronizar %1$d de %2$d…</string>
+    <string name="downloads_force_resync_done">%1$d de %2$d sincronizados.</string>
+    <string name="downloads_force_resync_no_data">Selecione pelo menos um tipo de dados para sincronizar.</string>
 </resources>

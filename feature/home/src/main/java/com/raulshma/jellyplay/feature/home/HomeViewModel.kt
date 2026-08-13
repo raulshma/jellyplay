@@ -434,6 +434,7 @@ class HomeViewModel @Inject constructor(
                     performanceMode = prefs.appearance.performanceMode,
                     showClock = prefs.home.showClockOnHome,
                     showSettingsInHomeSearch = prefs.home.showSettingsInHomeSearch,
+                    hideTopHeaderOnScroll = prefs.home.hideTopHeaderOnScroll,
                     continueWatchingClickBehavior = prefs.home.continueWatchingClickBehavior,
                     experimentalCardClippingEnabled = ExperimentalFeature.HOME_CARD_CLIPPING in prefs.experimental.enabledExperimentalFeatures,
                     directArrEnabled = ExperimentalFeature.DIRECT_ARR_INTEGRATION in prefs.experimental.enabledExperimentalFeatures,

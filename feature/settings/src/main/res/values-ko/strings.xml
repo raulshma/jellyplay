@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">뉴스레터</string>
     <string name="settings_advanced_badge">고급</string>
     <string name="settings_no_matches">일치하는 설정이 없습니다</string>
+    <string name="settings_search_hint">입력하여 설정 검색</string>
+    <string name="settings_recents_title">최근</string>
+    <string name="settings_clear_recents">지우기</string>
     <string name="settings_signed_in_as_label">로그인됨</string>
     <string name="settings_account">계정</string>
     <string name="settings_signed_in_as_name">%1$s(으)로 로그인됨</string>
@@ -704,8 +707,6 @@
     <string name="settings_exp_press_hold_preview">길게 눌러 미리보기</string>
     <string name="settings_exp_press_hold_preview_subtitle">미디어 카드를 길게 눌러 흐려진 미리보기를 보고, 놓으면 닫기</string>
     <string name="settings_exp_arr_integration_subtitle">Radarr/Sonarr에서 요청의 다운로드 대기열 진행률과 홈의 예정된 캘린더를 표시. 서버 세부 정보는 Seerr에서 자동 감지되며 *arr 설정에서 수동 재정의</string>
-    <string name="settings_exp_expressive_nav">Material 3 익스프레시브 탐색</string>
-    <string name="settings_exp_expressive_nav_subtitle">별도의 검색 버튼이 있는 Google 포토 리디자인 스타일 플로팅 탐색 캡슐.</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">자막 글꼴 크기</string>
@@ -1156,17 +1157,12 @@
     <string name="settings_subtitles_wyzie">Wyzie Subs</string>
     <string name="settings_subtitles_wyzie_help">무료 자막 API (하루 1,000회 요청). store.wyzie.io/redeem에서 키 발급.</string>
     <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
-    <string name="settings_subtitles_opensubtitles_help">API key가 필요합니다. 사용자 이름/비밀번호(선택)로 일일 다운로드 한도가 증가합니다.</string>
+    <string name="settings_subtitles_opensubtitles_help">opensubtitles.com 계정으로 로그인하세요. VIP 멤버십은 일일 다운로드 한도를 높이며, 무료 계정도 제한된 다운로드 횟수를 제공합니다.</string>
     <string name="settings_subtitles_api_key">API key</string>
-    <string name="settings_subtitles_username_optional">사용자 이름 (선택)</string>
-    <string name="settings_subtitles_password_optional">비밀번호 (선택)</string>
+    <string name="settings_subtitles_username">사용자 이름 (선택)</string>
+    <string name="settings_subtitles_password">비밀번호 (선택)</string>
     <string name="settings_subtitles_save">저장</string>
     <string name="settings_subtitles_test">테스트</string>
     <string name="settings_subtitles_testing">테스트 중…</string>
     <string name="settings_subtitles_connected">연결됨</string>
-    <string name="settings_nav_style">탐색 스타일</string>
-    <string name="settings_nav_style_expressive">익스프레시브 (M3)</string>
-    <string name="settings_nav_style_classic">클래식</string>
-    <string name="settings_nav_style_expressive_subtitle">Google 포토 스타일 플로팅 알약 + 독립형 검색 버튼</string>
-    <string name="settings_nav_style_classic_subtitle">기존 플로팅 하단 탐색 바</string>
 </resources>

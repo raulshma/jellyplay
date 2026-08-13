@@ -32,6 +32,9 @@
     <string name="core_action_mark_unwatched">Mark as unwatched</string>
     <string name="core_action_download">Download</string>
     <string name="core_action_add_to_playlist">Add to playlist</string>
+    <string name="core_action_favorite">Add to favorites</string>
+    <string name="core_action_unfavorite">Remove from favorites</string>
+    <string name="core_action_delete">Delete download</string>
     <string name="core_action_details">View details</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer
@@ -212,6 +215,8 @@
     <string name="ss_hero_section_subtitle">Display featured content banner at top of home screen</string>
     <string name="ss_clock_home_title">Show Clock on Home</string>
     <string name="ss_clock_home_subtitle">Display the current time in the home screen top bar</string>
+    <string name="ss_hide_top_header_title">Hide Top Header on Scroll</string>
+    <string name="ss_hide_top_header_subtitle">Auto-hide the home screen top header when scrolling down</string>
     <string name="ss_continue_watching_click_title">Continue Watching Tap</string>
     <string name="ss_continue_watching_click_subtitle">Resume playback or open details when tapping a Continue Watching tile</string>
     <string name="ss_unhide_cw_title">Unhide All from Continue Watching</string>

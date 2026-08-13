@@ -174,6 +174,7 @@
     <string name="detail_error_download_failed">Download fehlgeschlagen</string>
     <string name="detail_error_not_a_series">Dies ist keine Serie</string>
     <string name="detail_error_queue_failed">Downloads konnten nicht in die Warteschlange aufgenommen werden</string>
+    <string name="detail_error_unavailable_offline">Dieser Eintrag ist offline nicht verfügbar.</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
     <string name="detail_option_manage_series">Serie verwalten</string>
@@ -279,4 +280,108 @@
     <string name="detail_season_empty_title">Keine Episoden verfügbar</string>
     <string name="detail_season_empty_description">Episoden erscheinen hier, sobald sie hinzugefügt werden.</string>
 
+    <!-- Unified download / offline-detail strings. Resync falls back to default. -->
+    <string name="detail_download_info">Download-Info</string>
+    <string name="detail_file_size">Dateigröße</string>
+    <string name="detail_status">Status</string>
+    <string name="detail_progress">Fortschritt</string>
+    <string name="detail_download_status_pending">Ausstehend</string>
+    <string name="detail_download_status_queued">In der Warteschlange</string>
+    <string name="detail_download_status_downloading">Wird heruntergeladen</string>
+    <string name="detail_download_status_paused">Angehalten</string>
+    <string name="detail_download_status_completed">Abgeschlossen</string>
+    <string name="detail_download_status_failed">Fehlgeschlagen</string>
+    <string name="detail_download_status_cancelled">Abgebrochen</string>
+    <string name="detail_watch_status">Wiedergabestatus</string>
+    <string name="detail_watched_status_watched">Angesehen</string>
+    <string name="detail_watched_status_label">Angesehen</string>
+    <string name="detail_watched_status_in_progress">In Arbeit</string>
+    <string name="detail_watched_status_started">Begonnen</string>
+    <string name="detail_position">Position</string>
+    <string name="detail_position_of">%1$s von %2$s</string>
+    <string name="detail_last_watched">Zuletzt angesehen</string>
+    <string name="detail_close">Schließen</string>
+    <string name="detail_delete">Löschen</string>
+    <string name="detail_delete_download_title">Download löschen</string>
+    <string name="detail_delete_download_cd">Download löschen</string>
+    <string name="detail_delete_download_message">"%1$s" vom Gerät entfernen? Das gibt %2$s frei.</string>
+    <string name="detail_delete_episode_title">Episode löschen</string>
+    <string name="detail_delete_episode_cd">Episode löschen</string>
+    <string name="detail_delete_episode_message">"%1$s" vom Gerät entfernen?</string>
+    <string name="detail_delete_downloads_title">Downloads löschen</string>
+    <string name="detail_select_episodes_to_remove">Wähle Episoden aus, die vom Gerät entfernt werden sollen.</string>
+    <string name="detail_episodes_selected">%1$d von %2$d Episoden ausgewählt</string>
+    <string name="detail_episodes_selected_with_freed">%1$d von %2$d Episoden ausgewählt · %3$s</string>
+    <string name="detail_delete_count">%1$d löschen</string>
+    <string name="detail_delete_count_with_freed">%1$d löschen · %2$s</string>
+    <string name="detail_season_default">Staffel %1$d</string>
+    <string name="detail_delete_entire_series">Ganze Serie löschen</string>
+    <string name="detail_option_delete_downloads">Downloads löschen</string>
+    <plurals name="detail_episodes_count">
+        <item quantity="one">%1$d Episode</item>
+        <item quantity="other">%1$d Episoden</item>
+    </plurals>
+
+    <!-- Sync / resync download -->
+    <string name="detail_resync_title">Download synchronisieren</string>
+    <string name="detail_resync_checking">Suche nach Updates…</string>
+    <string name="detail_resync_update_available">Neue Informationen verfügbar</string>
+    <string name="detail_resync_media_changed">Mediendatei geändert — erneuter Download erforderlich</string>
+    <string name="detail_resync_in_progress">Synchronisiere neueste Details…</string>
+    <string name="detail_resync_complete">Download mit neuesten Details synchronisiert</string>
+    <string name="detail_resync_failed">Synchronisierung fehlgeschlagen</string>
+    <string name="detail_resync_up_to_date">Dieser Download ist auf dem neuesten Stand.</string>
+    <string name="detail_resync_description">Auf dem Server sind neuere Informationen verfügbar. Synchronisieren, um Metadaten und Bilder zu aktualisieren.</string>
+    <string name="detail_resync_change_metadata">Aktualisierte Metadaten (Übersicht, Besetzung, Bewertungen)</string>
+    <string name="detail_resync_change_images">Aktualisierte Bilder (Poster/Hintergrund)</string>
+    <string name="detail_resync_change_media">Die Mediendatei selbst hat sich geändert</string>
+    <string name="detail_resync_media_explanation">Eine Metadaten-Synchronisierung kann die Mediendatei nicht aktualisieren. Lösche diesen Eintrag und lade ihn erneut herunter, um die neue Datei zu erhalten.</string>
+    <string name="detail_resync_action">Jetzt synchronisieren</string>
+    <string name="detail_resync_redownload">Medien erneut herunterladen</string>
+
+    <!-- Local subtitles -->
+    <string name="detail_local_subtitles">Untertitel</string>
+    <string name="detail_local_subtitle_off">Aus</string>
+    <string name="detail_local_subtitle_default_badge">STANDARD</string>
+    <string name="detail_local_subtitle_forced_badge">ERZWUNGEN</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">Download-Details</string>
+    <string name="detail_download_section_download">Download</string>
+    <string name="detail_download_section_media">Medien</string>
+    <string name="detail_download_section_media_info">Medien-Info</string>
+    <string name="detail_download_section_files">Heruntergeladene Dateien</string>
+    <string name="detail_downloaded_bytes">Heruntergeladene Größe</string>
+    <string name="detail_downloaded_date">Download-Datum</string>
+    <string name="detail_container">Container</string>
+    <string name="detail_file_present">Datei vorhanden</string>
+    <string name="detail_media_source">Medienquelle</string>
+    <string name="detail_download_path">Pfad</string>
+    <string name="detail_media_title">Titel</string>
+    <string name="detail_media_type">Typ</string>
+    <string name="detail_original_title">Originaltitel</string>
+    <string name="detail_year">Jahr</string>
+    <string name="detail_runtime">Laufzeit</string>
+    <string name="detail_file_name">Datei</string>
+    <string name="detail_episode_label">Episode</string>
+    <string name="detail_no_downloaded_subtitles">Keine heruntergeladenen Untertitel</string>
+    <string name="detail_view_download_details">Download-Details anzeigen</string>
+    <string name="detail_download_tab_overview">Übersicht</string>
+    <string name="detail_download_tab_media_info">Medien-Info</string>
+    <string name="detail_download_tab_storage">Speicher</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">Gesamt auf Speicher</string>
+    <string name="detail_download_files_loading">Berechne Dateigrößen…</string>
+    <string name="detail_download_files_empty">Keine heruntergeladenen Dateien gefunden</string>
+    <string name="detail_download_files_location">Speicherort</string>
+    <plurals name="detail_files_count">
+        <item quantity="one">%1$d Datei</item>
+        <item quantity="other">%1$d Dateien</item>
+    </plurals>
+    <string name="detail_file_category_media">Medien</string>
+    <string name="detail_file_category_subtitle">Untertitel</string>
+    <string name="detail_file_category_trickplay">Trickplay</string>
+    <string name="detail_file_category_segment">Segmente</string>
+    <string name="detail_file_category_image">Bilder</string>
 </resources>

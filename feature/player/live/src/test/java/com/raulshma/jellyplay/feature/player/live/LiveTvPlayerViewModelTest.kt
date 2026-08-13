@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
+import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -44,6 +46,7 @@ class LiveTvPlayerViewModelTest {
     private lateinit var playbackRepo: PlaybackRepository
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
     private lateinit var playbackStore: PlaybackStore
+    private lateinit var aggregateStore: VideoPlayerAggregateStore
     private lateinit var lastChannelStore: LastChannelStore
     private lateinit var engineFactory: LiveEngineFactory
     private lateinit var fakeEngine: LivePlayerEngine
@@ -61,6 +64,8 @@ class LiveTvPlayerViewModelTest {
         playbackRepo = mockk(relaxed = true)
         appRuntimeStateStore = mockk(relaxed = true)
         playbackStore = mockk(relaxed = true)
+        aggregateStore = mockk(relaxed = true)
+        every { aggregateStore.aggregate } returns MutableStateFlow(VideoPlayerAggregate())
         lastChannelStore = mockk(relaxed = true)
         engineFactory = mockk(relaxed = true)
         fakeEngine = mockk(relaxed = true)
@@ -446,6 +451,7 @@ class LiveTvPlayerViewModelTest {
         playbackRepository = playbackRepo,
         appRuntimeStateStore = appRuntimeStateStore,
         playbackStore = playbackStore,
+        aggregateStore = aggregateStore,
         lastChannelStore = lastChannelStore,
         engineFactory = engineFactory,
         imageUrlProvider = imageUrlProvider,

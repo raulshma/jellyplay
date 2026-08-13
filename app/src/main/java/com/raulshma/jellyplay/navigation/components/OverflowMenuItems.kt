@@ -57,9 +57,15 @@ import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
  * adaptive surface container colors, TV D-pad focus glow, and 22dp Tabler icons
  * paired with semi-bold typography.
  *
- * Items enter with a staggered slide-up + fade + scale-in (anchored at the
- * bottom, nearest the toggle first). Items compose bottom-up: the last declared
- * entry sits closest to the toggle.
+ * Items enter with a staggered slide + fade + scale-in. When [alignToStart] is
+ * true (tablet NavigationRail) the column is anchored top-start beside the rail
+ * and items flow top-down, sliding in from above. Otherwise (phone) it is
+ * anchored bottom-end beside the floating nav toggle and items flow bottom-up,
+ * sliding up from below.
+ *
+ * [alignToStart] left-aligns the pills (for the tablet NavigationRail, where the
+ * "More" toggle lives on the left); the default right-aligns them beside the
+ * phone floating nav bar's trailing toggle.
  */
 @Composable
 fun OverflowMenuItems(
@@ -73,12 +79,14 @@ fun OverflowMenuItems(
     offlineMode: OfflineMode,
     isGoingOnline: Boolean,
     downloadCount: Int = 0,
+    alignToStart: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val isOfflineActive = offlineMode != OfflineMode.ONLINE
 
-    // Ordered nearest-to-toggle first (bottom of the column). Index drives the
-    // stagger delay so the item closest to the toggle rises in first.
+    // Declared in display order for the tablet (top-anchored) column. Index
+    // drives the stagger delay so the top-most item enters first; on phone the
+    // bottom-anchored column renders the same order from the toggle upward.
     val items = listOf(
         OverflowEntry(
             icon = Tabler.Outline.Wand,
@@ -126,8 +134,11 @@ fun OverflowMenuItems(
     )
 
     Column(
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.Bottom),
+        horizontalAlignment = if (alignToStart) Alignment.Start else Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(
+            space = 6.dp,
+            alignment = if (alignToStart) Alignment.Top else Alignment.Bottom,
+        ),
         modifier = modifier,
     ) {
         items.forEachIndexed { index, entry ->
@@ -136,11 +147,12 @@ fun OverflowMenuItems(
             state.targetState = true
             AnimatedVisibility(
                 visibleState = state,
-                // Stagger: nearest-to-toggle (index 0) has no delay; each later
-                // item adds 40ms. Slide from below + slight scale + fade.
+                // Stagger: index 0 has no delay; each later item adds 40ms.
+                // Tablet (top-anchored) slides in from above; phone slides up
+                // from below. Slight scale + fade in both cases.
                 enter = slideInVertically(
                     animationSpec = tween(durationMillis = 220, delayMillis = index * 40),
-                    initialOffsetY = { it / 2 },
+                    initialOffsetY = { if (alignToStart) -it / 2 else it / 2 },
                 ) + fadeIn(
                     animationSpec = tween(durationMillis = 220, delayMillis = index * 40),
                 ) + scaleIn(
@@ -148,7 +160,10 @@ fun OverflowMenuItems(
                     initialScale = 0.85f,
                 ),
                 exit = fadeOut(animationSpec = tween(120)) +
-                    slideOutVertically(animationSpec = tween(120), targetOffsetY = { it / 2 }),
+                    slideOutVertically(
+                        animationSpec = tween(120),
+                        targetOffsetY = { if (alignToStart) -it / 2 else it / 2 },
+                    ),
             ) {
                 OverflowPill(
                     icon = entry.icon,

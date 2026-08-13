@@ -152,6 +152,12 @@ data class UserPreferences(
      * colour when disabled or in performance mode.
      */
     val homeBackdropEnabled: Boolean = true,
+    /**
+     * Whether the home screen's top header dock auto-hides on scroll-down and
+     * reappears on scroll-up. When false the dock stays pinned. Mirrors the
+     * floating nav-bar `hideBottomNavOnScroll` toggle.
+     */
+    val hideTopHeaderOnScroll: Boolean = false,
     val onboardingCompleted: Boolean = false,
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
     val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),

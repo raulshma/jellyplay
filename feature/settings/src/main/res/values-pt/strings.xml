@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">Boletim</string>
     <string name="settings_advanced_badge">Av</string>
     <string name="settings_no_matches">Nenhuma configuração correspondente encontrada</string>
+    <string name="settings_search_hint">Digite para pesquisar configurações</string>
+    <string name="settings_recents_title">Recentes</string>
+    <string name="settings_clear_recents">Limpar</string>
     <string name="settings_signed_in_as_label">Sessão iniciada como</string>
     <string name="settings_account">Conta</string>
     <string name="settings_signed_in_as_name">Sessão iniciada como %1$s</string>
@@ -706,8 +709,6 @@
     <string name="settings_exp_press_hold_preview">Pré-visualização premir-manter</string>
     <string name="settings_exp_press_hold_preview_subtitle">Prima sem soltar um cartão de mídia para espreitar uma pré-visualização desfocada; solte para fechar</string>
     <string name="settings_exp_arr_integration_subtitle">Mostrar o progresso da fila de downloads em Pedidos e um calendário futuro no Início a partir do seu Radarr/Sonarr. Os detalhes do servidor são detetados do Seerr; substituição manual nas definições *arr</string>
-    <string name="settings_exp_expressive_nav">Navegação expressiva do Material 3</string>
-    <string name="settings_exp_expressive_nav_subtitle">Cápsula de navegação flutuante no estilo do novo design do Google Fotos com botão de pesquisa separado.</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">Tamanho da fonte das legendas</string>
@@ -1158,17 +1159,12 @@
     <string name="settings_subtitles_wyzie">Wyzie Subs</string>
     <string name="settings_subtitles_wyzie_help">API de legendas gratuita (1.000 requisições/dia). Obtenha uma chave em store.wyzie.io/redeem.</string>
     <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
-    <string name="settings_subtitles_opensubtitles_help">API key obrigatória. Usuário/senha opcionais aumentam a cota diária de downloads.</string>
+    <string name="settings_subtitles_opensubtitles_help">Entre com sua conta do opensubtitles.com. Uma assinatura VIP aumenta a cota diária de downloads; contas gratuitas também têm um número limitado de downloads.</string>
     <string name="settings_subtitles_api_key">API key</string>
-    <string name="settings_subtitles_username_optional">Nome de usuário (opcional)</string>
-    <string name="settings_subtitles_password_optional">Senha (opcional)</string>
+    <string name="settings_subtitles_username">Nome de usuário (opcional)</string>
+    <string name="settings_subtitles_password">Senha (opcional)</string>
     <string name="settings_subtitles_save">Salvar</string>
     <string name="settings_subtitles_test">Testar</string>
     <string name="settings_subtitles_testing">Testando…</string>
     <string name="settings_subtitles_connected">Conectado</string>
-    <string name="settings_nav_style">Estilo de navegação</string>
-    <string name="settings_nav_style_expressive">Expressivo (M3)</string>
-    <string name="settings_nav_style_classic">Clássico</string>
-    <string name="settings_nav_style_expressive_subtitle">Cápsula flutuante estilo Google Fotos + botão de pesquisa independente</string>
-    <string name="settings_nav_style_classic_subtitle">Barra de navegação inferior flutuante tradicional</string>
 </resources>

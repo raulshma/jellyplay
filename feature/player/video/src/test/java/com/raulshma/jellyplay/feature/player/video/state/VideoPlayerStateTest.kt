@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
-import com.raulshma.jellyplay.feature.player.video.components.AspectRatio
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

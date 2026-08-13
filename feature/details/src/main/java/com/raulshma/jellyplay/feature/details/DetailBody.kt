@@ -75,10 +75,14 @@ internal fun DetailBodyLandscape(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 FadingItem {
+                    // Prefer the on-disk poster (DetailAssets.posterPath) for a
+                    // LOCAL origin before the server getImageUrl fallback.
+                    val posterImageUrl = state.assets.posterPath
+                        ?: callbacks.getImageUrl(state.itemId)
                     DetailPoster(
                         itemId = state.itemId,
                         primaryBlurHash = item?.blurHashes?.primary,
-                        getImageUrl = callbacks.getImageUrl,
+                        getImageUrl = { posterImageUrl },
                         posterWidth = 220.dp,
                         posterHeight = 330.dp,
                         contentAlpha = scrollState.contentAlpha,
@@ -177,7 +181,10 @@ internal fun DetailBodyPortrait(
                             .requiredHeight(posterHeight),
                     ) {
                         MediaImage(
-                            url = callbacks.getImageUrl(state.itemId),
+                            // Prefer the on-disk poster (DetailAssets.posterPath)
+                            // for a LOCAL origin before the server fallback.
+                            url = state.assets.posterPath
+                                ?: callbacks.getImageUrl(state.itemId),
                             contentDescription = null,
                             blurHash = item?.blurHashes?.primary,
                             // Portrait poster (~120 dp × 3× ≈ 432 px) — decode a

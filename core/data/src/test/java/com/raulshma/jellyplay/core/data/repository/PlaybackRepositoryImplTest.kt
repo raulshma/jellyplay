@@ -624,4 +624,88 @@ class PlaybackRepositoryImplTest {
         // (verified in PlaybackOutboxRepositoryImplTest).
         coVerify(exactly = 3) { outbox.enqueueProgress(any(), any(), any(), any(), any(), any()) }
     }
+
+    // ── replayOutboxEntry: entry-type → API-call mapping (the drain path) ──
+
+    private fun outboxEntry(
+        type: PlaybackOutboxEventType,
+        itemId: String = "item-1",
+        sessionId: String = "s1",
+        positionTicks: Long = 100L,
+        isPaused: Boolean = false,
+        playMethod: PlayMethod = PlayMethod.DIRECT_PLAY,
+    ) = PlaybackOutboxEntry(
+        id = "e1",
+        itemId = itemId,
+        eventType = type,
+        sessionId = sessionId,
+        positionTicks = positionTicks,
+        isPaused = isPaused,
+        playMethod = playMethod,
+        mediaSourceId = null,
+        recordedAt = 1_000L,
+        createdAt = 1_000L,
+    )
+
+    @Test
+    fun `replayOutboxEntry START dispatches reportPlaybackStart`() = runTest {
+        repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.START))
+
+        coVerify(exactly = 1) { apiClient.reportPlaybackStart("item-1", "s1", PlayMethod.DIRECT_PLAY) }
+        // Pure dispatch: never touches the outbox.
+        coVerify(exactly = 0) { outbox.enqueueStart(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `replayOutboxEntry PROGRESS dispatches reportPlaybackProgress with full payload`() = runTest {
+        repository.replayOutboxEntry(
+            outboxEntry(PlaybackOutboxEventType.PROGRESS, positionTicks = 99L, isPaused = true),
+        )
+
+        coVerify(exactly = 1) {
+            apiClient.reportPlaybackProgress("item-1", "s1", 99L, true, PlayMethod.DIRECT_PLAY)
+        }
+    }
+
+    @Test
+    fun `replayOutboxEntry STOP dispatches reportPlaybackStopped`() = runTest {
+        repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.STOP, positionTicks = 5_000_000L))
+
+        coVerify(exactly = 1) { apiClient.reportPlaybackStopped("item-1", "s1", 5_000_000L) }
+    }
+
+    @Test
+    fun `replayOutboxEntry PLAYED and UNPLAYED dispatch markPlayed and markUnplayed`() = runTest {
+        repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.PLAYED, itemId = "a"))
+        repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.UNPLAYED, itemId = "b"))
+
+        coVerify(exactly = 1) { apiClient.markPlayed("a") }
+        coVerify(exactly = 1) { apiClient.markUnplayed("b") }
+    }
+
+    @Test
+    fun `replayOutboxEntry FAVORITE and UNFAVORITE dispatch setFavorite with the right flag`() = runTest {
+        repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.FAVORITE, itemId = "a"))
+        repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.UNFAVORITE, itemId = "b"))
+
+        coVerify(exactly = 1) { apiClient.setFavorite("a", isFavorite = true) }
+        coVerify(exactly = 1) { apiClient.setFavorite("b", isFavorite = false) }
+    }
+
+    @Test
+    fun `replayOutboxEntry returns true on server success`() = runTest {
+        coEvery { apiClient.markPlayed("item-1") } returns Result.success(Unit)
+
+        assertTrue(repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.PLAYED)))
+    }
+
+    @Test
+    fun `replayOutboxEntry returns false on server failure`() = runTest {
+        coEvery { apiClient.markPlayed("item-1") } returns Result.failure(RuntimeException("500"))
+
+        assertEquals(false, repository.replayOutboxEntry(outboxEntry(PlaybackOutboxEventType.PLAYED)))
+        // No re-enqueue — the drain loop owns retry/dead-letter.
+        coVerify(exactly = 0) { outbox.enqueueStart(any(), any(), any(), any()) }
+    }
 }
+

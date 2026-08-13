@@ -5,11 +5,15 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
+import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
@@ -18,14 +22,20 @@ import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.DetailCapabilities
+import com.raulshma.jellyplay.core.model.DetailContext
+import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.ResyncResult
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.isVideoType
+import com.raulshma.jellyplay.core.model.seriesIdForDetail
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.isExperimentalEnabled
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
@@ -36,7 +46,6 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.toAudioQueueItem
 import com.raulshma.jellyplay.core.network.seerr.buildPosterUrl
-import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.api.TmdbApiClient
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -53,11 +62,14 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -67,16 +79,25 @@ class DetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val mediaRepository: MediaRepository,
     /**
-     * The consolidated series seasons/episodes snapshot — the single owner of
-     * the "seasons → per-season episodes → sorted" shape this screen used to
-     * re-assemble privately (`episodesMap`, `cachedSortedEpisodes*`,
-     * `episodeDataEpoch`, the three `load*` functions). All episode loads now
-     * read from the catalogue snapshot; smart-play reads its `sortedEpisodes`.
+     * The single external seam for media-detail resolution. Owns the
+     * remote/local source decision, the projected [MediaDetail], seasons/
+     * episodes (via the shared EpisodeCatalogue), album tracks, local
+     * subtitles, local artwork, the download/sync attachment, and capabilities.
+     * [loadItemInternal] collects its [DetailLoadState] stream and reduces each
+     * emission into [_uiState]; remote-only subordinate work (Seerr, Sonarr,
+     * theme music, similar/collection items) fires off the resolved snapshot.
      */
-    private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue,
+    private val mediaDetailProvider: MediaDetailProvider,
+    /**
+     * Orchestrates offline download freshness checks and metadata/image resyncs.
+     * [checkForUpdates] is TTL-gated (1h) and safe to fire on entry; [resyncItem]
+     * powers the resync / re-download actions surfaced via [DetailUiState.resyncState].
+     */
+    private val offlineSyncManager: OfflineSyncManager,
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
+    private val offlineRepository: OfflineRepository,
     private val downloadIntake: DownloadIntake,
     private val projections: PreferenceProjections,
     private val libraryStore: LibraryStore,
@@ -154,7 +175,7 @@ class DetailViewModel @Inject constructor(
      * observers see one atomic snapshot, while each group's [StateFlow] deduplicates
      * its own emissions upstream of the merge.
      */
-    val uiState: StateFlow<DetailUiState> = run {
+    val uiState: StateFlow<DetailUiState> by lazy {
         // Group 1 — core load state (detail/seasons/episodes/smart-play/...).
         val core = _uiState.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
         // Group 2 — Seerr request-flow ephemera (radarr/sonarr/result/dialog state).
@@ -192,6 +213,33 @@ class DetailViewModel @Inject constructor(
                 isSeerrRecommendationsEnabled = flags.isRecommendationsEnabled,
             )
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
+            // Group 4 — fold the extracted action helpers' state back into the
+            // flat [DetailUiState]. The helpers own their StateFlows; this combine
+            // projects them into the existing fields so composables + tests that
+            // read uiState.* are unchanged. One emission per helper tick.
+            .let { seerr ->
+                combine(
+                    seerr,
+                    resyncActions.state,
+                    playlistActions.state,
+                    downloadLifecycleActions.state,
+                ) { primary, resync, playlist, download ->
+                    primary.copy(
+                        resyncState = resync,
+                        playlists = playlist.playlists,
+                        isLoadingPlaylists = playlist.isLoadingPlaylists,
+                        isAddingToPlaylist = playlist.isAddingToPlaylist,
+                        showPlaylistPicker = playlist.showPlaylistPicker,
+                        showCreatePlaylistDialog = playlist.showCreatePlaylistDialog,
+                        isDownloading = download.isDownloading,
+                        cellularDownloadWarningMb = download.cellularDownloadWarningMb,
+                        isDownloadingSeries = download.isDownloadingSeries,
+                        downloadSheetEpisodes = download.downloadSheetEpisodes,
+                        downloadSheetLoadingSeasons = download.downloadSheetLoadingSeasons,
+                        downloadedEpisodeIds = download.downloadedEpisodeIds,
+                    )
+                }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
+            }
     }
 
     // Direct (non-observable) readers for the two stream-selection indices.
@@ -201,49 +249,167 @@ class DetailViewModel @Inject constructor(
     // other state is consumed reactively via [uiState].
     val selectedSubtitleIndex: Int? get() = _uiState.value.selectedSubtitleIndex
     val selectedAudioIndex: Int? get() = _uiState.value.selectedAudioIndex
+    val selectedLocalSubtitleIndex: Int? get() = _uiState.value.selectedLocalSubtitleIndex
 
     // Internal caches (not observable UI state). Mutations happen on the Main
-    // dispatcher (viewModelScope). The seasons/episodes map, the sorted-episodes
-    // cache and the episode-data epoch that used to live here have moved into
-    // [episodeCatalogue] — the single owner of the series snapshot. The only
-    // episode state kept locally is the download sheet's per-season on-demand
-    // cache (the sheet fetches seasons lazily, independent of the main display).
-    private val downloadSheetEpisodesMap = mutableMapOf<String, List<MediaItem>>()
-    private var downloadSheetFetchedSeasonIds: Set<String> = emptySet()
-    /**
-     * The last catalogue snapshot loaded for [currentSeriesId]. Held locally so
-     * smart-play and the optimistic mark-season rewrite read the canonical
-     * playback order without a second catalogue round-trip. Nulled in
-     * [loadItemInternal] when the series changes.
-     */
-    @Volatile
-    private var currentCatalogueSnapshot: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot? = null
+    // dispatcher (viewModelScope). Seasons/episodes/sortedEpisodes all live in
+    // [MediaDetailSnapshot] now — the provider owns the read graph and the
+    // optimistic rewrite, so the VM keeps no local catalogue snapshot. The
+    // download sheet's per-season cache moved into [downloadLifecycleActions].
     private var loadJob: Job? = null
     private var currentItemId: String? = null
     private var currentSeriesId: String? = null
     private var seerrDataLoaded = false
     private var seerrDataGeneration = 0L
+    /** Serializes user-data mutations so rapid taps resolve in input order. */
+    private val userDataMutationMutex = Mutex()
+    /**
+     * The [MediaDetailSnapshot.contentGeneration] of the last snapshot whose
+     * *content* sections (detail, seasons, episodes, album tracks, subtitles,
+     * origin) were fully reduced into [_uiState]. The provider guarantees stable
+     * content references + the same generation across attachment-only ticks, so
+     * a value equal to the incoming snapshot's generation means "attachment tick"
+     * — we update only [DetailUiState.detailContext]/[DetailUiState.capabilities]/
+     * [DetailUiState.assets]/[DetailUiState.localSubtitles] and leave the
+     * consumer's optimistic content (watched/favorite flips, episodes) untouched.
+     * Reset to -1 in [loadItemInternal] so the first Loaded emission of every
+     * screen entry is treated as a fresh resolution.
+     */
+    private var lastAppliedGeneration = -1L
+
+    // ── Extracted action helpers ────────────────────────────────────────
+    // Each follows the SeerrRequestStateHolder template: a plain, VM-scoped
+    // class (constructed here, dies with viewModelScope) that owns its own
+    // coroutines and state. The VM keeps thin delegating methods below so
+    // existing callers and tests stay stable; each helper is independently
+    // unit-testable. Stateful helpers expose a StateFlow folded into [uiState]
+    // (see the combine below); one-shot messages flow back through _messages.
+    private val offlineDeleteActions = OfflineDeleteActions(
+        scope = scope,
+        offlineRepository = offlineRepository,
+        episodesProvider = { _uiState.value.episodes },
+        seasonsProvider = { _uiState.value.seasons },
+    )
+    private val resyncActions = ResyncActions(
+        scope = scope,
+        offlineSyncManager = offlineSyncManager,
+        mediaRepository = mediaRepository,
+        offlineRepository = offlineRepository,
+        downloadIntake = downloadIntake,
+        context = context,
+        itemIdProvider = { currentItemId },
+    )
+    private val markSeasonReactor = MarkSeasonReactor(
+        scope = scope,
+        mediaRepository = mediaRepository,
+        context = context,
+        itemIdProvider = { currentItemId },
+        episodesProvider = { _uiState.value.episodes },
+        applyRewrite = mediaDetailProvider::applyOptimisticSeasonRewrite,
+        messageSink = { _messages.tryEmit(it) },
+        seriesIdProvider = { currentSeriesId },
+        onItemPlayed = { itemId, played, seriesId ->
+            updatePlayedStateInUi(itemId, played)
+            applyOptimisticItemMutation(
+                itemId = itemId,
+                isPlayed = played,
+                seriesId = seriesId,
+            )
+        },
+        mutationMutex = userDataMutationMutex,
+    )
+    private val playlistActions = PlaylistActions(
+        scope = scope,
+        mediaRepository = mediaRepository,
+        appRuntimeStateStore = appRuntimeStateStore,
+        context = context,
+        detailProvider = { _uiState.value.detail },
+        sortedEpisodesProvider = { _uiState.value.sortedEpisodes },
+        canonicalEpisodeIds = mediaDetailProvider::canonicalEpisodeIds,
+        messageSink = { _messages.tryEmit(it) },
+    )
+    private val downloadLifecycleActions = DownloadLifecycleActions(
+        scope = scope,
+        downloadIntake = downloadIntake,
+        downloadsStore = downloadsStore,
+        adaptiveBitrateManager = adaptiveBitrateManager,
+        downloadRepository = downloadRepository,
+        context = context,
+        detailProvider = { _uiState.value.detail },
+        seasonsProvider = { _uiState.value.seasons },
+        currentSeriesIdProvider = { currentSeriesId },
+        itemIdProvider = { currentItemId },
+        expandSeason = mediaDetailProvider::expandSeason,
+        messageSink = { _messages.tryEmit(it) },
+    )
 
     fun selectSubtitle(index: Int?) {
         _uiState.update { it.copy(selectedSubtitleIndex = index) }
-        val itemId = _uiState.value.detail?.item?.id ?: return
-        launch {
-            engineStore.setMediaStreamSelection(
-                itemId = itemId,
-                subtitleStreamIndex = index,
-                audioStreamIndex = _uiState.value.selectedAudioIndex,
-            )
-        }
+        persistStreamSelection(subtitleIndex = index, audioIndex = _uiState.value.selectedAudioIndex)
     }
 
     fun selectAudio(index: Int?) {
         _uiState.update { it.copy(selectedAudioIndex = index) }
+        persistStreamSelection(subtitleIndex = _uiState.value.selectedSubtitleIndex, audioIndex = index)
+    }
+
+    /**
+     * Persists a manifest-backed local-subtitle selection for the current item.
+     *
+     * Sets [DetailUiState.selectedLocalSubtitleIndex] in [_uiState] AND persists
+     * via [PlayerEngineStore.setMediaStreamSelection] (subtitleStreamIndex =
+     * [index], audioStreamIndex = the existing remote audio index). A spike
+     * confirmed `mediaStreamSelections[itemId]` is honored offline, and the
+     * player resolves the side-loaded subtitle by its `offline:${index}` id via
+     * `TrackSelectionPolicy.resolveByOfflineSubtitleId` (wired in this change).
+     *
+     * Distinct from [selectSubtitle]: that writes the REMOTE subtitle stream
+     * index for a server source; this writes the local-manifest index for a
+     * downloaded file (the two are independent selection spaces).
+     */
+    fun selectLocalSubtitle(index: Int?) {
+        _uiState.update { it.copy(selectedLocalSubtitleIndex = index) }
+        persistStreamSelection(subtitleIndex = index, audioIndex = _uiState.value.selectedAudioIndex)
+    }
+
+    /**
+     * Loads the on-disk file inventory (media + sidecar artifacts) for the
+     * download-details sheet. Runs only when the sheet opens — sidecar sizes
+     * aren't persisted, so this is the one place the filesystem walk executes.
+     * Resolves the item id from the current snapshot, falling back to
+     * [currentItemId] so a not-yet-snapshotted download still inventories.
+     */
+    fun loadDownloadFileInventory() {
+        val itemId = _uiState.value.detail?.item?.id ?: currentItemId ?: return
+        _uiState.update { it.copy(isLoadingDownloadFiles = true) }
+        launch {
+            val inventory = downloadRepository.getDownloadFileInventory(itemId)
+            _uiState.update {
+                it.copy(downloadFileInventory = inventory, isLoadingDownloadFiles = false)
+            }
+        }
+    }
+
+    /** Clears the loaded inventory so the next sheet open re-reads fresh sizes. */
+    fun clearDownloadFileInventory() {
+        _uiState.update {
+            it.copy(downloadFileInventory = null, isLoadingDownloadFiles = false)
+        }
+    }
+
+    /**
+     * Single persistence seam for the stream selectors: writes the resolved
+     * subtitle/audio pair to [PlayerEngineStore.setMediaStreamSelection]. Extracted
+     * so [selectSubtitle], [selectAudio], and [selectLocalSubtitle] cannot drift
+     * apart in how they resolve the current item id or launch the write.
+     */
+    private fun persistStreamSelection(subtitleIndex: Int?, audioIndex: Int?) {
         val itemId = _uiState.value.detail?.item?.id ?: return
         launch {
             engineStore.setMediaStreamSelection(
                 itemId = itemId,
-                audioStreamIndex = index,
-                subtitleStreamIndex = _uiState.value.selectedSubtitleIndex,
+                subtitleStreamIndex = subtitleIndex,
+                audioStreamIndex = audioIndex,
             )
         }
     }
@@ -275,12 +441,11 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * Pull-to-refresh: invalidates every in-memory cache backing this detail
-     * screen (detail, similar, seasons/episodes, album tracks, collection
-     * items) and re-fetches all data fresh from the server. Unlike [loadItem]
-     * the current content stays on screen (the full-screen loading state is
-     * skipped); the pull-to-refresh indicator is driven by
-     * [DetailUiState.isRefreshing] instead.
+     * Pull-to-refresh: delegates to [MediaDetailProvider.refresh], which owns
+     * the per-type cache invalidation (detail, seasons/episodes, album, collection)
+     * and re-resolves the snapshot. Unlike [loadItem] the current content stays
+     * on screen (the full-screen loading state is skipped); the pull-to-refresh
+     * indicator is driven by [DetailUiState.isRefreshing] instead.
      */
     fun forceRefresh() {
         val itemId = _uiState.value.detail?.item?.id ?: return
@@ -307,127 +472,252 @@ class DetailViewModel @Inject constructor(
                     isLoading = !refresh,
                     isRefreshing = refresh,
                     error = null,
+                    isAccessDenied = false,
+                    origin = null,
+                    detailContext = null,
+                    capabilities = DetailUiState.DefaultCapabilities,
+                    assets = com.raulshma.jellyplay.core.model.DetailAssets(),
+                    localSubtitles = emptyList(),
+                    selectedLocalSubtitleIndex = null,
                     seasons = emptyList(),
                     episodes = emptyMap(),
                     fetchedSeasonIds = emptySet(),
                     collectionItems = emptyList(),
                     relatedItems = emptyList(),
+                    albumTracks = emptyList(),
                     smartPlayTarget = null,
                     selectedSubtitleIndex = null,
                     selectedAudioIndex = null,
                     seerrRecommendations = emptyList(),
                     seerrSimilar = emptyList(),
                     relatedVideos = emptyList(),
-                    isDownloading = false,
-                    isDownloadingSeries = false,
                     sonarrServersResolved = false,
+                    // NOTE: isDownloading / isDownloadingSeries / download-sheet
+                    // fields are owned by [downloadLifecycleActions] and reset
+                    // via resetForNavigation() below, not here.
                 )
             }
-            // Drop the catalogue snapshot for any series we were viewing so the
-            // new item's load starts fresh (the VM is reused across navigations).
-            currentSeriesId?.let { episodeCatalogue.invalidateSeries(it) }
-            currentCatalogueSnapshot = null
+            // Drop the provider's catalogue cache for any series we were viewing
+            // so the new item's load starts fresh (the VM is reused across
+            // navigations). The provider owns the catalogue internally now.
+            currentSeriesId?.let { mediaDetailProvider.invalidate(it) }
+            currentSeriesId = null
             seerrDataLoaded = false
             // Bump the seerr generation so any in-flight trailer/video/recommendation
             // fetch from the *previous* item is invalidated and cannot write its stale
             // results onto this item's screen (the VM is shared across detail navigations).
             seerrDataGeneration++
-            // Clear download-sheet caches too, since the same VM instance is reused.
-            downloadSheetEpisodesMap.clear()
-            downloadSheetFetchedSeasonIds = emptySet()
+            // Reset the content-generation guard so the first Loaded emission of this
+            // screen entry is treated as a fresh resolution (fires remote side effects,
+            // adopts content sections). The provider never emits a generation of -1.
+            lastAppliedGeneration = -1L
+            // Reset the download-lifecycle helper's state + sheet caches, since the
+            // same VM instance is reused across navigations.
+            downloadLifecycleActions.resetForNavigation()
             if (refresh) {
-                // Invalidate every cache the detail screen reads so the refetch
-                // hits the server rather than the TTL caches.
-                val item = _uiState.value.detail?.item
-                mediaRepository.invalidateDetailCache(itemId)
-                when (item?.mediaType) {
-                    MediaType.SERIES -> episodeCatalogue.invalidateSeries(item.id)
-                    MediaType.EPISODE -> item.seriesId?.let { episodeCatalogue.invalidateSeries(it) }
-                    MediaType.ALBUM -> mediaRepository.invalidateUserDataCaches(itemId)
-                    MediaType.COLLECTION -> mediaRepository.invalidateCollectionItemsCache(itemId)
-                    else -> Unit
+                // The provider owns per-type cache invalidation + the remote refetch.
+                // Suspend until the new generation lands so the collector that follows
+                // observes the refreshed snapshot rather than a stale replay; the detail
+                // stays visible (kept above) under the isRefreshing indicator meanwhile.
+                mediaDetailProvider.refresh(itemId)
+            }
+            mediaDetailProvider.observe(itemId).collect { state ->
+                // Stale-write guard: a collector from a previous itemId is cancelled
+                // by loadJob?.cancel() on the next loadItem, but defend in depth.
+                if (currentItemId != itemId) return@collect
+                applyLoadState(itemId, state)
+            }
+        }
+    }
+
+    /**
+     * Reduces a single [DetailLoadState] from the provider into [_uiState].
+     *
+     * - [DetailLoadState.Loading]: surfaces a full-screen loading state only
+     *   when no content is shown yet; never clears an already-rendered detail.
+     * - [DetailLoadState.Error]: classifies the provider's error into the
+     *   unavailable-offline / access-denied / generic buckets.
+     * - [DetailLoadState.Loaded]: either a full content reduction (new
+     *   [MediaDetailSnapshot.contentGeneration]) or an attachment-only tick
+     *   (same generation), per the clobber-protection contract in [reduceLoaded].
+     */
+    private fun applyLoadState(itemId: String, state: DetailLoadState) {
+        when (state) {
+            DetailLoadState.Loading -> {
+                // Only flip into the full-screen loading state when there is no
+                // content to show. A transient Loading after content is rendered
+                // (e.g. a provider re-resolution) must NOT blank the screen; the
+                // prior detail stays visible until the next Loaded replaces it.
+                _uiState.update {
+                    it.copy(
+                        isLoading = it.detail == null,
+                        error = null,
+                    )
                 }
             }
-            mediaRepository.getMediaDetail(itemId)
-                .onSuccess { detail ->
-                    val storedSelection = engineStore.playerEngine.value.mediaStreamSelections[itemId]
+            is DetailLoadState.Error -> {
+                val e = state.error
+                val message: String
+                val accessDenied: Boolean
+                when {
+                    e.isUnavailableOffline -> {
+                        message = context.getString(R.string.detail_error_unavailable_offline)
+                        accessDenied = false
+                    }
+                    e.isAccessDenied -> {
+                        message = context.getString(R.string.detail_error_access_denied)
+                        accessDenied = true
+                    }
+                    else -> {
+                        message = e.message.ifBlank { context.getString(R.string.detail_error_load_failed) }
+                        accessDenied = false
+                    }
+                }
+                _uiState.update {
+                    it.copy(
+                        error = message,
+                        isAccessDenied = accessDenied,
+                        isLoading = false,
+                        isRefreshing = false,
+                    )
+                }
+            }
+            is DetailLoadState.Loaded -> reduceLoaded(itemId, state.snapshot)
+        }
+    }
+
+    /**
+     * Reduces a resolved [MediaDetailSnapshot] into [_uiState].
+     *
+     * Two paths, keyed on [MediaDetailSnapshot.contentGeneration] vs
+     * [lastAppliedGeneration]:
+     *
+     * 1. **New resolution** (generation changed): adopts the content sections
+     *    (detail, seasons, episodes, album tracks, local subtitles, origin,
+     *    assets, capabilities, detailContext) atomically, clears the smart-play
+     *    target, then recomputes it — for both origins, since a LOCAL series
+     *    carries the same loaded episode data and should expose the same
+     *    Play/Resume/Next up target. For a REMOTE origin, additionally fires the
+     *    remote-only subordinate work (similar/collection items, theme music,
+     *    Sonarr resolution, Seerr discovery) exactly once per resolution. For a
+     *    LOCAL origin no remote coroutines start.
+     * 2. **Attachment tick** (same generation): updates ONLY detailContext,
+     *    capabilities, assets and localSubtitles — the provider guarantees
+     *    stable content references across attachment ticks, so the consumer's
+     *    optimistic mutations (watched/favorite flips, episode rewrites) survive
+     *    download-progress / sync-state re-emissions without being clobbered.
+     */
+    private fun reduceLoaded(itemId: String, snapshot: MediaDetailSnapshot) {
+        val detail = snapshot.detail
+        val isRemote = snapshot.context.origin == DetailOrigin.REMOTE
+        val isNewResolution = snapshot.contentGeneration != lastAppliedGeneration
+        if (!isNewResolution) {
+            // Attachment-only tick: preserve the consumer's optimistic content.
+            _uiState.update {
+                it.copy(
+                    detailContext = snapshot.context,
+                    capabilities = snapshot.capabilities,
+                    assets = snapshot.assets,
+                    localSubtitles = snapshot.localSubtitles,
+                )
+            }
+            return
+        }
+
+        // New resolution: adopt content sections wholesale.
+        currentSeriesId = detail.item.seriesIdForDetail
+
+        // Stream selection: remote applies the persisted engine-store selection;
+        // local clears it (local playback uses the separate local-subtitle index).
+        val (subtitleIndex, audioIndex) = if (isRemote) {
+            val stored = engineStore.playerEngine.value.mediaStreamSelections[itemId]
+            stored?.subtitleStreamIndex to stored?.audioStreamIndex
+        } else {
+            null to null
+        }
+
+        _uiState.update {
+            it.copy(
+                detail = detail,
+                origin = snapshot.context.origin,
+                detailContext = snapshot.context,
+                capabilities = snapshot.capabilities,
+                assets = snapshot.assets,
+                localSubtitles = snapshot.localSubtitles,
+                seasons = snapshot.seasons,
+                episodes = snapshot.episodesBySeason,
+                fetchedSeasonIds = snapshot.fetchedSeasonIds,
+                sortedEpisodes = snapshot.sortedEpisodes,
+                albumTracks = snapshot.albumTracks,
+                selectedSubtitleIndex = subtitleIndex,
+                selectedAudioIndex = audioIndex,
+                // Smart-play is recomputed below; cleared first so a stale target
+                // from the previous item never survives a resolution change.
+                smartPlayTarget = null,
+                contentGeneration = snapshot.contentGeneration,
+                isLoading = false,
+                isRefreshing = false,
+                error = null,
+                isAccessDenied = false,
+            )
+        }
+        lastAppliedGeneration = snapshot.contentGeneration
+
+        // Smart-play targets the next episode to watch from the already-loaded
+        // sorted episodes, so it runs for both origins: a LOCAL series with
+        // downloaded episodes shows the same Play/Resume/Next up target (and Up
+        // Next section) as its remote counterpart. Only the remote-only
+        // subordinate work stays gated on isRemote below.
+        maybeComputeSmartPlayTarget()
+        if (isRemote) {
+            triggerRemoteSideEffects(itemId, detail, snapshot.capabilities)
+        }
+        // Collections are remote-only companion content (not part of the snapshot);
+        // gated on remoteDiscovery so a local origin never starts it.
+        if (isRemote && snapshot.capabilities.remoteDiscovery &&
+            detail.item.mediaType == MediaType.COLLECTION
+        ) {
+            loadCollectionItems(itemId)
+        }
+    }
+
+    /**
+     * Fires the remote-only subordinate work for a freshly-resolved REMOTE
+     * snapshot. Each launch captures [itemId] and bails if navigation moved on,
+     * mirroring the seerrDataGeneration guard. All branches are additionally
+     * gated on [DetailCapabilities.remoteDiscovery] so the capability flip is
+     * the single authority for whether discovery may run.
+     */
+    private fun triggerRemoteSideEffects(
+        itemId: String,
+        detail: MediaDetail,
+        capabilities: DetailCapabilities,
+    ) {
+        if (!capabilities.remoteDiscovery) return
+        val themeSourceId = detail.item.seriesId ?: itemId
+        themeMusicPlayer.playThemeFor(themeSourceId)
+        when (detail.item.mediaType) {
+            MediaType.SERIES, MediaType.EPISODE -> resolveSonarrForSeries(detail)
+            else -> Unit
+        }
+        // Fetch similar/related items concurrently and non-blocking so the core
+        // detail renders immediately. The result lands in relatedItems.
+        launch {
+            mediaRepository.getSimilarItems(itemId, limit = 12)
+                .onSuccess { items ->
+                    if (currentItemId != itemId) return@onSuccess
                     _uiState.update {
-                        it.copy(
-                            detail = detail,
-                            selectedSubtitleIndex = storedSelection?.subtitleStreamIndex,
-                            selectedAudioIndex = storedSelection?.audioStreamIndex,
-                        )
-                    }
-                    val itemType = detail.item.mediaType
-                    // Subsidiary loads run via [launch] in viewModelScope, so they
-                    // are NOT children of loadJob (loadJob?.cancel() will not stop
-                    // them). Each subsidiary therefore captures the current item/series
-                    // id and bails before writing if navigation has moved on, so a
-                    // stale fetch can no longer clobber the new item's state. This
-                    // mirrors the seerrDataGeneration guard used by [loadSeerrData].
-                    when (itemType) {
-                        MediaType.SERIES -> {
-                            loadSeasons(itemId)
-                            resolveSonarrForSeries(detail)
-                        }
-                        MediaType.EPISODE -> {
-                            // For episodes: load the parent series' seasons so the
-                            // episode row + smart-play target resolve. This must
-                            // never gate the Play button, hence the non-blocking call.
-                            detail.item.seriesId?.let { seriesId ->
-                                loadSeasons(seriesId)
-                                resolveSonarrForSeries(detail)
-                            }
-                        }
-                        MediaType.ALBUM -> loadAlbumTracks(itemId)
-                        MediaType.COLLECTION -> loadCollectionItems(itemId)
-                        else -> _uiState.update { state -> state.copy(smartPlayTarget = null) }
-                    }
-                    val themeSourceId = detail.item.seriesId ?: itemId
-                    themeMusicPlayer.playThemeFor(themeSourceId)
-
-                    // Fetch similar/related items concurrently and
-                    // non-blocking so the core detail (title, poster, cast,
-                    // streams) renders immediately. The result lands in
-                    // [DetailUiState.relatedItems] and the "More like this"
-                    // section appears when it arrives.
-                    launch {
-                        mediaRepository.getSimilarItems(itemId, limit = 12)
-                            .onSuccess { items ->
-                                // Guard: if navigation moved to another item while
-                                // this fetch was in flight, drop the result rather
-                                // than overwriting the new item's relatedItems.
-                                if (currentItemId != itemId) return@onSuccess
-                                _uiState.update {
-                                    it.copy(relatedItems = items.filter { related -> related.id != itemId })
-                                }
-                            }
-                    }
-
-                    // Trigger the Seerr recommendations/videos fetch from the VM
-                    // (not the UI) so the former UI-side LaunchedEffect with its
-                    // hard-coded 350ms delay and connection-polling over-keying is
-                    // gone. The same delay is preserved here for frame priority
-                    // (don't contend with first-frame GPU work), and the
-                    // seerrDataLoaded guard keeps it idempotent across re-entries.
-                    // Late-connect (Seerr enabled while on the detail screen) is
-                    // not handled; revisit if it becomes a real need.
-                    launch {
-                        kotlinx.coroutines.delay(350)
-                        if (currentItemId != itemId) return@launch
-                        loadSeerrDataIfNeeded(detail)
+                        it.copy(relatedItems = items.filter { related -> related.id != itemId })
                     }
                 }
-                .onFailure { err ->
-                    val accessDenied = (err as? ApiException)?.isAccessDenied == true
-                    val message = if (accessDenied) {
-                        context.getString(R.string.detail_error_access_denied)
-                    } else {
-                        err.message ?: context.getString(R.string.detail_error_load_failed)
-                    }
-                    _uiState.update { it.copy(error = message, isAccessDenied = accessDenied) }
-                }
-            _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
+        }
+        // Trigger the Seerr recommendations/videos fetch from the VM. The 350ms
+        // delay is preserved for frame priority (don't contend with first-frame
+        // GPU work); seerrDataLoaded keeps it idempotent across re-entries.
+        launch {
+            kotlinx.coroutines.delay(350)
+            if (currentItemId != itemId) return@launch
+            loadSeerrDataIfNeeded(detail)
         }
     }
 
@@ -451,83 +741,24 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    private fun loadSeasons(seriesId: String) {
-        currentSeriesId = seriesId
-        launch {
-            // One consolidated load: seasons + every season's episodes + the
-            // canonical playback order, all from [episodeCatalogue]. The
-            // catalogue owns single-flight, caching, the batched→per-season
-            // fallback and the fetchedSeasonIds edge (a season whose episodes
-            // group under a different key stays absent so the on-demand refetch
-            // below can still fire).
-            val snapshot = episodeCatalogue.loadSeriesEpisodes(seriesId).getOrNull()
-            // Guard: if navigation moved to another series, drop the result.
-            if (currentSeriesId != seriesId) return@launch
-            if (snapshot == null) return@launch
-            currentCatalogueSnapshot = snapshot
-            _uiState.update {
-                it.copy(
-                    seasons = snapshot.seasons,
-                    episodes = snapshot.episodesBySeason,
-                    fetchedSeasonIds = snapshot.fetchedSeasonIds,
-                )
-            }
-            maybeComputeSmartPlayTarget()
-        }
-    }
-
+    /**
+     * On-demand per-season expand. The provider supplies seasons/episodes up
+     * front (including [DetailUiState.fetchedSeasonIds]); a season NOT in that
+     * set (e.g. the mismatched-season-key edge) is fetched here through the
+     * provider, which merges it into its snapshot and re-emits a new-generation
+     * [MediaDetailSnapshot] via [observe]. [reduceLoaded] adopts the merged
+     * episodes and recomputes smart-play — no local uiState merge needed.
+     */
     fun loadEpisodesForSeason(seriesId: String, seasonId: String) {
         if (_uiState.value.fetchedSeasonIds.contains(seasonId)) return
+        val itemId = currentItemId ?: return
         launch {
-            // On-demand per-season load via the catalogue: serves from the
-            // shared snapshot if present, else fetches the one season and merges
-            // it back. The local snapshot is updated by folding the new season
-            // in (rather than re-reading the full snapshot) so a season that was
-            // absent from the batched load — the fetchedSeasonIds edge — still
-            // lands in uiState and smart-play's source list.
-            val episodes = episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId).getOrNull()
-                ?: return@launch
             if (currentSeriesId != seriesId) return@launch
-            val merged = currentCatalogueSnapshot?.let { current ->
-                current.copy(
-                    episodesBySeason = current.episodesBySeason + (seasonId to episodes),
-                    fetchedSeasonIds = current.fetchedSeasonIds + seasonId,
-                    sortedEpisodes = (current.episodesBySeason + (seasonId to episodes))
-                        .values.flatten().sortedByPlaybackOrder(),
-                )
-            }
-            currentCatalogueSnapshot = merged
-            _uiState.update {
-                it.copy(
-                    episodes = merged?.episodesBySeason ?: it.episodes + (seasonId to episodes),
-                    fetchedSeasonIds = (merged?.fetchedSeasonIds ?: it.fetchedSeasonIds) + seasonId,
-                )
-            }
-            maybeComputeSmartPlayTarget()
-        }
-    }
-
-    /**
-     * The canonical playback order, matching the catalogue's
-     * `sortedByPlaybackOrder`. Used only by [loadEpisodesForSeason]'s optimistic
-     * merge to rebuild `sortedEpisodes` after a per-season fetch lands.
-     */
-    private fun Iterable<MediaItem>.sortedByPlaybackOrder(): List<MediaItem> =
-        sortedWith(
-            compareBy(
-                { it.seasonNumber ?: Int.MAX_VALUE },
-                { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE },
-                { it.name },
-            )
-        )
-
-    private fun loadAlbumTracks(albumId: String) {
-        launch {
-            mediaRepository.getAlbumTracks(albumId)
-                .onSuccess { tracks ->
-                    if (currentItemId != albumId) return@onSuccess
-                    _uiState.update { it.copy(albumTracks = tracks) }
-                }
+            // expandSeason fetches the season via the catalogue (serving from
+            // its cached snapshot when present, else fetching the one season),
+            // merges it into the provider's content, and re-emits. The reducer
+            // picks up the new snapshot on the next observe() emission.
+            mediaDetailProvider.expandSeason(itemId, seasonId)
         }
     }
 
@@ -559,6 +790,24 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Plays a single LOCAL-origin album track.
+     *
+     * The remote [playAlbum] builds a queue via [AudioPlaybackManager.playQueue],
+     * which depends on a server [MediaRepository.getMediaDetail] fetch. For a
+     * local track we instead use the per-item [AudioPlaybackManager.play], which
+     * has its own local-source fallback (`resolveLocalSource`) when the server
+     * fetch fails — so a downloaded track plays without a server round-trip.
+     *
+     * Decision (plan §I): `AudioPlaybackManager.play(itemId)` exists and carries
+     * the local-source fallback, so it is used directly rather than routing
+     * through `onAudioClick` → `Route.AudioPlayer`. `play()` asserts the main
+     * thread (ExoPlayer contract); the click handler runs on the main thread.
+     */
+    fun playLocalTrack(itemId: String) {
+        audioPlaybackManager.play(itemId)
+    }
+
     private fun maybeComputeSmartPlayTarget() {
         val item = _uiState.value.detail?.item ?: return
         when (item.mediaType) {
@@ -571,12 +820,12 @@ class DetailViewModel @Inject constructor(
     private fun computeSeriesSmartPlayTarget() {
         launch(Dispatchers.Default) {
             val state = _uiState.value
-            // Check pending seasons BEFORE reading the snapshot — a season not
-            // yet in fetchedSeasonIds means the catalogue snapshot is incomplete
-            // and smart-play would target the wrong episode.
+            // Check pending seasons BEFORE reading the sorted list — a season
+            // not yet in fetchedSeasonIds means episodes are incomplete and
+            // smart-play would target the wrong episode.
             val seasonsPending = state.seasons.any { s -> !state.fetchedSeasonIds.contains(s.id) }
             if (seasonsPending) return@launch
-            val sorted = currentCatalogueSnapshot?.sortedEpisodes ?: return@launch
+            val sorted = state.sortedEpisodes.takeIf { it.isNotEmpty() } ?: return@launch
             val result = SmartPlayResolver.resolveSeries(sorted)
             if (result == null) {
                 _uiState.update { it.copy(smartPlayTarget = null) }
@@ -590,7 +839,7 @@ class DetailViewModel @Inject constructor(
 
     private fun computeEpisodeSmartPlayTarget(currentEpisode: MediaItem) {
         launch(Dispatchers.Default) {
-            val sorted = currentCatalogueSnapshot?.sortedEpisodes ?: return@launch
+            val sorted = _uiState.value.sortedEpisodes.takeIf { it.isNotEmpty() } ?: return@launch
             // The episode must still be present in the current sorted view.
             if (sorted.none { it.id == currentEpisode.id }) {
                 _uiState.update { it.copy(smartPlayTarget = null) }
@@ -621,191 +870,45 @@ class DetailViewModel @Inject constructor(
     }
 
     fun toggleFavorite() {
-        val detail = _uiState.value.detail ?: return
-        val itemId = detail.item.id
-        val currentIsFavorite = detail.item.isFavorite
         launch {
-            mediaRepository.toggleFavorite(itemId)
+            userDataMutationMutex.withLock {
+                val itemId = _uiState.value.detail?.item?.id ?: return@withLock
+                mediaRepository.toggleFavorite(itemId)
                 .onSuccess {
-                    _uiState.update { state ->
-                        state.copy(
-                            detail = state.detail?.copy(
-                                item = state.detail.item.copy(isFavorite = !currentIsFavorite)
-                            )
-                        )
-                    }
+                    val targetIsFavorite = it
+                    applyFavoriteMutation(itemId, targetIsFavorite)
                 }
                 .onFailure {
                     // Don't leave the user guessing why the heart didn't flip.
                     _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_update_favorite)))
                 }
-        }
-    }
-
-    fun markPlayed() {
-        val itemId = _uiState.value.detail?.item?.id ?: return
-        launch {
-            mediaRepository.markPlayed(itemId)
-                .onSuccess {
-                    _uiState.update { state ->
-                        state.copy(
-                            detail = state.detail?.copy(
-                                // Jellyfin clears a manual watched item's
-                                // resume point. Mirror that immediately so the
-                                // detail UI cannot retain an in-progress bar
-                                // while the queued/offline mutation syncs.
-                                item = state.detail.item.copy(
-                                    isPlayed = true,
-                                    playbackPositionTicks = 0L,
-                                )
-                            )
-                        )
-                    }
-                }
-                .onFailure {
-                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_mark_played)))
-                }
-        }
-    }
-
-    fun markUnplayed() {
-        val itemId = _uiState.value.detail?.item?.id ?: return
-        launch {
-            mediaRepository.markUnplayed(itemId)
-                .onSuccess {
-                    _uiState.update { state ->
-                        state.copy(
-                            detail = state.detail?.copy(
-                                // Marking unwatched also resets resume state;
-                                // otherwise the detail screen would instantly
-                                // show the title as partially watched again.
-                                item = state.detail.item.copy(
-                                    isPlayed = false,
-                                    playbackPositionTicks = 0L,
-                                )
-                            )
-                        )
-                    }
-                }
-                .onFailure {
-                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_mark_unplayed)))
-                }
-        }
-    }
-
-    /**
-     * Marks a row item (related/collection/episode) played or
-     * unplayed without switching the screen's current detail item. Flips the
-     * item in-place in [DetailUiState.relatedItems] so the card's badge updates
-     * immediately; the next detail fetch reconciles the server truth.
-     */
-    fun markRowItemPlayed(item: MediaItem, played: Boolean) {
-        launch {
-            val result = if (played) mediaRepository.markPlayed(item.id)
-            else mediaRepository.markUnplayed(item.id)
-            result.onSuccess {
-                _uiState.update { state ->
-                    state.copy(
-                        relatedItems = state.relatedItems.map {
-                            if (it.id == item.id) it.copy(
-                                isPlayed = played,
-                                playbackPositionTicks = 0L,
-                            ) else it
-                        },
-                        collectionItems = state.collectionItems.map {
-                            if (it.id == item.id) it.copy(
-                                isPlayed = played,
-                                playbackPositionTicks = 0L,
-                            ) else it
-                        },
-                    )
-                }
             }
         }
     }
 
+    fun markPlayed() = setPlayed(played = true)
+
+    fun markUnplayed() = setPlayed(played = false)
+
     /**
-     * Marks every episode in [seasonId] as played. Jellyfin's
-     * `markPlayedItem` endpoint recurses into a season's children, so this is a
-     * single network call — but the UI needs the optimistic in-place flip so
-     * every `EpisodeCard` shows the WATCHED badge and the Play button target
-     * recomputes without waiting on a re-fetch.
-     *
-     * The optimistic write goes through [episodeCatalogue.updateSeasonEpisodes],
-     * which rewrites the season in the cached snapshot and rebuilds its derived
-     * `sortedEpisodes` — so smart-play's next-up target recomputes against the
-     * flipped contents. The catalogue snapshot is then dropped via
-     * [EpisodeCatalogue.invalidateSeries] so re-entry refetches the
-     * fully-cascaded server state (no refetch here — see the old comment below).
+     * Shared optimistic watched-toggle for the detail item. Jellyfin clears a
+     * manually (un)watched item's resume point, so both directions mirror that
+     * immediately — the detail UI cannot retain an in-progress bar while the
+     * queued/offline mutation syncs.
      */
-    fun markSeasonPlayed(seasonId: String) {
-        markSeason(seasonId, played = true)
-    }
-
-    fun markSeasonUnplayed(seasonId: String) {
-        markSeason(seasonId, played = false)
-    }
-
-    private fun markSeason(seasonId: String, played: Boolean) {
-        val seriesId = currentSeriesId ?: return
-        val current = currentCatalogueSnapshot?.seasonEpisodes(seasonId) ?: return
-        // No-op if there is nothing to flip — avoids an unnecessary network
-        // call, a spurious cache invalidation, and a redundant uiState emission.
-        val alreadyInTargetState = current.all { it.isPlayed == played }
-        if (alreadyInTargetState) return
-
+    private fun setPlayed(played: Boolean) {
         launch {
-            val result = if (played) mediaRepository.markPlayed(seasonId)
-            else mediaRepository.markUnplayed(seasonId)
-            result
-                .onSuccess {
-                    // Optimistically rewrite the season in the catalogue snapshot;
-                    // updateSeasonEpisodes rebuilds the derived sortedEpisodes so
-                    // smart-play targets the right episode immediately.
-                    val rewritten = episodeCatalogue.updateSeasonEpisodes(seriesId, seasonId) { episodes ->
-                        episodes.map { episode ->
-                            // The mark-played/unplayed endpoints clear the resume
-                            // position server-side; mirror that locally for BOTH
-                            // directions. For mark-unplayed this is what stops the
-                            // in-progress bar and the "remaining time" label from
-                            // lingering on an episode the user just marked unplayed,
-                            // and keeps the episode out of continue watching locally
-                            // until the next re-fetch confirms the server state.
-                            episode.copy(
-                                isPlayed = played,
-                                playbackPositionTicks = 0L,
-                            )
-                        }
-                    }
-                    currentCatalogueSnapshot = rewritten
-                    _uiState.update { state ->
-                        state.copy(episodes = rewritten?.episodesBySeason ?: state.episodes)
-                    }
-                    // Drop the catalogue snapshot for this series. The optimistic
-                    // flip above keeps the current screen correct, but
-                    // `MediaRepositoryImpl.invalidateUserDataCaches` keys the
-                    // series-cache drop off `detailCache.get(seasonId)`, which is
-                    // null — seasons are loaded via the catalogue, not as
-                    // standalone details. Without this explicit drop, re-entering
-                    // the series detail (back navigation, app background) would
-                    // serve the stale pre-mutation snapshot.
-                    episodeCatalogue.invalidateSeries(seriesId)
-                    // No post-mutation server refetch. The optimistic flip above
-                    // already holds the correct post-mutation state for this
-                    // screen, and a refetch would actively cause a stale-badge
-                    // regression on re-entry: the per-season slice would be written
-                    // back into the catalogue, so a later loadSeriesEpisodes would
-                    // serve pre-cascade data — the watched/unwatched badges would
-                    // flip back to stale and only self-correct once the TTL
-                    // expired. Dropping the cache above and NOT re-populating it
-                    // forces re-entry's load to miss and hit the server, which by
-                    // then has the fully-cascaded UserData.Played state.
-                    // The Play-button target may now point to a different
-                    // episode (e.g. next-up moved to the following season), so
-                    // recompute it against the updated episode contents.
-                    maybeComputeSmartPlayTarget()
-                }
-                .onFailure {
+            userDataMutationMutex.withLock {
+                val itemId = _uiState.value.detail?.item?.id ?: return@withLock
+                val result = if (played) mediaRepository.markPlayed(itemId)
+                else mediaRepository.markUnplayed(itemId)
+                result.onSuccess {
+                    updatePlayedStateInUi(itemId, played)
+                    applyOptimisticItemMutation(
+                        itemId = itemId,
+                        isPlayed = played,
+                    )
+                }.onFailure {
                     _messages.emit(
                         DetailMessage.Text(
                             context.getString(
@@ -815,8 +918,129 @@ class DetailViewModel @Inject constructor(
                         )
                     )
                 }
+            }
         }
     }
+
+    /**
+     * Applies a played flip to every visible projection of an item. Detail
+     * actions can target the current item, a related/collection card, or an
+     * episode card; keeping these projections together prevents one card from
+     * replaying the old state until the next full detail load.
+     */
+    private fun updatePlayedStateInUi(itemId: String, played: Boolean) {
+        var shouldRecomputeSmartPlay = false
+        _uiState.update { state ->
+            val currentDetail = state.detail
+            val isCurrentDetail = currentDetail?.item?.id == itemId
+            shouldRecomputeSmartPlay = isCurrentDetail || state.sortedEpisodes.any { it.id == itemId }
+            val updateItem: (MediaItem) -> MediaItem = { item ->
+                if (item.id == itemId) item.copy(isPlayed = played, playbackPositionTicks = 0L) else item
+            }
+            state.copy(
+                detail = currentDetail?.let { detail ->
+                    if (isCurrentDetail) detail.copy(item = updateItem(detail.item)) else detail
+                },
+                relatedItems = state.relatedItems.map(updateItem),
+                collectionItems = state.collectionItems.map(updateItem),
+                episodes = state.episodes.mapValues { (_, episodes) -> episodes.map(updateItem) },
+                sortedEpisodes = state.sortedEpisodes.map(updateItem),
+            )
+        }
+        if (shouldRecomputeSmartPlay) maybeComputeSmartPlayTarget()
+    }
+
+    /** Updates the active provider snapshot and invalidates any parent series cache. */
+    private suspend fun applyOptimisticItemMutation(
+        itemId: String,
+        isFavorite: Boolean? = null,
+        isPlayed: Boolean? = null,
+        seriesId: String? = null,
+    ) {
+        mediaDetailProvider.applyOptimisticItemState(
+            itemId = itemId,
+            isFavorite = isFavorite,
+            isPlayed = isPlayed,
+        )
+        (seriesId ?: seriesIdForItem(itemId))?.let(mediaDetailProvider::invalidate)
+        currentItemId?.takeIf { it != itemId }?.let { parentItemId ->
+            // Related/collection cards are loaded through parent-keyed caches,
+            // so invalidating only the mutated item's detail is insufficient.
+            mediaRepository.invalidateDetailCache(parentItemId)
+            mediaRepository.invalidateCollectionItemsCache(parentItemId)
+        }
+    }
+
+    private fun seriesIdForItem(itemId: String): String? {
+        val state = _uiState.value
+        val episodeSeriesId = state.episodes.values
+            .asSequence()
+            .flatten()
+            .firstOrNull { it.id == itemId }
+            ?.seriesId
+        if (episodeSeriesId != null) return episodeSeriesId
+        return state.detail?.item
+            ?.takeIf { it.id == itemId }
+            ?.seriesIdForDetail
+    }
+
+    /** Keeps every visible projection of an item aligned after a favorite flip. */
+    private fun updateFavoriteStateInUi(itemId: String, favorite: Boolean) {
+        _uiState.update { state ->
+            val currentDetail = state.detail
+            val isCurrentDetail = currentDetail?.item?.id == itemId
+            val updateItem: (MediaItem) -> MediaItem = { item ->
+                if (item.id == itemId) item.copy(isFavorite = favorite) else item
+            }
+            state.copy(
+                detail = currentDetail?.let { detail ->
+                    if (isCurrentDetail) detail.copy(item = updateItem(detail.item)) else detail
+                },
+                relatedItems = state.relatedItems.map(updateItem),
+                collectionItems = state.collectionItems.map(updateItem),
+                episodes = state.episodes.mapValues { (_, episodes) -> episodes.map(updateItem) },
+                sortedEpisodes = state.sortedEpisodes.map(updateItem),
+            )
+        }
+    }
+
+    private suspend fun applyFavoriteMutation(itemId: String, favorite: Boolean) {
+        updateFavoriteStateInUi(itemId, favorite)
+        applyOptimisticItemMutation(itemId = itemId, isFavorite = favorite)
+    }
+
+    /**
+     * Marks a row item (related/collection/episode) played or
+     * unplayed without switching the screen's current detail item. Flips the
+     * item in-place across all visible projections and invalidates the parent
+     * content/catalogue caches so re-entry cannot replay the old state.
+     */
+    fun markRowItemPlayed(item: MediaItem, played: Boolean) {
+        launch {
+            userDataMutationMutex.withLock {
+                val result = if (played) mediaRepository.markPlayed(item.id)
+                else mediaRepository.markUnplayed(item.id)
+                result.onSuccess {
+                    updatePlayedStateInUi(item.id, played)
+                    applyOptimisticItemMutation(
+                        itemId = item.id,
+                        isPlayed = played,
+                        seriesId = item.seriesId,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Marks every episode in [seasonId] as played. The optimistic rewrite goes
+     * through [MediaDetailProvider.applyOptimisticSeasonRewrite]; the reducer
+     * adopts it + recomputes smart-play. Delegates to [MarkSeasonReactor] — see
+     * there for the no-refetch / re-entry invalidation contract.
+     */
+    fun markSeasonPlayed(seasonId: String) = markSeasonReactor.markSeasonPlayed(seasonId)
+
+    fun markSeasonUnplayed(seasonId: String) = markSeasonReactor.markSeasonUnplayed(seasonId)
 
     fun hideFromNextUp() {
         val item = _uiState.value.detail?.item ?: return
@@ -858,171 +1082,30 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun startDownload() {
-        val detail = _uiState.value.detail ?: run {
-            launch { _messages.emit(DetailMessage.Text(context.getString(R.string.detail_error_details_not_loaded))) }
-            return
-        }
-        val source = detail.mediaSources.firstOrNull() ?: run {
-            launch { _messages.emit(DetailMessage.Text(context.getString(R.string.detail_error_no_source))) }
-            return
-        }
-
-        // Cellular download size warning: when on a metered network and the
-        // user has configured a warning threshold (MB), surface a
-        // confirmation dialog instead of silently consuming data.
-        val prefs = downloadsStore.downloads.value
-        val thresholdMb = prefs.cellularDownloadSizeWarningMb
-        if (thresholdMb > 0 && !adaptiveBitrateManager.isUnmeteredConnection()) {
-            val sizeBytes = source.size ?: 0L
-            val sizeMb = (sizeBytes / (1024L * 1024L)).toInt()
-            if (sizeMb >= thresholdMb) {
-                _uiState.update { it.copy(cellularDownloadWarningMb = sizeMb) }
-                return
-            }
-        }
-
-        performDownload(detail.item, source)
-    }
+    fun startDownload() = downloadLifecycleActions.startDownload()
 
     /**
-     * Called from the UI after the user explicitly confirms a cellular
-     * download that exceeded the [com.raulshma.jellyplay.core.model.legacy.UserPreferences.cellularDownloadSizeWarningMb]
-     * threshold. Clears the warning state and proceeds with the download.
+     * Called from the UI after the user explicitly confirms a cellular download
+     * that exceeded the warning threshold. Delegates to [DownloadLifecycleActions].
      */
-    fun confirmCellularDownload() {
-        val detail = _uiState.value.detail ?: return
-        val source = detail.mediaSources.firstOrNull() ?: return
-        _uiState.update { it.copy(cellularDownloadWarningMb = null) }
-        performDownload(detail.item, source)
-    }
+    fun confirmCellularDownload() = downloadLifecycleActions.confirmCellularDownload()
 
-    fun dismissCellularDownloadWarning() {
-        _uiState.update { it.copy(cellularDownloadWarningMb = null) }
-    }
-
-    private fun performDownload(
-        item: com.raulshma.jellyplay.core.model.MediaItem,
-        source: com.raulshma.jellyplay.core.model.MediaSource,
-    ) {
-        val detail = _uiState.value.detail ?: return
-        launch {
-            _uiState.update { it.copy(isDownloading = true) }
-            try {
-                // Apply the user's download quality preference when building the
-                // stream URL so the server transcodes to the requested ceiling.
-                // The intake seam owns the full bundle (local images, trickplay,
-                // subtitles, segments, offline metadata row), so feature modules
-                // no longer re-implement the artifact-writing recipe.
-                val prefs = downloadsStore.downloads.value
-                val maxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
-                val result = downloadIntake.start(detail, maxBitrate)
-                if (result.downloadItem == null) {
-                    val message = result.error
-                        ?: context.getString(R.string.detail_error_download_failed)
-                    _messages.emit(DetailMessage.Text(message))
-                }
-            } catch (e: Exception) {
-                _messages.emit(DetailMessage.Text(e.message ?: context.getString(R.string.detail_error_download_failed)))
-            }
-            _uiState.update { it.copy(isDownloading = false) }
-        }
-    }
+    fun dismissCellularDownloadWarning() = downloadLifecycleActions.dismissCellularDownloadWarning()
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
 
-    fun downloadSeries(episodeIds: Map<String, List<String>>? = null) {
-        val detail = _uiState.value.detail ?: run {
-            launch { _messages.emit(DetailMessage.SeriesDownload(queuedCount = 0, error = context.getString(R.string.detail_error_details_not_loaded))) }
-            return
-        }
-        val item = detail.item
-        if (item.mediaType != MediaType.SERIES) {
-            launch { _messages.emit(DetailMessage.SeriesDownload(queuedCount = 0, error = context.getString(R.string.detail_error_not_a_series))) }
-            return
-        }
+    fun downloadSeries(episodeIds: Map<String, List<String>>? = null) =
+        downloadLifecycleActions.downloadSeries(episodeIds)
 
-        launch {
-            _uiState.update { it.copy(isDownloadingSeries = true) }
-            downloadIntake.startSeries(item.id, episodeIds)
-                .onSuccess { downloadIds ->
-                    _messages.emit(DetailMessage.SeriesDownload(queuedCount = downloadIds.size, error = null))
-                }
-                .onFailure { error ->
-                    _messages.emit(DetailMessage.SeriesDownload(queuedCount = 0, error = error.message ?: context.getString(R.string.detail_error_queue_failed)))
-                }
-            _uiState.update { it.copy(isDownloadingSeries = false) }
-        }
-    }
+    fun prepareDownloadSheetEpisodes() = downloadLifecycleActions.prepareDownloadSheetEpisodes()
 
-    fun prepareDownloadSheetEpisodes() {
-        val seriesId = currentSeriesId ?: return
-        val seasons = _uiState.value.seasons
-        if (seasons.isEmpty()) return
-        val seasonIds = seasons.map { it.id }.toSet()
+    fun loadDownloadSheetEpisodes(seasonId: String) =
+        downloadLifecycleActions.loadDownloadSheetEpisodes(seasonId)
 
-        downloadSheetEpisodesMap.clear()
-        downloadSheetFetchedSeasonIds = emptySet()
-        _uiState.update { it.copy(downloadSheetLoadingSeasons = seasonIds) }
+    fun loadDownloadedEpisodeIds() = downloadLifecycleActions.loadDownloadedEpisodeIds()
 
-        launch {
-            // The catalogue snapshot already holds the grouped map (and refetches
-            // any missing season on demand internally), so the download sheet
-            // reads it directly instead of re-issuing getAllEpisodesGrouped + a
-            // per-season fallback fan-out.
-            val snapshot = episodeCatalogue.loadSeriesEpisodes(seriesId).getOrNull()
-            if (currentSeriesId != seriesId) return@launch
-            currentCatalogueSnapshot = snapshot
-            seasons.forEach { season ->
-                downloadSheetEpisodesMap[season.id] = snapshot?.seasonEpisodes(season.id) ?: emptyList()
-            }
-
-            downloadSheetFetchedSeasonIds = seasonIds
-            _uiState.update {
-                it.copy(
-                    downloadSheetEpisodes = downloadSheetEpisodesMap.toMap(),
-                    downloadSheetLoadingSeasons = emptySet(),
-                )
-            }
-        }
-    }
-
-    fun loadDownloadSheetEpisodes(seasonId: String) {
-        if (seasonId in downloadSheetFetchedSeasonIds) return
-        val seriesId = currentSeriesId ?: return
-        _uiState.update { it.copy(downloadSheetLoadingSeasons = it.downloadSheetLoadingSeasons + seasonId) }
-        launch {
-            // Read the season from the catalogue snapshot (serves from the shared
-            // cache when already present, else fetches the one season), avoiding
-            // a duplicate round-trip and a second in-memory copy.
-            val episodes = episodeCatalogue.loadSeasonEpisodes(seriesId, seasonId).getOrDefault(emptyList())
-            downloadSheetEpisodesMap[seasonId] = episodes
-            _uiState.update { it.copy(downloadSheetEpisodes = downloadSheetEpisodesMap.toMap()) }
-            downloadSheetFetchedSeasonIds = downloadSheetFetchedSeasonIds + seasonId
-            _uiState.update { it.copy(downloadSheetLoadingSeasons = it.downloadSheetLoadingSeasons - seasonId) }
-        }
-    }
-
-    fun loadDownloadedEpisodeIds() {
-        val seriesId = currentSeriesId ?: return
-        launch {
-            val ids = downloadRepository.getDownloadedEpisodeIdsForSeries(seriesId)
-            _uiState.update { it.copy(downloadedEpisodeIds = ids) }
-        }
-    }
-
-    fun resetDownloadSheetState() {
-        downloadSheetEpisodesMap.clear()
-        downloadSheetFetchedSeasonIds = emptySet()
-        _uiState.update {
-            it.copy(
-                downloadSheetEpisodes = emptyMap(),
-                downloadSheetLoadingSeasons = emptySet(),
-                downloadedEpisodeIds = emptySet(),
-            )
-        }
-    }
+    fun resetDownloadSheetState() = downloadLifecycleActions.resetDownloadSheetState()
 
     fun getBackdropUrl(itemId: String): String =
         imageUrlProvider.getBackdropUrl(itemId)
@@ -1152,243 +1235,105 @@ class DetailViewModel @Inject constructor(
     fun prefetchSeerrDetails(tmdbId: Int, mediaType: String, onDone: () -> Unit) =
         seerrRequestState.prefetchDetails(tmdbId, mediaType, onDone)
 
-    private fun qualityToMaxBitrate(quality: DownloadQuality): Int? = when (quality) {
-        DownloadQuality.ORIGINAL -> null
-        DownloadQuality.HIGH_1080P -> 8_000_000
-        DownloadQuality.MEDIUM_720P -> 3_000_000
-        DownloadQuality.LOW_480P -> 1_500_000
-    }
-
     // ── Add to Playlist ────────────────────────────────────────────────
-    // The playlist repository path is fully wired (PlaylistRepository mixin on
-    // MediaRepository); these functions load the picker list and resolve the
-    // current item's ids into a playlist. Series expand to their episode ids
-    // (a Jellyfin playlist only holds playable items, not a series itself).
+    // Delegated to [playlistActions] (PlaylistActions). The VM keeps thin
+    // pass-throughs so existing callers/tests stay stable; the helper owns the
+    // playlist state machine + the series→episode-id expansion.
+
+    /** Opens the Add-to-Playlist picker. Delegates to [PlaylistActions]. */
+    fun openPlaylistPicker() = playlistActions.openPlaylistPicker()
+
+    fun dismissPlaylistPicker() = playlistActions.dismissPlaylistPicker()
+
+    fun openCreatePlaylistDialog() = playlistActions.openCreatePlaylistDialog()
+
+    fun dismissCreatePlaylistDialog() = playlistActions.dismissCreatePlaylistDialog()
+
+    /** Adds the current item to an existing playlist. Delegates to [PlaylistActions]. */
+    fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) =
+        playlistActions.addToPlaylist(playlist)
+
+    /** Adds to the reserved "Watch Later" playlist. Delegates to [PlaylistActions]. */
+    fun addToWatchLater() = playlistActions.addToWatchLater()
+
+    /** Creates a new playlist seeded with the current item. Delegates to [PlaylistActions]. */
+    fun createAndAddPlaylist(name: String, overview: String) =
+        playlistActions.createAndAddPlaylist(name, overview)
+
+    // ── Offline / download-lifecycle management ──────────────────────────
+    // Ports the operations previously owned by OfflineDetailViewModel and
+    // OfflineSeriesViewModel so the unified detail screen can manage a local
+    // download in place. These read the reactive
+    // [DetailUiState.detailContext] attachment for capability gating and act on
+    // the current item or the passed ids. Per-item write actions route through
+    // the offline-aware PlayedStateSync / playback outbox (mirroring today).
+
+    /** Deletes a single downloaded item by id. Delegates to [OfflineDeleteActions]. */
+    fun deleteOfflineItem(id: String) = offlineDeleteActions.deleteOfflineItem(id)
+
+    /** Deletes a single downloaded episode by id. Delegates to [OfflineDeleteActions]. */
+    fun deleteOfflineEpisode(episodeId: String) =
+        offlineDeleteActions.deleteOfflineEpisode(episodeId)
 
     /**
-     * Opens the Add-to-Playlist picker and loads the user's playlists on demand.
-     * The list is fetched fresh each open (server playlists are not cached
-     * locally, matching the music playlists flow).
+     * Deletes a batch of downloaded episodes. Whole-season selections collapse
+     * into one [offlineRepository.deleteOfflineSeason] transaction; partial
+     * selections fall back to per-episode deletes. See [OfflineDeleteActions].
      */
-    fun openPlaylistPicker() {
-        val detail = _uiState.value.detail ?: return
-        // Only playable video items and series are eligible (audio already has
-        // its own playlist flow in feature/music).
-        val type = detail.item.mediaType
-        if (!type.isVideoType && type != MediaType.SERIES) return
-        _uiState.update { it.copy(showPlaylistPicker = true) }
-        loadPlaylists()
-    }
+    fun deleteOfflineEpisodes(episodeIds: List<String>) =
+        offlineDeleteActions.deleteOfflineEpisodes(episodeIds)
 
-    fun dismissPlaylistPicker() {
-        _uiState.update { it.copy(showPlaylistPicker = false) }
-    }
+    /** Drops an entire downloaded season (one DB transaction + artifact cleanup). */
+    fun deleteOfflineSeason(seasonId: String) = offlineDeleteActions.deleteOfflineSeason(seasonId)
 
-    fun openCreatePlaylistDialog() {
-        _uiState.update {
-            it.copy(
-                showPlaylistPicker = false,
-                showCreatePlaylistDialog = true,
-            )
-        }
-    }
+    /** Drops an entire downloaded series and all its seasons/episodes. */
+    fun deleteOfflineSeries(seriesId: String) = offlineDeleteActions.deleteOfflineSeries(seriesId)
 
-    fun dismissCreatePlaylistDialog() {
-        _uiState.update { it.copy(showCreatePlaylistDialog = false) }
-    }
+    /**
+     * TTL-gated server freshness check for the current item. Safe to call on
+     * every screen entry. Delegates to [ResyncActions.checkForUpdates].
+     */
+    fun checkForUpdates() = resyncActions.checkForUpdates()
 
-    private fun loadPlaylists() {
-        _uiState.update { it.copy(isLoadingPlaylists = true) }
+    /**
+     * Re-syncs the current item's metadata and changed images from the server.
+     * Surfaces progress via [DetailUiState.resyncState]. Delegates to
+     * [ResyncActions.resync].
+     */
+    fun resync() = resyncActions.resync()
+
+    /** Resets [DetailUiState.resyncState] to [ResyncUiState.Idle] (no-op while Working). */
+    fun clearResyncState() = resyncActions.clearResyncState()
+
+    /**
+     * Re-downloads the media file when the server's MediaSource changed. This is
+     * the DETAIL re-download path, not the *arr Manage-Series action
+     * ([ArrRepository.redownloadMedia]). Delegates to [ResyncActions.redownloadMedia].
+     */
+    fun redownloadMedia() = resyncActions.redownloadMedia()
+
+    /**
+     * Marks a single episode played/unplayed (offline-aware + outboxed). Does NOT
+     * refetch the server — the provider snapshot is rewritten optimistically and
+     * the parent catalogue is invalidated for re-entry. Delegates to
+     * [MarkSeasonReactor.markEpisodePlayed].
+     */
+    fun markEpisodePlayed(episodeId: String, played: Boolean) =
+        markSeasonReactor.markEpisodePlayed(episodeId, played)
+
+    /**
+     * Per-item favorite toggle (offline-aware + outboxed). Distinct from the
+     * no-arg [toggleFavorite], which flips the current detail item optimistically.
+     */
+    fun toggleFavorite(itemId: String) {
         launch {
-            mediaRepository.getPlaylists(limit = 100)
-                .onSuccess { playlists ->
-                    if (currentItemId != _uiState.value.detail?.item?.id) return@onSuccess
-                    _uiState.update {
-                        it.copy(
-                            playlists = playlists.filter { p -> p.canEdit },
-                            isLoadingPlaylists = false,
-                        )
-                    }
+            userDataMutationMutex.withLock {
+                mediaRepository.toggleFavorite(itemId).onSuccess { targetIsFavorite ->
+                    applyFavoriteMutation(itemId, targetIsFavorite)
                 }
-                .onFailure {
-                    if (currentItemId != _uiState.value.detail?.item?.id) return@onFailure
-                    _uiState.update { it.copy(isLoadingPlaylists = false) }
-                }
-        }
-    }
-
-    /**
-     * Adds the current item to an existing playlist. For a series, all fetched
-     * episodes are added (Jellyfin rejects a bare series id in a playlist).
-     */
-    fun addToPlaylist(playlist: com.raulshma.jellyplay.core.model.Playlist) {
-        val detail = _uiState.value.detail ?: return
-        launch {
-            _uiState.update { it.copy(isAddingToPlaylist = true) }
-            resolvePlaylistItemIds(detail)
-                .onSuccess { ids ->
-                    if (ids.isEmpty()) {
-                        _messages.emit(
-                            DetailMessage.Text(context.getString(R.string.detail_msg_no_episodes_queued))
-                        )
-                        return@onSuccess
-                    }
-                    mediaRepository.addItemsToPlaylist(playlist.id, ids)
-                        .onSuccess {
-                            _messages.emit(
-                                DetailMessage.Text(
-                                    context.getString(R.string.detail_msg_added_to_playlist, playlist.name)
-                                )
-                            )
-                        }
-                        .onFailure {
-                            _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
-                        }
-                }
-                .onFailure {
-                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
-                }
-            _uiState.update {
-                it.copy(
-                    isAddingToPlaylist = false,
-                    showPlaylistPicker = false,
-                )
             }
         }
     }
-
-    /**
-     * Adds to the reserved "Watch Later" playlist, creating it on first use and
-     * caching its id in preferences so subsequent adds reuse it.
-     */
-    fun addToWatchLater() {
-        val detail = _uiState.value.detail ?: return
-        val cachedId = appRuntimeStateStore.state.value.watchLaterPlaylistId
-        launch {
-            _uiState.update { it.copy(isAddingToPlaylist = true) }
-            val ids = resolvePlaylistItemIds(detail).getOrElse {
-                _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
-                _uiState.update {
-                    it.copy(
-                        isAddingToPlaylist = false,
-                        showPlaylistPicker = false,
-                    )
-                }
-                return@launch
-            }
-            if (ids.isEmpty()) {
-                _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_no_episodes_queued)))
-                _uiState.update {
-                    it.copy(
-                        isAddingToPlaylist = false,
-                        showPlaylistPicker = false,
-                    )
-                }
-                return@launch
-            }
-            if (cachedId != null) {
-                mediaRepository.addItemsToPlaylist(cachedId, ids)
-                    .onSuccess {
-                        _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_added_to_watch_later)))
-                    }
-                    .onFailure {
-                        _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
-                    }
-            } else {
-                mediaRepository.createPlaylist(
-                    name = context.getString(R.string.detail_playlist_watch_later),
-                    overview = null,
-                    itemIds = ids,
-                    mediaType = playlistMediaType(detail.item.mediaType),
-                ).onSuccess { newId ->
-                    appRuntimeStateStore.setWatchLaterPlaylistId(newId)
-                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_added_to_watch_later)))
-                }.onFailure {
-                    _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
-                }
-            }
-            _uiState.update {
-                it.copy(
-                    isAddingToPlaylist = false,
-                    showPlaylistPicker = false,
-                )
-            }
-        }
-    }
-
-    /**
-     * Creates a new playlist seeded with the current item and closes the
-     * create-playlist dialog.
-     */
-    fun createAndAddPlaylist(name: String, overview: String) {
-        val detail = _uiState.value.detail ?: return
-        val trimmed = name.trim()
-        if (trimmed.isEmpty()) return
-        launch {
-            _uiState.update { it.copy(isAddingToPlaylist = true) }
-            val ids = resolvePlaylistItemIds(detail).getOrElse {
-                _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
-                _uiState.update {
-                    it.copy(
-                        isAddingToPlaylist = false,
-                        showCreatePlaylistDialog = false,
-                    )
-                }
-                return@launch
-            }
-            mediaRepository.createPlaylist(
-                name = trimmed,
-                overview = overview.ifBlank { null },
-                itemIds = ids,
-                mediaType = playlistMediaType(detail.item.mediaType),
-            ).onSuccess {
-                _messages.emit(
-                    DetailMessage.Text(context.getString(R.string.detail_msg_playlist_created, trimmed))
-                )
-            }.onFailure {
-                _messages.emit(DetailMessage.Text(context.getString(R.string.detail_msg_couldnt_add_to_playlist)))
-            }
-            _uiState.update {
-                it.copy(
-                    isAddingToPlaylist = false,
-                    showCreatePlaylistDialog = false,
-                )
-            }
-        }
-    }
-
-    /**
-     * Resolves the current item into the Jellyfin item ids to add to a playlist.
-     * Movies/episodes/music-videos resolve to themselves; a series expands to
-     * its fetched episodes (fetching them first if the seasons haven't loaded
-     * yet — e.g. the user opened the picker before episodes resolved).
-     */
-    private suspend fun resolvePlaylistItemIds(
-        detail: MediaDetail,
-    ): Result<List<String>> = runCatching {
-        val item = detail.item
-        if (item.mediaType != MediaType.SERIES) return@runCatching listOf(item.id)
-        // A series is playable as a playlist only via its episodes. Read the
-        // canonical playback order from the catalogue snapshot if loaded, else
-        // load it; an empty result is surfaced as a no-op message rather than
-        // adding the (invalid) series id.
-        val sortedIds = currentCatalogueSnapshot?.takeIf { it.seriesId == item.id }?.allEpisodeIds
-        if (!sortedIds.isNullOrEmpty()) return@runCatching sortedIds
-        episodeCatalogue.loadSeriesEpisodes(item.id)
-            .getOrNull()
-            ?.allEpisodeIds
-            ?: emptyList()
-    }
-
-    /**
-     * Maps the item's media type to the value passed to `createPlaylist`. The
-     * network layer only cares whether the playlist is audio- or video-typed
-     * (it branches to `SdkMediaType.AUDIO` vs `SdkMediaType.VIDEO`), so any
-     * non-audio [MediaType] is equivalent here — [MediaType.MOVIE] is used as a
-     * representative video type rather than adding a synthetic VIDEO constant.
-     */
-    private fun playlistMediaType(type: MediaType): MediaType =
-        if (type.isAudioType) MediaType.AUDIO else MediaType.MOVIE
 
     override fun onCleared() {
         super.onCleared()

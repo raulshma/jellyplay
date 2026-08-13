@@ -447,6 +447,16 @@ object SettingsSearchRegistry {
             isAdvanced = true
         ),
         SettingsSearchItem(
+            id = "hide_top_header",
+            titleRes = R.string.ss_hide_top_header_title,
+            subtitleRes = R.string.ss_hide_top_header_subtitle,
+            categoryRes = R.string.ss_cat_appearance,
+            keywords = listOf("top header", "app bar", "home bar", "hide", "scroll", "auto hide", "collapse", "dock"),
+            route = Route.AppearanceSettings(),
+            icon = Tabler.Outline.ArrowBarToDown,
+            isAdvanced = true
+        ),
+        SettingsSearchItem(
             id = "continue_watching_click",
             titleRes = R.string.ss_continue_watching_click_title,
             subtitleRes = R.string.ss_continue_watching_click_subtitle,

@@ -178,4 +178,28 @@ class SubtitleStyleResolverTest {
         val resolved = resolveSubtitleStyle(slice, isHdr = true)
         assertEquals(SubtitleColor.YELLOW, resolved.fontColor)
     }
+
+    @Test
+    fun `resolveSubtitleDelayMs prefers per-item entry over global default`() {
+        val slice = SubtitleSlice(
+            subtitleStyle = SubtitleStyle(offsetMs = 250L),
+            subtitleDelayByItem = mapOf("item-1" to -400L),
+        )
+        assertEquals(-400L, resolveSubtitleDelayMs(slice, "item-1"))
+    }
+
+    @Test
+    fun `resolveSubtitleDelayMs falls back to global default when no per-item entry`() {
+        val slice = SubtitleSlice(
+            subtitleStyle = SubtitleStyle(offsetMs = 250L),
+            subtitleDelayByItem = mapOf("item-1" to -400L),
+        )
+        assertEquals(250L, resolveSubtitleDelayMs(slice, "item-2"))
+    }
+
+    @Test
+    fun `resolveSubtitleDelayMs null itemId uses global default`() {
+        val slice = SubtitleSlice(subtitleStyle = SubtitleStyle(offsetMs = 90L))
+        assertEquals(90L, resolveSubtitleDelayMs(slice, null))
+    }
 }

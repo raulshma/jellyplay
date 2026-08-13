@@ -34,14 +34,19 @@ class PlayerLifecycleManager @Inject constructor(
     @Volatile
     var activeCallbacks: PlayerLifecycleCallbacks? = null
 
+    /** True when background video audio is enabled (engine keeps running on background). */
+    val isBackgroundAudioEnabled: Boolean
+        get() = playbackStore.playback.value.backgroundVideoAudioEnabled
+
     /** Clears the active engine callbacks. Called when playback ends. */
     fun reset() {
         activeCallbacks = null
     }
 
-    // Called by MainActivity. Delegates directly to the engine's callbacks:
-    // - ExoPlayer: no-op (PlayerView handles lifecycle)
-    // - MPV/LibVLC: pause audio, save state
+    // Called by the host Activity (PlayerActivity / LiveTvPlayerActivity).
+    // Delegates directly to the active engine's callbacks. Every engine
+    // overrides both: ExoPlayer, MPV and LibVLC each remember play state on
+    // pause and resume playback on resume (unless background audio is on).
 
     /** Called from Activity.onPause() when NOT in PiP mode */
     fun onActivityPause() {

@@ -83,7 +83,13 @@ internal object EngineConfigBuilder {
         engineSpecific: EngineSpecificConfig?,
     ): EngineConfig {
         val isHdr = isHdrFromStreams(mediaStreams)
-        val subtitleStyle = resolveSubtitleStyle(agg.subtitle, isHdr = isHdr)
+        // Subtitle delay is per-media: resolve the per-item override (else the
+        // global default) so the engine boots with the correct delay on initial
+        // load / engine swap. Without this the engine starts at the global
+        // default while the engineFlow collector seeds uiState with the per-item
+        // value — the load path then sees no diff and never pushes the delay, so
+        // a saved correction would show in metadata but never reach the engine.
+        val subtitleStyle = resolveSubtitleStyleWithDelay(agg.subtitle, itemId, isHdr = isHdr)
         return EngineConfig(
             decoderMode = agg.playback.decoderMode,
             audioPassthrough = agg.playback.audioPassthrough,

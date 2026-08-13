@@ -106,6 +106,25 @@ class MpvPlayerEngine(
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
     @Volatile private var pendingSubtitles: List<SubtitleSource> = emptyList()
+    /**
+     * Maps the `title` (== the [SubtitleSource.label] passed to `sub-add`) of a
+     * side-loaded subtitle to the caller-supplied [SubtitleSource.id] —
+     * `"offline:${index}"` for downloaded sidecars, `"external:${index}"` for
+     * remote non-manifest subs. mpv's `sub-add` takes no id argument, so without
+     * this registry [buildTracks] would emit the synthetic `"mpv_sub_${id}"` and
+     * lose the stable id that the offline-subtitle restore path keys on.
+     * ExoPlayer instead propagates the `MediaItem.SubtitleConfiguration.id` into
+     * the track `format.id`; this registry keeps mpv's exposed [MediaTrack.id]
+     * consistent with that so a persisted/pending offline selection resolves on
+     * both engines.
+     *
+     * Keyed by label because that is the exact `title` arg echoed back in mpv's
+     * `track-list`, matching the label-keyed dedup in [existingSubLabels].
+     * Rebuilt per item in [load] and cleared in [release] so entries never bleed
+     * across items. Reference-swapped (never mutated in place) so [buildTracks]
+     * reads it race-free from the main thread.
+     */
+    @Volatile private var sideLoadedSubtitleIds: Map<String, String> = emptyMap()
     // Android audio session id generated via AudioManager and pushed into
     // mpv's audiotrack/aaudio outputs so Android AudioEffects (dialogue
     // boost, night mode) can bind to mpv's output. Previously read back
@@ -452,7 +471,7 @@ class MpvPlayerEngine(
             }
 
             // Tag the output stream so Android routes it correctly (movie role →
-            // speaker, ignores notifications). findroid sets this unconditionally.
+            // speaker, ignores notifications).
             mpv.setOptionString("audio-set-media-role", "yes")
 
             mpv.setOptionString(
@@ -579,6 +598,14 @@ class MpvPlayerEngine(
         released = false
         pendingRequest = request
         pendingSubtitles = request.externalSubtitles
+        // Rebuild the side-loaded-subtitle id registry for the new item: each
+        // external subtitle's label (the `title` arg passed to `sub-add`) maps
+        // to its SubtitleSource.id, so buildTracks can stamp that stable id onto
+        // the resulting MediaTrack.id instead of the synthetic mpv id. See
+        // [sideLoadedSubtitleIds].
+        sideLoadedSubtitleIds = request.externalSubtitles
+            .filter { it.id.isNotBlank() }
+            .associate { it.label to it.id }
         // Reset observer-driven caches for the new item. The first time-pos /
         // duration observations will repopulate these as the demuxer resolves.
         serverDurationMs = request.serverDurationMs
@@ -616,6 +643,7 @@ class MpvPlayerEngine(
         released = true
         pendingRequest = null
         pendingSubtitles = emptyList()
+        sideLoadedSubtitleIds = emptyMap()
         // Note: there is no AudioManager.releaseAudioSessionId() —
         // Android's AudioSystem reclaims unreferenced session ids, so the
         // prior allocation via generateAudioSessionId() has no manual release.
@@ -1039,8 +1067,8 @@ class MpvPlayerEngine(
         return view
     }
 
-    override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
-        // Not used via view in MPV, we apply via mpv properties
+    override fun applySubtitleStyle(style: SubtitleStyle) {
+        // mpv applies styles via properties, not via a View.
         applySubtitleStyleInternal(style)
     }
     
@@ -1055,12 +1083,11 @@ class MpvPlayerEngine(
         }
     }
 
-    override fun setAspectRatio(mode: Int, ratio: Float?) {
+    override fun setAspectRatio(ratio: AspectRatio) {
+        val numeric = ratio.ratio
         val aspectValue = when {
-            mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL -> "-1"
-            mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> "-1"
-            ratio != null && ratio > 0f -> {
-                val w = (ratio * 100).toInt()
+            numeric != null && numeric > 0f -> {
+                val w = (numeric * 100).toInt()
                 val h = 100
                 val gcd = gcd(w, h)
                 "${w / gcd}:${h / gcd}"
@@ -1070,7 +1097,7 @@ class MpvPlayerEngine(
         val m = mpvView?.mpv ?: return
         try { m.setPropertyString("video-aspect-override", aspectValue) } catch (_: Exception) {}
 
-        val isZoom = mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        val isZoom = ratio == AspectRatio.CROP
         try {
             m.setPropertyDouble("panscan", if (isZoom) 1.0 else 0.0)
             m.setPropertyString("sub-use-margins", if (isZoom) "yes" else "no")
@@ -1281,6 +1308,11 @@ class MpvPlayerEngine(
             val title = track["title"]?.asString()
             val codec = track["codec"]?.asString()
             val selected = track["selected"]?.asBoolean() ?: false
+            // `external` is true for sub-add'd (side-loaded) tracks and absent/
+            // false for container-demuxed tracks. Gates the side-loaded id
+            // lookup below so a demuxed track that happens to share a label
+            // with a sidecar never inherits the sidecar's stable id.
+            val isExternal = track["external"]?.asBoolean() ?: false
             // ff-index is the demuxer/container stream index — present for
             // container-demuxed tracks (== the server's MediaStream.index), null
             // for side-loaded (sub-add) tracks. Used as the robust resolution key
@@ -1298,9 +1330,23 @@ class MpvPlayerEngine(
                 isDefault = isDefault,
             )
 
+            // For side-loaded subtitles, prefer the caller-supplied
+            // SubtitleSource.id (looked up by the track's title, which is the
+            // label passed to sub-add) over the synthetic mpv id — mirroring
+            // ExoPlayer, which propagates the SubtitleConfiguration id into the
+            // track format. The offline-subtitle restore path
+            // (TrackSelectionPolicy.resolveByOfflineSubtitleId) keys on this id.
+            // Demuxed tracks and side-loaded tracks without a registered id fall
+            // through to the synthetic `"mpv_${t}_${id}"`.
+            val resolvedId = if (trackType == TrackType.SUBTITLE && isExternal) {
+                title?.let { sideLoadedSubtitleIds[it] }
+            } else {
+                null
+            }
+
             result.add(
                 MediaTrack(
-                    id = "mpv_${t}_${id}",
+                    id = resolvedId ?: "mpv_${t}_${id}",
                     index = id,
                     label = TrackLabelFormatter.primary(info),
                     language = lang,
@@ -1485,7 +1531,7 @@ class MpvPlayerEngine(
 
         // Guard against duplicate sub-add. mpv lists every track (demuxed +
         // previously sub-add'd) in track-list; if a side-load with the same
-        // label is already present, skip it. findroid hit the same class of bug
+        // label is already present, skip it. hit the same class of bug
         // (START_FILE re-firing re-flushed its initialCommands) and fixed it by
         // clearing the buffer; here the equivalent is checking the live
         // track-list, which also covers a load() called twice without a
@@ -1536,6 +1582,12 @@ class MpvPlayerEngine(
         if (source.label in existingSubLabels()) {
             Log.d(TAG, "Skipping duplicate external subtitle (already in track-list): label=${source.label}")
             return
+        }
+        // Register the caller-supplied id (when present) so buildTracks can
+        // stamp it onto the resulting MediaTrack.id instead of the synthetic
+        // mpv id — mirroring ExoPlayer's SubtitleConfiguration.id propagation.
+        if (source.id.isNotBlank()) {
+            sideLoadedSubtitleIds = sideLoadedSubtitleIds + (source.label to source.id)
         }
         try {
             if (source.language.isNullOrBlank()) {

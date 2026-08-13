@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.StreamType
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -123,4 +125,68 @@ class MediaInfoFormatTest {
         assertEquals("0 ch", MediaInfoFormat.channelLabel(0))
         assertEquals("16 ch", MediaInfoFormat.channelLabel(16))
     }
+
+    // ── mediaQualityLabel (compact pill label, shared by remote + offline) ──
+
+    @Test
+    fun `mediaQualityLabel null video is Auto SDR`() {
+        assertEquals("Auto SDR", mediaQualityLabel(null))
+    }
+
+    @Test
+    fun `mediaQualityLabel buckets height into 4K HD SD`() {
+        assertEquals("4K SDR", mediaQualityLabel(video(height = 2160)))
+        assertEquals("4K SDR", mediaQualityLabel(video(height = 4320)))
+        assertEquals("HD SDR", mediaQualityLabel(video(height = 1080)))
+        assertEquals("HD SDR", mediaQualityLabel(video(height = 720)))
+        assertEquals("SD SDR", mediaQualityLabel(video(height = 480)))
+    }
+
+    @Test
+    fun `mediaQualityLabel appends uppercased range with DoVi precedence`() {
+        assertEquals("4K DOLBY VISION", mediaQualityLabel(video(height = 2160, doVi = "Dolby Vision")))
+        assertEquals("HD HDR", mediaQualityLabel(video(height = 1080, rangeType = "hdr")))
+        assertEquals("HD SDR", mediaQualityLabel(video(height = 1080, range = "sdr")))
+    }
+
+    // ── mediaAudioLabel (compact pill label, shared by remote + offline) ──
+
+    @Test
+    fun `mediaAudioLabel null audio is AUTO`() {
+        assertEquals("AUTO", mediaAudioLabel(null, "%d ch"))
+    }
+
+    @Test
+    fun `mediaAudioLabel prepends uppercased language and channel layout`() {
+        assertEquals("ENG - 5.1", mediaAudioLabel(audio(lang = "eng", channels = 6), "%d ch"))
+        assertEquals("ENG - MONO", mediaAudioLabel(audio(lang = "eng", channels = 1), "%d ch"))
+        assertEquals("ENG - STEREO", mediaAudioLabel(audio(lang = "eng", channels = 2), "%d ch"))
+        assertEquals("ENG - 7.1", mediaAudioLabel(audio(lang = "eng", channels = 8), "%d ch"))
+    }
+
+    @Test
+    fun `mediaAudioLabel falls back to format string for uncommon channel counts`() {
+        assertEquals("FRA - 4 ch", mediaAudioLabel(audio(lang = "fra", channels = 4), "%d ch"))
+    }
+
+    private fun video(
+        height: Int? = 1080,
+        range: String? = null,
+        rangeType: String? = null,
+        doVi: String? = null,
+    ) = MediaStream(
+        index = 0,
+        type = StreamType.VIDEO,
+        height = height,
+        videoRange = range,
+        videoRangeType = rangeType,
+        videoDoViTitle = doVi,
+    )
+
+    private fun audio(lang: String? = null, channels: Int? = null) = MediaStream(
+        index = 1,
+        type = StreamType.AUDIO,
+        language = lang,
+        channels = channels,
+    )
 }

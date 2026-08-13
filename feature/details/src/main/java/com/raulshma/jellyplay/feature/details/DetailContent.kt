@@ -130,11 +130,19 @@ internal fun DetailContent(
         isDownloading = state.isDownloading,
         isDownloadingSeries = state.isDownloadingSeries,
         canManageSeries = state.canManageSeries,
+        canDeleteDownloadedSeries = state.origin?.isLocal == true &&
+            isSeries &&
+            (state.detailContext?.seriesAggregate?.downloadedEpisodeCount ?: 0) > 0,
+        canEditMetadata = state.capabilities.remoteDiscovery,
+        canAddToPlaylist = state.capabilities.remoteDiscovery,
+        isOffline = state.origin?.isLocal == true,
         onClose = { /* menus close themselves */ },
         onEditClick = callbacks.onEditClick,
         onShare = shareMedia,
         onDownload = { showDownloadDialog = true },
         onDownloadSeries = callbacks.onDownloadSeriesClick,
+        onDeleteDownload = callbacks.onDeleteDownload,
+        onDeleteDownloadedSeries = callbacks.onDeleteDownloadedEpisodes,
         onHideFromNextUp = callbacks.onHideFromNextUp,
         onShowFromNextUp = callbacks.onShowFromNextUp,
         onHideFromContinueWatching = callbacks.onHideFromContinueWatching,
@@ -194,6 +202,7 @@ internal fun DetailContent(
             preferences = state.preferences,
             scrollState = scrollState,
             isExpanded = isExpanded,
+            localBackdropPath = state.assets.backdropPath,
         )
 
         // Pull-to-refresh lets the user force a fresh fetch (invalidating the

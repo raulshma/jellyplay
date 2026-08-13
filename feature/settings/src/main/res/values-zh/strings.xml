@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">简报</string>
     <string name="settings_advanced_badge">高级</string>
     <string name="settings_no_matches">未找到匹配的设置</string>
+    <string name="settings_search_hint">输入以搜索设置</string>
+    <string name="settings_recents_title">最近</string>
+    <string name="settings_clear_recents">清除</string>
     <string name="settings_signed_in_as_label">已登录账号</string>
     <string name="settings_account">账号</string>
     <string name="settings_signed_in_as_name">已登录为 %1$s</string>
@@ -706,8 +709,6 @@
     <string name="settings_exp_press_hold_preview">长按预览</string>
     <string name="settings_exp_press_hold_preview_subtitle">长按媒体卡片以窥视模糊的详情预览；松开以关闭</string>
     <string name="settings_exp_arr_integration_subtitle">从你的 Radarr/Sonarr 在请求中显示下载队列进度，并在主页显示即将到来的日历。服务器详情从 Seerr 自动发现；在 *arr 设置中手动覆盖</string>
-    <string name="settings_exp_expressive_nav">Material 3 Expressive 表现力导航</string>
-    <string name="settings_exp_expressive_nav_subtitle">Google 相册新版设计风格悬浮导航胶囊及独立搜索按钮。</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">字幕字体大小</string>
@@ -1158,17 +1159,12 @@
     <string name="settings_subtitles_wyzie">Wyzie Subs</string>
     <string name="settings_subtitles_wyzie_help">免费字幕 API（每天 1,000 次请求）。在 store.wyzie.io/redeem 获取密钥。</string>
     <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
-    <string name="settings_subtitles_opensubtitles_help">需要 API key。可选的用户名/密码可提高每日下载配额。</string>
+    <string name="settings_subtitles_opensubtitles_help">使用你的 opensubtitles.com 账户登录。VIP 会员可提高每日下载配额，免费账户也有一定的下载次数。</string>
     <string name="settings_subtitles_api_key">API key</string>
-    <string name="settings_subtitles_username_optional">用户名（可选）</string>
-    <string name="settings_subtitles_password_optional">密码（可选）</string>
+    <string name="settings_subtitles_username">用户名（可选）</string>
+    <string name="settings_subtitles_password">密码（可选）</string>
     <string name="settings_subtitles_save">保存</string>
     <string name="settings_subtitles_test">测试</string>
     <string name="settings_subtitles_testing">测试中…</string>
     <string name="settings_subtitles_connected">已连接</string>
-    <string name="settings_nav_style">导航样式</string>
-    <string name="settings_nav_style_expressive">Expressive 表现力 (M3)</string>
-    <string name="settings_nav_style_classic">经典</string>
-    <string name="settings_nav_style_expressive_subtitle">Google 相册风格悬浮胶囊 + 独立搜索按钮</string>
-    <string name="settings_nav_style_classic_subtitle">传统悬浮底部导航栏</string>
 </resources>

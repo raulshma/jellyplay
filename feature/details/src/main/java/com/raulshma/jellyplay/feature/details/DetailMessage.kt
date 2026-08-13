@@ -14,6 +14,12 @@ import androidx.compose.runtime.Immutable
  * - [Text] is a fully-resolved string (caller already did resource lookup).
  * - [SeriesDownload] keeps the raw count/error so the screen can resolve the
  *   plural `detail_episodes_queued` resource, which only the UI layer can do.
+ *
+ * The former `OpenOffline` navigation request has been removed: the
+ * [com.raulshma.jellyplay.core.data.repository.MediaDetailProvider] now performs
+ * the remote/local fallback in place (origin `LOCAL_REMOTE_FAILURE`) instead of
+ * redirecting to a separate offline screen, so a load failure no longer carries
+ * a navigation side effect.
  */
 @Immutable
 sealed interface DetailMessage {

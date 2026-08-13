@@ -38,7 +38,7 @@ class SubtitleProviderRepositoryImplTest {
     private val openSubtitles = stubProvider(SubtitleProviderKind.OPENSUBTITLES)
 
     private val wyzieCreds = SubtitleProviderCredentials.Wyzie(apiKey = "k")
-    private val osCreds = SubtitleProviderCredentials.OpenSubtitles(apiKey = "k")
+    private val osCreds = SubtitleProviderCredentials.OpenSubtitles(username = "u", password = "p")
 
     private val query = SubtitleQuery(imdbId = "tt1", languages = listOf("eng"))
 

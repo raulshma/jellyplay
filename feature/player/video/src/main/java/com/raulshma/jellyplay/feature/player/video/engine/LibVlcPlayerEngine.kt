@@ -520,7 +520,7 @@ class LibVlcPlayerEngine(
         }
     }
 
-    override fun applySubtitleStyleToView(view: View, style: SubtitleStyle) {
+    override fun applySubtitleStyle(style: SubtitleStyle) {
         if (currentConfig.subtitleStyle != style) {
             currentConfig = currentConfig.copy(subtitleStyle = style)
             reloadMediaForSubtitleStyleChange()
@@ -702,22 +702,16 @@ class LibVlcPlayerEngine(
         addOption(LibVlcSubtitleStyleMapping.subMarginPixels(style, screenHeight))
     }
 
-    override fun setAspectRatio(mode: Int, ratio: Float?) {
+    override fun setAspectRatio(ratio: AspectRatio) {
         try {
             val mp = mediaPlayer ?: return
+            val aspectValue = ratio.ratio
             when {
-                mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL -> {
-                    mp.aspectRatio = null
-                    mp.scale = 0f
-                }
-                mode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> {
-                    mp.aspectRatio = null
-                    mp.scale = 0f
-                }
-                ratio != null && ratio > 0f -> {
-                    mp.aspectRatio = ratio.toString()
+                aspectValue != null && aspectValue > 0f -> {
+                    mp.aspectRatio = aspectValue.toString()
                 }
                 else -> {
+                    // FIT / FILL / CROP / AUTO — let libVLC keep the native frame.
                     mp.aspectRatio = null
                     mp.scale = 0f
                 }
@@ -726,17 +720,6 @@ class LibVlcPlayerEngine(
     }
 
     val vlcMediaPlayer: MediaPlayer? get() = mediaPlayer
-
-    override fun setRenderer(renderer: Any?) {
-        try {
-            val item = renderer as? RendererItem
-            mediaPlayer?.setRenderer(item)
-            hasRenderer = item != null
-            pendingRendererItem = item
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to set renderer", e)
-        }
-    }
 
     override val currentPositionMs: Long
         get() = try { mediaPlayer?.time ?: 0L } catch (_: Exception) { 0L }

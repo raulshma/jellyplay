@@ -43,6 +43,13 @@ class ExoLiveEngine(
     context: Context,
     private val config: LiveEngineConfig,
     streamingClient: OkHttpClient,
+    /**
+     * Invoked from [PlayerListener] when a direct-stream error should trigger a
+     * transcode re-resolve. Installed at construction (via [LiveEngineFactory])
+     * rather than exposed as a mutable property, so the engine never observes a
+     * half-wired callback and the seam only flows one way.
+     */
+    private val onTranscodeFallbackNeeded: () -> Unit,
 ) : LivePlayerEngine {
 
     private val appContext = context.applicationContext
@@ -67,8 +74,6 @@ class ExoLiveEngine(
 
     private val _isAtLiveEdge = MutableStateFlow(true)
     override val isAtLiveEdge: StateFlow<Boolean> = _isAtLiveEdge.asStateFlow()
-
-    override var onTranscodeFallbackNeeded: (() -> Unit)? = null
 
     private var currentMethod: LivePlayMethod = LivePlayMethod.DIRECT_STREAM
 
@@ -227,7 +232,7 @@ class ExoLiveEngine(
                 // also fails, it surfaces the error itself.
                 errorPhase = ErrorPhase.FALLING_BACK
                 _state.value = LiveEngineState.BUFFERING
-                onTranscodeFallbackNeeded?.invoke()
+                onTranscodeFallbackNeeded.invoke()
             } else {
                 // No fallback available (already on transcode, or already
                 // retried) — surface the error and stop. Latch so the

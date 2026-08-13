@@ -33,6 +33,9 @@
     <string name="core_action_mark_unwatched">标记为未看</string>
     <string name="core_action_download">下载</string>
     <string name="core_action_add_to_playlist">添加到播放列表</string>
+    <string name="core_action_favorite">添加到收藏</string>
+    <string name="core_action_unfavorite">从收藏中移除</string>
+    <string name="core_action_delete">删除下载</string>
     <string name="core_action_details">查看详情</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer

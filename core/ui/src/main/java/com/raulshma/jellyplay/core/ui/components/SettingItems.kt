@@ -45,6 +45,8 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ChevronRight
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
+import com.raulshma.jellyplay.core.designsystem.theme.groupedItemContainerColor
+import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
 import com.raulshma.jellyplay.core.ui.animation.pressScaleValue
 import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
@@ -270,7 +272,7 @@ private fun SettingListItemImpl(
             )
         },
         colors = ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            containerColor = groupedItemContainerColor(),
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -281,6 +283,7 @@ private fun SettingListItemImpl(
                 this.alpha = pressAlpha
             }
             .highlightGlow(glowAlpha, shape, primaryColor)
+            .lightModeHairlineBorder(shape)
             .focusRequester(focusRequester)
             .bringIntoViewRequester(bringIntoViewRequester)
             .then(tvFocusState.focusModifier)
@@ -425,7 +428,7 @@ private fun SettingToggleItemImpl(
             )
         },
         colors = ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            containerColor = groupedItemContainerColor(),
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -436,6 +439,7 @@ private fun SettingToggleItemImpl(
                 this.alpha = pressAlpha
             }
             .highlightGlow(glowAlpha, shape, primaryColor)
+            .lightModeHairlineBorder(shape)
             .focusRequester(focusRequester)
             .bringIntoViewRequester(bringIntoViewRequester)
             .then(tvFocusState.focusModifier)

@@ -29,6 +29,9 @@
     <string name="settings_newsletter_cd">ニュースレター</string>
     <string name="settings_advanced_badge">詳細</string>
     <string name="settings_no_matches">一致する設定が見つかりません</string>
+    <string name="settings_search_hint">入力して設定を検索</string>
+    <string name="settings_recents_title">最近</string>
+    <string name="settings_clear_recents">クリア</string>
     <string name="settings_signed_in_as_label">サインイン中</string>
     <string name="settings_account">アカウント</string>
     <string name="settings_signed_in_as_name">%1$s としてサインイン中</string>
@@ -704,8 +707,6 @@
     <string name="settings_exp_press_hold_preview">長押しプレビュー</string>
     <string name="settings_exp_press_hold_preview_subtitle">メディアカードを長押ししてぼかした詳細プレビューを表示、離して閉じる</string>
     <string name="settings_exp_arr_integration_subtitle">Radarr/Sonarr からリクエストのダウンロードキュー進行とホームの近日カレンダーを表示。サーバー詳細は Seerr から自動検出、*arr 設定で手動上書き</string>
-    <string name="settings_exp_expressive_nav">Material 3 エクスプレッシブナビゲーション</string>
-    <string name="settings_exp_expressive_nav_subtitle">Google フォトの新デザイン風フローティングナビゲーションカプセルと独立した検索ボタン。</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">字幕のフォントサイズ</string>
@@ -1156,17 +1157,12 @@
     <string name="settings_subtitles_wyzie">Wyzie Subs</string>
     <string name="settings_subtitles_wyzie_help">無料の字幕API（1日1,000リクエスト）。store.wyzie.io/redeem でキーを取得。</string>
     <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
-    <string name="settings_subtitles_opensubtitles_help">API key が必要です。ユーザー名/パスワード（任意）で1日のダウンロード枠が増えます。</string>
+    <string name="settings_subtitles_opensubtitles_help">opensubtitles.com のアカウントでサインインしてください。VIP メンバーシップで1日のダウンロード枠が増加します。無料アカウントにも限定されたダウンロード枠があります。</string>
     <string name="settings_subtitles_api_key">API key</string>
-    <string name="settings_subtitles_username_optional">ユーザー名（任意）</string>
-    <string name="settings_subtitles_password_optional">パスワード（任意）</string>
+    <string name="settings_subtitles_username">ユーザー名（任意）</string>
+    <string name="settings_subtitles_password">パスワード（任意）</string>
     <string name="settings_subtitles_save">保存</string>
     <string name="settings_subtitles_test">テスト</string>
     <string name="settings_subtitles_testing">テスト中…</string>
     <string name="settings_subtitles_connected">接続済み</string>
-    <string name="settings_nav_style">ナビゲーションのスタイル</string>
-    <string name="settings_nav_style_expressive">エクスプレッシブ (M3)</string>
-    <string name="settings_nav_style_classic">クラシック</string>
-    <string name="settings_nav_style_expressive_subtitle">Google フォト風フローティングカプセル + 独立した検索ボタン</string>
-    <string name="settings_nav_style_classic_subtitle">従来のフローティングボトムナビゲーションバー</string>
 </resources>

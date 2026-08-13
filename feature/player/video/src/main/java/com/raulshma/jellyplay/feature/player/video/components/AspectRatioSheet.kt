@@ -43,18 +43,8 @@ import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.AspectRatio
-import com.composables.icons.tabler.outline.Check
-
-enum class AspectRatio(val displayName: String, val ratio: Float?) {
-    AUTO("Auto", null),
-    FIT("Fit", null),
-    FILL("Fill", null),
-    RATIO_16_9("16:9", 16f / 9f),
-    RATIO_4_3("4:3", 4f / 3f),
-    RATIO_21_9("21:9", 21f / 9f),
-    CROP("Crop", null),
-}
+import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
+import com.composables.icons.tabler.outline.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -19,6 +19,8 @@
     <string name="sync_event_stop">已停止</string>
     <string name="sync_event_played">已标记为已播放</string>
     <string name="sync_event_unplayed">已标记为未播放</string>
+    <string name="sync_event_favorite">已添加收藏</string>
+    <string name="sync_event_unfavorite">已取消收藏</string>
 
     <!-- Title shown for a pending row whose media could not be resolved. -->
     <string name="sync_unknown_title">未知项目</string>

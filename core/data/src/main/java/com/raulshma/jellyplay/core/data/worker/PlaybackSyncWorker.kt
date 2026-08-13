@@ -6,11 +6,11 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
-import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.async
@@ -29,8 +29,10 @@ import kotlinx.coroutines.sync.withPermit
  *     [PlaybackSyncReconnectListener]).
  *   - Periodically (backstop) via [PlaybackSyncScheduler].
  *
- * The drain replays outbox entries directly through [JellyfinApiClient] rather
- * than the repository, so a retry does not recurse back into the outbox.
+ * The drain replays outbox entries through [PlaybackRepository.replayOutboxEntry],
+ * a pure dispatch (no enqueue) so a retry does not recurse back into the outbox;
+ * the worker owns the drain loop (delete on success, retry/dead-letter on
+ * failure, reconcile), the repository owns the entry-type → API-call mapping.
  *
  * Latest-wins reconciliation: for each item that has a downloaded offline row,
  * the server's `MediaItem` is fetched and compared. If the server's
@@ -44,9 +46,10 @@ class PlaybackSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val outbox: PlaybackOutboxRepository,
-    private val apiClient: JellyfinApiClient,
+    private val playbackRepository: PlaybackRepository,
     private val offlineModeManager: OfflineModeManager,
     private val playedStateSync: PlayedStateSync,
+    private val offlineRepository: OfflineRepository,
     private val userDataSyncScheduler: UserDataSyncScheduler,
 ) : CoroutineWorker(context, params) {
 
@@ -59,15 +62,30 @@ class PlaybackSyncWorker @AssistedInject constructor(
             return Result.success()
         }
         val pending = outbox.drain()
-        if (pending.isEmpty()) return Result.success()
+
+        // Downloaded items whose played/resume state may have drifted
+        // server-side (watched or resumed on the web / another device). These
+        // are reconciled even when the outbox is empty so a server-side change
+        // propagates to the offline store without this device recording any
+        // playback of its own — closes the "fixed online, not reflected
+        // offline" gap. Best-effort lookup: a DB read failure degrades to an
+        // outbox-only run.
+        val downloadedIds = runCatching { offlineRepository.getDownloadedItemIds() }
+            .getOrElse { emptyList() }
+
+        if (pending.isEmpty() && downloadedIds.isEmpty()) return Result.success()
 
         // Promote to a foreground service while the drain runs so the user sees
         // a "Syncing watch progress" notification and the OS does not throttle
-        // a burst of reconnect-driven drains. Best-effort: some device OEMs
-        // restrict foreground promotion; fall back to plain background if it
-        // throws.
-        runCatching {
-            setForeground(PlaybackSyncNotificationHelper.createForegroundInfo(applicationContext, pending.size))
+        // a burst of reconnect-driven drains. Only posted when there is outbox
+        // work to push (the notification reports the outbox count); a
+        // reconcile-only run with an empty outbox stays a silent background
+        // freshness check. Best-effort: some device OEMs restrict foreground
+        // promotion; fall back to plain background if it throws.
+        if (pending.isNotEmpty()) {
+            runCatching {
+                setForeground(PlaybackSyncNotificationHelper.createForegroundInfo(applicationContext, pending.size))
+            }
         }
 
         // On the final attempt the drain must converge: a persistently
@@ -79,39 +97,41 @@ class PlaybackSyncWorker @AssistedInject constructor(
         // discarding the row lost both the audit trail and any chance of repair.
         //
         // Note on atomicity: each entry's "replay + delete" cannot be wrapped
-        // in a single Room transaction because replay() is a network call and
+        // in a single Room transaction because replayOutboxEntry() is a network call and
         // holding the SQLite lock across network I/O is an anti-pattern (and
         // blocks every other DB client). The residual risk is re-delivery if
-        // the process is killed between a successful replay() and the delete():
+        // the process is killed between a successful replayOutboxEntry() and the delete():
         // the Jellyfin playback-report endpoints are keyed by sessionId/itemId
         // and treat a later report as latest-wins, so a duplicate is idempotent
         // in effect. The dead-letter flag closes the data-loss half of the bug.
         val exhausted = runAttemptCount >= MAX_RETRIES
         val reconciledItems = mutableSetOf<String>()
         var anyFailure = false
-        var remaining = pending.size
-        for (entry in pending) {
-            val ok = runCatching { replay(entry) }.getOrElse { false }
-            if (ok) {
-                outbox.delete(entry.id)
-                reconciledItems.add(entry.itemId)
-            } else if (exhausted) {
-                Log.w(
-                    TAG,
-                    "Dead-lettering outbox entry ${entry.id} " +
-                        "(item=${entry.itemId}, type=${entry.eventType}) " +
-                        "after $MAX_RETRIES attempts",
-                )
-                outbox.markDeadLetter(entry.id)
-            } else {
-                anyFailure = true
-            }
-            remaining--
-            // Update the notification mid-drain so the count ticks down. Only
-            // worth a notify() call on meaningful batches to avoid spam.
-            if (pending.size > 1 && remaining > 0) {
-                runCatching {
-                    PlaybackSyncNotificationHelper.updateNotification(applicationContext, remaining)
+        if (pending.isNotEmpty()) {
+            var remaining = pending.size
+            for (entry in pending) {
+                val ok = runCatching { playbackRepository.replayOutboxEntry(entry) }.getOrElse { false }
+                if (ok) {
+                    outbox.delete(entry.id)
+                    reconciledItems.add(entry.itemId)
+                } else if (exhausted) {
+                    Log.w(
+                        TAG,
+                        "Dead-lettering outbox entry ${entry.id} " +
+                            "(item=${entry.itemId}, type=${entry.eventType}) " +
+                            "after $MAX_RETRIES attempts",
+                    )
+                    outbox.markDeadLetter(entry.id)
+                } else {
+                    anyFailure = true
+                }
+                remaining--
+                // Update the notification mid-drain so the count ticks down. Only
+                // worth a notify() call on meaningful batches to avoid spam.
+                if (pending.size > 1 && remaining > 0) {
+                    runCatching {
+                        PlaybackSyncNotificationHelper.updateNotification(applicationContext, remaining)
+                    }
                 }
             }
         }
@@ -125,33 +145,45 @@ class PlaybackSyncWorker @AssistedInject constructor(
         // periodic backstop (the next drain reconciles them once they surface
         // again). Each reconciliation is independent and wrapped in runCatching
         // so a single failure cannot abort the batch.
-        val itemsToReconcile = reconciledItems.toList().take(MAX_RECONCILE_BATCH)
-        if (itemsToReconcile.isNotEmpty()) {
-            coroutineScope {
+        //
+        // The batch is the union of just-pushed outbox items and a bounded set
+        // of other downloaded items (server-side drift). Deduped so an item
+        // that was both pushed and downloaded is fetched once.
+        val itemsToReconcile = (reconciledItems + downloadedIds)
+            .distinct()
+            .take(MAX_RECONCILE_BATCH)
+        val reconcileChanged = if (itemsToReconcile.isNotEmpty()) {
+            val results = coroutineScope {
                 val gate = Semaphore(MAX_CONCURRENT_RECONCILES)
                 itemsToReconcile.map { itemId ->
                     async {
                         gate.withPermit {
-                            runCatching { playedStateSync.reconcileOfflineRow(itemId) }
+                            runCatching { playedStateSync.reconcileOfflineRow(itemId) }.getOrNull()
                         }
                     }
                 }.awaitAll()
             }
+            results.any { it != null && it != PlayedStateSync.ComputeResult.NOOP }
+        } else {
+            false
         }
 
         // Drain done — dismiss the progress notification regardless of outcome.
         // On retry/failure WorkManager re-runs the worker, which will repost.
-        runCatching { PlaybackSyncNotificationHelper.dismissNotification(applicationContext) }
+        if (pending.isNotEmpty()) {
+            runCatching { PlaybackSyncNotificationHelper.dismissNotification(applicationContext) }
+        }
 
-        // If anything was pushed up, the online UI caches (Continue Watching,
-        // Next Up, detail) are now stale. Trigger an immediate user-data
-        // refresh so the user sees fresh played/progress state on the online
-        // home + detail screens instead of waiting for the 60s/2min cache TTLs
-        // or the UserDataSyncScheduler periodic tick (12h). KEEP policy
-        // collapses rapid reconnects. (This worker's own outbox-drain backstop
-        // in PlaybackSyncScheduler is 4h with a 30m flex — distinct from the
+        // If anything was pushed up OR a downloaded row actually changed during
+        // reconcile, the online UI caches (Continue Watching, Next Up, detail)
+        // are now stale. Trigger an immediate user-data refresh so the user
+        // sees fresh played/progress state on the online home + detail screens
+        // instead of waiting for the 60s/2min cache TTLs or the
+        // UserDataSyncScheduler periodic tick (12h). KEEP policy collapses rapid
+        // reconnects. (This worker's own outbox-drain backstop in
+        // PlaybackSyncScheduler is 4h with a 30m flex — distinct from the
         // user-data cadence referenced here.)
-        if (reconciledItems.isNotEmpty()) {
+        if (reconciledItems.isNotEmpty() || reconcileChanged) {
             runCatching { userDataSyncScheduler.enqueueNow() }
         }
 
@@ -161,34 +193,6 @@ class PlaybackSyncWorker @AssistedInject constructor(
         // guaranteeing the outbox count reaches 0.
         return if (anyFailure) Result.retry() else Result.success()
     }
-
-    private suspend fun replay(entry: PlaybackOutboxEntry): Boolean =
-        when (entry.eventType) {
-            PlaybackOutboxEventType.START ->
-                apiClient.reportPlaybackStart(
-                    entry.itemId,
-                    entry.sessionId,
-                    entry.playMethod,
-                ).isSuccess
-            PlaybackOutboxEventType.PROGRESS ->
-                apiClient.reportPlaybackProgress(
-                    entry.itemId,
-                    entry.sessionId,
-                    entry.positionTicks,
-                    entry.isPaused,
-                    entry.playMethod,
-                ).isSuccess
-            PlaybackOutboxEventType.STOP ->
-                apiClient.reportPlaybackStopped(
-                    entry.itemId,
-                    entry.sessionId,
-                    entry.positionTicks,
-                ).isSuccess
-            PlaybackOutboxEventType.PLAYED ->
-                apiClient.markPlayed(entry.itemId).isSuccess
-            PlaybackOutboxEventType.UNPLAYED ->
-                apiClient.markUnplayed(entry.itemId).isSuccess
-        }
 
     companion object {
         const val UNIQUE_PERIODIC_NAME = "com.raulshma.jellyplay.work.playback_sync_periodic"

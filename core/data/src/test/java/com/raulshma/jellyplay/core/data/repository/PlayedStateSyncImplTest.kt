@@ -103,6 +103,48 @@ class PlayedStateSyncImplTest {
         coVerify(exactly = 1) { playbackOutboxRepository.enqueuePlayedState("item-1", isPlayed = true) }
     }
 
+    // ── toggleFavorite: favorite fan-out (mirrors flip) ───────────────
+
+    @Test
+    fun `toggleFavorite offline reads local state, flips, applies and enqueues`() = runTest {
+        every { offlineModeManager.isOffline } returns true
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isFavorite = false)
+
+        val result = sync.toggleFavorite("item-1")
+
+        assertEquals(Result.success(true), result)
+        coVerify(exactly = 1) { offlineRepository.applyFavoriteState("item-1", isFavorite = true) }
+        coVerify(exactly = 1) { playbackOutboxRepository.enqueueFavoriteState("item-1", isFavorite = true) }
+        // Offline path must NOT hit the API.
+        coVerify(exactly = 0) { apiClient.toggleFavorite(any(), any()) }
+    }
+
+    @Test
+    fun `toggleFavorite online success mirrors the resolved target into the offline store`() = runTest {
+        every { offlineModeManager.isOffline } returns false
+        coEvery { apiClient.toggleFavorite("item-1", any()) } returns Result.success(true)
+
+        val result = sync.toggleFavorite("item-1")
+
+        assertEquals(Result.success(true), result)
+        coVerify(exactly = 1) { offlineRepository.applyFavoriteState("item-1", isFavorite = true) }
+        coVerify(exactly = 0) { playbackOutboxRepository.enqueueFavoriteState(any(), any()) }
+    }
+
+    @Test
+    fun `toggleFavorite online failure applies locally and enqueues the flipped target`() = runTest {
+        every { offlineModeManager.isOffline } returns false
+        coEvery { apiClient.toggleFavorite("item-1", any()) } returns Result.failure(RuntimeException("500"))
+        coEvery { offlineRepository.getOfflineItem("item-1") } returns offlineItem(isFavorite = true)
+
+        val result = sync.toggleFavorite("item-1")
+
+        // Local was favorite → flipped to unfavorite; intent preserved.
+        assertEquals(Result.success(false), result)
+        coVerify(exactly = 1) { offlineRepository.applyFavoriteState("item-1", isFavorite = false) }
+        coVerify(exactly = 1) { playbackOutboxRepository.enqueueFavoriteState("item-1", isFavorite = false) }
+    }
+
     // ── reconcile: latest-wins merge ───────────────────────────────────
 
     @Test
@@ -244,9 +286,10 @@ class PlayedStateSyncImplTest {
     // ── Helpers ────────────────────────────────────────────────────────
 
     private fun offlineItem(
-        isPlayed: Boolean,
+        isPlayed: Boolean = false,
         lastPlayedDate: String? = null,
         runTimeTicks: Long? = null,
+        isFavorite: Boolean = false,
     ) = OfflineMediaItem(
         id = "item-1",
         name = "Test",
@@ -254,6 +297,7 @@ class PlayedStateSyncImplTest {
         isPlayed = isPlayed,
         lastPlayedDate = lastPlayedDate,
         runTimeTicks = runTimeTicks,
+        isFavorite = isFavorite,
     )
 
     private fun mediaItem(

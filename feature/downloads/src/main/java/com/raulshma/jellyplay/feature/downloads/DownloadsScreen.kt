@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -45,6 +44,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TriStateCheckbox
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.episodeContextLine
@@ -114,8 +115,8 @@ fun DownloadsScreen(
     val resyncProgress by viewModel.resyncProgress.collectAsStateWithLifecycle()
 
     // Pending delete confirmation. Deleting a completed download removes the
-    // file from disk, so we confirm first — matching OfflineDetailScreen and
-    // OfflineSeriesScreen within the same module.
+    // file from disk, so we confirm first — matching the unified
+    // MediaDetailScreen delete confirmations.
     var pendingDelete by remember { mutableStateOf<DownloadItem?>(null) }
     var pendingBulkDelete by remember { mutableStateOf(false) }
     var showResyncSheet by remember { mutableStateOf(false) }
@@ -376,53 +377,31 @@ fun DownloadsScreen(
     }
 
     pendingDelete?.let { item ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text(stringResource(R.string.downloads_delete_download_title)) },
-            text = {
-                Text(stringResource(R.string.downloads_delete_download_message, item.name, viewModel.formatBytes(item.totalSizeBytes)))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pendingDelete = null
-                        viewModel.deleteDownload(item)
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text(stringResource(R.string.downloads_delete)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.downloads_cancel)) }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.downloads_delete_download_title),
+            message = stringResource(R.string.downloads_delete_download_message, item.name, viewModel.formatBytes(item.totalSizeBytes)),
+            confirmText = stringResource(R.string.downloads_delete),
+            dismissText = stringResource(R.string.downloads_cancel),
+            icon = Tabler.Outline.Trash,
+            tone = ConfirmTone.DESTRUCTIVE,
+            onConfirm = { viewModel.deleteDownload(item) },
+            onDismiss = { pendingDelete = null },
         )
     }
 
     if (pendingBulkDelete) {
         val count = selectedIds.size
         val freedBytes = selectedItems.sumOf { it.totalSizeBytes }
-        AlertDialog(
-            onDismissRequest = { pendingBulkDelete = false },
-            icon = { Icon(Tabler.Outline.Trash, contentDescription = null) },
-            title = { Text(stringResource(R.string.downloads_delete_downloads_title)) },
-            text = {
-                Text(
-                    pluralStringResource(R.plurals.downloads_delete_downloads_message, count, count) +
-                        if (freedBytes > 0) stringResource(R.string.downloads_frees_up_sentence, viewModel.formatBytes(freedBytes)) else "",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pendingBulkDelete = false
-                        viewModel.deleteSelected()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text(stringResource(R.string.downloads_delete)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingBulkDelete = false }) { Text(stringResource(R.string.downloads_cancel)) }
-            },
+        ConfirmDialog(
+            title = stringResource(R.string.downloads_delete_downloads_title),
+            message = pluralStringResource(R.plurals.downloads_delete_downloads_message, count, count) +
+                if (freedBytes > 0) stringResource(R.string.downloads_frees_up_sentence, viewModel.formatBytes(freedBytes)) else "",
+            confirmText = stringResource(R.string.downloads_delete),
+            dismissText = stringResource(R.string.downloads_cancel),
+            icon = Tabler.Outline.Trash,
+            tone = ConfirmTone.DESTRUCTIVE,
+            onConfirm = { viewModel.deleteSelected() },
+            onDismiss = { pendingBulkDelete = false },
         )
     }
 
@@ -573,7 +552,8 @@ private fun DownloadItemRow(
                 )
                 // For series episodes, surface the parent series and an SXXEXX
                 // tag below the episode title so rows are identifiable in a flat
-                // download list (mirrors the context line on OfflineDetailScreen).
+                // download list (mirrors the context line on the unified
+                // MediaDetailScreen).
                 // The SxxExx + " · " + series shape is shared with the resync
                 // sheets via [episodeContextLine] so a format change is one place.
                 episodeContextLine(
@@ -1095,8 +1075,9 @@ private fun ResyncSheetRow(
  * regular resync sheet's progress granularity.
  *
  * Entry is via the resync sheet's header action, so the resync icon remains the
- * single freshness hub. Mirrors [DeleteSeriesSheet]'s multi-select pattern
- * (tri-state select-all header + per-item checkboxes) for consistency.
+ * single freshness hub. Mirrors the unified detail tree's
+ * `DeleteDownloadedEpisodesSheet` multi-select pattern (tri-state select-all
+ * header + per-item checkboxes) for consistency.
  *
  * Three phases, derived from live [progress] + the local [started] latch:
  *  - **picker** (default): editable items + data checkboxes;
@@ -1127,6 +1108,9 @@ private fun ForceResyncSheet(
     var syncMetadata by remember { androidx.compose.runtime.mutableStateOf(true) }
     var syncPoster by remember { androidx.compose.runtime.mutableStateOf(true) }
     var syncBackdrop by remember { androidx.compose.runtime.mutableStateOf(true) }
+    var syncSubtitles by remember { androidx.compose.runtime.mutableStateOf(true) }
+    var syncTrickplay by remember { androidx.compose.runtime.mutableStateOf(true) }
+    var syncSegments by remember { androidx.compose.runtime.mutableStateOf(true) }
     // Latch: sticky once a sync has been kicked off (or is still running from a
     // prior mid-batch dismiss). Derived purely from live progress so an
     // orphaned background batch latches this sheet straight into the running/
@@ -1279,8 +1263,31 @@ private fun ForceResyncSheet(
                             checked = syncBackdrop,
                             onToggle = { syncBackdrop = !syncBackdrop },
                         )
+                        ForceResyncDataRow(
+                            label = stringResource(R.string.downloads_force_resync_data_subtitles),
+                            description = stringResource(R.string.downloads_force_resync_data_subtitles_desc),
+                            checked = syncSubtitles,
+                            onToggle = { syncSubtitles = !syncSubtitles },
+                        )
+                        ForceResyncDataRow(
+                            label = stringResource(R.string.downloads_force_resync_data_trickplay),
+                            description = stringResource(R.string.downloads_force_resync_data_trickplay_desc),
+                            checked = syncTrickplay,
+                            onToggle = { syncTrickplay = !syncTrickplay },
+                        )
+                        ForceResyncDataRow(
+                            label = stringResource(R.string.downloads_force_resync_data_segments),
+                            description = stringResource(R.string.downloads_force_resync_data_segments_desc),
+                            checked = syncSegments,
+                            onToggle = { syncSegments = !syncSegments },
+                        )
                         val options = com.raulshma.jellyplay.core.model.ResyncOptions(
-                            metadata = syncMetadata, poster = syncPoster, backdrop = syncBackdrop,
+                            metadata = syncMetadata,
+                            poster = syncPoster,
+                            backdrop = syncBackdrop,
+                            subtitles = syncSubtitles,
+                            trickplay = syncTrickplay,
+                            segments = syncSegments,
                         )
                         if (options.isEmpty) {
                             Text(
@@ -1299,7 +1306,12 @@ private fun ForceResyncSheet(
             // In the picker phase the primary Sync action sits beside it so the
             // two terminal controls share a row.
             val options = com.raulshma.jellyplay.core.model.ResyncOptions(
-                metadata = syncMetadata, poster = syncPoster, backdrop = syncBackdrop,
+                metadata = syncMetadata,
+                poster = syncPoster,
+                backdrop = syncBackdrop,
+                subtitles = syncSubtitles,
+                trickplay = syncTrickplay,
+                segments = syncSegments,
             )
             val canSync = !showRunning && !showDone && selectedIds.isNotEmpty() && !options.isEmpty
             Row(

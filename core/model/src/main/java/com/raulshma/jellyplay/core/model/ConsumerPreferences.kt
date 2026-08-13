@@ -171,7 +171,6 @@ data class MainPreferences(
     val navItemOrder: List<String> = emptyList(),
     val hideBottomNavOnScroll: Boolean = true,
     val navBarShowLabels: Boolean = true,
-    val navigationStyle: NavigationStyle = NavigationStyle.CLASSIC,
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
     val onboardingCompleted: Boolean = false,
     val enabledExperimentalFeatures: Set<ExperimentalFeature> = emptySet(),

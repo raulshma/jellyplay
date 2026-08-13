@@ -887,25 +887,51 @@ class MediaRepositoryImpl @Inject constructor(
         apiClient.syncPlayMovePlaylistItem(playlistItemId, newIndex)
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> {
-        invalidateHomeSectionsCache()
-        invalidateUserDataCaches(itemId)
-        return apiClient.toggleFavorite(itemId)
+        // Fan-out (online API + best-effort offline mirror, or local apply +
+        // outbox staging when offline / online call failed) is owned by
+        // PlayedStateSync — the single home for the user-data write contract,
+        // shared with PlaybackSyncWorker's reconciliation (favorite included).
+        return withUserDataMutationCacheInvalidation(itemId) {
+            playedStateSync.toggleFavorite(itemId)
+        }
     }
 
     override suspend fun markPlayed(itemId: String): Result<Unit> {
-        invalidateHomeSectionsCache()
-        invalidateUserDataCaches(itemId)
         // Fan-out (online API + best-effort offline mirror, or local apply +
         // outbox staging when offline / online call failed) is owned by
         // PlayedStateSync — the single home for the played/resume-state write
         // contract, shared with PlaybackSyncWorker's reconciliation.
-        return playedStateSync.flip(itemId, played = true)
+        return withUserDataMutationCacheInvalidation(itemId) {
+            playedStateSync.flip(itemId, played = true)
+        }
     }
 
     override suspend fun markUnplayed(itemId: String): Result<Unit> {
+        return withUserDataMutationCacheInvalidation(itemId) {
+            playedStateSync.flip(itemId, played = false)
+        }
+    }
+
+    /**
+     * Evicts before and after a user-data write. The parent series id is
+     * captured before the first eviction because that eviction removes the
+     * cached detail needed to discover an episode's series.
+     */
+    private suspend fun <T> withUserDataMutationCacheInvalidation(
+        itemId: String,
+        mutation: suspend () -> Result<T>,
+    ): Result<T> {
+        val seriesId = cachedSeriesId(itemId)
         invalidateHomeSectionsCache()
-        invalidateUserDataCaches(itemId)
-        return playedStateSync.flip(itemId, played = false)
+        invalidateUserDataCaches(itemId, seriesId)
+        return try {
+            mutation()
+        } finally {
+            // The second eviction closes the race where a fetch started after
+            // the pre-write eviction observed the old server state.
+            invalidateHomeSectionsCache()
+            invalidateUserDataCaches(itemId, seriesId)
+        }
     }
 
     /**
@@ -916,6 +942,10 @@ class MediaRepositoryImpl @Inject constructor(
      * of serving the cached pre-mutation snapshot.
      */
     override fun invalidateUserDataCaches(itemId: String) {
+        invalidateUserDataCaches(itemId, seriesIdHint = null)
+    }
+
+    private fun invalidateUserDataCaches(itemId: String, seriesIdHint: String?) {
         val identity = currentIdentity()
         // Read the cached detail first to discover whether this item belongs
         // to a series (either is the series or is an episode of one) so we can
@@ -923,8 +953,22 @@ class MediaRepositoryImpl @Inject constructor(
         val cached = detailCache.get(identity, itemId)
         albumTracksCache.remove(identity, "tracks_$itemId")
         invalidateDetailCache(itemId)
-        val seriesId = cached?.item?.seriesId ?: cached?.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
+        // Home "Latest in X" rows carry per-item UserData (played/favorite) but
+        // are keyed by parent folder, not by itemId, so they can't be evicted
+        // selectively — drop the whole (small, LRU-bounded) cache the way the
+        // home-sections cache is dropped, so home/library rows reflect the write
+        // instead of serving stale badges until the TTL expires.
+        latestMediaCache.clear()
+        val seriesId = seriesIdHint
+            ?: cached?.item?.seriesId
+            ?: cached?.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
         if (seriesId != null) invalidateSeriesCache(seriesId)
+    }
+
+    private fun cachedSeriesId(itemId: String): String? {
+        val cached = detailCache.get(currentIdentity(), itemId) ?: return null
+        return cached.item.seriesId
+            ?: cached.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
     }
 
     override suspend fun getLiveTvChannels(

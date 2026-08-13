@@ -32,6 +32,9 @@
     <string name="settings_member_badge">Member</string>
     <string name="settings_connected_server">Connected to server</string>
     <string name="settings_no_matches">No matching settings found</string>
+    <string name="settings_search_hint">Type to search settings</string>
+    <string name="settings_recents_title">Recent</string>
+    <string name="settings_clear_recents">Clear</string>
     <string name="settings_signed_in_as_label">Signed in as</string>
     <string name="settings_account">Account</string>
     <string name="settings_signed_in_as_name">Signed in as %1$s</string>
@@ -106,10 +109,10 @@
     <string name="settings_subtitles_wyzie">Wyzie Subs</string>
     <string name="settings_subtitles_wyzie_help">Free subtitle API (1,000 requests/day). Get a key at store.wyzie.io/redeem.</string>
     <string name="settings_subtitles_opensubtitles">OpenSubtitles</string>
-    <string name="settings_subtitles_opensubtitles_help">API key required. Optional username/password unlocks a higher daily download quota.</string>
+    <string name="settings_subtitles_opensubtitles_help">Sign in with your opensubtitles.com account. A VIP membership raises the daily download quota; free accounts get a limited number of downloads too.</string>
     <string name="settings_subtitles_api_key">API key</string>
-    <string name="settings_subtitles_username_optional">Username (optional)</string>
-    <string name="settings_subtitles_password_optional">Password (optional)</string>
+    <string name="settings_subtitles_username">Username</string>
+    <string name="settings_subtitles_password">Password</string>
     <string name="settings_subtitles_save">Save</string>
     <string name="settings_subtitles_test">Test</string>
     <string name="settings_subtitles_testing">Testing…</string>
@@ -775,8 +778,6 @@
     <string name="settings_exp_press_hold_preview">Press-and-Hold Preview</string>
     <string name="settings_exp_press_hold_preview_subtitle">Long-press a media card to peek a blurred detail preview; release to dismiss</string>
     <string name="settings_exp_arr_integration_subtitle">Show download-queue progress on Requests and a coming-soon calendar on Home from your Radarr/Sonarr. Server details are auto-discovered from Seerr; manual override in *arr settings</string>
-    <string name="settings_exp_expressive_nav">Material 3 Expressive Navigation</string>
-    <string name="settings_exp_expressive_nav_subtitle">Google Photos redesign style floating navigation capsule with separate search button.</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">Subtitle Font Size</string>
@@ -1162,14 +1163,12 @@
     <string name="settings_nav_pinned">Pinned</string>
     <string name="settings_nav_items_summary">%1$d of %2$d items visible</string>
     <string name="settings_nav_items_summary_with_scroll">%1$d of %2$d items - %3$s</string>
-    <string name="settings_nav_style">Navigation Style</string>
-    <string name="settings_nav_style_expressive">Expressive (M3)</string>
-    <string name="settings_nav_style_classic">Classic</string>
-    <string name="settings_nav_style_expressive_subtitle">Google Photos style floating pill + standalone search button</string>
-    <string name="settings_nav_style_classic_subtitle">Traditional floating bottom navigation bar</string>
     <string name="settings_nav_hide_on_scroll">Hide on Scroll</string>
     <string name="settings_nav_hide_on_scroll_on">Bar hides when scrolling down</string>
     <string name="settings_nav_hide_on_scroll_off">Bar stays visible</string>
+    <string name="settings_hide_top_header_on_scroll">Hide Top Header on Scroll</string>
+    <string name="settings_hide_top_header_on_scroll_on">Header hides when scrolling down</string>
+    <string name="settings_hide_top_header_on_scroll_off">Header stays visible</string>
     <string name="settings_nav_item_home">Home</string>
     <string name="settings_nav_item_home_subtitle">Home dashboard</string>
     <string name="settings_nav_item_library">Library</string>

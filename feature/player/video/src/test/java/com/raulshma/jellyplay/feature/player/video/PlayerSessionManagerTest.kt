@@ -80,6 +80,11 @@ class PlayerSessionManagerTest {
         // Default: EXTERNAL player to avoid real engine instantiation in unit tests.
         every { aggregateStore.aggregate } returns
             MutableStateFlow(VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL)))
+        // The load path awaits the raw (hydrated) flow rather than the StateFlow's
+        // cold-start initial value, so stub it with the same single emission.
+        every { aggregateStore.aggregateRaw } returns kotlinx.coroutines.flow.flowOf(
+            VideoPlayerAggregate(playback = PlaybackSlice(preferredPlayer = PlayerType.EXTERNAL)),
+        )
 
         // Default: PlaybackInfo resolution yields nothing, so loadOnline
         // falls back to the static direct-stream URL (PlayMethod.DIRECT_PLAY).

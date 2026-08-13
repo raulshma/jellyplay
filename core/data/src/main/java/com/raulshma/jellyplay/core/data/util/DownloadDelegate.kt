@@ -232,22 +232,29 @@ class DownloadDelegate @Inject constructor(
                     }
                     request.trickplayInfo?.let { info ->
                         try {
-                            writer.downloadTrickplayData(request.mediaItemId, info, downloadItem.downloadPath)
+                            if (!writer.downloadTrickplayData(request.mediaItemId, info, downloadItem.downloadPath)) {
+                                android.util.Log.d("DownloadDelegate", "Trickplay sync failed for ${request.mediaItemId}")
+                            }
                         } catch (_: Exception) {}
                     }
                     // Bundle external subtitles + intro/outro segments for offline use.
                     if (request.mediaStreams.isNotEmpty()) {
                         try {
-                            writer.downloadExternalSubtitles(
-                                request.mediaItemId,
-                                request.mediaSourceId,
-                                request.mediaStreams,
-                                downloadItem.downloadPath,
-                            )
+                            if (!writer.downloadExternalSubtitles(
+                                    request.mediaItemId,
+                                    request.mediaSourceId,
+                                    request.mediaStreams,
+                                    downloadItem.downloadPath,
+                                )
+                            ) {
+                                android.util.Log.d("DownloadDelegate", "Subtitles sync failed for ${request.mediaItemId}")
+                            }
                         } catch (_: Exception) {}
                     }
                     try {
-                        writer.downloadMediaSegments(request.mediaItemId, downloadItem.downloadPath)
+                        if (!writer.downloadMediaSegments(request.mediaItemId, downloadItem.downloadPath)) {
+                            android.util.Log.d("DownloadDelegate", "Segments sync failed for ${request.mediaItemId}")
+                        }
                     } catch (_: Exception) {}
                 }
                 DownloadResult(downloadItem = downloadItem, error = null)

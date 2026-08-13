@@ -171,6 +171,7 @@
     <string name="detail_error_download_failed">ダウンロードに失敗しました</string>
     <string name="detail_error_not_a_series">これはシリーズではありません</string>
     <string name="detail_error_queue_failed">ダウンロードのキュー追加に失敗しました</string>
+    <string name="detail_error_unavailable_offline">このアイテムはオフラインでは利用できません。</string>
 
     <!-- ── Manage Series (Sonarr-style episode management) ───────────────── -->
     <string name="detail_option_manage_series">シリーズを管理</string>
@@ -276,4 +277,106 @@
     <string name="detail_season_empty_title">エピソードはありません</string>
     <string name="detail_season_empty_description">エピソードが追加されるとここに表示されます。</string>
 
+    <!-- Unified download / offline-detail strings. Resync falls back to default. -->
+    <string name="detail_download_info">ダウンロード情報</string>
+    <string name="detail_file_size">ファイルサイズ</string>
+    <string name="detail_status">ステータス</string>
+    <string name="detail_progress">進捗</string>
+    <string name="detail_download_status_pending">保留中</string>
+    <string name="detail_download_status_queued">キューに追加済み</string>
+    <string name="detail_download_status_downloading">ダウンロード中</string>
+    <string name="detail_download_status_paused">一時停止中</string>
+    <string name="detail_download_status_completed">完了</string>
+    <string name="detail_download_status_failed">失敗</string>
+    <string name="detail_download_status_cancelled">キャンセル済み</string>
+    <string name="detail_watch_status">視聴ステータス</string>
+    <string name="detail_watched_status_watched">視聴済み</string>
+    <string name="detail_watched_status_label">視聴済み</string>
+    <string name="detail_watched_status_in_progress">視聴中</string>
+    <string name="detail_watched_status_started">開始済み</string>
+    <string name="detail_position">位置</string>
+    <string name="detail_position_of">%2$s 中 %1$s</string>
+    <string name="detail_last_watched">最後に視聴</string>
+    <string name="detail_close">閉じる</string>
+    <string name="detail_delete">削除</string>
+    <string name="detail_delete_download_title">ダウンロードを削除</string>
+    <string name="detail_delete_download_cd">ダウンロードを削除</string>
+    <string name="detail_delete_download_message">「%1$s」を端末から削除しますか？%2$s が解放されます。</string>
+    <string name="detail_delete_episode_title">エピソードを削除</string>
+    <string name="detail_delete_episode_cd">エピソードを削除</string>
+    <string name="detail_delete_episode_message">「%1$s」を端末から削除しますか？</string>
+    <string name="detail_delete_downloads_title">ダウンロードを削除</string>
+    <string name="detail_select_episodes_to_remove">端末から削除するエピソードを選択してください。</string>
+    <string name="detail_episodes_selected">%2$d 件中 %1$d 件のエピソードを選択</string>
+    <string name="detail_episodes_selected_with_freed">%2$d 件中 %1$d 件のエピソードを選択 · %3$s</string>
+    <string name="detail_delete_count">%1$d 件削除</string>
+    <string name="detail_delete_count_with_freed">%1$d 件削除 · %2$s</string>
+    <string name="detail_season_default">シーズン %1$d</string>
+    <string name="detail_delete_entire_series">シリーズ全体を削除</string>
+    <string name="detail_option_delete_downloads">ダウンロードを削除</string>
+    <plurals name="detail_episodes_count">
+        <item quantity="other">%1$d エピソード</item>
+    </plurals>
+
+    <!-- Sync / resync download -->
+    <string name="detail_resync_title">ダウンロードを同期</string>
+    <string name="detail_resync_checking">アップデートを確認中…</string>
+    <string name="detail_resync_update_available">新しい情報が利用可能です</string>
+    <string name="detail_resync_media_changed">メディアファイルが変更されました — 再ダウンロードが必要です</string>
+    <string name="detail_resync_in_progress">最新の詳細を同期中…</string>
+    <string name="detail_resync_complete">ダウンロードを最新の詳細と同期しました</string>
+    <string name="detail_resync_failed">同期に失敗しました</string>
+    <string name="detail_resync_up_to_date">このダウンロードは最新です。</string>
+    <string name="detail_resync_description">サーバーに新しい情報があります。同期するとメタデータと画像が更新されます。</string>
+    <string name="detail_resync_change_metadata">メタデータを更新（概要、キャスト、評価）</string>
+    <string name="detail_resync_change_images">アートワークを更新（ポスター/背景）</string>
+    <string name="detail_resync_change_media">メディアファイル自体が変更されました</string>
+    <string name="detail_resync_media_explanation">メタデータの同期ではメディアファイルを更新できません。このアイテムを削除して再ダウンロードすると、新しいファイルを取得できます。</string>
+    <string name="detail_resync_action">今すぐ同期</string>
+    <string name="detail_resync_redownload">メディアを再ダウンロード</string>
+
+    <!-- Local subtitles -->
+    <string name="detail_local_subtitles">字幕</string>
+    <string name="detail_local_subtitle_off">オフ</string>
+    <string name="detail_local_subtitle_default_badge">デフォルト</string>
+    <string name="detail_local_subtitle_forced_badge">強制</string>
+
+    <!-- Download Details Sheet -->
+    <string name="detail_download_details_title">ダウンロードの詳細</string>
+    <string name="detail_download_section_download">ダウンロード</string>
+    <string name="detail_download_section_media">メディア</string>
+    <string name="detail_download_section_media_info">メディア情報</string>
+    <string name="detail_download_section_files">ダウンロードしたファイル</string>
+    <string name="detail_downloaded_bytes">ダウンロード済みサイズ</string>
+    <string name="detail_downloaded_date">ダウンロード日時</string>
+    <string name="detail_container">コンテナ</string>
+    <string name="detail_file_present">ファイルの有無</string>
+    <string name="detail_media_source">メディアソース</string>
+    <string name="detail_download_path">パス</string>
+    <string name="detail_media_title">タイトル</string>
+    <string name="detail_media_type">タイプ</string>
+    <string name="detail_original_title">原題</string>
+    <string name="detail_year">公開年</string>
+    <string name="detail_runtime">再生時間</string>
+    <string name="detail_file_name">ファイル</string>
+    <string name="detail_episode_label">エピソード</string>
+    <string name="detail_no_downloaded_subtitles">ダウンロードされた字幕はありません</string>
+    <string name="detail_view_download_details">ダウンロードの詳細を表示</string>
+    <string name="detail_download_tab_overview">概要</string>
+    <string name="detail_download_tab_media_info">メディア情報</string>
+    <string name="detail_download_tab_storage">ストレージ</string>
+
+    <!-- Inventory -->
+    <string name="detail_download_files_total">ディスク上の合計</string>
+    <string name="detail_download_files_loading">ファイルサイズを計算中…</string>
+    <string name="detail_download_files_empty">ダウンロードされたファイルが見つかりません</string>
+    <string name="detail_download_files_location">場所</string>
+    <plurals name="detail_files_count">
+        <item quantity="other">%1$d 個のファイル</item>
+    </plurals>
+    <string name="detail_file_category_media">メディア</string>
+    <string name="detail_file_category_subtitle">字幕</string>
+    <string name="detail_file_category_trickplay">Trickplay</string>
+    <string name="detail_file_category_segment">セグメント</string>
+    <string name="detail_file_category_image">画像</string>
 </resources>
