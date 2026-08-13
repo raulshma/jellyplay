@@ -359,3 +359,40 @@ val Route?.toNavRouteClass: com.raulshma.jellyplay.core.ui.animation.NavRouteCla
         else ->
             com.raulshma.jellyplay.core.ui.animation.NavRouteClass.DEFAULT
     }
+
+/**
+ * Returns a copy of this route with its `highlightSettingId` set to [id] for any
+ * settings-destination route (the data classes that carry one). Non-settings
+ * routes are returned unchanged.
+ *
+ * The registry stores each [com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem]'s
+ * `route` with a *null* `highlightSettingId`; the specific setting to scroll to /
+ * focus is the item's own `id`. The in-settings search injects that id per route
+ * via its `when` dispatch; this helper lets the **home** header search do the same
+ * in one shot instead of duplicating the dispatch table, so a settings result
+ * tapped from the home bar lands scrolled/focused on the matched row just like the
+ * in-settings search. See [com.raulshma.jellyplay.feature.settings.HighlightScroll].
+ */
+fun Route.withHighlightSettingId(id: String): Route = when (this) {
+    is Route.ServerManagement -> copy(highlightSettingId = id)
+    is Route.UserManagement -> copy(highlightSettingId = id)
+    is Route.SeerrSettings -> copy(highlightSettingId = id)
+    is Route.AppearanceSettings -> copy(highlightSettingId = id)
+    is Route.PinnedHomeSections -> copy(highlightSettingId = id)
+    is Route.HomeLayoutPresets -> copy(highlightSettingId = id)
+    is Route.LibraryHomeSections -> copy(highlightSettingId = id)
+    is Route.PlaybackSettings -> copy(highlightSettingId = id)
+    is Route.AudioSettings -> copy(highlightSettingId = id)
+    is Route.LanguageSettings -> copy(highlightSettingId = id)
+    is Route.NotificationSettings -> copy(highlightSettingId = id)
+    is Route.StorageSettings -> copy(highlightSettingId = id)
+    is Route.SecuritySettings -> copy(highlightSettingId = id)
+    is Route.PrivacyData -> copy(highlightSettingId = id)
+    is Route.BackupSettings -> copy(highlightSettingId = id)
+    is Route.ExperimentalSettings -> copy(highlightSettingId = id)
+    is Route.FactoryReset -> copy(highlightSettingId = id)
+    is Route.Integrations -> copy(highlightSettingId = id)
+    is Route.ArrSettings -> copy(highlightSettingId = id)
+    is Route.SubtitleProviderSettings -> copy(highlightSettingId = id)
+    else -> this
+}
