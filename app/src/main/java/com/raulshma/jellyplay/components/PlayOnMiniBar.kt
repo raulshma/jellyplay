@@ -92,7 +92,7 @@ fun PlayOnMiniBar(
         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
         modifier = modifier,
     ) {
-        // Match FloatingNavigationBar: translucent surfaceContainer, smooth
+        // Match the floating nav bar: translucent surfaceContainer, smooth
         // corners, zero elevation.
         Surface(
             shape = ShapeCache.smooth28,

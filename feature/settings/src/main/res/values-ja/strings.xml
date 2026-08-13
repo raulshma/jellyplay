@@ -707,8 +707,6 @@
     <string name="settings_exp_press_hold_preview">長押しプレビュー</string>
     <string name="settings_exp_press_hold_preview_subtitle">メディアカードを長押ししてぼかした詳細プレビューを表示、離して閉じる</string>
     <string name="settings_exp_arr_integration_subtitle">Radarr/Sonarr からリクエストのダウンロードキュー進行とホームの近日カレンダーを表示。サーバー詳細は Seerr から自動検出、*arr 設定で手動上書き</string>
-    <string name="settings_exp_expressive_nav">Material 3 エクスプレッシブナビゲーション</string>
-    <string name="settings_exp_expressive_nav_subtitle">Google フォトの新デザイン風フローティングナビゲーションカプセルと独立した検索ボタン。</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">字幕のフォントサイズ</string>
@@ -1167,9 +1165,4 @@
     <string name="settings_subtitles_test">テスト</string>
     <string name="settings_subtitles_testing">テスト中…</string>
     <string name="settings_subtitles_connected">接続済み</string>
-    <string name="settings_nav_style">ナビゲーションのスタイル</string>
-    <string name="settings_nav_style_expressive">エクスプレッシブ (M3)</string>
-    <string name="settings_nav_style_classic">クラシック</string>
-    <string name="settings_nav_style_expressive_subtitle">Google フォト風フローティングカプセル + 独立した検索ボタン</string>
-    <string name="settings_nav_style_classic_subtitle">従来のフローティングボトムナビゲーションバー</string>
 </resources>

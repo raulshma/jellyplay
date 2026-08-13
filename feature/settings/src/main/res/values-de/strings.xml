@@ -709,8 +709,6 @@
     <string name="settings_exp_press_hold_preview">Drück-Halte-Vorschau</string>
     <string name="settings_exp_press_hold_preview_subtitle">Lange auf eine Medienkarte drücken, um eine weichgezeichnete Detailvorschau zu sehen; Loslassen zum Schließen</string>
     <string name="settings_exp_arr_integration_subtitle">Download-Warteschlangen-Fortschritt bei Anfragen und einen kommenden Kalender auf dem Startbildschirm aus deinem Radarr/Sonarr zeigen. Serverdetails werden automatisch über Seerr erkannt; manuelle Überschreibung in den *arr-Einstellungen</string>
-    <string name="settings_exp_expressive_nav">Material 3 Expressive Navigation</string>
-    <string name="settings_exp_expressive_nav_subtitle">Schwebende Navigationskapsel im Google Fotos-Redesign-Stil mit separater Suchtaste.</string>
 
     <!-- LanguageSettingsScreen.kt subtitle section -->
     <string name="settings_subtitle_font_size">Untertitel-Schriftgröße</string>
@@ -1167,9 +1165,4 @@
     <string name="settings_subtitles_test">Testen</string>
     <string name="settings_subtitles_testing">Wird getestet…</string>
     <string name="settings_subtitles_connected">Verbunden</string>
-    <string name="settings_nav_style">Navigationsstil</string>
-    <string name="settings_nav_style_expressive">Expressiv (M3)</string>
-    <string name="settings_nav_style_classic">Klassisch</string>
-    <string name="settings_nav_style_expressive_subtitle">Schwebende Kapsel im Google Fotos-Stil mit separater Suchtaste</string>
-    <string name="settings_nav_style_classic_subtitle">Traditionelle schwebende untere Navigationsleiste</string>
 </resources>

@@ -221,18 +221,6 @@ class PreferenceProjectionsTest {
     }
 
     @Test
-    fun `a navigation style write is reflected in navigationCustomizationPreferences`() = runTest {
-        val before = projections.navigationCustomizationPreferences.first().navigationStyle
-        val target = if (before == com.raulshma.jellyplay.core.model.NavigationStyle.EXPRESSIVE)
-            com.raulshma.jellyplay.core.model.NavigationStyle.CLASSIC
-        else
-            com.raulshma.jellyplay.core.model.NavigationStyle.EXPRESSIVE
-        graph.navigationStore.setNavigationStyle(target)
-        val after = projections.navigationCustomizationPreferences.first().navigationStyle
-        assertEquals(target, after)
-    }
-
-    @Test
     fun `a syncplay write is reflected in the syncplay projection`() = runTest {
         val before = projections.syncPlayPreferences.first().syncPlayAutoAcceptInvites
         graph.syncPlayCastStore.setSyncPlayAutoAcceptInvites(!before)

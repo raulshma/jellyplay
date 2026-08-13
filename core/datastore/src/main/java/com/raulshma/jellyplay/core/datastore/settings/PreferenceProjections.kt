@@ -391,7 +391,6 @@ class PreferenceProjections @Inject constructor(
                 hiddenNavItems = nav.hiddenNavItems,
                 navItemOrder = nav.navItemOrder,
                 hideBottomNavOnScroll = nav.hideBottomNavOnScroll,
-                navigationStyle = nav.navigationStyle,
             )
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), NavigationCustomizationPreferences())
@@ -716,7 +715,6 @@ class PreferenceProjections @Inject constructor(
             navItemOrder = g1.navigation.navItemOrder,
             hideBottomNavOnScroll = g1.navigation.hideBottomNavOnScroll,
             navBarShowLabels = g1.navigation.navBarShowLabels,
-            navigationStyle = g1.navigation.navigationStyle,
             preferredPlayer = playback.preferredPlayer,
             enabledExperimentalFeatures = g1.experimental.enabledExperimentalFeatures,
             appLanguage = g1.experimental.appLanguage,

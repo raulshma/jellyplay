@@ -1,10 +1,15 @@
 package com.raulshma.jellyplay.core.designsystem.theme
 
+import androidx.compose.foundation.border
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 object BrandColors {
     val tmdb = Color(0xFF01B4E4)
@@ -96,18 +101,19 @@ fun playerOnScrim(): Color =
     if (LocalIsLightTheme.current) Color.Black else Color.White
 
 /**
- * Container fill for settings list rows, search-result rows, and similar grouped items.
+ * Container fill for grouped list rows, search-result rows, search fields, and similar outlined
+ * items.
  *
  * Dark mode keeps the translucent [androidx.compose.material3.ColorScheme.surfaceVariant] that
  * reads as a gentle elevation over the dark background. Light mode returns a crisp solid white
  * (`surfaceContainerLowest`) — mirroring the profile-banner hero — so rows read as clean outlined
- * cards; callers pair this with [hairlineBorderColor] so white rows stay defined inside white
+ * cards; callers pair this with [lightModeHairlineBorder] so white rows stay defined inside white
  * group surfaces. [darkAlpha] lets callers preserve the exact dark-mode alpha they were using
  * (e.g. 0.4f for search fields) without changing its light-mode behaviour.
  */
 @Composable
 @ReadOnlyComposable
-fun settingsItemContainerColor(darkAlpha: Float = 0.3f): Color =
+fun groupedItemContainerColor(darkAlpha: Float = 0.3f): Color =
     if (LocalIsLightTheme.current) MaterialTheme.colorScheme.surfaceContainerLowest
     else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = darkAlpha)
 
@@ -134,3 +140,18 @@ fun settingsGroupContainerColor(): Color =
 fun hairlineBorderColor(): Color =
     if (LocalIsLightTheme.current) MaterialTheme.colorScheme.outlineVariant
     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+
+/**
+ * A [Modifier.border] of [hairlineBorderColor] at [width] along [shape], applied only in light
+ * mode — where grouped rows and outlined surfaces need a visible edge against white surfaces.
+ * Dark mode returns the receiver unchanged, since the translucent container fills already read as
+ * elevation there. Centralizes the `if (isLight) Modifier.border(1.dp, hairlineBorderColor(), shape)
+ * else Modifier` shape that was open-coded at every grouped-row call site.
+ */
+@Composable
+@ReadOnlyComposable
+fun Modifier.lightModeHairlineBorder(
+    shape: Shape,
+    width: Dp = 1.dp,
+): Modifier =
+    if (LocalIsLightTheme.current) border(width, hairlineBorderColor(), shape) else this
