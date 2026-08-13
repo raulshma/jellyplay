@@ -1248,6 +1248,76 @@ class DetailViewModelTest {
             assertFalse(viewModel.uiState.value.hasCreditSegment)
         }
 
+    // ── LOCAL-origin "More like this" mined from the on-device library ──────
+    // A LOCAL load with genres/studios asks OfflineRepository.getLocalRelated
+    // for on-device titles sharing a genre/studio and surfaces them as
+    // localRelatedItems (excluding the item itself), so offline browsing isn't
+    // an island.
+
+    @Test
+    fun loadItem_local_surfacesLocalRelatedFromGenresOrStudios() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val detail = MediaDetail(
+                item = MediaItem(
+                    id = "m1",
+                    name = "Movie",
+                    mediaType = MediaType.MOVIE,
+                    genres = listOf("Sci-Fi"),
+                    studios = listOf("Studio Ghibli"),
+                ),
+            )
+            stubProvider("m1", localSnapshot(detail))
+            coEvery {
+                offlineRepository.getLocalRelated(
+                    currentId = "m1",
+                    genres = listOf("Sci-Fi"),
+                    studios = listOf("Studio Ghibli"),
+                    limit = 12,
+                )
+            } returns listOf(
+                MediaItem(id = "m2", name = "Related Movie", mediaType = MediaType.MOVIE),
+                // The current item must be filtered out of the surfaced row.
+                MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+            )
+
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+
+            // The on-device mining fired for the LOCAL origin's genres/studios…
+            coVerify(exactly = 1) {
+                offlineRepository.getLocalRelated(
+                    currentId = "m1",
+                    genres = listOf("Sci-Fi"),
+                    studios = listOf("Studio Ghibli"),
+                    limit = 12,
+                )
+            }
+            // …and the surfaced row excludes the item itself.
+            assertEquals(
+                listOf("m2"),
+                viewModel.uiState.value.localRelatedItems.map { it.id },
+            )
+        }
+
+    @Test
+    fun loadItem_localWithoutGenresOrStudios_skipsLocalRelatedFetch() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            // No genres or studios: triggerLocalSideEffects early-returns, so the
+            // on-device mining never fires and the row stays empty.
+            val detail = MediaDetail(
+                item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+            )
+            stubProvider("m1", localSnapshot(detail))
+
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { offlineRepository.getLocalRelated(any(), any(), any(), any()) }
+            assertTrue(viewModel.uiState.value.localRelatedItems.isEmpty())
+        }
+
     @Test
     fun loadItem_remoteThenLocal_clearsSegmentAvailabilityOnNavigation() =
         runTest(mainDispatcherRule.testDispatcher) {

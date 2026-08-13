@@ -829,6 +829,7 @@ private fun HomeSeriesDeleteSheet(
                 seasons = state.seasons,
                 episodes = state.episodesBySeason,
                 totalSizeBytes = state.totalSizeBytes,
+                episodeSizeBytes = state.episodeSizeBytes,
                 onDelete = onDelete,
                 onDeleteEntireSeries = onDeleteEntireSeries,
                 onDismiss = onDismiss,

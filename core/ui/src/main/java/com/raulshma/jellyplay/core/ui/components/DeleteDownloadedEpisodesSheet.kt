@@ -71,16 +71,23 @@ import com.raulshma.jellyplay.core.ui.R
  * Callers wrap it in [TvSafeSheet].
  *
  * Data note: callers must pre-filter [episodes] to downloaded episodes only —
- * every episode passed in is treated as deletable. The freed-space figure uses
- * the aggregate [totalSizeBytes] and is only shown when the selection covers
- * every episode (the one case where the freed total is exactly known); partial
- * selections show a count-only summary.
+ * every episode passed in is treated as deletable. The freed-space figure is
+ * exact for any selection when [episodeSizeBytes] is supplied (per-episode
+ * sizes); otherwise it falls back to the aggregate [totalSizeBytes], shown
+ * only when the selection covers every episode. Callers without per-episode
+ * sizes (e.g. the detail screen, whose episodes arrive as unified MediaItems)
+ * omit the map and get the aggregate-only behaviour.
  *
  * @param seasons season rows (for names + ordering); each should exist as a key
  *   in [episodes]. Only seasons with at least one downloaded episode.
  * @param episodes downloaded episodes keyed by season id.
  * @param totalSizeBytes aggregate on-disk size of the series' downloads; 0
- *   hides the freed-space figure.
+ *   hides the aggregate freed-space figure (ignored when [episodeSizeBytes]
+ *   is supplied).
+ * @param episodeSizeBytes optional per-episode on-disk sizes keyed by episode
+ *   id. When supplied, the freed-space figure reflects the current (possibly
+ *   partial) selection precisely; when empty, the figure falls back to the
+ *   aggregate [totalSizeBytes] shown only for a whole-series selection.
  * @param onDelete invoked with the flat set of episode ids to remove.
  * @param onDeleteEntireSeries invoked to drop the whole series in one go.
  * @param onDismiss closes the sheet.
@@ -91,6 +98,7 @@ fun DeleteDownloadedEpisodesSheet(
     seasons: List<MediaItem>,
     episodes: Map<String, List<MediaItem>>,
     totalSizeBytes: Long,
+    episodeSizeBytes: Map<String, Long> = emptyMap(),
     onDelete: (episodeIds: Set<String>) -> Unit,
     onDeleteEntireSeries: () -> Unit,
     onDismiss: () -> Unit,
@@ -101,11 +109,17 @@ fun DeleteDownloadedEpisodesSheet(
     val totalSelectedCount = selection.totalSelectedCount
     val allSelected = selection.allSelected
     val allSelectableIds = selection.allSelectableIds
-    // Freed-space is exact only when every downloadable episode is selected
-    // (the whole-series delete frees the aggregate total). For partial
-    // selections the per-episode sizes are not available on the unified
-    // MediaItem, so the summary falls back to count-only.
-    val freedBytes = if (allSelected) totalSizeBytes else 0L
+    // Freed-space: when the caller supplies per-episode sizes, sum the currently
+    // selected ids for an exact figure on any (including partial) selection.
+    // Otherwise the per-episode sizes aren't available, so fall back to the
+    // aggregate total — exact only when every episode is selected.
+    val freedBytes = if (episodeSizeBytes.isNotEmpty()) {
+        selection.toSelectedIds().sumOf { id -> episodeSizeBytes[id] ?: 0L }
+    } else if (allSelected) {
+        totalSizeBytes
+    } else {
+        0L
+    }
     val freedBytesStr = freedBytes.takeIf { it > 0 }?.formatBytes()
 
     Column(

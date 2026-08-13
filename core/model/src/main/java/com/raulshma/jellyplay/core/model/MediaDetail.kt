@@ -58,21 +58,23 @@ data class PersonInfo(
     val primaryBlurHash: String? = null,
 ) {
     /**
-     * True for person types Jellyfin treats as on-screen/credited cast (Actor,
-     * Director) that carry a primary image. Centralizes the predicate duplicated
-     * by the offline cast-preload + cast-image-persist paths so the eligible set
-     * stays consistent. Guest stars and crew types without a primary image are
-     * excluded (no fetchable portrait).
+     * True whenever a primary portrait is fetchable and worth preloading /
+     * persisting for offline — i.e. the person carries a `primaryImageTag`,
+     * regardless of type. Centralizes the predicate the offline cast-preload +
+     * cast-image-persist paths share so the eligible set stays consistent with
+     * the dedicated Cast & Crew screen, which renders any tagged portrait.
+     *
+     * Originally restricted to Actor/Director; broadened to include crew types
+     * (Writer/Producer/Composer/GuestStar/…) that carry a `primaryImageTag`, so
+     * the offline main detail cast row no longer suppresses crew portraits.
+     * Equivalent to [hasPortrait]; both now agree on "a tag means a portrait".
      */
-    fun hasCastImage(): Boolean =
-        (type == "Actor" || type == "Director") && !primaryImageTag.isNullOrBlank()
+    fun hasCastImage(): Boolean = hasPortrait()
 
     /**
      * True whenever a primary portrait is fetchable, regardless of person type.
-     * Broader than [hasCastImage] (which restricts the main cast row to
-     * Actor/Director): the dedicated Cast & Crew screen renders portraits for
-     * crew types (Writer/Producer/Composer/GuestStar/…) too, as long as a
-     * primary image tag is present.
+     * Used by the dedicated Cast & Crew screen to render portraits for crew
+     * types too, as long as a primary image tag is present.
      */
     fun hasPortrait(): Boolean = !primaryImageTag.isNullOrBlank()
 }

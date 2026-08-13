@@ -749,9 +749,23 @@ class HomeViewModel @Inject constructor(
             val downloadedBySeason = episodesOffBySeason.filterValues { it.isNotEmpty() }
             val seasons = seasonsOff.filter { it.id in downloadedBySeason }.map { it.toMediaItem() }
             val episodesBySeason = downloadedBySeason.mapValues { (_, eps) -> eps.map { it.toMediaItem() } }
+            // Per-episode on-disk sizes from the offline store, so the delete
+            // sheet's freed-space figure is exact for partial selections too.
+            val episodeSizeBytes = downloadedBySeason.values
+                .flatten()
+                .associate { it.id to it.totalSizeBytes }
             val totalSizeBytes = episodesOffBySeason.values.flatten().sumOf { it.totalSizeBytes }
             _uiState.update {
-                it.copy(seriesDelete = HomeSeriesDeleteState(series.id, seasons, episodesBySeason, totalSizeBytes, isLoading = false))
+                it.copy(
+                    seriesDelete = HomeSeriesDeleteState(
+                        seriesId = series.id,
+                        seasons = seasons,
+                        episodesBySeason = episodesBySeason,
+                        totalSizeBytes = totalSizeBytes,
+                        episodeSizeBytes = episodeSizeBytes,
+                        isLoading = false,
+                    ),
+                )
             }
         }
     }

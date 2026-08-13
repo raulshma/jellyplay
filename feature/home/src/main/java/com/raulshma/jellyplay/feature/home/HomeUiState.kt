@@ -107,7 +107,10 @@ data class HomeUiState(
  * Data backing the offline home's series delete-episodes sheet (the same
  * `DeleteDownloadedEpisodesSheet` the media-detail screen uses). [episodes]
  * holds only downloaded episodes keyed by season id; [totalSizeBytes] is the
- * aggregate on-disk size used for the freed-space summary.
+ * aggregate on-disk size used for the freed-space summary when the whole
+ * series is selected; [episodeSizeBytes] carries the per-episode sizes read
+ * from the offline store so the freed-space figure is exact for partial
+ * selections too.
  */
 @Immutable
 data class HomeSeriesDeleteState(
@@ -115,6 +118,7 @@ data class HomeSeriesDeleteState(
     val seasons: List<MediaItem>,
     val episodesBySeason: Map<String, List<MediaItem>>,
     val totalSizeBytes: Long,
+    val episodeSizeBytes: Map<String, Long> = emptyMap(),
     val isLoading: Boolean,
 )
 

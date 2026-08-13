@@ -344,6 +344,16 @@ class DetailViewModel @Inject constructor(
         canonicalEpisodeIds = mediaDetailProvider::canonicalEpisodeIds,
         messageSink = { _messages.tryEmit(it) },
     )
+    private val instantMixActions = InstantMixActions(
+        scope = scope,
+        mediaRepository = mediaRepository,
+        playbackRepository = playbackRepository,
+        audioPlaybackManager = audioPlaybackManager,
+        context = context,
+        detailProvider = { _uiState.value.detail },
+        currentItemProvider = { currentItemId },
+        messageSink = { _messages.tryEmit(it) },
+    )
     private val downloadLifecycleActions = DownloadLifecycleActions(
         scope = scope,
         downloadIntake = downloadIntake,
@@ -868,46 +878,16 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    // ── Instant mix ────────────────────────────────────────────────────
+    // Delegated to [instantMixActions] (InstantMixActions). The VM keeps a thin
+    // pass-through so callers/tests stay stable; the helper owns the mix fetch
+    // + queue build + navigation-drift guard.
+
     /**
-     * One-shot "Start instant mix" action for audio-type items. Fetches a
-     * Jellyfin-built mix seeded off the current item via
-     * [MediaRepository.getInstantMix] and hands it straight to
-     * [AudioPlaybackManager.playQueue] at index 0. Fire-and-forget: success is
-     * implicit (playback starts) and the only UI feedback is the failure / empty
-     * snackbar emitted via [DetailMessage]. Mirrors [playAlbum]'s queue build +
-     * dispatcher, and guards navigation drift so a mix resolved after the user
-     * navigated away cannot start playback on the wrong screen.
+     * Starts a Jellyfin instant mix for the current audio item. Delegates to
+     * [InstantMixActions]; see that class for the fetch + queue-build contract.
      */
-    fun startInstantMix() {
-        val detail = _uiState.value.detail ?: return
-        val item = detail.item
-        if (!item.mediaType.isAudioType) return
-        val itemId = item.id
-        val albumFallback = item.album ?: item.name
-        // Queue construction builds N image URLs + N queue items; keep it off the
-        // Main dispatcher, matching playAlbum (the click handler is non-suspend).
-        launch(Dispatchers.Default) {
-            mediaRepository.getInstantMix(itemId)
-                .onSuccess { mix ->
-                    // Don't start a mix for a screen the user has already left.
-                    if (currentItemId != itemId) return@onSuccess
-                    if (mix.isEmpty()) {
-                        _messages.tryEmit(DetailMessage.Text(context.getString(R.string.detail_instant_mix_empty)))
-                        return@onSuccess
-                    }
-                    val queueItems = mix.map { track ->
-                        track.toAudioQueueItem(
-                            imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
-                            albumFallback = albumFallback,
-                        )
-                    }
-                    audioPlaybackManager.playQueue(queueItems, 0)
-                }
-                .onFailure {
-                    _messages.tryEmit(DetailMessage.Text(context.getString(R.string.detail_instant_mix_failed)))
-                }
-        }
-    }
+    fun startInstantMix() = instantMixActions.startInstantMix()
 
     /**
      * Plays a single LOCAL-origin album track.
