@@ -79,6 +79,16 @@ class PlayerActivity : FragmentActivity() {
     @Inject
     lateinit var preferenceProjections: PreferenceProjections
 
+    /**
+     * Hoisted launch arguments read from the start/new Intent. [onNewIntent]
+     * (re-selection while this `singleTask` activity is already alive — e.g.
+     * picking another item from the browse UI while in PiP) updates this so the
+     * Compose tree recomposes with the new `itemId` and re-fires the screen's
+     * `LaunchedEffect(itemId)` → `initialize()`, instead of the new extras being
+     * silently dropped.
+     */
+    private val launchArgs = mutableStateOf<PlayerLaunchArgs?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -92,17 +102,11 @@ class PlayerActivity : FragmentActivity() {
         )
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        val itemId = intent.getStringExtra(EXTRA_ITEM_ID) ?: run {
+        launchArgs.value = parsePlayerArgs(intent) ?: run {
             Log.w(TAG, "No itemId extra; finishing.")
             finish()
             return
         }
-        val mediaSourceId = intent.getStringExtra(EXTRA_MEDIA_SOURCE_ID)
-        val startPositionTicks = intent.getLongExtra(EXTRA_START_POSITION_TICKS, 0L)
-        val subtitleStreamIndex = intent.getIntExtra(EXTRA_SUBTITLE_STREAM_INDEX, -1)
-            .takeIf { it >= 0 }
-        val audioStreamIndex = intent.getIntExtra(EXTRA_AUDIO_STREAM_INDEX, -1)
-            .takeIf { it >= 0 }
 
         setContent {
             // Theme the player with the same preference-driven stack as
@@ -118,17 +122,23 @@ class PlayerActivity : FragmentActivity() {
             // behaviour. The tester builds its own preview engine, so it is
             // self-contained.
             var showSubtitleTester by remember { mutableStateOf(false) }
+            // Hoisted launch args so onNewIntent (re-selection while this
+            // singleTask activity is alive, e.g. picking another item while in
+            // PiP) can swap the item without recreating the Activity. Reading
+            // launchArgs.value here recomposes VideoPlayerScreen with the new
+            // itemId, re-firing its LaunchedEffect(itemId) → initialize().
+            val args = launchArgs.value ?: return@setContent
             JellyPlayPreferenceTheme(
                 preferences = preferences,
                 darkTheme = darkTheme,
             ) {
                 Box(Modifier.fillMaxSize()) {
                     VideoPlayerScreen(
-                        itemId = itemId,
-                        mediaSourceId = mediaSourceId,
-                        startPositionTicks = startPositionTicks,
-                        subtitleStreamIndex = subtitleStreamIndex,
-                        audioStreamIndex = audioStreamIndex,
+                        itemId = args.itemId,
+                        mediaSourceId = args.mediaSourceId,
+                        startPositionTicks = args.startPositionTicks,
+                        subtitleStreamIndex = args.subtitleStreamIndex,
+                        audioStreamIndex = args.audioStreamIndex,
                         onBack = { finish() },
                         onEnterPip = { enterPipMode() },
                         onOpenSubtitleTester = { showSubtitleTester = true },
@@ -185,6 +195,18 @@ class PlayerActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // Swap the item without recreating this singleTask Activity: updating
+        // launchArgs recomposes VideoPlayerScreen with the new itemId, re-firing
+        // its LaunchedEffect(itemId) → viewModel.initialize(). This is the path
+        // that handles "play another media while in PiP" — without it the live
+        // instance expands out of PiP but the new extras are dropped and the
+        // old item keeps playing.
+        parsePlayerArgs(intent)?.let { launchArgs.value = it }
     }
 
     override fun onDestroy() {
@@ -282,17 +304,27 @@ class PlayerActivity : FragmentActivity() {
             window.attributes = window.attributes.apply {
                 screenBrightness = savedBrightness
             }
-            // Leaving PiP fires for BOTH expand-to-fullscreen and dismiss. Do NOT
-            // pause here: this callback runs BEFORE onResume on expand, so pausing
-            // would freeze playback when the user expands — onResume's resume relies
-            // on wasPlayingBeforeActivityPause, which is stale because entering PiP
-            // skipped onActivityPause, so it cannot reliably resume. The engine is
-            // never paused by us while in PiP, so on expand it just keeps playing.
-            // The dismiss case is handled separately: onPause (engine pause unless
-            // background audio) + onStop (justExitedPip → notifyPipDismissed). Arm
-            // the flag here only so onStop can tell dismiss apart from a plain
-            // minimise while still in PiP.
-            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            // Leaving PiP fires for BOTH expand-to-fullscreen and dismiss. The
+            // two are distinguished by lifecycle state at this callback:
+            //
+            //  - Expand: the activity resumes, so state is >= STARTED here (and
+            //    onResume follows). Arm justExitedPip so onStop can still finish
+            //    on a later dismiss (covers the ordering where this callback fires
+            //    before onStop). onResume clears it for a genuine expand.
+            //
+            //  - Dismiss (close icon / swipe-away): on some OEMs onStop fires
+            //    BEFORE this callback (observed: onStop at isInPipMode=true,
+            //    screenOff=false, justExitedPip=false — so onStop's dismiss arm
+            //    misses — then this callback at state=CREATED). When state <
+            //    STARTED the activity is already past onStop and will not resume,
+            //    so finish here directly. This drives onDestroy → onDispose →
+            //    viewModel.release() (engine stop + playback-stop report) — the
+            //    same teardown as back-close. Background audio is honored only on
+            //    the fullscreen→home path, not an explicit PiP dismiss.
+            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                justExitedPip = false
+                if (!isFinishing) finish()
+            } else if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                 justExitedPip = true
             }
         }
@@ -333,12 +365,15 @@ class PlayerActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         if (justExitedPip) {
-            // PiP was dismissed (swiped away). If background audio is OFF, close
-            // the player via the dismiss path; if ON, leave the engine running.
+            // Dismiss fallback for the ordering where onPipModeChanged(false)
+            // fires BEFORE onStop (state was >= STARTED at the callback, so it
+            // armed justExitedPip instead of finishing). On OEMs where onStop
+            // fires first, onPipModeChanged(false) finishes directly at
+            // state < STARTED. finish() here drives the same onDestroy →
+            // onDispose → release() teardown as back-close. Background audio is
+            // honored only on the fullscreen→home path, not an explicit dismiss.
             justExitedPip = false
-            if (!playerLifecycleManager.isBackgroundAudioEnabled) {
-                pipController.notifyPipDismissed()
-            }
+            if (!isFinishing) finish()
         } else if (isInPictureInPictureMode) {
             // Distinguish screen-lock (pause so audio doesn't leak with bg audio
             // OFF) from app-minimise (keep playing). onStop
@@ -508,6 +543,31 @@ class PlayerActivity : FragmentActivity() {
             ratio > max -> max
             else -> ratio
         }
+    }
+
+    /**
+     * Parsed launch arguments shared by [onCreate] and [onNewIntent] so both the
+     * initial start and a re-selection while in PiP feed the player identically.
+     */
+    private data class PlayerLaunchArgs(
+        val itemId: String,
+        val mediaSourceId: String?,
+        val startPositionTicks: Long,
+        val subtitleStreamIndex: Int?,
+        val audioStreamIndex: Int?,
+    )
+
+    private fun parsePlayerArgs(intent: Intent): PlayerLaunchArgs? {
+        val itemId = intent.getStringExtra(EXTRA_ITEM_ID) ?: return null
+        return PlayerLaunchArgs(
+            itemId = itemId,
+            mediaSourceId = intent.getStringExtra(EXTRA_MEDIA_SOURCE_ID),
+            startPositionTicks = intent.getLongExtra(EXTRA_START_POSITION_TICKS, 0L),
+            subtitleStreamIndex = intent.getIntExtra(EXTRA_SUBTITLE_STREAM_INDEX, -1)
+                .takeIf { it >= 0 },
+            audioStreamIndex = intent.getIntExtra(EXTRA_AUDIO_STREAM_INDEX, -1)
+                .takeIf { it >= 0 },
+        )
     }
 
     companion object {
