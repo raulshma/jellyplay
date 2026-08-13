@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.core.ui.components.rememberMediaQuickActionControl
 import com.raulshma.jellyplay.core.ui.components.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
+import com.raulshma.jellyplay.core.ui.navigation.withHighlightSettingId
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
@@ -105,8 +106,10 @@ data class HomeCallbacks(
     val onModeChange: (HomeMode) -> Unit = {},
     val onSearchItemClick: (String) -> Unit = {},
     val onSearchSeerrClick: (Int, String) -> Unit = { _, _ -> },
-    /** Open a settings destination surfaced by the home search bar. The [Route]
-     * carries its own `highlightSettingId` for deep-link scroll/highlight. */
+    /** Open a settings destination surfaced by the home search bar. The passed
+     * [com.raulshma.jellyplay.core.ui.navigation.Route] already has its
+     * `highlightSettingId` populated (via [withHighlightSettingId]) so the
+     * destination screen scrolls to / focuses the matched setting row. */
     val onSettingsSearchItemClick: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
     val onNewsletterClick: () -> Unit = {},
     /** Deep-link into Settings → Home Screen Layout. Reached from the inline
@@ -533,7 +536,10 @@ private fun MainHomeContent(
                         viewModel.onEvent(HomeUiEvent.ClearSearch)
                         focusManager.clearFocus()
                         viewModel.onSettingsResultClicked(item)
-                        callbacks.onSettingsSearchItemClick(item.route)
+                        // Inject the matched setting's id as the deep-link scroll/
+                        // focus target so the destination screen scrolls to and
+                        // highlights it — same behavior as the in-settings search.
+                        callbacks.onSettingsSearchItemClick(item.route.withHighlightSettingId(item.id))
                     }
                 }
 
