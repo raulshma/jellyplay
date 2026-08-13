@@ -135,6 +135,7 @@ internal fun DetailContent(
             (state.detailContext?.seriesAggregate?.downloadedEpisodeCount ?: 0) > 0,
         canEditMetadata = state.capabilities.remoteDiscovery,
         canAddToPlaylist = state.capabilities.remoteDiscovery,
+        isOffline = state.origin?.isLocal == true,
         onClose = { /* menus close themselves */ },
         onEditClick = callbacks.onEditClick,
         onShare = shareMedia,

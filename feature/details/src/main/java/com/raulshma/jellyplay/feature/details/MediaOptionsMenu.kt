@@ -60,6 +60,7 @@ internal fun rememberMediaOptions(
     canDeleteDownloadedSeries: Boolean,
     canEditMetadata: Boolean,
     canAddToPlaylist: Boolean,
+    isOffline: Boolean,
     onClose: () -> Unit,
     onEditClick: () -> Unit,
     onShare: () -> Unit,
@@ -116,7 +117,7 @@ internal fun rememberMediaOptions(
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
         downloadStatus, downloadProgress, canManageSeries, canDeleteDownloadedSeries, canEditMetadata,
-        canAddToPlaylist, labelManageSeries,
+        canAddToPlaylist, isOffline, labelManageSeries,
         labelAddToPlaylist, labelDeleteDownloads,
         labelHideDetailUpNext, labelShowDetailUpNext) {
         buildList {
@@ -161,7 +162,9 @@ internal fun rememberMediaOptions(
                         }
                     )
                 }
-            } else if (!isAudio && item != null && isSeries && seasons.isNotEmpty()) {
+            // Series download pulls media from the server, so it is offered only on a
+            // remote origin (offline mode cannot start a new transfer).
+            } else if (!isOffline && !isAudio && item != null && isSeries && seasons.isNotEmpty()) {
                 add(
                     MediaOption(
                         label = if (isDownloadingSeries) labelDownloadingSeries else labelDownloadSeries,

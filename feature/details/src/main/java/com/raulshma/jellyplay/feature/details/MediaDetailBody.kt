@@ -72,6 +72,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.detailBodyMaxWidth
+import com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag
 import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
@@ -189,12 +190,11 @@ internal fun DetailContentBody(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 8.dp)
                                 .clip(ShapeCache.smooth8)
                                 .then(seriesNavFocusState.focusModifier)
                                 .then(Modifier.tvFocusIndicator(seriesNavFocusState, ShapeCache.smooth8))
                                 .clickable { item.seriesId?.let(callbacks.onNavigateToSeries) }
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
@@ -232,21 +232,29 @@ internal fun DetailContentBody(
                             if (isNotEmpty()) append(" · ")
                             append("E$episode")
                         }
-                        item.seriesName?.takeIf { it.isNotBlank() }?.let { series ->
-                            if (isNotEmpty()) append(" · ")
-                            append(series)
-                        }
                     }
-                    if (episodeContext.isNotBlank()) {
+                    if (episodeContext.isNotBlank() || item.isPlayed) {
                         FadingItem {
                             Column {
-                                Text(
-                                    text = episodeContext,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Spacer(Modifier.height(6.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    if (episodeContext.isNotBlank()) {
+                                        Text(
+                                            text = episodeContext,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                    if (item.isPlayed) {
+                                        EpisodeWatchedTag(
+                                            label = stringResource(R.string.detail_watched_badge),
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(2.dp))
                             }
                         }
                     }

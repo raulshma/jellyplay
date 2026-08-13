@@ -43,12 +43,17 @@ internal data class HomeBackdropState(
 )
 
 /**
- * Whether the backdrop should render at all. Suppressed when disabled or in
- * performance mode (matches `MediaImage`'s blurhash gating). Pure so it can be
- * unit-tested without a composition.
+ * Whether the backdrop should render at all. Suppressed when disabled, in
+ * performance mode (matches `MediaImage`'s blurhash gating), and in light
+ * themes. The colourful ambient/blurhash layers sit full-screen behind a
+ * scrolling list, which destroys text contrast on a light background — so
+ * light mode shows the plain [HomeBackdropState.backgroundColor] (the
+ * resolved `colorScheme.background`) instead. This mirrors the detail screen,
+ * which fades its hero into the plain theme background in light mode rather
+ * than darkening it. Pure so it can be unit-tested without a composition.
  */
 internal fun shouldRenderBackdrop(state: HomeBackdropState): Boolean =
-    state.enabled && !state.performanceMode
+    state.enabled && !state.performanceMode && !state.isLightTheme
 
 /**
  * Picks the active [BackdropLayer] from the resolved state. Pure for testing.
@@ -72,6 +77,9 @@ internal fun resolveBackdropLayer(state: HomeBackdropState): BackdropLayer =
  * Performance & accessibility:
  *  - Suppressed entirely in `performanceMode` (matches `MediaImage`'s blurhash
  *    nulling) so low-end devices pay zero cost.
+ *  - Suppressed entirely in light themes (see [shouldRenderBackdrop]); the
+ *    flat [HomeBackdropState.backgroundColor] shows through instead, keeping
+ *    list content legible on a light surface.
  *  - The ambient layer's own animation freezes under reduced motion.
  *  - A scrim is drawn in the draw phase (no recompose) blending toward
  *    [backgroundColor] for legibility; OLED adds a near-black overlay, light
