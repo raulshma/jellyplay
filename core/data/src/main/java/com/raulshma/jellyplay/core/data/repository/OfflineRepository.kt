@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import kotlinx.coroutines.flow.Flow
@@ -86,6 +87,20 @@ interface OfflineRepository {
      * alphabetically. Returns an empty list for blank or too-short queries.
      */
     suspend fun searchOffline(query: String, limit: Int = 20): List<OfflineMediaItem>
+
+    /**
+     * Offline "More like this": on-device titles sharing a genre (then studio)
+     * with [currentId], for a LOCAL-origin detail screen so offline browsing
+     * isn't an island. De-duplicated by id, capped at [limit], returned as
+     * [MediaItem]s (local artwork resolved) so the detail screen's existing
+     * related-items row renders them unchanged. Empty when nothing matches.
+     */
+    suspend fun getLocalRelated(
+        currentId: String,
+        genres: List<String>,
+        studios: List<String>,
+        limit: Int = 12,
+    ): List<MediaItem>
 
     /**
      * Reactive freshness state for an offline item, projected from the persisted

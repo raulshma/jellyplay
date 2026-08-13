@@ -13,7 +13,11 @@
     <string name="detail_section_items">항목</string>
     <string name="detail_section_cast_crew">출연진 &amp; 제작진</string>
     <string name="detail_section_cast">출연진</string>
+    <string name="detail_section_crew">제작진</string>
     <string name="detail_section_more_like_this">비슷한 작품</string>
+    <string name="detail_section_chapters">챕터</string>
+    <string name="detail_see_all">모두 보기</string>
+    <string name="detail_more_like_this_on_device">기기 내</string>
     <string name="detail_section_videos">동영상</string>
     <string name="detail_section_seasons">시즌</string>
 
@@ -114,6 +118,7 @@
     <string name="detail_stream_default_badge">기본</string>
     <string name="detail_audio_track_format">트랙 %1$d</string>
     <string name="detail_subtitle_track_format">트랙 %1$d</string>
+    <string name="detail_download_quality">품질</string>
     <string name="detail_subtitle_off">끔</string>
     <string name="detail_audio_channels_format">%1$dCH</string>
 

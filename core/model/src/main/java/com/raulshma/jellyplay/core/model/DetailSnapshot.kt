@@ -175,6 +175,10 @@ data class DetailCapabilities(
     val remoteWorkAllowed: Boolean,
     /** A completed, on-disk download exists — surfaces delete/freshness/resync/re-download. */
     val localDownloadManagement: Boolean,
+    /** Genre/tag chips are tappable → deep-link into a filtered library section. Remote-only. */
+    val tagNavigation: Boolean,
+    /** A chapter list can be rendered and a chapter is playable (resume-from-position). */
+    val chapters: Boolean,
 )
 
 /**

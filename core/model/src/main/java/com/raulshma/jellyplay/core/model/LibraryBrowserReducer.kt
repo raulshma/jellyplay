@@ -75,8 +75,15 @@ object LibraryBrowserReducer {
         } ?: SortOption.DATE_LAST_CONTENT_ADDED
         // "See All" from a home Latest row mirrors the default library tab view
         // (top-level items) and differs only in sort order (latest first).
-        // Explicit ctx.mediaTypes (if passed) still win.
-        val filters = LibraryFilters(sortBy = sectionSort, mediaTypes = ctx.mediaTypes)
+        // Explicit ctx.mediaTypes (if passed) still win. A detail-screen chip
+        // deep-link (ctx.genre / ctx.tag) seeds a name-based genre/tag filter —
+        // the query layer filters genres + tags by name.
+        val filters = LibraryFilters(
+            sortBy = sectionSort,
+            mediaTypes = ctx.mediaTypes,
+            genres = listOfNotNull(ctx.genre),
+            tags = listOfNotNull(ctx.tag),
+        )
         // Reset grouping so a leftover "Group by Year" from a previous section can't
         // supersede the latest-first sort on the next "Latest X" open (#113).
         return current.copy(

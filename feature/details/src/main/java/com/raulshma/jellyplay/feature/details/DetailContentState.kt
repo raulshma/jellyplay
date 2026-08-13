@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.DetailCapabilities
 import com.raulshma.jellyplay.core.model.DetailContext
 import com.raulshma.jellyplay.core.model.DetailOrigin
 import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.LocalSubtitleOption
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -46,6 +47,7 @@ internal data class DetailContentState(
     val albumTracks: List<MediaItem>,
     val collectionItems: List<MediaItem>,
     val relatedItems: List<MediaItem>,
+    val localRelatedItems: List<MediaItem> = emptyList(),
     val relatedVideos: List<SeerrRelatedVideo>,
     val seerrRecommendations: List<SeerrSearchItem>,
     val seerrSimilar: List<SeerrSearchItem>,
@@ -79,6 +81,8 @@ internal data class DetailContentState(
      * treats every episode as downloaded.
      */
     val downloadedEpisodeIds: Set<String> = emptySet(),
+    // Pre-download picker (quality + external-subtitle selection).
+    val downloadPicker: DownloadPickerState = DownloadPickerState(),
 )
 
 /**
@@ -96,11 +100,23 @@ internal data class DetailContentCallbacks(
     val getImageUrl: (String) -> String,
     val getBackdropUrl: (String) -> String,
     val getSeerrPosterUrl: (String?) -> String?,
+    /** Resolves a chapter thumbnail URL (imageType = Chapter) by list index + tag. */
+    val getChapterImageUrl: (itemId: String, imageIndex: Int, tag: String?) -> String,
     val onRetry: () -> Unit,
     val onRefresh: () -> Unit,
     val onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
+    /** Resume-from-chapter: hand off to the player at a chapter's start position. */
+    val onPlayChapter: (startTicks: Long) -> Unit = {},
     val onAudioClick: () -> Unit,
     val onDownloadClick: () -> Unit,
+    /** Open the pre-download picker (quality + external-subtitle selection). */
+    val onOpenDownloadPicker: () -> Unit = {},
+    /** Dismiss the pre-download picker without starting a download. */
+    val onDismissDownloadPicker: () -> Unit = {},
+    /** Replace the pending download quality in the picker. */
+    val onPendingQualityChange: (DownloadQuality) -> Unit = {},
+    /** Replace the pending external-subtitle selection. */
+    val onPendingSubtitleSelectionChange: (SubtitleSelection) -> Unit = {},
     val onDownloadSeriesClick: () -> Unit,
     val onToggleFavorite: () -> Unit,
     val onMarkPlayed: () -> Unit,
@@ -111,6 +127,8 @@ internal data class DetailContentCallbacks(
     val onAudioSelect: (Int?) -> Unit,
     val onItemClick: (String) -> Unit,
     val onPersonClick: (String) -> Unit,
+    /** Open the full Cast & Crew screen (reached from "See all" on the cast row). */
+    val onSeeAllCast: () -> Unit = {},
     val onNavigateToSeries: (String) -> Unit,
     val onSeasonSelected: (String) -> Unit,
     val onEpisodesDescendingChange: (Boolean) -> Unit,

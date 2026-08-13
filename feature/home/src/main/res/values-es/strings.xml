@@ -93,4 +93,10 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">No se pudo cargar el contenido. Revisa tu conexión e inténtalo de nuevo.</string>
+
+    <!-- Confirmación de eliminar descarga al mantener pulsado en inicio sin conexión. -->
+    <string name="home_delete_download_title">Eliminar descarga</string>
+    <string name="home_delete_download_message">¿Quitar \"%1$s\" de tu dispositivo? Esto libera %2$s.</string>
+    <string name="home_delete_download_message_no_size">¿Quitar \"%1$s\" de tu dispositivo?</string>
+    <string name="home_delete_download_confirm">Eliminar</string>
 </resources>

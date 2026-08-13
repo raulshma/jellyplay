@@ -5,6 +5,7 @@ import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.details.CollectionDetailScreen
+import com.raulshma.jellyplay.feature.details.CastAndCrewScreen
 import com.raulshma.jellyplay.feature.details.ManageSeriesScreen
 import com.raulshma.jellyplay.feature.details.MediaDetailScreen
 import com.raulshma.jellyplay.feature.details.MediaInfoScreen
@@ -68,6 +69,14 @@ fun EntryProviderScope<NavKey>.detailsSection(
         PersonDetailScreen(
             personId = key.personId,
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.CastAndCrew> { key ->
+        CastAndCrewScreen(
+            itemId = key.itemId,
+            onPersonClick = { personId -> navigator.navigate(Route.PersonDetail(personId)) },
             onBack = { navigator.goBack() },
         )
     }

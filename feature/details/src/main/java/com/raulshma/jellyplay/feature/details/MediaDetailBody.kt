@@ -139,6 +139,43 @@ internal fun FadingItem(
     }
 }
 
+/**
+ * Pill chip for a navigable metadata facet (genre / tag / studio). The genre and
+ * tag rows shared the same clip → background → focus → clickable → padding → Text
+ * shape, differing only in colour and the route argument; this collapses them so
+ * the look stays consistent and the duplicated modifier chain lives once.
+ *
+ * [enabled] renders the chip as a non-clickable label (used for genres on a
+ * LOCAL origin that can't fulfil a drill-in) — focus + click are attached only
+ * when navigable, matching the previous per-branch gating.
+ */
+@Composable
+private fun TagChip(
+    label: String,
+    containerColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit = {},
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
+    Box(
+        modifier = modifier
+            .clip(ShapeCache.smooth16)
+            .background(containerColor)
+            .then(if (enabled) focusState.focusModifier else Modifier)
+            .then(if (enabled) Modifier.tvFocusIndicator(focusState, ShapeCache.smooth16) else Modifier)
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            color = contentColor,
+        )
+    }
+}
+
 @Composable
 internal fun DetailContentBody(
     state: DetailContentState,
@@ -364,6 +401,11 @@ internal fun DetailContentBody(
 
                 item.genres.takeIf { it.isNotEmpty() }?.let { genres ->
                     Spacer(Modifier.height(14.dp))
+                    // Genre chips: tappable → a filtered library section (REMOTE only).
+                    // LOCAL origin renders as non-clickable labels — gated by
+                    // capabilities.tagNavigation so a local origin never offers a
+                    // drill-in it can't fulfill. Mirrors the studio chip pattern.
+                    val genreNavEnabled = state.capabilities.tagNavigation
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
@@ -371,18 +413,50 @@ internal fun DetailContentBody(
                     ) {
                         items(genres, key = { it }, contentType = { "genre" }) { genre ->
                             FadingItem {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(ShapeCache.smooth16)
-                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f))
-                                        .padding(horizontal = 14.dp, vertical = 7.dp)
-                                ) {
-                                    Text(
-                                        text = genre,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
-                                    )
-                                }
+                                TagChip(
+                                    label = genre,
+                                    containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                                    contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
+                                    enabled = genreNavEnabled,
+                                    onClick = {
+                                        callbacks.onNavigate(
+                                            com.raulshma.jellyplay.core.ui.navigation.Route.LibrarySection(
+                                                title = genre,
+                                                genre = genre,
+                                            ),
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                detail.tagItems.takeIf { it.isNotEmpty() && state.capabilities.tagNavigation }?.let { tags ->
+                    Spacer(Modifier.height(10.dp))
+                    // Tag chips: tappable → a filtered library section (REMOTE only).
+                    // Same tagNavigation gate as genres; tagItems carry a name + id
+                    // but the library query filters tags by name, so name is all we pass.
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .tvFocusRestorer(),
+                    ) {
+                        items(tags, key = { it.name }, contentType = { "tag" }) { tag ->
+                            FadingItem {
+                                TagChip(
+                                    label = tag.name,
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.95f),
+                                    onClick = {
+                                        callbacks.onNavigate(
+                                            com.raulshma.jellyplay.core.ui.navigation.Route.LibrarySection(
+                                                title = tag.name,
+                                                tag = tag.name,
+                                            ),
+                                        )
+                                    },
+                                )
                             }
                         }
                     }
@@ -537,6 +611,58 @@ internal fun DetailContentBody(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         modifier = Modifier.padding(horizontal = bodyContentPad),
                     )
+                }
+            }
+        }
+
+        // ── Chapters ──
+        // MediaDetail.chapters is loaded for every item but was never surfaced
+        // on the detail screen (only the player's ChapterPickerSheet used it).
+        // Render it as a tappable thumbnail row that resumes the player at the
+        // chapter's start position. Gated by capabilities.chapters (remote +
+        // non-empty) so a local origin never offers a drill-in it can't fulfill.
+        StaggeredDetailSection(visible = showContent && state.capabilities.chapters, delayIndex = 4) {
+            val chapters = state.detail.chapters
+            if (chapters.isNotEmpty()) {
+                Column {
+                    FadingItem {
+                        Text(
+                            text = stringResource(R.string.detail_section_chapters),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                            modifier = Modifier
+                                .padding(horizontal = bodyContentPad)
+                                .semantics { heading() },
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    // ChapterInfo has no id and startPositionTicks isn't guaranteed
+                    // unique — Jellyfin can emit duplicate positions (seen in the wild),
+                    // which crashes LazyRow with a duplicate key. Pair each chapter with
+                    // its list index so the key is collision-free. The index is already
+                    // the stable identity used for /Images/Chapter/{index} lookups below.
+                    TvFocusableItemRow(
+                        items = chapters.mapIndexed { i, c -> i to c },
+                        key = { (index, chapter) -> "chapter_${index}_${chapter.startPositionTicks}" },
+                        contentPadding = PaddingValues(horizontal = bodyContentPad),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) { _, (index, chapter), focusModifier ->
+                        val chapterImageUrl = remember(item.id, index, chapter.imageTag) {
+                            callbacks.getChapterImageUrl(item.id, index, chapter.imageTag)
+                        }
+                        val chapterClick = remember(chapter.startPositionTicks) {
+                            { callbacks.onPlayChapter(chapter.startPositionTicks) }
+                        }
+                        ChapterTile(
+                            name = chapter.name,
+                            imageUrl = chapterImageUrl,
+                            timestamp = com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks(
+                                chapter.startPositionTicks,
+                            ),
+                            onClick = chapterClick,
+                            modifier = focusModifier,
+                        )
+                    }
                 }
             }
         }
@@ -730,15 +856,39 @@ internal fun DetailContentBody(
         StaggeredDetailSection(visible = showContent, delayIndex = 8) {
             if (detail.people.isNotEmpty()) {
                 Column {
+                    // "See all" appears only when the cast is large enough to hide
+                    // people behind the single row, and only for a navigable (remote)
+                    // origin — the Cast & Crew screen re-fetches the full people list.
+                    val showSeeAllCast = detail.people.size > 12 && state.capabilities.personNavigation
                     FadingItem {
-                        Text(
-                            text = stringResource(R.string.detail_section_cast_crew),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        androidx.compose.foundation.layout.Row(
                             modifier = Modifier
-                                .padding(horizontal = bodyContentPad)
-                                .semantics { heading() },
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                                .fillMaxWidth()
+                                .padding(horizontal = bodyContentPad),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.detail_section_cast_crew),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.semantics { heading() },
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            if (showSeeAllCast) {
+                                val seeAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                                Text(
+                                    text = stringResource(R.string.detail_see_all),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .clip(ShapeCache.smooth16)
+                                        .then(seeAllFocusState.focusModifier)
+                                        .then(Modifier.tvFocusIndicator(seeAllFocusState, ShapeCache.smooth16))
+                                        .clickable { callbacks.onSeeAllCast() }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                )
+                            }
+                        }
                     }
                     Spacer(Modifier.height(16.dp))
                         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
@@ -791,17 +941,38 @@ internal fun DetailContentBody(
         }
 
         StaggeredDetailSection(visible = showContent, delayIndex = 10) {
-            if (state.relatedItems.isNotEmpty()) {
+            // A LOCAL origin has no server "similar" list, so it shows on-device
+            // titles mined from the offline library (localRelatedItems) instead;
+            // remote keeps the server-sourced relatedItems. Either way the row
+            // renders identically — only the source + an "On-device" badge differ.
+            val isLocalOrigin = state.origin?.isLocal == true
+            val moreLikeThis = if (isLocalOrigin) state.localRelatedItems else state.relatedItems
+            if (moreLikeThis.isNotEmpty()) {
                 Column {
                     FadingItem {
-                        Text(
-                            text = stringResource(R.string.detail_section_more_like_this),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier
-                                .padding(horizontal = bodyContentPad)
-                                .semantics { heading() },
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        androidx.compose.foundation.layout.Row(
+                            modifier = Modifier.padding(horizontal = bodyContentPad),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.detail_section_more_like_this),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.semantics { heading() },
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            if (isLocalOrigin) {
+                                Text(
+                                    text = stringResource(R.string.detail_more_like_this_on_device),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .clip(ShapeCache.smooth16)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
                     }
                     Spacer(Modifier.height(16.dp))
                     // Compute the card width once from the already-read adaptiveInfo
@@ -809,12 +980,12 @@ internal fun DetailContentBody(
                     // visible item lambda (one CompositionLocal read per item).
                     val relatedCardWidth = if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
                     TvFocusableItemRow(
-                        items = state.relatedItems,
+                        items = moreLikeThis,
                         key = { "related_${it.id}" },
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         onFocusedIndexChange = { index ->
-                            state.relatedItems.getOrNull(index)?.let(callbacks.onFocusedMediaItem)
+                            moreLikeThis.getOrNull(index)?.let(callbacks.onFocusedMediaItem)
                         },
                     ) { _, related, focusModifier ->
                             val relatedClick = remember(related.id) { { callbacks.onItemClick(related.id) } }
@@ -922,6 +1093,61 @@ internal fun SeerrItemsRow(
                     modifier = focusModifier.width(cardWidth),
                 )
         }
+    }
+}
+
+@Composable
+private fun ChapterTile(
+    name: String,
+    imageUrl: String,
+    timestamp: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusState = rememberTvFocusState(focusedScale = 1.04f)
+    Column(
+        modifier = modifier
+            .width(180.dp)
+            .then(focusState.focusModifier)
+            .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smooth12))
+            .clickable(onClick = onClick),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .height(104.dp)
+                .fillMaxWidth()
+                .clip(ShapeCache.smooth12)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (imageUrl.isNotEmpty()) {
+                MediaImage(
+                    url = imageUrl,
+                    contentDescription = name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Icon(
+                    Tabler.Outline.PlayerPlay,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = timestamp,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
     }
 }
 

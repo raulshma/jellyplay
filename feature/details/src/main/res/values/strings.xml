@@ -12,7 +12,11 @@
     <string name="detail_section_items">Items</string>
     <string name="detail_section_cast_crew">Cast &amp; Crew</string>
     <string name="detail_section_cast">Cast</string>
+    <string name="detail_section_crew">Crew</string>
     <string name="detail_section_more_like_this">More Like This</string>
+    <string name="detail_section_chapters">Chapters</string>
+    <string name="detail_see_all">See all</string>
+    <string name="detail_more_like_this_on_device">On-device</string>
     <string name="detail_section_videos">Videos</string>
     <string name="detail_section_seasons">Seasons</string>
     <string name="detail_section_seerr_recommendations">Seerr Recommendations</string>
@@ -120,6 +124,7 @@
     <string name="detail_stream_default_badge">DEFAULT</string>
     <string name="detail_audio_track_format">Track %1$d</string>
     <string name="detail_subtitle_track_format">Track %1$d</string>
+    <string name="detail_download_quality">Quality</string>
     <string name="detail_subtitle_off">OFF</string>
     <string name="detail_audio_channels_format">%1$dCH</string>
 
@@ -131,6 +136,14 @@
     <string name="detail_estimated_size">Estimated size: %1$s</string>
     <string name="detail_available_storage">Available storage: %1$s</string>
     <string name="detail_not_enough_storage">Not enough storage space available.</string>
+    <string name="detail_download_advanced">Advanced</string>
+    <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
+    <string name="detail_download_subtitles_all">All subtitles</string>
+    <string name="detail_download_subtitles_none">No subtitles</string>
+    <plurals name="detail_download_subtitles_count">
+        <item quantity="one">%1$d subtitle</item>
+        <item quantity="other">%1$d subtitles</item>
+    </plurals>
 
     <!-- ── File-size formatting ─────────────────────────────────────────── -->
     <string name="detail_size_gb">%1$.1f GB</string>

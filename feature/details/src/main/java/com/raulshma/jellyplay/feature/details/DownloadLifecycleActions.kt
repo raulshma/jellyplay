@@ -32,6 +32,10 @@ internal data class DownloadLifecycleState(
     val downloadSheetEpisodes: Map<String, List<MediaItem>> = emptyMap(),
     val downloadSheetLoadingSeasons: Set<String> = emptySet(),
     val downloadedEpisodeIds: Set<String> = emptySet(),
+    // Per-download picker (quality + external-subtitle selection). Folded into
+    // [DownloadPickerState] so sheet visibility, quality, and subtitle selection
+    // travel as one unit through the holder instead of three loose fields.
+    val downloadPicker: DownloadPickerState = DownloadPickerState(),
 )
 
 /**
@@ -67,6 +71,41 @@ internal class DownloadLifecycleActions(
     private val _state = MutableStateFlow(DownloadLifecycleState())
     val state: StateFlow<DownloadLifecycleState> = _state.asStateFlow()
 
+    /**
+     * Opens the pre-download picker, seeding the pending quality from the user's
+     * stored preference and resetting the subtitle selection to "all" so a prior
+     * session's pick never leaks into a new one.
+     */
+    fun openDownloadPicker() {
+        val prefs = downloadsStore.downloads.value
+        _state.update {
+            it.copy(
+                downloadPicker = DownloadPickerState(
+                    visible = true,
+                    quality = prefs.downloadQuality,
+                ),
+            )
+        }
+    }
+
+    fun dismissDownloadPicker() {
+        _state.update { it.copy(downloadPicker = it.downloadPicker.copy(visible = false)) }
+    }
+
+    fun setPendingQuality(quality: DownloadQuality) {
+        _state.update { it.copy(downloadPicker = it.downloadPicker.copy(quality = quality)) }
+    }
+
+    /**
+     * Replaces the external-subtitle selection for the next download. The picker
+     * UI hands the toggled [SubtitleSelection] here; [SubtitleSelection.All]
+     * bundles every deliverable subtitle, [SubtitleSelection.Subset] an explicit
+     * set (possibly empty — a valid "no subtitles" choice).
+     */
+    fun setPendingSubtitleSelection(selection: SubtitleSelection) {
+        _state.update { it.copy(downloadPicker = it.downloadPicker.copy(subtitleSelection = selection)) }
+    }
+
     // Per-season on-demand cache for the download sheet (the sheet fetches
     // seasons lazily, independent of the main display). These are internal
     // caches, not observable state — they are projected into
@@ -84,6 +123,12 @@ internal class DownloadLifecycleActions(
             scope.launch { messageSink(DetailMessage.Text(context.getString(R.string.detail_error_no_source))) }
             return
         }
+
+        // The picker (if open) has handed off to the download; close it so the
+        // cellular-warning dialog / spinner can take over. The pending quality
+        // + subtitle selection persist in state so [performDownload] and a
+        // follow-up [confirmCellularDownload] resolve identically.
+        _state.update { it.copy(downloadPicker = it.downloadPicker.copy(visible = false)) }
 
         // Cellular download size warning: when on a metered network and the
         // user has configured a warning threshold (MB), surface a
@@ -126,13 +171,16 @@ internal class DownloadLifecycleActions(
         scope.launch {
             _state.update { it.copy(isDownloading = true) }
             try {
-                // Apply the user's download quality preference when building the
-                // stream URL so the server transcodes to the requested ceiling.
-                // The intake seam owns the full bundle (local images, trickplay,
-                // subtitles, segments, offline metadata row).
-                val prefs = downloadsStore.downloads.value
-                val maxBitrate = qualityToMaxBitrate(prefs.downloadQuality)
-                val result = downloadIntake.start(detail, maxBitrate)
+                // Apply the pending download quality (seeded from the user's
+                // preference when the picker opens) when building the stream URL
+                // so the server transcodes to the requested ceiling, and narrow
+                // the bundled subtitles to the picker's selection
+                // (SubtitleSelection.All = every deliverable subtitle). The intake
+                // seam owns the full bundle (local images, trickplay, subtitles,
+                // segments, offline metadata row).
+                val picker = _state.value.downloadPicker
+                val maxBitrate = qualityToMaxBitrate(picker.quality)
+                val result = downloadIntake.start(detail, maxBitrate, picker.subtitleSelection.toIndexSet())
                 if (result.downloadItem == null) {
                     val message = result.error
                         ?: context.getString(R.string.detail_error_download_failed)
@@ -247,6 +295,7 @@ internal class DownloadLifecycleActions(
                 isDownloading = false,
                 isDownloadingSeries = false,
                 cellularDownloadWarningMb = null,
+                downloadPicker = DownloadPickerState(),
                 downloadSheetEpisodes = emptyMap(),
                 downloadSheetLoadingSeasons = emptySet(),
                 downloadedEpisodeIds = emptySet(),

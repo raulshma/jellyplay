@@ -37,6 +37,14 @@ interface PlaybackRepository {
 
     fun getImageUrl(itemId: String, imageType: String = "Primary", maxWidth: Int? = 400): String
 
+    /**
+     * Resolves a chapter thumbnail: Jellyfin's `/Items/{itemId}/Images/Chapter/{imageIndex}`
+     * endpoint, keyed on the chapter's list position + optional image tag. The detail
+     * screen's chapter row is the only consumer; the primary image path ([getImageUrl])
+     * is untouched so the hot poster/backdrop path stays unchanged.
+     */
+    fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String? = null, maxWidth: Int? = 400): String
+
     fun getBackdropUrl(itemId: String, maxWidth: Int = 1280): String
 
     /** Fetches an item's image bytes via the authenticated API (for offline storage). */

@@ -42,6 +42,9 @@ data class ChapterInfo(
     val name: String,
     val startPositionTicks: Long,
     val imageDateModified: String? = null,
+    /** Jellyfin chapter image tag; pairs with the list index to resolve the
+     *  `/Items/{itemId}/Images/Chapter/{index}` thumbnail. */
+    val imageTag: String? = null,
 )
 
 @Immutable
@@ -63,6 +66,15 @@ data class PersonInfo(
      */
     fun hasCastImage(): Boolean =
         (type == "Actor" || type == "Director") && !primaryImageTag.isNullOrBlank()
+
+    /**
+     * True whenever a primary portrait is fetchable, regardless of person type.
+     * Broader than [hasCastImage] (which restricts the main cast row to
+     * Actor/Director): the dedicated Cast & Crew screen renders portraits for
+     * crew types (Writer/Producer/Composer/GuestStar/…) too, as long as a
+     * primary image tag is present.
+     */
+    fun hasPortrait(): Boolean = !primaryImageTag.isNullOrBlank()
 }
 
 @Immutable
@@ -117,7 +129,17 @@ data class MediaStream(
     val audioBitRate: Long? = null,
     val audioSampleRate: Int? = null,
     val keyFrames: List<Long>? = null,
-)
+) {
+    /**
+     * True for subtitle streams JellyPlay can bundle offline: external sidecars
+     * or embedded subs exposing a server delivery URL. Centralizes the predicate
+     * the download writer ([com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter.downloadExternalSubtitles]),
+     * the offline sync comparator, and the pre-download picker UI each
+     * re-implemented inline — and could silently drift apart when one changed.
+     */
+    val isBundleableSubtitle: Boolean
+        get() = type == StreamType.SUBTITLE && (isExternal || !deliveryUrl.isNullOrBlank())
+}
 
 @Immutable
 @Serializable

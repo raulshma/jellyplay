@@ -47,11 +47,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.Trash
 import com.raulshma.jellyplay.core.designsystem.theme.ArtworkThemeWrapper
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.OfflineMode
@@ -60,6 +62,8 @@ import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.LocalNavigationBarColor
@@ -256,11 +260,24 @@ private fun MainHomeContent(
         currentOnPlayClick(item.id, null, item.playbackPositionTicks ?: 0L, item.mediaType, item.parentId, item.name)
     } }
 
+    // Item awaiting a delete-confirm from the offline home's quick-action menu.
+    // Hoisted here (not in the sheet callback) so the dialog survives the card
+    // leaving composition while it's open.
+    var pendingDelete by remember { mutableStateOf<com.raulshma.jellyplay.core.model.MediaItem?>(null) }
+
     // Quick actions on card long-press and the TV Menu key on the focused
     // card. Provided to every PosterCard in scope via
     // CompositionLocal — the cards wire their own long-press.
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> item.quickActions(MediaQuickActionScope.HOME) } },
+        resolveActions = remember(viewModel) {
+            { item: com.raulshma.jellyplay.core.model.MediaItem ->
+                // The offline home only renders downloaded items, so a
+                // destructive "delete download" affordance makes sense there.
+                // Online home keeps the original Play / Mark / Details surface.
+                val offline = viewModel.uiState.value.offlineMode != OfflineMode.ONLINE
+                item.quickActions(MediaQuickActionScope.HOME, includeDelete = offline)
+            }
+        },
         executeAction = remember(viewModel, mediaOnItemClick, mediaOnPlayClick) {
             { item: com.raulshma.jellyplay.core.model.MediaItem, action: QuickAction ->
                 when (action) {
@@ -268,6 +285,8 @@ private fun MainHomeContent(
                     QuickAction.MARK_WATCHED -> viewModel.markItemPlayed(item)
                     QuickAction.MARK_UNWATCHED -> viewModel.markItemUnplayed(item)
                     QuickAction.DETAILS -> mediaOnItemClick(item)
+                    // Capture for the delete-confirm dialog (rendered below).
+                    QuickAction.DELETE -> pendingDelete = item
                     else -> Unit
                 }
             }
@@ -622,6 +641,30 @@ private fun MainHomeContent(
 
     // Long-press / TV-Menu quick actions for home cards.
     MediaQuickActionHost(quickActionController)
+
+    // Delete-confirm for the offline home's quick-action "Delete download".
+    pendingDelete?.let { target ->
+        val sizeBytes = remember(state.offlineLibrary, target.id) {
+            state.offlineLibrary.firstOrNull { it.id == target.id }?.totalSizeBytes ?: 0L
+        }
+        ConfirmDialog(
+            title = stringResource(R.string.home_delete_download_title),
+            message = if (sizeBytes > 0L) {
+                stringResource(R.string.home_delete_download_message, target.name, sizeBytes.formatBytes())
+            } else {
+                stringResource(R.string.home_delete_download_message_no_size, target.name)
+            },
+            confirmText = stringResource(R.string.home_delete_download_confirm),
+            dismissText = stringResource(com.raulshma.jellyplay.core.ui.R.string.core_cancel),
+            icon = Tabler.Outline.Trash,
+            tone = ConfirmTone.DESTRUCTIVE,
+            onConfirm = {
+                viewModel.deleteOfflineMedia(target)
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null },
+        )
+    }
 
     state.seerrRequestState.requestItem?.let { item ->
         androidx.compose.runtime.LaunchedEffect(item.id) {

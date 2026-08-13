@@ -93,4 +93,10 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">콘텐츠를 불러올 수 없습니다. 연결을 확인하고 다시 시도하세요.</string>
+
+    <!-- 오프라인 홈 길게 눌러 다운로드 삭제 확인. -->
+    <string name="home_delete_download_title">다운로드 삭제</string>
+    <string name="home_delete_download_message">\"%1$s\"을(를) 기기에서 제거하시겠습니까? %2$s이(가) 확보됩니다.</string>
+    <string name="home_delete_download_message_no_size">\"%1$s\"을(를) 기기에서 제거하시겠습니까?</string>
+    <string name="home_delete_download_confirm">삭제</string>
 </resources>

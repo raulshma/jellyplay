@@ -449,4 +449,67 @@ class OpenSubtitlesSubtitleProviderTest {
         assertEquals(2, result.getOrThrow().size)
     }
     // endregion
+
+    // region verifyCredentials (Test button path)
+    // verifyCredentials performs a real /login with the user's username/password
+    // so a wrong password is caught BEFORE saving — search alone can't, since it
+    // authenticates only with the shared app key and never logs in. The probe
+    // neither reads nor persists the store: it runs against unsaved form text.
+
+    @Test
+    fun `verifyCredentials succeeds on a 200 login and discards the token`() = runBlocking {
+        // A successful /login → Result.success(Unit). The token is thrown away
+        // (no persistence) — only the pass/fail matters for the Test button.
+        server.enqueue(
+            MockResponse().setBody("""{"token":"jwt-abc","status":200}"""),
+        )
+
+        val result = provider.verifyCredentials(creds)
+
+        assertTrue(result.isSuccess)
+        assertEquals("verify makes exactly one /login request", 1, server.requestCount)
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertTrue("hits /login: ${request.path}", request.path!!.startsWith("/api/v1/login"))
+        assertEquals(OpenSubtitlesSubtitleProvider.APP_API_KEY, request.getHeader("Api-Key"))
+        val body = request.body.readUtf8()
+        assertTrue("username in body: $body", body.contains("\"username\":\"tester\""))
+        assertTrue("password in body: $body", body.contains("\"password\":\"hunter2\""))
+    }
+
+    @Test
+    fun `verifyCredentials surfaces a non-retryable ApiException on a 401 login`() = runBlocking {
+        // Wrong password → OpenSubtitles returns 401 from /login. This must
+        // surface as a FAILURE (so the Test chip shows an error), be
+        // non-retryable (401 is permanent), and never reach /subtitles.
+        server.enqueue(
+            MockResponse().setResponseCode(401).setBody("""{"message":"Invalid credentials"}"""),
+        )
+
+        val result = provider.verifyCredentials(creds)
+
+        assertTrue(result.isFailure)
+        val ex = result.exceptionOrNull() as? ApiException
+        assertNotNull(ex)
+        assertEquals(false, ex?.isRetryable)
+        assertEquals(401, ex?.httpCode)
+        assertEquals("only the login call fired", 1, server.requestCount)
+        assertTrue(
+            "never reaches search",
+            !server.takeRequest().path!!.startsWith("/api/v1/subtitles"),
+        )
+    }
+
+    @Test
+    fun `verifyCredentials fails fast without a request when credentials are blank`() = runBlocking {
+        // The Test button fail-fast lives in the ViewModel, but the provider
+        // guards too: unconfigured creds never hit the network.
+        val result = provider.verifyCredentials(
+            SubtitleProviderCredentials.OpenSubtitles(username = "", password = ""),
+        )
+
+        assertTrue(result.isFailure)
+        assertEquals(0, server.requestCount)
+    }
+    // endregion
 }

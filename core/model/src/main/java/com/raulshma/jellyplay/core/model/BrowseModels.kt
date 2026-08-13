@@ -260,4 +260,8 @@ data class LibrarySectionContext(
     val collectionType: String? = null,
     val sortBy: String? = null,
     val mediaTypes: List<MediaType> = emptyList(),
+    // Pre-applied genre/tag filter (by name) for a detail-screen chip deep-link.
+    // The library query filters by name, so these carry a single name each.
+    val genre: String? = null,
+    val tag: String? = null,
 )

@@ -237,6 +237,7 @@ class DetailViewModel @Inject constructor(
                         downloadSheetEpisodes = download.downloadSheetEpisodes,
                         downloadSheetLoadingSeasons = download.downloadSheetLoadingSeasons,
                         downloadedEpisodeIds = download.downloadedEpisodeIds,
+                        downloadPicker = download.downloadPicker,
                     )
                 }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
             }
@@ -484,6 +485,7 @@ class DetailViewModel @Inject constructor(
                     fetchedSeasonIds = emptySet(),
                     collectionItems = emptyList(),
                     relatedItems = emptyList(),
+                    localRelatedItems = emptyList(),
                     albumTracks = emptyList(),
                     smartPlayTarget = null,
                     selectedSubtitleIndex = null,
@@ -671,6 +673,8 @@ class DetailViewModel @Inject constructor(
         maybeComputeSmartPlayTarget()
         if (isRemote) {
             triggerRemoteSideEffects(itemId, detail, snapshot.capabilities)
+        } else {
+            triggerLocalSideEffects(itemId, detail)
         }
         // Collections are remote-only companion content (not part of the snapshot);
         // gated on remoteDiscovery so a local origin never starts it.
@@ -718,6 +722,32 @@ class DetailViewModel @Inject constructor(
             kotlinx.coroutines.delay(350)
             if (currentItemId != itemId) return@launch
             loadSeerrDataIfNeeded(detail)
+        }
+    }
+
+    /**
+     * LOCAL-origin counterpart to [triggerRemoteSideEffects]. Remote discovery
+     * (similar/Seerr/trailers) is server-only, so a downloaded item would
+     * otherwise render as an island. Instead we mine the on-device offline
+     * library for titles sharing a genre (then studio) and surface them in the
+     * same "More like this" row with an "On-device" label. Read-only single
+     * fetch — no helper class — over the already-indexed offline rows.
+     */
+    private fun triggerLocalSideEffects(itemId: String, detail: MediaDetail) {
+        val genres = detail.item.genres
+        val studios = detail.item.studios
+        if (genres.isEmpty() && studios.isEmpty()) return
+        launch {
+            val related = offlineRepository.getLocalRelated(
+                currentId = itemId,
+                genres = genres,
+                studios = studios,
+                limit = 12,
+            )
+            if (currentItemId != itemId) return@launch
+            _uiState.update {
+                it.copy(localRelatedItems = related.filter { r -> r.id != itemId })
+            }
         }
     }
 
@@ -1084,6 +1114,14 @@ class DetailViewModel @Inject constructor(
 
     fun startDownload() = downloadLifecycleActions.startDownload()
 
+    // ── Pre-download picker (quality + external-subtitle selection) ──
+    fun openDownloadPicker() = downloadLifecycleActions.openDownloadPicker()
+    fun dismissDownloadPicker() = downloadLifecycleActions.dismissDownloadPicker()
+    fun setPendingDownloadQuality(quality: DownloadQuality) =
+        downloadLifecycleActions.setPendingQuality(quality)
+    fun setPendingSubtitleSelection(selection: SubtitleSelection) =
+        downloadLifecycleActions.setPendingSubtitleSelection(selection)
+
     /**
      * Called from the UI after the user explicitly confirms a cellular download
      * that exceeded the warning threshold. Delegates to [DownloadLifecycleActions].
@@ -1094,6 +1132,10 @@ class DetailViewModel @Inject constructor(
 
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
+
+    /** Chapter thumbnail URL for the detail-screen chapter row. */
+    fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?): String =
+        imageUrlProvider.getChapterImageUrl(itemId, imageIndex, tag)
 
     fun downloadSeries(episodeIds: Map<String, List<String>>? = null) =
         downloadLifecycleActions.downloadSeries(episodeIds)

@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.StreamType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,6 +29,13 @@ data class DownloadRequest(
     // "ts", ...). Used to derive the on-disk file extension and to attach the
     // correct MIME type to the player engine at playback time.
     val container: String? = null,
+    // Subset of SUBTITLE stream indices (by [MediaStream.index]) to bundle for
+    // offline use. Null means "every external/deliverable subtitle" (the
+    // historical default). When non-null, [executeDownload] pre-filters the
+    // streams handed to the writer so only the user's selection is fetched and
+    // recorded in the subtitle manifest. Non-subtitle streams are always passed
+    // through unchanged.
+    val selectedSubtitleIndices: Set<Int>? = null,
 )
 
 data class DownloadResult(
@@ -50,11 +58,14 @@ class DownloadDelegate @Inject constructor(
     /**
      * Builds a [DownloadRequest] from [detail]. [maxBitrate] (bits per second)
      * is applied to the stream URL so the server transcodes to the user's
-     * chosen download quality; pass null for original quality.
+     * chosen download quality; pass null for original quality. [selectedSubtitleIndices]
+     * narrows the external subtitles bundled offline to the given stream indices
+     * (null = all external/deliverable subtitles).
      */
     suspend fun prepareDownloadRequest(
         detail: MediaDetail,
         maxBitrate: Int? = null,
+        selectedSubtitleIndices: Set<Int>? = null,
     ): DownloadRequest? {
         val item = detail.item
         val source = detail.mediaSources.firstOrNull() ?: return null
@@ -81,6 +92,7 @@ class DownloadDelegate @Inject constructor(
             mediaStreams = source.mediaStreams,
             detail = detail,
             container = source.container,
+            selectedSubtitleIndices = selectedSubtitleIndices,
         )
     }
 
@@ -102,9 +114,10 @@ class DownloadDelegate @Inject constructor(
     suspend fun startOne(
         detail: MediaDetail,
         maxBitrate: Int? = null,
+        selectedSubtitleIndices: Set<Int>? = null,
         precomputedCurrentBytes: Long? = null,
     ): DownloadResult? {
-        val request = prepareDownloadRequest(detail, maxBitrate) ?: return null
+        val request = prepareDownloadRequest(detail, maxBitrate, selectedSubtitleIndices) ?: return null
         return executeDownload(request, precomputedCurrentBytes)
     }
 
@@ -238,12 +251,23 @@ class DownloadDelegate @Inject constructor(
                         } catch (_: Exception) {}
                     }
                     // Bundle external subtitles + intro/outro segments for offline use.
-                    if (request.mediaStreams.isNotEmpty()) {
+                    // When the request carries a selected-subtitle set, narrow the
+                    // streams to that subset first so the writer (and the manifest it
+                    // writes) only record the user's pick; non-subtitle streams pass
+                    // through unchanged since the writer filters to subtitles itself.
+                    val subtitleStreams = when (request.selectedSubtitleIndices) {
+                        null -> request.mediaStreams
+                        else -> request.mediaStreams.filter { stream ->
+                            stream.type != StreamType.SUBTITLE ||
+                                stream.index in request.selectedSubtitleIndices
+                        }
+                    }
+                    if (subtitleStreams.isNotEmpty()) {
                         try {
                             if (!writer.downloadExternalSubtitles(
                                     request.mediaItemId,
                                     request.mediaSourceId,
-                                    request.mediaStreams,
+                                    subtitleStreams,
                                     downloadItem.downloadPath,
                                 )
                             ) {

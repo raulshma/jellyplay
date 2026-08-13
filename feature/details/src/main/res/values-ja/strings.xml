@@ -13,7 +13,11 @@
     <string name="detail_section_items">アイテム</string>
     <string name="detail_section_cast_crew">キャスト &amp; スタッフ</string>
     <string name="detail_section_cast">キャスト</string>
+    <string name="detail_section_crew">スタッフ</string>
     <string name="detail_section_more_like_this">似ている作品</string>
+    <string name="detail_section_chapters">チャプター</string>
+    <string name="detail_see_all">すべて表示</string>
+    <string name="detail_more_like_this_on_device">端末内</string>
     <string name="detail_section_videos">動画</string>
     <string name="detail_section_seasons">シーズン</string>
 
@@ -114,6 +118,7 @@
     <string name="detail_stream_default_badge">デフォルト</string>
     <string name="detail_audio_track_format">トラック %1$d</string>
     <string name="detail_subtitle_track_format">トラック %1$d</string>
+    <string name="detail_download_quality">品質</string>
     <string name="detail_subtitle_off">オフ</string>
     <string name="detail_audio_channels_format">%1$dCH</string>
 

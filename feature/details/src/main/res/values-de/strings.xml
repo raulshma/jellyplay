@@ -13,7 +13,11 @@
     <string name="detail_section_items">Einträge</string>
     <string name="detail_section_cast_crew">Besetzung &amp; Crew</string>
     <string name="detail_section_cast">Besetzung</string>
+    <string name="detail_section_crew">Crew</string>
     <string name="detail_section_more_like_this">Ähnliches</string>
+    <string name="detail_section_chapters">Kapitel</string>
+    <string name="detail_see_all">Alle anzeigen</string>
+    <string name="detail_more_like_this_on_device">Auf dem Gerät</string>
     <string name="detail_section_videos">Videos</string>
     <string name="detail_section_seasons">Staffeln</string>
 
@@ -116,6 +120,7 @@
     <string name="detail_stream_default_badge">STANDARD</string>
     <string name="detail_audio_track_format">Titel %1$d</string>
     <string name="detail_subtitle_track_format">Titel %1$d</string>
+    <string name="detail_download_quality">Qualität</string>
     <string name="detail_subtitle_off">AUS</string>
     <string name="detail_audio_channels_format">%1$d-Kanal</string>
 

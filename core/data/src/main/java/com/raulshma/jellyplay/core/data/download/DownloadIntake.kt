@@ -44,11 +44,19 @@ interface DownloadIntake {
      * server transcodes to the user's chosen download quality; pass null for
      * original quality.
      *
+     * [selectedSubtitleIndices] narrows the external subtitles bundled offline
+     * to the given stream indices (by [com.raulshma.jellyplay.core.model.MediaStream.index]);
+     * pass null to bundle every external/deliverable subtitle (the default).
+     *
      * Returns a [DownloadResult] with either the started [DownloadItem] or
      * an error message. A null request (no media source / blank stream URL)
      * yields a result with a descriptive error rather than throwing.
      */
-    suspend fun start(detail: MediaDetail, maxBitrate: Int? = null): DownloadResult
+    suspend fun start(
+        detail: MediaDetail,
+        maxBitrate: Int? = null,
+        selectedSubtitleIndices: Set<Int>? = null,
+    ): DownloadResult
 
     /**
      * Starts a batch download for the given episodes of a series. If
@@ -72,10 +80,14 @@ class DownloadIntakeImpl @Inject constructor(
     private val downloadRepository: DownloadRepository,
 ) : DownloadIntake {
 
-    override suspend fun start(detail: MediaDetail, maxBitrate: Int?): DownloadResult {
+    override suspend fun start(
+        detail: MediaDetail,
+        maxBitrate: Int?,
+        selectedSubtitleIndices: Set<Int>?,
+    ): DownloadResult {
         // The per-item recipe (prepare + execute) lives in DownloadDelegate.startOne
         // so single-item intake and the series-batch loop share one code path.
-        return delegate.startOne(detail, maxBitrate)
+        return delegate.startOne(detail, maxBitrate, selectedSubtitleIndices)
             ?: DownloadResult(
                 downloadItem = null,
                 error = context.getString(R.string.data_no_media_source_download),

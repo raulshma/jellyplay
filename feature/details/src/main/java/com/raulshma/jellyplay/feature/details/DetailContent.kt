@@ -15,10 +15,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -29,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -70,7 +68,6 @@ internal fun DetailContent(
     val isAudio = item?.mediaType?.isAudioType == true
     val isAlbum = item?.mediaType == MediaType.ALBUM
     val isSeries = item?.mediaType == MediaType.SERIES
-    var showDownloadDialog by remember { mutableStateOf(false) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
@@ -139,7 +136,7 @@ internal fun DetailContent(
         onClose = { /* menus close themselves */ },
         onEditClick = callbacks.onEditClick,
         onShare = shareMedia,
-        onDownload = { showDownloadDialog = true },
+        onDownload = callbacks.onOpenDownloadPicker,
         onDownloadSeries = callbacks.onDownloadSeriesClick,
         onDeleteDownload = callbacks.onDeleteDownload,
         onDeleteDownloadedSeries = callbacks.onDeleteDownloadedEpisodes,
@@ -255,17 +252,27 @@ internal fun DetailContent(
         )
     }
 
-    if (showDownloadDialog) {
+    if (state.downloadPicker.visible) {
         val source = state.detail?.mediaSources?.firstOrNull()
-        DownloadConfirmationDialog(
+        // External/deliverable subtitle streams eligible for offline bundling.
+        // Shares MediaStream.isBundleableSubtitle with the download writer + sync
+        // comparator so the multi-select shows exactly the subtitles that save.
+        val subtitleStreams: List<MediaStream> = remember(source) {
+            source?.mediaStreams
+                ?.filter { it.isBundleableSubtitle }
+                ?: emptyList()
+        }
+        DownloadPickerSheet(
             fileSize = source?.size,
             isAudio = isAudio,
             availableStorageProvider = availableStorageProvider,
-            onConfirm = {
-                showDownloadDialog = false
-                callbacks.onDownloadClick()
-            },
-            onDismiss = { showDownloadDialog = false },
+            subtitleStreams = subtitleStreams,
+            pendingQuality = state.downloadPicker.quality,
+            pendingSubtitleSelection = state.downloadPicker.subtitleSelection,
+            onPendingQualityChange = callbacks.onPendingQualityChange,
+            onPendingSubtitleSelectionChange = callbacks.onPendingSubtitleSelectionChange,
+            onConfirm = { callbacks.onDownloadClick() },
+            onDismiss = callbacks.onDismissDownloadPicker,
         )
     }
 }

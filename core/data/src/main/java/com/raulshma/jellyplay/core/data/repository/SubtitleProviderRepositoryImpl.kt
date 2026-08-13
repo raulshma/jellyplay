@@ -112,19 +112,31 @@ class SubtitleProviderRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun searchProvider(
+    override suspend fun verifyCredentials(
         kind: SubtitleProviderKind,
-        query: SubtitleQuery,
+        credentials: SubtitleProviderCredentials,
     ): ProviderSearchOutcome {
-        // Intentionally ignore the enable toggle — Test must verify a pasted key
-        // before the user turns the provider on. Only credentials gate the probe.
+        // Intentionally ignore the enable toggle AND the saved store — Test must
+        // verify the in-progress form text (which may not be saved yet). Only the
+        // passed-in credentials gate the probe.
         if (kind == SubtitleProviderKind.JELLYFIN) return ProviderSearchOutcome.Skipped
         val provider = externalProviders[kind] ?: return ProviderSearchOutcome.Skipped
-        val cred = preferencesStore.getCredentials(kind) ?: return ProviderSearchOutcome.Skipped
-        return provider.search(query, cred).fold(
-            onSuccess = { ProviderSearchOutcome.Success(it) },
+        if (!credentials.isConfigured) return ProviderSearchOutcome.Skipped
+        // A raw throw escaping verifyCredentials() must surface as an Error, not
+        // propagate (matching searchExternal's isolation contract).
+        val outcome = runCatching { provider.verifyCredentials(credentials) }
+            .getOrElse { e ->
+                Log.e(
+                    TAG,
+                    "verifyCredentials $kind threw, isolating: ${e.javaClass.simpleName}: ${e.message}",
+                    e,
+                )
+                return ProviderSearchOutcome.Error(e.message ?: "$kind verification failed")
+            }
+        return outcome.fold(
+            onSuccess = { ProviderSearchOutcome.Success(emptyList()) },
             onFailure = { e ->
-                ProviderSearchOutcome.Error(e.message ?: "$kind search failed")
+                ProviderSearchOutcome.Error(e.message ?: "$kind verification failed")
             },
         )
     }

@@ -577,6 +577,7 @@ class LibraryApiClientImpl @Inject constructor(
                 name = chapter.name ?: "",
                 startPositionTicks = chapter.startPositionTicks ?: 0L,
                 imageDateModified = chapter.imageDateModified?.toString(),
+                imageTag = chapter.imageTag,
             )
         } ?: emptyList()
         val mediaSources = item.mediaSources?.map { source ->

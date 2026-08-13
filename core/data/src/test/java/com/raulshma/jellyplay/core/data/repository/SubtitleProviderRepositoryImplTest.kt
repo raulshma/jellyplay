@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.network.subtitle.SubtitleProvider
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.delay
@@ -119,17 +120,51 @@ class SubtitleProviderRepositoryImplTest {
     }
 
     @Test
-    fun `searchProvider returns Skipped when no credentials`() = runTest {
-        // The Test button path ignores the enable toggle — only credentials gate
-        // the probe. No credentials → Skipped without hitting the provider.
+    fun `verifyCredentials returns Skipped for unconfigured credentials`() = runTest {
+        // The Test button path ignores the enable toggle AND the saved store —
+        // the caller passes in-progress form text. Blank API key → not
+        // configured → Skipped without ever hitting the provider.
         val repo = newRepository(
             mapOf(SubtitleProviderKind.WYZIE to wyzie, SubtitleProviderKind.OPENSUBTITLES to openSubtitles),
         )
-        every { preferencesStore.getCredentials(SubtitleProviderKind.WYZIE) } returns null
+        coEvery { wyzie.verifyCredentials(any()) } returns Result.success(Unit)
 
-        val outcome = repo.searchProvider(SubtitleProviderKind.WYZIE, query)
+        val outcome = repo.verifyCredentials(
+            SubtitleProviderKind.WYZIE,
+            SubtitleProviderCredentials.Wyzie(apiKey = ""),
+        )
 
         assertTrue(outcome is ProviderSearchOutcome.Skipped)
+        coVerify(exactly = 0) { wyzie.verifyCredentials(any()) }
+    }
+
+    @Test
+    fun `verifyCredentials returns Success when the provider verifies`() = runTest {
+        val repo = newRepository(
+            mapOf(SubtitleProviderKind.WYZIE to wyzie, SubtitleProviderKind.OPENSUBTITLES to openSubtitles),
+        )
+        coEvery { wyzie.verifyCredentials(any()) } returns Result.success(Unit)
+
+        val outcome = repo.verifyCredentials(SubtitleProviderKind.WYZIE, wyzieCreds)
+
+        assertTrue("configured + verified → Success", outcome is ProviderSearchOutcome.Success)
+    }
+
+    @Test
+    fun `verifyCredentials surfaces an Error when the provider rejects the creds`() = runTest {
+        val repo = newRepository(
+            mapOf(SubtitleProviderKind.WYZIE to wyzie, SubtitleProviderKind.OPENSUBTITLES to openSubtitles),
+        )
+        coEvery { wyzie.verifyCredentials(any()) } returns
+            Result.failure(IllegalStateException("Invalid API key"))
+
+        val outcome = repo.verifyCredentials(SubtitleProviderKind.WYZIE, wyzieCreds)
+
+        assertTrue(outcome is ProviderSearchOutcome.Error)
+        assertTrue(
+            "error message propagated: ${(outcome as ProviderSearchOutcome.Error).message}",
+            outcome.message.contains("Invalid API key"),
+        )
     }
 
     @Test

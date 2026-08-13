@@ -88,6 +88,10 @@ data class DetailUiState(
     /** Similar/related items — fetched separately from the core detail so the
      *  screen can render incrementally (title/poster/cast first, similar after). */
     val relatedItems: List<MediaItem> = emptyList(),
+    /** LOCAL-origin "More like this": on-device titles sharing a genre/studio,
+     *  surfaced so a downloaded item isn't a discovery island offline. Empty for
+     *  a remote origin (which uses [relatedItems]). */
+    val localRelatedItems: List<MediaItem> = emptyList(),
     // Smart play (continue-watching / next-up computed target)
     val smartPlayTarget: SmartPlayTarget? = null,
     // Stream selection (audio/subtitle indices persisted across sessions)
@@ -112,6 +116,12 @@ data class DetailUiState(
     val downloadSheetEpisodes: Map<String, List<MediaItem>> = emptyMap(),
     val downloadSheetLoadingSeasons: Set<String> = emptySet(),
     val downloadedEpisodeIds: Set<String> = emptySet(),
+    // Pre-download picker: quality override + external-subtitle selection. The
+    // picker is opened from the download affordance; on confirm the pending
+    // values feed [DetailViewModel.startDownload]. Folded into
+    // [DownloadPickerState] (projected from [DownloadLifecycleState] by the
+    // Group-4 combine in DetailViewModel) so the trio travels as one unit.
+    val downloadPicker: DownloadPickerState = DownloadPickerState(),
     // Download-details bottom sheet: on-disk file inventory (media file +
     // subtitles/trickplay/segments/images sidecars) with live byte sizes. Null
     // until the sheet is opened and the inventory is loaded; the inventory itself
@@ -163,6 +173,8 @@ data class DetailUiState(
             smartPlay = false,
             remoteWorkAllowed = false,
             localDownloadManagement = false,
+            tagNavigation = false,
+            chapters = false,
         )
     }
 }

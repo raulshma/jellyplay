@@ -142,6 +142,9 @@ class PlaybackRepositoryImpl @Inject constructor(
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?): String =
         apiClient.getImageUrl(itemId, imageType, maxWidth)
 
+    override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?, maxWidth: Int?): String =
+        apiClient.getImageUrl(itemId, imageType = "Chapter", maxWidth = maxWidth, imageIndex = imageIndex, tag = tag)
+
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String =
         apiClient.getBackdropImageUrl(itemId, maxWidth)
 

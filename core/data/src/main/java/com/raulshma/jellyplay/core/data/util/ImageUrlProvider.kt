@@ -12,6 +12,9 @@ interface ImageUrlProvider {
     // null to a fixed default silently capped full-res photos at 400px.
     fun getImageUrl(itemId: String, maxWidth: Int? = DEFAULT_MAX_WIDTH): String
 
+    /** Chapter thumbnail for the detail-screen chapter row (imageType = Chapter). */
+    fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String? = null): String
+
     fun getBackdropUrl(itemId: String, maxWidth: Int = DEFAULT_BACKDROP_WIDTH): String
 
     companion object {
@@ -65,6 +68,18 @@ class ImageUrlProviderImpl @Inject constructor(
         val key = "b_$itemId|$maxWidth"
         urlCache.get(key)?.let { return it }
         val url = playbackRepository.getBackdropUrl(itemId, maxWidth = maxWidth)
+        if (url.isNotEmpty()) urlCache.put(key, url)
+        return url
+    }
+
+    override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?): String {
+        // Chapter thumbnails are small list-position-keyed images; perf-aware
+        // width clamp + shared LRU keep the chapter row cheap to recompose.
+        val effectiveWidth = if (performanceMode) PERF_MAX_WIDTH
+        else ImageUrlProvider.DEFAULT_MAX_WIDTH
+        val key = "c_$itemId|$imageIndex|${tag ?: ""}"
+        urlCache.get(key)?.let { return it }
+        val url = playbackRepository.getChapterImageUrl(itemId, imageIndex, tag, maxWidth = effectiveWidth)
         if (url.isNotEmpty()) urlCache.put(key, url)
         return url
     }

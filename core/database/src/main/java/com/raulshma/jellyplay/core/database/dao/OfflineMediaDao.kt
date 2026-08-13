@@ -141,6 +141,39 @@ interface OfflineMediaDao {
      */
     @Query("SELECT id, peopleJson FROM offline_media")
     suspend fun getAllPeopleJson(): List<OfflinePeopleRow>
+
+    /**
+     * Offline "More like this": top-level titles (MOVIE/SERIES) whose CSV `genres`
+     * column contains [genre]. The `',' || genres || ','` wrap avoids false
+     * substring matches ("Action" inside "ActionAdventure"). One genre per call —
+     * the repository fans out over the item's genres and de-dupes — because Room
+     * cannot expand a list bind into multiple LIKE OR clauses. The top-level set
+     * is capped at 500 rows so this scan is cheap in practice.
+     */
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE id != :currentId
+          AND mediaType IN ('MOVIE', 'SERIES')
+          AND (',' || genres || ',') LIKE '%,' || :genre || ',%'
+        ORDER BY createdAt DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getRelatedByGenre(currentId: String, genre: String, limit: Int): List<OfflineMediaWithPlayback>
+
+    /** Studio fallback for offline "More like this" when genre matches are sparse. */
+    @Query(
+        """
+        SELECT * FROM offline_media_with_playback
+        WHERE id != :currentId
+          AND mediaType IN ('MOVIE', 'SERIES')
+          AND (',' || studios || ',') LIKE '%,' || :studio || ',%'
+        ORDER BY createdAt DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getRelatedByStudio(currentId: String, studio: String, limit: Int): List<OfflineMediaWithPlayback>
 }
 
 /** Local on-disk image path projection for resync path preservation. */

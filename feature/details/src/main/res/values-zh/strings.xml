@@ -13,7 +13,11 @@
     <string name="detail_section_items">项目</string>
     <string name="detail_section_cast_crew">演员 &amp; 职员表</string>
     <string name="detail_section_cast">演员</string>
+    <string name="detail_section_crew">职员</string>
     <string name="detail_section_more_like_this">类似推荐</string>
+    <string name="detail_section_chapters">章节</string>
+    <string name="detail_see_all">查看全部</string>
+    <string name="detail_more_like_this_on_device">本机</string>
     <string name="detail_section_videos">视频</string>
     <string name="detail_section_seasons">季</string>
 
@@ -114,6 +118,7 @@
     <string name="detail_stream_default_badge">默认</string>
     <string name="detail_audio_track_format">音轨 %1$d</string>
     <string name="detail_subtitle_track_format">字幕轨道 %1$d</string>
+    <string name="detail_download_quality">质量</string>
     <string name="detail_subtitle_off">关闭</string>
     <string name="detail_audio_channels_format">%1$d 声道</string>
 

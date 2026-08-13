@@ -55,24 +55,24 @@ class DownloadIntakeTest {
         // The per-item recipe (prepare + execute) is encapsulated in
         // DownloadDelegate.startOne; the intake is a thin adapter that maps
         // a null recipe result to a human-readable error.
-        coEvery { delegate.startOne(detail, null, null) } returns DownloadResult(item, null)
+        coEvery { delegate.startOne(detail, null, null, null) } returns DownloadResult(item, null)
 
         val result = intake.start(detail)
 
         assertEquals("dl-1", result.downloadItem?.id)
         assertNull(result.error)
-        coVerify(exactly = 1) { delegate.startOne(detail, null, null) }
+        coVerify(exactly = 1) { delegate.startOne(detail, null, null, null) }
     }
 
     @Test
     fun `start forwards maxBitrate to prepareDownloadRequest`() = runTest {
         val detail = mediaDetail()
-        coEvery { delegate.startOne(detail, 8_000_000, null) } returns
+        coEvery { delegate.startOne(detail, 8_000_000, null, null) } returns
             DownloadResult(null, null)
 
         intake.start(detail, maxBitrate = 8_000_000)
 
-        coVerify(exactly = 1) { delegate.startOne(detail, 8_000_000, null) }
+        coVerify(exactly = 1) { delegate.startOne(detail, 8_000_000, null, null) }
     }
 
     @Test
@@ -81,7 +81,7 @@ class DownloadIntakeTest {
         // startOne yields null when no request can be built (no media source /
         // blank stream URL); the intake must surface a human-readable error
         // rather than throw or return a silent success.
-        coEvery { delegate.startOne(detail, any(), any()) } returns null
+        coEvery { delegate.startOne(detail, any(), any(), any()) } returns null
         every { context.getString(R.string.data_no_media_source_download) } returns
             "No media source available for download"
 
@@ -94,7 +94,7 @@ class DownloadIntakeTest {
     @Test
     fun `start surfaces the delegate's failure verbatim`() = runTest {
         val detail = mediaDetail()
-        coEvery { delegate.startOne(detail, null, null) } returns
+        coEvery { delegate.startOne(detail, null, null, null) } returns
             DownloadResult(null, "disk full")
 
         val result = intake.start(detail)

@@ -13,7 +13,11 @@
     <string name="detail_section_items">Elementos</string>
     <string name="detail_section_cast_crew">Reparto y equipo</string>
     <string name="detail_section_cast">Reparto</string>
+    <string name="detail_section_crew">Equipo</string>
     <string name="detail_section_more_like_this">Más como esto</string>
+    <string name="detail_section_chapters">Capítulos</string>
+    <string name="detail_see_all">Ver todos</string>
+    <string name="detail_more_like_this_on_device">En el dispositivo</string>
     <string name="detail_section_videos">Vídeos</string>
     <string name="detail_section_seasons">Temporadas</string>
 
@@ -116,6 +120,7 @@
     <string name="detail_stream_default_badge">PREDETERMINADO</string>
     <string name="detail_audio_track_format">Pista %1$d</string>
     <string name="detail_subtitle_track_format">Pista %1$d</string>
+    <string name="detail_download_quality">Calidad</string>
     <string name="detail_subtitle_off">DESACTIVADO</string>
     <string name="detail_audio_channels_format">%1$dCH</string>
 

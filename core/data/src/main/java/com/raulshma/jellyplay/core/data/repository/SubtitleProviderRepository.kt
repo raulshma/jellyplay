@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleFile
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderCredentials
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
@@ -21,9 +22,10 @@ import kotlinx.coroutines.flow.Flow
  * - [searchAllStreaming] — merges [searchJellyfin] with [search] into one
  *   ordered list with per-provider error messages, streaming partials as each
  *   provider resolves; this is the player/editor entry point.
- * - [searchProvider] — probes a **single** provider by credentials alone
- *   (ignores the enable toggle), used by the *Test* button so a freshly pasted
- *   key can be verified before the user flips the Switch on.
+ * - [verifyCredentials] — probes a **single** provider with explicit
+ *   credentials (ignores the enable toggle AND the saved store), used by the
+ *   *Test* button so the user can verify a freshly pasted key/password **before
+ *   saving** it.
  *
  * Download dispatches to the owning provider by [SubtitleSearchResult.provider]:
  *
@@ -52,13 +54,17 @@ interface SubtitleProviderRepository {
     suspend fun search(query: SubtitleQuery): Map<SubtitleProviderKind, ProviderSearchOutcome>
 
     /**
-     * Probes a single [kind] by credentials alone — the enable toggle is
-     * ignored, so a freshly pasted key verifies before the user turns the
-     * provider on. Used by the *Test* button in settings.
+     * Validates [credentials] against a single [kind] — the *Test* button path.
+     * The enable toggle and the saved credential store are both ignored: callers
+     * pass the in-progress form text so a freshly pasted key/password verifies
+     * **before** it is saved. Maps the provider's [SubtitleProvider.verifyCredentials]
+     * result to a [ProviderSearchOutcome] (`Success` → reachable/auth-ok;
+     * `Error(message)` → auth/quota/network failure; `Skipped` → Jellyfin or
+     * unconfigured credentials).
      */
-    suspend fun searchProvider(
+    suspend fun verifyCredentials(
         kind: SubtitleProviderKind,
-        query: SubtitleQuery,
+        credentials: SubtitleProviderCredentials,
     ): ProviderSearchOutcome
 
     /**

@@ -93,4 +93,10 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">无法加载内容。请检查您的连接并重试。</string>
+
+    <!-- 离线首页长按“删除下载”确认。 -->
+    <string name="home_delete_download_title">删除下载</string>
+    <string name="home_delete_download_message">从设备移除“%1$s”？此操作将释放 %2$s。</string>
+    <string name="home_delete_download_message_no_size">从设备移除“%1$s”？</string>
+    <string name="home_delete_download_confirm">删除</string>
 </resources>

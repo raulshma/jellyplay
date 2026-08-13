@@ -6,7 +6,6 @@ import com.raulshma.jellyplay.core.datastore.SubtitleProviderPreferencesStore
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderCredentials
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderPreferences
-import com.raulshma.jellyplay.core.model.subtitle.SubtitleQuery
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,10 +24,13 @@ import javax.inject.Inject
  * documented in [ArrSettingsViewModel] and would silently overwrite the
  * encrypted store with a single entry).
  *
- * A "Test" action probes a provider with a known TMDB id so the user can verify
- * their Wyzie API key or OpenSubtitles username/password (the OpenSubtitles test
- * also exercises the JWT login flow) before leaving the screen. The status is a
- * small sealed class mirroring Arr's `ServerConnectionStatus`.
+ * A "Test" action verifies the **in-progress form text** (not the saved store)
+ * so the user can confirm a Wyzie API key or OpenSubtitles username/password
+ * works **before** tapping Save. The screen hands the live field values to
+ * [testWyzieApiKey] / [testOpenSubtitlesCredentials], which build the credential
+ * object and route it through [SubtitleProviderRepository.verifyCredentials] —
+ * OpenSubtitles performs a real `/login` there, so a wrong password is caught.
+ * Status is a small sealed class mirroring Arr's `ServerConnectionStatus`.
  */
 @HiltViewModel
 class SubtitleProviderSettingsViewModel @Inject constructor(
@@ -102,30 +104,46 @@ fun saveOpenSubtitlesCredentials(username: String?, password: String?) {
 }
 
     /**
-     * Probes [kind] with a known TMDB id so the user can verify their key works
-     * even before flipping the enable Switch on. For OpenSubtitles, search
-     * triggers a mandatory JWT login first, so this validates the configured
-     * username/password end-to-end. Surfaces [ProviderStatus] per provider.
+     * Tests the Wyzie [apiKey] exactly as typed in the form — nothing is read
+     * from or written to the store, so the user verifies a freshly pasted key
+     * **before** tapping Save. Blank → "Enter credentials first".
      */
-    fun testProvider(kind: SubtitleProviderKind) {
-        // Fail fast when there is nothing configured to test.
-        if (preferencesStore.getCredentials(kind)?.isConfigured != true) {
+    fun testWyzieApiKey(apiKey: String) {
+        testCredentials(SubtitleProviderKind.WYZIE, SubtitleProviderCredentials.Wyzie(apiKey.trim()))
+    }
+
+    /**
+     * Tests the OpenSubtitles [username]/[password] exactly as typed in the form
+     * — neither read from nor written to the store, so the user verifies them
+     * **before** tapping Save. OpenSubtitles performs a real `/login` in the
+     * repository, so a wrong password is caught here.
+     */
+    fun testOpenSubtitlesCredentials(username: String?, password: String?) {
+        val credentials = SubtitleProviderCredentials.OpenSubtitles(
+            username = username?.trim()?.ifBlank { null },
+            password = password?.ifBlank { null },
+        )
+        testCredentials(SubtitleProviderKind.OPENSUBTITLES, credentials)
+    }
+
+    /**
+     * Shared Test path for both providers. Builds nothing from the store — the
+     * caller passes the in-progress form credentials — and surfaces
+     * [ProviderStatus] for [kind]. Fail-fast on unconfigured credentials so the
+     * user gets immediate feedback without a network round-trip.
+     */
+    private fun testCredentials(kind: SubtitleProviderKind, credentials: SubtitleProviderCredentials) {
+        if (!credentials.isConfigured) {
             _providerStatus.update { it + (kind to ProviderStatus.Error("Enter credentials first")) }
             return
         }
         launch {
             _providerStatus.update { it + (kind to ProviderStatus.Testing) }
-            // Search a well-known movie (TMDB 11 — Star Wars) just to exercise
-            // auth + a minimal search round-trip.
-            val query = SubtitleQuery(
-                tmdbId = TEST_TMDB_ID,
-                languages = listOf("eng"),
-            )
-            // searchProvider probes this one provider by credentials alone,
-            // ignoring the enable toggle — so a freshly pasted key verifies
-            // before the user turns the provider on. Same rate-limit/retry path
-            // the player/editor use.
-            val outcome = subtitleProviderRepository.searchProvider(kind, query)
+            // verifyCredentials probes this one provider against the passed-in
+            // credentials alone, ignoring the enable toggle and the saved store —
+            // so a freshly pasted key/password verifies before the user turns the
+            // provider on or saves. Same rate-limit/retry path the player uses.
+            val outcome = subtitleProviderRepository.verifyCredentials(kind, credentials)
             _providerStatus.update {
                 it + (kind to when (outcome) {
                     is ProviderSearchOutcome.Success -> ProviderStatus.Connected
@@ -142,11 +160,5 @@ fun saveOpenSubtitlesCredentials(username: String?, password: String?) {
         data object Testing : ProviderStatus()
         data object Connected : ProviderStatus()
         data class Error(val message: String) : ProviderStatus()
-    }
-
-    companion object {
-        // Star Wars: A New Hope — a stable, well-indexed TMDB id used purely to
-        // exercise the provider's auth + search path during a Test.
-        private const val TEST_TMDB_ID = 11
     }
 }

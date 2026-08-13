@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
@@ -708,6 +709,24 @@ class HomeViewModel @Inject constructor(
     fun markItemPlayed(item: MediaItem) = setItemPlayed(item, played = true)
 
     fun markItemUnplayed(item: MediaItem) = setItemPlayed(item, played = false)
+
+    /**
+     * Deletes a downloaded item from the offline home's quick-action menu.
+     * Routes a series card to [OfflineRepository.deleteOfflineSeries] (whole
+     * series) and anything else to [OfflineRepository.deleteOfflineItem] — the
+     * same delete features the detail screen uses. The reactive
+     * [HomeUiState.offlineLibrary] flow refreshes on its own once the row is
+     * gone, so no manual state update is needed here.
+     */
+    fun deleteOfflineMedia(item: MediaItem) {
+        launch {
+            if (item.mediaType == MediaType.SERIES) {
+                offlineRepository.deleteOfflineSeries(item.id)
+            } else {
+                offlineRepository.deleteOfflineItem(item.id)
+            }
+        }
+    }
 
     private fun setItemPlayed(item: MediaItem, played: Boolean) {
         launch {

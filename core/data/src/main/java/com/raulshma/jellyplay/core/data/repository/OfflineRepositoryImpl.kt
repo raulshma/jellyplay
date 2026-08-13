@@ -19,6 +19,8 @@ import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
+import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
@@ -385,6 +387,43 @@ class OfflineRepositoryImpl @Inject constructor(
         return offlineMediaDao
             .search(pattern = pattern, prefixPattern = prefixPattern, limit = limit)
             .map { it.toOfflineMediaItem() }
+    }
+
+    override suspend fun getLocalRelated(
+        currentId: String,
+        genres: List<String>,
+        studios: List<String>,
+        limit: Int,
+    ): List<MediaItem> {
+        if (limit <= 0) return emptyList()
+        val seen = HashSet<String>()
+        val matches = ArrayList<OfflineMediaItem>()
+
+        suspend fun addAll(rows: List<OfflineMediaWithPlayback>) {
+            for (row in rows) {
+                val item = row.toOfflineMediaItem()
+                if (seen.add(item.id)) {
+                    matches.add(item)
+                    if (matches.size >= limit) return
+                }
+            }
+        }
+
+        // Genre matches first (strongest signal); one query per genre because
+        // Room cannot expand a list bind into multiple LIKE OR clauses.
+        for (genre in genres) {
+            if (matches.size >= limit) break
+            addAll(offlineMediaDao.getRelatedByGenre(currentId, genre, limit))
+        }
+        // Studio fallback only when genre matches were sparse.
+        if (matches.size < limit) {
+            for (studio in studios) {
+                if (matches.size >= limit) break
+                addAll(offlineMediaDao.getRelatedByStudio(currentId, studio, limit))
+            }
+        }
+        if (matches.isEmpty()) return emptyList()
+        return resolveArtworkList(matches).map { it.toMediaItem() }
     }
 
     /**

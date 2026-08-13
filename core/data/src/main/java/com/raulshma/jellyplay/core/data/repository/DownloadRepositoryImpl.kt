@@ -39,7 +39,6 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import com.raulshma.jellyplay.core.model.OfflineSubtitleEntry
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
-import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -491,9 +490,11 @@ class DownloadRepositoryImpl @Inject constructor(
                                     val episodeDetail = mediaRepository.getMediaDetail(episode.id).getOrNull()
                                     // Single per-episode recipe shared with DownloadIntake.start
                                     // via DownloadDelegate.startOne — no inline prepare/execute to
-                                    // drift out of sync.
+                                    // drift out of sync. Series downloads bundle every external
+                                    // subtitle (null selection); per-item picker selection lives
+                                    // only on the single-item DownloadIntake.start path.
                                     val result = episodeDetail?.let {
-                                        delegate.startOne(it, qualityMaxBitrate, budgetHint)
+                                        delegate.startOne(it, qualityMaxBitrate, null, budgetHint)
                                     }
                                     result?.downloadItem?.let { it.id to it.downloadPath }
                                 } catch (ce: CancellationException) {
@@ -601,9 +602,7 @@ class DownloadRepositoryImpl @Inject constructor(
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val parentDir = File(downloadPath).parentFile ?: return@withContext false
-            val subtitleStreams = mediaStreams.filter {
-                it.type == StreamType.SUBTITLE && (it.isExternal || !it.deliveryUrl.isNullOrBlank())
-            }
+            val subtitleStreams = mediaStreams.filter { it.isBundleableSubtitle }
             if (subtitleStreams.isEmpty()) return@withContext true
 
             val subtitlesDir = File(parentDir, DownloadArtifacts.subtitlesDir(itemId)).apply { mkdirs() }

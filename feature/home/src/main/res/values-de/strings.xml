@@ -93,4 +93,10 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">Inhalte konnten nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.</string>
+
+    <!-- Offline-Startseite: Löschen-Bestätigung beim langen Drücken. -->
+    <string name="home_delete_download_title">Download löschen</string>
+    <string name="home_delete_download_message">"%1$s" vom Gerät entfernen? Das gibt %2$s frei.</string>
+    <string name="home_delete_download_message_no_size">"%1$s" vom Gerät entfernen?</string>
+    <string name="home_delete_download_confirm">Löschen</string>
 </resources>

@@ -7,6 +7,9 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.util.DownloadResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.model.DownloadItem
+import com.raulshma.jellyplay.core.model.DownloadQuality
+import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSource
@@ -98,7 +101,7 @@ class DownloadLifecycleActionsTest {
         // could skip the intermediate value — reading .value at the suspend
         // point is deterministic).
         val gate = CompletableDeferred<DownloadResult>()
-        coEvery { downloadIntake.start(any(), any()) } coAnswers { gate.await() }
+        coEvery { downloadIntake.start(any(), any(), any()) } coAnswers { gate.await() }
 
         val h = makeActions(scope = this, detail = detail)
 
@@ -111,7 +114,92 @@ class DownloadLifecycleActionsTest {
         advanceUntilIdle() // resumes the launch → isDownloading flips false
 
         assertFalse(h.state.value.isDownloading)
-        coVerify { downloadIntake.start(detail, null) } // ORIGINAL quality → null maxBitrate
+        coVerify { downloadIntake.start(detail, null, null) } // ORIGINAL quality → null maxBitrate
+    }
+    // endregion
+
+    // region download picker (quality + external-subtitle selection)
+    @Test
+    fun `openDownloadPicker seeds pending quality from prefs and resets subtitle selection`() = runTest {
+        val h = makeActions(
+            scope = this,
+            downloadsSlice = DownloadsSlice(downloadQuality = DownloadQuality.HIGH_1080P),
+        )
+
+        h.openDownloadPicker()
+
+        assertTrue(h.state.value.downloadPicker.visible)
+        assertEquals(DownloadQuality.HIGH_1080P, h.state.value.downloadPicker.quality)
+        assertEquals(SubtitleSelection.All, h.state.value.downloadPicker.subtitleSelection)
+    }
+
+    @Test
+    fun `setPendingSubtitleSelection replaces the subtitle selection, with All restoring the default`() = runTest {
+        val h = makeActions(scope = this)
+        h.openDownloadPicker()
+
+        h.setPendingSubtitleSelection(SubtitleSelection.Subset(setOf(2, 4)))
+        assertEquals(SubtitleSelection.Subset(setOf(2, 4)), h.state.value.downloadPicker.subtitleSelection)
+
+        h.setPendingSubtitleSelection(SubtitleSelection.All)
+        assertEquals(SubtitleSelection.All, h.state.value.downloadPicker.subtitleSelection)
+    }
+
+    @Test
+    fun `setPendingQuality updates the pending download quality`() = runTest {
+        val h = makeActions(scope = this)
+        h.openDownloadPicker()
+
+        h.setPendingQuality(DownloadQuality.MEDIUM_720P)
+
+        assertEquals(DownloadQuality.MEDIUM_720P, h.state.value.downloadPicker.quality)
+    }
+
+    @Test
+    fun `dismissDownloadPicker hides the sheet without clearing the pending selection`() = runTest {
+        val h = makeActions(scope = this)
+        h.openDownloadPicker()
+        h.setPendingSubtitleSelection(SubtitleSelection.Subset(setOf(1)))
+
+        h.dismissDownloadPicker()
+
+        assertFalse(h.state.value.downloadPicker.visible)
+        // Pending selection persists so a cellular-confirm follow-up resolves identically.
+        assertEquals(SubtitleSelection.Subset(setOf(1)), h.state.value.downloadPicker.subtitleSelection)
+    }
+
+    @Test
+    fun `startDownload forwards pending quality maxBitrate + subtitle indices to intake and closes the picker`() = runTest {
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+            mediaSources = listOf(MediaSource(id = "src-1", name = "Source")),
+        )
+        coEvery { downloadIntake.start(any(), any(), any()) } returns DownloadResult(
+            downloadItem = DownloadItem(
+                id = "dl-1",
+                name = "Movie",
+                mediaItemId = "m1",
+                mediaType = MediaType.MOVIE,
+                downloadUrl = "https://stream",
+                downloadPath = "/tmp/dl-1",
+                totalSizeBytes = 0,
+                downloadedBytes = 0,
+                status = DownloadStatus.PENDING,
+            ),
+            error = null,
+        )
+        val h = makeActions(scope = this, detail = detail)
+
+        h.openDownloadPicker()
+        h.setPendingQuality(DownloadQuality.HIGH_1080P) // → 8_000_000 bps
+        h.setPendingSubtitleSelection(SubtitleSelection.Subset(setOf(3, 5)))
+        h.startDownload()
+        advanceUntilIdle()
+
+        // downloadPicker.quality drives maxBitrate (NOT prefs.downloadQuality),
+        // and the subtitle selection is threaded through to the intake.
+        coVerify { downloadIntake.start(detail, 8_000_000, setOf(3, 5)) }
+        assertFalse(h.state.value.downloadPicker.visible)
     }
     // endregion
 
@@ -214,7 +302,7 @@ class DownloadLifecycleActionsTest {
         advanceUntilIdle()
 
         assertTrue(messages.contains(DetailMessage.Text("no detail")))
-        coVerify(exactly = 0) { downloadIntake.start(any(), any()) }
+        coVerify(exactly = 0) { downloadIntake.start(any(), any(), any()) }
     }
 
     @Test
@@ -228,7 +316,7 @@ class DownloadLifecycleActionsTest {
         advanceUntilIdle()
 
         assertTrue(messages.contains(DetailMessage.Text("no source")))
-        coVerify(exactly = 0) { downloadIntake.start(any(), any()) }
+        coVerify(exactly = 0) { downloadIntake.start(any(), any(), any()) }
     }
 
     @Test
@@ -251,7 +339,7 @@ class DownloadLifecycleActionsTest {
 
         assertEquals(60, h.state.value.cellularDownloadWarningMb)
         assertFalse(h.state.value.isDownloading)
-        coVerify(exactly = 0) { downloadIntake.start(any(), any()) }
+        coVerify(exactly = 0) { downloadIntake.start(any(), any(), any()) }
     }
 
     @Test
@@ -262,7 +350,7 @@ class DownloadLifecycleActionsTest {
             item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
             mediaSources = listOf(MediaSource(id = "src-1", name = "Source", size = 40L * 1024L * 1024L)),
         )
-        coEvery { downloadIntake.start(any(), any()) } returns DownloadResult(
+        coEvery { downloadIntake.start(any(), any(), any()) } returns DownloadResult(
             downloadItem = mockk(relaxed = true),
             error = null,
         )
@@ -277,7 +365,7 @@ class DownloadLifecycleActionsTest {
         advanceUntilIdle()
 
         assertNull(h.state.value.cellularDownloadWarningMb)
-        coVerify { downloadIntake.start(detail, null) }
+        coVerify { downloadIntake.start(detail, null, null) }
     }
 
     @Test
@@ -286,7 +374,7 @@ class DownloadLifecycleActionsTest {
             item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
             mediaSources = listOf(MediaSource(id = "src-1", name = "Source", size = 60L * 1024L * 1024L)),
         )
-        coEvery { downloadIntake.start(any(), any()) } returns DownloadResult(
+        coEvery { downloadIntake.start(any(), any(), any()) } returns DownloadResult(
             downloadItem = mockk(relaxed = true),
             error = null,
         )
@@ -304,7 +392,7 @@ class DownloadLifecycleActionsTest {
         advanceUntilIdle()
 
         assertNull(h.state.value.cellularDownloadWarningMb)
-        coVerify { downloadIntake.start(detail, null) }
+        coVerify { downloadIntake.start(detail, null, null) }
     }
 
     @Test
@@ -326,7 +414,7 @@ class DownloadLifecycleActionsTest {
         h.dismissCellularDownloadWarning()
 
         assertNull(h.state.value.cellularDownloadWarningMb)
-        coVerify(exactly = 0) { downloadIntake.start(any(), any()) }
+        coVerify(exactly = 0) { downloadIntake.start(any(), any(), any()) }
     }
     // endregion
 

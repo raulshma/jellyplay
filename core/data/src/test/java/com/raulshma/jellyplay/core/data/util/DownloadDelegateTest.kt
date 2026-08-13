@@ -39,6 +39,9 @@ class DownloadDelegateTest {
         // Nullable so the field can default without calling an outer-class
         // member; set explicitly by the test before each case.
         var startResult: Result<DownloadItem>? = null
+        // Captures the stream list handed to downloadExternalSubtitles so a test
+        // can assert the selectedSubtitleIndices narrowing.
+        var recordedSubtitleStreams: List<MediaStream>? = null
         private fun result(): Result<DownloadItem> = startResult!!
 
         override suspend fun startDownload(
@@ -97,7 +100,11 @@ class DownloadDelegateTest {
             mediaSourceId: String,
             mediaStreams: List<MediaStream>,
             downloadPath: String,
-        ): Boolean { calls += "downloadExternalSubtitles($itemId)"; return true }
+        ): Boolean {
+            recordedSubtitleStreams = mediaStreams
+            calls += "downloadExternalSubtitles($itemId)"
+            return true
+        }
 
         override suspend fun downloadMediaSegments(itemId: String, downloadPath: String): Boolean {
             calls += "downloadMediaSegments($itemId)"; return true
@@ -143,6 +150,42 @@ class DownloadDelegateTest {
             ),
             writer.calls,
         )
+    }
+
+    @Test
+    fun `executeDownload narrows bundled subtitles to the selected indices`() = runTest {
+        // selectedSubtitleIndices drops only SUBTITLE streams outside the set;
+        // non-subtitle streams (audio/video) always pass through, so the writer
+        // — and the manifest it writes — record only the user's pick.
+        val streams = listOf(
+            MediaStream(index = 1, type = StreamType.SUBTITLE, isExternal = true),
+            MediaStream(index = 2, type = StreamType.SUBTITLE, isExternal = true),
+            MediaStream(index = 3, type = StreamType.SUBTITLE, isExternal = true),
+            MediaStream(index = 4, type = StreamType.AUDIO),
+        )
+        val request = DownloadRequest(
+            mediaItemId = "item-1",
+            name = "Test",
+            mediaType = MediaType.MOVIE.name,
+            mediaSourceId = "src-1",
+            downloadUrl = "https://stream",
+            imageUrl = "https://img",
+            imageBlurHash = null,
+            mediaStreams = streams,
+            detail = MediaDetail(
+                item = MediaItem(id = "item-1", name = "Test", mediaType = MediaType.MOVIE),
+                mediaSources = listOf(MediaSource(id = "src-1", name = "Source", container = "mkv")),
+            ),
+            container = "mkv",
+            selectedSubtitleIndices = setOf(2),
+        )
+        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+
+        delegate.executeDownload(request)
+
+        // Subtitle index 2 survives; 1 and 3 are dropped; the audio stream (4)
+        // passes through unchanged.
+        assertEquals(listOf(2, 4), writer.recordedSubtitleStreams?.map { it.index })
     }
 
     @Test

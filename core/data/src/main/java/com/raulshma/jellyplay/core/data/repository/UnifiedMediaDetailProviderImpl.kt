@@ -768,6 +768,8 @@ class UnifiedMediaDetailProviderImpl @Inject constructor(
             smartPlay = isRemote,
             remoteWorkAllowed = connectivity == RemoteConnectivity.AVAILABLE,
             localDownloadManagement = isCompletedLocal,
+            tagNavigation = isRemote,
+            chapters = isRemote && content.detail.chapters.isNotEmpty(),
         )
         val context = DetailContext(
             origin = content.origin,

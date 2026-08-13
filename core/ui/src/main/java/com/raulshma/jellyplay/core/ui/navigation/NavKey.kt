@@ -38,6 +38,11 @@ sealed class Route : NavKey {
         val collectionType: String? = null,
         val sortBy: String? = null,
         val mediaTypes: List<String> = emptyList(),
+        // Optional pre-applied genre/tag filter (by name) for deep-links from a
+        // detail-screen chip. The library query layer filters genres + tags by
+        // name (see LibraryApiClientImpl.getItems), so a single name is enough.
+        val genre: String? = null,
+        val tag: String? = null,
     ) : Route()
     @Serializable data object Search : Route()
     @Serializable data object LiveTv : Route()
@@ -46,6 +51,8 @@ sealed class Route : NavKey {
     @Serializable data class MetadataEditor(val itemId: String) : Route()
     @Serializable data class SeerrDetail(val tmdbId: Int, val mediaType: String) : Route()
     @Serializable data class PersonDetail(val personId: String) : Route()
+    /** Full cast & crew screen reached from "See all" on a detail screen's cast row. */
+    @Serializable data class CastAndCrew(val itemId: String) : Route()
     /** Sonarr-style series management screen (collapsible seasons, per-episode actions). */
     @Serializable data class ManageSeries(val seriesId: String) : Route()
 
@@ -319,6 +326,7 @@ val Route.isDetail: Boolean
         is Route.MetadataEditor,
         is Route.SeerrDetail,
         is Route.PersonDetail,
+        is Route.CastAndCrew,
         is Route.ManageSeries,
         is Route.MediaInfo,
         is Route.LibrarySection,

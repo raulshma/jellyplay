@@ -94,4 +94,10 @@
 
     <!-- Localized error messages -->
     <string name="home_error_load_content">Couldn\'t load content. Check your connection and try again.</string>
+
+    <!-- Offline home long-press "Delete download" confirmation. -->
+    <string name="home_delete_download_title">Delete download</string>
+    <string name="home_delete_download_message">Remove \"%1$s\" from your device? This frees up %2$s.</string>
+    <string name="home_delete_download_message_no_size">Remove \"%1$s\" from your device?</string>
+    <string name="home_delete_download_confirm">Delete</string>
 </resources>

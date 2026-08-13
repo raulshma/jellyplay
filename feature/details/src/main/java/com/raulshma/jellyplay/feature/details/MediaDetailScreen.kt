@@ -254,6 +254,9 @@ fun MediaDetailScreen(
                 val rememberedGetImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } }
                 val rememberedGetBackdropUrl = remember(viewModel) { { id: String -> viewModel.getBackdropUrl(id) } }
                 val rememberedGetSeerrPosterUrl = remember(viewModel) { { path: String? -> viewModel.getSeerrPosterUrl(path) } }
+                val rememberedGetChapterImageUrl = remember(viewModel) {
+                    { id: String, index: Int, tag: String? -> viewModel.getChapterImageUrl(id, index, tag) }
+                }
 
                 // Series id used by season-episode fetches. Keyed on BOTH the
                 // item id and the resolved series id so it recomputes once the
@@ -290,6 +293,7 @@ fun MediaDetailScreen(
                     albumTracks = uiState.albumTracks,
                     collectionItems = uiState.collectionItems,
                     relatedItems = uiState.relatedItems,
+                    localRelatedItems = uiState.localRelatedItems,
                     relatedVideos = uiState.relatedVideos,
                     seerrRecommendations = uiState.seerrRecommendations,
                     seerrSimilar = uiState.seerrSimilar,
@@ -305,6 +309,7 @@ fun MediaDetailScreen(
                     selectedLocalSubtitleIndex = uiState.selectedLocalSubtitleIndex,
                     resyncState = uiState.resyncState,
                     downloadedEpisodeIds = uiState.downloadedEpisodeIds,
+                    downloadPicker = uiState.downloadPicker,
                 )
 
                 val onVideoClick = rememberVideoClickHandler(
@@ -314,6 +319,7 @@ fun MediaDetailScreen(
 
                 val callbacks = remember(
                     rememberedGetImageUrl, rememberedGetBackdropUrl, rememberedGetSeerrPosterUrl,
+                    rememberedGetChapterImageUrl,
                     viewModel, onPlayClick, onAudioClick, itemId, onItemClick, onPersonClick,
                     onNavigateToSeries, onNavigate, onEditClick, onManageSeries, onBack, onVideoClick,
                 ) {
@@ -321,6 +327,7 @@ fun MediaDetailScreen(
                         getImageUrl = rememberedGetImageUrl,
                         getBackdropUrl = rememberedGetBackdropUrl,
                         getSeerrPosterUrl = rememberedGetSeerrPosterUrl,
+                        getChapterImageUrl = rememberedGetChapterImageUrl,
                         onRetry = { viewModel.loadItem(itemId) },
                         onRefresh = { viewModel.forceRefresh() },
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
@@ -344,8 +351,30 @@ fun MediaDetailScreen(
                                 viewModel.selectedAudioIndex,
                             )
                         },
+                        onPlayChapter = { start ->
+                            // Resume the current item at a chapter position. Reuses the
+                            // same play path + stream selection as the primary play button
+                            // (local-origin subtitle index when offline).
+                            val isLocalOrigin = uiState.origin?.isLocal == true
+                            val subtitleIndex = if (isLocalOrigin) {
+                                viewModel.selectedLocalSubtitleIndex
+                            } else {
+                                viewModel.selectedSubtitleIndex
+                            }
+                            onPlayClick(
+                                itemId,
+                                null,
+                                start,
+                                subtitleIndex,
+                                viewModel.selectedAudioIndex,
+                            )
+                        },
                         onAudioClick = { onAudioClick(itemId) },
                         onDownloadClick = { viewModel.startDownload() },
+                        onOpenDownloadPicker = { viewModel.openDownloadPicker() },
+                        onDismissDownloadPicker = { viewModel.dismissDownloadPicker() },
+                        onPendingQualityChange = { viewModel.setPendingDownloadQuality(it) },
+                        onPendingSubtitleSelectionChange = { viewModel.setPendingSubtitleSelection(it) },
                         onDownloadSeriesClick = {
                             showSeriesDownloadSheet = true
                             viewModel.loadDownloadedEpisodeIds()
@@ -383,6 +412,9 @@ fun MediaDetailScreen(
                         onAudioSelect = { idx: Int? -> viewModel.selectAudio(idx) },
                         onItemClick = onItemClick,
                         onPersonClick = onPersonClick,
+                        onSeeAllCast = {
+                            onNavigate(com.raulshma.jellyplay.core.ui.navigation.Route.CastAndCrew(itemId))
+                        },
                         onNavigateToSeries = onNavigateToSeries,
                         onSeasonSelected = { seasonId: String ->
                             viewModel.loadEpisodesForSeason(seriesIdForSeasons, seasonId)

@@ -53,6 +53,10 @@ class ResilientSubtitleProvider @Inject constructor(
         credentials: SubtitleProviderCredentials,
     ): Result<SubtitleFile> = req { delegate.download(result, credentials) }
 
+    override suspend fun verifyCredentials(
+        credentials: SubtitleProviderCredentials,
+    ): Result<Unit> = req { delegate.verifyCredentials(credentials) }
+
     companion object {
         private const val TAG = "Subtitles"
     }

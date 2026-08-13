@@ -50,4 +50,33 @@ interface SubtitleProvider {
         result: SubtitleSearchResult,
         credentials: SubtitleProviderCredentials,
     ): Result<SubtitleFile>
+
+    /**
+     * Validate [credentials] against the provider — the *Test* button path in
+     * *Integrations → Subtitle Providers*. Unlike [search], this must actually
+     * exercise the user's secret so a wrong key/password is caught **before** the
+     * credentials are saved (the form passes its in-progress text here).
+     *
+     * The default probes with a well-known movie (TMDB 11 — Star Wars) via
+     * [search]. That is already a real auth check for key-gated providers (Wyzie
+     * ships the `key` on every request, so a bad key fails the search). Providers
+     * whose [search] does **not** authenticate the user's own secret override
+     * this — notably OpenSubtitles, whose search uses a shared app key and skips
+     * `/login`, so it overrides this to perform a real login probe.
+     *
+     * Success → `Result.success(Unit)`; any auth/quota/network failure →
+     * `Result.failure` (the fan-out/repo maps these to the Test chip).
+     */
+    suspend fun verifyCredentials(credentials: SubtitleProviderCredentials): Result<Unit> =
+        search(VERIFY_QUERY, credentials).map { }
+
+    companion object {
+        /**
+         * Smoke-test query used by the default [verifyCredentials] probe: a
+         * stable, well-indexed movie (Star Wars: A New Hope) purely to exercise
+         * the provider's auth + a minimal search round-trip. Provider-specific
+         * overrides (OpenSubtitles' login probe) ignore it.
+         */
+        private val VERIFY_QUERY = SubtitleQuery(tmdbId = 11, languages = listOf("eng"))
+    }
 }

@@ -50,6 +50,8 @@ fun EntryProviderScope<NavKey>.librarySection(navigator: Navigator) {
                 mediaTypes = key.mediaTypes.mapNotNull { name ->
                     runCatching { MediaType.valueOf(name) }.getOrNull()
                 },
+                genre = key.genre,
+                tag = key.tag,
             )
         }
         LibraryScreen(

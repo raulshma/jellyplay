@@ -155,6 +155,45 @@ class OpenSubtitlesSubtitleProvider @Inject constructor(
         }
     }
 
+    /**
+     * Validates the user's username/password with a real `POST /login`. This is
+     * the *Test* button path: [search] deliberately authenticates only with the
+     * shared app `Api-Key` (never `/login` — that endpoint is the flakiest and
+     * gating search on it blanked results), so a wrong password still returns
+     * search results. The Test button must catch a bad password **before** it is
+     * saved, so it routes here instead.
+     *
+     * Unlike [ensureValidToken] (used by [download]), this probes the
+     * **passed-in** credentials directly: it neither reads nor persists the
+     * store, because the Test button runs against unsaved form text. A 401 from
+     * `/login` surfaces as a non-retryable "Invalid credentials" [ApiException];
+     * network/parse errors flow through the same [wrapNetwork] path as search.
+     */
+    override suspend fun verifyCredentials(
+        credentials: SubtitleProviderCredentials,
+    ): Result<Unit> {
+        val os = credentials as? SubtitleProviderCredentials.OpenSubtitles
+        if (os == null || !os.isConfigured) {
+            return Result.failure(
+                ApiException(false, message = "OpenSubtitles username and password are not configured"),
+            )
+        }
+        val username = os.username!!.trim()
+        val password = os.password!!
+        return rateLimiter.acquire {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    // doLogin throws on a non-2xx (e.g. 401) via execute(); the
+                    // resulting token is discarded — we only care that login
+                    // succeeded. No store read or write happens here.
+                    doLogin(username, password)
+                }
+            }.recoverCatching { e ->
+                throw wrapNetwork(e)
+            }.map { }
+        }
+    }
+
     override suspend fun download(
         result: SubtitleSearchResult,
         credentials: SubtitleProviderCredentials,

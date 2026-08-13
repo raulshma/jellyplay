@@ -6,7 +6,6 @@ import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OfflineSyncState
 import com.raulshma.jellyplay.core.model.ResyncCheckResult
-import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SyncStatus
 import java.security.MessageDigest
 import javax.inject.Inject
@@ -266,7 +265,7 @@ class OfflineSyncComparator @Inject constructor() {
 
     private fun deliverableSubtitles(detail: MediaDetail): List<MediaStream> =
         detail.mediaSources.firstOrNull()?.mediaStreams
-            ?.filter { it.type == StreamType.SUBTITLE && (it.isExternal || !it.deliveryUrl.isNullOrBlank()) }
+            ?.filter { it.isBundleableSubtitle }
             ?: emptyList()
 
     /**

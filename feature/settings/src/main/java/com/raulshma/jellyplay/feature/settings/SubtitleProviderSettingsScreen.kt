@@ -45,9 +45,11 @@ import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
  * has an enable switch + an API-key field; OpenSubtitles has an enable switch +
  * username/password (it authenticates with the user's opensubtitles.com account
  * — the API key is a compiled-in shared app key, never user-visible, mirroring
- * the Jellyfin plugin). A "Test" action exercises the provider's auth + search
- * path and surfaces a Connected / Error status, mirroring the *arr
- * server-probe UX.
+ * the Jellyfin plugin). A "Test" action verifies the **in-progress form text**
+ * against the provider (a real `/login` for OpenSubtitles, a probe search for
+ * Wyzie) and surfaces a Connected / Error status — so the user can confirm a
+ * key/password works **before** tapping Save, mirroring the *arr server-probe
+ * UX.
  *
  * Mirrors [ArrSettingsScreen]'s scaffold + grouped-list layout. The screen is
  * purely a configuration surface; the player + editor consume the configured
@@ -63,16 +65,18 @@ fun SubtitleProviderSettingsScreen(
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val providerStatus by viewModel.providerStatus.collectAsStateWithLifecycle()
 
-    // Read the current credential snapshot once per save (keyed on providerStatus,
-    // which changes after a Save mutates the secure store). Without `remember` this
-    // synchronous EncryptedSharedPreferences read runs on every recomposition — and
-    // a new snapshot also resets `var apiKey by remember(initialApiKey){...}` in
-    // ProviderSection mid-typing, clobbering in-progress input.
-    val wyzieCreds = remember(providerStatus) {
+    // Seed the form fields from the secure store ONCE. Deliberately NOT keyed on
+    // providerStatus: Test mutates providerStatus (Testing → Connected/Error), and
+    // re-reading the snapshot then would reset `var apiKey by remember(initialApiKey)`
+    // back to the SAVED value — clobbering the in-progress text the user just
+    // verified. Since Test now validates exactly that typed text (before Save),
+    // preserving it across a test is required. Re-entry (navigate away/back)
+    // recomposes fresh and re-reads, so the seed stays current.
+    val wyzieCreds = remember {
         viewModel.currentCredential(SubtitleProviderKind.WYZIE)
             as? SubtitleProviderCredentials.Wyzie
     }
-    val osCreds = remember(providerStatus) {
+    val osCreds = remember {
         viewModel.currentCredential(SubtitleProviderKind.OPENSUBTITLES)
             as? SubtitleProviderCredentials.OpenSubtitles
     }
@@ -110,7 +114,7 @@ fun SubtitleProviderSettingsScreen(
                         initialPassword = null,
                         status = providerStatus[SubtitleProviderKind.WYZIE],
                         onSave = { apiKey, _, _ -> viewModel.saveWyzieApiKey(apiKey) },
-                        onTest = { viewModel.testProvider(SubtitleProviderKind.WYZIE) },
+                        onTest = { apiKey, _, _ -> viewModel.testWyzieApiKey(apiKey) },
                         helperText = stringResource(R.string.settings_subtitles_wyzie_help),
                     )
                 }
@@ -133,7 +137,9 @@ fun SubtitleProviderSettingsScreen(
                         onSave = { _, username, password ->
                             viewModel.saveOpenSubtitlesCredentials(username, password)
                         },
-                        onTest = { viewModel.testProvider(SubtitleProviderKind.OPENSUBTITLES) },
+                        onTest = { _, username, password ->
+                            viewModel.testOpenSubtitlesCredentials(username, password)
+                        },
                         helperText = stringResource(R.string.settings_subtitles_opensubtitles_help),
                     )
                 }
@@ -159,7 +165,7 @@ private fun ProviderSection(
     initialPassword: String?,
     status: SubtitleProviderSettingsViewModel.ProviderStatus?,
     onSave: (apiKey: String, username: String?, password: String?) -> Unit,
-    onTest: () -> Unit,
+    onTest: (apiKey: String, username: String?, password: String?) -> Unit,
     helperText: String,
 ) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -221,7 +227,11 @@ private fun ProviderSection(
             ) {
                 Text(stringResource(R.string.settings_subtitles_save))
             }
-            OutlinedButton(onClick = onTest) {
+            // Test uses the live form text (not the saved store) so the user can
+            // verify a freshly pasted key/password before tapping Save.
+            OutlinedButton(
+                onClick = { onTest(apiKey, usernameLabel?.let { username }, passwordLabel?.let { password }) },
+            ) {
                 Text(stringResource(R.string.settings_subtitles_test))
             }
             StatusIndicator(status)
