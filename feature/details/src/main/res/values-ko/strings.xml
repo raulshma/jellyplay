@@ -15,6 +15,7 @@
     <string name="detail_section_cast">출연진</string>
     <string name="detail_section_crew">제작진</string>
     <string name="detail_section_more_like_this">비슷한 작품</string>
+    <string name="detail_section_special_features">부가 영상</string>
     <string name="detail_section_chapters">챕터</string>
     <string name="detail_see_all">모두 보기</string>
     <string name="detail_more_like_this_on_device">기기 내</string>
@@ -27,6 +28,11 @@
     <string name="detail_play_finding_episode">에피소드 찾는 중</string>
     <string name="detail_play_no_episodes_available">재생 가능한 에피소드 없음</string>
     <string name="detail_play_no_episodes">에피소드 없음</string>
+
+    <!-- ── Segment availability chip (rendered near the Play button) ──────── -->
+    <string name="detail_skip_available_intro">인트로 건너뛰기 가능</string>
+    <string name="detail_skip_available_credits">크레딧 건너뛰기 가능</string>
+    <string name="detail_skip_available_both">인트로·크레딧 건너뛰기</string>
 
     <!-- ── Up Next card label ───────────────────────────────────────────── -->
     <string name="detail_up_next">다음</string>
@@ -108,6 +114,28 @@
     <plurals name="detail_playlist_item_count">
         <item quantity="other">항목 %1$d개</item>
     </plurals>
+
+    <!-- ── 컬렉션에 추가 ────────────────────────────────────────────── -->
+    <string name="detail_option_add_to_collection">컬렉션에 추가</string>
+    <string name="detail_collection_picker_title">컬렉션에 추가</string>
+    <string name="detail_collection_create_new">새 컬렉션 만들기</string>
+    <string name="detail_collection_new_title">새 컬렉션</string>
+    <string name="detail_collection_name_label">이름</string>
+    <string name="detail_collection_create">만들기</string>
+    <string name="detail_msg_no_collections">컬렉션이 없습니다</string>
+    <!-- %1$s = 컬렉션 이름 -->
+    <string name="detail_msg_added_to_collection">\"%1$s\"에 추가했습니다</string>
+    <!-- %1$s = 컬렉션 이름 -->
+    <string name="detail_msg_collection_created">\"%1$s\" 컬렉션을 만들고 항목을 추가했습니다</string>
+    <string name="detail_msg_couldnt_add_to_collection">컬렉션에 추가할 수 없습니다</string>
+    <plurals name="detail_collection_item_count">
+        <item quantity="other">항목 %1$d개</item>
+    </plurals>
+
+    <!-- ── 인스턴트 믹스 (오디오) ────────────────────────────────────── -->
+    <string name="detail_option_instant_mix">인스턴트 믹스 시작</string>
+    <string name="detail_instant_mix_empty">이 항목에 사용할 믹스가 없습니다</string>
+    <string name="detail_instant_mix_failed">인스턴트 믹스를 시작할 수 없습니다</string>
 
     <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
     <string name="detail_select_audio">오디오 선택</string>

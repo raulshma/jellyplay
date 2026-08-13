@@ -61,6 +61,13 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
      */
     suspend fun getIntros(itemId: String): Result<List<MediaItem>>
 
+    /**
+     * Special features / extras (featurettes, deleted scenes, interviews, etc.)
+     * attached to the given item via Jellyfin's `/Items/{id}/SpecialFeatures`
+     * endpoint. Returns an empty list when the item has no extras. Remote-only.
+     */
+    suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>>
+
     suspend fun search(
         query: String,
         filters: LibraryFilters = LibraryFilters(),
@@ -137,6 +144,27 @@ interface MediaRepository : LiveTvRepository, SyncPlayRepository, NewsletterRepo
         startIndex: Int = 0,
         limit: Int = 50,
     ): Result<SearchResult>
+
+    /**
+     * Lists the user's collections (Jellyfin BoxSet items) for the detail
+     * screen's "Add to Collection" picker. Remote-only — collections are a
+     * server-side library construct. Returned summaries are not cached: the
+     * picker refetches on every open so newly-created collections appear.
+     */
+    suspend fun getCollections(limit: Int = 100): Result<List<com.raulshma.jellyplay.core.model.CollectionSummary>>
+
+    /**
+     * Creates a new collection seeded with the given item ids and returns the
+     * new collection's id. Used by the detail screen's Create-Collection flow.
+     * Remote-only.
+     */
+    suspend fun createCollection(name: String, itemIds: List<String> = emptyList()): Result<String>
+
+    /**
+     * Adds the given item ids to an existing collection. Used by the detail
+     * screen's Add-to-Collection picker. Remote-only.
+     */
+    suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit>
 
     suspend fun getTags(
         parentId: String? = null,

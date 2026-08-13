@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
@@ -41,6 +42,8 @@ import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaDetailSnapshot
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.RemoteConnectivity
@@ -152,6 +155,14 @@ class DetailViewModelTest {
         // Default stub for the similar-items fetch so the REMOTE side-effect launch
         // doesn't crash casting the relaxed-mock default.
         coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())
+        // Default stub for the special-features fetch so its REMOTE side-effect
+        // launch doesn't crash casting the relaxed-mock Result default. Individual
+        // tests override this to drive the specialFeatures list.
+        coEvery { mediaRepository.getSpecialFeatures(any()) } returns Result.success(emptyList())
+        // Default stub for the media-segments pre-warm fetch so its REMOTE
+        // side-effect launch doesn't crash casting the relaxed-mock Result default.
+        // Individual tests override this to drive the availability booleans.
+        coEvery { playbackRepository.getMediaSegments(any()) } returns Result.success(emptyList())
         // Provider refresh is a no-op by default; tests that drive refresh override.
         coEvery { mediaDetailProvider.refresh(any()) } returns Unit
         // Successful user-data mutations update the provider's active replay
@@ -1178,6 +1189,174 @@ class DetailViewModelTest {
         io.mockk.coVerify(exactly = 0) { seerrRepository.getTvDetails(any()) }
     }
 
+    // ── Intro/credits segment pre-warm + detail-side availability chip ─────
+    // A REMOTE load fires playbackRepository.getMediaSegments to (a) pre-warm the
+    // player's segment TTL cache so its first skip is instant and (b) project the
+    // intro/credits availability onto uiState for the chip near the Play button.
+
+    @Test
+    fun loadItem_remote_fetchesMediaSegmentsAndSurfacesAvailability() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            stubProvider(
+                "m1",
+                remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
+            )
+            val introSegment = MediaSegment(
+                id = "intro-1",
+                itemId = "m1",
+                type = MediaSegmentType.INTRO,
+                startTicks = 0L,
+                endTicks = 5_000_000L,
+            )
+            coEvery { playbackRepository.getMediaSegments("m1") } returns Result.success(listOf(introSegment))
+
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+
+            // The pre-warm fetch fired (and warmed the player's segment cache).
+            coVerify(exactly = 1) { playbackRepository.getMediaSegments("m1") }
+            // The intro segment landed on uiState for the detail chip.
+            assertTrue(viewModel.uiState.value.hasIntroSegment)
+            assertFalse(viewModel.uiState.value.hasCreditSegment)
+        }
+
+    @Test
+    fun loadItem_local_doesNotFetchMediaSegments() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val ep1 = episode("e1", 1, 1, isPlayed = false)
+            val detail = MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES))
+            stubProvider(
+                "s1",
+                localSnapshot(
+                    detail,
+                    seasons = listOf(season),
+                    episodesBySeason = mapOf(season.id to listOf(ep1)),
+                    fetchedSeasonIds = setOf(season.id),
+                ),
+            )
+
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+
+            // A LOCAL origin short-circuits remote side effects — no segment
+            // pre-warm fetch, and the chip booleans stay false.
+            coVerify(exactly = 0) { playbackRepository.getMediaSegments(any()) }
+            assertFalse(viewModel.uiState.value.hasIntroSegment)
+            assertFalse(viewModel.uiState.value.hasCreditSegment)
+        }
+
+    @Test
+    fun loadItem_remoteThenLocal_clearsSegmentAvailabilityOnNavigation() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            // First: a REMOTE item whose intro segment sets the chip booleans.
+            stubProvider(
+                "m1",
+                remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
+            )
+            val introSegment = MediaSegment(
+                id = "intro-1",
+                itemId = "m1",
+                type = MediaSegmentType.INTRO,
+                startTicks = 0L,
+                endTicks = 5_000_000L,
+            )
+            coEvery { playbackRepository.getMediaSegments("m1") } returns Result.success(listOf(introSegment))
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasIntroSegment)
+
+            // Then: navigate to a LOCAL item. The atomic reset in loadItem must
+            // clear the prior item's segment availability so the chip can't
+            // advertise "skip available" for an item with no segments.
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val ep1 = episode("e1", 1, 1, isPlayed = false)
+            val detail = MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES))
+            stubProvider(
+                "s1",
+                localSnapshot(
+                    detail,
+                    seasons = listOf(season),
+                    episodesBySeason = mapOf(season.id to listOf(ep1)),
+                    fetchedSeasonIds = setOf(season.id),
+                ),
+            )
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.hasIntroSegment)
+            assertFalse(viewModel.uiState.value.hasCreditSegment)
+        }
+
+    // ── Special features / extras ───────────────────────────────────────────
+    // A REMOTE load fires mediaRepository.getSpecialFeatures (sourced from
+    // Jellyfin's /Items/{id}/SpecialFeatures) and projects the result onto
+    // uiState.specialFeatures so the "Special Features" row can render.
+
+    @Test
+    fun loadItem_remote_fetchesSpecialFeaturesAndSurfacesExtras() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            stubProvider(
+                "m1",
+                remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
+            )
+            val extras = listOf(
+                MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE),
+                MediaItem(id = "extra-2", name = "Deleted Scenes", mediaType = MediaType.MOVIE),
+            )
+            coEvery { mediaRepository.getSpecialFeatures("m1") } returns Result.success(extras)
+
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+
+            // The fetch fired exactly once for the resolved item.
+            coVerify(exactly = 1) { mediaRepository.getSpecialFeatures("m1") }
+            // The extras landed on uiState for the detail row.
+            assertEquals(extras, viewModel.uiState.value.specialFeatures)
+        }
+
+    @Test
+    fun loadItem_remoteThenLocal_clearsSpecialFeaturesOnNavigation() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            // First: a REMOTE item whose special features populate the row.
+            stubProvider(
+                "m1",
+                remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
+            )
+            val extras = listOf(MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE))
+            coEvery { mediaRepository.getSpecialFeatures("m1") } returns Result.success(extras)
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+            assertEquals(extras, viewModel.uiState.value.specialFeatures)
+
+            // Then: navigate to a LOCAL item. The atomic reset in loadItem must
+            // clear the prior item's extras so the row can't render a stale
+            // special-feature set for an item that has none.
+            val season = MediaItem(id = "season1", name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1)
+            val ep1 = episode("e1", 1, 1, isPlayed = false)
+            val detail = MediaDetail(item = MediaItem(id = "s1", name = "Show", mediaType = MediaType.SERIES))
+            stubProvider(
+                "s1",
+                localSnapshot(
+                    detail,
+                    seasons = listOf(season),
+                    episodesBySeason = mapOf(season.id to listOf(ep1)),
+                    fetchedSeasonIds = setOf(season.id),
+                ),
+            )
+            viewModel.loadItem("s1")
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.specialFeatures.isEmpty())
+            // A LOCAL origin short-circuits remote discovery — no extras fetch.
+            coVerify(exactly = 0) { mediaRepository.getSpecialFeatures("s1") }
+        }
+
     // ── NEW: resync() maps OfflineSyncManager results to ResyncUiState ──────
 
     @Test
@@ -1229,6 +1408,132 @@ class DetailViewModelTest {
         assertTrue(state is ResyncUiState.Error)
         assertEquals("boom", (state as ResyncUiState.Error).message)
     }
+
+    // ── Instant Mix ───────────────────────────────────────────────────────
+    // startInstantMix fetches a Jellyfin mix off the current audio item and hands
+    // it to AudioPlaybackManager.playQueue at index 0. The mix build runs on
+    // Dispatchers.Default (not the test dispatcher), so the success test polls a
+    // captured call list instead of relying on advanceUntilIdle() alone.
+
+    @Test
+    fun startInstantMix_success_playsQueueWithMappedItems() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val album = MediaItem(
+                id = "album1",
+                name = "Album",
+                mediaType = MediaType.ALBUM,
+                album = "Album",
+            )
+            stubProvider("album1", remoteSnapshot(MediaDetail(item = album)))
+            val mixTracks = listOf(
+                MediaItem(id = "t1", name = "Track 1", mediaType = MediaType.AUDIO),
+                MediaItem(id = "t2", name = "Track 2", mediaType = MediaType.AUDIO),
+            )
+            coEvery { mediaRepository.getInstantMix(any(), any()) } returns Result.success(mixTracks)
+            val playedPair = CompletableDeferred<Pair<List<AudioQueueItem>, Int>>()
+            every { audioPlaybackManager.playQueue(any(), any()) } answers {
+                playedPair.complete(firstArg<List<AudioQueueItem>>() to secondArg<Int>())
+            }
+
+            viewModel.loadItem("album1")
+            advanceUntilIdle()
+
+            viewModel.startInstantMix()
+            // playQueue runs on Dispatchers.Default; poll the deferred (safe publication).
+            val deadline = System.currentTimeMillis() + 2_000
+            while (System.currentTimeMillis() < deadline && !playedPair.isCompleted) {
+                delay(10)
+                advanceUntilIdle()
+            }
+
+            assertTrue("playQueue was not invoked", playedPair.isCompleted)
+            val (queue, startIndex) = playedPair.await()
+            assertEquals(0, startIndex)
+            assertEquals(listOf("t1", "t2"), queue.map { it.id })
+            // Tracks carry no album, so albumFallback (the detail item's album) wins.
+            assertEquals("Album", queue.first().album)
+        }
+
+    @Test
+    fun startInstantMix_emptyMix_emitsEmptyMessageAndDoesNotPlay() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val album = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)
+            stubProvider("album1", remoteSnapshot(MediaDetail(item = album)))
+            coEvery { mediaRepository.getInstantMix(any(), any()) } returns Result.success(emptyList())
+            val firstMessage = CompletableDeferred<DetailMessage>()
+            backgroundScope.launch { viewModel.messages.collect { firstMessage.complete(it) } }
+            every { context.getString(R.string.detail_instant_mix_empty) } returns "no mix"
+
+            viewModel.loadItem("album1")
+            advanceUntilIdle()
+            advanceUntilIdle() // ensure the messages collector is subscribed (replay = 0)
+
+            viewModel.startInstantMix()
+            // The mix build runs on Dispatchers.Default; poll the deferred (safe publication).
+            val deadline = System.currentTimeMillis() + 2_000
+            while (System.currentTimeMillis() < deadline && !firstMessage.isCompleted) {
+                delay(10)
+                advanceUntilIdle()
+            }
+
+            assertTrue("instant mix empty message was not emitted", firstMessage.isCompleted)
+            assertEquals("no mix", (firstMessage.await() as DetailMessage.Text).text)
+            io.mockk.verify(exactly = 0) { audioPlaybackManager.playQueue(any(), any()) }
+        }
+
+    @Test
+    fun startInstantMix_failure_emitsFailureMessageAndDoesNotPlay() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            val album = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)
+            stubProvider("album1", remoteSnapshot(MediaDetail(item = album)))
+            coEvery { mediaRepository.getInstantMix(any(), any()) } returns
+                Result.failure(RuntimeException("boom"))
+            val firstMessage = CompletableDeferred<DetailMessage>()
+            backgroundScope.launch { viewModel.messages.collect { firstMessage.complete(it) } }
+            every { context.getString(R.string.detail_instant_mix_failed) } returns "failed mix"
+
+            viewModel.loadItem("album1")
+            advanceUntilIdle()
+            advanceUntilIdle() // ensure the messages collector is subscribed (replay = 0)
+
+            viewModel.startInstantMix()
+            // The mix build runs on Dispatchers.Default; poll the deferred (safe publication).
+            val deadline = System.currentTimeMillis() + 2_000
+            while (System.currentTimeMillis() < deadline && !firstMessage.isCompleted) {
+                delay(10)
+                advanceUntilIdle()
+            }
+
+            // Diagnostics: confirm the repo was hit and onFailure resolved the string.
+            coVerify(exactly = 1) { mediaRepository.getInstantMix(any(), any()) }
+            io.mockk.verify(atLeast = 1) { context.getString(R.string.detail_instant_mix_failed) }
+            assertTrue("instant mix failure message was not emitted", firstMessage.isCompleted)
+            assertEquals("failed mix", (firstMessage.await() as DetailMessage.Text).text)
+            io.mockk.verify(exactly = 0) { audioPlaybackManager.playQueue(any(), any()) }
+        }
+
+    @Test
+    fun startInstantMix_nonAudioItem_isNoOp() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+            stubProvider(
+                "m1",
+                remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
+            )
+
+            viewModel.loadItem("m1")
+            advanceUntilIdle()
+
+            viewModel.startInstantMix()
+            advanceUntilIdle()
+
+            // Non-audio items short-circuit before the repository is touched.
+            coVerify(exactly = 0) { mediaRepository.getInstantMix(any(), any()) }
+            io.mockk.verify(exactly = 0) { audioPlaybackManager.playQueue(any(), any()) }
+        }
 
     @Test
     fun resolveTmdbId_providerIdTmdb_returnsParsed() = runTest(mainDispatcherRule.testDispatcher) {

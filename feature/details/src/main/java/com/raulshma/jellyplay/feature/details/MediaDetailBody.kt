@@ -1036,6 +1036,54 @@ internal fun DetailContentBody(
                 )
             }
         }
+
+        // ── Special Features / Extras ──
+        // Featurettes, deleted scenes, interviews, etc. attached server-side via
+        // Jellyfin's /Items/{id}/SpecialFeatures. Rendered as a tappable poster row
+        // (matching "More like this") so an extra plays in the video player on tap.
+        // Remote-only: the fetch is gated by capabilities.remoteDiscovery (see
+        // triggerRemoteSideEffects), and an empty list hides the section entirely.
+        StaggeredDetailSection(
+            visible = showContent && state.capabilities.remoteDiscovery && state.specialFeatures.isNotEmpty(),
+            delayIndex = 13,
+        ) {
+            val extras = state.specialFeatures
+            Column {
+                FadingItem {
+                    Text(
+                        text = stringResource(R.string.detail_section_special_features),
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier
+                            .padding(horizontal = bodyContentPad)
+                            .semantics { heading() },
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                // Compute the card width once from the already-read adaptiveInfo
+                // instead of re-reading LocalAdaptiveInfo.current inside each
+                // visible item lambda (one CompositionLocal read per item).
+                val extraCardWidth = if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
+                TvFocusableItemRow(
+                    items = extras,
+                    key = { "extra_${it.id}" },
+                    contentPadding = PaddingValues(horizontal = bodyContentPad),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    onFocusedIndexChange = { index ->
+                        extras.getOrNull(index)?.let(callbacks.onFocusedMediaItem)
+                    },
+                ) { _, extra, focusModifier ->
+                    val extraClick = remember(extra.id) { { callbacks.onPlayExtra(extra) } }
+                    val extraImageUrl = remember(extra.id) { callbacks.getImageUrl(extra.id) }
+                    PosterCard(
+                        item = extra,
+                        imageUrl = extraImageUrl,
+                        onClick = extraClick,
+                        modifier = focusModifier.width(extraCardWidth),
+                    )
+                }
+            }
+        }
     }
     }
     }

@@ -87,6 +87,31 @@ class MediaRepositoryImplTest {
     }
 
     @Test
+    fun `getSpecialFeatures delegates to apiClient and maps items`() = runTest {
+        val extras = listOf(
+            MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE),
+            MediaItem(id = "extra-2", name = "Deleted Scenes", mediaType = MediaType.MOVIE),
+        )
+        coEvery { apiClient.getSpecialFeatures("item-1") } returns Result.success(extras)
+
+        val result = repository.getSpecialFeatures("item-1")
+
+        assertTrue(result.isSuccess)
+        assertEquals(extras, result.getOrNull())
+        coVerify(exactly = 1) { apiClient.getSpecialFeatures("item-1") }
+    }
+
+    @Test
+    fun `getSpecialFeatures empty when apiClient returns empty`() = runTest {
+        coEvery { apiClient.getSpecialFeatures("item-1") } returns Result.success(emptyList())
+
+        val result = repository.getSpecialFeatures("item-1")
+
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrNull().isNullOrEmpty())
+    }
+
+    @Test
     fun `getLyricsWithFallback returns cached plain lyrics when synced is null`() = runTest {
         val cachedEntity = LyricsCacheEntity(
             itemId = "item-1",
@@ -614,6 +639,46 @@ class MediaRepositoryImplTest {
 
         coVerify(exactly = 1) { apiClient.getCollectionItems("col-1", 0, 20) }
         coVerify(exactly = 1) { apiClient.getCollectionItems("col-1", 20, 20) }
+    }
+
+    // ------------------------------------------------------------------
+    // Collection write/list paths are uncached passthroughs to the apiClient
+    // (the picker refetches on every open so a freshly-created collection is
+    // immediately selectable). Pin the delegation here.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `getCollections delegates to apiClient`() = runTest {
+        val collections = listOf(
+            com.raulshma.jellyplay.core.model.CollectionSummary(id = "c1", name = "Marvel", itemCount = 4),
+        )
+        coEvery { apiClient.getCollections(100) } returns Result.success(collections)
+
+        val result = repository.getCollections()
+
+        assertTrue(result.isSuccess)
+        assertEquals(collections, result.getOrNull())
+        coVerify(exactly = 1) { apiClient.getCollections(100) }
+    }
+
+    @Test
+    fun `createCollection delegates name and seed ids to apiClient`() = runTest {
+        coEvery { apiClient.createCollection("My Set", listOf("m1")) } returns Result.success("col-new")
+
+        val result = repository.createCollection("My Set", listOf("m1"))
+
+        assertEquals("col-new", result.getOrNull())
+        coVerify(exactly = 1) { apiClient.createCollection("My Set", listOf("m1")) }
+    }
+
+    @Test
+    fun `addItemsToCollection delegates collectionId and item ids to apiClient`() = runTest {
+        coEvery { apiClient.addItemsToCollection("c1", listOf("m1", "m2")) } returns Result.success(Unit)
+
+        val result = repository.addItemsToCollection("c1", listOf("m1", "m2"))
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { apiClient.addItemsToCollection("c1", listOf("m1", "m2")) }
     }
 
     // ------------------------------------------------------------------

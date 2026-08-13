@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -65,6 +66,14 @@ interface LibraryApiClient {
      * no intros are configured server-side.
      */
     suspend fun getIntros(itemId: String): Result<List<MediaItem>>
+
+    /**
+     * Fetch special features / extras (featurettes, deleted scenes, interviews,
+     * etc.) attached to the given item via Jellyfin's `/Items/{id}/SpecialFeatures`
+     * endpoint. Returns an empty list when the item has no extras. Remote-only —
+     * the endpoint is server-side and the result is filtered by parental rating.
+     */
+    suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>>
 
     suspend fun getSearchHints(
         query: String,
@@ -146,6 +155,27 @@ interface LibraryApiClient {
         startIndex: Int = 0,
         limit: Int = 50,
     ): Result<SearchResult>
+
+    /**
+     * Lists the user's collections (Jellyfin BoxSet items) for the detail
+     * screen's "Add to Collection" picker. Remote-only — collections are a
+     * server-side library construct. Returns a lightweight summary per
+     * collection (id, name, item count, primary image tag).
+     */
+    suspend fun getCollections(limit: Int = 100): Result<List<CollectionSummary>>
+
+    /**
+     * Creates a new collection (BoxSet) via Jellyfin's `/Collections` endpoint,
+     * optionally seeded with [itemIds]. Returns the new collection's id.
+     * Remote-only.
+     */
+    suspend fun createCollection(name: String, itemIds: List<String> = emptyList()): Result<String>
+
+    /**
+     * Adds the given item ids to an existing collection via Jellyfin's
+     * `/Collections/{collectionId}/Items` endpoint. Remote-only.
+     */
+    suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit>
 
     suspend fun getTags(
         parentId: String? = null,

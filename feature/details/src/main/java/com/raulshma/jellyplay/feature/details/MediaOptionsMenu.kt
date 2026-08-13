@@ -13,7 +13,9 @@ import com.composables.icons.tabler.outline.ListDetails
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Playlist
 import com.composables.icons.tabler.outline.Share
+import com.composables.icons.tabler.outline.Stack2
 import com.composables.icons.tabler.outline.Trash
+import com.composables.icons.tabler.outline.WaveSine
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -60,6 +62,8 @@ internal fun rememberMediaOptions(
     canDeleteDownloadedSeries: Boolean,
     canEditMetadata: Boolean,
     canAddToPlaylist: Boolean,
+    canAddToCollection: Boolean,
+    canInstantMix: Boolean,
     isOffline: Boolean,
     onClose: () -> Unit,
     onEditClick: () -> Unit,
@@ -77,6 +81,8 @@ internal fun rememberMediaOptions(
     onManageSeries: () -> Unit,
     onTechnicalInfo: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    onAddToCollection: () -> Unit = {},
+    onStartInstantMix: () -> Unit = {},
 ): List<MediaOption> {
     // Download status / progress, resolved once for both the label and the
     // enabled flag so the two menus stay in lock-step.
@@ -111,14 +117,16 @@ internal fun rememberMediaOptions(
     val labelTechnicalInfo = stringResource(R.string.detail_option_technical_info)
     val labelManageSeries = stringResource(R.string.detail_option_manage_series)
     val labelAddToPlaylist = stringResource(R.string.detail_option_add_to_playlist)
+    val labelAddToCollection = stringResource(R.string.detail_option_add_to_collection)
     val labelDeleteDownloads = stringResource(R.string.detail_option_delete_downloads)
+    val labelInstantMix = stringResource(R.string.detail_option_instant_mix)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
         downloadStatus, downloadProgress, canManageSeries, canDeleteDownloadedSeries, canEditMetadata,
-        canAddToPlaylist, isOffline, labelManageSeries,
-        labelAddToPlaylist, labelDeleteDownloads,
+        canAddToPlaylist, canAddToCollection, canInstantMix, isOffline, labelManageSeries,
+        labelAddToPlaylist, labelDeleteDownloads, labelInstantMix, labelAddToCollection,
         labelHideDetailUpNext, labelShowDetailUpNext) {
         buildList {
             // Metadata editor is a remote-only action (feature matrix: local = No);
@@ -191,6 +199,25 @@ internal fun rememberMediaOptions(
             if (canAddToPlaylist && item != null && (item.mediaType.isVideoType || item.mediaType == MediaType.SERIES)) {
                 add(MediaOption(labelAddToPlaylist, Tabler.Outline.Playlist) {
                     onClose(); onAddToPlaylist()
+                })
+            }
+            // Add to Collection: mirrors the Add-to-Playlist gate (playable
+            // video items + series, remote-only) but assembles a Jellyfin
+            // collection (BoxSet) instead. A series expands to its episode ids
+            // in the VM. Sits directly under Add to Playlist so the two
+            // assemble-into actions stay grouped.
+            if (canAddToCollection && item != null && (item.mediaType.isVideoType || item.mediaType == MediaType.SERIES)) {
+                add(MediaOption(labelAddToCollection, Tabler.Outline.Stack2) {
+                    onClose(); onAddToCollection()
+                })
+            }
+            // Instant Mix: audio-only. Builds a shuffled track queue seeded from
+            // the current item via Jellyfin's instant-mix endpoint. The gate
+            // (audio type + remoteDiscovery) is resolved in DetailContent so the
+            // menu entry only renders for a remote audio item.
+            if (canInstantMix) {
+                add(MediaOption(labelInstantMix, Tabler.Outline.WaveSine) {
+                    onClose(); onStartInstantMix()
                 })
             }
             if (isSeries || item?.seriesId != null) {

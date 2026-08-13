@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.paging.FavoritesPagingSource
 import com.raulshma.jellyplay.core.data.paging.MediaPagingSource
 import com.raulshma.jellyplay.core.data.paging.SearchPagingSource
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.EpgGuide
@@ -433,6 +434,9 @@ class MediaRepositoryImpl @Inject constructor(
     override suspend fun getIntros(itemId: String): Result<List<MediaItem>> =
         apiClient.getIntros(itemId)
 
+    override suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>> =
+        apiClient.getSpecialFeatures(itemId)
+
     override suspend fun search(
         query: String,
         filters: LibraryFilters,
@@ -617,6 +621,17 @@ class MediaRepositoryImpl @Inject constructor(
             result.getOrNull()?.let { collectionItemsCache.put(identity, cacheKey, it) }
         }
     }
+
+    override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> =
+        // Not cached: the picker refetches on every open so a freshly-created
+        // collection is immediately selectable without a cache-invalidation hop.
+        apiClient.getCollections(limit)
+
+    override suspend fun createCollection(name: String, itemIds: List<String>): Result<String> =
+        apiClient.createCollection(name, itemIds)
+
+    override suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit> =
+        apiClient.addItemsToCollection(collectionId, itemIds)
 
     override suspend fun getTags(
         parentId: String?,

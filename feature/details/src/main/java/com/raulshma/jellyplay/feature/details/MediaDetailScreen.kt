@@ -294,7 +294,10 @@ fun MediaDetailScreen(
                     albumTracks = uiState.albumTracks,
                     collectionItems = uiState.collectionItems,
                     relatedItems = uiState.relatedItems,
+                    specialFeatures = uiState.specialFeatures,
                     localRelatedItems = uiState.localRelatedItems,
+                    hasIntroSegment = uiState.hasIntroSegment,
+                    hasCreditSegment = uiState.hasCreditSegment,
                     relatedVideos = uiState.relatedVideos,
                     seerrRecommendations = uiState.seerrRecommendations,
                     seerrSimilar = uiState.seerrSimilar,
@@ -370,6 +373,13 @@ fun MediaDetailScreen(
                                 viewModel.selectedAudioIndex,
                             )
                         },
+                        onPlayExtra = { extra ->
+                            // Play a special feature / extra from the start. An extra is
+                            // its own item (trailer / featurette / deleted scene), so it
+                            // starts at position 0 and inherits no subtitle/audio selection
+                            // from the parent item.
+                            onPlayClick(extra.id, null, 0L, null, null)
+                        },
                         onAudioClick = { onAudioClick(itemId) },
                         onDownloadClick = { viewModel.startDownload() },
                         onOpenDownloadPicker = { viewModel.openDownloadPicker() },
@@ -440,6 +450,8 @@ fun MediaDetailScreen(
                         onHideDetailUpNext = { viewModel.setShowDetailUpNext(false) },
                         onManageSeries = { onManageSeries(itemId) },
                         onAddToPlaylist = { viewModel.openPlaylistPicker() },
+                        onAddToCollection = { viewModel.openCollectionPicker() },
+                        onStartInstantMix = { viewModel.startInstantMix() },
                         onMediaQuickActions = { item -> quickActionController.show(item) },
                         onFocusedMediaItem = { item -> tvFocusedItem = item },
                         onDeleteDownload = {
@@ -545,6 +557,33 @@ fun MediaDetailScreen(
                     viewModel.createAndAddPlaylist(name, overview)
                 },
                 onDismiss = { viewModel.dismissCreatePlaylistDialog() },
+            )
+        }
+
+        if (uiState.showCollectionPicker && detail != null) {
+            val collectionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            TvSafeSheet(
+                onDismissRequest = { viewModel.dismissCollectionPicker() },
+                sheetState = collectionSheetState,
+            ) {
+                AddToCollectionSheet(
+                    collections = uiState.collections,
+                    isLoading = uiState.isLoadingCollections,
+                    isAdding = uiState.isAddingToCollection,
+                    onPick = { collection -> viewModel.addToCollection(collection) },
+                    onCreateNew = { viewModel.openCreateCollectionDialog() },
+                    onDismiss = { viewModel.dismissCollectionPicker() },
+                )
+            }
+        }
+
+        if (uiState.showCreateCollectionDialog) {
+            CreateCollectionDialog(
+                isLoading = uiState.isAddingToCollection,
+                onConfirm = { name ->
+                    viewModel.createAndAddCollection(name)
+                },
+                onDismiss = { viewModel.dismissCreateCollectionDialog() },
             )
         }
 

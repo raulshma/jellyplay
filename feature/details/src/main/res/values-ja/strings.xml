@@ -15,6 +15,7 @@
     <string name="detail_section_cast">キャスト</string>
     <string name="detail_section_crew">スタッフ</string>
     <string name="detail_section_more_like_this">似ている作品</string>
+    <string name="detail_section_special_features">特典映像</string>
     <string name="detail_section_chapters">チャプター</string>
     <string name="detail_see_all">すべて表示</string>
     <string name="detail_more_like_this_on_device">端末内</string>
@@ -27,6 +28,11 @@
     <string name="detail_play_finding_episode">エピソードを検索中</string>
     <string name="detail_play_no_episodes_available">視聴可能なエピソードはありません</string>
     <string name="detail_play_no_episodes">エピソードがありません</string>
+
+    <!-- ── Segment availability chip (rendered near the Play button) ──────── -->
+    <string name="detail_skip_available_intro">イントロスキップあり</string>
+    <string name="detail_skip_available_credits">エンディングスキップあり</string>
+    <string name="detail_skip_available_both">イントロ・エンディングスキップ</string>
 
     <!-- ── Up Next card label ───────────────────────────────────────────── -->
     <string name="detail_up_next">次のエピソード</string>
@@ -108,6 +114,28 @@
     <plurals name="detail_playlist_item_count">
         <item quantity="other">%1$d 件のアイテム</item>
     </plurals>
+
+    <!-- ── コレクションに追加 ────────────────────────────────────────── -->
+    <string name="detail_option_add_to_collection">コレクションに追加</string>
+    <string name="detail_collection_picker_title">コレクションに追加</string>
+    <string name="detail_collection_create_new">新しいコレクションを作成</string>
+    <string name="detail_collection_new_title">新しいコレクション</string>
+    <string name="detail_collection_name_label">名前</string>
+    <string name="detail_collection_create">作成</string>
+    <string name="detail_msg_no_collections">コレクションはまだありません</string>
+    <!-- %1$s = コレクション名 -->
+    <string name="detail_msg_added_to_collection">\"%1$s\" に追加しました</string>
+    <!-- %1$s = コレクション名 -->
+    <string name="detail_msg_collection_created">\"%1$s\" を作成しアイテムを追加しました</string>
+    <string name="detail_msg_couldnt_add_to_collection">コレクションに追加できませんでした</string>
+    <plurals name="detail_collection_item_count">
+        <item quantity="other">%1$d 件のアイテム</item>
+    </plurals>
+
+    <!-- ── インスタントミックス (オーディオ) ──────────────────────────── -->
+    <string name="detail_option_instant_mix">インスタントミックスを開始</string>
+    <string name="detail_instant_mix_empty">このアイテムにはミックスがありません</string>
+    <string name="detail_instant_mix_failed">インスタントミックスを開始できませんでした</string>
 
     <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
     <string name="detail_select_audio">音声を選択</string>

@@ -223,7 +223,8 @@ class DetailViewModel @Inject constructor(
                     resyncActions.state,
                     playlistActions.state,
                     downloadLifecycleActions.state,
-                ) { primary, resync, playlist, download ->
+                    collectionActions.state,
+                ) { primary, resync, playlist, download, collection ->
                     primary.copy(
                         resyncState = resync,
                         playlists = playlist.playlists,
@@ -231,6 +232,11 @@ class DetailViewModel @Inject constructor(
                         isAddingToPlaylist = playlist.isAddingToPlaylist,
                         showPlaylistPicker = playlist.showPlaylistPicker,
                         showCreatePlaylistDialog = playlist.showCreatePlaylistDialog,
+                        collections = collection.collections,
+                        isLoadingCollections = collection.isLoadingCollections,
+                        isAddingToCollection = collection.isAddingToCollection,
+                        showCollectionPicker = collection.showCollectionPicker,
+                        showCreateCollectionDialog = collection.showCreateCollectionDialog,
                         isDownloading = download.isDownloading,
                         cellularDownloadWarningMb = download.cellularDownloadWarningMb,
                         isDownloadingSeries = download.isDownloadingSeries,
@@ -323,6 +329,15 @@ class DetailViewModel @Inject constructor(
         scope = scope,
         mediaRepository = mediaRepository,
         appRuntimeStateStore = appRuntimeStateStore,
+        context = context,
+        detailProvider = { _uiState.value.detail },
+        sortedEpisodesProvider = { _uiState.value.sortedEpisodes },
+        canonicalEpisodeIds = mediaDetailProvider::canonicalEpisodeIds,
+        messageSink = { _messages.tryEmit(it) },
+    )
+    private val collectionActions = CollectionActions(
+        scope = scope,
+        mediaRepository = mediaRepository,
         context = context,
         detailProvider = { _uiState.value.detail },
         sortedEpisodesProvider = { _uiState.value.sortedEpisodes },
@@ -486,7 +501,14 @@ class DetailViewModel @Inject constructor(
                     collectionItems = emptyList(),
                     relatedItems = emptyList(),
                     localRelatedItems = emptyList(),
+                    specialFeatures = emptyList(),
                     albumTracks = emptyList(),
+                    // Segment availability is only re-populated on the REMOTE
+                    // success path of triggerRemoteSideEffects; reset here so a
+                    // navigation to a LOCAL item (or a failed REMOTE fetch) can't
+                    // leave the prior item's "skip available" chip stale.
+                    hasIntroSegment = false,
+                    hasCreditSegment = false,
                     smartPlayTarget = null,
                     selectedSubtitleIndex = null,
                     selectedAudioIndex = null,
@@ -715,6 +737,32 @@ class DetailViewModel @Inject constructor(
                     }
                 }
         }
+        // Fetch special features / extras (featurettes, deleted scenes, etc.)
+        // concurrently so the core detail renders immediately; the result lands
+        // in specialFeatures and renders as its own horizontal row.
+        launch {
+            mediaRepository.getSpecialFeatures(itemId)
+                .onSuccess { extras ->
+                    if (currentItemId != itemId) return@onSuccess
+                    _uiState.update { it.copy(specialFeatures = extras) }
+                }
+        }
+        // Pre-warm the player's media-segment TTL cache and surface the two
+        // intro/credits skip affordances as a detail-side chip. The cache fill
+        // is an implicit side effect of the call; only the booleans flow into
+        // uiState so the chip can render before the player attaches.
+        launch {
+            playbackRepository.getMediaSegments(itemId).onSuccess { segments ->
+                if (currentItemId != itemId) return@onSuccess
+                val availability = segments.toAvailability()
+                _uiState.update {
+                    it.copy(
+                        hasIntroSegment = availability.hasIntro,
+                        hasCreditSegment = availability.hasCredits,
+                    )
+                }
+            }
+        }
         // Trigger the Seerr recommendations/videos fetch from the VM. The 350ms
         // delay is preserved for frame priority (don't contend with first-frame
         // GPU work); seerrDataLoaded keeps it idempotent across re-entries.
@@ -817,6 +865,47 @@ class DetailViewModel @Inject constructor(
                 )
             }
             audioPlaybackManager.playQueue(queueItems, startIndex)
+        }
+    }
+
+    /**
+     * One-shot "Start instant mix" action for audio-type items. Fetches a
+     * Jellyfin-built mix seeded off the current item via
+     * [MediaRepository.getInstantMix] and hands it straight to
+     * [AudioPlaybackManager.playQueue] at index 0. Fire-and-forget: success is
+     * implicit (playback starts) and the only UI feedback is the failure / empty
+     * snackbar emitted via [DetailMessage]. Mirrors [playAlbum]'s queue build +
+     * dispatcher, and guards navigation drift so a mix resolved after the user
+     * navigated away cannot start playback on the wrong screen.
+     */
+    fun startInstantMix() {
+        val detail = _uiState.value.detail ?: return
+        val item = detail.item
+        if (!item.mediaType.isAudioType) return
+        val itemId = item.id
+        val albumFallback = item.album ?: item.name
+        // Queue construction builds N image URLs + N queue items; keep it off the
+        // Main dispatcher, matching playAlbum (the click handler is non-suspend).
+        launch(Dispatchers.Default) {
+            mediaRepository.getInstantMix(itemId)
+                .onSuccess { mix ->
+                    // Don't start a mix for a screen the user has already left.
+                    if (currentItemId != itemId) return@onSuccess
+                    if (mix.isEmpty()) {
+                        _messages.tryEmit(DetailMessage.Text(context.getString(R.string.detail_instant_mix_empty)))
+                        return@onSuccess
+                    }
+                    val queueItems = mix.map { track ->
+                        track.toAudioQueueItem(
+                            imageUrl = playbackRepository.getImageUrl(track.id, maxWidth = 400),
+                            albumFallback = albumFallback,
+                        )
+                    }
+                    audioPlaybackManager.playQueue(queueItems, 0)
+                }
+                .onFailure {
+                    _messages.tryEmit(DetailMessage.Text(context.getString(R.string.detail_instant_mix_failed)))
+                }
         }
     }
 
@@ -1301,6 +1390,31 @@ class DetailViewModel @Inject constructor(
     /** Creates a new playlist seeded with the current item. Delegates to [PlaylistActions]. */
     fun createAndAddPlaylist(name: String, overview: String) =
         playlistActions.createAndAddPlaylist(name, overview)
+
+    // ── Add to Collection ───────────────────────────────────────────────
+    // Delegated to [collectionActions] (CollectionActions). The VM keeps thin
+    // pass-throughs so callers/tests stay stable; the helper owns the
+    // collection state machine + the series→episode-id expansion. A mirror of
+    // the playlist block above, minus the Watch Later bucket (collections have
+    // none) and minus the media-type tagging (the create endpoint takes only a
+    // name).
+
+    /** Opens the Add-to-Collection picker. Delegates to [CollectionActions]. */
+    fun openCollectionPicker() = collectionActions.openCollectionPicker()
+
+    fun dismissCollectionPicker() = collectionActions.dismissCollectionPicker()
+
+    fun openCreateCollectionDialog() = collectionActions.openCreateCollectionDialog()
+
+    fun dismissCreateCollectionDialog() = collectionActions.dismissCreateCollectionDialog()
+
+    /** Adds the current item to an existing collection. Delegates to [CollectionActions]. */
+    fun addToCollection(collection: com.raulshma.jellyplay.core.model.CollectionSummary) =
+        collectionActions.addToCollection(collection)
+
+    /** Creates a new collection seeded with the current item. Delegates to [CollectionActions]. */
+    fun createAndAddCollection(name: String) =
+        collectionActions.createAndAddCollection(name)
 
     // ── Offline / download-lifecycle management ──────────────────────────
     // Ports the operations previously owned by OfflineDetailViewModel and

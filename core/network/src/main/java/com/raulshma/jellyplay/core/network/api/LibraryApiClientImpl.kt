@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ChapterInfo
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -633,6 +634,22 @@ class LibraryApiClientImpl @Inject constructor(
         }
     }
 
+    override suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>> = engine.apiResultWithRetry {
+        val userId = engine.currentUser.value?.id?.toUUID()
+            ?: throw IllegalStateException("Not authenticated")
+        // Unlike getIntros (a BaseItemDtoQueryResult with a paginated `.items`
+        // wrapper), getSpecialFeatures returns a bare List<BaseItemDto> directly
+        // — the /Items/{id}/SpecialFeatures endpoint emits a JSON array, so the
+        // SDK surfaces it as a list rather than a query result.
+        val response = engine.requireApi().userLibraryApi.getSpecialFeatures(
+            itemId = itemId.toUUID(),
+            userId = userId,
+        ).content
+        engine.run {
+            (response ?: emptyList()).map { it.toMediaItem() }.filterByParentalRating()
+        }
+    }
+
     override suspend fun getSearchHints(
         query: String,
         mediaTypes: List<MediaType>?,
@@ -951,6 +968,45 @@ class LibraryApiClientImpl @Inject constructor(
             startIndex = startIndex,
         )
     }
+
+    override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> =
+        engine.apiResultWithRetry {
+            // Collections are BoxSet items. Mirrors the getPlaylists query
+            // (includeItemTypes + recursive) but targets BOX_SET. CHILD_COUNT is
+            // requested so the picker can show "N items" per collection.
+            val response = engine.requireApi().itemsApi.getItems(
+                includeItemTypes = listOf(BaseItemKind.BOX_SET),
+                limit = limit,
+                recursive = true,
+                fields = listOf(ItemFields.CHILD_COUNT),
+            ).content
+            response.items.map { item ->
+                CollectionSummary(
+                    id = item.id.toString(),
+                    name = item.name ?: "",
+                    itemCount = item.childCount ?: 0,
+                    imageTag = item.imageTags?.get(ImageType.PRIMARY)?.toString(),
+                )
+            }
+        }
+
+    override suspend fun createCollection(name: String, itemIds: List<String>): Result<String> =
+        engine.apiResultWithRetry {
+            val result = engine.requireApi().collectionApi.createCollection(
+                name = name,
+                ids = itemIds,
+            ).content
+            result.id.toString()
+        }
+
+    override suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit> =
+        engine.apiResultWithRetry {
+            engine.requireApi().collectionApi.addToCollection(
+                collectionId = collectionId.toUUID(),
+                ids = itemIds.map { it.toUUID() },
+            ).content
+            Unit
+        }
 
     override suspend fun getTags(
         parentId: String?,

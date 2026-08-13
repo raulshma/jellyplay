@@ -132,6 +132,8 @@ internal fun DetailContent(
             (state.detailContext?.seriesAggregate?.downloadedEpisodeCount ?: 0) > 0,
         canEditMetadata = state.capabilities.remoteDiscovery,
         canAddToPlaylist = state.capabilities.remoteDiscovery,
+        canAddToCollection = state.capabilities.remoteDiscovery,
+        canInstantMix = isAudio && state.capabilities.remoteDiscovery,
         isOffline = state.origin?.isLocal == true,
         onClose = { /* menus close themselves */ },
         onEditClick = callbacks.onEditClick,
@@ -149,6 +151,8 @@ internal fun DetailContent(
         onManageSeries = callbacks.onManageSeries,
         onTechnicalInfo = { callbacks.onNavigate(Route.MediaInfo(state.itemId)) },
         onAddToPlaylist = callbacks.onAddToPlaylist,
+        onAddToCollection = callbacks.onAddToCollection,
+        onStartInstantMix = callbacks.onStartInstantMix,
     )
 
     val isSynthwave = com.raulshma.jellyplay.core.designsystem.theme.LocalIsSynthwave.current

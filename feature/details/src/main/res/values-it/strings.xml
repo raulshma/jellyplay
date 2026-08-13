@@ -15,6 +15,7 @@
     <string name="detail_section_cast">Cast</string>
     <string name="detail_section_crew">Troupe</string>
     <string name="detail_section_more_like_this">Simili a questo</string>
+    <string name="detail_section_special_features">Contenuti extra</string>
     <string name="detail_section_chapters">Capitoli</string>
     <string name="detail_see_all">Vedi tutti</string>
     <string name="detail_more_like_this_on_device">Sul dispositivo</string>
@@ -27,6 +28,11 @@
     <string name="detail_play_finding_episode">Ricerca episodio</string>
     <string name="detail_play_no_episodes_available">Nessun episodio disponibile</string>
     <string name="detail_play_no_episodes">Nessun episodio</string>
+
+    <!-- ── Segment availability chip (rendered near the Play button) ──────── -->
+    <string name="detail_skip_available_intro">Salta intro disponibile</string>
+    <string name="detail_skip_available_credits">Salta titoli di coda disponibile</string>
+    <string name="detail_skip_available_both">Salta intro e titoli di coda</string>
 
     <!-- ── Up Next card label ───────────────────────────────────────────── -->
     <string name="detail_up_next">Prossimo</string>
@@ -110,6 +116,29 @@
         <item quantity="one">%1$d elemento</item>
         <item quantity="other">%1$d elementi</item>
     </plurals>
+
+    <!-- ── Add to Collection picker ────────────────────────────────────── -->
+    <string name="detail_option_add_to_collection">Aggiungi a raccolta</string>
+    <string name="detail_collection_picker_title">Aggiungi a raccolta</string>
+    <string name="detail_collection_create_new">Crea nuova raccolta</string>
+    <string name="detail_collection_new_title">Nuova raccolta</string>
+    <string name="detail_collection_name_label">Nome</string>
+    <string name="detail_collection_create">Crea</string>
+    <string name="detail_msg_no_collections">Nessuna raccolta</string>
+    <!-- %1$s = nome della raccolta -->
+    <string name="detail_msg_added_to_collection">Aggiunto a \"%1$s\"</string>
+    <!-- %1$s = nome della raccolta -->
+    <string name="detail_msg_collection_created">Creata \"%1$s\" e elemento aggiunto</string>
+    <string name="detail_msg_couldnt_add_to_collection">Impossibile aggiungere alla raccolta</string>
+    <plurals name="detail_collection_item_count">
+        <item quantity="one">%1$d elemento</item>
+        <item quantity="other">%1$d elementi</item>
+    </plurals>
+
+    <!-- ── Instant Mix (elementi audio) ──────────────────────────────── -->
+    <string name="detail_option_instant_mix">Avvia mix istantaneo</string>
+    <string name="detail_instant_mix_empty">Nessun mix disponibile per questo elemento</string>
+    <string name="detail_instant_mix_failed">Impossibile avviare il mix istantaneo</string>
 
     <!-- ── Stream picker (audio / subtitle) ─────────────────────────────── -->
     <string name="detail_select_audio">Seleziona audio</string>

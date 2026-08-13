@@ -47,7 +47,12 @@ internal data class DetailContentState(
     val albumTracks: List<MediaItem>,
     val collectionItems: List<MediaItem>,
     val relatedItems: List<MediaItem>,
+    val specialFeatures: List<MediaItem> = emptyList(),
     val localRelatedItems: List<MediaItem> = emptyList(),
+    /** Intro skip available (INTRO segment resolved for the item). Drives the chip. */
+    val hasIntroSegment: Boolean = false,
+    /** Credits skip available (OUTRO segment resolved for the item). Drives the chip. */
+    val hasCreditSegment: Boolean = false,
     val relatedVideos: List<SeerrRelatedVideo>,
     val seerrRecommendations: List<SeerrSearchItem>,
     val seerrSimilar: List<SeerrSearchItem>,
@@ -107,6 +112,8 @@ internal data class DetailContentCallbacks(
     val onPlayClick: (itemId: String, mediaSourceId: String?, startPosition: Long) -> Unit,
     /** Resume-from-chapter: hand off to the player at a chapter's start position. */
     val onPlayChapter: (startTicks: Long) -> Unit = {},
+    /** Play a special feature / extra (featurette, deleted scene, etc.) in the player. */
+    val onPlayExtra: (MediaItem) -> Unit = {},
     val onAudioClick: () -> Unit,
     val onDownloadClick: () -> Unit,
     /** Open the pre-download picker (quality + external-subtitle selection). */
@@ -147,6 +154,10 @@ internal data class DetailContentCallbacks(
     val onHideDetailUpNext: () -> Unit = {},
     val onManageSeries: () -> Unit,
     val onAddToPlaylist: () -> Unit,
+    /** Open the Add-to-Collection picker for the current item (fire-and-forget VM action). */
+    val onAddToCollection: () -> Unit = {},
+    /** Start an instant mix for the current audio item (fire-and-forget VM action). */
+    val onStartInstantMix: () -> Unit = {},
     /** Open the quick-action sheet for a row item */
     val onMediaQuickActions: (MediaItem) -> Unit = {},
     /** Track the TV-focused row item so the Menu key can open its quick actions. */

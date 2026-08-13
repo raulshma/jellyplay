@@ -32,6 +32,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -170,6 +171,10 @@ internal fun DetailActionButtons(
                     onClick = onPlay,
                 )
             }
+            SegmentAvailabilityChip(
+                hasIntro = state.hasIntroSegment,
+                hasCredits = state.hasCreditSegment,
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -249,6 +254,10 @@ internal fun DetailActionButtons(
                 )
             }
             }
+            SegmentAvailabilityChip(
+                hasIntro = state.hasIntroSegment,
+                hasCredits = state.hasCreditSegment,
+            )
         }
     }
 }
@@ -402,6 +411,43 @@ private fun FavoriteButton(
             if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
             contentDescription = stringResource(R.string.detail_cd_favorite),
             tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/**
+ * Small informational pill near the Play button advertising that intro/credits
+ * skip points are available for this item. Rendered only when at least one
+ * segment resolved. Static (non-focusable) so it never competes with the Play
+ * button for TV focus. Styled like the Up-Next pill: tinted primary background
+ * at low alpha with a bold `labelSmall` caption.
+ *
+ * @param hasIntro true when an INTRO segment was resolved.
+ * @param hasCredits true when an OUTRO (credits) segment was resolved.
+ */
+@Composable
+private fun SegmentAvailabilityChip(
+    hasIntro: Boolean,
+    hasCredits: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (!hasIntro && !hasCredits) return
+    val label = when {
+        hasIntro && hasCredits -> stringResource(R.string.detail_skip_available_both)
+        hasIntro -> stringResource(R.string.detail_skip_available_intro)
+        else -> stringResource(R.string.detail_skip_available_credits)
+    }
+    Box(
+        modifier = modifier
+            .clip(ShapeCache.smooth8)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }

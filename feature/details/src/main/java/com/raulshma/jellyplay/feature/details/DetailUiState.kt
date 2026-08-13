@@ -88,10 +88,21 @@ data class DetailUiState(
     /** Similar/related items — fetched separately from the core detail so the
      *  screen can render incrementally (title/poster/cast first, similar after). */
     val relatedItems: List<MediaItem> = emptyList(),
+    /** Special features / extras (featurettes, deleted scenes, interviews, etc.)
+     *  sourced from Jellyfin's `/Items/{id}/SpecialFeatures` endpoint. Tapping an
+     *  extra plays it in the video player. Remote-only — empty for a local origin. */
+    val specialFeatures: List<MediaItem> = emptyList(),
     /** LOCAL-origin "More like this": on-device titles sharing a genre/studio,
      *  surfaced so a downloaded item isn't a discovery island offline. Empty for
      *  a remote origin (which uses [relatedItems]). */
     val localRelatedItems: List<MediaItem> = emptyList(),
+    /** True when the resolved item has an INTRO media segment (intro skip
+     *  available). Fetched alongside [relatedItems] so the player's segment cache
+     *  is pre-warmed and the detail chip can render before playback. Remote-only. */
+    val hasIntroSegment: Boolean = false,
+    /** True when the resolved item has an OUTRO (credits) media segment. Paired
+     *  with [hasIntroSegment] to drive the detail-side skip chip. Remote-only. */
+    val hasCreditSegment: Boolean = false,
     // Smart play (continue-watching / next-up computed target)
     val smartPlayTarget: SmartPlayTarget? = null,
     // Stream selection (audio/subtitle indices persisted across sessions)
@@ -145,6 +156,14 @@ data class DetailUiState(
     val isAddingToPlaylist: Boolean = false,
     val showPlaylistPicker: Boolean = false,
     val showCreatePlaylistDialog: Boolean = false,
+    // Add-to-collection picker (movie/episode/series detail). Mirrors the
+    // playlist picker fields above; the collection list + flags are fetched
+    // on-demand when the picker opens, not on every detail load.
+    val collections: List<com.raulshma.jellyplay.core.model.CollectionSummary> = emptyList(),
+    val isLoadingCollections: Boolean = false,
+    val isAddingToCollection: Boolean = false,
+    val showCollectionPicker: Boolean = false,
+    val showCreateCollectionDialog: Boolean = false,
 ) {
     @Immutable
     data class SmartPlayTarget(
