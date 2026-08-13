@@ -119,26 +119,17 @@ internal fun SeasonsSection(
      * server [getImageUrl]). Null disables the local-first lookup.
      */
     getEpisodeLocalImagePath: ((MediaItem) -> String?)? = null,
-    /**
-     * True when the snapshot is sourced from local data. The caller already
-     * neutralizes the deferred preferences (hideThumbnails/skipSpecials/
-     * episodesDescending) for a local origin; this flag additionally hides the
-     * sort-order toggle, whose tap would otherwise mutate the global pref with
-     * no visible effect (local order is always server order).
-     */
-    isLocalOrigin: Boolean = false,
 ) {
     // ── DEFERRED FOR LOCAL ORIGIN ────────────────────────────────────────────
     // The following affordances remain ONLINE-ONLY and are deliberately NOT
-    // implemented for a local/offline origin in this PR:
-    //   • hideEpisodeThumbnails / spoiler overlay — local cards always show art.
+    // implemented for a local/offline origin:
+    //   • hideEpisodeThumbnails / spoiler overlay — local cards always show art
+    //     (hiding thumbnails without guaranteed local artwork yields blank tiles).
     //   • skipSpecials (S0 filtering) — local series render every season.
-    //   • episodesDescending sort toggle — local series use server order.
     //   • press-and-hold peek (rememberMediaPeek) — local cards don't peek.
-    // The params stay on the signature (driven by `preferences`, defaulting to
-    // false/true) so a local origin simply passes neutral values; the unified
-    // EpisodeCard renders correctly without these for a downloaded episode. The
-    // sort-order toggle is additionally hidden for a local origin ([isLocalOrigin]).
+    // Episode sort order ([episodesDescending]) and its toggle ARE honored for a
+    // local origin: offline episodes load in canonical ascending playback order
+    // (same as online), so reversing to newest-first is a meaningful choice.
     // ─────────────────────────────────────────────────────────────────────────
     val smartTargetSeasonId = smartPlayTarget?.episode?.seasonId
     val initialSeasonIndex = when {
@@ -220,29 +211,24 @@ internal fun SeasonsSection(
                         }
                     }
                     val sortFocusState = rememberTvFocusState(focusedScale = 1.1f)
-                    // The sort toggle is an online-only affordance (local order is
-                    // always server order), so hide it for a local origin rather
-                    // than render a control that mutates a pref with no effect.
-                    if (!isLocalOrigin) {
-                        Surface(
-                            modifier = Modifier
-                                .clip(ShapeCache.smooth16)
-                                .then(sortFocusState.focusModifier)
-                                .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
-                                .clickable { onEpisodesDescendingChange(!episodesDescending) },
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                            shape = ShapeCache.smooth16,
-                        ) {
-                            Icon(
-                                imageVector = if (episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
-                                contentDescription = stringResource(
-                                    if (episodesDescending) R.string.detail_cd_sort_oldest_first
-                                    else R.string.detail_cd_sort_newest_first
-                                ),
-                                modifier = Modifier.padding(8.dp),
-                            )
-                        }
+                    Surface(
+                        modifier = Modifier
+                            .clip(ShapeCache.smooth16)
+                            .then(sortFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
+                            .clickable { onEpisodesDescendingChange(!episodesDescending) },
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shape = ShapeCache.smooth16,
+                    ) {
+                        Icon(
+                            imageVector = if (episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
+                            contentDescription = stringResource(
+                                if (episodesDescending) R.string.detail_cd_sort_oldest_first
+                                else R.string.detail_cd_sort_newest_first
+                            ),
+                            modifier = Modifier.padding(8.dp),
+                        )
                     }
                 }
             }

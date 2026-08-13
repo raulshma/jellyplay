@@ -126,8 +126,10 @@ fun HomeTopDock(
             .fillMaxWidth()
             .then(if (!isTv) Modifier.statusBarsPadding() else Modifier)
             .padding(
-                horizontal = 16.dp,
-                vertical = 4.dp
+                start = 16.dp,
+                top = 4.dp,
+                end = 16.dp,
+                bottom = 0.dp,
             )
             .onDpadKey(
                 onBack = {
@@ -160,7 +162,7 @@ fun HomeTopDock(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
+                    .height(52.dp)
                     .padding(
                         start = 4.dp,
                         top = 0.dp,
@@ -242,13 +244,13 @@ private fun RowScope.SearchExpandedContent(
     ) {
         IconButton(
             onClick = onBack,
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(38.dp),
         ) {
             Icon(
                 Tabler.Outline.ArrowLeft,
                 contentDescription = stringResource(R.string.home_back),
                 tint = appBarIconColorFaded,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(22.dp),
             )
         }
     }
@@ -268,7 +270,7 @@ private fun RowScope.SearchExpandedContent(
         modifier = Modifier
             .weight(1f)
             .padding(horizontal = 4.dp)
-            .height(48.dp)
+            .height(42.dp)
             .focusRequester(focusRequester),
         placeholder = {
             Text(
@@ -296,13 +298,13 @@ private fun RowScope.SearchExpandedContent(
             IconButton(
                 onClick = onClear,
                 shapes = androidx.compose.material3.IconButtonDefaults.shapes(),
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(38.dp),
             ) {
                 Icon(
                     Tabler.Outline.X,
                     contentDescription = stringResource(R.string.home_clear_search),
                     tint = appBarIconColorFaded,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
@@ -318,11 +320,11 @@ private fun OfflineToggleIcon(
     IconButton(
         onClick = onToggleOffline,
         enabled = !isGoingOnline,
-        modifier = Modifier.size(44.dp),
+        modifier = Modifier.size(38.dp),
     ) {
         if (isGoingOnline) {
             LoadingIndicator(
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(20.dp),
                 color = MaterialTheme.colorScheme.primary,
             )
         } else {
@@ -330,7 +332,7 @@ private fun OfflineToggleIcon(
                 Tabler.Outline.Download,
                 contentDescription = stringResource(R.string.home_go_online),
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(22.dp),
             )
         }
     }
@@ -379,14 +381,14 @@ private fun SyncStatusIcon(
         ) {
             IconButton(
                 onClick = onClick,
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(38.dp),
             ) {
                 Icon(
                     imageVector = Tabler.Outline.Refresh,
                     contentDescription = contentDescription,
                     tint = if (isDraining) MaterialTheme.colorScheme.primary else tint,
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(22.dp)
                         .then(
                             if (isDraining) Modifier.graphicsLayer { rotationZ = rotation }
                             else Modifier,
@@ -427,12 +429,12 @@ private fun CollapsedDockContent(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
             ),
-            modifier = Modifier.height(60.dp),
+            modifier = Modifier.height(52.dp),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .padding(horizontal = 12.dp, vertical = 5.dp),
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -498,12 +500,12 @@ private fun CollapsedDockContent(
             width = 1.dp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
         ),
-        modifier = Modifier.height(60.dp),
+        modifier = Modifier.height(52.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxHeight()
-                .padding(horizontal = 8.dp, vertical = 5.dp),
+                .padding(horizontal = 6.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -526,13 +528,13 @@ private fun CollapsedDockContent(
             ) {
                 IconButton(
                     onClick = onSearchExpand,
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier.size(38.dp),
                 ) {
                     Icon(
                         Tabler.Outline.Search,
                         contentDescription = stringResource(R.string.home_search),
                         tint = appBarIconColorFaded,
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
@@ -584,13 +586,13 @@ private fun UserSwitcherChip(
                 ) {
                     if (isTv) showTvMenu = true else menuExpanded = true
                 }
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+                .padding(horizontal = 6.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             UserAvatar(
                 name = currentUser.name,
-                size = 22.dp,
+                size = 20.dp,
                 avatarColor = avatarColor,
                 onAvatarColor = onAvatarColor,
             )

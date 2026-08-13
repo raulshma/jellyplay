@@ -18,5 +18,5 @@ object Dimensions {
      * mini-player is allowed to slide behind it before being fully hidden).
      * Read as px via `with(LocalDensity.current) { Dimensions.floatingNavHeight.toPx() }`.
      */
-    val floatingNavHeight: Dp = 64.dp
+    val floatingNavHeight: Dp = 56.dp
 }

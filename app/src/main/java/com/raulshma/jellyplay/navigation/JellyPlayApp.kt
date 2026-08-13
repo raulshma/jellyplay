@@ -1694,7 +1694,7 @@ private fun FloatingNavigationBar(
         Row(
             modifier = Modifier
                 .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                .padding(horizontal = 28.dp, vertical = 14.dp),
+                .padding(horizontal = 24.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(32.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
