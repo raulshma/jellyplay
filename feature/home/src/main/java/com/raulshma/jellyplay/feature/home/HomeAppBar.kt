@@ -142,84 +142,88 @@ fun HomeTopDock(
             ),
         contentAlignment = Alignment.TopStart
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-                .graphicsLayer {
-                    shadowElevation = if (isSearchFocused) 6f else 0f
-                    shape = ShapeCache.smooth24
-                    clip = true
-                }
-                .background(
-                    if (isSearchFocused) {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    } else {
-                        Color.Transparent
+        if (isSearchFocused) {
+            Surface(
+                shape = ShapeCache.smooth24,
+                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+                tonalElevation = 3.dp,
+                shadowElevation = 6.dp,
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .padding(
+                                start = 4.dp,
+                                top = 0.dp,
+                                end = 4.dp,
+                                bottom = 0.dp,
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        SearchExpandedContent(
+                            searchQuery = searchQuery,
+                            appBarIconColor = appBarIconColor,
+                            appBarIconColorFaded = appBarIconColorFaded,
+                            onBack = {
+                                onSearchExpanded(false)
+                                onClearSearch()
+                                focusManager.clearFocus()
+                            },
+                            onQueryChange = onSearchQueryChange,
+                            onClear = {
+                                onClearSearch()
+                                focusManager.clearFocus()
+                            },
+                        )
                     }
-                )
-        ) {
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 400.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
+                            ),
+                    ) {
+                        searchResultsContent()
+                    }
+                }
+            }
+        } else {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
-                    .padding(
-                        start = 4.dp,
-                        top = 0.dp,
-                        end = 4.dp,
-                        bottom = 0.dp
-                    ),
+                    .animateContentSize(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = if (isSearchFocused || !hasStatusIndicators) Arrangement.End else Arrangement.SpaceBetween
+                horizontalArrangement = if (!hasStatusIndicators) Arrangement.End else Arrangement.SpaceBetween,
             ) {
-                if (isSearchFocused) {
-                    SearchExpandedContent(
-                        searchQuery = searchQuery,
-                        appBarIconColor = appBarIconColor,
-                        appBarIconColorFaded = appBarIconColorFaded,
-                        onBack = {
-                            onSearchExpanded(false)
-                            onClearSearch()
-                            focusManager.clearFocus()
-                        },
-                        onQueryChange = onSearchQueryChange,
-                        onClear = {
-                            onClearSearch()
-                            focusManager.clearFocus()
-                        },
-                    )
-                } else {
-                    CollapsedDockContent(
-                        hasStatusIndicators = hasStatusIndicators,
-                        offlineMode = offlineMode,
-                        homeMode = homeMode,
-                        headerStatus = headerStatus,
-                        appBarIconColorFaded = appBarIconColorFaded,
-                        pendingSyncCount = pendingSyncCount,
-                        showClock = showClock,
-                        currentUser = currentUser,
-                        currentServerUsers = currentServerUsers,
-                        onUserSwitch = onUserSwitch,
-                        onToggleOffline = onToggleOffline,
-                        isGoingOnline = isGoingOnline,
-                        onShowSyncDetails = onShowSyncDetails,
-                        onModeChange = onModeChange,
-                        onSearchExpand = { onSearchExpanded(true) },
-                    )
-                }
-            }
-
-            if (isSearchFocused) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f)
-                        ),
-                ) {
-                    searchResultsContent()
-                }
+                CollapsedDockContent(
+                    hasStatusIndicators = hasStatusIndicators,
+                    offlineMode = offlineMode,
+                    homeMode = homeMode,
+                    headerStatus = headerStatus,
+                    appBarIconColorFaded = appBarIconColorFaded,
+                    pendingSyncCount = pendingSyncCount,
+                    showClock = showClock,
+                    currentUser = currentUser,
+                    currentServerUsers = currentServerUsers,
+                    onUserSwitch = onUserSwitch,
+                    onToggleOffline = onToggleOffline,
+                    isGoingOnline = isGoingOnline,
+                    onShowSyncDetails = onShowSyncDetails,
+                    onModeChange = onModeChange,
+                    onSearchExpand = { onSearchExpanded(true) },
+                )
             }
         }
     }
